@@ -474,10 +474,6 @@
       "name": "Desplazamiento automático durante streaming",
       "desc": "Desplazarse automáticamente hacia abajo mientras Claude transmite respuestas. Desactivar para quedarse arriba y leer desde el principio."
     },
-    "useVueLibrary": {
-      "name": "Vista de biblioteca unificada (beta)",
-      "desc": "Abre agentes, habilidades y bucles como una sola vista de biblioteca con pestañas. Se aplica la próxima vez que se abra una vista de biblioteca."
-    },
     "showAgentEditedFiles": {
       "name": "Mostrar archivos modificados por el agente",
       "desc": "Muestra encima del campo de chat los archivos que el agente crea o edita para abrirlos con un clic. Desactívalo para mantener el comportamiento silencioso anterior."

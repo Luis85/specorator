@@ -5,9 +5,9 @@ import { vi } from 'vitest';
  * panels touch on mount, so view-level tests keep working as Tasks 10-12 swap
  * real panels into the shell.
  */
-export function makePlugin(useVueLibrary: boolean) {
+export function makePlugin() {
   return {
-    settings: { useVueLibrary },
+    settings: {},
     app: {
       vault: {
         getAbstractFileByPath: vi.fn().mockReturnValue(null),

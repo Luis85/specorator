@@ -37,7 +37,7 @@ describe('LibraryView open/close leak guard', () => {
   });
 
   it('leaves no DOM and no dangling document/window listeners across 5 cycles', async () => {
-    const plugin = makePlugin(true);
+    const plugin = makePlugin();
     const leaf = { setViewState: vi.fn() } as never;
     for (let i = 0; i < 5; i += 1) {
       const view = new LibraryView(leaf, plugin);

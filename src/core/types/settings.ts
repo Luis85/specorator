@@ -205,8 +205,6 @@ export interface SpecoratorSettings {
   firstRunDismissed: boolean;
   /** When true, prompt the user to commit & push after Accepting a Work-Order in a dirty git-backed vault. */
   promptCommitOnAccept?: boolean;
-  /** When true, the three library views open as the unified Vue Library view. */
-  useVueLibrary?: boolean;
 
   // Agent Board
   agentBoardWorkOrderFolder: string;

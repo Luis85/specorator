@@ -474,10 +474,6 @@
       "name": "Rolagem automática durante streaming",
       "desc": "Rolar automaticamente para baixo enquanto o Claude transmite respostas. Desativar para ficar no topo e ler desde o início."
     },
-    "useVueLibrary": {
-      "name": "Visão de biblioteca unificada (beta)",
-      "desc": "Abre agentes, habilidades e loops como uma única visão de biblioteca com abas. Aplica-se na próxima vez que uma visão de biblioteca for aberta."
-    },
     "showAgentEditedFiles": {
       "name": "Mostrar arquivos alterados pelo agente",
       "desc": "Lista acima do campo de chat os arquivos que o agente cria ou edita para abri-los com um clique. Desative para manter o comportamento silencioso anterior."

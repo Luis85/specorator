@@ -16,7 +16,6 @@ import {
   createWorkOrderFromCurrentNoteAndOpenModal,
   createWorkOrderFromSelectionAndOpenModal,
 } from '@/features/tasks/ui/createWorkOrderInteractive';
-import { VIEW_TYPE_LOOP_LIBRARY } from '@/features/tasks/ui/LoopLibraryView';
 import { t } from '@/i18n/i18n';
 import type SpecoratorPlugin from '@/main';
 import { buildCursorContext } from '@/utils/editor';
@@ -112,10 +111,7 @@ function registerWorkOrderCommands(
   register({
     id: 'open-loop-library',
     name: t('commands.openLoopLibrary'),
-    callback: () =>
-      void (plugin.settings.useVueLibrary
-        ? activateLibrary(plugin, 'loops')
-        : plugin.openLeafView(VIEW_TYPE_LOOP_LIBRARY)),
+    callback: () => void activateLibrary(plugin, 'loops'),
   });
 
   register({

@@ -28,13 +28,13 @@ function makeWorkspacePlugin(existing: FakeLeaf[], created?: FakeLeaf) {
     getLeaf: vi.fn().mockReturnValue(created),
     revealLeaf: vi.fn().mockResolvedValue(undefined),
   };
-  const plugin = makePlugin(true) as { app: { workspace?: unknown } };
+  const plugin = makePlugin() as { app: { workspace?: unknown } };
   plugin.app.workspace = workspace;
   return { plugin: plugin as never, workspace };
 }
 
 function makeRealView(): LibraryView {
-  return new LibraryView(makeLibraryLeaf(null) as never, makePlugin(true));
+  return new LibraryView(makeLibraryLeaf(null) as never, makePlugin());
 }
 
 describe('activateLibrary', () => {

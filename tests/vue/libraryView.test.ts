@@ -28,14 +28,14 @@ describe('LibraryView', () => {
   beforeEach(() => resetLibraryPinia());
 
   it('exposes the stable view type and metadata', () => {
-    const view = new LibraryView(makeLeaf(), makePlugin(true));
+    const view = new LibraryView(makeLeaf(), makePlugin());
     expect(view.getViewType()).toBe('specorator-library');
     expect(view.getDisplayText()).toBe('Library');
     expect(view.getIcon()).toBe('library');
   });
 
   it('mounts the tab strip with three tabs and the Agents panel as the default', async () => {
-    const view = new LibraryView(makeLeaf(), makePlugin(true));
+    const view = new LibraryView(makeLeaf(), makePlugin());
     const el = mountView(view);
     await view.onOpen();
     const tabs = el.querySelectorAll('.specorator-vue-lib-nav-item');
@@ -45,7 +45,7 @@ describe('LibraryView', () => {
   });
 
   it('switches tabs on click and via setActiveTab', async () => {
-    const plugin = makePlugin(true);
+    const plugin = makePlugin();
     // The mounted Loops panel resolves its store against the view's
     // module-singleton pinia — pre-init it there with a stubbed note store so
     // the panel's load() never hits the fake vault.
@@ -65,7 +65,7 @@ describe('LibraryView', () => {
   });
 
   it('treats clicking the already-active tab as a no-op', async () => {
-    const view = new LibraryView(makeLeaf(), makePlugin(true));
+    const view = new LibraryView(makeLeaf(), makePlugin());
     const el = mountView(view);
     await view.onOpen();
     const setActiveTab = vi.spyOn(view, 'setActiveTab');
@@ -76,7 +76,7 @@ describe('LibraryView', () => {
   });
 
   it('asks a registered tab guard and stays put when it declines', async () => {
-    const view = new LibraryView(makeLeaf(), makePlugin(true));
+    const view = new LibraryView(makeLeaf(), makePlugin());
     const guard = vi.fn().mockResolvedValue(false);
     setGuard(view, guard);
     await view.setActiveTab('skills');
@@ -88,7 +88,7 @@ describe('LibraryView', () => {
   });
 
   it('latches while a guard prompt is pending instead of stacking prompts', async () => {
-    const view = new LibraryView(makeLeaf(), makePlugin(true));
+    const view = new LibraryView(makeLeaf(), makePlugin());
     let resolveGuard: (ok: boolean) => void = () => undefined;
     const guard = vi.fn().mockImplementation(
       () => new Promise<boolean>((resolve) => (resolveGuard = resolve)),
@@ -103,7 +103,7 @@ describe('LibraryView', () => {
   });
 
   it('round-trips the active tab through setState/getState', async () => {
-    const view = new LibraryView(makeLeaf(), makePlugin(true));
+    const view = new LibraryView(makeLeaf(), makePlugin());
     expect(view.getState().tab).toBe('agents');
     await view.setState({ tab: 'skills' }, {} as never);
     expect(view.getState().tab).toBe('skills');
@@ -114,7 +114,7 @@ describe('LibraryView', () => {
   });
 
   it('scopes contentEl under the Vue island classes while open, not the legacy scaffold', async () => {
-    const view = new LibraryView(makeLeaf(), makePlugin(true));
+    const view = new LibraryView(makeLeaf(), makePlugin());
     const el = mountView(view);
     await view.onOpen();
     expect(el.classList.contains('specorator-vue')).toBe(true);
@@ -126,39 +126,10 @@ describe('LibraryView', () => {
   });
 
   it('unmounts and empties contentEl on close', async () => {
-    const view = new LibraryView(makeLeaf(), makePlugin(true));
+    const view = new LibraryView(makeLeaf(), makePlugin());
     const el = mountView(view);
     await view.onOpen();
     await view.onClose();
     expect(el.childElementCount).toBe(0);
-  });
-
-  it('redirects the leaf to the legacy roster view when the flag is off', async () => {
-    const leaf = makeLeaf();
-    const view = new LibraryView(leaf, makePlugin(false));
-    const el = mountView(view);
-    // Real Obsidian ordering: onOpen first (mounts nothing, no redirect yet),
-    // THEN setState delivers the persisted state and triggers the redirect.
-    await view.onOpen();
-    expect(el.childElementCount).toBe(0);
-    const setViewState = (leaf as { setViewState: ReturnType<typeof vi.fn> }).setViewState;
-    expect(setViewState).not.toHaveBeenCalled();
-    await view.setState(null, {} as never);
-    expect(setViewState).toHaveBeenCalledWith({
-      type: 'specorator-agent-roster',
-      active: true,
-    });
-  });
-
-  it('re-homes a stale leaf to the legacy view MATCHING its persisted tab', async () => {
-    const leaf = makeLeaf();
-    const view = new LibraryView(leaf, makePlugin(false));
-    mountView(view);
-    await view.onOpen();
-    await view.setState({ tab: 'loops' }, {} as never);
-    expect((leaf as { setViewState: ReturnType<typeof vi.fn> }).setViewState).toHaveBeenCalledWith({
-      type: 'specorator-loop-library',
-      active: true,
-    });
   });
 });

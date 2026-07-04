@@ -474,10 +474,6 @@
       "name": "Défilement automatique pendant le streaming",
       "desc": "Défiler automatiquement vers le bas pendant que Claude diffuse les réponses. Désactiver pour rester en haut et lire depuis le début."
     },
-    "useVueLibrary": {
-      "name": "Vue de bibliothèque unifiée (bêta)",
-      "desc": "Ouvre les agents, compétences et boucles dans une seule vue de bibliothèque à onglets. S'applique à la prochaine ouverture d'une vue de bibliothèque."
-    },
     "showAgentEditedFiles": {
       "name": "Afficher les fichiers modifiés par l'agent",
       "desc": "Liste les fichiers créés ou modifiés par l'agent au-dessus de la zone de saisie pour les ouvrir en un clic. Désactivez pour conserver le comportement silencieux précédent."

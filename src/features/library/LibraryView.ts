@@ -6,7 +6,7 @@ import { createApp, markRaw, ref } from 'vue';
 import { t } from '../../i18n/i18n';
 import type SpecoratorPlugin from '../../main';
 import type { LibraryTab } from './viewType';
-import { TAB_TO_LEGACY_VIEW_TYPE, VIEW_TYPE_LIBRARY } from './viewType';
+import { VIEW_TYPE_LIBRARY } from './viewType';
 import { getLibraryPinia } from './vue/globalPinia';
 import { ACTIVE_TAB_KEY, PLUGIN_KEY, TAB_GUARD_KEY, VIEW_KEY } from './vue/libraryKeys';
 import LibraryRoot from './vue/LibraryRoot.vue';
@@ -65,17 +65,6 @@ export class LibraryView extends ItemView {
     // any panel could have registered one.
     if (isLibraryTab(tab)) this.activeTab.value = tab;
     await super.setState(state, result);
-    if (!this.plugin.settings.useVueLibrary) {
-      // Flag off: hand this leaf to the MATCHING legacy view so rollback
-      // reopens Skills/Loops where they were, not always the roster. The
-      // redirect lives here, not in onOpen — Obsidian delivers the persisted
-      // state AFTER onOpen, so an onOpen redirect would always see the
-      // default tab.
-      await this.leaf.setViewState({
-        type: TAB_TO_LEGACY_VIEW_TYPE[this.activeTab.value],
-        active: true,
-      });
-    }
   }
 
   getState(): Record<string, unknown> {
@@ -83,9 +72,6 @@ export class LibraryView extends ItemView {
   }
 
   async onOpen(): Promise<void> {
-    // Flag off: mount nothing. The rollback redirect happens in setState,
-    // which Obsidian calls after onOpen with the persisted tab (see there).
-    if (!this.plugin.settings.useVueLibrary) return;
     // Popout/move flows can run onOpen twice on one view instance
     // (Hover Editor-style; see SpecoratorView) — drop any previous island
     // before mounting a fresh one.

@@ -3,6 +3,7 @@ import {
   getCommandHotkeys,
   resetCommandHotkeysForTests,
 } from '@/core/commands/commandHotkeyRegistry';
+import { activateLibrary } from '@/features/library/activateLibrary';
 import type { ChatTabExecutionSurface } from '@/features/tasks/execution/ChatTabExecutionSurface';
 import type { ChatWorkOrderLinker } from '@/features/tasks/execution/ChatWorkOrderLinker';
 import {
@@ -14,6 +15,11 @@ import type SpecoratorPlugin from '@/main';
 
 // The create-work-order commands open modals / pickers; stub the module so the
 // command wiring can be asserted without the task UI stack.
+// open-loop-library targets the unified Vue Library; stub the activation seam.
+jest.mock('@/features/library/activateLibrary', () => ({
+  activateLibrary: jest.fn().mockResolvedValue(undefined),
+}));
+
 jest.mock('@/features/tasks/ui/createWorkOrderInteractive', () => ({
   createWorkOrderInteractive: jest.fn(),
   createWorkOrderFromCurrentNoteInteractive: jest.fn(),
@@ -112,6 +118,17 @@ describe('registerPluginCommands', () => {
 
     commands.find((c) => c.id === 'create-work-order-from-selection')!.editorCallback?.();
     expect(createWorkOrderFromSelectionAndOpenModal).toHaveBeenCalledWith(plugin);
+  });
+
+  it('open-loop-library activates the unified Library on the loops tab', () => {
+    const { plugin, commands } = createPlugin();
+    registerPluginCommands({
+      plugin,
+      taskExecutionSurface: {} as ChatTabExecutionSurface,
+      chatWorkOrderLinker: {} as ChatWorkOrderLinker,
+    });
+    commands.find((c) => c.id === 'open-loop-library')!.callback?.();
+    expect(activateLibrary).toHaveBeenCalledWith(plugin, 'loops');
   });
 
   it('clear-diagnostic-logs invokes plugin.logger.clear', () => {
