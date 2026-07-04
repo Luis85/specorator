@@ -3,6 +3,8 @@ title: Settings registry port completion
 date: 2026-06-11
 status: open
 scope: settings-architecture
+parent: Settings
+priority: 3 - low
 ---
 
 # Settings Registry Port Completion Implementation Plan

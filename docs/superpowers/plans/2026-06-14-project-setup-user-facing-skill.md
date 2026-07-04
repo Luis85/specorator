@@ -1,7 +1,7 @@
 ---
 title: Project-setup skill — user-facing skill (Plan 3 of 3)
 date: 2026-06-14
-status: shipped
+status: done
 scope: .claude/skills/project-setup
 ---
 

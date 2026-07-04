@@ -1,8 +1,10 @@
 ---
-title: "Vue 3 + Pinia harness and unified Library pilot — implementation plan"
+title: Vue 3 + Pinia harness and unified Library pilot — implementation plan
 date: 2026-07-01
-status: draft
+status: open
 scope: build, tooling, testing, features/library, features/agents/roster, features/skills, features/tasks/loops, shared, app/views
+priority: 1 - high
+parent: Frontend
 ---
 
 # Vue 3 + Pinia Harness and Unified Library Pilot Implementation Plan

@@ -3,7 +3,7 @@ type: issue
 id: issue-20260603-split-inputtoolbar
 title: Split InputToolbar.ts (1419 LOC, 11 independent widget classes) into a toolbar/ directory
 status: done
-priority: 2 - normal
+priority: 2 - medium
 triage: ready-for-agent
 created: 2026-06-03
 updated: 2026-06-09

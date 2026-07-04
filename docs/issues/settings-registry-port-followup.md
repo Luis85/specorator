@@ -6,7 +6,7 @@ tags:
   - settings
   - registry
   - tech-debt
-priority: 2 - normal
+priority: 2 - medium
 relations:
   - "[[2026-05-30-settings-overhaul-design]]"
   - "[[2026-05-30-settings-overhaul]]"

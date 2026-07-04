@@ -1,10 +1,10 @@
 ---
 type: tech-debt
-title: "Provider-native capability parity remains uneven"
+title: Provider-native capability parity remains uneven
 date: 2026-06-07
 updated: 2026-06-07
 status: open
-priority: "2 - normal"
+priority: 2 - medium
 severity: medium
 scope: provider-parity
 tags:

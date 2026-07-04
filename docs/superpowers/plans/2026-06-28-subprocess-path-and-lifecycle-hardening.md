@@ -1,8 +1,10 @@
 ---
 title: Subprocess PATH and Lifecycle Hardening
 date: 2026-06-28
-status: draft
+status: open
 scope: core/transport, core/providers, utils/env, providers/claude, providers/opencode, features/chat/services
+priority: 2 - medium
+parent: "[[Multi Provider Support]]"
 ---
 
 # Subprocess PATH and Lifecycle Hardening Implementation Plan

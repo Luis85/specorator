@@ -1,6 +1,7 @@
 ---
 status: open
 parent: "[[Workspace Isolation]]"
+priority: 3 - low
 ---
 # Workspace Isolation Implementation Plan
 

@@ -4,6 +4,9 @@ date: 2026-06-14
 status: proposed
 scope: shared/mention, chat-rendering, inline-edit, settings, providers/opencode
 parent: Infrastructure
+tags:
+  - incomplete
+priority: 3 - low
 ---
 # Upstream Sync to YishenTu/claudian 2.0.24 — Plan
 

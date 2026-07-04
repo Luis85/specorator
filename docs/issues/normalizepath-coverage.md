@@ -3,7 +3,7 @@ type: issue
 id: issue-20260603-normalizepath-coverage
 title: Ensure normalizePath() coverage on every user/agent-constructed vault path
 status: done
-priority: 2 - normal
+priority: 2 - medium
 triage: ready-for-agent
 created: 2026-06-03
 updated: 2026-06-03

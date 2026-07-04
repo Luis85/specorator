@@ -1,7 +1,7 @@
 ---
 title: Project-setup skill — harness templates + baseline (Plan 2 of 3)
 date: 2026-06-14
-status: shipped
+status: done
 scope: .claude/skills/project-setup
 ---
 

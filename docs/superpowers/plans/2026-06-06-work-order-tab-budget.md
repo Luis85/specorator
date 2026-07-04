@@ -1,5 +1,5 @@
 ---
-status: shipped
+status: done
 parent: "[[Agent Kanban Board]]"
 shipped_by: "[[work-order-20260606-work-order-tab-budget]]"
 ---

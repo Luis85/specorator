@@ -1,5 +1,5 @@
 ---
-priority: 2 - normal
+priority: 2 - medium
 status: open
 tracked-by: "[[custom-actions-per-lane]]"
 relations:

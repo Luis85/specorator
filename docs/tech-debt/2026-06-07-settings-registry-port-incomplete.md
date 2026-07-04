@@ -1,10 +1,10 @@
 ---
 type: tech-debt
-title: "Settings registry port is incomplete and legacy renderers remain live"
+title: Settings registry port is incomplete and legacy renderers remain live
 date: 2026-06-07
 updated: 2026-06-11
 status: in-progress
-priority: "2 - normal"
+priority: 2 - medium
 severity: medium
 scope: settings-architecture
 tags:

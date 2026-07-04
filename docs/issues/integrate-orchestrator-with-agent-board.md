@@ -3,7 +3,7 @@ type: issue
 id: issue-20260603-orchestrator-board-integration
 title: Integrate the Orchestrator with the Agent Board (parallel work orders + combined review)
 status: closed
-priority: 2 - normal
+priority: 2 - medium
 triage: needs-scoping
 created: 2026-06-03
 updated: 2026-06-03

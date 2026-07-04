@@ -12,6 +12,7 @@ related:
   - "[[Multi Provider Support]]"
 user_manual: "[[sidepanel-chat]]"
 image: "[[chat-sidepanel-overview.png]]"
+priority: 1 - high
 ---
 
 # Co-Worker - Chat

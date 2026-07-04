@@ -3,7 +3,7 @@ type: issue
 id: issue-20260603-deferred-view-load-time
 title: Confirm chat view defers (isDeferred/loadIfDeferred) and no child process spawns at load
 status: done
-priority: 2 - normal
+priority: 2 - medium
 triage: ready-for-agent
 created: 2026-06-03
 updated: 2026-06-09

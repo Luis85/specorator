@@ -3,7 +3,7 @@ type: issue
 id: issue-20260603-split-oversized-coordination-files
 title: Split the three oversized coordination files that pass the deletion test
 status: open
-priority: 2 - normal
+priority: 2 - medium
 triage: needs-scoping
 created: 2026-06-03
 updated: 2026-06-03

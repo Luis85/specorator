@@ -3,7 +3,7 @@ type: issue
 id: issue-20260603-opencode-path-containment
 title: Add vault-containment to OpencodeChatRuntime read/writeTextFile (main path)
 status: shipped
-priority: 2 - normal
+priority: 2 - medium
 triage: done
 created: 2026-06-03
 updated: 2026-06-04

@@ -12,6 +12,7 @@ related:
 user_manual: "[[multi-provider]]"
 parent: "[[Specorator - Product Vision]]"
 image: "[[multi-provider-overview.png]]"
+priority: 1 - high
 ---
 
 # Multi Provider Support

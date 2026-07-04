@@ -1,10 +1,10 @@
 ---
 type: tech-debt
-title: "Release artifact reproducibility is not checked in PR CI"
+title: Release artifact reproducibility is not checked in PR CI
 date: 2026-06-07
 updated: 2026-06-09
 status: done
-priority: "2 - normal"
+priority: 2 - medium
 severity: medium
 scope: release-build
 tags:

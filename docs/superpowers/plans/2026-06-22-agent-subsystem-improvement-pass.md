@@ -1,5 +1,7 @@
 ---
 status: open
+parent: "[[Multi Provider Support]]"
+priority: 2 - medium
 ---
 # Agent Subsystem Improvement Pass — Implementation Plan
 

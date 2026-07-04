@@ -1,10 +1,10 @@
 ---
 type: tech-debt
-title: "RuntimeHost exists but ChatRuntime still exposes mutable callback setters"
+title: RuntimeHost exists but ChatRuntime still exposes mutable callback setters
 date: 2026-06-07
 updated: 2026-06-10
 status: done
-priority: "2 - normal"
+priority: 2 - medium
 severity: medium
 scope: provider-runtime-interface
 tags:

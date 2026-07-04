@@ -3,6 +3,10 @@ status: shipped
 parent: Infrastructure
 shipped_in: 3.0.0
 shipped_by: "[[Agent Board/tasks/work-order-20260606-settings-overhaul]]"
+tags:
+  - bugs
+  - incomplete
+priority: 3 - low
 ---
 
 > **Status (2026-06-07): shipped in 3.0.0.** Phases A–J all landed: registry foundation, search bar, first-run

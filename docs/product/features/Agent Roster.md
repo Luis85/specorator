@@ -13,6 +13,7 @@ related:
   - "[[Multi Provider Support]]"
 user_manual: "[[agent-roster]]"
 image: "[[agent-roster-overview.png]]"
+priority: 2 - medium
 ---
 
 # Agent Roster
