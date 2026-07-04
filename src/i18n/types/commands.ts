@@ -18,4 +18,6 @@ export type CommandsTranslationKey =
   | 'commands.closeCurrentTab'
   | 'commands.openAgentRoster'
   | 'commands.openSkillLibrary'
-  | 'commands.openLoopLibrary';
+  | 'commands.openLoopLibrary'
+  | 'commands.openLibrary'
+  | 'commands.openQuickActions';

@@ -15,7 +15,7 @@ import type SpecoratorPlugin from '@/main';
 
 // The create-work-order commands open modals / pickers; stub the module so the
 // command wiring can be asserted without the task UI stack.
-// open-loop-library targets the unified Vue Library; stub the activation seam.
+// The five library commands target the unified Vue Library; stub the activation seam.
 jest.mock('@/features/library/activateLibrary', () => ({
   activateLibrary: jest.fn().mockResolvedValue(undefined),
 }));
@@ -60,12 +60,16 @@ const EXPECTED_COMMAND_IDS = [
   'open-view',
   'open-agent-board',
   'run-next-ready-work-order',
+  'open-library',
+  'open-agent-roster',
+  'open-skill-library',
+  'open-loop-library',
+  'open-quick-actions',
   'create-work-order',
   'create-work-order-from-current-note',
   'create-work-order-from-selection',
   'create-work-order-template',
   'install-common-work-order-templates',
-  'open-loop-library',
   'create-work-order-from-browser-selection',
   'create-work-order-from-chat-conversation',
   'copy-diagnostic-logs',
@@ -120,15 +124,29 @@ describe('registerPluginCommands', () => {
     expect(createWorkOrderFromSelectionAndOpenModal).toHaveBeenCalledWith(plugin);
   });
 
-  it('open-loop-library activates the unified Library on the loops tab', () => {
+  it('routes the five library commands through activateLibrary with their tabs', () => {
     const { plugin, commands } = createPlugin();
     registerPluginCommands({
       plugin,
       taskExecutionSurface: {} as ChatTabExecutionSurface,
       chatWorkOrderLinker: {} as ChatWorkOrderLinker,
     });
-    commands.find((c) => c.id === 'open-loop-library')!.callback?.();
+
+    const run = (id: string) => {
+      (activateLibrary as jest.Mock).mockClear();
+      commands.find((c) => c.id === id)!.callback?.();
+    };
+
+    run('open-library');
+    expect(activateLibrary).toHaveBeenCalledWith(plugin);
+    run('open-agent-roster');
+    expect(activateLibrary).toHaveBeenCalledWith(plugin, 'agents');
+    run('open-skill-library');
+    expect(activateLibrary).toHaveBeenCalledWith(plugin, 'skills');
+    run('open-loop-library');
     expect(activateLibrary).toHaveBeenCalledWith(plugin, 'loops');
+    run('open-quick-actions');
+    expect(activateLibrary).toHaveBeenCalledWith(plugin, 'quick-actions');
   });
 
   it('clear-diagnostic-logs invokes plugin.logger.clear', () => {

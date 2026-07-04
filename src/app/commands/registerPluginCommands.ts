@@ -4,6 +4,7 @@ import { MarkdownView, Notice } from 'obsidian';
 import { registerCommandHotkey } from '@/core/commands/commandHotkeyRegistry';
 import { type InlineEditContext, InlineEditModal } from '@/features/inline-edit/ui/InlineEditModal';
 import { activateLibrary } from '@/features/library/activateLibrary';
+import type { LibraryTab } from '@/features/library/viewType';
 import {
   createWorkOrderFromBrowserSelection,
   createWorkOrderTemplate,
@@ -63,6 +64,26 @@ function registerViewCommands(plugin: SpecoratorPlugin, register: RegisterComman
   });
 }
 
+// All library commands live here (not in registerPluginViews) so every one of
+// them goes through the registrar and gains a hotkey entry.
+function registerLibraryCommands(plugin: SpecoratorPlugin, register: RegisterCommand): void {
+  register({
+    id: 'open-library',
+    name: t('commands.openLibrary'),
+    callback: () => void activateLibrary(plugin),
+  });
+
+  const tabCommands: ReadonlyArray<{ id: string; name: string; tab: LibraryTab }> = [
+    { id: 'open-agent-roster', name: t('commands.openAgentRoster'), tab: 'agents' },
+    { id: 'open-skill-library', name: t('commands.openSkillLibrary'), tab: 'skills' },
+    { id: 'open-loop-library', name: t('commands.openLoopLibrary'), tab: 'loops' },
+    { id: 'open-quick-actions', name: t('commands.openQuickActions'), tab: 'quick-actions' },
+  ];
+  for (const { id, name, tab } of tabCommands) {
+    register({ id, name, callback: () => void activateLibrary(plugin, tab) });
+  }
+}
+
 function registerWorkOrderCommands(
   plugin: SpecoratorPlugin,
   chatWorkOrderLinker: ChatWorkOrderLinker,
@@ -106,12 +127,6 @@ function registerWorkOrderCommands(
     callback: () => {
       void installPresetTemplatesWithNotice(plugin);
     },
-  });
-
-  register({
-    id: 'open-loop-library',
-    name: t('commands.openLoopLibrary'),
-    callback: () => void activateLibrary(plugin, 'loops'),
   });
 
   register({
@@ -255,6 +270,7 @@ export function registerPluginCommands(deps: PluginCommandDeps): void {
   const register = createRegistrar(plugin);
 
   registerViewCommands(plugin, register);
+  registerLibraryCommands(plugin, register);
   registerWorkOrderCommands(plugin, chatWorkOrderLinker, register);
   registerDiagnosticCommands(plugin, register);
   registerInlineEditCommand(plugin, register);

@@ -14,7 +14,7 @@ import LibraryRoot from './vue/LibraryRoot.vue';
 const DEFAULT_TAB: LibraryTab = 'agents';
 
 function isLibraryTab(value: unknown): value is LibraryTab {
-  return value === 'agents' || value === 'skills' || value === 'loops';
+  return value === 'agents' || value === 'skills' || value === 'loops' || value === 'quick-actions';
 }
 
 export class LibraryView extends ItemView {

@@ -111,8 +111,12 @@ describe('LibraryView', () => {
     expect(view.getState().tab).toBe('skills');
     await view.setState({ tab: 'bogus' }, {} as never); // unknown tab ignored
     expect(view.getState().tab).toBe('skills');
+    // quick-actions is a reachable persisted state since the open-quick-actions
+    // command landed; it must restore, not fall back (panel arrives in Task 5).
+    await view.setState({ tab: 'quick-actions' }, {} as never);
+    expect(view.getState().tab).toBe('quick-actions');
     await view.setState(null, {} as never); // restore with no state ignored
-    expect(view.getState().tab).toBe('skills');
+    expect(view.getState().tab).toBe('quick-actions');
   });
 
   it('scopes contentEl under the Vue island classes while open, not the legacy scaffold', async () => {

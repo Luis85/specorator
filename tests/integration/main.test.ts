@@ -643,12 +643,12 @@ describe('SpecoratorPlugin', () => {
   describe('command callback', () => {
     it('reveals existing view when command is executed', async () => {
       await plugin.onload();
-      // First registered command is open-agent-roster, which now activates the
-      // unified Library — its leaf contract includes loadIfDeferred().
+      // open-library activates the unified Library — its leaf contract
+      // includes loadIfDeferred().
       const mockLeaf = { id: 'existing', loadIfDeferred: jest.fn().mockResolvedValue(undefined) };
       mockApp.workspace.getLeavesOfType.mockReturnValue([mockLeaf]);
 
-      const commandConfig = (plugin.addCommand as jest.Mock).mock.calls[0][0];
+      const commandConfig = getRegisteredCommand('open-library');
       await commandConfig.callback();
 
       expect(mockApp.workspace.revealLeaf).toHaveBeenCalledWith(mockLeaf);

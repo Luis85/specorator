@@ -77,6 +77,30 @@ describe('activateLibrary', () => {
     expect(view.getState().tab).toBe('skills');
   });
 
+  it('reveals an existing leaf on its current tab when called with no tab', async () => {
+    const view = makeRealView();
+    const setActiveTab = vi.spyOn(view, 'setActiveTab');
+    const leaf = makeLibraryLeaf(view);
+    const { plugin, workspace } = makeWorkspacePlugin([leaf]);
+    await activateLibrary(plugin);
+    expect(workspace.revealLeaf).toHaveBeenCalledWith(leaf);
+    expect(leaf.loadIfDeferred).toHaveBeenCalled();
+    expect(setActiveTab).not.toHaveBeenCalled();
+  });
+
+  it('creates a leaf when none exists and does not force a tab', async () => {
+    const view = makeRealView();
+    const setActiveTab = vi.spyOn(view, 'setActiveTab');
+    const leaf = makeLibraryLeaf(view);
+    const { plugin, workspace } = makeWorkspacePlugin([], leaf);
+    await activateLibrary(plugin);
+    expect(workspace.getLeaf).toHaveBeenCalledWith('tab');
+    expect(leaf.setViewState).toHaveBeenCalledWith({ type: VIEW_TYPE_LIBRARY, active: true });
+    expect(workspace.revealLeaf).toHaveBeenCalledWith(leaf);
+    expect(setActiveTab).not.toHaveBeenCalled();
+    expect(view.getState().tab).toBe('agents');
+  });
+
   it('still reveals (and does not throw) when the leaf view is not a LibraryView', async () => {
     const leaf = makeLibraryLeaf({ not: 'a library view' });
     const { plugin, workspace } = makeWorkspacePlugin([leaf]);

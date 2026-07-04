@@ -4,4 +4,5 @@ export type RibbonTranslationKey =
   | 'ribbon.openAgentBoard'
   | 'ribbon.openAgentRoster'
   | 'ribbon.openSkillLibrary'
-  | 'ribbon.openLoopLibrary';
+  | 'ribbon.openLoopLibrary'
+  | 'ribbon.openLibrary';
