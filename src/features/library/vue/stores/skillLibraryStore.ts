@@ -5,7 +5,7 @@ import { ProviderWorkspaceRegistry } from '../../../../core/providers/ProviderWo
 import type SpecoratorPlugin from '../../../../main';
 import { extractStringArray, parseFrontmatter } from '../../../../utils/frontmatter';
 import type { SkillTabEntry } from '../../../quickActions/skills/types';
-import { isCloneableSkillPath, writeSkillClone } from '../../../skills/skillCloning';
+import { isCloneableSkillPath, vaultSkillFolderOf, writeSkillClone } from '../../../skills/skillCloning';
 import type { SkillLibraryRow } from '../../../skills/skillLibraryRows';
 import { toSkillLibraryRows } from '../../../skills/skillLibraryRows';
 import { resolveSkillVaultPath } from '../../../skills/skillPaths';
@@ -103,16 +103,17 @@ export const useSkillLibraryStore = defineStore('library-skills', () => {
   }
 
   /**
-   * Delete shares the clone writability gate (`isCloneableSkillPath`): only
-   * vault-relative sources are deletable — host-absolute (global/home) and
-   * runtime-discovered skills stay untouchable. A skill IS its folder
-   * (`<root>/<name>/` with at least SKILL.md), so the whole dir goes.
+   * Delete shares the clone writability gate (`vaultSkillFolderOf`, which
+   * `isCloneableSkillPath` wraps): only exact `<root>/<name>/SKILL.md` sources
+   * are deletable — host-absolute (global/home), runtime-discovered, and
+   * malformed cache-hydrated paths all yield no folder and stay untouchable.
+   * A skill IS its folder, so the whole dir goes.
    */
   async function remove(row: SkillLibraryRow): Promise<boolean> {
     const p = plugin;
     if (!p) throw new Error('skillLibraryStore used before init()');
-    if (!isCloneableSkillPath(row.sourceFilePath)) return false;
-    const folder = row.sourceFilePath.split('/').slice(0, -1).join('/');
+    const folder = vaultSkillFolderOf(row.sourceFilePath);
+    if (!folder) return false;
     await p.vaultFileAdapter.deleteFolderRecursive(folder);
     // Same seam as SkillEditorModal.save: skill dot-folders bypass the vault
     // watcher, so invalidate the aggregator bucket AND force-reload the owning

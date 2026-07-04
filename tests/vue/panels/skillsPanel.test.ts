@@ -242,6 +242,19 @@ describe('SkillsPanel mutation flows', () => {
     expect(screen.queryByRole('button', { name: 'Delete' })).toBeNull();
   });
 
+  it('malformed rows (path not <root>/<name>/SKILL.md) get no Delete or Duplicate button', async () => {
+    // A corrupted skill-index cache can hydrate rows with arbitrary paths; the
+    // shape gate must keep the destructive actions off such cards entirely.
+    const malformed = {
+      ...entry, id: 'claude:skill-m', name: 'm-skill',
+      sourceFilePath: 'Notes/x.md',
+    };
+    setupMutable([malformed]);
+    await screen.findByText('m-skill');
+    expect(screen.queryByRole('button', { name: 'Delete' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Duplicate' })).toBeNull();
+  });
+
   it('empty state CTA starts the create flow', async () => {
     vi.mocked(promptReason).mockResolvedValueOnce(null);
     setupMutable([]);

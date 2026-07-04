@@ -170,6 +170,29 @@ describe('useSkillLibraryStore', () => {
     expect(p.events.emit).not.toHaveBeenCalled();
   });
 
+  // Rows are NOT guaranteed well-formed: the aggregator hydrates them from the
+  // on-disk skill-index cache, which an outside writer can corrupt. A malformed
+  // path must never reach the recursive delete — 'SKILL.md' would otherwise
+  // derive folder '' (the ENTIRE vault) and '.claude/skills/SKILL.md' a whole
+  // skills root.
+  it.each([
+    ['bare SKILL.md (vault root)', 'SKILL.md'],
+    ['SKILL.md directly under a root (all Claude skills)', '.claude/skills/SKILL.md'],
+    ['arbitrary vault note', 'Notes/x.md'],
+    ['nested beyond <root>/<name>', '.claude/skills/a/b/SKILL.md'],
+    ['unknown root', 'foo/skills/a/SKILL.md'],
+  ])('remove() refuses malformed shape: %s', async (_label, sourceFilePath) => {
+    const store = useSkillLibraryStore();
+    const plugin = makePlugin([entry]);
+    store.init(plugin);
+    await store.load();
+    const removed = await store.remove({ ...store.rows[0], sourceFilePath });
+    expect(removed).toBe(false);
+    const p = plugin as { vaultFileAdapter: { deleteFolderRecursive: ReturnType<typeof vi.fn> }; events: { emit: ReturnType<typeof vi.fn> } };
+    expect(p.vaultFileAdapter.deleteFolderRecursive).not.toHaveBeenCalled();
+    expect(p.events.emit).not.toHaveBeenCalled();
+  });
+
   it('load() rejects when the store is used before init()', async () => {
     const store = useSkillLibraryStore();
     await expect(store.load()).rejects.toThrow('used before init()');

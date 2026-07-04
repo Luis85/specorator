@@ -243,6 +243,27 @@ describe('VaultFileAdapter', () => {
 
       await expect(vaultAdapter.deleteFolderRecursive('busy')).rejects.toThrow('locked');
     });
+
+    // Destructive primitive: root-ish paths must throw regardless of caller
+    // discipline — exists('') normalizes to the vault root, so a recursive
+    // delete on it would wipe the entire vault.
+    it.each([[''], ['.'], ['/'], ['//']])('throws on root-ish path %j without touching the adapter', async (path) => {
+      mockAdapter.rmdir = jest.fn();
+
+      await expect(vaultAdapter.deleteFolderRecursive(path)).rejects.toThrow();
+
+      expect(mockAdapter.exists).not.toHaveBeenCalled();
+      expect(mockAdapter.rmdir).not.toHaveBeenCalled();
+    });
+
+    it('trims trailing slashes before deleting', async () => {
+      mockAdapter.exists.mockResolvedValue(true);
+      mockAdapter.rmdir = jest.fn().mockResolvedValue(undefined);
+
+      await vaultAdapter.deleteFolderRecursive('x//');
+
+      expect(mockAdapter.rmdir).toHaveBeenCalledWith('x', true);
+    });
   });
 
   describe('listFiles', () => {

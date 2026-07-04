@@ -1,5 +1,5 @@
 import type { VaultFileAdapter } from '../../../../src/core/storage/VaultFileAdapter';
-import { isCloneableSkillPath, SKILLS_DIR, skillTemplate, writeSkillClone } from '../../../../src/features/skills/skillCloning';
+import { isCloneableSkillPath, SKILLS_DIR, skillTemplate, vaultSkillFolderOf, writeSkillClone } from '../../../../src/features/skills/skillCloning';
 
 describe('skillTemplate', () => {
   it('emits the exact frontmatter + heading scaffold for a new skill', () => {
@@ -17,9 +17,10 @@ Write the skill instructions here.
 describe('isCloneableSkillPath', () => {
   it.each([
     ['.claude/skills/a/SKILL.md'],
-    [`${SKILLS_DIR}/deep/nested/SKILL.md`],
     ['.codex/skills/b/SKILL.md'],
-  ])('accepts vault-relative path %s', (path) => {
+    ['.agents/skills/c/SKILL.md'],
+    [`${SKILLS_DIR}/my-skill-copy/SKILL.md`],
+  ])('accepts the <root>/<name>/SKILL.md shape %s', (path) => {
     expect(isCloneableSkillPath(path)).toBe(true);
   });
 
@@ -32,8 +33,41 @@ describe('isCloneableSkillPath', () => {
     ['Windows drive letter', 'C:/Users/u/.claude/skills/a/SKILL.md'],
     ['backslash separators', '.claude\\skills\\a\\SKILL.md'],
     ['parent-dir escape', '.claude/skills/../../secrets/SKILL.md'],
+    // Shape violations: a delete derived from these would escape the skill's
+    // own folder (vault root, a whole skills root, or an arbitrary vault note).
+    ['bare SKILL.md (folder would be the vault root)', 'SKILL.md'],
+    ['SKILL.md directly under a root (folder would be ALL skills)', '.claude/skills/SKILL.md'],
+    ['arbitrary vault note', 'Notes/x.md'],
+    ['nested beyond <root>/<name> (5 segments)', '.claude/skills/a/b/SKILL.md'],
+    ['unknown root', 'foo/skills/a/SKILL.md'],
+    ['wrong filename', '.claude/skills/a/OTHER.md'],
+    ['dot name (folder would be the root itself)', '.claude/skills/./SKILL.md'],
+    ['dot-dot name (folder would be the root parent)', '.claude/skills/../SKILL.md'],
+    ['empty name segment', '.claude/skills//SKILL.md'],
   ])('rejects %s', (_label, path) => {
     expect(isCloneableSkillPath(path)).toBe(false);
+  });
+});
+
+describe('vaultSkillFolderOf', () => {
+  it.each([
+    ['.claude/skills/a/SKILL.md', '.claude/skills/a'],
+    ['.codex/skills/b/SKILL.md', '.codex/skills/b'],
+    ['.agents/skills/c/SKILL.md', '.agents/skills/c'],
+  ])('returns the skill folder for %s', (path, folder) => {
+    expect(vaultSkillFolderOf(path)).toBe(folder);
+  });
+
+  it.each([
+    [null],
+    ['SKILL.md'],
+    ['.claude/skills/SKILL.md'],
+    ['Notes/x.md'],
+    ['.claude/skills/a/b/SKILL.md'],
+    ['foo/skills/a/SKILL.md'],
+    ['/home/u/.codex/skills/a/SKILL.md'],
+  ])('returns null for %s so no delete target can be derived', (path) => {
+    expect(vaultSkillFolderOf(path)).toBeNull();
   });
 });
 

@@ -67,4 +67,22 @@ describe('skillIndexPersistence', () => {
     });
     expect(parsePersistedSkillIndex(json)).toBeNull();
   });
+
+  it('drops corrupt entries (non-object, or sourceFilePath not a string) instead of casting blind', () => {
+    const json = JSON.stringify({
+      schemaVersion: PERSISTED_SCHEMA_VERSION,
+      writtenAt: 0,
+      buckets: {
+        claude: [
+          entry(),
+          null,
+          'not-an-entry',
+          { ...entry({ id: 'skill-bad' }), sourceFilePath: 42 },
+        ],
+      },
+    });
+    const out = parsePersistedSkillIndex(json);
+    expect(out).not.toBeNull();
+    expect(out!.get('claude')?.map((e) => e.id)).toEqual(['skill-a']);
+  });
 });

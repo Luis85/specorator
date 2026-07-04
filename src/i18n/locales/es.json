@@ -1159,7 +1159,7 @@
     "providerVault": "Vault",
     "prompt": "Prompt",
     "delete": "Delete",
-    "deleteConfirm": "Delete the skill \"{name}\" and its folder?",
+    "deleteConfirm": "Delete the skill \"{name}\" and its folder and everything in it?",
     "deleted": "Deleted {name}."
   },
   "loopLibrary": {

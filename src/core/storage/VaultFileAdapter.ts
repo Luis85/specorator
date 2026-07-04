@@ -103,8 +103,15 @@ export class VaultFileAdapter {
    * failures propagate so callers can surface them.
    */
   async deleteFolderRecursive(path: string): Promise<void> {
-    if (await this.exists(path)) {
-      await this.app.vault.adapter.rmdir(path, true);
+    // Last line of defense for a destructive primitive: refuse root-ish paths
+    // regardless of caller discipline — exists('') normalizes to the vault
+    // root, so recursing on it would wipe the entire vault.
+    const trimmed = path.replace(/\/+$/, '');
+    if (!trimmed || trimmed === '.') {
+      throw new Error(`deleteFolderRecursive refuses root-ish path "${path}"`);
+    }
+    if (await this.exists(trimmed)) {
+      await this.app.vault.adapter.rmdir(trimmed, true);
     }
   }
 
