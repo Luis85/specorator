@@ -103,6 +103,27 @@ describe('useSkillLibraryStore', () => {
     expect(p.events.emit).toHaveBeenCalledWith('vaultSkill.changed', { providerId: 'claude' });
   });
 
+  it('clone() of a vault-rooted Codex skill writes under .codex and invalidates the CODEX catalog', async () => {
+    const store = useSkillLibraryStore();
+    const codexEntry = {
+      ...entry, id: 'codex:skill-c', providerId: 'codex', providerDisplayName: 'Codex',
+      name: 'c', sourceFilePath: '.codex/skills/c/SKILL.md',
+    };
+    const plugin = makePlugin([codexEntry]);
+    const refresh = vi.fn().mockResolvedValue(undefined);
+    vi.mocked(ProviderWorkspaceRegistry.getCommandCatalog).mockReturnValue({ refresh } as never);
+    store.init(plugin);
+    await store.load();
+    const clonePath = await store.clone(store.rows[0]);
+    // writeSkillClone derives the root from the source, so the copy stays Codex-rooted.
+    expect(clonePath).toBe('.codex/skills/c-copy/SKILL.md');
+    const p = plugin as { events: { emit: ReturnType<typeof vi.fn> } };
+    // Invalidation must hit the OWNING provider's bucket + catalog cache, not Claude's.
+    expect(p.events.emit).toHaveBeenCalledWith('vaultSkill.changed', { providerId: 'codex' });
+    expect(ProviderWorkspaceRegistry.getCommandCatalog).toHaveBeenCalledWith('codex');
+    expect(refresh).toHaveBeenCalled();
+  });
+
   it('clone() refuses non-cloneable (host-absolute) paths without writing', async () => {
     const store = useSkillLibraryStore();
     const plugin = makePlugin([entry]);

@@ -36,11 +36,11 @@ export const useSkillLibraryStore = defineStore('library-skills', () => {
     return mtimeById.get(id) ?? 0;
   }
 
-  /** Read frontmatter `tags` and file mtime for vault-file skills. Codex vault
-   * skills surface a host-absolute `sourceFilePath` (mapped via `toHostPath`), so
-   * convert it back to a vault-relative path before reading — otherwise the vault
-   * adapter can't resolve it and the skill loses tags + sorts as `updated=0`.
-   * Genuinely out-of-vault (home-scope) paths still fail and yield no tags/mtime. */
+  /** Read frontmatter `tags` and file mtime for vault-file skills. Non-vault
+   * skills surface a host-absolute `sourceFilePath`; `resolveSkillVaultPath`
+   * relativizes an in-vault one so the adapter can read it — otherwise the
+   * skill loses tags + sorts as `updated=0`. Genuinely out-of-vault
+   * (home-scope) paths still fail and yield no tags/mtime. */
   async function loadSkillTags(
     entries: SkillTabEntry[],
     mtimes: Map<string, number>,
@@ -87,13 +87,17 @@ export const useSkillLibraryStore = defineStore('library-skills', () => {
     }
   }
 
-  /** Port of SkillLibraryView.cloneSkill's write half; returns the clone path. */
+  /** Port of SkillLibraryView.cloneSkill's write half; returns the clone path.
+   * writeSkillClone derives the root from the source path, so a Codex clone
+   * stays under `.codex/skills/` — invalidation must follow the owning
+   * provider for the same reason. */
   async function clone(row: SkillLibraryRow): Promise<string | null> {
     const p = plugin;
     if (!p) throw new Error('skillLibraryStore used before init()');
     if (!isCloneableSkillPath(row.sourceFilePath)) return null;
     const path = await writeSkillClone(p.vaultFileAdapter, row.sourceFilePath, row.name);
-    p.events.emit('vaultSkill.changed', { providerId: 'claude' });
+    p.events.emit('vaultSkill.changed', { providerId: row.providerId });
+    await ProviderWorkspaceRegistry.getCommandCatalog(row.providerId)?.refresh();
     await load();
     return path;
   }

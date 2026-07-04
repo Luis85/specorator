@@ -14,6 +14,7 @@ import {
 } from '../skills/CodexSkillListingService';
 import {
   type CodexSkillStorage,
+  codexSkillVaultRelativePath,
   createCodexSkillPersistenceKey,
   parseCodexSkillPersistenceKey,
   resolveCodexSkillLocationFromPath,
@@ -134,7 +135,11 @@ export class CodexSkillCatalog implements ProviderCommandCatalog {
         isDeletable: true,
         displayPrefix: '$',
         insertPrefix: '$',
-        sourceFilePath: listedSkill.path,
+        // Vault entries surface the vault-relative path, not the host-absolute
+        // wire path: the Skills tab's clone/delete gate and the vault adapter
+        // act on it directly. Dropdown entries and the raw listing keep host
+        // paths for runtime consumers.
+        sourceFilePath: codexSkillVaultRelativePath(location),
         persistenceKey: createCodexSkillPersistenceKey({
           rootId: location.rootId,
           currentName: location.name,

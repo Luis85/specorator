@@ -93,6 +93,15 @@ export function parseCodexSkillPersistenceKey(
   };
 }
 
+/**
+ * Vault-relative `SKILL.md` path for a managed skill location — the value the
+ * vault adapter (and the shared skill clone/delete gate) can act on, unlike
+ * the host-absolute path the app-server reports.
+ */
+export function codexSkillVaultRelativePath(location: CodexSkillLocation): string {
+  return `${ROOT_PATH_BY_ID[location.rootId]}/${location.name}/SKILL.md`;
+}
+
 export function resolveCodexSkillLocationFromPath(
   skillPath: string,
   vaultPath: string,

@@ -197,7 +197,41 @@ Prompt`,
       expect(entries[0].name).toBe('vault-skill');
       expect(entries[0].scope).toBe('vault');
       expect(entries[0].content).toBe('Prompt');
-      expect(entries[0].sourceFilePath).toBe('/test/vault/.codex/skills/vault-skill/SKILL.md');
+      // Vault-relative, NOT the host-absolute wire path: the Skills tab's
+      // clone/delete gate and the vault adapter both act on this value.
+      expect(entries[0].sourceFilePath).toBe('.codex/skills/vault-skill/SKILL.md');
+    });
+
+    it('surfaces vault-relative sourceFilePath for both managed roots', async () => {
+      const vaultAdapter = createMockAdapter({
+        '.codex/skills/codex-skill/SKILL.md': '---\ndescription: A\n---\nPrompt',
+        '.agents/skills/agents-skill/SKILL.md': '---\ndescription: B\n---\nPrompt',
+      });
+      const storage = new CodexSkillStorage(vaultAdapter, createMockAdapter({}));
+      const listProvider = createMockSkillListProvider([
+        {
+          name: 'codex-skill',
+          description: 'A',
+          path: '/test/vault/.codex/skills/codex-skill/SKILL.md',
+          scope: 'repo',
+          enabled: true,
+        },
+        {
+          name: 'agents-skill',
+          description: 'B',
+          path: '/test/vault/.agents/skills/agents-skill/SKILL.md',
+          scope: 'repo',
+          enabled: true,
+        },
+      ]);
+      const catalog = new CodexSkillCatalog(storage, listProvider, '/test/vault');
+
+      const entries = await catalog.listVaultEntries();
+
+      expect(entries.map(e => e.sourceFilePath).sort()).toEqual([
+        '.agents/skills/agents-skill/SKILL.md',
+        '.codex/skills/codex-skill/SKILL.md',
+      ]);
     });
 
     it('recognizes repo skills under a \\\\wsl$ vault path', async () => {

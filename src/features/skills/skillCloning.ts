@@ -6,12 +6,14 @@ import { librarySlug, uniqueChildDir } from '../../utils/libraryView';
 export const SKILLS_DIR = '.claude/skills';
 
 /**
- * Duplicate writes through the vault adapter, which only understands
- * vault-relative paths. Non-Claude skills surface host-absolute source paths
- * (Codex maps via `toHostPath`) and runtime-discovered skills have none — both
- * would make Duplicate scatter a misplaced/empty tree inside the vault (and the
- * post-write invalidation only targets Claude). Gate the action to paths the
- * adapter can actually clone: vault-relative, no drive letter, no `..` escape.
+ * Clone/delete writability gate. Both actions write through the vault adapter,
+ * which only understands vault-relative paths. Vault-rooted skills surface
+ * those regardless of provider (Codex vault entries are relativized in
+ * `CodexSkillCatalog.listVaultEntries`); only NON-VAULT skills stay
+ * host-absolute (global/home scope) and runtime-discovered skills have no path
+ * at all — both would make a write scatter a misplaced/empty tree inside the
+ * vault. Gate the actions to paths the adapter can actually touch:
+ * vault-relative, no drive letter, no `..` escape.
  */
 export function isCloneableSkillPath(p: string | null): p is string {
   if (!p || p.startsWith('/') || p.startsWith('~') || p.startsWith('\\')) return false;

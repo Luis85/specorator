@@ -41,7 +41,7 @@ export class SkillEditorModal extends LibraryEditorModal {
       meta.createDiv({ cls: 'specorator-library-modal-hint', text: this.row.description });
     }
 
-    // Codex vault skills surface a host-absolute `sourceFilePath`; resolve the
+    // Non-vault skills surface a host-absolute `sourceFilePath`; resolve the
     // vault-relative path the adapter can actually read/write. Out-of-vault
     // (home-scope) skills resolve to null and stay read-only — writing them
     // would create a bogus in-vault `/.../.codex/skills/...` tree.

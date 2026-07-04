@@ -220,6 +220,18 @@ describe('SkillsPanel mutation flows', () => {
     expect(p.vaultFileAdapter.deleteFolderRecursive).not.toHaveBeenCalled();
   });
 
+  it('vault-rooted Codex rows expose Duplicate and Delete (shared writability gate)', async () => {
+    const codexRow = {
+      ...entry, id: 'codex:skill-c', name: 'c-skill',
+      providerId: 'codex', providerDisplayName: 'Codex',
+      sourceFilePath: '.codex/skills/c/SKILL.md',
+    };
+    setupMutable([codexRow]);
+    await screen.findByText('c-skill');
+    expect(screen.getByRole('button', { name: 'Duplicate' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Delete' })).toBeTruthy();
+  });
+
   it('non-vault rows (host-absolute source) get no Delete button', async () => {
     const hostAbs = {
       ...entry, id: 'codex:skill-g', name: 'g-skill',

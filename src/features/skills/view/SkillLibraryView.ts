@@ -1,5 +1,6 @@
 import { ItemView, Notice, type WorkspaceLeaf } from 'obsidian';
 
+import { ProviderWorkspaceRegistry } from '../../../core/providers/ProviderWorkspaceRegistry';
 import { t } from '../../../i18n/i18n';
 import type SpecoratorPlugin from '../../../main';
 import { renderLibraryNav } from '../../../shared/libraryNav';
@@ -72,11 +73,11 @@ export class SkillLibraryView extends ItemView {
     mountLibraryList({ controller: this.controller, items: rows, toolbar, list, renderCard: (l, r) => this.renderSkillCard(l, r) });
   }
 
-  /** Read frontmatter `tags` and file mtime for vault-file skills. Codex vault
-   * skills surface a host-absolute `sourceFilePath` (mapped via `toHostPath`), so
-   * convert it back to a vault-relative path before reading — otherwise the vault
-   * adapter can't resolve it and the skill loses tags + sorts as `updated=0`.
-   * Genuinely out-of-vault (home-scope) paths still fail and yield no tags/mtime. */
+  /** Read frontmatter `tags` and file mtime for vault-file skills. Non-vault
+   * skills surface a host-absolute `sourceFilePath`; `resolveSkillVaultPath`
+   * relativizes an in-vault one so the adapter can read it — otherwise the
+   * skill loses tags + sorts as `updated=0`. Genuinely out-of-vault
+   * (home-scope) paths still fail and yield no tags/mtime. */
   private async loadSkillTags(entries: SkillTabEntry[]): Promise<Map<string, string[]>> {
     this.skillMtime.clear();
     const out = new Map<string, string[]>();
@@ -130,7 +131,12 @@ export class SkillLibraryView extends ItemView {
   private async cloneSkill(row: SkillLibraryRow): Promise<void> {
     if (!isCloneableSkillPath(row.sourceFilePath)) { new Notice(t('skillLibrary.readonlyNotice')); return; }
     const path = await writeSkillClone(this.plugin.vaultFileAdapter, row.sourceFilePath, row.name);
-    this.plugin.events.emit('vaultSkill.changed', { providerId: 'claude' });
+    // writeSkillClone keeps the clone under the SOURCE root (`.codex/skills/`
+    // for Codex rows), so invalidate the owning provider — a catalog with its
+    // own listing cache (Codex, 5s) must also force-reload or the re-render
+    // below misses the clone until the TTL.
+    this.plugin.events.emit('vaultSkill.changed', { providerId: row.providerId });
+    await ProviderWorkspaceRegistry.getCommandCatalog(row.providerId)?.refresh();
     new Notice(t('skillLibrary.created', { path }));
     await this.render();
     // A skill's display name is its folder basename, so the clone is named after
