@@ -217,6 +217,34 @@ describe('VaultFileAdapter', () => {
     });
   });
 
+  describe('deleteFolderRecursive', () => {
+    it('removes the folder tree via the adapter native recursive rmdir', async () => {
+      mockAdapter.exists.mockResolvedValue(true);
+      mockAdapter.rmdir = jest.fn().mockResolvedValue(undefined);
+
+      await vaultAdapter.deleteFolderRecursive('.claude/skills/a');
+
+      expect(mockAdapter.exists).toHaveBeenCalledWith('.claude/skills/a');
+      expect(mockAdapter.rmdir).toHaveBeenCalledWith('.claude/skills/a', true);
+    });
+
+    it('is a no-op when the folder does not exist', async () => {
+      mockAdapter.exists.mockResolvedValue(false);
+      mockAdapter.rmdir = jest.fn();
+
+      await vaultAdapter.deleteFolderRecursive('missing-folder');
+
+      expect(mockAdapter.rmdir).not.toHaveBeenCalled();
+    });
+
+    it('propagates rmdir failures instead of swallowing them like deleteFolder', async () => {
+      mockAdapter.exists.mockResolvedValue(true);
+      mockAdapter.rmdir = jest.fn().mockRejectedValue(new Error('locked'));
+
+      await expect(vaultAdapter.deleteFolderRecursive('busy')).rejects.toThrow('locked');
+    });
+  });
+
   describe('listFiles', () => {
     it('lists files in existing folder', async () => {
       mockAdapter.exists.mockResolvedValue(true);

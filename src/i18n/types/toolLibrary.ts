@@ -30,6 +30,9 @@ export type ToolLibraryTranslationKey =
   | 'skillLibrary.providerVault'
   | 'skillLibrary.actionFailed'
   | 'skillLibrary.prompt'
+  | 'skillLibrary.delete'
+  | 'skillLibrary.deleteConfirm'
+  | 'skillLibrary.deleted'
   // Loop Library
   | 'loopLibrary.navLabel'
   | 'loopLibrary.title'

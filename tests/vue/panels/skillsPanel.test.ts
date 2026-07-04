@@ -1,4 +1,5 @@
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/vue';
+import { Notice } from 'obsidian';
 import { createPinia, setActivePinia } from 'pinia';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -16,8 +17,13 @@ vi.mock('@/features/skills/view/SkillEditorModal', () => ({
   }),
 }));
 vi.mock('@/shared/modals/PromptModal', () => ({ promptReason: vi.fn() }));
+vi.mock('@/shared/modals/ConfirmModal', () => ({
+  confirm: vi.fn().mockResolvedValue(true),
+  confirmDelete: vi.fn(),
+}));
 import { runVaultSkill } from '@/features/quickActions/skills/runVaultSkill';
 import { SkillEditorModal } from '@/features/skills/view/SkillEditorModal';
+import { confirm } from '@/shared/modals/ConfirmModal';
 import { promptReason } from '@/shared/modals/PromptModal';
 
 const entry = {
@@ -72,13 +78,16 @@ function setupMutable(entries: unknown[], opts: { listAll?: ReturnType<typeof vi
   setActivePinia(pinia);
   const errorLog = vi.fn();
   const plugin = {
-    app: {},
+    // vault present (adapter-less): host-absolute skill paths resolve to null
+    // (out-of-vault) instead of throwing inside resolveSkillVaultPath.
+    app: { vault: {} },
     vaultSkillAggregator: { listAll: opts.listAll ?? vi.fn().mockResolvedValue(entries) },
     vaultFileAdapter: {
       read: vi.fn().mockResolvedValue('---\ntags: [t1]\n---\nbody'),
       stat: vi.fn().mockResolvedValue({ mtime: 1 }),
       write: vi.fn().mockResolvedValue(undefined),
       exists: vi.fn().mockResolvedValue(false),
+      deleteFolderRecursive: vi.fn().mockResolvedValue(undefined),
     },
     events: { emit: vi.fn() },
     logger: { scope: () => ({ error: errorLog, warn: vi.fn() }) },
@@ -90,7 +99,11 @@ function setupMutable(entries: unknown[], opts: { listAll?: ReturnType<typeof vi
   });
   const p = plugin as {
     vaultSkillAggregator: { listAll: ReturnType<typeof vi.fn> };
-    vaultFileAdapter: { write: ReturnType<typeof vi.fn>; read: ReturnType<typeof vi.fn> };
+    vaultFileAdapter: {
+      write: ReturnType<typeof vi.fn>;
+      read: ReturnType<typeof vi.fn>;
+      deleteFolderRecursive: ReturnType<typeof vi.fn>;
+    };
     events: { emit: ReturnType<typeof vi.fn> };
   };
   return { store, plugin, p, errorLog, ...utils };
@@ -184,6 +197,37 @@ describe('SkillsPanel mutation flows', () => {
     const card = await screen.findByRole('button', { name: 'r-skill' });
     expect(within(card).getByText('Read-only')).toBeTruthy();
     expect(screen.queryByRole('button', { name: 'Duplicate' })).toBeNull();
+  });
+
+  it('Delete confirms, removes the folder through the store, Notices, and reloads', async () => {
+    const { p } = setupMutable([entry]);
+    await screen.findByText('a-skill');
+    await fireEvent.click(screen.getByRole('button', { name: 'Delete' }));
+    await waitFor(() => expect(p.vaultFileAdapter.deleteFolderRecursive).toHaveBeenCalledWith('.claude/skills/a'));
+    expect(confirm).toHaveBeenCalled();
+    expect(p.events.emit).toHaveBeenCalledWith('vaultSkill.changed', { providerId: 'claude' });
+    await waitFor(() => expect(Notice).toHaveBeenCalledWith('Deleted a-skill.'));
+    // Multi-leaf staleness contract: remove() must reload the shared store.
+    await waitFor(() => expect(p.vaultSkillAggregator.listAll.mock.calls.length).toBeGreaterThan(1));
+  });
+
+  it('Delete keeps the skill when the confirm is declined', async () => {
+    vi.mocked(confirm).mockResolvedValueOnce(false);
+    const { p } = setupMutable([entry]);
+    await screen.findByText('a-skill');
+    await fireEvent.click(screen.getByRole('button', { name: 'Delete' }));
+    await waitFor(() => expect(confirm).toHaveBeenCalled());
+    expect(p.vaultFileAdapter.deleteFolderRecursive).not.toHaveBeenCalled();
+  });
+
+  it('non-vault rows (host-absolute source) get no Delete button', async () => {
+    const hostAbs = {
+      ...entry, id: 'codex:skill-g', name: 'g-skill',
+      providerId: 'codex', sourceFilePath: '/home/u/.codex/skills/g/SKILL.md',
+    };
+    setupMutable([hostAbs]);
+    await screen.findByText('g-skill');
+    expect(screen.queryByRole('button', { name: 'Delete' })).toBeNull();
   });
 
   it('empty state CTA starts the create flow', async () => {

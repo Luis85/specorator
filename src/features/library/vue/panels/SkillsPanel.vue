@@ -3,6 +3,7 @@ import { Notice } from 'obsidian';
 import { inject, onMounted } from 'vue';
 
 import { t } from '../../../../i18n/i18n';
+import { confirm } from '../../../../shared/modals/ConfirmModal';
 import { promptReason } from '../../../../shared/modals/PromptModal';
 import { withErrorNotice } from '../../../../shared/uiAction';
 import { librarySlug, uniqueChildDir } from '../../../../utils/libraryView';
@@ -77,6 +78,18 @@ function onClone(row: SkillLibraryRow): void {
       editable: true,
       tags: row.tags,
     });
+  }, t('skillLibrary.actionFailed'), fail);
+}
+
+function onDelete(row: SkillLibraryRow): void {
+  void withErrorNotice(async () => {
+    if (!plugin) return;
+    const ok = await confirm(plugin.app, t('skillLibrary.deleteConfirm', { name: row.name }), t('skillLibrary.delete'));
+    if (!ok) return;
+    const removed = await store.remove(row);
+    // Unreachable through the gated button; kept for programmatic callers.
+    if (!removed) { new Notice(t('skillLibrary.readonlyNotice')); return; }
+    new Notice(t('skillLibrary.deleted', { name: row.name }));
   }, t('skillLibrary.actionFailed'), fail);
 }
 
@@ -193,6 +206,16 @@ function onCreateSkill(): void {
             @click="onClone(row)"
           >
             ⧉
+          </button>
+          <!-- Delete shares the clone writability gate: only vault-rooted
+            skill folders the adapter can touch are deletable. -->
+          <button
+            v-if="isCloneableSkillPath(row.sourceFilePath)"
+            type="button"
+            class="specorator-vue-card-delete"
+            @click="onDelete(row)"
+          >
+            {{ t('skillLibrary.delete') }}
           </button>
         </template>
       </LibraryCard>

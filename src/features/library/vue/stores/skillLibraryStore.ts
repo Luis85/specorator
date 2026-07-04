@@ -1,6 +1,7 @@
 import { defineStore } from 'pinia';
 import { ref, shallowRef } from 'vue';
 
+import { ProviderWorkspaceRegistry } from '../../../../core/providers/ProviderWorkspaceRegistry';
 import type SpecoratorPlugin from '../../../../main';
 import { extractStringArray, parseFrontmatter } from '../../../../utils/frontmatter';
 import type { SkillTabEntry } from '../../../quickActions/skills/types';
@@ -97,5 +98,26 @@ export const useSkillLibraryStore = defineStore('library-skills', () => {
     return path;
   }
 
-  return { rows, loading, init, load, clone, entryFor, mtimeFor };
+  /**
+   * Delete shares the clone writability gate (`isCloneableSkillPath`): only
+   * vault-relative sources are deletable — host-absolute (global/home) and
+   * runtime-discovered skills stay untouchable. A skill IS its folder
+   * (`<root>/<name>/` with at least SKILL.md), so the whole dir goes.
+   */
+  async function remove(row: SkillLibraryRow): Promise<boolean> {
+    const p = plugin;
+    if (!p) throw new Error('skillLibraryStore used before init()');
+    if (!isCloneableSkillPath(row.sourceFilePath)) return false;
+    const folder = row.sourceFilePath.split('/').slice(0, -1).join('/');
+    await p.vaultFileAdapter.deleteFolderRecursive(folder);
+    // Same seam as SkillEditorModal.save: skill dot-folders bypass the vault
+    // watcher, so invalidate the aggregator bucket AND force-reload the owning
+    // provider's catalog (Codex serves a 5s listing cache the event can't clear).
+    p.events.emit('vaultSkill.changed', { providerId: row.providerId });
+    await ProviderWorkspaceRegistry.getCommandCatalog(row.providerId)?.refresh();
+    await load();
+    return true;
+  }
+
+  return { rows, loading, init, load, clone, remove, entryFor, mtimeFor };
 });

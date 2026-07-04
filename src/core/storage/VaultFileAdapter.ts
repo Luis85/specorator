@@ -95,6 +95,19 @@ export class VaultFileAdapter {
     }
   }
 
+  /**
+   * Removes a folder tree. Unlike `deleteFolder` (kept non-recursive so its
+   * callers can't wipe unexpected contents), this delegates to the adapter's
+   * native recursive rmdir for deliberate whole-folder deletes (e.g. a skill's
+   * `<root>/<name>/` dir, which always holds at least SKILL.md) and lets
+   * failures propagate so callers can surface them.
+   */
+  async deleteFolderRecursive(path: string): Promise<void> {
+    if (await this.exists(path)) {
+      await this.app.vault.adapter.rmdir(path, true);
+    }
+  }
+
   private async list(folder: string): Promise<{ files: string[]; folders: string[] }> {
     if (!(await this.exists(folder))) {
       return { files: [], folders: [] };

@@ -1157,7 +1157,10 @@
     "nameField": "Name",
     "actionFailed": "Something went wrong — check the developer console.",
     "providerVault": "Vault",
-    "prompt": "Prompt"
+    "prompt": "Prompt",
+    "delete": "Delete",
+    "deleteConfirm": "Delete the skill \"{name}\" and its folder?",
+    "deleted": "Deleted {name}."
   },
   "loopLibrary": {
     "navLabel": "Loops",

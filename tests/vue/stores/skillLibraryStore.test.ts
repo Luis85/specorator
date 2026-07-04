@@ -1,6 +1,12 @@
 import { createPinia, setActivePinia } from 'pinia';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+// The store invalidates provider catalogs through the static registry; mock it
+// so tests can pin the refresh seam without booting workspace services.
+vi.mock('@/core/providers/ProviderWorkspaceRegistry', () => ({
+  ProviderWorkspaceRegistry: { getCommandCatalog: vi.fn().mockReturnValue(null) },
+}));
+import { ProviderWorkspaceRegistry } from '@/core/providers/ProviderWorkspaceRegistry';
 import { useSkillLibraryStore } from '@/features/library/vue/stores/skillLibraryStore';
 
 const entry = {
@@ -18,6 +24,7 @@ function makePlugin(entries: unknown[]) {
       stat: vi.fn().mockResolvedValue({ mtime: 42 }),
       write: vi.fn().mockResolvedValue(undefined),
       exists: vi.fn().mockResolvedValue(false),
+      deleteFolderRecursive: vi.fn().mockResolvedValue(undefined),
     },
     events: { emit: vi.fn() },
     logger: { scope: () => ({ error: vi.fn(), warn: vi.fn() }) },
@@ -25,7 +32,10 @@ function makePlugin(entries: unknown[]) {
 }
 
 describe('useSkillLibraryStore', () => {
-  beforeEach(() => setActivePinia(createPinia()));
+  beforeEach(() => {
+    setActivePinia(createPinia());
+    vi.mocked(ProviderWorkspaceRegistry.getCommandCatalog).mockClear().mockReturnValue(null);
+  });
 
   it('load() builds rows with frontmatter tags and keeps the entry lookup', async () => {
     const store = useSkillLibraryStore();
@@ -102,6 +112,41 @@ describe('useSkillLibraryStore', () => {
     expect(result).toBeNull();
     const p = plugin as { vaultFileAdapter: { write: ReturnType<typeof vi.fn> } };
     expect(p.vaultFileAdapter.write).not.toHaveBeenCalled();
+  });
+
+  it('remove() deletes the skill FOLDER recursively, invalidates the owning provider, and reloads', async () => {
+    const store = useSkillLibraryStore();
+    const plugin = makePlugin([entry]);
+    const refresh = vi.fn().mockResolvedValue(undefined);
+    vi.mocked(ProviderWorkspaceRegistry.getCommandCatalog).mockReturnValue({ refresh } as never);
+    store.init(plugin);
+    await store.load();
+    const removed = await store.remove(store.rows[0]);
+    expect(removed).toBe(true);
+    const p = plugin as {
+      vaultFileAdapter: { deleteFolderRecursive: ReturnType<typeof vi.fn> };
+      events: { emit: ReturnType<typeof vi.fn> };
+      vaultSkillAggregator: { listAll: ReturnType<typeof vi.fn> };
+    };
+    // Folder derives from sourceFilePath (strip /SKILL.md), never a file delete.
+    expect(p.vaultFileAdapter.deleteFolderRecursive).toHaveBeenCalledWith('.claude/skills/a');
+    expect(p.events.emit).toHaveBeenCalledWith('vaultSkill.changed', { providerId: 'claude' });
+    expect(ProviderWorkspaceRegistry.getCommandCatalog).toHaveBeenCalledWith('claude');
+    expect(refresh).toHaveBeenCalled();
+    // Multi-leaf staleness contract: remove() must reload the shared store.
+    expect(p.vaultSkillAggregator.listAll.mock.calls.length).toBeGreaterThan(1);
+  });
+
+  it('remove() refuses non-deletable (host-absolute) paths without touching disk', async () => {
+    const store = useSkillLibraryStore();
+    const plugin = makePlugin([entry]);
+    store.init(plugin);
+    await store.load();
+    const removed = await store.remove({ ...store.rows[0], sourceFilePath: '/home/u/.codex/skills/a/SKILL.md' });
+    expect(removed).toBe(false);
+    const p = plugin as { vaultFileAdapter: { deleteFolderRecursive: ReturnType<typeof vi.fn> }; events: { emit: ReturnType<typeof vi.fn> } };
+    expect(p.vaultFileAdapter.deleteFolderRecursive).not.toHaveBeenCalled();
+    expect(p.events.emit).not.toHaveBeenCalled();
   });
 
   it('load() rejects when the store is used before init()', async () => {
