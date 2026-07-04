@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { LibraryView } from '@/features/library/LibraryView';
 import { resetLibraryPinia } from '@/features/library/vue/globalPinia';
@@ -38,7 +38,7 @@ describe('LibraryView open/close leak guard', () => {
 
   it('leaves no DOM and no dangling document/window listeners across 5 cycles', async () => {
     const plugin = makePlugin();
-    const leaf = { setViewState: vi.fn() } as never;
+    const leaf = {} as never;
     for (let i = 0; i < 5; i += 1) {
       const view = new LibraryView(leaf, plugin);
       const el = document.createElement('div');

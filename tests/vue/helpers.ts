@@ -1,9 +1,8 @@
 import { vi } from 'vitest';
 
 /**
- * Fake SpecoratorPlugin covering every backend surface the three Library
- * panels touch on mount, so view-level tests keep working as Tasks 10-12 swap
- * real panels into the shell.
+ * Fake SpecoratorPlugin covering every backend surface the Library panels
+ * touch on mount.
  */
 export function makePlugin() {
   return {

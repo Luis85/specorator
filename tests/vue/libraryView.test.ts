@@ -8,7 +8,9 @@ import { useLoopLibraryStore } from '@/features/library/vue/stores/loopLibrarySt
 import { makePlugin } from './helpers';
 
 function makeLeaf() {
-  return { setViewState: vi.fn().mockResolvedValue(undefined) } as never;
+  // Empty stub: LibraryView no longer drives the leaf itself (the flag-off
+  // redirect that used setViewState was deleted with the legacy views).
+  return {} as never;
 }
 
 /** The obsidian mock's ItemView has no real contentEl; give the view a jsdom one. */

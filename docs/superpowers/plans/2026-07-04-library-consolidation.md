@@ -159,6 +159,16 @@ Then re-run Step 1's greps — every deleted class must now have ZERO ts/vue hit
   plugin.addCommand({ id: 'open-skill-library', name: t('commands.openSkillLibrary'), callback: () => void openLibrary('skills') });
   plugin.addCommand({ id: 'open-quick-actions', name: t('commands.openQuickActions'), callback: () => void openLibrary('quick-actions') });
 ```
+ALSO (Task 1 quality-review note): the three library commands now diverge in
+registration path — roster/skills via raw `plugin.addCommand` in
+registerPluginViews, loops via the registrar (`registerPluginCommands`, which
+also feeds the hotkey registry). While rewriting the command block here,
+unify: move ALL library commands (the three tab deep-links + the two new
+ones) onto ONE path — whichever of the two the codebase treats as canonical
+for hotkey support (inspect `registerCommandHotkey` usage in
+registerPluginCommands.ts and follow it). Update the Jest expectations
+accordingly.
+
 NOTE: `'quick-actions'` is not a valid `LibraryTab` until Task 5 — to keep Task 3 compiling, add the union member in THIS task (`viewType.ts`: `export type LibraryTab = 'agents' | 'skills' | 'loops' | 'quick-actions';`) and let `LibraryRoot` handle the unknown tab gracefully until Task 5 (check `LibraryRoot.vue`'s panel switch: `AgentsPanel` is the `v-else` fallback — an unmatched tab falls back to Agents; acceptable transiently, note it in the commit). i18n: add `ribbon.openLibrary`, `commands.openLibrary`, `commands.openQuickActions` to all 10 locales.
 
 - [ ] **Step 3: Verify + commit** — both lanes + typechecks + lint + locale alignment; commit `feat(library): single Open Library ribbon and unified commands`.
