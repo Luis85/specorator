@@ -40,10 +40,8 @@
   border-radius: 4px;
 }
 
-/* Library views: the cross-library nav tabs and cap-picker controls need a
-   visible focus ring. (The card's own focus ring lives in library.css; the
-   whole card is the keyboard open affordance, role="button" tabindex="0".) */
-.specorator-library-nav-item:focus-visible,
+/* Library detail editor: the cap-picker controls and role chips need a
+   visible focus ring. */
 .specorator-cap-picker-header:focus-visible,
 .specorator-cap-picker-chip:focus-visible,
 .specorator-roster-role-chip:focus-visible {

@@ -42,9 +42,6 @@ export class AgentDetailEditor {
     this.draft = { ...agent, roles: [...agent.roles], skills: [...agent.skills], tags: [...(agent.tags ?? [])] };
 
     root.empty();
-    // The list view shares the `specorator-library` shell; the detail page has its
-    // own bespoke root, so drop the library scaffold class when switching in.
-    root.removeClass('specorator-roster', 'specorator-library');
     root.addClass('specorator-roster-detail');
 
     this.renderTopbar(root);

@@ -16,7 +16,7 @@ export interface LibraryList<T> {
 }
 
 /**
- * Reactive twin of LibraryListController for the Vue panels: same pure engine
+ * Reactive list engine for the Vue panels over the shared pure helpers
  * (applyLibraryQuery/collectLibraryTags), driven by a reactive SOURCE getter
  * (typically `() => store.xxx`) rather than snapshots. This is what keeps a
  * SECOND Library leaf consistent: the stores are plugin-global, so any leaf's
