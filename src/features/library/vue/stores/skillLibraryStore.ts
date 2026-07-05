@@ -1,5 +1,5 @@
 import { defineStore } from 'pinia';
-import { ref, shallowRef } from 'vue';
+import { shallowRef } from 'vue';
 
 import type SpecoratorPlugin from '../../../../main';
 import { extractStringArray, parseFrontmatter } from '../../../../utils/frontmatter';
@@ -10,6 +10,7 @@ import type { SkillLibraryRow } from '../../../skills/skillLibraryRows';
 import { toSkillLibraryRows } from '../../../skills/skillLibraryRows';
 import { resolveSkillVaultPath } from '../../../skills/skillPaths';
 import { mergeById } from '../mergeById';
+import { useGuardedLoad } from '../useGuardedLoad';
 
 /**
  * Reactive projection of the skill aggregator (SkillLibraryView.render's data
@@ -18,12 +19,11 @@ import { mergeById } from '../mergeById';
  */
 export const useSkillLibraryStore = defineStore('library-skills', () => {
   const rows = shallowRef<SkillLibraryRow[]>([]);
-  const loading = ref(false);
+  const { loading, run } = useGuardedLoad();
 
   let plugin: SpecoratorPlugin | null = null;
   let entryById = new Map<string, SkillTabEntry>();
   let mtimeById = new Map<string, number>();
-  let loadToken = 0;
 
   function init(p: SpecoratorPlugin): void {
     plugin = p;
@@ -68,26 +68,24 @@ export const useSkillLibraryStore = defineStore('library-skills', () => {
   async function load(): Promise<void> {
     const p = plugin;
     if (!p) throw new Error('skillLibraryStore used before init()');
-    // Request-token guard: a slow load that STARTED before a mutation must not
-    // resolve AFTER the mutation's reload and overwrite fresher data (two
-    // leaves open, or the mount load overlapping clone/create). ALL state —
-    // rows AND the entry/mtime lookup maps — commits behind the token check so
-    // a stale read can't desync the lookups from the rows either.
-    const token = ++loadToken;
-    loading.value = true;
-    try {
-      const entries = (await p.vaultSkillAggregator?.listAll()) ?? [];
-      const mtimes = new Map<string, number>();
-      const tagsById = await loadSkillTags(entries, mtimes);
-      if (token !== loadToken) return; // superseded by a newer load — drop stale result
-      entryById = new Map(entries.map((e) => [e.id, e]));
-      mtimeById = mtimes;
-      // Merge by identity so untouched skill rows keep their previous reference
-      // (no card icon/tag repaint on a mutation reload — see mergeById).
-      rows.value = mergeById(rows.value, toSkillLibraryRows(entries, tagsById), (r) => r.id);
-    } finally {
-      if (token === loadToken) loading.value = false;
-    }
+    // ALL state — rows AND the entry/mtime lookup maps — commits behind the
+    // guard's token check so a stale read can't desync the lookups from the
+    // rows either (two leaves open, or the mount load overlapping clone/create).
+    await run(
+      async () => {
+        const entries = (await p.vaultSkillAggregator?.listAll()) ?? [];
+        const mtimes = new Map<string, number>();
+        const tagsById = await loadSkillTags(entries, mtimes);
+        return { entries, mtimes, tagsById };
+      },
+      ({ entries, mtimes, tagsById }) => {
+        entryById = new Map(entries.map((e) => [e.id, e]));
+        mtimeById = mtimes;
+        // Merge by identity so untouched skill rows keep their previous reference
+        // (no card icon/tag repaint on a mutation reload — see mergeById).
+        rows.value = mergeById(rows.value, toSkillLibraryRows(entries, tagsById), (r) => r.id);
+      },
+    );
   }
 
   /** Port of SkillLibraryView.cloneSkill's write half; returns the clone path.

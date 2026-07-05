@@ -5,6 +5,7 @@ import type SpecoratorPlugin from '../../../../main';
 import { assignNextFavoriteRank, QuickActionStorage } from '../../../quickActions/QuickActionStorage';
 import type { QuickAction } from '../../../quickActions/types';
 import { mergeById } from '../mergeById';
+import { useGuardedLoad } from '../useGuardedLoad';
 
 /**
  * Reactive projection over QuickActionStorage for the Library tab. I/O stays
@@ -13,13 +14,12 @@ import { mergeById } from '../mergeById';
  */
 export const useQuickActionStore = defineStore('library-quick-actions', () => {
   const actions = ref<QuickAction[]>([]);
-  const loading = ref(false);
+  const { loading, run } = useGuardedLoad();
   const error = ref<string | null>(null);
   const folderConfigured = ref(true);
 
   let plugin: SpecoratorPlugin | null = null;
   let storage: QuickActionStorage | null = null;
-  let loadToken = 0;
 
   function init(p: SpecoratorPlugin): void {
     if (plugin) return;
@@ -35,24 +35,20 @@ export const useQuickActionStore = defineStore('library-quick-actions', () => {
 
   async function load(): Promise<void> {
     if (!storage) return;
-    // Request-token guard: a slow load that STARTED before a mutation must not
-    // resolve AFTER the mutation's reload and overwrite fresher data.
-    const token = ++loadToken;
-    loading.value = true;
-    try {
-      folderConfigured.value = storage.hasConfiguredFolder();
-      const next = await storage.loadAll();
-      if (token !== loadToken) return; // a newer load superseded this one
-      // Merge by identity (filePath is the stable key) so untouched quick-action
-      // cards keep their previous reference — no icon repaint on a mutation reload.
-      actions.value = mergeById(actions.value, next, (a) => a.filePath);
-      error.value = null;
-    } catch (e) {
-      if (token !== loadToken) return;
-      error.value = e instanceof Error ? e.message : String(e);
-    } finally {
-      if (token === loadToken) loading.value = false;
-    }
+    const s = storage;
+    await run(
+      () => {
+        folderConfigured.value = s.hasConfiguredFolder();
+        return s.loadAll();
+      },
+      (next) => {
+        // Merge by identity (filePath is the stable key) so untouched quick-action
+        // cards keep their previous reference — no icon repaint on a mutation reload.
+        actions.value = mergeById(actions.value, next, (a) => a.filePath);
+        error.value = null;
+      },
+      (e) => { error.value = e instanceof Error ? e.message : String(e); },
+    );
   }
 
   /** Editor-modal persistence path (panel onSave routes here so the modal

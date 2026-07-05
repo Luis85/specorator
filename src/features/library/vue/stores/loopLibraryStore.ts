@@ -1,10 +1,11 @@
 import { defineStore } from 'pinia';
-import { ref, shallowRef } from 'vue';
+import { shallowRef } from 'vue';
 
 import type SpecoratorPlugin from '../../../../main';
 import { LoopNoteStore } from '../../../tasks/loops/LoopNoteStore';
 import type { LoopDefinition, SaveLoopInput } from '../../../tasks/loops/loopTypes';
 import { mergeById } from '../mergeById';
+import { useGuardedLoad } from '../useGuardedLoad';
 
 /**
  * Reactive projection of the loop notes. I/O stays in LoopNoteStore; actions
@@ -14,11 +15,10 @@ import { mergeById } from '../mergeById';
  */
 export const useLoopLibraryStore = defineStore('library-loops', () => {
   const loops = shallowRef<LoopDefinition[]>([]);
-  const loading = ref(false);
+  const { loading, run } = useGuardedLoad();
 
   let plugin: SpecoratorPlugin | null = null;
   let noteStore = new LoopNoteStore();
-  let loadToken = 0;
 
   function init(p: SpecoratorPlugin, store?: LoopNoteStore): void {
     plugin = p;
@@ -32,22 +32,13 @@ export const useLoopLibraryStore = defineStore('library-loops', () => {
 
   async function load(): Promise<void> {
     if (!plugin) throw new Error('loopLibraryStore used before init()');
-    // Request-token guard: a slow load that STARTED before a mutation must not
-    // resolve AFTER the mutation's reload and overwrite fresher data (two
-    // leaves open, or the mount load overlapping save/clone/remove). The
-    // `loading` flag also commits behind the token check so a stale load can't
-    // clear it while a newer one is still in flight.
-    const token = ++loadToken;
-    loading.value = true;
-    try {
-      const { loops: list } = await noteStore.list(plugin.app.vault, folder());
-      if (token !== loadToken) return; // superseded by a newer load — drop stale result
+    const p = plugin;
+    await run(
+      async () => (await noteStore.list(p.app.vault, folder())).loops,
       // Merge by identity (loop path is the stable key) so untouched loop cards
       // keep their previous reference — no repaint on a mutation reload.
-      loops.value = mergeById(loops.value, list, (l) => l.path);
-    } finally {
-      if (token === loadToken) loading.value = false;
-    }
+      (list) => { loops.value = mergeById(loops.value, list, (l) => l.path); },
+    );
   }
 
   async function save(input: SaveLoopInput, originalPath?: string): Promise<void> {
