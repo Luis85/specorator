@@ -43,9 +43,7 @@ exports[`QuickActionsPanel > card structure snapshot (small, stable sub-tree) 1`
         data-v-00781362=""
         title="Toggle favorite"
         type="button"
-      >
-         ★ 
-      </button>
+      />
       
     </div>
     

@@ -257,6 +257,7 @@ function onToggleFavorite(action: QuickAction): void {
           <!-- .stop: the star sits inside the card's activate surface, and a
             toggle must not also open the editor. -->
           <button
+            :ref="(el) => applyIcon(el, 'star')"
             type="button"
             class="specorator-vue-qa-star"
             :class="{ 'is-on': action.favorite === true }"
@@ -265,9 +266,7 @@ function onToggleFavorite(action: QuickAction): void {
             :title="t('quickActions.library.favoriteAria')"
             :disabled="pending.isBusy(action.filePath)"
             @click.stop="onToggleFavorite(action)"
-          >
-            ★
-          </button>
+          />
         </template>
         <div
           v-if="action.description"
@@ -332,24 +331,41 @@ function onToggleFavorite(action: QuickAction): void {
   height: 20px;
 }
 
-/* Glyph-only toggle: strip Obsidian's native button chrome so the star reads
-   as a favorite marker, not a third CTA in the name row. Scoped (0,2,0)
-   beats the host button baseline (0,1,1) by specificity. */
+/* Icon toggle: strip Obsidian's native button chrome so the star reads as a
+   favorite marker, not a third CTA in the name row, but keep a real icon-sized
+   hit area with a hover affordance. Scoped (0,2,0) beats the host button
+   baseline (0,1,1) by specificity. */
 .specorator-vue-qa-star {
-  padding: 0 var(--sp-space-3xs);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--sp-space-3xs);
   background: transparent;
   border: none;
   box-shadow: none;
+  border-radius: var(--sp-radius-s);
   color: var(--sp-text-faint);
   cursor: pointer;
 }
 
+/* setIcon() renders the lucide <svg> imperatively — no data-v, reach via
+   :deep(). Sized to match the card's leading icon. */
+.specorator-vue-qa-star :deep(svg) {
+  width: 18px;
+  height: 18px;
+}
+
 .specorator-vue-qa-star:hover {
   color: var(--sp-text);
-  background: transparent;
+  background: var(--sp-surface-hover);
 }
 
 .specorator-vue-qa-star.is-on {
   color: var(--sp-accent);
+}
+
+/* Favorited: fill the outline star so the on-state reads at a glance. */
+.specorator-vue-qa-star.is-on :deep(svg) {
+  fill: currentColor;
 }
 </style>
