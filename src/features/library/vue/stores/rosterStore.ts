@@ -64,7 +64,17 @@ export const useRosterStore = defineStore('library-agents', () => {
   async function remove(agent: RosterAgent): Promise<void> {
     const p = requirePlugin();
     await p.agentRosterStore.delete(agent.id);
-    await p.removeRosterAgentProjection(agent);
+    // The roster file is now gone — the delete has succeeded. Provider-projection
+    // cleanup is explicitly best-effort (it isolates per-file failures itself),
+    // so a throw from it must NOT reject remove(): that would both present a
+    // succeeded delete as a failure AND skip the reload below, leaving the
+    // deleted agent's card lingering in every mounted leaf — the "delete did
+    // nothing" phantom. Surface it as a warning and carry on to reload.
+    try {
+      await p.removeRosterAgentProjection(agent);
+    } catch (error) {
+      p.logger.scope('agents').warn('roster projection cleanup failed after delete', error);
+    }
     await load();
   }
 

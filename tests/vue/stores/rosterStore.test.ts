@@ -15,9 +15,17 @@ function makePlugin(agents: unknown[]) {
     save: vi.fn().mockResolvedValue(undefined),
     delete: vi.fn().mockResolvedValue(undefined),
   };
+  const removeRosterAgentProjection = vi.fn().mockResolvedValue(undefined);
+  const warn = vi.fn();
   return {
-    plugin: { agentRosterStore: rosterStore, removeRosterAgentProjection: vi.fn().mockResolvedValue(undefined) } as never,
+    plugin: {
+      agentRosterStore: rosterStore,
+      removeRosterAgentProjection,
+      logger: { scope: () => ({ warn, error: vi.fn(), debug: vi.fn() }) },
+    } as never,
     rosterStore,
+    removeRosterAgentProjection,
+    warn,
   };
 }
 
@@ -113,6 +121,24 @@ describe('useRosterStore', () => {
     expect(rosterStore.delete).toHaveBeenCalledWith('roster:a');
     expect((plugin as { removeRosterAgentProjection: ReturnType<typeof vi.fn> }).removeRosterAgentProjection).toHaveBeenCalled();
     expect(rosterStore.list).toHaveBeenCalled();
+  });
+
+  it('remove() still reloads (dropping the card) when best-effort projection cleanup throws', async () => {
+    // Root-cause guard for the "detail Delete did nothing" report: the roster
+    // file is deleted BEFORE projection cleanup, so a cleanup throw must not
+    // skip load() — otherwise the deleted agent's card lingers in every mounted
+    // leaf even though its file is already gone (a phantom no-op).
+    const { plugin, rosterStore, removeRosterAgentProjection, warn } = makePlugin([]);
+    removeRosterAgentProjection.mockRejectedValueOnce(new Error('provider registry blew up'));
+    const store = useRosterStore();
+    store.init(plugin);
+    const listCallsBefore = rosterStore.list.mock.calls.length;
+    // The delete itself succeeded, so remove() resolves (does not reject) and
+    // the cleanup failure is surfaced as a warning, not a failed delete.
+    await expect(store.remove(agent as never)).resolves.toBeUndefined();
+    expect(rosterStore.delete).toHaveBeenCalledWith('roster:a');
+    expect(rosterStore.list.mock.calls.length).toBeGreaterThan(listCallsBefore);
+    expect(warn).toHaveBeenCalled();
   });
 
   it('load() rejects when the store is used before init()', async () => {

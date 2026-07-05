@@ -93,6 +93,10 @@ function saveButton(root: HTMLElement): HTMLButtonElement {
   return root.querySelector('.specorator-roster-detail-footer .mod-cta') as HTMLButtonElement;
 }
 
+function deleteButton(root: HTMLElement): HTMLButtonElement {
+  return root.querySelector('.specorator-roster-detail-footer .specorator-library-card-delete') as HTMLButtonElement;
+}
+
 function startChatButton(root: HTMLElement): HTMLButtonElement {
   const buttons = root.querySelectorAll('.specorator-roster-detail-footer button');
   return buttons[buttons.length - 1] as HTMLButtonElement;
@@ -158,6 +162,20 @@ describe('AgentDetailEditor skills picker', () => {
       { id: 'brainstorming', name: 'brainstorming', description: 'Ideate broadly', badge: 'Claude, Codex' },
       { id: 'pdf-extract', name: 'pdf-extract', description: 'Extract text', badge: 'Claude' },
     ]);
+  });
+});
+
+describe('AgentDetailEditor delete button', () => {
+  it('footer Delete fires onDeleted with the original agent', async () => {
+    const { callbacks, root } = await renderEditor(makeAgent());
+    const del = deleteButton(root);
+    expect(del).toBeTruthy();
+    del.click();
+    await flush();
+    expect(callbacks.onDeleted).toHaveBeenCalledTimes(1);
+    expect(callbacks.onDeleted).toHaveBeenCalledWith(
+      expect.objectContaining({ id: 'roster:agent-a' }),
+    );
   });
 });
 
