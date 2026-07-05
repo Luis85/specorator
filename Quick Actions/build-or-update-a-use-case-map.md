@@ -45,6 +45,48 @@ Present a short preview and get a yes:
 - Canvas integrity: every node `id` is unique; every `file` node's `file` is a vault-relative path with forward slashes pointing at a note that exists; every edge references existing node ids.
 - **Verify before claiming done** (report the numbers): every canvas file-node resolves to a real note; YAML parses for every note; **zero aliased links in any frontmatter**; no node overlaps; edge count == use-case count.
 
+## 6. Generator recipe — language-agnostic
+Writing 100+ notes plus a coordinate-perfect canvas by hand is error-prone. Build a small generator instead. The steps and shapes below are the same in any language.
+
+### Pick a runtime
+Use whatever the project already has (Node, Python, Ruby, Go, a shell + `jq`, …). The generator only needs to: read/write text files, make folders, and serialize JSON. If no runtime is convenient, do the same thing directly with your file tools — identical data, identical schema. Keep the script as a throwaway (e.g. under a scratch/`.context` dir), not a committed artifact.
+
+### One source of truth
+Define a single in-memory data structure and generate **everything** (all notes + the canvas) from it, so a re-run is reproducible:
+- an **ordered** list of views; each view has `key`, `name`, `color`, `surface`, `purpose`, and an **ordered** list of use-cases;
+- each use-case has `name`, `description`, `actors`, `trigger`, `sourceFiles`, `cluster`.
+Encode `actors` compactly if you like, but expand to full names in the note output.
+
+### Deterministic ids & ordering
+Never use random or time-based ids — they change every run and thrash the canvas diff. Derive stable ids from position: view `v_<view-key>`, use-case `u_<view-key>_<i>`, edge `e_<view-key>_<i>`. Keep input order fixed. (Many sandboxes also block `random`/`now()` in generator contexts — deterministic ids sidestep that entirely.)
+
+### Canvas JSON schema (Obsidian `.canvas`)
+Top level: `{ "nodes": [ … ], "edges": [ … ], "metadata": { "version": "1.0-1.0", "frontmatter": {} } }`.
+- **File node**: `{ id, type: "file", file: "<vault-relative/path.md>", x, y, width, height, color? }` — `file` uses forward slashes, is relative to the vault root, and must point at a note that exists.
+- **Text node** (title / legend): `{ id, type: "text", text: "<markdown>", x, y, width, height }`.
+- **Edge**: `{ id, fromNode, fromSide: "right", toNode, toSide: "left", color? }`.
+- `color` is either a preset digit string `"1"`..`"6"` (red, orange, yellow, green, cyan, purple) or a hex string like `"#8a8f98"`. Coordinates are plain numbers; **+x is right, +y is down** (height grows downward). Match the same key set your Obsidian version already writes (open an existing canvas to check, e.g. whether it includes `styleAttributes: {}`).
+
+### Layout recipe (bands + columns)
+Pick constants, e.g.: view node `300×140`; use-case node `330×120`; `gridX0 ≈ 540` (where the use-case grid starts, right of the left column at `x=0`); `rowPitch = ucHeight + 50`; `colPitch = ucWidth + 70`; `colMax = 12`; `bandGap ≈ 240`.
+Lay views top→down, each in its own horizontal **band**:
+- `n = use-case count`, `rows = min(n, colMax)`, `bandHeight = (rows-1)*rowPitch + ucHeight`.
+- **View node**: `x = 0`, `y = bandTop + bandHeight/2 − viewHeight/2` (centered in its band).
+- **Use-case `i`**: `col = floor(i / colMax)`, `row = i mod colMax`, `x = gridX0 + col*colPitch`, `y = bandTop + row*rowPitch`; add one edge view→use-case, colored to the view.
+- Then `bandTop += bandHeight + bandGap`.
+- A view with **zero** use-cases (single-reference surface) is a lone node: `bandHeight = viewHeight`, no grid, no edges.
+- Add a title text node and a legend text node above the first band (negative `y`).
+
+### Emit notes
+Apply the §4 frontmatter rules while writing: unaliased frontmatter links, no backtick/`@`-leading scalars, quote any value with `#`/`/`/`:`/`|`/`@`. Aliased links and backticked code go in the **body** only.
+
+### Idempotency
+- **Create mode**: wiping and rebuilding the generated map folder from the data is fine.
+- **Update mode**: do **not** blind-wipe — see *Update-mode care*. Read the existing canvas first and preserve each existing node's `x/y` and user-edited notes; only add new nodes/notes, refresh changed bodies, and flag removed ones. Merge by stable id/slug.
+
+### Self-check (fail loudly)
+After generating, re-parse the canvas and every note and assert: unique node ids; every file-node path exists on disk; every edge endpoint resolves; no two use-case nodes overlap; every note's YAML parses; zero aliased links in any frontmatter. Print counts (views, use-cases, nodes, edges) and, in update mode, the added/changed/removed diff.
+
 ## Update-mode care
 Match existing use-cases by slug/name, keep their notes and their canvas coordinates, and only add / modify / mark-removed. Never wipe the user's manual node positions or hand edits without saying so first.
 
