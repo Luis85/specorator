@@ -110,7 +110,7 @@ function onInstallStarters(): void {
   </div>
   <div class="specorator-vue-panel-list">
     <div
-      v-if="store.loading"
+      v-if="store.loading && store.loops.length === 0"
       class="specorator-vue-panel-loading"
     >
       {{ t('common.loading') }}

@@ -9,6 +9,7 @@ import { isCloneableSkillPath, vaultSkillFolderOf, writeSkillClone } from '../..
 import type { SkillLibraryRow } from '../../../skills/skillLibraryRows';
 import { toSkillLibraryRows } from '../../../skills/skillLibraryRows';
 import { resolveSkillVaultPath } from '../../../skills/skillPaths';
+import { mergeById } from '../mergeById';
 
 /**
  * Reactive projection of the skill aggregator (SkillLibraryView.render's data
@@ -81,7 +82,9 @@ export const useSkillLibraryStore = defineStore('library-skills', () => {
       if (token !== loadToken) return; // superseded by a newer load — drop stale result
       entryById = new Map(entries.map((e) => [e.id, e]));
       mtimeById = mtimes;
-      rows.value = toSkillLibraryRows(entries, tagsById);
+      // Merge by identity so untouched skill rows keep their previous reference
+      // (no card icon/tag repaint on a mutation reload — see mergeById).
+      rows.value = mergeById(rows.value, toSkillLibraryRows(entries, tagsById), (r) => r.id);
     } finally {
       if (token === loadToken) loading.value = false;
     }

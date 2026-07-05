@@ -200,7 +200,7 @@ function onToggleFavorite(action: QuickAction): void {
   </div>
   <div class="specorator-vue-panel-list">
     <div
-      v-if="store.loading"
+      v-if="store.loading && store.actions.length === 0"
       class="specorator-vue-panel-loading"
     >
       {{ t('common.loading') }}

@@ -2,6 +2,7 @@ import { fireEvent, render, screen, waitFor, within } from '@testing-library/vue
 import { Notice } from 'obsidian';
 import { createPinia, setActivePinia } from 'pinia';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { nextTick } from 'vue';
 
 import { PLUGIN_KEY } from '@/features/library/vue/libraryKeys';
 import type * as quickActionStorageModule from '@/features/quickActions/QuickActionStorage';
@@ -161,6 +162,18 @@ describe('QuickActionsPanel', () => {
     const onStar = within(favCard).getByRole('button', { name: 'Toggle favorite' });
     expect(onStar.getAttribute('aria-pressed')).toBe('true');
     expect(onStar.classList.contains('is-on')).toBe(true);
+  });
+
+  it('shows the loading indicator only on the first/empty load, never on a background mutation reload', async () => {
+    const { store } = setup([action]);
+    await screen.findByText('Summarize');
+    store.loading = true; // background reload, rows still present
+    await nextTick();
+    expect(document.querySelector('.specorator-vue-panel-loading')).toBeNull();
+    store.actions = []; // first/empty load
+    store.error = null;
+    await nextTick();
+    expect(document.querySelector('.specorator-vue-panel-loading')).toBeTruthy();
   });
 
   it('Run dispatches through runQuickActionForFile with a null file (no pill context)', async () => {

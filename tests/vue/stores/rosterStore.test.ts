@@ -141,6 +141,25 @@ describe('useRosterStore', () => {
     expect(warn).toHaveBeenCalled();
   });
 
+  it('load() merges by identity: unchanged rows keep their reference, the changed one is new', async () => {
+    const a = { ...agent, id: 'roster:a', name: 'Alice' };
+    const b = { ...agent, id: 'roster:b', name: 'Bob' };
+    const { plugin, rosterStore } = makePlugin([]);
+    // Each list() returns FRESH clones (as a disk reload does), so identity is
+    // preserved only when the store routes through mergeById.
+    rosterStore.list = vi.fn()
+      .mockResolvedValueOnce([{ ...a }, { ...b }])
+      .mockResolvedValueOnce([{ ...a }, { ...b, name: 'Bobby' }]);
+    const store = useRosterStore();
+    store.init(plugin);
+    await store.load();
+    const [firstA, firstB] = store.agents;
+    await store.load(); // mutation reload: only Bob changed
+    expect(store.agents[0]).toBe(firstA); // unchanged -> same reference
+    expect(store.agents[1]).not.toBe(firstB); // changed -> fresh reference
+    expect(store.agents[1].name).toBe('Bobby');
+  });
+
   it('load() rejects when the store is used before init()', async () => {
     const store = useRosterStore();
     await expect(store.load()).rejects.toThrow('used before init()');

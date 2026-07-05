@@ -239,6 +239,23 @@ describe('useSkillLibraryStore', () => {
     expect(p.events.emit).not.toHaveBeenCalled();
   });
 
+  it('load() merges by identity: unchanged skill rows keep their reference, the changed one is new', async () => {
+    const store = useSkillLibraryStore();
+    const entryB = { ...entry, id: 'claude:skill-b', name: 'b', sourceFilePath: '.claude/skills/b/SKILL.md' };
+    const plugin = makePlugin([entry]);
+    const p = plugin as { vaultSkillAggregator: { listAll: ReturnType<typeof vi.fn> } };
+    p.vaultSkillAggregator.listAll = vi.fn()
+      .mockResolvedValueOnce([{ ...entry }, { ...entryB }])
+      .mockResolvedValueOnce([{ ...entry }, { ...entryB, description: 'changed' }]);
+    store.init(plugin);
+    await store.load();
+    const [firstA, firstB] = store.rows;
+    await store.load(); // mutation reload: only skill-b changed
+    expect(store.rows[0]).toBe(firstA);
+    expect(store.rows[1]).not.toBe(firstB);
+    expect(store.rows[1].description).toBe('changed');
+  });
+
   it('load() rejects when the store is used before init()', async () => {
     const store = useSkillLibraryStore();
     await expect(store.load()).rejects.toThrow('used before init()');

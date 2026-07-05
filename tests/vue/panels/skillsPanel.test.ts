@@ -2,6 +2,7 @@ import { fireEvent, render, screen, waitFor, within } from '@testing-library/vue
 import { Notice } from 'obsidian';
 import { createPinia, setActivePinia } from 'pinia';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { nextTick } from 'vue';
 
 import { PLUGIN_KEY } from '@/features/library/vue/libraryKeys';
 import SkillsPanel from '@/features/library/vue/panels/SkillsPanel.vue';
@@ -111,6 +112,17 @@ function setupMutable(entries: unknown[], opts: { listAll?: ReturnType<typeof vi
 
 describe('SkillsPanel mutation flows', () => {
   beforeEach(() => vi.clearAllMocks());
+
+  it('shows the loading indicator only on the first/empty load, never on a background mutation reload', async () => {
+    const { store } = setupMutable([entry]);
+    await screen.findByText('a-skill');
+    store.loading = true; // background reload, rows still present
+    await nextTick();
+    expect(document.querySelector('.specorator-vue-panel-loading')).toBeNull();
+    store.rows = []; // first/empty load
+    await nextTick();
+    expect(document.querySelector('.specorator-vue-panel-loading')).toBeTruthy();
+  });
 
   it('Duplicate clones through the store, reloads, and opens the editor on the SYNTHESIZED clone row', async () => {
     const { plugin, p } = setupMutable([entry]);

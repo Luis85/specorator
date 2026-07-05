@@ -235,6 +235,20 @@ describe('useQuickActionStore', () => {
     expect(storage.loadAll).toHaveBeenCalledTimes(1);
   });
 
+  it('load() merges by identity (filePath key): unchanged actions keep their reference, the changed one is new', async () => {
+    const { store, storage } = initStore();
+    const second = { ...baseAction, id: 'b', name: 'B', filePath: 'Quick Actions/b.md' };
+    storage.loadAll
+      .mockResolvedValueOnce([{ ...baseAction }, { ...second }])
+      .mockResolvedValueOnce([{ ...baseAction }, { ...second, name: 'B edited' }]);
+    await store.load();
+    const [firstA, firstB] = store.actions;
+    await store.load(); // mutation reload: only the second action changed
+    expect(store.actions[0]).toBe(firstA);
+    expect(store.actions[1]).not.toBe(firstB);
+    expect(store.actions[1].name).toBe('B edited');
+  });
+
   it('save() persists through storage, refreshes the favorites cache, and reloads (editor-modal onSave path)', async () => {
     const { store, plugin, storage } = initStore();
     await store.save(baseAction);

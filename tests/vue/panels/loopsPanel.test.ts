@@ -1,6 +1,7 @@
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/vue';
 import { createPinia, setActivePinia } from 'pinia';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { nextTick } from 'vue';
 
 import { PLUGIN_KEY } from '@/features/library/vue/libraryKeys';
 import LoopsPanel from '@/features/library/vue/panels/LoopsPanel.vue';
@@ -60,6 +61,17 @@ describe('LoopsPanel', () => {
     // card or getByText throws 'Found multiple elements'.
     const card = screen.getByRole('button', { name: 'A loop' });
     expect(within(card).getByText('tag1')).toBeTruthy();
+  });
+
+  it('shows the loading indicator only on the first/empty load, never on a background mutation reload', async () => {
+    const { store } = setup([loop]);
+    await screen.findByText('A loop');
+    store.loading = true; // background reload, rows still present
+    await nextTick();
+    expect(document.querySelector('.specorator-vue-panel-loading')).toBeNull();
+    store.loops = []; // first/empty load
+    await nextTick();
+    expect(document.querySelector('.specorator-vue-panel-loading')).toBeTruthy();
   });
 
   it('Prompt button launches the loop prompt flow without activating the card', async () => {

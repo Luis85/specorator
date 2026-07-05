@@ -4,6 +4,7 @@ import { ref, shallowRef } from 'vue';
 import type SpecoratorPlugin from '../../../../main';
 import { cloneRosterAgent, draftRosterAgent } from '../../../agents/roster/rosterCapabilities';
 import type { RosterAgent } from '../../../agents/roster/rosterTypes';
+import { mergeById } from '../mergeById';
 
 export const useRosterStore = defineStore('library-agents', () => {
   const agents = shallowRef<RosterAgent[]>([]);
@@ -33,7 +34,9 @@ export const useRosterStore = defineStore('library-agents', () => {
     try {
       const list = await p.agentRosterStore.list();
       if (token !== loadToken) return; // superseded by a newer load — drop stale result
-      agents.value = list;
+      // Merge by identity so untouched rows keep their previous object reference
+      // (no child avatar/icon repaint on a mutation reload — see mergeById).
+      agents.value = mergeById(agents.value, list, (a) => a.id);
     } finally {
       if (token === loadToken) loading.value = false;
     }

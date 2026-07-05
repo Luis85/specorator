@@ -246,7 +246,7 @@ function hasCaps(agent: RosterAgent): boolean {
     </div>
     <div class="specorator-vue-panel-list">
       <div
-        v-if="store.loading"
+        v-if="store.loading && store.agents.length === 0"
         class="specorator-vue-panel-loading"
       >
         {{ t('common.loading') }}

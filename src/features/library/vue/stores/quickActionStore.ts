@@ -4,6 +4,7 @@ import { ref } from 'vue';
 import type SpecoratorPlugin from '../../../../main';
 import { assignNextFavoriteRank, QuickActionStorage } from '../../../quickActions/QuickActionStorage';
 import type { QuickAction } from '../../../quickActions/types';
+import { mergeById } from '../mergeById';
 
 /**
  * Reactive projection over QuickActionStorage for the Library tab. I/O stays
@@ -42,7 +43,9 @@ export const useQuickActionStore = defineStore('library-quick-actions', () => {
       folderConfigured.value = storage.hasConfiguredFolder();
       const next = await storage.loadAll();
       if (token !== loadToken) return; // a newer load superseded this one
-      actions.value = next;
+      // Merge by identity (filePath is the stable key) so untouched quick-action
+      // cards keep their previous reference — no icon repaint on a mutation reload.
+      actions.value = mergeById(actions.value, next, (a) => a.filePath);
       error.value = null;
     } catch (e) {
       if (token !== loadToken) return;

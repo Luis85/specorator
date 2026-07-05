@@ -4,6 +4,7 @@ import { ref, shallowRef } from 'vue';
 import type SpecoratorPlugin from '../../../../main';
 import { LoopNoteStore } from '../../../tasks/loops/LoopNoteStore';
 import type { LoopDefinition, SaveLoopInput } from '../../../tasks/loops/loopTypes';
+import { mergeById } from '../mergeById';
 
 /**
  * Reactive projection of the loop notes. I/O stays in LoopNoteStore; actions
@@ -41,7 +42,9 @@ export const useLoopLibraryStore = defineStore('library-loops', () => {
     try {
       const { loops: list } = await noteStore.list(plugin.app.vault, folder());
       if (token !== loadToken) return; // superseded by a newer load — drop stale result
-      loops.value = list;
+      // Merge by identity (loop path is the stable key) so untouched loop cards
+      // keep their previous reference — no repaint on a mutation reload.
+      loops.value = mergeById(loops.value, list, (l) => l.path);
     } finally {
       if (token === loadToken) loading.value = false;
     }

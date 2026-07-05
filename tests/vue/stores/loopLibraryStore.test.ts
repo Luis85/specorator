@@ -90,6 +90,22 @@ describe('useLoopLibraryStore', () => {
     expect(store.loading).toBe(false);
   });
 
+  it('load() merges by identity: unchanged loops keep their reference, the changed one is new', async () => {
+    const loopB = { ...loopA, path: 'l/b.md', id: 'b', name: 'B loop' };
+    const store = useLoopLibraryStore();
+    const noteStore = {
+      list: vi.fn()
+        .mockResolvedValueOnce({ loops: [{ ...loopA }, { ...loopB }], warnings: [] })
+        .mockResolvedValueOnce({ loops: [{ ...loopA }, { ...loopB, notes: 'edited' }], warnings: [] }),
+    };
+    store.init(makePlugin(), noteStore as never);
+    await store.load();
+    const [firstA, firstB] = store.loops;
+    await store.load(); // mutation reload: only B changed
+    expect(store.loops[0]).toBe(firstA);
+    expect(store.loops[1]).not.toBe(firstB);
+  });
+
   it('load() rejects when the store is used before init()', async () => {
     const store = useLoopLibraryStore();
     await expect(store.load()).rejects.toThrow('used before init()');

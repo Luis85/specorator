@@ -2,7 +2,7 @@ import { fireEvent, render, screen, waitFor, within } from '@testing-library/vue
 import { Notice } from 'obsidian';
 import { createPinia, setActivePinia } from 'pinia';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { ref } from 'vue';
+import { nextTick, ref } from 'vue';
 
 import { PLUGIN_KEY, TAB_GUARD_KEY } from '@/features/library/vue/libraryKeys';
 import AgentsPanel from '@/features/library/vue/panels/AgentsPanel.vue';
@@ -151,6 +151,20 @@ describe('AgentsPanel mutation flows', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     isDirtySpy.mockReturnValue(false);
+  });
+
+  it('shows the loading indicator only on the first/empty load, never on a background mutation reload', async () => {
+    const { store } = setupMutable([agent]);
+    await screen.findByText('Alice');
+    // A mutation reload flips loading true while the rows are still present —
+    // the indicator must NOT flash over the existing cards.
+    store.loading = true;
+    await nextTick();
+    expect(document.querySelector('.specorator-vue-panel-loading')).toBeNull();
+    // First/empty load (no rows yet): the indicator DOES show.
+    store.agents = [];
+    await nextTick();
+    expect(document.querySelector('.specorator-vue-panel-loading')).toBeTruthy();
   });
 
   it('renders the model chip from the provider model options', async () => {
