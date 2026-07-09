@@ -1,8 +1,7 @@
 <script setup lang="ts">
-import type { EventRef, TAbstractFile } from 'obsidian';
 import { normalizePath, Notice, setIcon } from 'obsidian';
 import type { ComponentPublicInstance } from 'vue';
-import { inject, onMounted, onUnmounted } from 'vue';
+import { inject, onMounted } from 'vue';
 
 import { t } from '../../../../i18n/i18n';
 import { confirm } from '../../../../shared/modals/ConfirmModal';
@@ -18,6 +17,7 @@ import LibraryToolbar from '../components/LibraryToolbar.vue';
 import { PLUGIN_KEY } from '../libraryKeys';
 import { quickActionLibraryAccessors } from '../quickActionLibraryAccessors';
 import { useQuickActionStore } from '../stores/quickActionStore';
+import { useFolderVaultRefresh } from '../useFolderVaultRefresh';
 import { useLibraryList } from '../useLibraryList';
 import { useRowActionPending } from '../useRowActionPending';
 
@@ -43,52 +43,15 @@ onMounted(() => void withErrorNotice(() => store.load(), t('quickActions.library
 // REGULAR vault folder (unlike the dot-folder skills Obsidian never indexes),
 // so vault events DO fire for them: subscribe folder-scoped, exactly like
 // QuickActionFavoritesCache.
-const VAULT_RELOAD_DEBOUNCE_MS = 300;
-const vaultRefs: EventRef[] = [];
-let reloadTimer: ReturnType<typeof setTimeout> | null = null;
-// Straight-line alias: the setup-top throw guard doesn't narrow `plugin`
-// inside function declarations for vue-tsc.
-const vaultPlugin = plugin;
-
-function resolvedFolder(): string {
+useFolderVaultRefresh({
+  vault: plugin.app.vault,
   // Same live folder resolution as the store's storage wiring (default +
   // normalizePath) — the subscription and the loader must scan ONE folder.
-  const raw = (vaultPlugin.settings.quickActionsFolder ?? 'Quick Actions').trim();
-  return raw ? normalizePath(raw) : '';
-}
-
-function isUnderFolder(path: string): boolean {
-  const folder = resolvedFolder();
-  if (!folder) return false;
-  return path === folder || path.startsWith(`${folder}/`);
-}
-
-function onVaultChange(file: TAbstractFile, oldPath?: string): void {
-  const path = (file as { path?: string })?.path ?? '';
-  const old = typeof oldPath === 'string' ? oldPath : '';
-  if (!isUnderFolder(path) && !(old && isUnderFolder(old))) return;
-  // Coalesce bursts (multi-file sync, folder renames) into one reload.
-  if (reloadTimer !== null) clearTimeout(reloadTimer);
-  reloadTimer = setTimeout(() => {
-    reloadTimer = null;
-    void store.load(); // load() captures failures into store.error, never throws
-  }, VAULT_RELOAD_DEBOUNCE_MS);
-}
-
-onMounted(() => {
-  vaultRefs.push(vaultPlugin.app.vault.on('create', onVaultChange));
-  vaultRefs.push(vaultPlugin.app.vault.on('modify', onVaultChange));
-  vaultRefs.push(vaultPlugin.app.vault.on('delete', onVaultChange));
-  vaultRefs.push(vaultPlugin.app.vault.on('rename', onVaultChange));
-});
-
-onUnmounted(() => {
-  if (reloadTimer !== null) {
-    clearTimeout(reloadTimer);
-    reloadTimer = null;
-  }
-  for (const ref of vaultRefs) vaultPlugin.app.vault.offref(ref);
-  vaultRefs.length = 0;
+  resolveFolder: () => {
+    const raw = (plugin.settings.quickActionsFolder ?? 'Quick Actions').trim();
+    return raw ? normalizePath(raw) : '';
+  },
+  reload: () => void store.load(),
 });
 
 function fail(error: unknown): void {
