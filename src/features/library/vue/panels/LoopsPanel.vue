@@ -52,7 +52,12 @@ useFolderVaultRefresh({
     const raw = (plugin.settings.agentBoardLoopFolder || 'Agent Board/loops').trim();
     return raw ? normalizePath(raw) : '';
   },
-  reload: () => void store.load(),
+  // The loop store's load() re-throws (no onError in useGuardedLoad), unlike
+  // the quick-action store which captures into store.error. Route the
+  // refresh reload through the same withErrorNotice the mounted load uses so
+  // a transient vault-list rejection surfaces as a Notice, not an unhandled
+  // promise rejection.
+  reload: () => void withErrorNotice(() => store.load(), t('loopLibrary.actionFailed'), fail),
 });
 
 function openEditor(existing: LoopDefinition | null): void {

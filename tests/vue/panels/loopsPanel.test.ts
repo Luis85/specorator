@@ -335,6 +335,26 @@ describe('LoopsPanel vault-event refresh', () => {
     expect(noteStore.list.mock.calls.length).toBe(before + 1);
   });
 
+  it('routes a rejecting refresh reload through the error logger (no unhandled rejection)', async () => {
+    // The loop store's load() re-throws (no onError guard), so the refresh
+    // path must wrap it in withErrorNotice like the mounted load does — else
+    // a transient vault-list rejection escapes as an unhandled promise.
+    const list = vi
+      .fn()
+      .mockResolvedValueOnce({ loops: [loop], warnings: [] }) // mount load succeeds
+      .mockRejectedValue(new Error('vault boom')); // refresh reload rejects
+    const { errorLog, vaultHandlers } = setupMutable([loop], { list });
+    await screen.findByText('A loop');
+    vi.useFakeTimers();
+    try {
+      vaultHandlers.modify({ path: 'Agent Board/loops/a.md' });
+      await vi.advanceTimersByTimeAsync(400);
+    } finally {
+      vi.useRealTimers();
+    }
+    await waitFor(() => expect(errorLog).toHaveBeenCalled());
+  });
+
   it('unmount offrefs all four subscriptions and drops a pending debounce (no leak)', async () => {
     const { noteStore, vault, vaultHandlers, unmount } = setupMutable([loop]);
     await screen.findByText('A loop');
