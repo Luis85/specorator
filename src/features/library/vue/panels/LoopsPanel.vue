@@ -1,6 +1,7 @@
 <script setup lang="ts">
-import { Notice } from 'obsidian';
-import { inject, onMounted } from 'vue';
+import type { EventRef, TAbstractFile } from 'obsidian';
+import { normalizePath, Notice } from 'obsidian';
+import { inject, onMounted, onUnmounted } from 'vue';
 
 import { t } from '../../../../i18n/i18n';
 import { confirm } from '../../../../shared/modals/ConfirmModal';
@@ -37,6 +38,59 @@ onMounted(() => void withErrorNotice(() => store.load(), t('loopLibrary.actionFa
 function fail(error: unknown): void {
   plugin?.logger.scope('tasks').error('loop library action failed', error);
 }
+
+// Loops are regular vault notes, so an external writer — a note dropped in the
+// loop folder, an edit made outside the app, the preset installer running from
+// another leaf — persists without touching this store. Vault events DO fire
+// for them (unlike the dot-folder skills Obsidian never indexes), so subscribe
+// folder-scoped and reload, mirroring QuickActionsPanel.
+const VAULT_RELOAD_DEBOUNCE_MS = 300;
+const vaultRefs: EventRef[] = [];
+let reloadTimer: ReturnType<typeof setTimeout> | null = null;
+// Straight-line alias: the setup-top throw guard doesn't narrow `plugin`
+// inside function declarations for vue-tsc.
+const vaultPlugin = plugin;
+
+function resolvedFolder(): string {
+  // Same live folder resolution as the store (default + normalizePath) — the
+  // subscription and the loader must scan ONE folder.
+  const raw = (vaultPlugin.settings.agentBoardLoopFolder || 'Agent Board/loops').trim();
+  return raw ? normalizePath(raw) : '';
+}
+
+function isUnderFolder(path: string): boolean {
+  const folder = resolvedFolder();
+  if (!folder) return false;
+  return path === folder || path.startsWith(`${folder}/`);
+}
+
+function onVaultChange(file: TAbstractFile, oldPath?: string): void {
+  const path = (file as { path?: string })?.path ?? '';
+  const old = typeof oldPath === 'string' ? oldPath : '';
+  if (!isUnderFolder(path) && !(old && isUnderFolder(old))) return;
+  // Coalesce bursts (multi-file sync, folder renames) into one reload.
+  if (reloadTimer !== null) clearTimeout(reloadTimer);
+  reloadTimer = setTimeout(() => {
+    reloadTimer = null;
+    void store.load(); // load() captures failures into store.error, never throws
+  }, VAULT_RELOAD_DEBOUNCE_MS);
+}
+
+onMounted(() => {
+  vaultRefs.push(vaultPlugin.app.vault.on('create', onVaultChange));
+  vaultRefs.push(vaultPlugin.app.vault.on('modify', onVaultChange));
+  vaultRefs.push(vaultPlugin.app.vault.on('delete', onVaultChange));
+  vaultRefs.push(vaultPlugin.app.vault.on('rename', onVaultChange));
+});
+
+onUnmounted(() => {
+  if (reloadTimer !== null) {
+    clearTimeout(reloadTimer);
+    reloadTimer = null;
+  }
+  for (const ref of vaultRefs) vaultPlugin.app.vault.offref(ref);
+  vaultRefs.length = 0;
+});
 
 function openEditor(existing: LoopDefinition | null): void {
   if (!plugin) return;
