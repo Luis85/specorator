@@ -11,6 +11,7 @@ import { QuickActionStorage } from '../../../quickActions/QuickActionStorage';
 import { runQuickActionForFile } from '../../../quickActions/runQuickActionForFile';
 import type { QuickAction } from '../../../quickActions/types';
 import { QuickActionEditorModal } from '../../../quickActions/ui/QuickActionEditorModal';
+import IconButton from '../components/IconButton.vue';
 import LibraryCard from '../components/LibraryCard.vue';
 import LibraryEmptyState from '../components/LibraryEmptyState.vue';
 import LibraryToolbar from '../components/LibraryToolbar.vue';
@@ -254,18 +255,18 @@ function onToggleFavorite(action: QuickAction): void {
           />
         </template>
         <template #name-chips>
-          <!-- .stop: the star sits inside the card's activate surface, and a
-            toggle must not also open the editor. -->
-          <button
-            :ref="(el) => applyIcon(el, 'star')"
-            type="button"
-            class="specorator-vue-qa-star"
-            :class="{ 'is-on': action.favorite === true }"
-            :aria-pressed="action.favorite === true ? 'true' : 'false'"
-            :aria-label="t('quickActions.library.favoriteAria')"
+          <!-- .stop: the star sits inside the card's activate surface (the
+            name-chips slot has no @click.stop wrapper), so a toggle must not
+            also open the editor — IconButton emits the native event so .stop
+            lands here at the call site. -->
+          <IconButton
+            icon="star"
+            :ariaLabel="t('quickActions.library.favoriteAria')"
             :title="t('quickActions.library.favoriteAria')"
+            :pressed="action.favorite === true"
+            filled
             :disabled="pending.isBusy(action.filePath)"
-            @click.stop="onToggleFavorite(action)"
+            @activate.stop="onToggleFavorite(action)"
           />
         </template>
         <div
@@ -329,43 +330,5 @@ function onToggleFavorite(action: QuickAction): void {
 .specorator-vue-qa-icon :deep(svg) {
   width: 20px;
   height: 20px;
-}
-
-/* Icon toggle: strip Obsidian's native button chrome so the star reads as a
-   favorite marker, not a third CTA in the name row, but keep a real icon-sized
-   hit area with a hover affordance. Scoped (0,2,0) beats the host button
-   baseline (0,1,1) by specificity. */
-.specorator-vue-qa-star {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  padding: var(--sp-space-3xs);
-  background: transparent;
-  border: none;
-  box-shadow: none;
-  border-radius: var(--sp-radius-s);
-  color: var(--sp-text-faint);
-  cursor: pointer;
-}
-
-/* setIcon() renders the lucide <svg> imperatively — no data-v, reach via
-   :deep(). Sized to match the card's leading icon. */
-.specorator-vue-qa-star :deep(svg) {
-  width: 18px;
-  height: 18px;
-}
-
-.specorator-vue-qa-star:hover {
-  color: var(--sp-text);
-  background: var(--sp-surface-hover);
-}
-
-.specorator-vue-qa-star.is-on {
-  color: var(--sp-accent);
-}
-
-/* Favorited: fill the outline star so the on-state reads at a glance. */
-.specorator-vue-qa-star.is-on :deep(svg) {
-  fill: currentColor;
 }
 </style>
