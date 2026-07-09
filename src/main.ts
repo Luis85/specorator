@@ -691,17 +691,6 @@ export default class SpecoratorPlugin extends Plugin implements PluginContext {
     return this.rosterAgentService.removeRosterAgentProjection(agent);
   }
 
-  /** Reveals (or opens) a singleton workspace leaf for the given view type. */
-  async openLeafView(viewType: string): Promise<void> {
-    const { workspace } = this.app;
-    const existing = workspace.getLeavesOfType(viewType)[0];
-    const leaf = existing ?? workspace.getLeaf('tab');
-    if (!existing) {
-      await leaf.setViewState({ type: viewType, active: true });
-    }
-    void workspace.revealLeaf(leaf);
-  }
-
   getEnvironmentVariablesForScope(scope: EnvironmentScope): string {
     return getScopedEnvironmentVariables(
       this.settings,

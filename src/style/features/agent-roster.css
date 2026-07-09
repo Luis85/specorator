@@ -1,41 +1,12 @@
-/* Agent Roster view — list/dashboard + detail editor.
-   The list shell + cards reuse the shared `.specorator-library-*` scaffold (see
-   features/library.css); the roster only layers its own deltas (clickable card,
-   avatar slot, plain-text name button, role chips) on top. */
+/* Agent Roster detail editor (embedded in the Vue Agents panel) + capability
+   picker. The legacy roster list-view rules were pruned 2026-07-04 with the
+   library consolidation; the Vue panels own the card/list looks. */
 
 .specorator-roster-detail {
-  padding: var(--size-4-4);
-}
-
-/* ── List / cards ── */
-/* The cursor + hover affordance for the clickable card now lives on the shared
-   interactive card rule (.specorator-library-card[role="button"]) so it applies
-   uniformly across the Agent / Skill / Loop views. */
-
-.specorator-roster-card-avatar {
-  flex: 0 0 auto;
-  display: flex;
-}
-
-.specorator-roster-card-desc {
-  color: var(--text-muted);
-  font-size: var(--font-ui-small);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.specorator-roster-chip {
-  font-size: var(--font-ui-smaller);
-  color: var(--text-muted);
-  background: var(--background-modifier-border);
-  border-radius: var(--radius-s);
-  padding: 0 var(--size-4-1);
-}
-
-.specorator-roster-chip-role {
-  color: var(--text-on-accent);
-  background: var(--interactive-accent);
+  /* No bottom padding: it would inset the sticky footer's pin edge above the
+     pane bottom (sticky pins inside the scroller's padding box); the footer
+     spaces itself via its own padding/margin-top. */
+  padding: var(--size-4-4) var(--size-4-4) 0;
 }
 
 /* ── Detail editor ── */

@@ -1,6 +1,6 @@
 ---
 status: done
-priority: 2 - normal
+priority: 2 - medium
 relations:
   - "[[sidepanel-chat]]"
   - "[[Quick Actions]]"

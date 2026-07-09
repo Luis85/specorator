@@ -615,6 +615,21 @@
       "saveFailed": "Failed to save quick action",
       "nameExists": "已存在同名快速操作"
     },
+    "library": {
+      "tab": "快速操作",
+      "title": "快速操作庫",
+      "newAction": "新增操作",
+      "actionFailed": "發生問題 — 請檢查開發者主控台。",
+      "run": "執行",
+      "edit": "編輯",
+      "duplicate": "複製",
+      "delete": "刪除",
+      "deleteConfirm": "刪除快速操作「{name}」及其筆記?",
+      "deleted": "已刪除 {name}。",
+      "favoriteAria": "切換收藏",
+      "folderNotConfigured": "尚未設定快速操作資料夾。請在 設定 → Quick Actions 中設定後再建立操作。",
+      "favoriteLimit": "最多可以收藏 5 個快速動作"
+    },
     "capture": {
       "label": "儲存為快速操作",
       "saved": "快速操作已儲存",
@@ -1123,6 +1138,7 @@
     }
   },
   "library": {
+    "viewTitle": "庫",
     "searchPlaceholder": "Search…",
     "sortLabel": "Sort",
     "sortName": "Name (A–Z)",
@@ -1152,7 +1168,10 @@
     "nameField": "Name",
     "actionFailed": "Something went wrong — check the developer console.",
     "providerVault": "Vault",
-    "prompt": "Prompt"
+    "prompt": "Prompt",
+    "delete": "Delete",
+    "deleteConfirm": "Delete the skill \"{name}\" and its folder and everything in it?",
+    "deleted": "Deleted {name}."
   },
   "loopLibrary": {
     "navLabel": "Loops",
@@ -1174,9 +1193,7 @@
   "ribbon": {
     "openChat": "Open Co-Worker Chat",
     "openAgentBoard": "Open Agent Board",
-    "openAgentRoster": "Open Agent Roster",
-    "openSkillLibrary": "Open Skill Library",
-    "openLoopLibrary": "Open loop library"
+    "openLibrary": "Open Library"
   },
   "commands": {
     "openView": "Open chat view",
@@ -1197,6 +1214,8 @@
     "closeCurrentTab": "Close current tab",
     "openAgentRoster": "Open Agent Roster",
     "openSkillLibrary": "Open Skill Library",
-    "openLoopLibrary": "Open loop library"
+    "openLoopLibrary": "Open loop library",
+    "openLibrary": "Open Library",
+    "openQuickActions": "Open Quick Actions"
   }
 }

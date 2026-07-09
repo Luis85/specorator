@@ -1,11 +1,13 @@
 import eslintComments from '@eslint-community/eslint-plugin-eslint-comments';
 import js from '@eslint/js';
 import tseslint from '@typescript-eslint/eslint-plugin';
+import tsParser from '@typescript-eslint/parser';
 import jestPlugin from 'eslint-plugin-jest';
 import obsidianmd from 'eslint-plugin-obsidianmd';
 import { DEFAULT_ACRONYMS } from 'eslint-plugin-obsidianmd/dist/lib/rules/ui/acronyms.js';
 import { DEFAULT_BRANDS } from 'eslint-plugin-obsidianmd/dist/lib/rules/ui/brands.js';
 import simpleImportSort from 'eslint-plugin-simple-import-sort';
+import pluginVue from 'eslint-plugin-vue';
 import { defineConfig } from 'eslint/config';
 import { dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -15,6 +17,64 @@ const tsconfigRootDir = dirname(fileURLToPath(import.meta.url));
 // Staged at 'warn' until the backlog hit zero; promoted 2026-06-10 per the
 // ratchet policy in docs/build-ci/quality-gates.md § "Lint severity policy".
 const obsidianRuleSeverity = 'error';
+
+// Src-only safety gate, shared between `src/**/*.ts` and SFC `<script>` blocks
+// in `src/**/*.vue`. Type-aware rules (no-implied-eval) live in the .ts block
+// only — vue-tsc is the type gate for SFCs.
+const srcSafetyRules = {
+  'no-console': 'error',
+  // Mirror the Obsidian marketplace validator: the Function constructor /
+  // implied eval is banned everywhere except the user-tool sandbox in
+  // SpecoratorToolRegistry, which carries a justified inline disable.
+  // Scoped to src only — no-implied-eval is type-aware and would crash on
+  // untyped test fixtures.
+  'no-new-func': 'error',
+  // Q-1 (Notice i18n sweep). Block hardcoded English in `new Notice()`:
+  // every user-visible notice must go through `t('key')` or `t('key', params)`
+  // so the 10 supported locales can override it. Identifier pass-throughs
+  // like `new Notice(nameError)` stay allowed — those carry strings that
+  // helper functions return (see docs/issues/translate-validator-helper-strings.md
+  // for the planned next step that translates those helpers).
+  'no-restricted-syntax': [
+    'error',
+    {
+      selector:
+        'NewExpression[callee.name="Notice"][arguments.0.type="Literal"]',
+      message:
+        "Hardcoded English in `new Notice('...')` is not allowed. Use `t('key.path')` instead, adding the canonical string to src/i18n/locales/en.json. See docs/reviews/2026-06-02-codebase-review-and-improvement-plan.md `Subspace policy` for naming.",
+    },
+    {
+      selector:
+        'NewExpression[callee.name="Notice"][arguments.0.type="TemplateLiteral"]',
+      message:
+        "Hardcoded English in `new Notice(`...`)` is not allowed. Use `t('key.path', { param: value })` instead, adding the canonical string with `{param}` placeholders to src/i18n/locales/en.json.",
+    },
+    // OBS-B (Obsidian security review). Raw HTML injection is the #1 risk
+    // for a streaming chat UI: any innerHTML/outerHTML/insertAdjacentHTML
+    // fed by agent/markdown/user content is an XSS vector. Build DOM with
+    // createEl/createDiv/createSpan/setText/.empty(), or route untrusted
+    // content through MarkdownRenderer. If a site is provably static, use a
+    // narrow `// eslint-disable-next-line no-restricted-syntax` with a
+    // justification comment rather than disabling this rule globally.
+    {
+      selector:
+        'AssignmentExpression > MemberExpression[property.name="innerHTML"]',
+      message:
+        'Assigning to innerHTML is banned (XSS risk). Use createEl/createDiv/createSpan/setText/.empty(), or MarkdownRenderer for markdown. See docs/issues/audit-innerhtml-rendering.md (OBS-B).',
+    },
+    {
+      selector:
+        'AssignmentExpression > MemberExpression[property.name="outerHTML"]',
+      message:
+        'Assigning to outerHTML is banned (XSS risk). Use createEl/createDiv/createSpan/setText/.empty(), or MarkdownRenderer for markdown. See docs/issues/audit-innerhtml-rendering.md (OBS-B).',
+    },
+    {
+      selector: 'CallExpression[callee.property.name="insertAdjacentHTML"]',
+      message:
+        'insertAdjacentHTML is banned (XSS risk). Use createEl/createDiv/createSpan/setText, or MarkdownRenderer for markdown. See docs/issues/audit-innerhtml-rendering.md (OBS-B).',
+    },
+  ],
+};
 
 const stagedObsidianRules = {
   'obsidianmd/commands/no-command-in-command-id': obsidianRuleSeverity,
@@ -83,6 +143,53 @@ export default defineConfig([
   },
   ...tseslint.configs['flat/recommended'],
   {
+    // Vue SFC lint. flat/recommended = base + essential (errors) +
+    // strongly-recommended + recommended (warnings — the tracked, non-blocking
+    // backlog tier per docs/build-ci/quality-gates.md § lint severity policy).
+    files: ['**/*.vue'],
+    // Scoped via extends: three of flat/recommended's sub-configs ship with no
+    // `files` restriction and would otherwise resolve 116 vue/* rules against
+    // every .ts file (pure no-op cost, ~10% lint wall-clock).
+    extends: [pluginVue.configs['flat/recommended']],
+    languageOptions: {
+      parserOptions: {
+        // vue-eslint-parser stays the outer parser (set by the configs above);
+        // the TS parser handles <script lang="ts"> blocks.
+        parser: tsParser,
+        extraFileExtensions: ['.vue'],
+        sourceType: 'module',
+      },
+    },
+    plugins: {
+      'simple-import-sort': simpleImportSort,
+    },
+    rules: {
+      // The Vue analogue of the innerHTML ban below (OBS-B): v-html sets
+      // el.innerHTML under the hood. Render markdown/agent content through
+      // Obsidian's MarkdownRenderer against a template ref instead.
+      'vue/no-v-html': 'error',
+      // vue-tsc owns undefined-identifier checking for <script lang="ts"> —
+      // core no-undef is redundant there and false-positives on browser
+      // globals (window/setTimeout), mirroring typescript-eslint's stance
+      // that no-undef is off for type-checked code.
+      'no-undef': 'off',
+      // Mirror the repo's non-type-aware TS guardrails onto <script setup>
+      // blocks (same options as the src/tests .ts block above). Type-aware
+      // rules stay off SFC fast lint — vue-tsc is that gate.
+      '@typescript-eslint/consistent-type-imports': [
+        'error',
+        { prefer: 'type-imports', fixStyle: 'separate-type-imports' },
+      ],
+      '@typescript-eslint/no-unused-vars': [
+        'error',
+        { args: 'none', ignoreRestSiblings: true },
+      ],
+      '@typescript-eslint/no-explicit-any': 'error',
+      'simple-import-sort/imports': 'error',
+      'simple-import-sort/exports': 'error',
+    },
+  },
+  {
     files: ['src/**/*.ts', 'tests/**/*.ts'],
     plugins: {
       'simple-import-sort': simpleImportSort,
@@ -108,60 +215,17 @@ export default defineConfig([
   {
     files: ['src/**/*.ts'],
     rules: {
-      'no-console': 'error',
-      // Mirror the Obsidian marketplace validator: the Function constructor /
-      // implied eval is banned everywhere except the user-tool sandbox in
-      // SpecoratorToolRegistry, which carries a justified inline disable.
-      // Scoped to src only — no-implied-eval is type-aware and would crash on
-      // untyped test fixtures.
-      'no-new-func': 'error',
+      ...srcSafetyRules,
+      // Type-aware, so it stays off the .vue fast lint (vue-tsc is that gate)
+      // and off untyped test fixtures, which it would crash on.
       '@typescript-eslint/no-implied-eval': 'error',
-      // Q-1 (Notice i18n sweep). Block hardcoded English in `new Notice()`:
-      // every user-visible notice must go through `t('key')` or `t('key', params)`
-      // so the 10 supported locales can override it. Identifier pass-throughs
-      // like `new Notice(nameError)` stay allowed — those carry strings that
-      // helper functions return (see docs/issues/translate-validator-helper-strings.md
-      // for the planned next step that translates those helpers).
-      'no-restricted-syntax': [
-        'error',
-        {
-          selector:
-            'NewExpression[callee.name="Notice"][arguments.0.type="Literal"]',
-          message:
-            "Hardcoded English in `new Notice('...')` is not allowed. Use `t('key.path')` instead, adding the canonical string to src/i18n/locales/en.json. See docs/reviews/2026-06-02-codebase-review-and-improvement-plan.md `Subspace policy` for naming.",
-        },
-        {
-          selector:
-            'NewExpression[callee.name="Notice"][arguments.0.type="TemplateLiteral"]',
-          message:
-            "Hardcoded English in `new Notice(`...`)` is not allowed. Use `t('key.path', { param: value })` instead, adding the canonical string with `{param}` placeholders to src/i18n/locales/en.json.",
-        },
-        // OBS-B (Obsidian security review). Raw HTML injection is the #1 risk
-        // for a streaming chat UI: any innerHTML/outerHTML/insertAdjacentHTML
-        // fed by agent/markdown/user content is an XSS vector. Build DOM with
-        // createEl/createDiv/createSpan/setText/.empty(), or route untrusted
-        // content through MarkdownRenderer. If a site is provably static, use a
-        // narrow `// eslint-disable-next-line no-restricted-syntax` with a
-        // justification comment rather than disabling this rule globally.
-        {
-          selector:
-            'AssignmentExpression > MemberExpression[property.name="innerHTML"]',
-          message:
-            'Assigning to innerHTML is banned (XSS risk). Use createEl/createDiv/createSpan/setText/.empty(), or MarkdownRenderer for markdown. See docs/issues/audit-innerhtml-rendering.md (OBS-B).',
-        },
-        {
-          selector:
-            'AssignmentExpression > MemberExpression[property.name="outerHTML"]',
-          message:
-            'Assigning to outerHTML is banned (XSS risk). Use createEl/createDiv/createSpan/setText/.empty(), or MarkdownRenderer for markdown. See docs/issues/audit-innerhtml-rendering.md (OBS-B).',
-        },
-        {
-          selector: 'CallExpression[callee.property.name="insertAdjacentHTML"]',
-          message:
-            'insertAdjacentHTML is banned (XSS risk). Use createEl/createDiv/createSpan/setText, or MarkdownRenderer for markdown. See docs/issues/audit-innerhtml-rendering.md (OBS-B).',
-        },
-      ],
     },
+  },
+  {
+    // SFC <script> parity with the src/**/*.ts safety gate. Type-aware rules
+    // (no-implied-eval) intentionally excluded — vue-tsc is the type gate.
+    files: ['src/**/*.vue'],
+    rules: srcSafetyRules,
   },
   {
     files: ['src/**/*.ts'],
@@ -183,7 +247,8 @@ export default defineConfig([
     // here so a regression fails `npm run lint` locally instead of surfacing at
     // submission: every disable must justify itself, the security/UI rules below
     // may not be silenced inline, and stale disables are an error (not warn).
-    files: ['src/**/*.ts'],
+    // SFC <script> blocks in src carry the same disable-directive rules.
+    files: ['src/**/*.ts', 'src/**/*.vue'],
     plugins: {
       '@eslint-community/eslint-comments': eslintComments,
     },

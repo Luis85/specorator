@@ -7,7 +7,8 @@ import { ProviderRegistry } from '../../../core/providers/ProviderRegistry';
 // same change as its passing parity test (tests/integration/settings/
 // <tab>Port.test.ts asserts the legacy field inventory renders through the
 // registry walker). The legacy renderers and provider settingsTabRenderer
-// wiring stay in place as fallback until the v4.0.0 deletion pass, gated on
+// wiring stay in place as fallback until a dedicated deletion pass (no
+// version milestone — see ADR 0003), gated on
 // manual vault verification (fresh vault + existing vault) — see
 // docs/issues/settings-registry-port-followup.md and
 // docs/superpowers/plans/2026-06-11-settings-registry-port-completion.md.

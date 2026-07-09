@@ -10,6 +10,10 @@ views:
       - tagline
       - personas
       - status
+      - priority
+    sort:
+      - property: priority
+        direction: ASC
     columnSize:
       file.name: 237
     cardSize: 320
@@ -37,9 +41,13 @@ views:
     order:
       - file.name
       - status
+      - priority
       - parent
       - file.backlinks
+      - tags
     sort:
+      - property: priority
+        direction: ASC
       - property: file.name
         direction: DESC
       - property: parent
@@ -150,3 +158,19 @@ views:
       - status
     columnSize:
       file.name: 349
+  - type: table
+    name: Features Index
+    filters:
+      and:
+        - file.inFolder("docs/product/features")
+        - type == "feature"
+    order:
+      - file.name
+      - tagline
+      - personas
+      - status
+      - priority
+    columnSize:
+      file.name: 237
+    cardSize: 320
+    image: note.image

@@ -5,12 +5,9 @@ import '../../setup/obsidianDom';
 
 import type { VaultFileAdapter } from '@/core/storage/VaultFileAdapter';
 import {
-  createLibraryCard,
   createModalCodeArea,
   librarySlug,
   renameLibraryItemDir,
-  renderLibraryEmptyState,
-  renderLibraryShell,
   renderModalField,
   renderModalFooter,
   renderModalLabel,
@@ -80,60 +77,6 @@ describe('renameLibraryItemDir', () => {
 });
 
 describe('DOM helpers', () => {
-  it('renderLibraryShell builds header + list and runs the optional nav renderer', () => {
-    const root = container();
-    const renderNav = jest.fn((c: HTMLElement) => c.createDiv({ cls: 'nav-marker' }));
-    const { actions, list } = renderLibraryShell(root, 'Tools', renderNav);
-
-    expect(root.querySelector('.specorator-library-header h2')?.textContent).toBe('Tools');
-    expect(renderNav).toHaveBeenCalledWith(root);
-    expect(root.querySelector('.nav-marker')).not.toBeNull();
-    expect(actions.classList.contains('specorator-library-header-actions')).toBe(true);
-    expect(list.classList.contains('specorator-library-list')).toBe(true);
-  });
-
-  it('renderLibraryEmptyState renders the message and a working CTA', () => {
-    const root = container();
-    const onAction = jest.fn();
-    renderLibraryEmptyState(root, { icon: 'wrench', message: 'Nothing here', actionLabel: 'New tool', onAction });
-
-    expect(root.querySelector('.specorator-library-empty-icon')).not.toBeNull();
-    expect(root.querySelector('.specorator-library-empty-text')?.textContent).toBe('Nothing here');
-    const btn = root.querySelector<HTMLButtonElement>('.specorator-library-empty-action');
-    expect(btn?.textContent).toBe('New tool');
-    btn?.click();
-    expect(onAction).toHaveBeenCalledTimes(1);
-  });
-
-  it('renderLibraryEmptyState omits the CTA when no action is given', () => {
-    const root = container();
-    renderLibraryEmptyState(root, { icon: 'book-open', message: 'Empty' });
-    expect(root.querySelector('.specorator-library-empty-action')).toBeNull();
-  });
-
-  it('createLibraryCard exposes card, name row, body and actions', () => {
-    const root = container();
-    const { card, nameRow, body, actions } = createLibraryCard(root, 'my-tool');
-    expect(card.classList.contains('specorator-library-card')).toBe(true);
-    expect(nameRow.textContent).toBe('my-tool');
-    // Default name is a plain span — no focusable button.
-    expect(nameRow.querySelector('button')).toBeNull();
-    expect(body.classList.contains('specorator-library-card-body')).toBe(true);
-    expect(actions.classList.contains('specorator-library-card-actions')).toBe(true);
-    expect(root.querySelector('.specorator-library-card-leading')).toBeNull();
-  });
-
-  it('createLibraryCard renders a leading slot when asked', () => {
-    const root = container();
-    const seedLeading = jest.fn((slot: HTMLElement) => slot.createDiv({ cls: 'avatar-marker' }));
-    const { card } = createLibraryCard(root, 'Agent', { leading: seedLeading });
-    const leading = card.querySelector('.specorator-library-card-leading');
-    expect(leading).not.toBeNull();
-    expect(seedLeading).toHaveBeenCalledWith(leading);
-    expect(leading?.querySelector('.avatar-marker')).not.toBeNull();
-    expect(card.firstElementChild).toBe(leading);
-  });
-
   it('modal helpers render labels, fields, inputs, code areas and footer', () => {
     const root = container();
     renderModalLabel(root, 'Source');
@@ -164,42 +107,5 @@ describe('DOM helpers', () => {
     const root = container();
     renderModalFooter(root, { closeLabel: 'Close', onClose: jest.fn() });
     expect(root.querySelectorAll('.specorator-library-modal-footer button')).toHaveLength(1);
-  });
-
-  it('renderLibraryShell returns a toolbar slot between header and list', () => {
-    const root = container();
-    const { actions, toolbar, list } = renderLibraryShell(root, 'Title');
-    expect(actions).toBeTruthy();
-    expect(toolbar).toBeTruthy();
-    expect(list).toBeTruthy();
-    expect(toolbar.compareDocumentPosition(list) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
-  });
-
-  it('createLibraryCard interactive makes the card a role=button that activates on click and Enter', () => {
-    const list = container();
-    let activations = 0;
-    const { card } = createLibraryCard(list, 'X', {
-      interactive: { onActivate: () => { activations += 1; }, ariaLabel: 'X' },
-    });
-    expect(card.getAttribute('role')).toBe('button');
-    expect(card.getAttribute('tabindex')).toBe('0');
-    card.dispatchEvent(new MouseEvent('click'));
-    card.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter' }));
-    expect(activations).toBe(2);
-  });
-
-  it('createLibraryCard interactive does NOT activate when Enter/Space bubbles from a nested action button', () => {
-    const list = container();
-    let activations = 0;
-    const { actions } = createLibraryCard(list, 'X', {
-      interactive: { onActivate: () => { activations += 1; }, ariaLabel: 'X' },
-    });
-    const btn = actions.createEl('button', { text: 'Delete' });
-    // Keydown originating on the nested button bubbles to the card; the card must
-    // ignore it (e.target !== card) so the button keeps its own native behavior
-    // instead of also opening the card.
-    btn.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
-    btn.dispatchEvent(new KeyboardEvent('keydown', { key: ' ', bubbles: true }));
-    expect(activations).toBe(0);
   });
 });

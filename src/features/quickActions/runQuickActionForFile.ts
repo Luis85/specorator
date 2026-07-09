@@ -72,10 +72,13 @@ export async function dispatchQuickActionToTab(
  * Ensures the chat view is open, picks (or creates) a target tab, switches
  * to it FIRST so the welcome reset does not wipe the chip, then attaches
  * the right-clicked file or folder as a pill and fires the action prompt.
+ *
+ * `file` may be null — no file context (e.g. the Library tab's Run button):
+ * the pill attach is skipped and the prompt still dispatches.
  */
 export async function runQuickActionForFile(
   plugin: SpecoratorPlugin,
-  file: TAbstractFile,
+  file: TAbstractFile | null,
   action: QuickAction,
   override?: QuickActionRunOverride,
 ): Promise<void> {

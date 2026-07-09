@@ -3,7 +3,7 @@ type: issue
 id: issue-20260603-git-changed-files-view
 title: Add a lightweight changed-files view to the Git integration
 status: open
-priority: 2 - normal
+priority: 2 - medium
 triage: ready-for-agent
 created: 2026-06-03
 updated: 2026-06-03

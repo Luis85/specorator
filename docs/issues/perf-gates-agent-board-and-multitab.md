@@ -3,7 +3,7 @@ type: issue
 id: issue-20260603-perf-gates-board-multitab
 title: Add perf gates for Agent Board scaling and multi-tab concurrent streaming
 status: done
-priority: 2 - normal
+priority: 2 - medium
 triage: ready-for-agent
 created: 2026-06-03
 updated: 2026-06-09

@@ -22,6 +22,8 @@ export interface AgentDetailEditorCallbacks {
   onBack(): void;
   onStartChat(agent: RosterAgent): void;
   onDeleted(agent: RosterAgent): void;
+  /** Fires after every successful persist (explicit Save AND the start-chat auto-save). */
+  onSaved?(agent: RosterAgent): void;
 }
 
 /** Owns the agent detail/edit page: cards, pickers, dirty tracking, sticky footer. */
@@ -40,9 +42,6 @@ export class AgentDetailEditor {
     this.draft = { ...agent, roles: [...agent.roles], skills: [...agent.skills], tags: [...(agent.tags ?? [])] };
 
     root.empty();
-    // The list view shares the `specorator-library` shell; the detail page has its
-    // own bespoke root, so drop the library scaffold class when switching in.
-    root.removeClass('specorator-roster', 'specorator-library');
     root.addClass('specorator-roster-detail');
 
     this.renderTopbar(root);
@@ -67,13 +66,18 @@ export class AgentDetailEditor {
   }
 
   private handleBack(): void {
-    if (!isRosterAgentDirty(this.original, this.draft)) {
+    if (!this.isDirty()) {
       this.callbacks.onBack();
       return;
     }
     void confirm(this.plugin.app, t('agentRoster.discardConfirm'), t('agentRoster.discard')).then((ok) => {
       if (ok) this.callbacks.onBack();
     });
+  }
+
+  /** True when the draft differs from the last persisted state. */
+  isDirty(): boolean {
+    return isRosterAgentDirty(this.original, this.draft);
   }
 
   private renderHeaderCard(root: HTMLElement): void {
@@ -233,9 +237,27 @@ export class AgentDetailEditor {
     renderLibraryLoading(card, t('common.loading'));
     const entries = (await this.plugin.vaultSkillAggregator?.listAll()) ?? [];
     card.empty();
-    const items: CapabilityItem[] = entries.map((e) => ({
-      id: e.name, name: e.name, description: e.description, badge: e.providerDisplayName,
-    }));
+    // agent.skills is name-keyed (providers each ship their own copy of a
+    // same-named skill and sync independently), so collapse duplicates into
+    // ONE item per name and merge the provider badges. Keeps listAll order;
+    // the first entry's description wins.
+    const byName = new Map<string, { item: CapabilityItem; badges: string[] }>();
+    const items: CapabilityItem[] = [];
+    for (const e of entries) {
+      const existing = byName.get(e.name);
+      if (existing) {
+        if (!existing.badges.includes(e.providerDisplayName)) {
+          existing.badges.push(e.providerDisplayName);
+          existing.item.badge = existing.badges.join(', ');
+        }
+        continue;
+      }
+      const item: CapabilityItem = {
+        id: e.name, name: e.name, description: e.description, badge: e.providerDisplayName,
+      };
+      byName.set(e.name, { item, badges: [e.providerDisplayName] });
+      items.push(item);
+    }
     renderCapabilityPicker(card, {
       label: t('agentRoster.skills'),
       items,
@@ -270,6 +292,7 @@ export class AgentDetailEditor {
     this.isNew = false;
     new Notice(t('agentRoster.saved', { name: this.draft.name }));
     this.updateDirty();
+    this.callbacks.onSaved?.(this.original);
   }
 
   private async startChatFromEditor(): Promise<void> {

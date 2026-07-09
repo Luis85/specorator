@@ -1,5 +1,5 @@
 ---
-priority: 2 - normal
+priority: 2 - medium
 relations:
   - Product
 status: open

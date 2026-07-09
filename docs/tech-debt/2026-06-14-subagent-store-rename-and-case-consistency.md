@@ -1,9 +1,9 @@
 ---
 type: tech-debt
-title: "Subagent store rename safety and case-insensitive identity"
+title: Subagent store rename safety and case-insensitive identity
 date: 2026-06-14
 status: open
-priority: "2 - normal"
+priority: 2 - medium
 severity: medium
 scope: providers
 ---

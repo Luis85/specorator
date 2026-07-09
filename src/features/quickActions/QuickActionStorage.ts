@@ -115,6 +115,14 @@ export class QuickActionStorage {
         try {
           const action = await this.loadFromFile(filePath);
           if (action) {
+            // Library "Recently updated" sort reads this. VaultFileAdapter.stat
+            // never throws (missing file -> null), so an unstat-able note still
+            // loads, just without an mtime. save() never persists it: the
+            // serializeQuickAction call lists its fields explicitly.
+            const stat = await this.adapter.stat(filePath);
+            if (stat) {
+              action.mtime = stat.mtime;
+            }
             actions.push(action);
           }
         } catch {
@@ -196,6 +204,8 @@ export class QuickActionStorage {
     await this.adapter.delete(filePath);
   }
 
+  /** Public for the Library duplicate flow's collision probe: callers check
+   * `exists(getFilePathForName(candidate))` with the same slugging save() uses. */
   getFilePathForName(name: string): string {
     const folder = this.resolveFolder();
     const safe = name

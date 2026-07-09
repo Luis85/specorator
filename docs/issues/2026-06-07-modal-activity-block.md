@@ -3,7 +3,7 @@ type: issue
 id: issue-20260607-modal-activity-block
 title: Work-order modal — Activity block (handoff sections + needs_handoff salvage + failed Run ledger)
 status: done
-priority: 2 - normal
+priority: 2 - medium
 triage: ready-for-agent
 created: 2026-06-07
 related:

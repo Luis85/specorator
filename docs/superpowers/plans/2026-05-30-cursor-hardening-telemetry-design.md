@@ -8,6 +8,7 @@ related:
   - docs/superpowers/plans/2026-05-30-cursor-integration-hardening.md (parent plan)
   - docs/reviews/2026-06-02-cursor-hardening-verified.md (verification report)
 parent: "[[Multi Provider Support]]"
+priority: 2 - medium
 ---
 
 # Cursor Hardening — Telemetry log codes

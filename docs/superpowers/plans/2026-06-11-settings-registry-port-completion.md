@@ -3,9 +3,12 @@ title: Settings registry port completion
 date: 2026-06-11
 status: open
 scope: settings-architecture
+parent: Settings
+priority: 3 - low
 ---
 
 # Settings Registry Port Completion Implementation Plan
+*(2026-07-04: the v4.0.0 milestone framing below is historical — it was retired with the library consolidation (docs/adr/0003-retire-legacy-library-views.md); deferred deletions land as dedicated passes.)*
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 

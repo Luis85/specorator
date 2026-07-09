@@ -3,7 +3,7 @@ type: issue
 id: issue-20260603-remote-mcp-ssrf
 title: Block SSRF for remote MCP before connecting + add transport hygiene (provenance, untrusted descriptions)
 status: partially-shipped
-priority: 2 - normal
+priority: 2 - medium
 triage: ready-for-agent
 created: 2026-06-03
 updated: 2026-06-09

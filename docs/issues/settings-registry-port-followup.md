@@ -1,12 +1,12 @@
 ---
 status: open
 type: issue
-target-version: 4.0.0
+target-version: unscheduled (dedicated deletion pass — the v4.0.0 milestone was retired, see ADR 0003)
 tags:
   - settings
   - registry
   - tech-debt
-priority: 2 - normal
+priority: 2 - medium
 relations:
   - "[[2026-05-30-settings-overhaul-design]]"
   - "[[2026-05-30-settings-overhaul]]"
@@ -22,6 +22,12 @@ relations:
 > residual scope is what this issue tracks. The `USE_REGISTRY_RENDERER` const and the orchestrator
 > registry slot (`fields/orchestrator.ts` was never created — orchestrator surface removed in
 > `f0d0d5d7`) are obsolete; drop both when porting.
+
+> **Triage update (2026-07-04):** the v4.0.0 milestone framing is retired
+> (`docs/adr/0003-retire-legacy-library-views.md` — the plugin is published as
+> Specorator 1.x with no major-version breaking release planned). The
+> legacy-renderer deletion below is re-scoped to a dedicated pass gated on
+> manual vault verification, not on a version.
 
 # Complete the settings registry port — phase J followup (v3.1.0)
 
@@ -187,7 +193,7 @@ verification. Implemented per
   (Claude 448→173, Codex 447→214, Opencode 671→73, Cursor 326→33 lines) and
   stay wired as the fallback.
 
-**Remaining for v4.0.0 (deliberately NOT done here):** delete the legacy
+**Remaining for the dedicated deletion pass (deliberately NOT done here; no version milestone — ADR 0003):** delete the legacy
 renderer files + `settingsTabRenderer` render path + `featureFlag.ts`, per
 the acceptance list above — only after manual verification on a fresh vault
 and a vault with existing settings (the phase-J1 lesson). Until then the

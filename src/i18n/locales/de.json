@@ -615,6 +615,21 @@
       "saveFailed": "Failed to save quick action",
       "nameExists": "Eine Quick Action mit diesem Namen existiert bereits"
     },
+    "library": {
+      "tab": "Schnellaktionen",
+      "title": "Schnellaktionen-Bibliothek",
+      "newAction": "Neue Aktion",
+      "actionFailed": "Etwas ist schiefgelaufen — prüfe die Entwicklerkonsole.",
+      "run": "Ausführen",
+      "edit": "Bearbeiten",
+      "duplicate": "Duplizieren",
+      "delete": "Löschen",
+      "deleteConfirm": "Die Schnellaktion \"{name}\" und ihre Notiz löschen?",
+      "deleted": "{name} gelöscht.",
+      "favoriteAria": "Favorit umschalten",
+      "folderNotConfigured": "Es ist kein Ordner für Schnellaktionen konfiguriert. Lege unter Einstellungen → Schnellaktionen einen fest, um Aktionen zu erstellen.",
+      "favoriteLimit": "Du kannst bis zu 5 Schnellaktionen als Favoriten markieren"
+    },
     "capture": {
       "label": "Als Quick Action speichern",
       "saved": "Quick Action gespeichert",
@@ -1123,6 +1138,7 @@
     }
   },
   "library": {
+    "viewTitle": "Bibliothek",
     "searchPlaceholder": "Search…",
     "sortLabel": "Sort",
     "sortName": "Name (A–Z)",
@@ -1152,7 +1168,10 @@
     "nameField": "Name",
     "actionFailed": "Something went wrong — check the developer console.",
     "providerVault": "Vault",
-    "prompt": "Prompt"
+    "prompt": "Prompt",
+    "delete": "Delete",
+    "deleteConfirm": "Delete the skill \"{name}\" and its folder and everything in it?",
+    "deleted": "Deleted {name}."
   },
   "loopLibrary": {
     "navLabel": "Loops",
@@ -1174,9 +1193,7 @@
   "ribbon": {
     "openChat": "Open Co-Worker Chat",
     "openAgentBoard": "Open Agent Board",
-    "openAgentRoster": "Open Agent Roster",
-    "openSkillLibrary": "Open Skill Library",
-    "openLoopLibrary": "Open loop library"
+    "openLibrary": "Open Library"
   },
   "commands": {
     "openView": "Open chat view",
@@ -1197,6 +1214,8 @@
     "closeCurrentTab": "Close current tab",
     "openAgentRoster": "Open Agent Roster",
     "openSkillLibrary": "Open Skill Library",
-    "openLoopLibrary": "Open loop library"
+    "openLoopLibrary": "Open loop library",
+    "openLibrary": "Open Library",
+    "openQuickActions": "Open Quick Actions"
   }
 }

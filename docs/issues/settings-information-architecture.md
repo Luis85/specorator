@@ -3,7 +3,7 @@ type: issue
 id: issue-20260603-settings-ia
 title: Reorganize settings information architecture (4 buckets) as the registry port completes
 status: open
-priority: 2 - normal
+priority: 2 - medium
 triage: needs-scoping
 created: 2026-06-03
 updated: 2026-06-03

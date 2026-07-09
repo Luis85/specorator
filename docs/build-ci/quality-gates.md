@@ -32,6 +32,7 @@ usage, and where this repo diverges from the generic fallow template — see
 | Coverage floors | `npm run test:coverage` | `coverage` | Coverage dropping below `coverageThreshold`. |
 | Provider-boundary guards | `npm run test` | `test` | A registered provider with an incomplete `ProviderRegistration`; new hardcoded provider-id lists/switches outside `src/providers/index.ts`. See "Provider-boundary guards" below. |
 | Perf scaling guards | `npm run test:perf` | `perf` | A hot path's cost scaling with unbounded input instead of its bounded window (render window, per-turn tools, slot cap). Deterministic count assertions only — timings stay report-only. |
+| Vue component lane | `npm run test:vue:coverage` | `component` | Vue-surface regressions (`tests/vue/**`, Vitest); coverage floors on `src/features/library/**`. See "Vue component lane (Vitest)" below. |
 | Production build | `npm run build` | `build` | CSS concat, esbuild bundle, SDK patching, renderer-unsafe-unref guard. |
 | Artifact smoke | `npm run check:artifacts` | `build` | Missing/empty artifacts, package/manifest version desync, missing `minAppVersion`, bundle-size budget. |
 
@@ -75,10 +76,16 @@ LOC can't see. As of run 13, the last `warn`-tier rules were promoted:
 `jest/expect-expect` (the staged-backlog rule) plus `jest/no-disabled-tests` and
 `jest/no-commented-out-tests`, which ship at `warn` from the jest-recommended
 preset (`...jestRecommended.rules`). `eslint --print-config` now reports **no
-rule at `warn`** for any file, so the lint gate is genuinely all-error — which
-matters because CI does not pass `--max-warnings`, so a `warn` rule would
-otherwise never fail the build. The `warn` tier stays available for staging a
-future rule but is currently empty.
+rule at `warn`** for any `.ts` file, so the lint gate is genuinely all-error
+for TypeScript — which matters because CI does not pass `--max-warnings`, so a
+`warn` rule would otherwise never fail the build. `.vue` SFCs (linted since
+2026-07-02) are the deliberate exception: eslint-plugin-vue's
+strongly-recommended and recommended tiers report at `warn` there as the
+tracked, non-blocking backlog, while the essential tier, `vue/no-v-html`, and
+the mirrored src-safety/TS guardrails report as `error` — errors block,
+warnings are tracked, same policy as above. See "Vue component lane (Vitest)"
+below for the rest of the Vue surface's gates. The `warn` tier stays available
+for staging a future `.ts` rule.
 
 Promoted to `error` on 2026-06-10, after their backlogs reached zero: the
 staged `obsidianmd/*` set, `@typescript-eslint/no-explicit-any` (src only;
@@ -95,7 +102,7 @@ jest-recommended preset's `jest/no-disabled-tests` + `jest/no-commented-out-test
 All three had zero offenders, so the promotions just lock the gain: a test with no
 assertion (outside the allowlisted `assertFunctionNames` wrappers), or a committed
 `.skip`/commented-out test, now fails CI instead of printing a warning.
-`eslint --print-config` confirms no rule remains at `warn`.
+`eslint --print-config` confirms no rule remains at `warn` for `.ts` files.
 
 ### Directive-comment discipline (2026-06-26)
 
@@ -218,6 +225,52 @@ existing `test` job — no new tooling:
   `src/features/settings/firstRunBanner/FirstRunBanner.ts` (grandfathered; its
   per-provider `name`/`blurb`/`cli` list should move to the registry — see
   `docs/tech-debt/2026-06-07-firstrun-banner-provider-list.md`).
+
+## Vue component lane (Vitest)
+
+The `component` CI job runs `npm run test:vue:coverage` — the Vitest lane
+(`vitest.config.mts`) for the Vue surface: SFC component tests, Pinia stores,
+and composables under `tests/vue/**`, in jsdom. The shared
+`tests/__mocks__/obsidian.ts` fake is served through a `resolve.alias`, with
+the mock's `jest.*` calls shimmed to `vi` and `@testing-library/vue` cleanup
+registered explicitly in `tests/vue/setup.ts`.
+
+Coverage floors (v8 provider, thresholds in `vitest.config.mts`) apply to
+`src/features/library/**` only, mirroring the Jest `coverage` job for the rest
+of `src/`. They are dormant (a 0/0 pass) until the first library file lands
+(Task 7 of `docs/superpowers/plans/2026-07-01-vue3-pinia-library-harness.md`).
+Reports go to `coverage-vue/`, ignored by both git and fallow.
+
+Lane isolation is exclusive by construction: Vitest's `include` sees only
+`tests/vue/**`, while Jest's `testMatch` globs cover only
+`tests/{unit,integration}/**` (perf has its own config) — the two runners never
+share a test file.
+
+Vue style guards (2026-07-03, with the Vue style baseline —
+`docs/superpowers/specs/2026-07-03-vue-style-baseline-design.md`):
+`tests/vue/styleBaseline.test.ts` runs in this lane, so both guards block CI
+via the `component` job — the **token guard** (`src/style/vue/tokens.css`
+defines only `--sp-*` properties, each mapped from exactly one Obsidian var;
+every other Vue stylesheet and SFC `<style>` block consumes only `--sp-*`
+tokens) and the **namespace guard** (static template classes must be
+`specorator-vue-*`, `is-*` state modifiers, or on the reviewed allowlist).
+Two existing gates were made Vue-aware in the same pass: the CSS `!important`
+guard also scans `<style>` blocks in `src/**/*.vue`, so the ratchet can't be
+bypassed by moving CSS into a component, and the artifact smoke asserts
+`styles.css` has scoped (`[data-v-`) rules after the `VUE_STYLES_MARKER` and
+the `.specorator-vue` baseline before it — catching a dead SFC-style merge
+pipeline and a dropped `index.css` registration independently.
+
+Metrics-integrity note: fallow's built-in Vitest plugin AST-parses the
+config's `resolve.alias` and applies it to the whole repo module graph, so all
+~275 `import 'obsidian'` sites (production `src/` included) resolve to
+`tests/__mocks__/obsidian.ts` in fallow's eyes. Two knock-on artifacts, both
+verified when the lane landed (2026-07-02): the mock shows fan-in ≈274 and
+ranks as a top hotspot/refactor target in `npm run quality:health` — an alias
+artifact, not a real refactor target — and ~270 files gained fan_out +1, which
+moved `averageMaintainability` 90.2 → 90.0 at the lane's introduction. That
+float was re-locked in `scripts/quality-baseline.json` with every counter
+metric unchanged.
 
 ## Fallow quality ratchet
 

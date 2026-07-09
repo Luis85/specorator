@@ -3,7 +3,7 @@ type: bug
 status: done
 tags:
   - chat
-priority: 2 - normal
+priority: 2 - medium
 relations:
   - "[[sidepanel-chat]]"
 ---

@@ -1,0 +1,47 @@
+/* Semantic design tokens for Vue surfaces (the `--sp-*` layer).
+   THE ONLY PLACE Obsidian variables may appear for Vue-rendered island
+   content — components consume `--sp-*` exclusively (enforced by
+   tests/vue/styleBaseline.test.ts). Add a mapping here BEFORE using a new
+   Obsidian variable in any Vue surface. Not every token has a consumer in
+   the Library fork: the set is the baseline vocabulary future Vue views
+   build on. */
+
+.specorator-vue {
+  /* Surfaces */
+  --sp-surface: var(--background-primary);
+  --sp-surface-raised: var(--background-secondary);
+  --sp-surface-hover: var(--background-modifier-hover);
+  /* Borders */
+  --sp-border: var(--background-modifier-border);
+  --sp-border-focus: var(--background-modifier-border-focus);
+  /* Text */
+  --sp-text: var(--text-normal);
+  --sp-text-muted: var(--text-muted);
+  --sp-text-faint: var(--text-faint);
+  --sp-text-error: var(--text-error);
+  --sp-text-on-accent: var(--text-on-accent);
+  /* Accent + status */
+  --sp-accent: var(--interactive-accent);
+  --sp-accent-hover: var(--interactive-accent-hover);
+  --sp-success: var(--color-green);
+  --sp-danger: var(--color-red);
+  /* Radii */
+  --sp-radius-s: var(--radius-s);
+  --sp-radius-m: var(--radius-m);
+  /* Spacing — t-shirt scale over Obsidian's size grid.
+     Forks translate var(--size-4-1) AND var(--size-2-2) (both 4px) to 2xs. */
+  --sp-space-3xs: var(--size-2-1);
+  --sp-space-2xs: var(--size-2-2);
+  --sp-space-xs: var(--size-2-3);
+  --sp-space-s: var(--size-4-2);
+  --sp-space-m: var(--size-4-3);
+  --sp-space-l: var(--size-4-4);
+  --sp-space-xl: var(--size-4-8);
+  /* Typography */
+  --sp-font-small: var(--font-ui-small);
+  --sp-font-smaller: var(--font-ui-smaller);
+  --sp-weight-medium: var(--font-medium);
+  --sp-weight-semibold: var(--font-semibold);
+  --sp-mono: var(--font-monospace);
+  --sp-line-tight: var(--line-height-tight);
+}

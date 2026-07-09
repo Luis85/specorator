@@ -54,8 +54,13 @@ export function renderCapabilityPicker(parent: HTMLElement, options: CapabilityP
 
   const renderChips = (): void => {
     chipsEl.empty();
+    // One chip per selected ID, not per matching item: a caller passing
+    // duplicate-id items must not produce duplicate chips (first match wins;
+    // items order keeps chip order stable).
+    const rendered = new Set<string>();
     for (const item of options.items) {
-      if (!selected.has(item.id)) continue;
+      if (!selected.has(item.id) || rendered.has(item.id)) continue;
+      rendered.add(item.id);
       const chip = chipsEl.createEl('button', { cls: 'specorator-cap-picker-chip' });
       chip.setAttribute('aria-label', t('agentRoster.removeCapability', { name: item.name }));
       chip.createSpan({ text: item.name });

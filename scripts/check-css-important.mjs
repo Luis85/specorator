@@ -10,6 +10,9 @@
  * next submission (see docs/tech-debt/2026-06-26-obsidian-marketplace-review*.md).
  *
  * Policy (a ratchet, not a freeze), mirroring scripts/check-loc.mjs:
+ *   - Scanned: every stylesheet under src/style/ plus the <style> blocks of
+ *     every .vue SFC under src/ — moving CSS into a component does not escape
+ *     the ratchet.
  *   - A stylesheet with zero `!important` is always fine.
  *   - A new `!important` in a file not on the baseline fails. Re-scope by
  *     specificity / CSS variables, or earn a baseline entry with a reason.
@@ -36,11 +39,12 @@ import { fileURLToPath } from 'node:url';
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const ROOT = join(__dirname, '..');
 const STYLE_DIR = join(ROOT, 'src', 'style');
+const SRC_DIR = join(ROOT, 'src');
 const BASELINE_PATH = join(__dirname, 'css-important-baseline.json');
 
 const DEFAULT_REASON =
-  'Grandfathered host/CM6 override. Justified per src/style/CLAUDE.md ' +
-  '(!important allowed only when overriding Obsidian defaults); shrink only.';
+  'Grandfathered `!important`. Justified per src/style/CLAUDE.md ' +
+  '(allowed only when overriding Obsidian defaults); shrink only.';
 
 const args = process.argv.slice(2);
 const update = args.includes('--update');
@@ -50,18 +54,30 @@ function toPosix(path) {
   return path.split(sep).join('/');
 }
 
-/** Count `!important` occurrences, ignoring CSS comments. */
-function countImportant(absPath) {
-  const text = readFileSync(absPath, 'utf8').replace(/\/\*[\s\S]*?\*\//g, '');
-  return (text.match(/!important/g) ?? []).length;
+/** Count `!important` occurrences in CSS text, ignoring CSS comments. */
+function countImportantIn(text) {
+  const stripped = text.replace(/\/\*[\s\S]*?\*\//g, '');
+  return (stripped.match(/!important/g) ?? []).length;
 }
 
-function collectCssFiles(dir, acc = []) {
+function countImportant(absPath) {
+  return countImportantIn(readFileSync(absPath, 'utf8'));
+}
+
+/** `!important` in SFC <style> blocks counts too — the ratchet must not be
+ *  bypassable by moving CSS into a component. */
+function countVueImportant(absPath) {
+  const source = readFileSync(absPath, 'utf8');
+  const blocks = [...source.matchAll(/<style[^>]*>([\s\S]*?)<\/style>/g)];
+  return blocks.reduce((sum, m) => sum + countImportantIn(m[1]), 0);
+}
+
+function collectFiles(dir, ext, acc = []) {
   for (const entry of readdirSync(dir, { withFileTypes: true })) {
     const abs = join(dir, entry.name);
     if (entry.isDirectory()) {
-      collectCssFiles(abs, acc);
-    } else if (entry.isFile() && entry.name.endsWith('.css')) {
+      collectFiles(abs, ext, acc);
+    } else if (entry.isFile() && entry.name.endsWith(ext)) {
       acc.push(abs);
     }
   }
@@ -78,8 +94,16 @@ function readBaseline() {
 
 const baseline = readBaseline();
 
-const files = collectCssFiles(STYLE_DIR)
-  .map((abs) => ({ path: toPosix(relative(ROOT, abs)), count: countImportant(abs) }))
+const files = [
+  ...collectFiles(STYLE_DIR, '.css').map((abs) => ({
+    path: toPosix(relative(ROOT, abs)),
+    count: countImportant(abs),
+  })),
+  ...collectFiles(SRC_DIR, '.vue').map((abs) => ({
+    path: toPosix(relative(ROOT, abs)),
+    count: countVueImportant(abs),
+  })),
+]
   .filter((f) => f.count > 0)
   .sort((a, b) => b.count - a.count);
 
@@ -132,14 +156,17 @@ const stale = Object.keys(allowlist).filter(
 const problems = [];
 if (newFiles.length > 0) {
   problems.push(
-    'New `!important` in non-baselined stylesheet(s) — re-scope by specificity ' +
+    'New `!important` in non-baselined stylesheet(s)/SFC style block(s) — ' +
+      're-scope by specificity ' +
       'or CSS variables, or allowlist with a reason in ' +
       'scripts/css-important-baseline.json:',
   );
   for (const { path, count } of newFiles) problems.push(`  ${count}  ${path}`);
 }
 if (grown.length > 0) {
-  problems.push('Grandfathered stylesheet(s) gained `!important` (shrink only):');
+  problems.push(
+    'Grandfathered stylesheet(s)/SFC style block(s) gained `!important` (shrink only):',
+  );
   for (const { path, count, ceiling } of grown) {
     problems.push(`  ${count} (was ${ceiling})  ${path}`);
   }

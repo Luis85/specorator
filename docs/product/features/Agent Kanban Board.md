@@ -13,6 +13,7 @@ related:
   - "[[Agent Loops]]"
 user_manual: "[[agent-board]]"
 image: "[[agent-board-overview.png]]"
+priority:
 ---
 
 # Agent Kanban Board

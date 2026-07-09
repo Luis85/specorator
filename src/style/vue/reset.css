@@ -1,0 +1,33 @@
+/* Baseline reset for Vue islands, scoped to `.specorator-vue` (added to the
+   island mount root by LibraryView.onOpen; every future Vue view does the
+   same). Deliberately minimal: Obsidian's native control styling IS the
+   baseline — element primitives here would beat Obsidian's
+   equal-specificity mod-cta/hover/form-field rules by source order (see the
+   2026-07-03 spec, "No control primitives"). */
+
+.specorator-vue,
+.specorator-vue *,
+.specorator-vue *::before,
+.specorator-vue *::after {
+  box-sizing: border-box;
+}
+
+/* Zero structural margins; spacing is opt-in via tokens. `:where()` keeps
+   this at (0,1,0) so later-imported legacy rules with explicit margins
+   (e.g. the embedded detail editor's .specorator-roster-section) win ties —
+   only true default-margin reliance is zeroed. */
+.specorator-vue :where(h1, h2, h3, h4, h5, h6, p, ul, ol, pre) {
+  margin: 0;
+}
+
+/* One standard focus ring. Native buttons additionally keep Obsidian's
+   button:focus-visible box-shadow — parity with the legacy filterchips,
+   which already layer an outline over it. */
+.specorator-vue :focus-visible {
+  outline: 2px solid var(--sp-accent);
+  outline-offset: 2px;
+}
+
+.specorator-vue img {
+  max-width: 100%;
+}

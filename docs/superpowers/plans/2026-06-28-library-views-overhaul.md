@@ -1,5 +1,7 @@
 ---
 status: open
+priority: 1 - high
+parent: Frontend
 ---
 
 

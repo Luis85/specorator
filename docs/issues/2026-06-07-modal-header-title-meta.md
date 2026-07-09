@@ -3,7 +3,7 @@ type: issue
 id: issue-20260607-modal-header-title-meta
 title: Work-order modal — header with editable inline title + meta row
 status: done
-priority: 2 - normal
+priority: 2 - medium
 triage: ready-for-agent
 created: 2026-06-07
 related:

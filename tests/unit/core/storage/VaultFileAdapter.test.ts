@@ -217,6 +217,55 @@ describe('VaultFileAdapter', () => {
     });
   });
 
+  describe('deleteFolderRecursive', () => {
+    it('removes the folder tree via the adapter native recursive rmdir', async () => {
+      mockAdapter.exists.mockResolvedValue(true);
+      mockAdapter.rmdir = jest.fn().mockResolvedValue(undefined);
+
+      await vaultAdapter.deleteFolderRecursive('.claude/skills/a');
+
+      expect(mockAdapter.exists).toHaveBeenCalledWith('.claude/skills/a');
+      expect(mockAdapter.rmdir).toHaveBeenCalledWith('.claude/skills/a', true);
+    });
+
+    it('is a no-op when the folder does not exist', async () => {
+      mockAdapter.exists.mockResolvedValue(false);
+      mockAdapter.rmdir = jest.fn();
+
+      await vaultAdapter.deleteFolderRecursive('missing-folder');
+
+      expect(mockAdapter.rmdir).not.toHaveBeenCalled();
+    });
+
+    it('propagates rmdir failures instead of swallowing them like deleteFolder', async () => {
+      mockAdapter.exists.mockResolvedValue(true);
+      mockAdapter.rmdir = jest.fn().mockRejectedValue(new Error('locked'));
+
+      await expect(vaultAdapter.deleteFolderRecursive('busy')).rejects.toThrow('locked');
+    });
+
+    // Destructive primitive: root-ish paths must throw regardless of caller
+    // discipline — exists('') normalizes to the vault root, so a recursive
+    // delete on it would wipe the entire vault.
+    it.each([[''], ['.'], ['/'], ['//']])('throws on root-ish path %j without touching the adapter', async (path) => {
+      mockAdapter.rmdir = jest.fn();
+
+      await expect(vaultAdapter.deleteFolderRecursive(path)).rejects.toThrow();
+
+      expect(mockAdapter.exists).not.toHaveBeenCalled();
+      expect(mockAdapter.rmdir).not.toHaveBeenCalled();
+    });
+
+    it('trims trailing slashes before deleting', async () => {
+      mockAdapter.exists.mockResolvedValue(true);
+      mockAdapter.rmdir = jest.fn().mockResolvedValue(undefined);
+
+      await vaultAdapter.deleteFolderRecursive('x//');
+
+      expect(mockAdapter.rmdir).toHaveBeenCalledWith('x', true);
+    });
+  });
+
   describe('listFiles', () => {
     it('lists files in existing folder', async () => {
       mockAdapter.exists.mockResolvedValue(true);

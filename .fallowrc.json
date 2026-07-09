@@ -10,13 +10,16 @@
     "**/scripts/**",
     "**/.fallow/**",
     "**/coverage/**",
+    "**/coverage-vue/**",
     "**/main.js",
     "**/styles.css",
     "src/style/**"
   ],
   "ignoreDependencies": [
     "tslib",
-    "electron"
+    "electron",
+    "vue-eslint-parser",
+    "@vue/test-utils"
   ],
   "duplicates": {
     "minOccurrences": 2,

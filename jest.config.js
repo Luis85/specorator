@@ -21,6 +21,10 @@ module.exports = {
     // Dedicated workspace ItemViews are verified manually in Obsidian, not unit
     // tested (their logic-bearing helpers are extracted and covered separately).
     '!src/features/**/view/**',
+    // src/features/library/** is tested and coverage-gated in the Vitest lane
+    // (vitest.config.mts coverage.include + the CI component job); counting it
+    // here at 0% would sink the Jest global floors.
+    '!src/features/library/**',
   ],
   coverageDirectory: 'coverage',
   // Guardrail (Q-3): regression floors, not aspirations. Each floor sits a few

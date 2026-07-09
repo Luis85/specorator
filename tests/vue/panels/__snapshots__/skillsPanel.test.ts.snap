@@ -1,0 +1,85 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`SkillsPanel mutation flows > card structure snapshot (small, stable sub-tree) 1`] = `
+<div
+  aria-label="a-skill"
+  class="specorator-vue-card"
+  data-v-1932512b=""
+  role="button"
+  tabindex="0"
+>
+  <!--v-if-->
+  <div
+    class="specorator-vue-card-body"
+    data-v-1932512b=""
+  >
+    <div
+      class="specorator-vue-card-name"
+      data-v-1932512b=""
+    >
+      <span
+        data-v-1932512b=""
+      >
+        a-skill
+      </span>
+      
+      <span
+        class="specorator-vue-chip specorator-vue-chip-muted"
+      >
+        Vault
+      </span>
+      <!--v-if-->
+      
+    </div>
+    
+    <div
+      class="specorator-vue-card-desc"
+    >
+      does a
+    </div>
+    
+    <div
+      class="specorator-vue-card-caps"
+      data-v-1932512b=""
+    >
+      
+      <span
+        class="specorator-vue-chip"
+        data-v-1932512b=""
+      >
+        t1
+      </span>
+      
+    </div>
+  </div>
+  <div
+    class="specorator-vue-card-actions"
+    data-v-1932512b=""
+  >
+    
+    <button
+      class="mod-cta"
+      type="button"
+    >
+      Prompt
+    </button>
+    <button
+      aria-label="Duplicate"
+      class="specorator-vue-card-icon"
+      title="Duplicate"
+      type="button"
+    >
+       ⧉ 
+    </button>
+    <!-- Delete shares the clone writability gate: only vault-rooted
+            skill folders the adapter can touch are deletable. -->
+    <button
+      class="specorator-vue-card-delete"
+      type="button"
+    >
+      Delete
+    </button>
+    
+  </div>
+</div>
+`;

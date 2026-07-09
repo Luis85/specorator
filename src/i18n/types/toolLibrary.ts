@@ -1,5 +1,6 @@
 export type ToolLibraryTranslationKey =
   // Shared library toolbar / chip keys
+  | 'library.viewTitle'
   | 'library.searchPlaceholder'
   | 'library.sortLabel'
   | 'library.sortName'
@@ -29,6 +30,9 @@ export type ToolLibraryTranslationKey =
   | 'skillLibrary.providerVault'
   | 'skillLibrary.actionFailed'
   | 'skillLibrary.prompt'
+  | 'skillLibrary.delete'
+  | 'skillLibrary.deleteConfirm'
+  | 'skillLibrary.deleted'
   // Loop Library
   | 'loopLibrary.navLabel'
   | 'loopLibrary.title'

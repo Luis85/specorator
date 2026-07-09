@@ -11,6 +11,7 @@ related:
   - "[[Agent Kanban Board]]"
   - "[[Quick Actions]]"
 parent: "[[Agent Kanban Board]]"
+priority: 3 - low
 ---
 
 # Agent Loops

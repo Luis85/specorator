@@ -14,6 +14,7 @@ shipped_by: "[[Agent Board/tasks/work-order-20260606-settings-overhaul]]"
 > design in section 6.
 
 # Settings overhaul — design
+*(2026-07-04: the v4.0.0 milestone framing below is historical — it was retired with the library consolidation (docs/adr/0003-retire-legacy-library-views.md); deferred deletions land as dedicated passes.)*
 
 Date: 2026-05-30
 Owner: Claudian core

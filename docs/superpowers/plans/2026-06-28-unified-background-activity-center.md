@@ -1,5 +1,7 @@
 ---
 status: open
+priority: 3 - low
+parent: "[[Co-Worker - Chat]]"
 ---
 # Unified Background Activity Center Implementation Plan
 

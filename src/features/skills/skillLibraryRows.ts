@@ -1,4 +1,5 @@
 import type { ProviderId } from '../../core/providers/types';
+import type { LibraryItemAccessors } from '../../shared/libraryToolbar';
 import type { SkillTabEntry } from '../quickActions/skills/types';
 
 export interface SkillLibraryRow {
@@ -12,6 +13,26 @@ export interface SkillLibraryRow {
   editable: boolean;
   /** Frontmatter tags; populated by `toSkillLibraryRows` (defaults to []). */
   tags?: string[];
+}
+
+/**
+ * Search/sort/tag accessors shared by the legacy SkillLibraryView and the Vue
+ * Skills panel so both surfaces rank and filter skills identically. Provider is
+ * a filter facet too (mirrors the agent view feeding roles), so a provider chip
+ * filters the list and matches the card's provider chip label. `mtimeFor` reads
+ * the caller's mtime lookup (populated by its loadSkillTags pass), falling back
+ * to 0 for skills without a local source file (e.g. runtime-discovered Opencode
+ * skills).
+ */
+export function skillLibraryAccessors(
+  mtimeFor: (id: string) => number,
+): LibraryItemAccessors<SkillLibraryRow> {
+  return {
+    getName: (r) => r.name,
+    getDescription: (r) => r.description,
+    getTags: (r) => [r.providerDisplayName, ...(r.tags ?? [])],
+    getUpdatedAt: (r) => mtimeFor(r.id),
+  };
 }
 
 /**

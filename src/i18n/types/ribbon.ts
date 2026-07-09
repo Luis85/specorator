@@ -1,7 +1,5 @@
 export type RibbonTranslationKey =
-  // Ribbon icon tooltips (main.ts)
+  // Ribbon icon tooltips (registerPluginViews.ts)
   | 'ribbon.openChat'
   | 'ribbon.openAgentBoard'
-  | 'ribbon.openAgentRoster'
-  | 'ribbon.openSkillLibrary'
-  | 'ribbon.openLoopLibrary';
+  | 'ribbon.openLibrary';

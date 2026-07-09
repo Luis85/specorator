@@ -3,7 +3,7 @@ type: issue
 id: issue-20260603-cursor-hardening-pr2
 title: Cursor integration hardening PR2 (open T-items; gates ADR-0001 Phase 3)
 status: open
-priority: 2 - normal
+priority: 2 - medium
 triage: ready-for-agent
 created: 2026-06-03
 updated: 2026-06-03

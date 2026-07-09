@@ -52,7 +52,20 @@ export function parsePersistedSkillIndex(
   const out = new Map<ProviderId, ProviderCommandEntry[]>();
   for (const [providerId, entries] of Object.entries(shape.buckets)) {
     if (!Array.isArray(entries)) continue;
-    out.set(providerId, entries);
+    out.set(providerId, entries.filter(isSaneEntry));
   }
   return out;
+}
+
+/**
+ * Type sanity for a cache-hydrated entry — the file is world-writable, so
+ * dropping malformed entries beats casting blind. Full path-shape validation
+ * belongs to the clone/delete gate (`vaultSkillFolderOf`); here we only refuse
+ * non-objects and a `sourceFilePath` that is present but not a string, which
+ * downstream code would otherwise feed into path-derivation logic.
+ */
+function isSaneEntry(entry: unknown): entry is ProviderCommandEntry {
+  if (!entry || typeof entry !== 'object') return false;
+  const sourceFilePath = (entry as { sourceFilePath?: unknown }).sourceFilePath;
+  return sourceFilePath === undefined || sourceFilePath === null || typeof sourceFilePath === 'string';
 }

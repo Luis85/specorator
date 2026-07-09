@@ -615,6 +615,21 @@
       "saveFailed": "Failed to save quick action",
       "nameExists": "Já existe uma ação rápida com este nome"
     },
+    "library": {
+      "tab": "Ações rápidas",
+      "title": "Biblioteca de ações rápidas",
+      "newAction": "Nova ação",
+      "actionFailed": "Algo deu errado — verifique o console do desenvolvedor.",
+      "run": "Executar",
+      "edit": "Editar",
+      "duplicate": "Duplicar",
+      "delete": "Excluir",
+      "deleteConfirm": "Excluir a ação rápida \"{name}\" e sua nota?",
+      "deleted": "{name} excluído.",
+      "favoriteAria": "Alternar favorito",
+      "folderNotConfigured": "Nenhuma pasta de ações rápidas está configurada. Defina uma em Configurações → Ações rápidas para começar a criar ações.",
+      "favoriteLimit": "Você pode favoritar até 5 ações rápidas"
+    },
     "capture": {
       "label": "Salvar como ação rápida",
       "saved": "Ação rápida salva",
@@ -1123,6 +1138,7 @@
     }
   },
   "library": {
+    "viewTitle": "Biblioteca",
     "searchPlaceholder": "Search…",
     "sortLabel": "Sort",
     "sortName": "Name (A–Z)",
@@ -1152,7 +1168,10 @@
     "nameField": "Name",
     "actionFailed": "Something went wrong — check the developer console.",
     "providerVault": "Vault",
-    "prompt": "Prompt"
+    "prompt": "Prompt",
+    "delete": "Delete",
+    "deleteConfirm": "Delete the skill \"{name}\" and its folder and everything in it?",
+    "deleted": "Deleted {name}."
   },
   "loopLibrary": {
     "navLabel": "Loops",
@@ -1174,9 +1193,7 @@
   "ribbon": {
     "openChat": "Open Co-Worker Chat",
     "openAgentBoard": "Open Agent Board",
-    "openAgentRoster": "Open Agent Roster",
-    "openSkillLibrary": "Open Skill Library",
-    "openLoopLibrary": "Open loop library"
+    "openLibrary": "Open Library"
   },
   "commands": {
     "openView": "Open chat view",
@@ -1197,6 +1214,8 @@
     "closeCurrentTab": "Close current tab",
     "openAgentRoster": "Open Agent Roster",
     "openSkillLibrary": "Open Skill Library",
-    "openLoopLibrary": "Open loop library"
+    "openLoopLibrary": "Open loop library",
+    "openLibrary": "Open Library",
+    "openQuickActions": "Open Quick Actions"
   }
 }

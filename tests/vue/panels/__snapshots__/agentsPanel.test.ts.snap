@@ -1,0 +1,105 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`AgentsPanel mutation flows > card structure snapshot (small, stable sub-tree) 1`] = `
+<div
+  aria-label="Alice"
+  class="specorator-vue-card specorator-vue-agent-card"
+  data-v-1932512b=""
+  data-v-f28e8ef0=""
+  role="button"
+  tabindex="0"
+>
+  <div
+    class="specorator-vue-card-leading"
+    data-v-1932512b=""
+  >
+    
+    <span
+      aria-hidden="true"
+      class="specorator-vue-avatar"
+      data-v-5434e477=""
+      data-v-f28e8ef0=""
+    />
+    
+  </div>
+  <div
+    class="specorator-vue-card-body"
+    data-v-1932512b=""
+  >
+    <div
+      class="specorator-vue-card-name"
+      data-v-1932512b=""
+    >
+      <span
+        data-v-1932512b=""
+      >
+        Alice
+      </span>
+      
+      
+    </div>
+    
+    <div
+      class="specorator-vue-agent-card-desc"
+      data-v-f28e8ef0=""
+    >
+      router
+    </div>
+    <div
+      class="specorator-vue-card-caps"
+      data-v-f28e8ef0=""
+    >
+      
+      <span
+        class="specorator-vue-agent-chip specorator-vue-agent-chip-role"
+        data-v-f28e8ef0=""
+      >
+        Worker
+      </span>
+      
+      
+      <span
+        class="specorator-vue-chip"
+        data-v-f28e8ef0=""
+      >
+        t
+      </span>
+      
+      <!--v-if-->
+      <!--v-if-->
+    </div>
+    
+    <!--v-if-->
+  </div>
+  <div
+    class="specorator-vue-card-actions"
+    data-v-1932512b=""
+  >
+    
+    <button
+      class="mod-cta"
+      data-v-f28e8ef0=""
+      type="button"
+    >
+      Start chat
+    </button>
+    <button
+      aria-label="Duplicate"
+      class="specorator-vue-card-icon"
+      data-v-f28e8ef0=""
+      title="Duplicate"
+      type="button"
+    >
+       ⧉ 
+    </button>
+    <button
+      class="specorator-vue-card-delete"
+      data-v-f28e8ef0=""
+      type="button"
+    >
+      Delete
+    </button>
+    
+  </div>
+</div>
+`;

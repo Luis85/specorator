@@ -615,6 +615,21 @@
       "saveFailed": "Failed to save quick action",
       "nameExists": "Une action rapide avec ce nom existe déjà"
     },
+    "library": {
+      "tab": "Actions rapides",
+      "title": "Bibliothèque d'actions rapides",
+      "newAction": "Nouvelle action",
+      "actionFailed": "Une erreur est survenue — consultez la console développeur.",
+      "run": "Exécuter",
+      "edit": "Modifier",
+      "duplicate": "Dupliquer",
+      "delete": "Supprimer",
+      "deleteConfirm": "Supprimer l'action rapide « {name} » et sa note ?",
+      "deleted": "{name} supprimé.",
+      "favoriteAria": "Basculer le favori",
+      "folderNotConfigured": "Aucun dossier d'actions rapides n'est configuré. Définissez-en un dans Paramètres → Actions rapides pour créer des actions.",
+      "favoriteLimit": "Vous pouvez marquer jusqu'à 5 actions rapides en favoris"
+    },
     "capture": {
       "label": "Enregistrer comme action rapide",
       "saved": "Action rapide enregistrée",
@@ -1123,6 +1138,7 @@
     }
   },
   "library": {
+    "viewTitle": "Bibliothèque",
     "searchPlaceholder": "Search…",
     "sortLabel": "Sort",
     "sortName": "Name (A–Z)",
@@ -1152,7 +1168,10 @@
     "nameField": "Name",
     "actionFailed": "Something went wrong — check the developer console.",
     "providerVault": "Vault",
-    "prompt": "Prompt"
+    "prompt": "Prompt",
+    "delete": "Delete",
+    "deleteConfirm": "Delete the skill \"{name}\" and its folder and everything in it?",
+    "deleted": "Deleted {name}."
   },
   "loopLibrary": {
     "navLabel": "Loops",
@@ -1174,9 +1193,7 @@
   "ribbon": {
     "openChat": "Open Co-Worker Chat",
     "openAgentBoard": "Open Agent Board",
-    "openAgentRoster": "Open Agent Roster",
-    "openSkillLibrary": "Open Skill Library",
-    "openLoopLibrary": "Open loop library"
+    "openLibrary": "Open Library"
   },
   "commands": {
     "openView": "Open chat view",
@@ -1197,6 +1214,8 @@
     "closeCurrentTab": "Close current tab",
     "openAgentRoster": "Open Agent Roster",
     "openSkillLibrary": "Open Skill Library",
-    "openLoopLibrary": "Open loop library"
+    "openLoopLibrary": "Open loop library",
+    "openLibrary": "Open Library",
+    "openQuickActions": "Open Quick Actions"
   }
 }

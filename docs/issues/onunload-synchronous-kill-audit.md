@@ -3,7 +3,7 @@ type: issue
 id: issue-20260603-onunload-kill-audit
 title: Ensure onunload fires child.kill() synchronously before any await (no orphaned CLI processes)
 status: done
-priority: 2 - normal
+priority: 2 - medium
 triage: ready-for-agent
 created: 2026-06-03
 updated: 2026-06-09

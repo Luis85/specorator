@@ -615,6 +615,21 @@
       "saveFailed": "Failed to save quick action",
       "nameExists": "이 이름의 빠른 작업이 이미 존재합니다"
     },
+    "library": {
+      "tab": "빠른 작업",
+      "title": "빠른 작업 라이브러리",
+      "newAction": "새 작업",
+      "actionFailed": "문제가 발생했습니다. 개발자 콘솔을 확인하세요.",
+      "run": "실행",
+      "edit": "편집",
+      "duplicate": "복제",
+      "delete": "삭제",
+      "deleteConfirm": "빠른 작업 \"{name}\"과(와) 해당 노트를 삭제하시겠습니까?",
+      "deleted": "{name}을(를) 삭제했습니다.",
+      "favoriteAria": "즐겨찾기 전환",
+      "folderNotConfigured": "빠른 작업 폴더가 설정되어 있지 않습니다. 설정 → Quick Actions에서 폴더를 지정하면 작업을 만들 수 있습니다.",
+      "favoriteLimit": "최대 5개의 빠른 작업을 즐겨찾기로 지정할 수 있습니다"
+    },
     "capture": {
       "label": "빠른 작업으로 저장",
       "saved": "빠른 작업이 저장되었습니다",
@@ -1123,6 +1138,7 @@
     }
   },
   "library": {
+    "viewTitle": "라이브러리",
     "searchPlaceholder": "Search…",
     "sortLabel": "Sort",
     "sortName": "Name (A–Z)",
@@ -1152,7 +1168,10 @@
     "nameField": "Name",
     "actionFailed": "Something went wrong — check the developer console.",
     "providerVault": "Vault",
-    "prompt": "Prompt"
+    "prompt": "Prompt",
+    "delete": "Delete",
+    "deleteConfirm": "Delete the skill \"{name}\" and its folder and everything in it?",
+    "deleted": "Deleted {name}."
   },
   "loopLibrary": {
     "navLabel": "Loops",
@@ -1174,9 +1193,7 @@
   "ribbon": {
     "openChat": "Open Co-Worker Chat",
     "openAgentBoard": "Open Agent Board",
-    "openAgentRoster": "Open Agent Roster",
-    "openSkillLibrary": "Open Skill Library",
-    "openLoopLibrary": "Open loop library"
+    "openLibrary": "Open Library"
   },
   "commands": {
     "openView": "Open chat view",
@@ -1197,6 +1214,8 @@
     "closeCurrentTab": "Close current tab",
     "openAgentRoster": "Open Agent Roster",
     "openSkillLibrary": "Open Skill Library",
-    "openLoopLibrary": "Open loop library"
+    "openLoopLibrary": "Open loop library",
+    "openLibrary": "Open Library",
+    "openQuickActions": "Open Quick Actions"
   }
 }

@@ -4,8 +4,12 @@ date: 2026-06-14
 status: proposed
 scope: shared/mention, chat-rendering, inline-edit, settings, providers/opencode
 parent: Infrastructure
+tags:
+  - incomplete
+priority: 3 - low
 ---
 # Upstream Sync to YishenTu/claudian 2.0.24 — Plan
+*(2026-07-04: the v4.0.0 milestone framing below is historical — it was retired with the library consolidation (docs/adr/0003-retire-legacy-library-views.md); deferred deletions land as dedicated passes.)*
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking. Tasks 2–4 are **awaiting maintainer approval** — do not start them until the owner picks them up (the `Quick win now + plan the rest` decision on 2026-06-14 only authorised Task 1).
 

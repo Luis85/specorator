@@ -1,0 +1,108 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`QuickActionsPanel > card structure snapshot (small, stable sub-tree) 1`] = `
+<div
+  aria-label="Summarize"
+  class="specorator-vue-card"
+  data-v-00781362=""
+  data-v-1932512b=""
+  role="button"
+  tabindex="0"
+>
+  <div
+    class="specorator-vue-card-leading"
+    data-v-1932512b=""
+  >
+    
+    <div
+      class="specorator-vue-card-icon specorator-vue-qa-icon"
+      data-v-00781362=""
+    />
+    
+  </div>
+  <div
+    class="specorator-vue-card-body"
+    data-v-1932512b=""
+  >
+    <div
+      class="specorator-vue-card-name"
+      data-v-1932512b=""
+    >
+      <span
+        data-v-1932512b=""
+      >
+        Summarize
+      </span>
+      
+      <!-- .stop: the star sits inside the card's activate surface, and a
+            toggle must not also open the editor. -->
+      <button
+        aria-label="Toggle favorite"
+        aria-pressed="false"
+        class="specorator-vue-qa-star"
+        data-v-00781362=""
+        title="Toggle favorite"
+        type="button"
+      />
+      
+    </div>
+    
+    <div
+      class="specorator-vue-card-desc"
+      data-v-00781362=""
+    >
+      Sum it up
+    </div>
+    
+    <div
+      class="specorator-vue-card-caps"
+      data-v-1932512b=""
+    >
+      
+      <span
+        class="specorator-vue-chip"
+        data-v-1932512b=""
+      >
+        writing
+      </span>
+      
+    </div>
+  </div>
+  <div
+    class="specorator-vue-card-actions"
+    data-v-1932512b=""
+  >
+    
+    <button
+      class="mod-cta"
+      data-v-00781362=""
+      type="button"
+    >
+      Run
+    </button>
+    <button
+      data-v-00781362=""
+      type="button"
+    >
+      Edit
+    </button>
+    <button
+      aria-label="Duplicate"
+      class="specorator-vue-card-icon"
+      data-v-00781362=""
+      title="Duplicate"
+      type="button"
+    >
+       ⧉ 
+    </button>
+    <button
+      class="specorator-vue-card-delete"
+      data-v-00781362=""
+      type="button"
+    >
+      Delete
+    </button>
+    
+  </div>
+</div>
+`;

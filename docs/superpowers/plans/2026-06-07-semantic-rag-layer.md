@@ -1,6 +1,7 @@
 ---
 status: open
 parent: "[[Specorator - Product Vision]]"
+priority: 3 - low
 ---
 # Semantic RAG Layer Implementation Plan
 

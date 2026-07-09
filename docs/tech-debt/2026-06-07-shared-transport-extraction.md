@@ -1,10 +1,10 @@
 ---
 type: tech-debt
-title: "Shared transport helpers from ADR-0001 are still unextracted"
+title: Shared transport helpers from ADR-0001 are still unextracted
 date: 2026-06-07
 updated: 2026-06-14
 status: done
-priority: "2 - normal"
+priority: 2 - medium
 severity: medium
 scope: provider-transport
 tags:

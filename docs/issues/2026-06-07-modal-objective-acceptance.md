@@ -3,7 +3,7 @@ type: issue
 id: issue-20260607-modal-objective-acceptance
 title: Work-order modal — Objective + Acceptance progress ring + checklist card
 status: done
-priority: 2 - normal
+priority: 2 - medium
 triage: ready-for-agent
 created: 2026-06-07
 related:

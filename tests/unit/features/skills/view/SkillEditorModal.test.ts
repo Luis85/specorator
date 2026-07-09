@@ -27,13 +27,14 @@ function makeRow(over: Partial<SkillLibraryRow> = {}): SkillLibraryRow {
 function makePlugin() {
   const write = jest.fn().mockResolvedValue(undefined);
   const emit = jest.fn();
+  const warn = jest.fn();
   const plugin = {
     app: { vault: { adapter: { basePath: '/vault' } } },
     events: { emit },
-    logger: { scope: () => ({ error: jest.fn() }) },
+    logger: { scope: () => ({ error: jest.fn(), warn }) },
     vaultFileAdapter: { write, read: jest.fn().mockResolvedValue('# Review\n') },
   } as never;
-  return { plugin, write, emit };
+  return { plugin, write, emit, warn };
 }
 
 // save() only reads the field refs and the row/plugin — no DOM render needed.
@@ -89,6 +90,25 @@ describe('SkillEditorModal.save — Codex host-absolute path', () => {
     // 5s listSkills TTL) before the re-render re-fetches entries.
     expect(getCommandCatalogMock).toHaveBeenCalledWith('codex');
     expect(refreshMock).toHaveBeenCalledTimes(1);
+  });
+
+  // Codex's catalog refresh spawns an ephemeral app-server; if the CLI can't
+  // start, refresh() rejects AFTER the vault write already landed. The save
+  // must still complete (onSaved, saved notice, close) — otherwise the modal
+  // stays open on an already-renamed skill and retry mutates the renamed file.
+  it('completes the save when the provider catalog refresh rejects after the write landed', async () => {
+    const { plugin, write, warn } = makePlugin();
+    refreshMock.mockRejectedValueOnce(new Error('codex app-server failed to start'));
+    const onSaved = jest.fn();
+    const modal = new SkillEditorModal(plugin as never, plugin as never, makeRow(), onSaved);
+
+    await primeAndSave(modal, { tags: 'x' });
+
+    expect(write).toHaveBeenCalledTimes(1);
+    expect(onSaved).toHaveBeenCalledTimes(1);
+    expect(Notice).toHaveBeenCalledWith('Saved review.');
+    expect((modal as unknown as { close: jest.Mock }).close).toHaveBeenCalled();
+    expect(warn).toHaveBeenCalledWith(expect.any(String), expect.any(Error));
   });
 
   it('does not write when the skill lives outside the vault (home-scope path)', async () => {

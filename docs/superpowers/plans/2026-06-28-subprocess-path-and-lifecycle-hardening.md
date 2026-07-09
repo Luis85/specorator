@@ -1,8 +1,10 @@
 ---
 title: Subprocess PATH and Lifecycle Hardening
 date: 2026-06-28
-status: draft
+status: open
 scope: core/transport, core/providers, utils/env, providers/claude, providers/opencode, features/chat/services
+priority: 2 - medium
+parent: "[[Multi Provider Support]]"
 ---
 
 # Subprocess PATH and Lifecycle Hardening Implementation Plan
@@ -16,14 +18,6 @@ scope: core/transport, core/providers, utils/env, providers/claude, providers/op
 **Tech Stack:** TypeScript, Node `child_process`, Jest (unit + integration projects), Obsidian/Electron runtime.
 
 **Why (root-cause summary):** On Windows, `{ ...process.env, PATH: x }` and the allowlist copy+override both produce an env object with two keys — `Path` (OS-cased, raw GUI PATH, often missing `Git\bin`) and `PATH` (enhanced). Windows env lookup is case-insensitive with no defined winner between duplicate-case keys, so a child (e.g. `cursor-agent` and the `git`/`bash` it spawns) can resolve the stale `Path`. Collapsing to a single key removes the ambiguity on every libuv version. Separately, `AgentSubprocess` (Opencode/ACP) kills only the direct child on POSIX, orphaning grandchildren.
-
-> **⚠️ EXECUTION NOTE (per user decision, 2026-06-28): NO GIT COMMITS.**
-> Do **not** run `git add` / `git commit` / branch / worktree. All work stays in
-> the **current working tree** (alongside the unrelated in-progress
-> `feat/library-views-overhaul` edits), uncommitted, for the user to review.
-> **Every "Commit" step below is superseded — skip it.** Each task's checkpoint
-> is the passing test run in its preceding step. The user reviews accumulated
-> diffs at the end.
 
 ---
 

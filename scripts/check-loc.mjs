@@ -9,7 +9,7 @@
  * docs/tech-debt/2026-06-07-oversized-modules-and-test-files.md).
  *
  * Policy (a ratchet, not a freeze):
- *   - Any `src/**` `.ts` file <= MAX_LOC nonblank lines is always fine.
+ *   - Any `src/**` `.ts` or `.vue` file <= MAX_LOC nonblank lines is always fine.
  *   - New files above MAX_LOC fail. Split them or earn an allowlist entry.
  *   - Known hotspots are grandfathered in scripts/loc-baseline.json with the
  *     LOC measured at baseline time. They may shrink freely but may NOT grow
@@ -62,7 +62,10 @@ function collectSourceFiles(dir, acc = []) {
     const abs = join(dir, entry.name);
     if (entry.isDirectory()) {
       collectSourceFiles(abs, acc);
-    } else if (entry.isFile() && entry.name.endsWith('.ts')) {
+    } else if (
+      entry.isFile() &&
+      (entry.name.endsWith('.ts') || entry.name.endsWith('.vue'))
+    ) {
       acc.push(abs);
     }
   }

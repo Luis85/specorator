@@ -1,0 +1,123 @@
+/* Shared visual vocabulary for Vue islands — classes rendered by MORE THAN
+   ONE component (including slot content, which compiles in the PARENT's
+   scope, so a child's scoped block can't own it; ::v-slotted is deliberately
+   not used — see the 2026-07-03 spec, Tier 2). Single-component classes live
+   in that component's <style scoped> block. Only `.specorator-vue-*`
+   selectors and `--sp-*` tokens are allowed here. Selectors are deliberately
+   NOT nested under `.specorator-vue`: the name prefix is the namespace, and
+   staying at (0,1,0) specificity lets scoped SFC rules (0,2,0) win by
+   specificity rather than by merge order. */
+
+/* ── Panel scaffold (all three Library panels) ── */
+.specorator-vue-panel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: var(--sp-space-s);
+  margin-bottom: var(--sp-space-l);
+}
+
+.specorator-vue-panel-actions {
+  display: flex;
+  gap: var(--sp-space-s);
+}
+
+.specorator-vue-panel-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-space-s);
+}
+
+.specorator-vue-panel-loading {
+  color: var(--sp-text-muted);
+  font-size: var(--sp-font-small);
+  text-align: center;
+  padding: var(--sp-space-l);
+}
+
+/* ── Card slot vocabulary (rendered by panels inside LibraryCard's slots) ── */
+.specorator-vue-card-caps {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-space-2xs);
+  margin-top: var(--sp-space-2xs);
+}
+
+.specorator-vue-card-desc {
+  color: var(--sp-text-muted);
+  font-size: var(--sp-font-small);
+  margin-top: var(--sp-space-3xs);
+  /* Clamp long descriptions so a verbose entry can't stretch the card. */
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.specorator-vue-card-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.specorator-vue-card-delete {
+  color: var(--sp-text-error);
+}
+
+/* Busy row: an async card action (clone/delete/start-chat) is in flight and
+   the panel has disabled the row's buttons. Obsidian only swaps the cursor on
+   disabled buttons, so the dim is the visible feedback. The state-gated
+   `button:disabled` here is NOT a control primitive (see the no-element-
+   primitives rule): it can't fight mod-cta's baseline outside is-busy. */
+.specorator-vue-card-actions.is-busy {
+  cursor: progress;
+}
+
+.specorator-vue-card-actions.is-busy button:disabled {
+  opacity: 0.6;
+  cursor: progress;
+}
+
+/* ── Chips ── */
+/* Chip modifiers co-locate with the family even when single-consumer today
+   (spec exception): one family, one place. */
+.specorator-vue-chip {
+  font-size: var(--sp-font-smaller);
+  border-radius: var(--sp-radius-s);
+  padding: 0 5px;
+  line-height: 1.5;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.specorator-vue-chip-muted {
+  color: var(--sp-text-muted);
+  background: var(--sp-border);
+}
+
+/* Outline variant: distinguishes the read-only marker from filled chips. */
+.specorator-vue-chip-outline {
+  color: var(--sp-text-muted);
+  background: transparent;
+  border: 1px solid var(--sp-border);
+}
+
+/* ── Empty/hint copy (LibraryEmptyState + panels' loading/hint copy) ── */
+.specorator-vue-empty-text {
+  max-width: 36ch;
+  font-size: var(--sp-font-small);
+  line-height: var(--sp-line-tight);
+}
+
+/* Obsidian sets user-select: none on body; opt text content back in per
+   region — never blanket the island (chrome must stay non-selectable).
+   The Agents panel's .specorator-vue-agent-card-desc opts in separately in
+   its scoped block (it forks the roster's single-line desc, not this
+   clamped one). */
+.specorator-vue-card-desc,
+.specorator-vue-empty-text,
+.specorator-vue-panel-loading {
+  user-select: text;
+  cursor: text;
+}

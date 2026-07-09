@@ -12,6 +12,7 @@ related:
 user_manual: "[[quick-actions]]"
 parent: "[[Co-Worker - Chat]]"
 image: "[[quick-actions-overview.png]]"
+priority: 2 - medium
 ---
 
 # Quick Actions

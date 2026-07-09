@@ -3,7 +3,7 @@ type: issue
 id: issue-20260607-agent-board-redesign-a11y-audit
 title: Agent Board redesign — accessibility + reduced-motion audit
 status: done
-priority: 2 - normal
+priority: 2 - medium
 triage: ready-for-agent
 created: 2026-06-07
 related:

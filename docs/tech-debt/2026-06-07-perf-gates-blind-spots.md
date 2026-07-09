@@ -1,10 +1,10 @@
 ---
 type: tech-debt
-title: "Performance gates miss Agent Board and concurrent streaming hot paths"
+title: Performance gates miss Agent Board and concurrent streaming hot paths
 date: 2026-06-07
 updated: 2026-06-10
 status: done
-priority: "2 - normal"
+priority: 2 - medium
 severity: medium
 scope: performance-testing
 tags:

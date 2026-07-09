@@ -61,6 +61,14 @@ export class ItemView {
   getIcon(): string {
     return '';
   }
+
+  // Real ItemView persistence hooks (no-ops here) so subclasses can call
+  // `super.setState(...)` / spread `super.getState()` like they do in Obsidian.
+  async setState(_state: unknown, _result: unknown): Promise<void> {}
+
+  getState(): Record<string, unknown> {
+    return {};
+  }
 }
 
 export class WorkspaceLeaf {}
@@ -659,8 +667,10 @@ export function normalizePath(path: string): string {
   return result === '' ? '/' : result;
 }
 
-// Notice mock that tracks constructor calls
-export const Notice = jest.fn().mockImplementation((_message: string, _timeout?: number) => {});
+// Notice mock that tracks constructor calls. Function expression, not an
+// arrow: Vitest's tinyspy invokes the implementation with `new` when the mock
+// is constructed, and arrows are not constructible (Jest doesn't care).
+export const Notice = jest.fn().mockImplementation(function (_message: string, _timeout?: number) {});
 
 function unquoteYaml(value: string): string {
   if (

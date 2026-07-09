@@ -12,6 +12,8 @@ import {
 } from 'fs';
 import rendererSafeUnrefHelpers from './scripts/rendererSafeUnref.js';
 import patchSdkImportMetaUrlModule from './scripts/patchSdkImportMetaUrl.js';
+import { createMergeVueSfcStylesPlugin } from './scripts/mergeVueSfcStyles.mjs';
+import VuePlugin from 'unplugin-vue/esbuild';
 
 const {
   findUnsafeTimerUnrefSites,
@@ -136,7 +138,26 @@ const copyToObsidian = {
 const context = await esbuild.context({
   entryPoints: ['src/main.ts'],
   bundle: true,
-  plugins: [patchSdkImportMeta, patchRendererUnsafeUnref, copyToObsidian],
+  plugins: [
+    patchSdkImportMeta,
+    VuePlugin({ isProduction: prod, sourceMap: false }),
+    // Folds SFC-extracted main.css into styles.css; must precede copyToObsidian
+    // (onEnd hooks run in registration order). See scripts/mergeVueSfcStyles.mjs.
+    createMergeVueSfcStylesPlugin({ prod, esbuild }),
+    patchRendererUnsafeUnref,
+    copyToObsidian,
+  ],
+  define: {
+    // Vue compile-time flags (https://vuejs.org/api/compile-time-flags):
+    // Composition API only -> tree-shake the Options API out; no devtools/SSR.
+    __VUE_OPTIONS_API__: 'false',
+    __VUE_PROD_DEVTOOLS__: 'false',
+    __VUE_PROD_HYDRATION_MISMATCH_DETAILS__: 'false',
+    // Vue's esm-bundler runtime gates its dev-mode branches on
+    // process.env.NODE_ENV. Define it ONLY for prod so dev builds leave the
+    // expression unreplaced and the runtime environment decides.
+    ...(prod ? { 'process.env.NODE_ENV': '"production"' } : {}),
+  },
   external: [
     'obsidian',
     'electron',

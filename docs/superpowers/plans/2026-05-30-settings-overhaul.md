@@ -3,6 +3,10 @@ status: shipped
 parent: Infrastructure
 shipped_in: 3.0.0
 shipped_by: "[[Agent Board/tasks/work-order-20260606-settings-overhaul]]"
+tags:
+  - bugs
+  - incomplete
+priority: 3 - low
 ---
 
 > **Status (2026-06-07): shipped in 3.0.0.** Phases A–J all landed: registry foundation, search bar, first-run
@@ -18,6 +22,7 @@ shipped_by: "[[Agent Board/tasks/work-order-20260606-settings-overhaul]]"
 > and the residual was already tracked as a v4.0.0 followup.
 
 # Settings Overhaul Implementation Plan
+*(2026-07-04: the v4.0.0 milestone framing below is historical — it was retired with the library consolidation (docs/adr/0003-retire-legacy-library-views.md); deferred deletions land as dedicated passes.)*
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
