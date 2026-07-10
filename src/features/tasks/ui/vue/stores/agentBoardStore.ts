@@ -1,11 +1,12 @@
 import { defineStore } from 'pinia';
-import { shallowRef } from 'vue';
+import { ref, shallowRef } from 'vue';
 
 import type SpecoratorPlugin from '../../../../../main';
 import { mergeById } from '../../../../library/vue/mergeById';
 import { useGuardedLoad } from '../../../../library/vue/useGuardedLoad';
 import { loadBoardConfig } from '../../../config/BoardConfigStore';
 import type { ResolvedBoardLayout } from '../../../config/boardConfigTypes';
+import { boardWorkOrderFolder } from '../../../config/boardWorkOrderFolder';
 import { resolveBoardLayout } from '../../../config/resolveBoardLayout';
 import { TaskIndexer } from '../../../indexing/TaskIndexer';
 import type { TaskSpec } from '../../../model/taskTypes';
@@ -41,6 +42,10 @@ export const useAgentBoardStore = defineStore('agent-board', () => {
   const liveHeartbeats = shallowRef<Map<string, string>>(new Map());
   const liveLedger = shallowRef<Map<string, string>>(new Map());
   const { loading, run } = useGuardedLoad();
+  // Captured (not thrown) so callers can fire `void store.load()` without
+  // guarding a rejection: the fetch path awaits vault reads on files that can
+  // vanish mid delete/rename burst — exactly the vault events driving reloads.
+  const error = ref<string | null>(null);
 
   let plugin: SpecoratorPlugin | null = null;
   let deps: BoardLoaderDeps | null = null;
@@ -57,10 +62,10 @@ export const useAgentBoardStore = defineStore('agent-board', () => {
   }
 
   function folder(): string {
-    // Real key confirmed against AgentBoardView.folder — NOT the plan's hypothesized
-    // `agentBoardFolder`. Slash-strip mirrors the view getter (the indexer normalizes
-    // internally too, but keeping it here keeps the projection faithful).
-    return (plugin?.settings.agentBoardWorkOrderFolder || 'Agent Board/tasks').replace(/^\/+|\/+$/g, '');
+    // Shared with the Vue event-routing composable's vault filter (see
+    // boardWorkOrderFolder) so the folder the loader indexes and the folder the
+    // filter accepts can never drift apart.
+    return plugin ? boardWorkOrderFolder(plugin.settings) : 'Agent Board/tasks';
   }
 
   async function load(): Promise<void> {
@@ -79,7 +84,9 @@ export const useAgentBoardStore = defineStore('agent-board', () => {
           tasks: mergeById(currentTasks(lane.id), lane.tasks, (t) => t.frontmatter.id),
         }));
         layout.value = { lanes: merged, errors: next.errors };
+        error.value = null;
       },
+      (e) => { error.value = e instanceof Error ? e.message : String(e); },
     );
   }
 
@@ -112,5 +119,5 @@ export const useAgentBoardStore = defineStore('agent-board', () => {
     }
   }
 
-  return { layout, liveHeartbeats, liveLedger, loading, init, load, recordHeartbeat, recordLedger, evictLive };
+  return { layout, liveHeartbeats, liveLedger, loading, error, init, load, recordHeartbeat, recordLedger, evictLive };
 });

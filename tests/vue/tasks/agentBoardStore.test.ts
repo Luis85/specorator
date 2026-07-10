@@ -109,6 +109,25 @@ describe('useAgentBoardStore', () => {
     expect(store.liveLedger).not.toBe(ledger);
   });
 
+  it('load() captures a fetch rejection into store.error, resolves (never throws), and leaves layout unchanged', async () => {
+    const store = useAgentBoardStore();
+    const deps: BoardLoaderDeps = {
+      indexVaultFolder: () => Promise.reject(new Error('vault boom')),
+      loadBoardConfig: vi.fn(() => ({ config: {}, errors: [] })) as unknown as BoardLoaderDeps['loadBoardConfig'],
+      resolveBoardLayout: vi.fn() as unknown as BoardLoaderDeps['resolveBoardLayout'],
+    };
+    store.init(makePlugin() as never, deps);
+    const layoutBefore = store.layout;
+
+    // Must resolve, not reject — the composable fires `void store.load()` off a
+    // vault-delete/rename burst and cannot handle a rejection.
+    await expect(store.load()).resolves.toBeUndefined();
+
+    expect(store.error).toBe('vault boom');
+    expect(store.layout).toBe(layoutBefore);
+    expect(store.loading).toBe(false);
+  });
+
   it('mergeById preserves task identity across loads (no flicker on a live board)', async () => {
     const first: ResolvedBoardLayout = { lanes: [makeLane('running', [makeTask('t1', 'running')])], errors: [] };
     // Second load: a FRESH task instance with identical content, as if re-parsed off disk.
