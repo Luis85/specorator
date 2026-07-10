@@ -87,7 +87,19 @@ export function useBoardEventRouting(plugin: SpecoratorPlugin): void {
     disposers.push(plugin.events.on('task:run-finished', (p) => {
       store.evictLive(p.taskId);
       store.clearPause(p.taskId);
+      // A finished run is no longer a skippable-Ready card — drop any stale chip.
+      store.clearSkip(p.taskId);
     }));
+
+    // Skip-chip overlay (the reactive replacement for reading the runner's
+    // non-reactive `control.lastSkipReasonByTask` on every render). setSkip mirrors
+    // the runner's recordSkip (task:queue-skipped); clearSkip mirrors every point
+    // the runner clears its own entry: `launch()` deletes it (→ task:attempt-started
+    // here), the ack calls clearSkipReason (cleared in the card's click handler),
+    // and any status change off the runnable state (below). Both events also stay
+    // in FULL_REFRESH_EVENTS so the reload still re-buckets the card's lane.
+    disposers.push(plugin.events.on('task:queue-skipped', (p) => store.setSkip(p.taskId, p.reason)));
+    disposers.push(plugin.events.on('task:attempt-started', (p) => store.clearSkip(p.taskId)));
 
     // Pause overlay (the O(1) replacement for the imperative view's `pauseState`
     // Map). setPause carries the event-sourced prompt the reply surface renders;
@@ -110,6 +122,10 @@ export function useBoardEventRouting(plugin: SpecoratorPlugin): void {
     // that sets it, so this guard never wipes a freshly-set pause.
     disposers.push(plugin.events.on('task:status-changed', (p) => {
       if (p.status !== 'needs_input' && p.status !== 'needs_approval') store.clearPause(p.taskId);
+      // A skip reason only applies to a Ready/Needs-fix card; any status change
+      // means it no longer does (a skip never itself changes status, so this can't
+      // wipe a still-valid chip). Mirrors the runner clearing on launch.
+      store.clearSkip(p.taskId);
     }));
     // NB: vault `delete` intentionally does NOT clear the pause overlay. The
     // imperative evictInMemoryStateForPath maps path→taskId, but this overlay is

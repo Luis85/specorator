@@ -1,10 +1,22 @@
-import { setIcon } from 'obsidian';
-
-import { t } from '../../../i18n/i18n';
 import type { TranslationKey } from '../../../i18n/types';
-import { type PersonaResolver } from '../../agents/personaRegistry';
+import type { PersonaResolver } from '../../agents/personaRegistry';
 import type { TaskSpec, TaskStatus } from '../model/taskTypes';
-import { PortalPopover, type PortalPopoverItem } from './portalPopover';
+
+// Data + contract module for the Agent Board card surface. The imperative
+// DOM-building (`AgentBoardCardActions`, the portal popover) was deleted in the
+// Task 5b Vue cutover; the Vue `CardActionCluster`/`OverflowMenu`/`CardReplySurface`
+// components consume the `CARD_ACTIONS` spec table plus the `AgentBoardRenderCallbacks`
+// and `AgentBoardPauseState` types re-homed here.
+
+/** Pause payload surfaced on a card while a run waits for input or approval. */
+export interface AgentBoardPauseState {
+  question?: string;
+  action?: string;
+  risk?: string;
+  defaultValue?: string;
+  reversible?: boolean;
+  runId?: string;
+}
 
 export interface AgentBoardRenderCallbacks {
   onOpenDetail(task: TaskSpec): void;
@@ -25,9 +37,8 @@ export interface AgentBoardRenderCallbacks {
    * cutover maps it to `AgentBoardView.onToggleQueue()`.
    */
   onToggleAutoRun?(): void;
-  /** Queue skip reason for a card, or null when the card is not skipped. */
-  getSkipReason?: (task: TaskSpec) => string | null;
-  /** Dismiss a card's queue skip chip. */
+  /** Dismiss a card's queue skip chip (clears the runner's shared skip map). The
+   *  chip itself is a reactive store overlay, not read through this contract. */
   onAckSkip?: (task: TaskSpec) => void;
   onContextMenu(task: TaskSpec, event: MouseEvent): void;
   onToggleLaneCollapse(laneId: string): void;
@@ -187,162 +198,3 @@ export const CARD_ACTIONS: Partial<Record<TaskStatus, CardActionModel>> = {
 };
 
 export const FALLBACK_CARD_ACTIONS: CardActionModel = { primary: null, menu: [MENU_OPEN_NOTE] };
-
-/** Live callbacks escape so each click resolves against current board state. */
-export interface AgentBoardCardActionsDeps {
-  getCallbacks(): AgentBoardRenderCallbacks | null;
-}
-
-/**
- * Owns the per-card hover action cluster (per-status primary button + ⋯ overflow
- * menu) and the single body-portaled overflow popover. Extracted from
- * `AgentBoardRenderer` so the renderer keeps card/lane DOM while this owns the
- * action spec table + popover lifecycle.
- */
-export class AgentBoardCardActions {
-  // The single open ⋯ overflow popover (only one card menu is open at a time).
-  // Tracked so a full re-render or a removed card tears it down — the popover is
-  // portaled onto document.body, so it would otherwise leak a detached node and
-  // its scroll/resize/click listeners across renders.
-  private openPopover: PortalPopover | null = null;
-
-  constructor(private readonly deps: AgentBoardCardActionsDeps) {}
-
-  /** Tear down the open ⋯ overflow popover (portaled on document.body), if any. */
-  closePopover(): void {
-    this.openPopover?.close();
-    this.openPopover = null;
-  }
-
-  /**
-   * Build the hover action cluster (per-status primary + ⋯) for a card. It
-   * reserves no layout width (CSS `position: absolute`), so titles keep their
-   * full width; it reveals on card hover/focus, and stays visible on live cards
-   * (running / needs_input / needs_approval). `persistent` keys the always-on
-   * styling for live cards. Every click routes through the supplied callbacks.
-   */
-  renderCardActions(card: HTMLElement, task: TaskSpec, persistent: boolean): HTMLElement {
-    const model = CARD_ACTIONS[task.frontmatter.status] ?? FALLBACK_CARD_ACTIONS;
-    const cluster = card.createDiv({
-      cls: `specorator-agent-board-card-actions${persistent ? ' specorator-agent-board-card-actions--persistent' : ''}`,
-    });
-    // The card opens the detail view on click; keep cluster interactions local.
-    cluster.addEventListener('click', (event) => event.stopPropagation());
-
-    if (model.primary) this.renderPrimaryAction(cluster, task, model.primary);
-    if (model.secondary) this.renderSecondaryAction(cluster, task, model.secondary);
-    this.renderOverflowMenu(cluster, task, model.menu);
-    return cluster;
-  }
-
-  /**
-   * Build the cluster and place it immediately after the title row (its DOM slot
-   * on first render). The cluster is `position: absolute`, so order doesn't
-   * affect its placement, but keeping the slot stable avoids surprising the
-   * `cardRefs` consumers. Used by `patchCard` after removing the stale cluster.
-   */
-  insertCardActions(
-    card: HTMLElement,
-    statusDot: HTMLElement,
-    task: TaskSpec,
-    persistent: boolean,
-  ): HTMLElement {
-    const cluster = this.renderCardActions(card, task, persistent);
-    const titleRow = statusDot.parentElement;
-    if (titleRow && titleRow.nextSibling) card.insertBefore(cluster, titleRow.nextSibling);
-    return cluster;
-  }
-
-  private renderPrimaryAction(cluster: HTMLElement, task: TaskSpec, action: CardAction): void {
-    const variant = action.variant ?? 'cta';
-    this.buildLabeledButton(
-      cluster,
-      task,
-      action,
-      `specorator-agent-board-card-action-primary specorator-agent-board-card-action-primary--${variant}`,
-    );
-  }
-
-  /**
-   * Labeled secondary button (e.g. "Go to conversation" on running cards). Honors
-   * the action's `available` guard at render time so a missing/deleted
-   * conversation hides it rather than rendering a dead button; the cluster is
-   * rebuilt on every `patchCard`, so the guard re-evaluates as state changes.
-   */
-  private renderSecondaryAction(cluster: HTMLElement, task: TaskSpec, action: CardAction): void {
-    const callbacks = this.deps.getCallbacks();
-    if (action.available && !(callbacks != null && action.available(callbacks, task))) return;
-    this.buildLabeledButton(cluster, task, action, 'specorator-agent-board-card-action-secondary');
-  }
-
-  /** Icon + label button shared by the primary and secondary card actions. */
-  private buildLabeledButton(cluster: HTMLElement, task: TaskSpec, action: CardAction, cls: string): void {
-    const button = cluster.createEl('button', { cls, attr: { type: 'button' } });
-    const icon = button.createSpan({ cls: 'specorator-agent-board-card-action-icon' });
-    icon.setAttribute('aria-hidden', 'true');
-    icon.setAttribute('data-icon', action.icon);
-    setIcon(icon, action.icon);
-    button.createSpan({ cls: 'specorator-agent-board-card-action-label', text: t(action.labelKey) });
-    button.addEventListener('click', (event) => {
-      event.stopPropagation();
-      const callbacks = this.deps.getCallbacks();
-      if (callbacks) action.run(callbacks, task);
-    });
-  }
-
-  private renderOverflowMenu(cluster: HTMLElement, task: TaskSpec, menu: CardAction[]): void {
-    const trigger = cluster.createEl('button', {
-      cls: 'specorator-agent-board-card-action-more',
-      attr: { type: 'button', 'aria-label': t('tasks.board.cardAction.moreActions'), 'aria-haspopup': 'menu' },
-    });
-    const glyph = trigger.createSpan({ cls: 'specorator-agent-board-card-action-icon' });
-    glyph.setAttribute('aria-hidden', 'true');
-    glyph.setAttribute('data-icon', 'more-horizontal');
-    setIcon(glyph, 'more-horizontal');
-
-    // The hover cluster hides on mouseleave (it shows on card :hover/:focus-within);
-    // keep it visible while THIS card's ⋯ menu is open so the trigger isn't
-    // orphaned when the pointer moves onto the (body-portaled) menu.
-    const card = cluster.closest('.specorator-agent-board-card');
-
-    const popover = new PortalPopover({
-      trigger,
-      // Built lazily on each open so guards (canOpenConversation, etc.)
-      // re-evaluate against current state, not the render-time snapshot.
-      items: (): PortalPopoverItem[] => {
-        const cb = this.deps.getCallbacks();
-        return menu
-          .filter((action) => !action.available || (cb != null && action.available(cb, task)))
-          .map((action) => ({
-            label: t(action.labelKey),
-            icon: action.icon,
-            danger: action.danger,
-            run: () => {
-              const callbacks = this.deps.getCallbacks();
-              if (callbacks) action.run(callbacks, task);
-            },
-          }));
-      },
-      menuClass: 'specorator-agent-board-card-menu',
-      itemClass: 'specorator-agent-board-card-menu-item',
-      itemIconClass: 'specorator-agent-board-card-menu-item-icon',
-      itemDangerClass: 'specorator-agent-board-card-menu-item--danger',
-      upClass: 'specorator-agent-board-card-menu--up',
-      onClose: () => card?.removeClass('is-menu-open'),
-    });
-
-    trigger.addEventListener('click', (event) => {
-      event.stopPropagation();
-      // Toggle: a second click on an already-open menu (this trigger's) closes it.
-      if (popover.isOpen()) {
-        this.closePopover();
-        return;
-      }
-      // Only one card menu is open at a time — close any other before opening.
-      this.closePopover();
-      this.openPopover = popover;
-      card?.addClass('is-menu-open');
-      popover.open();
-    });
-  }
-}

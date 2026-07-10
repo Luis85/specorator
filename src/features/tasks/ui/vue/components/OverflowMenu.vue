@@ -3,8 +3,7 @@ import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
 
 import { t } from '../../../../../i18n/i18n';
 import type { TaskSpec } from '../../../model/taskTypes';
-import type { CardAction } from '../../agentBoardCardActions';
-import type { AgentBoardRenderCallbacks } from '../../AgentBoardRenderer';
+import type { AgentBoardRenderCallbacks, CardAction } from '../../agentBoardCardActions';
 import { mountLucide } from '../mountLucide';
 
 // Parity target: portalPopover.ts (PortalPopover), reimplemented as a Vue

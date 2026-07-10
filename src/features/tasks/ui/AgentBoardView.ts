@@ -1,5 +1,6 @@
 import type { TAbstractFile, WorkspaceLeaf } from 'obsidian';
 import { ItemView, Notice, TFile } from 'obsidian';
+import { type App as VueApp, createApp, markRaw } from 'vue';
 
 import { ProviderRegistry } from '../../../core/providers/ProviderRegistry';
 import { VIEW_TYPE_SPECORATOR_AGENT_BOARD } from '../../../core/types/chat';
@@ -17,8 +18,7 @@ import {
   writeBoardQueuePaused,
   writeLaneCollapsed,
 } from '../config/BoardConfigStore';
-import type { BoardConfig, ResolvedBoardLayout } from '../config/boardConfigTypes';
-import { resolveBoardLayout } from '../config/resolveBoardLayout';
+import type { BoardConfig } from '../config/boardConfigTypes';
 import { sharedRunRegistry } from '../execution/activeRunRegistry';
 import { QueueRunner } from '../execution/QueueRunner';
 import { DEFAULT_STALE_THRESHOLD_MS } from '../execution/RunSession';
@@ -31,11 +31,13 @@ import { canTransitionTaskStatus, isRunnableTaskStatus } from '../model/taskStat
 import type { TaskBoardModel, TaskSpec, TaskStatus } from '../model/taskTypes';
 import { renderTaskPrompt } from '../prompt/TaskPromptRenderer';
 import { TaskNoteStore } from '../storage/TaskNoteStore';
-import { AgentBoardLiveHeartbeatTracker } from './agentBoardLiveHeartbeat';
-import { type AgentBoardPauseState, AgentBoardRenderer } from './AgentBoardRenderer';
+import type { AgentBoardRenderCallbacks } from './agentBoardCardActions';
 import { createWorkOrderInteractive } from './createWorkOrderInteractive';
 import { loadLatestTaskSpec } from './loadLatestTaskSpec';
 import { chooseLoop } from './LoopPickerModal';
+import AgentBoardRoot from './vue/AgentBoardRoot.vue';
+import { CALLBACKS_KEY, PLUGIN_KEY } from './vue/boardKeys';
+import { getAgentBoardPinia } from './vue/globalPinia';
 import { showWorkOrderContextMenu } from './WorkOrderContextMenu';
 import { buildWorkOrderConversationBindings } from './workOrderConversationBindings';
 import { WorkOrderDetailModal, type WorkOrderFieldUpdate } from './WorkOrderDetailModal';
@@ -53,7 +55,8 @@ const ORPHAN_RECHECK_INTERVAL_MS = 60_000;
 export class AgentBoardView extends ItemView {
   private readonly noteStore = new TaskNoteStore();
   private readonly indexer = new TaskIndexer(this.noteStore);
-  private readonly renderer = new AgentBoardRenderer();
+  // The Vue island mounted in onOpen. One app per leaf; unmounted in onClose.
+  private vueApp: VueApp | null = null;
   // Resolves loop slugs attached to work orders via frontmatter `loop` field.
   // Initialized in the constructor (after plugin is bound) because field
   // initializers run before parameter properties are assigned.
@@ -67,14 +70,12 @@ export class AgentBoardView extends ItemView {
   private rosterAgents: RosterAgent[] = [];
   private model: TaskBoardModel = { tasks: [], invalidNotes: [] };
   private config: BoardConfig = loadBoardConfig({}).config;
-  private layout: ResolvedBoardLayout = { lanes: [], errors: [] };
   private refreshTimer: number | null = null;
   private runner: QueueRunner | null = null;
   // One coordinator for the view, shared by manual runs and the queue runner.
   // Built in the constructor so paused runs stay reachable from the card
   // reply/approve/reject handlers via the shared run registry.
   private readonly coordinator: TaskRunCoordinator;
-  private elapsedTimer: number | null = null;
   // Periodic re-check for orphaned runs: the onOpen sweep catches a board that
   // was reopened after a reload, but a mid-session crash can strand cards while
   // the board is already open. recoverOrphanedRuns is idempotent (skips cards
@@ -87,15 +88,9 @@ export class AgentBoardView extends ItemView {
   // for the same orphan. The guard collapses overlapping calls into a single
   // pass; subsequent invocations no-op cleanly.
   private recoveringOrphans = false;
-  private readonly pauseState = new Map<string, AgentBoardPauseState>();
   // Last status written per task, so a failed/canceled run can report the
   // terminal status on `task:run-finished` without re-reading the note.
   private readonly lastRunStatus = new Map<string, TaskStatus>();
-  // Most recent heartbeat event timestamp per task. The note frontmatter only
-  // updates the heartbeat at start/pause/resume, so reading it for the live
-  // strip would freeze the age display between transitions; this map holds the
-  // sidecar tick's `at` value so the rendered age stays fresh second-by-second.
-  private readonly heartbeatTracker = new AgentBoardLiveHeartbeatTracker();
 
   constructor(
     leaf: WorkspaceLeaf,
@@ -166,72 +161,54 @@ export class AgentBoardView extends ItemView {
   }
 
   async onOpen(): Promise<void> {
+    // Engine wiring only. All CHROME (card/live-strip/toolbar repaints, the pause
+    // overlay, the freshness clock) is now owned by the Vue `AgentBoardRoot` and
+    // its `useBoardEventRouting` composable; the imperative renderer + its event
+    // subscriptions were deleted in the Task 5b cutover. What survives here is the
+    // set of events that keep the run engine's own model fresh and nudge the
+    // per-view `QueueRunner`, so the shared queue keeps draining regardless of
+    // which pane (or a bare vault edit) changed a card's eligibility.
     const { vault } = this.plugin.app;
     this.registerEvent(vault.on('create', (file) => this.onVaultChange(file)));
     this.registerEvent(vault.on('modify', (file) => this.onVaultChange(file)));
-    // A vault delete never emits a terminal status change, so the in-memory
-    // pause + heartbeat maps would otherwise leak when a paused card is
-    // deleted from disk. Evict before scheduling the refresh.
+    // A vault delete never emits a terminal status change, so the engine's
+    // per-task bookkeeping (lastRunStatus) would leak; evict before re-indexing.
+    // The Vue store drops its own overlays via load()'s re-derivation.
     this.registerEvent(vault.on('delete', (file) => {
       this.evictInMemoryStateForPath(file.path);
       this.onVaultChange(file);
     }));
     this.registerEvent(vault.on('rename', (file) => this.onVaultChange(file)));
-    // A freed chat tab can unblock the queue (it gates launches on tab
-    // availability), so re-render the slot count and nudge the runner.
-    this.register(this.plugin.events.on('chat:tabs-changed', () => {
-      this.refreshSlots();
-      this.runner?.tick();
-    }));
+    // A freed chat tab can unblock the queue (launches gate on tab availability),
+    // so nudge the runner. The slot-count chrome is repainted by the store.
+    this.register(this.plugin.events.on('chat:tabs-changed', () => this.runner?.tick()));
+    // Board config feeds the engine: renderPrompt reads `this.config` for lane
+    // resolution and syncRunner reconciles queue.paused from it, so keep it fresh
+    // (another pane's lane editor emits this). refresh() also re-syncs the runner.
     this.register(this.plugin.events.on('task:board-config-changed', () => void this.refresh()));
+    // Roster only feeds the card avatar (persona resolver), which the callbacks
+    // read live from `this.rosterAgents`; keep it current so a re-rendered card
+    // paints the renamed/recolored agent.
     this.register(this.plugin.events.on('roster:changed', () => void this.refresh()));
-
-    // Live-run visibility: patch cards in place from run events without a full
-    // re-render, and tick the elapsed timer every second.
-    this.register(this.plugin.events.on('task:attempt-started', (p) => this.patchCard(p.taskId)));
-    this.register(this.plugin.events.on('task:ledger-appended', (p) => this.patchLiveStrip(p.taskId, p.entry.message)));
-    this.register(this.plugin.events.on('task:heartbeat', (p) => {
-      this.heartbeatTracker.record(p.taskId, p.at);
-      this.patchLiveStrip(p.taskId);
-    }));
-    this.register(this.plugin.events.on('task:needs-input', (p) => this.onPauseRequested('needs_input', p)));
-    this.register(this.plugin.events.on('task:needs-approval', (p) => this.onPauseRequested('needs_approval', p)));
-    this.register(this.plugin.events.on('task:resumed', (p) => {
-      this.pauseState.delete(p.taskId);
-      this.patchCard(p.taskId);
-    }));
 
     // Any status change (manual or queue, this pane or another) can free a slot
     // or change eligibility. Patch the in-memory model first so the runner does
-    // not re-pick a card whose terminal status hasn't been re-indexed yet and the
-    // card UI repaints against the new status, then nudge the runner.
+    // not re-pick a card whose terminal status hasn't been re-indexed yet, then
+    // nudge the runner. The card repaint is the store's job now.
     this.register(this.plugin.events.on('task:status-changed', (payload) => {
       this.patchModelStatus(payload.taskId, payload.status);
-      this.onStatusChanged(payload);
       this.runner?.tick();
     }));
     this.register(this.plugin.events.on('task:run-finished', () => this.runner?.tick()));
     this.register(this.plugin.events.on('task:queue-cap-changed', () => this.onQueueCapChanged()));
-    // Pause/halt live in the shared control state, so by the time these fire the
-    // runner state is already global; the boards only need to repaint chrome.
-    this.register(this.plugin.events.on('task:queue-paused', () => this.render()));
-    this.register(this.plugin.events.on('task:queue-resumed', () => this.render()));
-    this.register(this.plugin.events.on('task:queue-halted', () => this.render()));
-    this.register(this.plugin.events.on('task:queue-tick', () => this.render()));
-    this.register(this.plugin.events.on('task:queue-skipped', () => this.render()));
-    this.register(this.plugin.events.on('task:queue-state-changed', () => this.render()));
-
-    this.elapsedTimer = window.setInterval(() => this.tickElapsed(), 1000);
-    this.register(() => {
-      if (this.elapsedTimer !== null) window.clearInterval(this.elapsedTimer);
-      this.elapsedTimer = null;
-    });
 
     // Run orphan recovery once after the initial index, then on a slow cadence
     // for as long as the board is open. recoverOrphanedRuns is idempotent — it
     // only acts on cards whose status looks live but have no driver and no fresh
     // sidecar tick — so a periodic re-check costs almost nothing and catches a
     // mid-session crash that strands cards while a board is already open.
+    // Runs BEFORE the Vue mount so `this.model`/`this.rosterAgents` (the engine +
+    // persona sources the callbacks close over) are populated on first paint.
     await this.refresh();
     await this.sweepStaleSidecars();
     await this.recoverOrphanedRuns();
@@ -243,33 +220,69 @@ export class AgentBoardView extends ItemView {
       if (this.orphanRecheckTimer !== null) window.clearInterval(this.orphanRecheckTimer);
       this.orphanRecheckTimer = null;
     });
+
+    this.mountVue();
+  }
+
+  /**
+   * Mount the Vue Agent Board island (parity: the Library view's island mount).
+   * `AgentBoardRoot` init()s + load()s the shared store on mount and owns all
+   * board chrome + EventBus→store routing. The callbacks object is built ONCE and
+   * markRaw'd: the Vue action clusters hold this reference for the life of the
+   * mount, so re-providing a fresh object per refresh would strand already-mounted
+   * clusters on a stale one. It closes over `this` and calls live view methods, so
+   * a single stable instance is correct.
+   */
+  private mountVue(): void {
+    this.vueApp?.unmount();
+    this.contentEl.empty();
+    // Two calls, not one: Obsidian's addClass is variadic but the shared test-lane
+    // polyfill (tests/setup/obsidianDom.ts) is single-arg.
+    this.contentEl.addClass('specorator-vue');
+    this.contentEl.addClass('specorator-agent-board-vue-root');
+    const app = createApp(AgentBoardRoot);
+    app.use(getAgentBoardPinia());
+    // markRaw: Obsidian objects are large and cyclic; never deep-proxy them.
+    app.provide(PLUGIN_KEY, markRaw(this.plugin));
+    app.provide(CALLBACKS_KEY, markRaw(this.buildCallbacks()));
+    app.mount(this.contentEl);
+    this.vueApp = app;
   }
 
   async onClose(): Promise<void> {
+    // Engine teardown first, then the Vue island.
     this.runner?.dispose();
     this.runner = null;
     if (this.refreshTimer !== null) {
       window.clearTimeout(this.refreshTimer);
       this.refreshTimer = null;
     }
+    // unmount() runs onUnmounted hooks (routing disposers, clock interval);
+    // empty() drops any detached DOM + listeners.
+    this.vueApp?.unmount();
+    this.vueApp = null;
+    this.contentEl.removeClass('specorator-vue');
+    this.contentEl.removeClass('specorator-agent-board-vue-root');
+    this.contentEl.empty();
   }
 
+  // Engine-model refresh: re-index the vault into `this.model`, reload the board
+  // config, refresh the loop-name cache + roster (persona) snapshot, and re-sync
+  // the runner. It no longer paints the board — the Vue store re-derives its own
+  // layout independently via `useBoardEventRouting`. Kept as the single seam that
+  // keeps the run engine's cached model honest; the action methods below await it.
   async refresh(): Promise<void> {
     const settings = asSettingsBag(this.plugin.settings);
-    // Preload roster agents so the persona resolver paints correct avatars on
-    // the synchronous render below (no async resolver race on first paint).
+    // Preload roster agents so the callbacks' persona resolver reads a current
+    // snapshot when the Vue cards render (no async resolver race on first paint).
     this.rosterAgents = (await this.plugin.agentRosterStore?.list()) ?? [];
     this.model = await this.indexer.indexVaultFolder(this.plugin.app.vault, this.folder);
-    const { config, errors } = loadBoardConfig(settings);
-    this.config = config;
-    const layout = resolveBoardLayout(config, this.model);
-    this.layout = { ...layout, errors: [...errors, ...layout.errors] };
+    this.config = loadBoardConfig(settings).config;
     // Rebuild the slug→name cache so the modal's properties panel can resolve
     // loop display names synchronously when opened (no async read at open time).
     const loops = await this.loopCatalog.listLoops();
     this.loopNameCache = new Map(loops.map((loop) => [loop.id, loop.name]));
     this.syncRunner();
-    this.render();
   }
 
   private get folder(): string {
@@ -282,21 +295,18 @@ export class AgentBoardView extends ItemView {
   }
 
   /**
-   * Drop in-memory pause + live heartbeat entries for a work-order path. Called
-   * on `vault.on('delete')` because a deleted file never emits a terminal
-   * status change — without this, paused cards leak their pause payload until
-   * the plugin reloads. Lookup is by path → task id from the current model,
-   * since the deleted file is already gone from the vault.
+   * Drop the engine's per-task bookkeeping for a deleted work-order path. Called
+   * on `vault.on('delete')` because a deleted file never emits a terminal status
+   * change. Lookup is by path → task id from the current model, since the deleted
+   * file is already gone from the vault. The Vue store's pause/heartbeat overlays
+   * are keyed by task id and simply fall out of the rendered board when load()
+   * re-derives the layout — an overlay entry for a task in no lane never renders.
    */
   private evictInMemoryStateForPath(path: string): void {
     if (!path.startsWith(`${this.folder}/`)) return;
     const task = this.model.tasks.find((entry) => entry.path === path);
     if (!task) return;
-    const id = task.frontmatter.id;
-    this.pauseState.delete(id);
-    this.heartbeatTracker.evict(id);
-    this.lastRunStatus.delete(id);
-    this.renderer.removeCard(id);
+    this.lastRunStatus.delete(task.frontmatter.id);
   }
 
   private scheduleRefresh(): void {
@@ -307,102 +317,70 @@ export class AgentBoardView extends ItemView {
     }, 100);
   }
 
-  // Light re-render that recomputes chat-tab slot capacity without re-indexing
-  // the vault. Called when chat tabs open/close.
-  refreshSlots(): void {
-    this.render();
-  }
-
   // Synchronous persona resolver built from the roster list preloaded in
-  // refresh() — no async race, so avatars are correct on the first paint.
+  // refresh() (and refreshed on `roster:changed`) — read live by the callbacks'
+  // resolvePersona so a re-rendered card paints the current avatar.
   private getPersonaResolver(): PersonaResolver {
     return buildPersonaResolverFromAgents(this.rosterAgents);
   }
 
-  private render(): void {
-    // Preserve lane scroll position across full re-renders so interacting with a
-    // card (which triggers refresh) doesn't jump the board back to the left.
-    const lanesSelector = '.specorator-agent-board-lanes';
-    const previousLanes = this.contentEl.querySelector(lanesSelector);
-    const scrollLeft = previousLanes?.scrollLeft ?? 0;
-    const scrollTop = previousLanes?.scrollTop ?? 0;
-
-    this.contentEl.empty();
-    const boardHost = this.contentEl.createDiv({ cls: 'specorator-agent-board-host' });
-
-    this.renderer.render(
-      boardHost,
-      {
-        layout: this.layout,
-        invalidNotes: this.model.invalidNotes,
-        slots: this.computeSlots(),
-        queue: this.getQueueToolbarState(),
-      },
-      {
-        onOpenDetail: (task) => void this.openDetail(task),
-        onRun: (task) => void this.runTask(task),
-        onStop: (task) => this.stopTask(task),
-        onAccept: (task) => void this.transitionTask(task, 'done', 'Accepted from review.'),
-        onRework: (task) => void this.reworkTask(task),
-        onMarkReady: (task) => void this.transitionTask(task, 'ready', 'Marked ready.'),
-        onReopen: (task) => void this.transitionTask(task, 'inbox', 'Reopened.'),
-        onMoveToInbox: (task) => void this.transitionTask(task, 'inbox', 'Moved back to inbox.'),
-        onAddWorkOrder: () => void this.addWorkOrderFromBoard(),
-        onRunNextReady: () => void this.runNextReady(),
-        getSkipReason: (task) => this.runner?.getSkipReason(task.frontmatter.id) ?? null,
-        onAckSkip: (task) => {
-          this.runner?.clearSkipReason(task.frontmatter.id);
-          this.render();
-        },
-        onToggleLaneCollapse: (laneId) => {
-          void this.handleToggleLaneCollapse(laneId);
-        },
-        onContextMenu: (task, event) => showWorkOrderContextMenu(task, event, {
-          plugin: this.plugin,
-          onOpenNote: (target) => void this.openTask(target),
-          ...buildWorkOrderConversationBindings(this.plugin),
-          onArchive: (target) => void this.archiveTask(target),
-          onDelete: (target) => void this.deleteTask(target),
-        }),
-        // Hover action cluster ⋯ menu items reuse the same view methods the
-        // right-click context menu uses, so both surfaces stay in lockstep.
-        onArchive: (task) => void this.archiveTask(task),
-        onOpenNote: (task) => void this.openTask(task),
-        // Spread gives both onOpenConversation and canOpenConversation so the ⋯
-        // menu gates "Open conversation" the same way the modal/right-click do.
-        ...buildWorkOrderConversationBindings(this.plugin),
-        onReply: (task, content) => void this.onReply(task.frontmatter.id, content),
-        onApprove: (task) => void this.onApprove(task.frontmatter.id),
-        onReject: (task, reason) => void this.onReject(task.frontmatter.id, reason),
-        onCancelPaused: (task) => this.stopTask(task),
-        onSendToReview: (task) => void this.transitionTask(task, 'review', 'Sent to review without a structured handoff.'),
-        onMarkFailed: (task) => void this.transitionTask(task, 'failed', 'Marked failed: run produced no structured handoff.'),
-        resolvePersona: this.getPersonaResolver(),
-      },
-    );
-
-    // A full render rebuilds card refs, so re-apply any active pause payloads
-    // (question/default/risk from the run events) over the note-seeded reply.
-    for (const taskId of this.pauseState.keys()) {
-      this.patchCard(taskId);
-    }
-
-    const nextLanes = this.contentEl.querySelector(lanesSelector);
-    if (nextLanes) {
-      nextLanes.scrollLeft = scrollLeft;
-      nextLanes.scrollTop = scrollTop;
-    }
-  }
-
-  private getQueueToolbarState() {
+  /**
+   * Build the ONE stable callbacks object the Vue island holds for the life of
+   * the mount (provided markRaw'd in `mountVue`). Every callback closes over
+   * `this` and calls a live view method, so a single instance stays correct
+   * across refreshes — DO NOT rebuild + re-provide per refresh, or already-mounted
+   * action clusters would keep a stale reference. Wired identically to the former
+   * imperative `render()` callbacks, plus `onToggleAutoRun` (the Vue toolbar's
+   * auto-run switch, which the imperative renderer embedded on the queue-toolbar
+   * state's `onToggle`), and with `onAckSkip` clearing only the runner's shared
+   * skip map — the skip chip is a reactive store overlay cleared in the card's
+   * click handler, so no render emit is needed.
+   */
+  private buildCallbacks(): AgentBoardRenderCallbacks {
     return {
-      paused: this.runner?.isPaused() ?? true,
-      halted: this.runner?.isHalted() ?? false,
-      haltReason: this.runner?.getHaltReason() ?? null,
-      slotOccupied: this.plugin.queueSlotTracker.occupied(),
-      slotCapacity: this.plugin.queueSlotTracker.capacity(),
-      consecutiveFailures: this.runner?.getConsecutiveFailures() ?? 0,
-      onToggle: () => void this.onToggleQueue(),
+      onOpenDetail: (task) => void this.openDetail(task),
+      onRun: (task) => void this.runTask(task),
+      onStop: (task) => this.stopTask(task),
+      onAccept: (task) => void this.transitionTask(task, 'done', 'Accepted from review.'),
+      onRework: (task) => void this.reworkTask(task),
+      onMarkReady: (task) => void this.transitionTask(task, 'ready', 'Marked ready.'),
+      onReopen: (task) => void this.transitionTask(task, 'inbox', 'Reopened.'),
+      onMoveToInbox: (task) => void this.transitionTask(task, 'inbox', 'Moved back to inbox.'),
+      onAddWorkOrder: () => void this.addWorkOrderFromBoard(),
+      onRunNextReady: () => void this.runNextReady(),
+      // Auto-run switch: (re)start / pause the shared queue (former imperative
+      // QueueToolbarState.onToggle, surfaced through the callbacks contract).
+      onToggleAutoRun: () => void this.onToggleQueue(),
+      // Ack: clear the runner's shared skip map so the queue doesn't immediately
+      // re-skip this card. The chip itself is a reactive store overlay the card's
+      // click handler clears (store.clearSkip), so no render/emit is needed here.
+      onAckSkip: (task) => this.runner?.clearSkipReason(task.frontmatter.id),
+      onToggleLaneCollapse: (laneId) => {
+        void this.handleToggleLaneCollapse(laneId);
+      },
+      onContextMenu: (task, event) => showWorkOrderContextMenu(task, event, {
+        plugin: this.plugin,
+        onOpenNote: (target) => void this.openTask(target),
+        ...buildWorkOrderConversationBindings(this.plugin),
+        onArchive: (target) => void this.archiveTask(target),
+        onDelete: (target) => void this.deleteTask(target),
+      }),
+      // Hover action cluster ⋯ menu items reuse the same view methods the
+      // right-click context menu uses, so both surfaces stay in lockstep.
+      onArchive: (task) => void this.archiveTask(task),
+      onOpenNote: (task) => void this.openTask(task),
+      // Spread gives both onOpenConversation and canOpenConversation so the ⋯
+      // menu gates "Open conversation" the same way the modal/right-click do.
+      ...buildWorkOrderConversationBindings(this.plugin),
+      onReply: (task, content) => void this.onReply(task.frontmatter.id, content),
+      onApprove: (task) => void this.onApprove(task.frontmatter.id),
+      onReject: (task, reason) => void this.onReject(task.frontmatter.id, reason),
+      onCancelPaused: (task) => this.stopTask(task),
+      onSendToReview: (task) => void this.transitionTask(task, 'review', 'Sent to review without a structured handoff.'),
+      onMarkFailed: (task) => void this.transitionTask(task, 'failed', 'Marked failed: run produced no structured handoff.'),
+      // Read live (rebuilt per card render) so a roster rename/recolor repaints
+      // the avatar as soon as the card next renders.
+      resolvePersona: (agentId) => this.getPersonaResolver()(agentId),
     };
   }
 
@@ -592,62 +570,6 @@ export class AgentBoardView extends ItemView {
     await this.refresh();
   }
 
-  private patchCard(taskId: string): void {
-    const task = this.model.tasks.find((entry) => entry.frontmatter.id === taskId);
-    if (!task) return;
-    this.renderer.patchCard(taskId, task, this.pauseState.get(taskId) ?? null);
-  }
-
-  private patchLiveStrip(taskId: string, lastLedger?: string): void {
-    const task = this.model.tasks.find((entry) => entry.frontmatter.id === taskId);
-    if (!task) return;
-    this.renderer.patchLiveStrip(taskId, this.heartbeatTracker.computePatch(task, lastLedger, Date.now()));
-  }
-
-  private onStatusChanged(p: { taskId: string; status: TaskStatus }): void {
-    if (p.status !== 'needs_input' && p.status !== 'needs_approval') {
-      this.pauseState.delete(p.taskId);
-    }
-    // Drop the live heartbeat at terminal so a re-launched card doesn't show
-    // the previous run's stale tick before the new run's first heartbeat lands.
-    // `needs_handoff` is also terminal here — the run ended without a parseable
-    // handoff and only a re-run can restart heartbeats.
-    if (
-      p.status === 'review'
-      || p.status === 'done'
-      || p.status === 'failed'
-      || p.status === 'canceled'
-      || p.status === 'needs_handoff'
-    ) {
-      this.heartbeatTracker.evict(p.taskId);
-    }
-    this.patchCard(p.taskId);
-  }
-
-  private onPauseRequested(
-    kind: 'needs_input' | 'needs_approval',
-    p: { taskId: string; runId: string; question?: string; action?: string; risk?: string; default?: string; reversible?: boolean },
-  ): void {
-    this.pauseState.set(p.taskId, {
-      question: kind === 'needs_input' ? p.question : undefined,
-      action: kind === 'needs_approval' ? p.action : undefined,
-      risk: p.risk,
-      defaultValue: p.default,
-      reversible: p.reversible,
-      runId: p.runId,
-    });
-    this.patchCard(p.taskId);
-  }
-
-  private tickElapsed(): void {
-    for (const task of this.model.tasks) {
-      const status = task.frontmatter.status;
-      if (status === 'running' || status === 'needs_input' || status === 'needs_approval') {
-        this.patchLiveStrip(task.frontmatter.id);
-      }
-    }
-  }
-
   // Reply/approve/reject route into the live RunSession via the shared registry,
   // so a board reopened mid-run can still drive a run owned by a previous view.
   // If no session is active (the run just ended), the next refresh removes the
@@ -774,7 +696,8 @@ export class AgentBoardView extends ItemView {
           // The note lacks the generated ledger region; the failed status above
           // is what un-stalls the card, so proceed without the ledger line.
         }
-        this.pauseState.delete(task.frontmatter.id);
+        // The emitted status-changed(failed) clears the Vue store's pause overlay
+        // (failed ≠ needs_input/approval) via useBoardEventRouting.
         this.plugin.events.emit('task:status-changed', { taskId: task.frontmatter.id, path: task.path, status: 'failed' });
         recovered = true;
       } catch {
@@ -933,14 +856,12 @@ export class AgentBoardView extends ItemView {
   // (Deliberately not a full syncRunner(): that reconciles pause from the cached
   // config, which would revert a pause just toggled from a board.)
   //
-  // Also re-render the board chrome: the toolbar's "Work-order tabs N/M" badge
-  // reads `state.slots.max` from `computeSlots()`, which derives from the queue
-  // cap. Without a render here the badge stays stale until the next status/run
-  // event ticks the board, even though the cap is already live.
+  // The toolbar's "Work-order tabs N/M" slot badge is repainted by the Vue store:
+  // task:queue-cap-changed is a full-refresh event, so its load() re-reads
+  // getTabSlotUsage() (which derives from the live cap) with no render here.
   private onQueueCapChanged(): void {
     this.runner?.setHaltAfterFailures(this.plugin.settings.agentBoardQueueHaltAfter);
     this.runner?.tick();
-    this.render();
   }
 
   private async handleToggleLaneCollapse(laneId: string): Promise<void> {
@@ -953,18 +874,14 @@ export class AgentBoardView extends ItemView {
     writeLaneCollapsed(settings, laneId, !lane.collapsed);
     try {
       await this.plugin.saveSettings();
-      // Other open Agent Board panes refresh their cached `config`/`layout`
-      // only on this event (see `onOpen` registration); without it a second
-      // pane keeps showing the stale expanded/collapsed state until an
-      // unrelated refresh. Matches the AgentBoardLaneEditor save path.
+      // Emit the routed board-config event: the Vue store reloads + repaints the
+      // collapsed/expanded lanes (this pane and every other), and this view's own
+      // task:board-config-changed subscription re-reads `this.config` via refresh.
+      // Matches the AgentBoardLaneEditor save path.
       this.plugin.events.emit('task:board-config-changed');
     } catch (error) {
       new Notice(t('tasks.board.updateFailed', { error: error instanceof Error ? error.message : String(error) }));
-      return;
     }
-    this.config = loadBoardConfig(settings).config;
-    this.layout = resolveBoardLayout(this.config, this.model);
-    this.render();
   }
 
   private async onToggleQueue(): Promise<void> {

@@ -4,9 +4,12 @@
 }
 
 /* Bind the board to the leaf height so the lanes' own scroll regions stay
-   inside the viewport. The view-content → host → board chain must be an
-   unbroken flex column with min-height:0 at every level; otherwise a tall lane
-   grows the whole view and the horizontal scrollbar is pushed off-screen. */
+   inside the viewport. The view-content → board chain must be an unbroken flex
+   column with min-height:0 at every level; otherwise a tall lane grows the
+   whole view and the horizontal scrollbar is pushed off-screen. The Vue root
+   (Task 5b cutover) mounts `.specorator-agent-board` directly under contentEl,
+   so the former imperative `.specorator-agent-board-host` pass-through is gone —
+   the board is now a direct flex child of view-content. */
 .workspace-leaf-content[data-type="specorator-agent-board-view"] .view-content {
   display: flex;
   flex-direction: column;
@@ -14,15 +17,8 @@
   padding: 0;
   overflow: hidden;
   /* Some themes paint .view-content with --background-secondary; pin it to the
-     board surface so no theme sliver shows around the board host. */
+     board surface so no theme sliver shows around the board. */
   background: var(--background-primary);
-}
-
-.specorator-agent-board-host {
-  display: flex;
-  flex-direction: column;
-  flex: 1 1 auto;
-  min-height: 0;
 }
 
 .specorator-agent-board {
@@ -48,8 +44,9 @@
   flex: 1 1 auto;
   min-height: 0;
   /* Borderless columns: scroll horizontally for lane overflow and vertically for
-     tall stacks of cards. Vertical scroll stays on this container (not per lane)
-     so AgentBoardView.render() can snapshot/restore scrollTop across re-renders. */
+     tall stacks of cards. Vertical scroll stays on this container (not per lane);
+     the Vue board reuses card DOM across store reloads (mergeById keeps task
+     refs), so scroll position survives a refresh without a manual snapshot. */
   overflow: auto;
   /* Bottom clearance so the horizontal scrollbar (and the last card's shadow)
      don't sit flush against the board edge — mirrors the prototype's

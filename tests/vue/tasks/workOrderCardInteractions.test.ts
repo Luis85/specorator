@@ -5,7 +5,7 @@ import { nextTick } from 'vue';
 
 import type { ResolvedBoardLayout, ResolvedLane } from '@/features/tasks/config/boardConfigTypes';
 import type { TaskSpec, TaskStatus } from '@/features/tasks/model/taskTypes';
-import type { AgentBoardRenderCallbacks } from '@/features/tasks/ui/AgentBoardRenderer';
+import type { AgentBoardRenderCallbacks } from '@/features/tasks/ui/agentBoardCardActions';
 import AgentBoardRoot from '@/features/tasks/ui/vue/AgentBoardRoot.vue';
 import { CALLBACKS_KEY, PLUGIN_KEY } from '@/features/tasks/ui/vue/boardKeys';
 import { useAgentBoardStore } from '@/features/tasks/ui/vue/stores/agentBoardStore';
@@ -70,7 +70,6 @@ function makeCallbacks(overrides: Partial<AgentBoardRenderCallbacks> = {}): Agen
     onApprove: vi.fn(),
     onReject: vi.fn(),
     onCancelPaused: vi.fn(),
-    getSkipReason: vi.fn(() => null),
     onAckSkip: vi.fn(),
     canOpenConversation: vi.fn(() => true),
     ...overrides,
@@ -275,10 +274,10 @@ describe('WorkOrderCard reply surface + skip chip', () => {
     expect(reply(container)?.querySelector('.specorator-agent-board-card-reply-prompt')?.textContent).toBe('Approve?');
   });
 
-  it('skip chip: a non-null getSkipReason renders the skip host + chip and acks via onAckSkip', async () => {
-    const callbacks = makeCallbacks({ getSkipReason: vi.fn(() => 'skipped: cap') });
+  it('skip chip: a store skip overlay renders the host + chip; ack clears the overlay AND calls onAckSkip', async () => {
+    const callbacks = makeCallbacks();
     const layout: ResolvedBoardLayout = { lanes: [makeLane('ready', [makeTask('c-r', 'ready')])], errors: [] };
-    const { container } = mountBoard(layout, callbacks);
+    const { store, container } = mountBoard(layout, callbacks, (s) => s.setSkip('c-r', 'skipped: cap'));
 
     const host = container.querySelector('.specorator-agent-board-card-skip-host');
     expect(host).toBeTruthy();
@@ -286,13 +285,38 @@ describe('WorkOrderCard reply surface + skip chip', () => {
     expect(chip?.textContent?.trim()).toBe('⊘ Queue skipped: skipped: cap');
 
     await fireEvent.click(chip as Element);
+    // Ack clears the runner's shared skip map via the callback...
     expect(callbacks.onAckSkip).toHaveBeenCalledTimes(1);
     expect((callbacks.onAckSkip as ReturnType<typeof vi.fn>).mock.calls[0][0].frontmatter.id).toBe('c-r');
+    // ...AND the reactive overlay, so the chip disappears with NO note change —
+    // this is the regression the pre-fix (task-only computed) could not do.
+    expect(store.skipReasons.has('c-r')).toBe(false);
+    await nextTick();
+    expect(container.querySelector('.specorator-agent-board-card-skip-host')).toBeNull();
     // @click.stop: acking the chip must not open the card detail.
     expect(callbacks.onOpenDetail).not.toHaveBeenCalled();
   });
 
-  it('skip chip: a null getSkipReason renders no skip host', () => {
+  it('skip chip: an in-session store.setSkip paints the chip (no note change); clearSkip removes it', async () => {
+    const layout: ResolvedBoardLayout = { lanes: [makeLane('ready', [makeTask('c-r', 'ready')])], errors: [] };
+    const { store, container } = mountBoard(layout, makeCallbacks());
+    // No overlay yet → no chip.
+    expect(container.querySelector('.specorator-agent-board-card-skip-host')).toBeNull();
+
+    // A skip while the board is mounted (task:queue-skipped → setSkip) paints the
+    // chip WITHOUT any change to the work-order note.
+    store.setSkip('c-r', 'no free slot');
+    await nextTick();
+    const chip = container.querySelector('.specorator-agent-board-card-skip-chip');
+    expect(chip?.textContent?.trim()).toBe('⊘ Queue skipped: no free slot');
+
+    // The card starting (attempt-started → clearSkip) removes the chip.
+    store.clearSkip('c-r');
+    await nextTick();
+    expect(container.querySelector('.specorator-agent-board-card-skip-host')).toBeNull();
+  });
+
+  it('skip chip: no store overlay → no skip host', () => {
     const layout: ResolvedBoardLayout = { lanes: [makeLane('ready', [makeTask('c-r', 'ready')])], errors: [] };
     const { container } = mountBoard(layout, makeCallbacks());
     expect(container.querySelector('.specorator-agent-board-card-skip-host')).toBeNull();

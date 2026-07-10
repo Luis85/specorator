@@ -215,24 +215,26 @@ describe('Agent Board critical ARIA attributes are present in source', () => {
   // tripwire that catches an attribute being deleted outright.
   const cases: ReadonlyArray<{ file: string; needles: string[] }> = [
     {
-      // Auto-run switch + lane toggles.
-      file: 'src/features/tasks/ui/AgentBoardRenderer.ts',
-      needles: [
-        "role: 'switch'",
-        "'aria-checked'",
-        "'aria-expanded'",
-        "setAttribute('tabindex', '0')",
-      ],
+      // Auto-run switch (Vue toolbar; the imperative renderer was deleted in the
+      // Task 5b cutover). Template attribute syntax, not setAttribute calls.
+      file: 'src/features/tasks/ui/vue/components/BoardToolbar.vue',
+      needles: ['role="switch"', ':aria-checked='],
     },
     {
-      // ⋯ overflow trigger (extracted card-action cluster).
-      file: 'src/features/tasks/ui/agentBoardCardActions.ts',
-      needles: ["'aria-haspopup': 'menu'"],
+      // Lane collapse toggles (Vue lane): the collapsed strip role=button, its
+      // aria-expanded state, and keyboard reachability (tabindex).
+      file: 'src/features/tasks/ui/vue/components/BoardLane.vue',
+      needles: ['aria-expanded=', 'tabindex="0"'],
     },
     {
-      // Portal overflow menu container + items.
-      file: 'src/features/tasks/ui/portalPopover.ts',
-      needles: ["'role', 'menu'", "'role', 'menuitem'"],
+      // ⋯ overflow trigger (Vue card-action cluster).
+      file: 'src/features/tasks/ui/vue/components/CardActionCluster.vue',
+      needles: ['aria-haspopup="menu"'],
+    },
+    {
+      // Portal overflow menu container + items (Vue teleported menu).
+      file: 'src/features/tasks/ui/vue/components/OverflowMenu.vue',
+      needles: ['role="menu"', 'role="menuitem"'],
     },
     {
       // Modal read-only acceptance checklist (role=checkbox + aria-checked).

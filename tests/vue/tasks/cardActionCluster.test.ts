@@ -4,7 +4,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { defineComponent, h, nextTick } from 'vue';
 
 import type { TaskSpec, TaskStatus } from '@/features/tasks/model/taskTypes';
-import type { AgentBoardRenderCallbacks } from '@/features/tasks/ui/AgentBoardRenderer';
+import type { AgentBoardRenderCallbacks } from '@/features/tasks/ui/agentBoardCardActions';
 import { CALLBACKS_KEY } from '@/features/tasks/ui/vue/boardKeys';
 import CardActionCluster from '@/features/tasks/ui/vue/components/CardActionCluster.vue';
 

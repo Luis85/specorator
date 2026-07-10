@@ -3,7 +3,7 @@ import { computed, inject, ref } from 'vue';
 
 import { t } from '../../../../../i18n/i18n';
 import type { TaskSpec } from '../../../model/taskTypes';
-import type { AgentBoardPauseState } from '../../AgentBoardRenderer';
+import type { AgentBoardPauseState } from '../../agentBoardCardActions';
 import { CALLBACKS_KEY } from '../boardKeys';
 
 // Parity target: AgentBoardRenderer.renderReplySurface (+ renderPromptText). The

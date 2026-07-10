@@ -11,7 +11,7 @@ import { resolveBoardLayout } from '../../../config/resolveBoardLayout';
 import { TaskIndexer } from '../../../indexing/TaskIndexer';
 import type { InvalidTaskNote, TaskSpec } from '../../../model/taskTypes';
 import { TaskNoteStore } from '../../../storage/TaskNoteStore';
-import type { AgentBoardPauseState } from '../../AgentBoardRenderer';
+import type { AgentBoardPauseState } from '../../agentBoardCardActions';
 
 /**
  * Loader seam over the vault-reading services the view drives in `refresh()`.
@@ -93,6 +93,16 @@ export const useAgentBoardStore = defineStore('agent-board', () => {
   // carries it. shallowRef for the same whole-Map replacement reactivity contract
   // as liveHeartbeats/liveLedger.
   const pauseState = shallowRef<Map<string, AgentBoardPauseState>>(new Map());
+  // Event-sourced skip overlay: the runner's shared `control.lastSkipReasonByTask`
+  // is a plain (non-reactive) Map, so the imperative renderer re-read it on every
+  // render to paint the queue skip chip. The Vue card can't watch that map — and a
+  // skip/ack never changes the note, so load()'s mergeById keeps the identical task
+  // ref and a task-only computed would never invalidate. This overlay is the
+  // reactive mirror: set from task:queue-skipped, cleared wherever the runner clears
+  // its own entry (launch → task:attempt-started, the ack, and any status change /
+  // run-finished off the runnable state). shallowRef for the same whole-Map
+  // replacement contract as pauseState/liveHeartbeats.
+  const skipReasons = shallowRef<Map<string, string>>(new Map());
   // Work-order notes that failed to parse — the imperative renderErrors' "Skipped
   // notes" surface. Sourced from the loader's model, not the resolved layout.
   const invalidNotes = shallowRef<InvalidTaskNote[]>([]);
@@ -224,8 +234,26 @@ export const useAgentBoardStore = defineStore('agent-board', () => {
     pauseState.value = next;
   }
 
+  // Mirrors the runner's `recordSkip` set (task:queue-skipped). New-reference so a
+  // shallowRef watch fires and the card's skip chip paints without a note change.
+  function setSkip(taskId: string, reason: string): void {
+    const next = new Map(skipReasons.value);
+    next.set(taskId, reason);
+    skipReasons.value = next;
+  }
+
+  // Mirrors every point the runner clears `lastSkipReasonByTask` (launch/ack) plus
+  // the defensive status-change/finish clears. Absent-key clear is a no-reference
+  // no-op, matching clearPause/evictLive.
+  function clearSkip(taskId: string): void {
+    if (!skipReasons.value.has(taskId)) return;
+    const next = new Map(skipReasons.value);
+    next.delete(taskId);
+    skipReasons.value = next;
+  }
+
   return {
-    layout, liveHeartbeats, liveLedger, pauseState, invalidNotes, slots, queueState, nowMs, loading, error,
-    init, load, tick, recordHeartbeat, recordLedger, evictLive, setPause, clearPause,
+    layout, liveHeartbeats, liveLedger, pauseState, skipReasons, invalidNotes, slots, queueState, nowMs, loading, error,
+    init, load, tick, recordHeartbeat, recordLedger, evictLive, setPause, clearPause, setSkip, clearSkip,
   };
 });

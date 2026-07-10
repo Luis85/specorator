@@ -31,9 +31,19 @@ const store = useAgentBoardStore();
 // stays answerable (parity: renderReplySurface AgentBoardRenderer.ts:621,643).
 const pause = computed(() => store.pauseState.get(props.task.frontmatter.id) ?? null);
 
-// Queue skip chip: the runner's skip reason for this card via the callback seam,
-// null when the card is not skipped (parity: renderSkipChipFor).
-const skipReason = computed(() => cb.getSkipReason?.(props.task) ?? null);
+// Queue skip chip: the reactive store overlay (mirrors the runner's non-reactive
+// skip map via task:queue-skipped / clears), null when the card is not skipped
+// (parity: renderSkipChipFor). Reading the store — rather than a task-only callback
+// computed — is what makes an in-session skip paint and an ack un-paint without a
+// note change (the note is unchanged, so load()'s mergeById keeps the task ref).
+const skipReason = computed(() => store.skipReasons.get(props.task.frontmatter.id) ?? null);
+
+function ackSkip(): void {
+  // Clear the reactive overlay immediately (the chip vanishes) AND the runner's
+  // own shared skip map via the callback, so the queue doesn't instantly re-skip.
+  store.clearSkip(props.task.frontmatter.id);
+  cb.onAckSkip?.(props.task);
+}
 
 const status = computed(() => props.task.frontmatter.status);
 const live = computed(() => LIVE_STATUSES.has(status.value));
@@ -162,7 +172,7 @@ const persona = computed(() => (cb.resolvePersona ?? resolvePersona)(props.task.
     >
       <div
         class="specorator-agent-board-card-skip-chip"
-        @click.stop="cb.onAckSkip?.(props.task)"
+        @click.stop="ackSkip"
       >
         {{ t('tasks.board.queueSkipped', { reason: skipReason }) }}
       </div>

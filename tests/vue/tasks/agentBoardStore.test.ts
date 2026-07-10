@@ -251,6 +251,30 @@ describe('useAgentBoardStore', () => {
     expect(store.pauseState).toBe(before);
   });
 
+  it('setSkip replaces the map with a NEW reference and stores the reason (reactive skip chip)', () => {
+    const { store } = initStore([{ lanes: [], errors: [] }]);
+    const before = store.skipReasons;
+    store.setSkip('t1', 'no free slot');
+    expect(store.skipReasons).not.toBe(before);
+    expect(store.skipReasons.get('t1')).toBe('no free slot');
+  });
+
+  it('clearSkip removes the entry (new reference so a shallowRef watch fires)', () => {
+    const { store } = initStore([{ lanes: [], errors: [] }]);
+    store.setSkip('t1', 'no free slot');
+    const before = store.skipReasons;
+    store.clearSkip('t1');
+    expect(store.skipReasons).not.toBe(before);
+    expect(store.skipReasons.has('t1')).toBe(false);
+  });
+
+  it('clearSkip on an absent key is a no-op that does not churn the reference', () => {
+    const { store } = initStore([{ lanes: [], errors: [] }]);
+    const before = store.skipReasons;
+    store.clearSkip('missing');
+    expect(store.skipReasons).toBe(before);
+  });
+
   it('mergeById preserves task identity across loads (no flicker on a live board)', async () => {
     const first: ResolvedBoardLayout = { lanes: [makeLane('running', [makeTask('t1', 'running')])], errors: [] };
     // Second load: a FRESH task instance with identical content, as if re-parsed off disk.

@@ -126,15 +126,38 @@ describe('useBoardEventRouting', () => {
     expect(load).toHaveBeenCalled();
   });
 
-  it('routes task:run-finished to evictLive, clearPause, AND load (terminal clears the pause overlay)', () => {
+  it('routes task:run-finished to evictLive, clearPause, clearSkip, AND load (terminal clears the overlays)', () => {
     const { store, events } = setup();
     const evictLive = vi.spyOn(store, 'evictLive');
     const clearPause = vi.spyOn(store, 'clearPause');
+    const clearSkip = vi.spyOn(store, 'clearSkip');
     const load = vi.spyOn(store, 'load').mockResolvedValue();
     events.fire('task:run-finished', { taskId: 'a' });
     expect(evictLive).toHaveBeenCalledWith('a');
     expect(clearPause).toHaveBeenCalledWith('a');
+    expect(clearSkip).toHaveBeenCalledWith('a');
     expect(load).toHaveBeenCalled();
+  });
+
+  it('routes task:queue-skipped to setSkip (the reactive skip-chip overlay) AND load', () => {
+    const { store, events } = setup();
+    const setSkip = vi.spyOn(store, 'setSkip');
+    const load = vi.spyOn(store, 'load').mockResolvedValue();
+    events.fire('task:queue-skipped', { taskId: 'a', reason: 'no free slot' });
+    expect(setSkip).toHaveBeenCalledWith('a', 'no free slot');
+    expect(load).toHaveBeenCalled();
+  });
+
+  it('clears the skip overlay when a card starts (attempt-started) or changes status', () => {
+    const { store, events } = setup();
+    const clearSkip = vi.spyOn(store, 'clearSkip');
+    // Launch clears the runner's skip map → the card started running.
+    events.fire('task:attempt-started', { taskId: 'a', path: 'p', attemptNumber: 1 });
+    expect(clearSkip).toHaveBeenCalledWith('a');
+    clearSkip.mockClear();
+    // Any status change off the runnable state also clears it.
+    events.fire('task:status-changed', { taskId: 'b', path: 'p', status: 'running' });
+    expect(clearSkip).toHaveBeenCalledWith('b');
   });
 
   it('routes task:needs-input to setPause (question + default seed) AND load', () => {
