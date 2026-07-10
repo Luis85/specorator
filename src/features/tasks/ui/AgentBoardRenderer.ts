@@ -8,6 +8,7 @@ import { parseAcceptanceProgress } from '../model/acceptanceProgress';
 import { isRunnableTaskStatus } from '../model/taskStateMachine';
 import type { InvalidTaskNote, TaskPriority, TaskSpec, TaskStatus } from '../model/taskTypes';
 import { AgentBoardCardActions, type AgentBoardRenderCallbacks } from './agentBoardCardActions';
+import { formatElapsed, staleAriaLabel, staleGlyph, staleTier } from './agentBoardLiveHeartbeat';
 
 export type { AgentBoardRenderCallbacks } from './agentBoardCardActions';
 
@@ -686,11 +687,9 @@ export class AgentBoardRenderer {
     const caption = metaEl.querySelector<HTMLElement>('.specorator-agent-board-card-live-strip--caption');
     if (dot) {
       // Per-tier glyph + aria-label so color-blind users still get the freshness
-      // signal (the glyph is the non-color cue). The bullet (●) is the basic
-      // "live" indicator; tier escalates to a half/empty glyph for amber/red.
-      const glyph = tier === 'green' ? '●' : tier === 'amber' ? '◐' : '◯';
+      // signal (the glyph is the non-color cue).
       dot.className = `specorator-agent-board-card-live-strip--dot specorator-stale-${tier}`;
-      dot.setText(glyph);
+      dot.setText(staleGlyph(tier));
       dot.setAttribute('aria-label', staleAriaLabel(tier, payload.heartbeatAgeMs));
     }
     caption?.setText(
@@ -730,35 +729,9 @@ function lastLineOf(ledger: string): string | null {
   return lines.length === 0 ? null : lines[lines.length - 1];
 }
 
-function staleTier(ageMs: number): 'green' | 'amber' | 'red' {
-  if (ageMs < 60_000) return 'green';
-  if (ageMs < 300_000) return 'amber';
-  return 'red';
-}
-
-function staleAriaLabel(tier: 'green' | 'amber' | 'red', ageMs: number): string {
-  const age = formatStaleAge(ageMs);
-  if (tier === 'green') return t('tasks.board.card.liveStrip.heartbeatFresh', { age });
-  if (tier === 'amber') return t('tasks.board.card.liveStrip.heartbeatStale', { age });
-  return t('tasks.board.card.liveStrip.heartbeatVeryStale', { age });
-}
-
-function formatElapsed(ms: number): string {
-  const totalSeconds = Math.max(0, Math.floor(ms / 1000));
-  const minutes = Math.floor(totalSeconds / 60);
-  const seconds = totalSeconds % 60;
-  return `${minutes}m ${seconds}s`;
-}
-
 const ERROR_LINE_CAP = 300;
 
 function truncateErrorLine(value: string): string {
   if (value.length <= ERROR_LINE_CAP) return value;
   return `${value.slice(0, ERROR_LINE_CAP - 1)}…`;
-}
-
-function formatStaleAge(ageMs: number): string {
-  if (ageMs < 60_000) return `${Math.round(ageMs / 1000)}s`;
-  if (ageMs < 3_600_000) return `${Math.round(ageMs / 60_000)}m`;
-  return `${Math.round(ageMs / 3_600_000)}h`;
 }

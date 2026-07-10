@@ -78,6 +78,28 @@ describe('useAgentBoardStore', () => {
     expect(store.loading).toBe(false);
   });
 
+  it('load() captures the loader model invalidNotes (the "Skipped notes" surface)', async () => {
+    const store = useAgentBoardStore();
+    const deps: BoardLoaderDeps = {
+      indexVaultFolder: () => Promise.resolve({ tasks: [], invalidNotes: [{ path: 'b.md', error: 'boom' }] }),
+      loadBoardConfig: vi.fn(() => ({ config: {}, errors: [] })) as unknown as BoardLoaderDeps['loadBoardConfig'],
+      resolveBoardLayout: vi.fn(() => ({ lanes: [], errors: [] })) as unknown as BoardLoaderDeps['resolveBoardLayout'],
+    };
+    store.init(makePlugin() as never, deps);
+
+    await store.load();
+
+    expect(store.invalidNotes).toEqual([{ path: 'b.md', error: 'boom' }]);
+  });
+
+  it('tick() advances nowMs to the current time (the board freshness clock)', () => {
+    const { store } = initStore([{ lanes: [], errors: [] }]);
+    const spy = vi.spyOn(Date, 'now').mockReturnValue(1_700_000_000_000);
+    store.tick();
+    expect(store.nowMs).toBe(1_700_000_000_000);
+    spy.mockRestore();
+  });
+
   it('recordHeartbeat replaces the map with a NEW reference and sets the value', () => {
     const { store } = initStore([{ lanes: [], errors: [] }]);
     const before = store.liveHeartbeats;

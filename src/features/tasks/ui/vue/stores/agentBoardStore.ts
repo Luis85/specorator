@@ -9,7 +9,7 @@ import type { ResolvedBoardLayout } from '../../../config/boardConfigTypes';
 import { boardWorkOrderFolder } from '../../../config/boardWorkOrderFolder';
 import { resolveBoardLayout } from '../../../config/resolveBoardLayout';
 import { TaskIndexer } from '../../../indexing/TaskIndexer';
-import type { TaskSpec } from '../../../model/taskTypes';
+import type { InvalidTaskNote, TaskSpec } from '../../../model/taskTypes';
 import { TaskNoteStore } from '../../../storage/TaskNoteStore';
 
 /**
@@ -41,11 +41,25 @@ export const useAgentBoardStore = defineStore('agent-board', () => {
   // in the setters below, so the deep-proxy overhead of `ref` would go unused.
   const liveHeartbeats = shallowRef<Map<string, string>>(new Map());
   const liveLedger = shallowRef<Map<string, string>>(new Map());
+  // Work-order notes that failed to parse — the imperative renderErrors' "Skipped
+  // notes" surface. Sourced from the loader's model, not the resolved layout.
+  const invalidNotes = shallowRef<InvalidTaskNote[]>([]);
   const { loading, run } = useGuardedLoad();
   // Captured (not thrown) so callers can fire `void store.load()` without
   // guarding a rejection: the fetch path awaits vault reads on files that can
   // vanish mid delete/rename burst — exactly the vault events driving reloads.
   const error = ref<string | null>(null);
+
+  // Reactive board clock: the O(1)-per-second freshness tick that replaces the
+  // imperative view's `tickElapsed` interval. Live strips read it so the dot
+  // escalates (green→amber→red) and elapsed advances on a hung run even when NO
+  // heartbeat arrives. Kept OFF the heartbeat path — a heartbeat never ticks it,
+  // preserving the per-strip O(1) heartbeat boundary; the 1s tick re-renders the
+  // (bounded) set of live strips, which is the correct, separate axis.
+  const nowMs = ref(Date.now());
+  function tick(): void {
+    nowMs.value = Date.now();
+  }
 
   let plugin: SpecoratorPlugin | null = null;
   let deps: BoardLoaderDeps | null = null;
@@ -76,14 +90,18 @@ export const useAgentBoardStore = defineStore('agent-board', () => {
       async () => {
         const model = await d.indexVaultFolder(p.app.vault, folder());
         const { config } = d.loadBoardConfig(p.settings);
-        return d.resolveBoardLayout(config, model as never);
+        return {
+          layout: d.resolveBoardLayout(config, model as never),
+          invalidNotes: model.invalidNotes as InvalidTaskNote[],
+        };
       },
-      (next) => {
+      ({ layout: next, invalidNotes: notes }) => {
         const merged = next.lanes.map((lane) => ({
           ...lane,
           tasks: mergeById(currentTasks(lane.id), lane.tasks, (t) => t.frontmatter.id),
         }));
         layout.value = { lanes: merged, errors: next.errors };
+        invalidNotes.value = notes;
         error.value = null;
       },
       (e) => { error.value = e instanceof Error ? e.message : String(e); },
@@ -119,5 +137,8 @@ export const useAgentBoardStore = defineStore('agent-board', () => {
     }
   }
 
-  return { layout, liveHeartbeats, liveLedger, loading, error, init, load, recordHeartbeat, recordLedger, evictLive };
+  return {
+    layout, liveHeartbeats, liveLedger, invalidNotes, nowMs, loading, error,
+    init, load, tick, recordHeartbeat, recordLedger, evictLive,
+  };
 });
