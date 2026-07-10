@@ -168,9 +168,14 @@ export const useAgentBoardStore = defineStore('agent-board', () => {
     await run(
       async () => {
         const model = await d.indexVaultFolder(p.app.vault, folder());
-        const { config } = d.loadBoardConfig(p.settings);
+        // Keep loadBoardConfig's parse warnings (duplicate lane ids / status
+        // mappings) — the imperative view merged them into layout.errors so the
+        // Board notices section explained the fallback lane behavior; dropping
+        // them leaves users with ambiguous lanes and no diagnostic.
+        const { config, errors: configErrors } = d.loadBoardConfig(p.settings);
+        const resolved = d.resolveBoardLayout(config, model as never);
         return {
-          layout: d.resolveBoardLayout(config, model as never),
+          layout: { ...resolved, errors: [...configErrors, ...resolved.errors] },
           invalidNotes: model.invalidNotes as InvalidTaskNote[],
         };
       },

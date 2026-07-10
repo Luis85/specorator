@@ -57,12 +57,22 @@ export function useBoardEventRouting(plugin: SpecoratorPlugin): void {
   const vaultRefs: EventRef[] = [];
   let refreshTimer: number | null = null;
 
-  function onVaultChange(file: TAbstractFile): void {
-    // Folder-scoped exactly like AgentBoardView.onVaultChange: writes outside
-    // the work-order folder never reload the board. Re-read live (so a settings
-    // change takes effect without a remount) via the SAME helper the store's
-    // loader uses, so the filter can't reject a path the loader would index.
-    if (!file.path.startsWith(`${boardWorkOrderFolder(plugin.settings)}/`)) return;
+  function isUnderBoardFolder(path: string): boolean {
+    return path.startsWith(`${boardWorkOrderFolder(plugin.settings)}/`);
+  }
+
+  function onVaultChange(file: TAbstractFile, oldPath?: string): void {
+    // Folder-scoped: writes outside the work-order folder never reload the board.
+    // Re-read the folder live (so a settings change takes effect without a
+    // remount) via the SAME helper the store's loader uses, so the filter can't
+    // reject a path the loader would index. Check BOTH the new path AND the
+    // rename oldPath: archiving a work order renames it OUT of the folder (its
+    // new path is the archive folder), and post-cutover `archiveTask` only
+    // refreshes the imperative engine model — the Vue board's sole reload signal
+    // is this vault event, so a new-path-only check would leave the archived
+    // card stale on the board. Mirrors the Library's useFolderVaultRefresh.
+    const old = typeof oldPath === 'string' ? oldPath : '';
+    if (!isUnderBoardFolder(file.path) && !(old && isUnderBoardFolder(old))) return;
     scheduleRefresh();
   }
 

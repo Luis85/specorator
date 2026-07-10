@@ -232,6 +232,22 @@ describe('useBoardEventRouting', () => {
     expect(load).not.toHaveBeenCalled();
   });
 
+  it('reloads when a rename moves a work order OUT of the folder (archive; oldPath was inside)', async () => {
+    // Archiving renames the note into the archive folder, so the rename event's
+    // new `file.path` is OUTSIDE the board folder — only the oldPath is inside.
+    // A new-path-only check would leave the archived card stale on the board.
+    const { store, vaultHandlers } = setup();
+    const load = vi.spyOn(store, 'load').mockResolvedValue();
+    vi.useFakeTimers();
+    try {
+      vaultHandlers.rename({ path: 'Agent Board/archive/wo-1.md' }, 'Agent Board/tasks/wo-1.md');
+      await vi.advanceTimersByTimeAsync(200);
+    } finally {
+      vi.useRealTimers();
+    }
+    expect(load).toHaveBeenCalledTimes(1);
+  });
+
   it('disposes every EventBus subscription, offrefs all vault refs, and drops a pending vault reload on unmount', async () => {
     const { store, events, vault, vaultHandlers, unmount } = setup();
     const load = vi.spyOn(store, 'load').mockResolvedValue();

@@ -98,6 +98,25 @@ describe('useAgentBoardStore', () => {
     expect(store.loading).toBe(false);
   });
 
+  it('merges loadBoardConfig parse warnings ahead of resolveBoardLayout errors', async () => {
+    // Malformed persisted board settings (duplicate lane ids / status mappings)
+    // surface as loadBoardConfig warnings; the imperative view appended them to
+    // layout.errors so the Board notices section explained the fallback lanes.
+    // The store must preserve them, config warnings first (parity with
+    // AgentBoardView.refresh: [...configErrors, ...layout.errors]).
+    const store = useAgentBoardStore();
+    const deps: BoardLoaderDeps = {
+      indexVaultFolder: () => Promise.resolve({ tasks: [], invalidNotes: [] }),
+      loadBoardConfig: vi.fn(() => ({ config: {}, errors: ['dup lane id "ready"'] })) as unknown as BoardLoaderDeps['loadBoardConfig'],
+      resolveBoardLayout: vi.fn(() => ({ lanes: [], errors: ['unsorted status'] })) as unknown as BoardLoaderDeps['resolveBoardLayout'],
+    };
+    store.init(makePlugin() as never, deps);
+
+    await store.load();
+
+    expect(store.layout.errors).toEqual(['dup lane id "ready"', 'unsorted status']);
+  });
+
   it('slots/queueState carry a pre-load default (empty slots, null queue) until the first load', () => {
     const store = useAgentBoardStore();
     expect(store.slots).toEqual({ used: 0, max: 0 });
