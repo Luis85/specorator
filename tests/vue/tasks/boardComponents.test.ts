@@ -170,15 +170,17 @@ describe('Agent Board Vue components', () => {
     expect(dot?.getAttribute('aria-label')).toBe('Ready');
     expect(dot?.getAttribute('title')).toBe('Ready');
     expect(card?.querySelector('.specorator-agent-board-card-live-strip')).toBeNull();
-    // The action cluster placeholder exists but is empty and NOT persistent.
+    // The action cluster (Task 4) now renders the per-status actions and is NOT
+    // persistent for a non-live card. Its full contents are covered in
+    // tests/vue/tasks/cardActionCluster.test.ts.
     const actions = card?.querySelector('.specorator-agent-board-card-actions');
     expect(actions).toBeTruthy();
     expect(actions?.classList.contains('specorator-agent-board-card-actions--persistent')).toBe(false);
-    expect(actions?.childElementCount).toBe(0);
+    expect(actions?.childElementCount).toBeGreaterThan(0);
     expect(card?.querySelector('.specorator-agent-board-card-title')?.textContent).toBe('Title c-ready');
   });
 
-  it('renders a running (live) card: live-actions, live dot, persistent empty cluster, and a live strip', () => {
+  it('renders a running (live) card: live-actions, live dot, persistent cluster, and a live strip', () => {
     const { container } = mountBoard(structuralLayout(), makeCallbacks());
     const card = container.querySelector('.specorator-agent-board-card--running');
     expect(card?.classList.contains('specorator-agent-board-card--live-actions')).toBe(true);
@@ -187,7 +189,8 @@ describe('Agent Board Vue components', () => {
     expect(dot?.classList.contains('specorator-agent-board-card-status-dot--live')).toBe(true);
     const actions = card?.querySelector('.specorator-agent-board-card-actions');
     expect(actions?.classList.contains('specorator-agent-board-card-actions--persistent')).toBe(true);
-    expect(actions?.childElementCount).toBe(0);
+    // Populated cluster (Task 4) — see tests/vue/tasks/cardActionCluster.test.ts.
+    expect(actions?.childElementCount).toBeGreaterThan(0);
     const strip = card?.querySelector('.specorator-agent-board-card-live-strip');
     expect(strip).toBeTruthy();
     expect(strip?.querySelector('.specorator-agent-board-card-live-strip--dot')).toBeTruthy();

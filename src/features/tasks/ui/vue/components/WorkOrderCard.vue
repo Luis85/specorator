@@ -8,11 +8,12 @@ import type { TaskSpec } from '../../../model/taskTypes';
 import { CALLBACKS_KEY } from '../boardKeys';
 import { LIVE_STATUSES, priorityBars, statusDotClass } from '../statusDot';
 import AgentAvatar from './AgentAvatar.vue';
+import CardActionCluster from './CardActionCluster.vue';
 import LiveStrip from './LiveStrip.vue';
 
 // Parity target: AgentBoardRenderer.renderCard (+ renderMetaRow / renderFooter /
-// applyStatusDot). The per-status action cluster (Task 4) and the reply surface
-// (Task 4) land as marked placeholders; the skip chip (Task 4) is a marker too.
+// applyStatusDot). The per-status action cluster is live (Task 4); the reply
+// surface + skip chip (Task 4b) remain marked placeholders.
 const props = defineProps<{ task: TaskSpec }>();
 
 const callbacks = inject(CALLBACKS_KEY);
@@ -60,10 +61,9 @@ const persona = computed(() => (cb.resolvePersona ?? resolvePersona)(props.task.
       </div>
     </div>
 
-    <!-- Task 4: action cluster — empty placeholder container the cluster mounts into. -->
-    <div
-      class="specorator-agent-board-card-actions"
-      :class="{ 'specorator-agent-board-card-actions--persistent': live }"
+    <CardActionCluster
+      :task="props.task"
+      :status="status"
     />
 
     <div class="specorator-agent-board-card-meta">

@@ -49,7 +49,7 @@ export interface AgentBoardRenderCallbacks {
  * `variant` keys the primary button styling; `danger` marks destructive ⋯ menu
  * items (red). `run` is resolved against the live callbacks at click time.
  */
-interface CardAction {
+export interface CardAction {
   labelKey: TranslationKey;
   icon: string;
   variant?: 'cta' | 'danger' | 'ghost';
@@ -59,7 +59,7 @@ interface CardAction {
   available?: (callbacks: AgentBoardRenderCallbacks, task: TaskSpec) => boolean;
 }
 
-interface CardActionModel {
+export interface CardActionModel {
   primary: CardAction | null;
   /** Optional labeled button rendered between the primary and the ⋯ menu. */
   secondary?: CardAction;
@@ -126,7 +126,7 @@ const MENU_MARK_FAILED: CardAction = {
  * pre-cluster recovery actions); any status the spec does not tabulate falls
  * back to an Open-note-only menu so every card stays actionable.
  */
-const CARD_ACTIONS: Partial<Record<TaskStatus, CardActionModel>> = {
+export const CARD_ACTIONS: Partial<Record<TaskStatus, CardActionModel>> = {
   inbox: {
     primary: { labelKey: 'tasks.workOrderModal.actionMarkReady', icon: 'check', variant: 'cta', run: (cb, task) => cb.onMarkReady(task) },
     // No "Run now": inbox items aren't runnable (must transition to ready first).
@@ -178,7 +178,7 @@ const CARD_ACTIONS: Partial<Record<TaskStatus, CardActionModel>> = {
   },
 };
 
-const FALLBACK_CARD_ACTIONS: CardActionModel = { primary: null, menu: [MENU_OPEN_NOTE] };
+export const FALLBACK_CARD_ACTIONS: CardActionModel = { primary: null, menu: [MENU_OPEN_NOTE] };
 
 /** Live callbacks escape so each click resolves against current board state. */
 export interface AgentBoardCardActionsDeps {
