@@ -1,7 +1,4 @@
-import { t } from '../../../i18n/i18n';
 import type { TranslationKey } from '../../../i18n/types';
-import type { TaskSpec } from '../model/taskTypes';
-import { renderSectionHeader } from './sectionHeader';
 
 /**
  * Editable work-order body sections collected from the detail modal's inline
@@ -16,28 +13,22 @@ export interface WorkOrderSectionUpdate {
   constraints?: string;
 }
 
-/**
- * Imperative handle the modal keeps after rendering the edit form. The Save /
- * Cancel actions live in the sticky footer (not in the form), so the footer's
- * Save button reaches back through `collect()` to gather the current textarea
- * values on demand.
- */
-export interface WorkOrderEditFormHandle {
-  /** Snapshot every textarea (a cleared field persists as an empty section). */
-  collect(): WorkOrderSectionUpdate;
-}
-
-interface FieldSpec {
+/** One editable body section: which task key it edits + its header/placeholder. */
+export interface WorkOrderEditFieldSpec {
   key: keyof WorkOrderSectionUpdate;
   icon: string;
   labelKey: TranslationKey;
   placeholderKey: TranslationKey;
 }
 
-// The four editable body sections, in the same order they read top-to-bottom in
-// the work-order note. Icons match the read-only section headers so the form
-// reads as the same document, just editable.
-const FIELD_SPECS: readonly FieldSpec[] = [
+/**
+ * The four editable body sections, in the same order they read top-to-bottom in
+ * the work-order note. Icons match the read-only section headers so the form
+ * reads as the same document, just editable. Consumed by the Vue edit form
+ * (`WorkOrderEditForm.vue`); the `WorkOrderSectionUpdate` type is also the
+ * `onSaveSections` payload shape shared with `TaskNoteStore.writeSections`.
+ */
+export const WORK_ORDER_EDIT_FIELDS: readonly WorkOrderEditFieldSpec[] = [
   {
     key: 'objective',
     icon: 'target',
@@ -63,36 +54,3 @@ const FIELD_SPECS: readonly FieldSpec[] = [
     placeholderKey: 'tasks.workOrderModal.editConstraintsPlaceholder',
   },
 ];
-
-/**
- * Renders the work-order detail modal's inline edit form: one raw-markdown
- * textarea per editable body section (Objective, Acceptance Criteria, Context,
- * Constraints) seeded from the task. The Cancel / Save actions are NOT rendered
- * here — they live in the modal's sticky footer; this returns a handle the
- * footer's Save button calls to collect every textarea value at save time (so a
- * cleared field persists as an empty section).
- */
-export function renderWorkOrderEditForm(
-  parent: HTMLElement,
-  task: TaskSpec,
-): WorkOrderEditFormHandle {
-  const form = parent.createDiv({ cls: 'specorator-work-order-modal-edit-form' });
-
-  const textareas = FIELD_SPECS.map((spec) => {
-    const { section } = renderSectionHeader(form, { icon: spec.icon, label: t(spec.labelKey) });
-    const textarea = section.createEl('textarea', {
-      cls: 'specorator-work-order-modal-edit-textarea',
-      attr: { placeholder: t(spec.placeholderKey), spellcheck: 'false' },
-    });
-    textarea.value = task.sections[spec.key] ?? '';
-    return { key: spec.key, textarea };
-  });
-
-  return {
-    collect: () => {
-      const update: WorkOrderSectionUpdate = {};
-      for (const field of textareas) update[field.key] = field.textarea.value;
-      return update;
-    },
-  };
-}
