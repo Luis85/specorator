@@ -1,29 +1,50 @@
 <script setup lang="ts">
 import { computed, inject } from 'vue';
 
+import { t } from '../../../../../i18n/i18n';
 import { resolvePersona } from '../../../../agents/personaRegistry';
 import { DEFAULT_LANE_TITLES } from '../../../config/boardConfigTypes';
 import { parseAcceptanceProgress } from '../../../model/acceptanceProgress';
 import type { TaskSpec } from '../../../model/taskTypes';
 import { CALLBACKS_KEY } from '../boardKeys';
 import { LIVE_STATUSES, priorityBars, statusDotClass } from '../statusDot';
+import { useAgentBoardStore } from '../stores/agentBoardStore';
 import AgentAvatar from './AgentAvatar.vue';
 import CardActionCluster from './CardActionCluster.vue';
+import CardReplySurface from './CardReplySurface.vue';
 import LiveStrip from './LiveStrip.vue';
 
 // Parity target: AgentBoardRenderer.renderCard (+ renderMetaRow / renderFooter /
-// applyStatusDot). The per-status action cluster is live (Task 4); the reply
-// surface + skip chip (Task 4b) remain marked placeholders.
+// applyStatusDot). The per-status action cluster (Task 4) and the reply surface +
+// skip chip (Task 4b) are all live now.
 const props = defineProps<{ task: TaskSpec }>();
 
 const callbacks = inject(CALLBACKS_KEY);
 if (!callbacks) throw new Error('WorkOrderCard mounted without CALLBACKS_KEY');
 const cb = callbacks;
 
+const store = useAgentBoardStore();
+
+// The live pause overlay only ENRICHES the reply prompt (event-sourced question /
+// approval action + risk). It does NOT gate the surface — CardReplySurface falls
+// back to the note's `pause_reason` when this is null, so a reloaded paused card
+// stays answerable (parity: renderReplySurface AgentBoardRenderer.ts:621,643).
+const pause = computed(() => store.pauseState.get(props.task.frontmatter.id) ?? null);
+
+// Queue skip chip: the runner's skip reason for this card via the callback seam,
+// null when the card is not skipped (parity: renderSkipChipFor).
+const skipReason = computed(() => cb.getSkipReason?.(props.task) ?? null);
+
 const status = computed(() => props.task.frontmatter.status);
 const live = computed(() => LIVE_STATUSES.has(status.value));
 const statusLabel = computed(() => DEFAULT_LANE_TITLES[status.value]);
 const statusDotCls = computed(() => statusDotClass(status.value));
+
+// Parity with renderCard's `showReply`: the reply surface + hidden footer are
+// driven by STATUS alone (needs_input / needs_approval), NOT by the presence of a
+// live pause overlay — so a reloaded paused card is still answerable
+// (AgentBoardRenderer.ts:459,461,168).
+const showReply = computed(() => status.value === 'needs_input' || status.value === 'needs_approval');
 
 const engineText = computed(
   () => `${props.task.frontmatter.provider ?? '—'} / ${props.task.frontmatter.model ?? '—'}`,
@@ -87,9 +108,12 @@ const persona = computed(() => (cb.resolvePersona ?? resolvePersona)(props.task.
       </span>
     </div>
 
-    <!-- Footer stays visible this task: the reply surface that hides it (is-hidden)
-      lands in Task 4. -->
-    <div class="specorator-agent-board-card-footer">
+    <!-- Footer is hidden (not destroyed) while the reply surface shows, so a
+      resumed card recovers its progress + assignee seam. -->
+    <div
+      class="specorator-agent-board-card-footer"
+      :class="{ 'is-hidden': showReply }"
+    >
       <div
         v-if="progress.total > 0"
         class="specorator-agent-board-card-progress"
@@ -120,8 +144,28 @@ const persona = computed(() => (cb.resolvePersona ?? resolvePersona)(props.task.
       :task="props.task"
     />
 
-    <!-- Task 4: reply surface — .specorator-agent-board-card-reply (needs the pause-state store overlay). -->
+    <!-- Key on status so a direct needs_input↔needs_approval flip remounts the
+      surface and re-seeds its reply field — parity with the imperative patchCard
+      rebuilding the field on every status patch (no stale typed text carried
+      across a branch change). An in-place prompt change (same status, new pause
+      overlay) keeps the key stable, so the prompt re-derives without a remount. -->
+    <CardReplySurface
+      v-if="showReply"
+      :key="status"
+      :task="props.task"
+      :pause="pause"
+    />
 
-    <!-- Task 4: skip chip — .specorator-agent-board-card-skip-host (couples to callbacks.getSkipReason). -->
+    <div
+      v-if="skipReason"
+      class="specorator-agent-board-card-skip-host"
+    >
+      <div
+        class="specorator-agent-board-card-skip-chip"
+        @click.stop="cb.onAckSkip?.(props.task)"
+      >
+        {{ t('tasks.board.queueSkipped', { reason: skipReason }) }}
+      </div>
+    </div>
   </div>
 </template>

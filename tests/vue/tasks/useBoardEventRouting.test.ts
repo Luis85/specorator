@@ -120,13 +120,56 @@ describe('useBoardEventRouting', () => {
     expect(load).toHaveBeenCalled();
   });
 
-  it('routes task:run-finished to BOTH evictLive and load', () => {
+  it('routes task:run-finished to evictLive, clearPause, AND load (terminal clears the pause overlay)', () => {
     const { store, events } = setup();
     const evictLive = vi.spyOn(store, 'evictLive');
+    const clearPause = vi.spyOn(store, 'clearPause');
     const load = vi.spyOn(store, 'load').mockResolvedValue();
     events.fire('task:run-finished', { taskId: 'a' });
     expect(evictLive).toHaveBeenCalledWith('a');
+    expect(clearPause).toHaveBeenCalledWith('a');
     expect(load).toHaveBeenCalled();
+  });
+
+  it('routes task:needs-input to setPause (question + default seed) AND load', () => {
+    const { store, events } = setup();
+    const setPause = vi.spyOn(store, 'setPause');
+    const load = vi.spyOn(store, 'load').mockResolvedValue();
+    events.fire('task:needs-input', { taskId: 'a', path: 'p', question: 'Q?', why: 'because', default: 'seed', runId: 'r1' });
+    expect(setPause).toHaveBeenCalledWith('a', { question: 'Q?', defaultValue: 'seed', runId: 'r1' });
+    expect(load).toHaveBeenCalled();
+  });
+
+  it('routes task:needs-approval to setPause (action + risk + reversible) AND load', () => {
+    const { store, events } = setup();
+    const setPause = vi.spyOn(store, 'setPause');
+    const load = vi.spyOn(store, 'load').mockResolvedValue();
+    events.fire('task:needs-approval', { taskId: 'a', path: 'p', action: 'Delete files', risk: 'high', reversible: false, runId: 'r1' });
+    expect(setPause).toHaveBeenCalledWith('a', { action: 'Delete files', risk: 'high', reversible: false, runId: 'r1' });
+    expect(load).toHaveBeenCalled();
+  });
+
+  it('routes task:resumed to clearPause AND load (drops the reply surface on resume)', () => {
+    const { store, events } = setup();
+    const clearPause = vi.spyOn(store, 'clearPause');
+    const load = vi.spyOn(store, 'load').mockResolvedValue();
+    events.fire('task:resumed', { taskId: 'a', path: 'p' });
+    expect(clearPause).toHaveBeenCalledWith('a');
+    expect(load).toHaveBeenCalled();
+  });
+
+  it('routes task:status-changed OFF a pause status to clearPause; a change TO a pause status keeps it', () => {
+    const { store, events } = setup();
+    const clearPause = vi.spyOn(store, 'clearPause');
+    events.fire('task:status-changed', { taskId: 'a', path: 'p', status: 'running' });
+    expect(clearPause).toHaveBeenCalledWith('a');
+
+    clearPause.mockClear();
+    // RunSession emits status-changed(needs_input) BEFORE the needs-input event
+    // that sets the pause, so this branch must NOT clear it.
+    events.fire('task:status-changed', { taskId: 'a', path: 'p', status: 'needs_input' });
+    events.fire('task:status-changed', { taskId: 'a', path: 'p', status: 'needs_approval' });
+    expect(clearPause).not.toHaveBeenCalled();
   });
 
   it('coalesces a burst of in-folder vault writes into one debounced load', async () => {

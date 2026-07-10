@@ -150,6 +150,30 @@ describe('useAgentBoardStore', () => {
     expect(store.loading).toBe(false);
   });
 
+  it('setPause replaces the map with a NEW reference and stores the payload', () => {
+    const { store } = initStore([{ lanes: [], errors: [] }]);
+    const before = store.pauseState;
+    store.setPause('t1', { question: 'Q?', runId: 'r1' });
+    expect(store.pauseState).not.toBe(before);
+    expect(store.pauseState.get('t1')).toEqual({ question: 'Q?', runId: 'r1' });
+  });
+
+  it('clearPause removes the entry (new reference so a shallowRef watch fires)', () => {
+    const { store } = initStore([{ lanes: [], errors: [] }]);
+    store.setPause('t1', { action: 'A', risk: 'R', runId: 'r1' });
+    const before = store.pauseState;
+    store.clearPause('t1');
+    expect(store.pauseState).not.toBe(before);
+    expect(store.pauseState.has('t1')).toBe(false);
+  });
+
+  it('clearPause on an absent key is a no-op that does not churn the reference (mirrors evictLive)', () => {
+    const { store } = initStore([{ lanes: [], errors: [] }]);
+    const before = store.pauseState;
+    store.clearPause('missing');
+    expect(store.pauseState).toBe(before);
+  });
+
   it('mergeById preserves task identity across loads (no flicker on a live board)', async () => {
     const first: ResolvedBoardLayout = { lanes: [makeLane('running', [makeTask('t1', 'running')])], errors: [] };
     // Second load: a FRESH task instance with identical content, as if re-parsed off disk.

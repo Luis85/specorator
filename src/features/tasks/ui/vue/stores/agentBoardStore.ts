@@ -11,6 +11,7 @@ import { resolveBoardLayout } from '../../../config/resolveBoardLayout';
 import { TaskIndexer } from '../../../indexing/TaskIndexer';
 import type { InvalidTaskNote, TaskSpec } from '../../../model/taskTypes';
 import { TaskNoteStore } from '../../../storage/TaskNoteStore';
+import type { AgentBoardPauseState } from '../../AgentBoardRenderer';
 
 /**
  * Loader seam over the vault-reading services the view drives in `refresh()`.
@@ -41,6 +42,13 @@ export const useAgentBoardStore = defineStore('agent-board', () => {
   // in the setters below, so the deep-proxy overhead of `ref` would go unused.
   const liveHeartbeats = shallowRef<Map<string, string>>(new Map());
   const liveLedger = shallowRef<Map<string, string>>(new Map());
+  // Event-sourced pause overlay: the imperative view's `pauseState` Map keyed by
+  // task id, populated from task:needs-input/needs-approval and consumed by the
+  // reply surface. The prompt (question / approval action + risk) lives in the
+  // run events, NOT the note, so it can't be re-derived by load() — this overlay
+  // carries it. shallowRef for the same whole-Map replacement reactivity contract
+  // as liveHeartbeats/liveLedger.
+  const pauseState = shallowRef<Map<string, AgentBoardPauseState>>(new Map());
   // Work-order notes that failed to parse — the imperative renderErrors' "Skipped
   // notes" surface. Sourced from the loader's model, not the resolved layout.
   const invalidNotes = shallowRef<InvalidTaskNote[]>([]);
@@ -137,8 +145,26 @@ export const useAgentBoardStore = defineStore('agent-board', () => {
     }
   }
 
+  // New-reference-on-mutation like the live setters, so a shallowRef watch fires.
+  // Mirrors the imperative onPauseRequested `pauseState.set`.
+  function setPause(taskId: string, payload: AgentBoardPauseState): void {
+    const next = new Map(pauseState.value);
+    next.set(taskId, payload);
+    pauseState.value = next;
+  }
+
+  // Mirrors every imperative `pauseState.delete` (resume / terminal / status
+  // change off a pause status). Clearing an absent key is a no-op that leaves the
+  // reference untouched (no needless churn), matching evictLive's has-guard.
+  function clearPause(taskId: string): void {
+    if (!pauseState.value.has(taskId)) return;
+    const next = new Map(pauseState.value);
+    next.delete(taskId);
+    pauseState.value = next;
+  }
+
   return {
-    layout, liveHeartbeats, liveLedger, invalidNotes, nowMs, loading, error,
-    init, load, tick, recordHeartbeat, recordLedger, evictLive,
+    layout, liveHeartbeats, liveLedger, pauseState, invalidNotes, nowMs, loading, error,
+    init, load, tick, recordHeartbeat, recordLedger, evictLive, setPause, clearPause,
   };
 });

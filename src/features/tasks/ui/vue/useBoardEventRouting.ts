@@ -80,10 +80,43 @@ export function useBoardEventRouting(plugin: SpecoratorPlugin): void {
     disposers.push(plugin.events.on('task:heartbeat', (p) => store.recordHeartbeat(p.taskId, p.at)));
     disposers.push(plugin.events.on('task:ledger-appended', (p) => store.recordLedger(p.taskId, p.entry.message)));
     // task:run-finished is in BOTH tiers: evict the stale live overlay (so no
-    // dead heartbeat/ledger line lingers on the now-terminal card) AND trigger
-    // the guarded reload below. The two touch different refs (live-overlay maps
-    // vs layout), so their relative order does not matter.
-    disposers.push(plugin.events.on('task:run-finished', (p) => store.evictLive(p.taskId)));
+    // dead heartbeat/ledger line lingers on the now-terminal card) AND clear any
+    // pause overlay (terminal ends a pause) AND trigger the guarded reload below.
+    // The three touch different refs (live-overlay maps / pause map / layout), so
+    // their relative order does not matter.
+    disposers.push(plugin.events.on('task:run-finished', (p) => {
+      store.evictLive(p.taskId);
+      store.clearPause(p.taskId);
+    }));
+
+    // Pause overlay (the O(1) replacement for the imperative view's `pauseState`
+    // Map). setPause carries the event-sourced prompt the reply surface renders;
+    // clearPause mirrors every imperative `pauseState.delete`. Each also stays in
+    // FULL_REFRESH_EVENTS below so the reload still re-buckets the card's lane.
+    // Payloads mirror onPauseRequested's field selection: needs-input carries the
+    // question + default seed; needs-approval carries the action + risk +
+    // reversible. (The needs-input event's `why` is not surfaced by the reply
+    // surface, so — like the imperative — it is not stored.)
+    disposers.push(plugin.events.on('task:needs-input', (p) =>
+      store.setPause(p.taskId, { question: p.question, defaultValue: p.default, runId: p.runId })));
+    disposers.push(plugin.events.on('task:needs-approval', (p) =>
+      store.setPause(p.taskId, { action: p.action, risk: p.risk, reversible: p.reversible, runId: p.runId })));
+    // task:resumed → back to running: drop the pause overlay so the reply surface
+    // disappears (imperative `pauseState.delete` on resume).
+    disposers.push(plugin.events.on('task:resumed', (p) => store.clearPause(p.taskId)));
+    // Any status change OFF a pause status clears the overlay, mirroring the
+    // imperative onStatusChanged. A change TO needs_input/needs_approval keeps it:
+    // RunSession emits status-changed(pause) BEFORE the needs-input/approval event
+    // that sets it, so this guard never wipes a freshly-set pause.
+    disposers.push(plugin.events.on('task:status-changed', (p) => {
+      if (p.status !== 'needs_input' && p.status !== 'needs_approval') store.clearPause(p.taskId);
+    }));
+    // NB: vault `delete` intentionally does NOT clear the pause overlay. The
+    // imperative evictInMemoryStateForPath maps path→taskId, but this overlay is
+    // keyed by taskId which a path-only delete event can't resolve. load()
+    // re-derives the layout so the deleted card leaves the board, and its orphaned
+    // pause entry — keyed by a taskId no longer in any lane — never renders. Same
+    // deferral already accepted for liveHeartbeats/liveLedger.
 
     for (const event of FULL_REFRESH_EVENTS) {
       disposers.push(plugin.events.on(event, () => void store.load()));
