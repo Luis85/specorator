@@ -25,8 +25,28 @@ function makeLane(id: string, tasks: TaskSpec[]): ResolvedLane {
   };
 }
 
-function makePlugin(folder = 'Agent Board/tasks') {
-  return { app: { vault: {} }, settings: { agentBoardWorkOrderFolder: folder } };
+/**
+ * Minimal plugin seam the store's toolbar-state projection reads: getTabSlotUsage
+ * (chat-tab badge) + the shared queueControl/queueSlotTracker singletons. Defaults
+ * mirror a fresh, paused plugin; `toolbar` overrides drive the projection tests.
+ */
+function makePlugin(
+  folder = 'Agent Board/tasks',
+  toolbar: {
+    slots?: { used: number; max: number };
+    occupied?: number;
+    capacity?: number;
+    queue?: Partial<{ paused: boolean; halted: boolean; haltReason: string | null; consecutiveFailures: number }>;
+  } = {},
+) {
+  const slots = toolbar.slots ?? { used: 0, max: 3 };
+  return {
+    app: { vault: {} },
+    settings: { agentBoardWorkOrderFolder: folder },
+    getTabSlotUsage: () => slots,
+    queueControl: { paused: true, halted: false, haltReason: null, consecutiveFailures: 0, ...toolbar.queue },
+    queueSlotTracker: { occupied: () => toolbar.occupied ?? 0, capacity: () => toolbar.capacity ?? slots.max },
+  };
 }
 
 /**
@@ -76,6 +96,63 @@ describe('useAgentBoardStore', () => {
     // Reads the REAL folder setting key (agentBoardWorkOrderFolder), not `agentBoardFolder`.
     expect(folders).toEqual(['Agent Board/tasks']);
     expect(store.loading).toBe(false);
+  });
+
+  it('slots/queueState carry a pre-load default (empty slots, null queue) until the first load', () => {
+    const store = useAgentBoardStore();
+    expect(store.slots).toEqual({ used: 0, max: 0 });
+    expect(store.queueState).toBeNull();
+  });
+
+  it('load() projects slots (getTabSlotUsage) + queueState (shared control + slot tracker)', async () => {
+    const plugin = makePlugin('Agent Board/tasks', {
+      slots: { used: 2, max: 3 },
+      occupied: 1,
+      capacity: 3,
+      queue: { paused: false, halted: false, haltReason: null, consecutiveFailures: 0 },
+    });
+    const { store } = initStore([{ lanes: [], errors: [] }], plugin);
+
+    await store.load();
+
+    expect(store.slots).toEqual({ used: 2, max: 3 });
+    expect(store.queueState).toEqual({
+      paused: false,
+      halted: false,
+      haltReason: null,
+      slotOccupied: 1,
+      slotCapacity: 3,
+      consecutiveFailures: 0,
+    });
+  });
+
+  it('load() projects a halted queue (reason + failure streak) for the toolbar halt caption', async () => {
+    const plugin = makePlugin('Agent Board/tasks', {
+      queue: { paused: false, halted: true, haltReason: '3 consecutive failures', consecutiveFailures: 3 },
+    });
+    const { store } = initStore([{ lanes: [], errors: [] }], plugin);
+
+    await store.load();
+
+    expect(store.queueState).toMatchObject({ halted: true, haltReason: '3 consecutive failures', consecutiveFailures: 3 });
+  });
+
+  it('load() refreshes slots/queueState even when the vault index rejects (parity: refreshSlots never gates on the index)', async () => {
+    const store = useAgentBoardStore();
+    const plugin = makePlugin('Agent Board/tasks', { slots: { used: 1, max: 4 }, occupied: 1, capacity: 4 });
+    const deps: BoardLoaderDeps = {
+      indexVaultFolder: () => Promise.reject(new Error('vault boom')),
+      loadBoardConfig: vi.fn(() => ({ config: {}, errors: [] })) as unknown as BoardLoaderDeps['loadBoardConfig'],
+      resolveBoardLayout: vi.fn() as unknown as BoardLoaderDeps['resolveBoardLayout'],
+    };
+    store.init(plugin as never, deps);
+
+    await store.load();
+
+    expect(store.error).toBe('vault boom');
+    // The toolbar chrome is sourced off live singletons, not the failed index.
+    expect(store.slots).toEqual({ used: 1, max: 4 });
+    expect(store.queueState?.slotCapacity).toBe(4);
   });
 
   it('load() captures the loader model invalidNotes (the "Skipped notes" surface)', async () => {

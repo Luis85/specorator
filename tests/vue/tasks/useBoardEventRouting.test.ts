@@ -60,6 +60,12 @@ function setup(settings: Record<string, unknown> = { agentBoardWorkOrderFolder: 
     app: { vault },
     settings,
     events: { on: events.on },
+    // The store's toolbar-state projection (read at the top of load()) sources
+    // these live singletons; a full-refresh event routes to the real load(), so
+    // the fake must expose them or the projection throws.
+    getTabSlotUsage: () => ({ used: 0, max: 3 }),
+    queueControl: { paused: true, halted: false, haltReason: null, consecutiveFailures: 0 },
+    queueSlotTracker: { occupied: () => 0, capacity: () => 3 },
   } as never;
   const store = useAgentBoardStore();
   store.init(plugin, makeDeps() as never);

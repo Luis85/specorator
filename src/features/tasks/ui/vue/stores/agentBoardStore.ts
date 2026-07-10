@@ -29,6 +29,50 @@ export interface BoardLoaderDeps {
 // leaves; `load()` always replaces `layout.value` wholesale rather than mutating.
 const EMPTY_LAYOUT: ResolvedBoardLayout = Object.freeze({ lanes: [], errors: [] });
 
+/** Chat-tab usage the toolbar's "Work-order tabs N/M · K free" badge reads,
+ *  mirroring the imperative `AgentBoardRenderState.slots` (`plugin.getTabSlotUsage()`). */
+export interface BoardSlotUsage {
+  used: number;
+  max: number;
+}
+
+/**
+ * Value-only projection of the toolbar's queue chrome — the imperative
+ * `QueueToolbarState` MINUS its `onToggle` callback (the Vue toolbar routes that
+ * action through the callbacks contract like every other button, not the store).
+ * Sourced live from the plugin-level shared queue control + slot tracker, the
+ * same singletons the imperative `getQueueToolbarState()` reads.
+ */
+export interface BoardToolbarQueueState {
+  paused: boolean;
+  halted: boolean;
+  haltReason: string | null;
+  slotOccupied: number;
+  slotCapacity: number;
+  consecutiveFailures: number;
+}
+
+/**
+ * Snapshot the toolbar's queue chrome off the plugin's shared singletons. The
+ * imperative view reads `runner.isPaused()/isHalted()/…`, which all delegate to
+ * `plugin.queueControl`; reading the control directly is the identical value
+ * without needing a runner (the queue engine stays imperative and out of scope).
+ * `queueControl` is eagerly seeded `paused: true`, matching the imperative's
+ * `runner?.isPaused() ?? true` fallback before a runner exists.
+ */
+function readQueueToolbarState(p: SpecoratorPlugin): BoardToolbarQueueState {
+  const control = p.queueControl;
+  const tracker = p.queueSlotTracker;
+  return {
+    paused: control.paused,
+    halted: control.halted,
+    haltReason: control.haltReason,
+    slotOccupied: tracker.occupied(),
+    slotCapacity: tracker.capacity(),
+    consecutiveFailures: control.consecutiveFailures,
+  };
+}
+
 /**
  * Reactive read-model over the Agent Board layout plus the two live overlays the
  * imperative view keeps (heartbeat `at` per task, last ledger line per task).
@@ -52,6 +96,15 @@ export const useAgentBoardStore = defineStore('agent-board', () => {
   // Work-order notes that failed to parse — the imperative renderErrors' "Skipped
   // notes" surface. Sourced from the loader's model, not the resolved layout.
   const invalidNotes = shallowRef<InvalidTaskNote[]>([]);
+  // Toolbar chrome projections (Part 5a). Both mirror LIVE plugin singletons the
+  // imperative view re-reads every render — NOT the vault index — so `load()`
+  // refreshes them unconditionally (see below). shallowRef: reactivity is the
+  // whole-value replacement in `load()`, so deep tracking would be unused.
+  // `slots` = chat-tab usage (getTabSlotUsage); `queueState` = the shared queue
+  // control snapshot, null until the first load (no divider/switch/counters —
+  // the imperative renderer gates that whole block on `state.queue`).
+  const slots = shallowRef<BoardSlotUsage>({ used: 0, max: 0 });
+  const queueState = shallowRef<BoardToolbarQueueState | null>(null);
   const { loading, run } = useGuardedLoad();
   // Captured (not thrown) so callers can fire `void store.load()` without
   // guarding a rejection: the fetch path awaits vault reads on files that can
@@ -94,6 +147,14 @@ export const useAgentBoardStore = defineStore('agent-board', () => {
     if (!plugin || !deps) return;
     const p = plugin;
     const d = deps;
+    // Toolbar chrome reads live plugin singletons (chat-tab usage + the shared
+    // queue control/slot tracker), independent of the vault index. Set BEFORE
+    // (and outside) `run()` so a transient index rejection can't stall the badge
+    // — the imperative view's refreshSlots()/getQueueToolbarState() likewise
+    // never gate on the index. Every event that changes these (chat:tabs-changed,
+    // task:queue-*) already routes to load() in useBoardEventRouting.
+    slots.value = p.getTabSlotUsage();
+    queueState.value = readQueueToolbarState(p);
     await run(
       async () => {
         const model = await d.indexVaultFolder(p.app.vault, folder());
@@ -164,7 +225,7 @@ export const useAgentBoardStore = defineStore('agent-board', () => {
   }
 
   return {
-    layout, liveHeartbeats, liveLedger, pauseState, invalidNotes, nowMs, loading, error,
+    layout, liveHeartbeats, liveLedger, pauseState, invalidNotes, slots, queueState, nowMs, loading, error,
     init, load, tick, recordHeartbeat, recordLedger, evictLive, setPause, clearPause,
   };
 });

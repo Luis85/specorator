@@ -17,6 +17,14 @@ export interface AgentBoardRenderCallbacks {
   onMoveToInbox(task: TaskSpec): void;
   onAddWorkOrder(): void;
   onRunNextReady(): void;
+  /**
+   * Auto-run switch toggle: (re)starts or pauses the shared queue. Vue-only —
+   * the imperative toolbar embeds this on `QueueToolbarState.onToggle`, so the
+   * imperative renderer never reads it here; the Vue toolbar routes actions
+   * through this callbacks contract like every other button, and the Task 5b
+   * cutover maps it to `AgentBoardView.onToggleQueue()`.
+   */
+  onToggleAutoRun?(): void;
   /** Queue skip reason for a card, or null when the card is not skipped. */
   getSkipReason?: (task: TaskSpec) => string | null;
   /** Dismiss a card's queue skip chip. */
