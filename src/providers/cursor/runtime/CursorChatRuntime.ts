@@ -24,6 +24,8 @@ import {
   type AcpSessionNotification,
   AcpSessionUpdateNormalizer,
   AcpStreamChunkQueue,
+  type AcpUsageUpdate,
+  type ActiveTurnEffect,
   buildAcpApprovalDecisionOptions,
   buildAcpUsageInfo,
   buildActiveTurnEffect,
@@ -67,6 +69,7 @@ export class CursorChatRuntime implements ChatRuntime {
   private askQuestionAbortController: AbortController | null = null;
   private autoApprovePermissions = false;
   private connection: AcpClientConnection | null = null;
+  private contextUsage: AcpUsageUpdate | null = null;
   private currentModeId: string | null = null;
   private currentSessionModelId: string | null = null;
   private currentTurnIsPlan = false;
@@ -132,14 +135,19 @@ export class CursorChatRuntime implements ChatRuntime {
 
   async reloadMcpServers(): Promise<void> {}
 
-  async ensureReady(_options?: ChatRuntimeEnsureReadyOptions): Promise<boolean> {
+  async ensureReady(options?: ChatRuntimeEnsureReadyOptions): Promise<boolean> {
     const cli = this.plugin.getResolvedProviderCliPath('cursor');
     if (!cli) {
       this.setReady(false);
       return false;
     }
 
-    if (this.process?.isAlive() && this.transport && !this.transport.isClosed && this.connection) {
+    // A forced ensureReady (env/CLI resync) must restart even when the process
+    // is alive; startProcess shuts the old one down before the fresh spawn.
+    const alive = Boolean(
+      this.process?.isAlive() && this.transport && !this.transport.isClosed && this.connection,
+    );
+    if (alive && options?.force !== true) {
       return true;
     }
 
@@ -216,6 +224,7 @@ export class CursorChatRuntime implements ChatRuntime {
     const activeTurn: ActiveTurn = { queue: new AcpStreamChunkQueue(), sessionId };
     this.activeTurn = activeTurn;
     this.currentTurnSawAssistantContent = false;
+    this.contextUsage = null;
     this.sessionUpdateNormalizer.reset();
     this.toolStreamAdapter.reset();
 
@@ -566,12 +575,7 @@ export class CursorChatRuntime implements ChatRuntime {
       sessionId: notification.sessionId,
       toolStreamAdapter: this.toolStreamAdapter,
     });
-    if (effect.metadataPatch) {
-      Object.assign(this.turnMetadata, effect.metadataPatch);
-    }
-    if (effect.sawAssistantContent) {
-      this.currentTurnSawAssistantContent = true;
-    }
+    this.applyActiveTurnEffectState(effect);
     for (const chunk of effect.chunks) {
       // query() already yields a single synthetic user_message_start /
       // assistant_message_start pair per turn, so those are the sole message
@@ -582,6 +586,22 @@ export class CursorChatRuntime implements ChatRuntime {
         continue;
       }
       this.activeTurn.queue.push(chunk);
+    }
+  }
+
+  // Turn-scoped state writes fanned out from the shared ActiveTurnEffect; keeping
+  // them here (rather than inline) lets handleSessionNotification stay focused on
+  // chunk forwarding. contextUsage is the authoritative window an earlier
+  // usage_update carried, threaded into the final usage chunk by emitFinalUsage.
+  private applyActiveTurnEffectState(effect: ActiveTurnEffect): void {
+    if (effect.metadataPatch) {
+      Object.assign(this.turnMetadata, effect.metadataPatch);
+    }
+    if (effect.sawAssistantContent) {
+      this.currentTurnSawAssistantContent = true;
+    }
+    if (effect.contextUsage !== undefined) {
+      this.contextUsage = effect.contextUsage;
     }
   }
 
@@ -618,9 +638,16 @@ export class CursorChatRuntime implements ChatRuntime {
       return; // usage contract: never emit without a model
     }
 
-    const acpUsage = buildAcpUsageInfo({ contextWindow: null, model, promptUsage });
+    const acpUsage = buildAcpUsageInfo({ contextWindow: this.contextUsage, model, promptUsage });
     if (acpUsage) {
       activeTurn.queue.push({ sessionId: activeTurn.sessionId, type: 'usage', usage: acpUsage });
+      return;
+    }
+
+    // An authoritative usage_update chunk already carried the real context window
+    // earlier this turn; the zero-window catalog fallback would overwrite it, so
+    // when we've seen one but buildAcpUsageInfo still returned null, emit nothing.
+    if (this.contextUsage) {
       return;
     }
 

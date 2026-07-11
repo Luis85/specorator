@@ -1,5 +1,6 @@
 import { ProviderSettingsCoordinator } from '@/core/providers/ProviderSettingsCoordinator';
 import { createHeadlessRuntimeHost, type RuntimeHost } from '@/core/runtime/RuntimeHost';
+import * as acpBuild from '@/providers/acp/buildAcpUsageInfo';
 import { CursorChatRuntime } from '@/providers/cursor/runtime/CursorChatRuntime';
 
 function makeRuntime(
@@ -73,6 +74,30 @@ describe('CursorChatRuntime (ACP)', () => {
     const msg = (runtime.describeStartupFailure as (e: unknown) => string)
       .call(runtime, new Error('transport closed'));
     expect(msg).toMatch(/update.*cursor-agent|Cursor CLI/i);
+  });
+});
+
+describe('CursorChatRuntime.ensureReady force restart', () => {
+  it('reuses the live process when force is not requested', async () => {
+    const runtime = makeRuntime();
+    primeRuntime(runtime, {});
+    const startProcess = jest
+      .spyOn(runtime as unknown as { startProcess: (c: string) => Promise<void> }, 'startProcess')
+      .mockResolvedValue();
+
+    await expect(runtime.ensureReady()).resolves.toBe(true);
+    expect(startProcess).not.toHaveBeenCalled();
+  });
+
+  it('shuts down and restarts on a forced ensureReady even when the process is alive', async () => {
+    const runtime = makeRuntime();
+    primeRuntime(runtime, {});
+    const startProcess = jest
+      .spyOn(runtime as unknown as { startProcess: (c: string) => Promise<void> }, 'startProcess')
+      .mockResolvedValue();
+
+    await expect(runtime.ensureReady({ force: true })).resolves.toBe(true);
+    expect(startProcess).toHaveBeenCalledTimes(1);
   });
 });
 
@@ -261,6 +286,45 @@ describe('CursorChatRuntime.emitFinalUsage', () => {
       .call(runtime, activeTurn, null, undefined);
 
     expect(push).not.toHaveBeenCalled();
+  });
+
+  it('carries a stored authoritative context window into the final usage payload', () => {
+    const runtime = makeRuntime() as unknown as Record<string, unknown>;
+    runtime.contextUsage = { size: 222_000, used: 4_096 };
+    const { activeTurn, push } = makeActiveTurn();
+
+    (runtime.emitFinalUsage as (t: unknown, u: unknown, q: unknown) => void)
+      .call(runtime, activeTurn, null, { model: 'gpt-5' });
+
+    expect(push).toHaveBeenCalledTimes(1);
+    const usage = push.mock.calls[0][0].usage;
+    // The authoritative usage_update window survives — not the zero-window catalog fallback.
+    expect(usage.contextWindow).toBe(222_000);
+    expect(usage.contextWindowIsAuthoritative).toBe(true);
+  });
+
+  it('suppresses the catalog fallback when a context usage was seen but no ACP usage builds', () => {
+    const runtime = makeRuntime() as unknown as Record<string, unknown>;
+    runtime.contextUsage = { size: 222_000, used: 4_096 };
+    const { activeTurn, push } = makeActiveTurn();
+    jest.spyOn(acpBuild, 'buildAcpUsageInfo').mockReturnValue(null);
+
+    (runtime.emitFinalUsage as (t: unknown, u: unknown, q: unknown) => void)
+      .call(runtime, activeTurn, null, { model: 'gpt-5' });
+
+    expect(push).not.toHaveBeenCalled();
+  });
+
+  it('still emits the catalog fallback when neither prompt usage nor context usage was seen', () => {
+    const runtime = makeRuntime() as unknown as Record<string, unknown>;
+    runtime.contextUsage = null;
+    const { activeTurn, push } = makeActiveTurn();
+
+    (runtime.emitFinalUsage as (t: unknown, u: unknown, q: unknown) => void)
+      .call(runtime, activeTurn, null, { model: 'gpt-5' });
+
+    expect(push).toHaveBeenCalledTimes(1);
+    expect(push.mock.calls[0][0].type).toBe('usage');
   });
 });
 
