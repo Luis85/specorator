@@ -2,6 +2,7 @@ import type { AskUserQuestionCallback, ChatTurnMetadata } from '../../../core/ru
 import { TOOL_TODO_WRITE } from '../../../core/tools/toolNames';
 import type { StreamChunk } from '../../../core/types';
 import type { AcpJsonRpcTransport } from '../../acp';
+import { mapCursorToolInput } from './cursorToolInputMapping';
 
 export interface CursorAcpExtensionHost {
   askUser: AskUserQuestionCallback;
@@ -267,9 +268,15 @@ export function registerCursorAcpExtensions(
 
   unsubscribes.push(transport.onNotification('cursor/update_todos', (params) => {
     const parsed = (params ?? {}) as { todos?: unknown[] };
-    const todos = parsed.todos ?? [];
+    // Route through the same Cursor todo coercion the stream-json tool-call path
+    // uses: the documented `cursor/update_todos` payload (`{id, content, status}`)
+    // lacks `activeForm`, which the shared todo panel's `parseTodoInput()`
+    // requires, so raw todos silently fail validation and the panel never
+    // updates. `mapCursorToolInput('updateTodosToolCall', ...)` derives
+    // `activeForm` from `content` and defaults `status`.
+    const input = mapCursorToolInput('updateTodosToolCall', { todos: parsed.todos ?? [] }, undefined);
     const id = `cursor-todos-${++todoCallCounter}`;
-    host.emitChunk({ type: 'tool_use', id, name: TOOL_TODO_WRITE, input: { todos } });
+    host.emitChunk({ type: 'tool_use', id, name: TOOL_TODO_WRITE, input });
     host.emitChunk({ type: 'tool_result', id, content: 'Todos updated', isError: false });
   }));
 

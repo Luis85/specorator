@@ -1,3 +1,4 @@
+import { parseTodoInput } from '@/core/tools/todo';
 import { TOOL_TODO_WRITE } from '@/core/tools/toolNames';
 import type { StreamChunk } from '@/core/types';
 import { registerCursorAcpExtensions } from '@/providers/cursor/runtime/cursorAcpExtensions';
@@ -228,6 +229,62 @@ describe('registerCursorAcpExtensions', () => {
 
     const toolUse = chunks.find((c) => c.type === 'tool_use') as { name: string } | undefined;
     expect(toolUse?.name).toBe(TOOL_TODO_WRITE);
+  });
+
+  it('normalizes a documented cursor/update_todos payload so the shared panel accepts it', async () => {
+    const { transport, notifications } = makeFakeTransport();
+    const chunks: StreamChunk[] = [];
+    registerCursorAcpExtensions(transport as never, {
+      askUser: jest.fn(),
+      emitChunk: (c) => chunks.push(c),
+      patchTurnMetadata: () => {},
+    });
+
+    // Documented cursor/update_todos shape per cursor.com/docs/cli/acp:
+    // `{id, content, status}` — no `activeForm`, which parseTodoInput requires.
+    await notifications.get('cursor/update_todos')!({
+      todos: [
+        { id: '1', content: 'step 1', status: 'pending' },
+        { id: '2', content: 'step 2', status: 'in_progress' },
+      ],
+    });
+
+    const toolUse = chunks.find((c) => c.type === 'tool_use') as
+      | { name: string; input: Record<string, unknown> }
+      | undefined;
+    expect(toolUse?.name).toBe(TOOL_TODO_WRITE);
+
+    const parsed = parseTodoInput(toolUse!.input);
+    expect(parsed).not.toBeNull();
+    expect(parsed).toEqual([
+      { id: '1', content: 'step 1', status: 'pending', activeForm: 'step 1' },
+      { id: '2', content: 'step 2', status: 'in_progress', activeForm: 'step 2' },
+    ]);
+  });
+
+  it('tolerates malformed cursor/update_todos payloads without throwing', () => {
+    const { transport, notifications } = makeFakeTransport();
+    const chunks: StreamChunk[] = [];
+    registerCursorAcpExtensions(transport as never, {
+      askUser: jest.fn(),
+      emitChunk: (c) => chunks.push(c),
+      patchTurnMetadata: () => {},
+    });
+
+    expect(() => {
+      notifications.get('cursor/update_todos')!({
+        todos: [null, 'oops', { status: 'pending' }, { content: '', status: 'pending' }],
+      });
+    }).not.toThrow();
+
+    const toolUse = chunks.find((c) => c.type === 'tool_use') as
+      | { name: string; input: Record<string, unknown> }
+      | undefined;
+    expect(toolUse?.name).toBe(TOOL_TODO_WRITE);
+    expect(parseTodoInput(toolUse!.input)).toBeNull();
+
+    expect(() => notifications.get('cursor/update_todos')!(undefined)).not.toThrow();
+    expect(() => notifications.get('cursor/update_todos')!({ todos: 'not-an-array' })).not.toThrow();
   });
 
   it('resolves to the cancelled outcome (never rejects) when questions entries are null', async () => {
