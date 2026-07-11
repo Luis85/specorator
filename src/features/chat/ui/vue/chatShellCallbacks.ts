@@ -1,3 +1,4 @@
+import type { ProviderId } from '../../../../core/providers/types';
 import type { TabBarItem, TabId } from '../../tabs/types';
 import type { ChatShellHeader } from './stores/chatShellStore';
 
@@ -37,4 +38,11 @@ export interface ChatShellCallbacks {
    *  the button only mounts when plugin.gitStatusWatcher exists (mirrors
    *  SpecoratorView.buildHeader). */
   mountGitActionHost: (el: HTMLElement) => void;
+  /** Resolves the active tab's navRowEl for 'input' tabBarPosition mode
+   *  (mirrors updateNavRowLocation's input-mode branch); null when there is
+   *  no active tab yet. */
+  resolveNavRowEl: (tabId: TabId | null) => HTMLElement | null;
+  /** Renders the per-provider logo SVG into the given host element (mirrors
+   *  SpecoratorView.syncHeaderLogo). */
+  renderProviderLogo: (el: HTMLElement, providerId: ProviderId) => void;
 }

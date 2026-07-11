@@ -1,7 +1,7 @@
 import { fireEvent, render } from '@testing-library/vue';
 import { createPinia, setActivePinia } from 'pinia';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { markRaw } from 'vue';
+import { markRaw, nextTick } from 'vue';
 
 import type { AgentPersona } from '@/features/agents/agentTypes';
 import type { TabBarItem } from '@/features/chat/tabs/types';
@@ -24,11 +24,13 @@ function item(id: string, overrides: Partial<TabBarItem> = {}): TabBarItem {
 function hdr(overrides: Partial<ChatShellHeader> = {}): ChatShellHeader {
   return {
     title: 'Specorator', boundAgent: null, activeProviderId: null,
-    tabBarVisible: false, metaRowVisible: false, ...overrides,
+    tabBarVisible: false, metaRowVisible: false,
+    tabBarPosition: 'input', logoProviderId: null, logoVisible: false,
+    ...overrides,
   };
 }
 
-function fakeCallbacks(): ChatShellCallbacks {
+function fakeCallbacks(overrides: Partial<ChatShellCallbacks> = {}): ChatShellCallbacks {
   return {
     subscribe: vi.fn(() => () => {}),
     onTabClick: vi.fn(),
@@ -43,6 +45,11 @@ function fakeCallbacks(): ChatShellCallbacks {
     mountHistoryHost: vi.fn(),
     mountWorkOrderHost: vi.fn(),
     mountGitActionHost: vi.fn(),
+    // Defaulting to null preserves the pre-6a in-place render for every
+    // existing test below: a null target disables the Teleport.
+    resolveNavRowEl: vi.fn(() => null),
+    renderProviderLogo: vi.fn(),
+    ...overrides,
   };
 }
 
@@ -179,5 +186,96 @@ describe('ChatHeader', () => {
     store.setHeader(hdr({ tabBarVisible: true }));
     await rerender({});
     expect(strip.style.display).not.toBe('none');
+  });
+
+  describe('dual-mode header layout (tabBarPosition)', () => {
+    it('header mode: TabStrip renders in the title slot; HeaderActions renders in the meta-row actions slot; the resolved nav-row element stays empty', () => {
+      const store = useChatShellStore();
+      store.setTabs([item('a', { isActive: true })]);
+      store.setHeader(hdr({ tabBarPosition: 'header', tabBarVisible: true }));
+      const navRow = document.createElement('div');
+      const cb = fakeCallbacks({ resolveNavRowEl: vi.fn(() => navRow) });
+      const { container } = mountHeader(cb);
+
+      const titleSlot = container.querySelector('.specorator-title-slot');
+      expect(titleSlot?.querySelector('.specorator-tab-badges')).toBeTruthy();
+
+      const actionsSlot = container.querySelector('.specorator-header-actions-slot');
+      expect(actionsSlot?.querySelector('.specorator-header-btn')).toBeTruthy();
+
+      // resolveNavRowEl is never consulted in header mode (headerMode forces disabled).
+      expect(navRow.childElementCount).toBe(0);
+    });
+
+    it("input mode: TabStrip + HeaderActions teleport into the resolved nav-row element, not the title slot / meta-row actions slot; the git host stays in the meta row", () => {
+      const store = useChatShellStore();
+      store.setTabs([item('a', { isActive: true })]);
+      store.setHeader(hdr({ tabBarPosition: 'input', tabBarVisible: true }));
+      const navA = document.createElement('div');
+      const cb = fakeCallbacks({ resolveNavRowEl: vi.fn(() => navA) });
+      const { container } = mountHeader(cb);
+
+      expect(navA.querySelector('.specorator-tab-badges')).toBeTruthy();
+      expect(navA.querySelector('.specorator-header-btn')).toBeTruthy();
+
+      const titleSlot = container.querySelector('.specorator-title-slot');
+      expect(titleSlot?.querySelector('.specorator-tab-badges')).toBeNull();
+
+      const actionsSlot = container.querySelector('.specorator-header-actions-slot');
+      expect(actionsSlot?.querySelector('.specorator-header-btn')).toBeNull();
+
+      expect(cb.mountGitActionHost).toHaveBeenCalledTimes(1);
+      const gitHost = (cb.mountGitActionHost as unknown as ReturnType<typeof vi.fn>).mock.calls[0][0] as HTMLElement;
+      expect(actionsSlot?.contains(gitHost)).toBe(true);
+    });
+
+    it('tab switch re-targets the Teleport: content moves from one nav row to the other', async () => {
+      const store = useChatShellStore();
+      store.setTabs([item('t1', { isActive: true }), item('t2')]);
+      store.setHeader(hdr({ tabBarPosition: 'input', tabBarVisible: true }));
+      store.setActiveTabId('t1');
+
+      const navA = document.createElement('div');
+      const navB = document.createElement('div');
+      const resolveNavRowEl = vi.fn((tabId: string | null) => {
+        if (tabId === 't1') return navA;
+        if (tabId === 't2') return navB;
+        return null;
+      });
+      const cb = fakeCallbacks({ resolveNavRowEl });
+      mountHeader(cb);
+
+      expect(navA.querySelector('.specorator-tab-badges')).toBeTruthy();
+      expect(navB.querySelector('.specorator-tab-badges')).toBeNull();
+
+      store.setActiveTabId('t2');
+      await nextTick();
+
+      expect(navA.querySelector('.specorator-tab-badges')).toBeNull();
+      expect(navB.querySelector('.specorator-tab-badges')).toBeTruthy();
+    });
+  });
+
+  describe('provider logo', () => {
+    it('ChatLogo receives logoProviderId and logoVisible from the header, and is visible when logoVisible is true', async () => {
+      const store = useChatShellStore();
+      store.setHeader(hdr({ logoProviderId: 'claude', logoVisible: true }));
+      const cb = fakeCallbacks();
+      const { container } = mountHeader(cb);
+      const logo = container.querySelector('.specorator-logo') as HTMLElement;
+      expect(logo).toBeTruthy();
+      expect(logo.style.display).not.toBe('none');
+      await nextTick();
+      expect(cb.renderProviderLogo).toHaveBeenCalledWith(logo, 'claude');
+    });
+
+    it('ChatLogo is hidden (display:none) when logoVisible is false', () => {
+      const store = useChatShellStore();
+      store.setHeader(hdr({ logoProviderId: 'claude', logoVisible: false }));
+      const cb = fakeCallbacks();
+      const { container } = mountHeader(cb);
+      const logo = container.querySelector('.specorator-logo') as HTMLElement;
+      expect(logo.style.display).toBe('none');
+    });
   });
 });

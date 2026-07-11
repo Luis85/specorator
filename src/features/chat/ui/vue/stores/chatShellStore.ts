@@ -23,10 +23,20 @@ export interface ChatShellHeader {
   /** Drives the meta-row show/hide (mirrors updateHeaderMetaRow: the row shows
    *  when EITHER the bound-agent chip OR the git-action slot has content). */
   metaRowVisible: boolean;
+  /** Mirrors settings.tabBarPosition: 'header' keeps badges + actions in the
+   *  header chrome; 'input' teleports both into the active tab's navRowEl
+   *  (see updateNavRowLocation). */
+  tabBarPosition: 'header' | 'input';
+  /** Provider whose logo renders in the title slot (mirrors syncHeaderLogo). */
+  logoProviderId: ProviderId | null;
+  /** Hides the logo when the tab strip is visible in header mode (mirrors the
+   *  hideBranding computation in updateNavRowLocation's header-mode branch). */
+  logoVisible: boolean;
 }
 
 const DEFAULT_HEADER: ChatShellHeader = Object.freeze({
   title: 'Specorator', boundAgent: null, activeProviderId: null, tabBarVisible: false, metaRowVisible: false,
+  tabBarPosition: 'input', logoProviderId: null, logoVisible: false,
 });
 
 /**

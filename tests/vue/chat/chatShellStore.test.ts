@@ -22,7 +22,10 @@ describe('useChatShellStore', () => {
     const store = useChatShellStore();
     expect(store.tabs).toEqual([]);
     expect(store.activeTabId).toBeNull();
-    expect(store.header).toEqual({ title: 'Specorator', boundAgent: null, activeProviderId: null, tabBarVisible: false, metaRowVisible: false });
+    expect(store.header).toEqual({
+      title: 'Specorator', boundAgent: null, activeProviderId: null, tabBarVisible: false, metaRowVisible: false,
+      tabBarPosition: 'input', logoProviderId: null, logoVisible: false,
+    });
   });
 
   it('setTabs replaces the array with a NEW reference (shallowRef watch fires)', () => {
@@ -35,7 +38,10 @@ describe('useChatShellStore', () => {
 
   it('setHeader merges the projected header chrome', () => {
     const store = useChatShellStore();
-    store.setHeader({ title: 'Fix bug', boundAgent: { name: 'Reviewer', persona: PERSONA }, activeProviderId: 'codex', tabBarVisible: true, metaRowVisible: true });
+    store.setHeader({
+      title: 'Fix bug', boundAgent: { name: 'Reviewer', persona: PERSONA }, activeProviderId: 'codex', tabBarVisible: true, metaRowVisible: true,
+      tabBarPosition: 'input', logoProviderId: null, logoVisible: false,
+    });
     expect(store.header.title).toBe('Fix bug');
     expect(store.header.boundAgent?.name).toBe('Reviewer');
     expect(store.header.tabBarVisible).toBe(true);
