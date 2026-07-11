@@ -1,7 +1,6 @@
-import { spawn } from 'child_process';
-import * as readline from 'readline';
-
+import { ProviderSettingsCoordinator } from '../../../core/providers/ProviderSettingsCoordinator';
 import type { ProviderCapabilities, ProviderId } from '../../../core/providers/types';
+import { buildUsageInfo } from '../../../core/providers/usage';
 import type { ChatRuntime } from '../../../core/runtime/ChatRuntime';
 import type { RuntimeHost } from '../../../core/runtime/RuntimeHost';
 import type {
@@ -15,45 +14,75 @@ import type {
 } from '../../../core/runtime/types';
 import type { ChatMessage, Conversation, SlashCommand, StreamChunk } from '../../../core/types';
 import type { PluginContext } from '../../../core/types/PluginContext';
+import { asSettingsBag } from '../../../core/types/settings';
+import { getVaultPath } from '../../../utils/path';
+import type { AcpJsonRpcTransport, AcpSubprocess } from '../../acp';
+import {
+  AcpClientConnection,
+  type AcpRequestPermissionRequest,
+  type AcpRequestPermissionResponse,
+  type AcpSessionNotification,
+  AcpSessionUpdateNormalizer,
+  AcpStreamChunkQueue,
+  buildAcpApprovalDecisionOptions,
+  buildAcpUsageInfo,
+  buildActiveTurnEffect,
+  mapApprovalDecision,
+  normalizeApprovalInput,
+  selectPermissionOption,
+} from '../../acp';
 import { CURSOR_PROVIDER_CAPABILITIES } from '../capabilities';
 import { encodeCursorTurn } from '../prompt/encodeCursorTurn';
 import { getCursorState, resolveCursorSessionId } from '../types';
-import { acquireCursorAgentSpawnLock } from './cursorAgentSpawnLock';
-import { buildCursorAnswerFollowUpPrompt } from './cursorAskUserQuestion';
+import { registerCursorAcpExtensions } from './cursorAcpExtensions';
+import { buildCursorAcpLaunchSpec, startCursorAcpProcess } from './cursorAcpLaunch';
+import { buildCursorAcpPromptBlocks } from './cursorAcpPrompt';
+import { resolveCursorAcpMode } from './cursorAcpSession';
+import { createCursorAcpToolStreamAdapter } from './cursorAcpToolNames';
+import { buildCursorAgentEnvironment } from './cursorAgentEnv';
+import { runWithCursorAgentSpawnLock } from './cursorAgentSpawnLock';
 import { cleanupStaleCursorMcpServer } from './cursorMcpCleanup';
-import { forceKillCursorProcessTree } from './cursorProcessKill';
-import {
-  awaitCursorExitCode,
-  resolveCursorQueryLaunch,
-  spawnCursorChild,
-} from './cursorQueryLaunch';
-import type { CursorQueryChunkTracker } from './cursorQueryLifecycle';
-import { finalizeCursorAgentStream, processCursorAgentNdjsonLines } from './cursorQueryProcessing';
+import { extractCursorUsage } from './cursorUsageMapping';
 
-const SIGKILL_TIMEOUT_MS = 3_000;
+interface ActiveTurn {
+  queue: AcpStreamChunkQueue;
+  sessionId: string;
+}
+
+const CURSOR_ACP_INIT_TIMEOUT_MS = 20_000;
+const CURSOR_OLD_CLI_MESSAGE =
+  'Cursor CLI does not support ACP (`agent acp`). Update cursor-agent (`cursor-agent update` or reinstall from cursor.com/cli), then retry.';
+const CURSOR_LOGIN_MESSAGE =
+  'Cursor CLI is not authenticated. Run `cursor-agent login` in a terminal, then retry.';
 
 export class CursorChatRuntime implements ChatRuntime {
   readonly providerId: ProviderId = 'cursor';
 
-  private plugin: PluginContext;
+  private activeTurn: ActiveTurn | null = null;
+  private autoApprovePermissions = false;
+  private connection: AcpClientConnection | null = null;
+  private currentModeId: string | null = null;
+  private currentTurnIsPlan = false;
+  private lastStartupErrorMessage: string | null = null;
+  private loadedSessionId: string | null = null;
+  private process: AcpSubprocess | null = null;
   private ready = false;
-  private readyListeners = new Set<(ready: boolean) => void>();
-  private canceled = false;
-  private child: ReturnType<typeof spawn> | null = null;
-  private lastSessionId: string | null = null;
-  private activeResumeId: string | null = null;
-  private turnMetadata: ChatTurnMetadata = {};
-  private readonly host: RuntimeHost;
-  private askUserQuestionAbortController: AbortController | null = null;
-  /** In-flight child termination, so a later cleanup() can await a cancel()-started kill. */
-  private pendingTermination: Promise<void> | null = null;
-  /** One-shot guard for the dropped-tool-library `~/.cursor/mcp.json` migration. */
+  private readonly readyListeners = new Set<(ready: boolean) => void>();
+  private sessionBootstrapNeeded = false;
+  private sessionId: string | null = null;
+  private sessionInvalidated = false;
+  private readonly sessionUpdateNormalizer = new AcpSessionUpdateNormalizer();
   private staleMcpCleaned = false;
+  private readonly toolStreamAdapter = createCursorAcpToolStreamAdapter();
+  private transport: AcpJsonRpcTransport | null = null;
+  private turnMetadata: ChatTurnMetadata = {};
+  private unregisterExtensions: (() => void) | null = null;
+  private unregisterTransportClose: (() => void) | null = null;
 
-  constructor(plugin: PluginContext, host: RuntimeHost) {
-    this.plugin = plugin;
-    this.host = host;
-  }
+  constructor(
+    private readonly plugin: PluginContext,
+    private readonly host: RuntimeHost,
+  ) {}
 
   getCapabilities(): Readonly<ProviderCapabilities> {
     return CURSOR_PROVIDER_CAPABILITIES;
@@ -79,25 +108,35 @@ export class CursorChatRuntime implements ChatRuntime {
   setResumeCheckpoint(_checkpointId: string | undefined): void {}
 
   syncConversationState(conversation: ChatRuntimeConversationState | null): void {
-    if (!conversation) {
-      this.activeResumeId = null;
-      return;
+    const nextSessionId = conversation ? resolveCursorSessionId(conversation) : null;
+    if (this.sessionId !== nextSessionId) {
+      this.sessionInvalidated = false;
+      this.sessionBootstrapNeeded = false;
     }
-    this.activeResumeId = resolveCursorSessionId(conversation);
+    this.sessionId = nextSessionId;
   }
 
   async reloadMcpServers(): Promise<void> {}
 
   async ensureReady(_options?: ChatRuntimeEnsureReadyOptions): Promise<boolean> {
     const cli = this.plugin.getResolvedProviderCliPath('cursor');
-    const nextReady = !!cli;
-    if (this.ready !== nextReady) {
-      this.ready = nextReady;
-      for (const listener of this.readyListeners) {
-        listener(nextReady);
-      }
+    if (!cli) {
+      this.setReady(false);
+      return false;
     }
-    return nextReady;
+
+    if (this.process?.isAlive() && this.transport && !this.transport.isClosed && this.connection) {
+      return true;
+    }
+
+    try {
+      await this.startProcess(cli);
+      return true;
+    } catch (error) {
+      this.setReady(false);
+      this.plugin.logger.scope('cursor.acp').warn('startup failed', error);
+      return false;
+    }
   }
 
   async *query(
@@ -106,9 +145,6 @@ export class CursorChatRuntime implements ChatRuntime {
     queryOptions?: ChatRuntimeQueryOptions,
   ): AsyncGenerator<StreamChunk> {
     this.turnMetadata = {};
-    this.canceled = false;
-    this.askUserQuestionAbortController?.abort();
-    this.askUserQuestionAbortController = new AbortController();
 
     const cli = this.plugin.getResolvedProviderCliPath('cursor');
     if (!cli) {
@@ -117,183 +153,105 @@ export class CursorChatRuntime implements ChatRuntime {
       return;
     }
 
-    const resumeId = this.activeResumeId;
-
-    yield {
-      type: 'user_message_start',
-      content: turn.persistedContent,
-    };
+    yield { type: 'user_message_start', content: turn.persistedContent };
     yield { type: 'assistant_message_start' };
 
-    const { workspaceDir, launch, env, isPlanTurn, cleanupPromptFile } = resolveCursorQueryLaunch({
-      plugin: this.plugin,
-      cli,
-      turn,
-      conversationHistory,
-      queryOptions,
-      resumeId,
-    });
-
-    // Migration: strip the dead loopback `specorator` entry older builds wrote to
-    // ~/.cursor/mcp.json (the HTTP tool server is gone). Once per runtime; never throws.
     if (!this.staleMcpCleaned) {
       this.staleMcpCleaned = true;
       await cleanupStaleCursorMcpServer();
     }
 
-    const releaseSpawnLock = await acquireCursorAgentSpawnLock();
-    let chunkTracker: CursorQueryChunkTracker;
-    try {
-      const spawned = spawnCursorChild(spawn, launch, env, workspaceDir);
-      const child = spawned.child;
-      this.child = child;
+    let startupError: string | null = null;
+    if (!(await this.ensureReady())) {
+      startupError = this.lastStartupErrorMessage ?? CURSOR_OLD_CLI_MESSAGE;
+    }
+    if (startupError || !this.connection) {
+      yield { type: 'error', content: startupError ?? 'Cursor ACP runtime is not ready.' };
+      yield { type: 'done' };
+      return;
+    }
 
-      const rl = readline.createInterface({ input: child.stdout! });
+    const cwd = getVaultPath(this.plugin.app) ?? process.cwd();
+    const sessionId = await this.ensureSession(cwd);
+    if (!sessionId) {
+      yield { type: 'error', content: this.lastStartupErrorMessage ?? 'Failed to open a Cursor session.' };
+      yield { type: 'done' };
+      return;
+    }
 
-      try {
-        async function* ndjsonLines(): AsyncGenerator<string> {
-          for await (const line of rl) {
-            yield line;
-          }
-        }
+    const mode = resolveCursorAcpMode(this.plugin.settings.permissionMode);
+    this.autoApprovePermissions = mode.autoApprove;
+    this.currentTurnIsPlan = mode.modeId === 'plan';
+    await this.applyMode(sessionId, mode.modeId);
 
-        const stream = processCursorAgentNdjsonLines(ndjsonLines(), {
-          askCallback: (input, signal) => this.host.askUser(input, signal),
-          askSignal: this.askUserQuestionAbortController?.signal,
-          isPlanTurn,
-          isCanceled: () => this.canceled,
-          onSessionId: (sessionId) => {
-            this.lastSessionId = sessionId;
-          },
-        });
+    this.activeTurn?.queue.close();
+    const activeTurn: ActiveTurn = { queue: new AcpStreamChunkQueue(), sessionId };
+    this.activeTurn = activeTurn;
+    this.sessionUpdateNormalizer.reset();
+    this.toolStreamAdapter.reset();
 
-        let next = await stream.next();
-        while (!next.done) {
-          yield next.value;
-          next = await stream.next();
-        }
-        chunkTracker = next.value;
-      } finally {
-        rl.close();
+    const history = this.sessionBootstrapNeeded ? (conversationHistory ?? []) : [];
+    this.sessionBootstrapNeeded = false;
+
+    const promptPromise = this.connection.prompt({
+      prompt: buildCursorAcpPromptBlocks(turn, history, queryOptions?.boundAgentPrompt),
+      sessionId,
+    }).then((response) => {
+      this.emitFinalUsage(activeTurn, response.usage ?? null, queryOptions);
+      if (this.currentTurnIsPlan) {
+        this.turnMetadata.planCompleted = true;
       }
+      activeTurn.queue.push({ type: 'done' });
+      activeTurn.queue.close();
+    }).catch((error) => {
+      activeTurn.queue.push({ type: 'error', content: this.formatRuntimeError(error) });
+      activeTurn.queue.push({ type: 'done' });
+      activeTurn.queue.close();
+    }).finally(() => {
+      if (this.activeTurn === activeTurn) {
+        this.activeTurn = null;
+      }
+    });
 
-      const exitCode = await awaitCursorExitCode(child, spawned.hadSpawnError);
-
-      this.child = null;
-      this.askUserQuestionAbortController?.abort();
-      this.askUserQuestionAbortController = null;
-
-      const { completionChunks, turnMetadata } = finalizeCursorAgentStream(
-        chunkTracker,
-        isPlanTurn,
-        {
-          canceled: this.canceled,
-          sawDone: chunkTracker.sawDone,
-          exitCode,
-          stderr: spawned.stderrText(),
-        },
-      );
-      yield* completionChunks;
-
-      this.applyCursorTurnResult(chunkTracker, turnMetadata);
+    try {
+      while (true) {
+        const chunk = await activeTurn.queue.next();
+        if (!chunk) {
+          break;
+        }
+        yield chunk;
+      }
+      await promptPromise;
     } finally {
-      cleanupPromptFile?.();
-      releaseSpawnLock();
-    }
-  }
-
-  /**
-   * Commits per-turn state after the stream drains: promote the new session id
-   * to the active resume id, merge plan/turn metadata, and stage any collected
-   * AskUserQuestion answers as an auto-resumed follow-up. The follow-up is
-   * skipped on cancel so a torn-down turn never auto-fires another query.
-   */
-  private applyCursorTurnResult(
-    chunkTracker: CursorQueryChunkTracker,
-    turnMetadata: ChatTurnMetadata,
-  ): void {
-    if (this.lastSessionId) {
-      this.activeResumeId = this.lastSessionId;
-    }
-
-    this.turnMetadata = { ...this.turnMetadata, ...turnMetadata };
-
-    if (chunkTracker.askUserAnswers.length > 0 && !this.canceled) {
-      this.turnMetadata.autoFollowUpText = buildCursorAnswerFollowUpPrompt(chunkTracker.askUserAnswers);
+      if (this.activeTurn === activeTurn) {
+        this.activeTurn = null;
+      }
     }
   }
 
   cancel(): void {
-    // Fire-and-forget mid-turn cancellation: tear the child down without making
-    // callers wait. cleanup() reuses the same termination flow but awaits exit.
-    void this.terminateChild();
-  }
-
-  /**
-   * Sends SIGTERM, escalates to SIGKILL if the child ignores it, and resolves
-   * once the child has actually exited. A hard give-up ceiling guarantees the
-   * promise can never hang teardown even if 'exit' never fires. Mirrors
-   * AcpSubprocess.shutdown() so provider switch/reinit can await child exit.
-   */
-  private terminateChild(): Promise<void> {
-    this.canceled = true;
-    this.askUserQuestionAbortController?.abort();
-    this.askUserQuestionAbortController = null;
-    const child = this.child;
-    if (!child || child.exitCode !== null) {
-      this.child = null;
-      // A termination may already be in flight from a prior cancel(); return it so
-      // cleanup() awaits the real child exit instead of resolving early (which would
-      // re-introduce the switch/reinit overlap this guards against).
-      return this.pendingTermination ?? Promise.resolve();
+    if (this.connection && this.sessionId) {
+      this.connection.cancel({ sessionId: this.sessionId });
     }
-    this.child = null;
-
-    const termination = new Promise<void>((resolve) => {
-      let settled = false;
-      const finish = () => {
-        if (settled) return;
-        settled = true;
-        window.clearTimeout(killTimer);
-        window.clearTimeout(giveUpTimer);
-        child.off('exit', onExit);
-        resolve();
-      };
-      const onExit = () => finish();
-      // Escalate if cursor-agent (or a descendant holding a pipe open) ignores
-      // SIGTERM, so cancel/teardown can't hang on child exit. On Windows this
-      // tree-kills via taskkill to also reap orphaned bash/git grandchildren.
-      const killTimer = window.setTimeout(() => {
-        if (child.exitCode === null && child.signalCode === null) {
-          forceKillCursorProcessTree(child);
-        }
-      }, SIGKILL_TIMEOUT_MS);
-      // Hard ceiling: never let teardown hang if 'exit' never fires.
-      const giveUpTimer = window.setTimeout(finish, SIGKILL_TIMEOUT_MS * 2);
-
-      child.once('exit', onExit);
-      try {
-        child.kill('SIGTERM');
-      } catch {
-        // Process already gone between the guard and the kill — nothing to await.
-        finish();
-      }
-    });
-    this.pendingTermination = termination;
-    return termination;
+    this.host.dismissApproval();
   }
 
   resetSession(): void {
-    this.lastSessionId = null;
-    this.activeResumeId = null;
+    this.sessionId = null;
+    this.loadedSessionId = null;
+    this.sessionInvalidated = false;
+    this.sessionBootstrapNeeded = false;
+    this.currentModeId = null;
   }
 
   getSessionId(): string | null {
-    return this.lastSessionId;
+    return this.sessionId;
   }
 
   consumeSessionInvalidation(): boolean {
-    return false;
+    const invalidated = this.sessionInvalidated;
+    this.sessionInvalidated = false;
+    return invalidated;
   }
 
   isReady(): boolean {
@@ -305,9 +263,9 @@ export class CursorChatRuntime implements ChatRuntime {
   }
 
   async cleanup(): Promise<void> {
-    // Await the child's actual exit so provider switch/reinit never overlaps the
-    // outgoing CLI process with a freshly constructed replacement runtime.
-    await this.terminateChild();
+    this.activeTurn?.queue.close();
+    this.activeTurn = null;
+    await this.shutdownProcess();
     this.readyListeners.clear();
   }
 
@@ -318,16 +276,11 @@ export class CursorChatRuntime implements ChatRuntime {
     conversation: Conversation | null;
     sessionInvalidated: boolean;
   }): SessionUpdateResult {
-    if (params.sessionInvalidated && params.conversation) {
-      return {
-        updates: {
-          sessionId: null,
-          providerState: undefined,
-        },
-      };
+    if (params.sessionInvalidated && params.conversation && !this.sessionId) {
+      return { updates: { sessionId: null, providerState: undefined } };
     }
 
-    const sid = this.lastSessionId;
+    const sid = this.sessionId;
     const existing = params.conversation ? getCursorState(params.conversation.providerState) : {};
     const providerState: Record<string, unknown> = { ...existing };
     if (sid) {
@@ -346,4 +299,292 @@ export class CursorChatRuntime implements ChatRuntime {
     return null;
   }
 
+  private async startProcess(cliPath: string): Promise<void> {
+    await this.shutdownProcess();
+    this.lastStartupErrorMessage = null;
+
+    const cwd = getVaultPath(this.plugin.app) ?? process.cwd();
+    const env = buildCursorAgentEnvironment(this.plugin, cliPath);
+    const spec = buildCursorAcpLaunchSpec(cliPath, cwd, env);
+
+    // The spawn lock guards ~/.cursor/cli-config.json contention (Windows
+    // EPERM under concurrent spawns) — now once per session, not per turn.
+    const { process: proc, transport } = await runWithCursorAgentSpawnLock(
+      async () => startCursorAcpProcess(spec),
+    );
+    this.process = proc;
+    this.transport = transport;
+    this.unregisterTransportClose = transport.onClose(() => {
+      if (this.transport === transport) {
+        this.setReady(false);
+        this.activeTurn?.queue.push({
+          type: 'error',
+          content: this.formatRuntimeError(new Error('Cursor ACP process exited unexpectedly.')),
+        });
+        this.activeTurn?.queue.push({ type: 'done' });
+        this.activeTurn?.queue.close();
+      }
+    });
+
+    this.connection = new AcpClientConnection({
+      clientInfo: { name: 'specorator', version: this.plugin.manifest?.version ?? '0.0.0' },
+      delegate: {
+        onSessionNotification: (notification) => this.handleSessionNotification(notification),
+        requestPermission: (request) => this.handlePermissionRequest(request),
+      },
+      transport,
+    });
+    this.unregisterExtensions = registerCursorAcpExtensions(transport, {
+      askUser: this.host.askUser,
+      emitChunk: (chunk) => this.activeTurn?.queue.push(chunk),
+      patchTurnMetadata: (patch) => Object.assign(this.turnMetadata, patch),
+    });
+
+    transport.start();
+    try {
+      await withTimeout(
+        this.connection.initialize(),
+        CURSOR_ACP_INIT_TIMEOUT_MS,
+        new Error('ACP initialize timed out'),
+      );
+    } catch (error) {
+      this.lastStartupErrorMessage = this.describeStartupFailure(error);
+      await this.shutdownProcess();
+      throw error;
+    }
+    this.setReady(true);
+  }
+
+  private describeStartupFailure(_error: unknown): string {
+    // Any failure before initialize resolves — immediate exit ("unknown
+    // subcommand"), closed transport, or timeout — means the installed
+    // cursor-agent predates ACP. One actionable message covers them all.
+    const stderr = this.process?.getStderrSnapshot() ?? '';
+    return stderr ? `${CURSOR_OLD_CLI_MESSAGE}\n\n${stderr}` : CURSOR_OLD_CLI_MESSAGE;
+  }
+
+  private async ensureSession(cwd: string): Promise<string | null> {
+    if (!this.connection) {
+      return null;
+    }
+    if (this.sessionId && this.loadedSessionId === this.sessionId) {
+      return this.sessionId;
+    }
+
+    if (this.sessionId) {
+      try {
+        const response = await this.connection.loadSession({
+          cwd,
+          mcpServers: [],
+          sessionId: this.sessionId,
+        });
+        this.loadedSessionId = response.sessionId;
+        this.sessionId = response.sessionId;
+        return response.sessionId;
+      } catch (error) {
+        // Load-bearing no-spike fallback: an id-mapping mismatch degrades to a
+        // fresh session with history re-injected on the next prompt.
+        this.plugin.logger.scope('cursor.acp').warn('session/load failed; falling back to new session', error);
+        this.sessionInvalidated = true;
+        this.sessionBootstrapNeeded = true;
+        this.sessionId = null;
+        this.loadedSessionId = null;
+      }
+    }
+
+    return this.createSession(cwd);
+  }
+
+  private async createSession(cwd: string): Promise<string | null> {
+    if (!this.connection) {
+      return null;
+    }
+    try {
+      const response = await this.connection.newSession({ cwd, mcpServers: [] });
+      this.loadedSessionId = response.sessionId;
+      this.sessionId = response.sessionId;
+      return response.sessionId;
+    } catch (error) {
+      if (await this.tryAuthenticate()) {
+        try {
+          const response = await this.connection.newSession({ cwd, mcpServers: [] });
+          this.loadedSessionId = response.sessionId;
+          this.sessionId = response.sessionId;
+          return response.sessionId;
+        } catch (retryError) {
+          this.lastStartupErrorMessage = this.formatRuntimeError(retryError);
+          return null;
+        }
+      }
+      this.lastStartupErrorMessage = CURSOR_LOGIN_MESSAGE + '\n\n' + this.formatRuntimeError(error);
+      return null;
+    }
+  }
+
+  private async tryAuthenticate(): Promise<boolean> {
+    if (!this.connection) {
+      return false;
+    }
+    try {
+      await this.connection.authenticate({ methodId: 'cursor_login' });
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  private async applyMode(sessionId: string, modeId: string): Promise<void> {
+    if (!this.connection || this.currentModeId === modeId) {
+      return;
+    }
+    try {
+      await this.connection.setMode({ modeId, sessionId });
+      this.currentModeId = modeId;
+    } catch (error) {
+      // Mode setting is best-effort: an agent that rejects setMode still runs
+      // the turn in its default mode; approvals remain client-enforced.
+      this.plugin.logger.scope('cursor.acp').warn('setMode failed', error);
+    }
+  }
+
+  private async handleSessionNotification(notification: AcpSessionNotification): Promise<void> {
+    if (!this.activeTurn || notification.sessionId !== this.activeTurn.sessionId) {
+      return;
+    }
+    const normalized = this.sessionUpdateNormalizer.normalize(notification.update);
+    if (
+      normalized.type !== 'message_chunk'
+      && normalized.type !== 'tool_call'
+      && normalized.type !== 'tool_call_update'
+      && normalized.type !== 'usage'
+    ) {
+      return;
+    }
+
+    const effect = buildActiveTurnEffect(normalized, {
+      promptUsage: null,
+      resolveUsageModel: () => this.resolveActiveModel() ?? 'cursor',
+      sessionId: notification.sessionId,
+      toolStreamAdapter: this.toolStreamAdapter,
+    });
+    if (effect.metadataPatch) {
+      Object.assign(this.turnMetadata, effect.metadataPatch);
+    }
+    for (const chunk of effect.chunks) {
+      this.activeTurn.queue.push(chunk);
+    }
+  }
+
+  private async handlePermissionRequest(
+    request: AcpRequestPermissionRequest,
+  ): Promise<AcpRequestPermissionResponse> {
+    if (this.autoApprovePermissions) {
+      const auto = selectPermissionOption(request.options, ['allow_always', 'allow_once']);
+      if (auto.outcome.outcome === 'selected') {
+        return auto;
+      }
+    }
+
+    const input = normalizeApprovalInput(request.toolCall.rawInput);
+    const decision = await this.host.approval(
+      request.toolCall.title ?? 'tool',
+      input,
+      request.toolCall.title ?? '',
+      { decisionOptions: buildAcpApprovalDecisionOptions(request.options) },
+    );
+    return mapApprovalDecision(decision, request.options);
+  }
+
+  private emitFinalUsage(
+    activeTurn: ActiveTurn,
+    promptUsage: Parameters<typeof buildAcpUsageInfo>[0]['promptUsage'],
+    queryOptions?: ChatRuntimeQueryOptions,
+  ): void {
+    const model = this.resolveActiveModel(queryOptions);
+    if (!model) {
+      return; // usage contract: never emit without a model
+    }
+
+    const acpUsage = buildAcpUsageInfo({ contextWindow: null, model, promptUsage });
+    if (acpUsage) {
+      activeTurn.queue.push({ sessionId: activeTurn.sessionId, type: 'usage', usage: acpUsage });
+      return;
+    }
+
+    // No ACP usage payload: fall back to the model-window catalog (same
+    // zero-token window shape the stream-json path emitted without usage data).
+    // Routed through buildUsageInfo so the emitted shape stays contract-clean
+    // (floors, clamps, computed percentage) rather than a hand-built object.
+    const fallback = extractCursorUsage({}, model);
+    activeTurn.queue.push({
+      sessionId: activeTurn.sessionId,
+      type: 'usage',
+      usage: buildUsageInfo({
+        model,
+        inputTokens: fallback.inputTokens,
+        ...(fallback.outputTokens !== undefined ? { outputTokens: fallback.outputTokens } : {}),
+        ...(fallback.cacheReadInputTokens !== undefined
+          ? { cacheReadInputTokens: fallback.cacheReadInputTokens }
+          : {}),
+        contextTokens: fallback.contextTokens,
+        contextWindow: fallback.contextWindow,
+        contextWindowIsAuthoritative: fallback.contextWindowIsAuthoritative,
+      }),
+    });
+  }
+
+  private resolveActiveModel(queryOptions?: ChatRuntimeQueryOptions): string | null {
+    if (typeof queryOptions?.model === 'string' && queryOptions.model.trim()) {
+      return queryOptions.model.trim();
+    }
+    const snapshot = ProviderSettingsCoordinator.getProviderSettingsSnapshot(
+      asSettingsBag(this.plugin.settings),
+      'cursor',
+    );
+    return typeof snapshot.model === 'string' && snapshot.model.trim() ? snapshot.model.trim() : null;
+  }
+
+  private formatRuntimeError(error: unknown): string {
+    const baseMessage = error instanceof Error ? error.message : 'Cursor ACP request failed';
+    const stderr = this.process?.getStderrSnapshot();
+    return stderr ? `${baseMessage}\n\n${stderr}` : baseMessage;
+  }
+
+  private setReady(ready: boolean): void {
+    if (this.ready === ready) {
+      return;
+    }
+    this.ready = ready;
+    for (const listener of this.readyListeners) {
+      listener(ready);
+    }
+  }
+
+  private async shutdownProcess(): Promise<void> {
+    this.setReady(false);
+    this.unregisterExtensions?.();
+    this.unregisterExtensions = null;
+    this.unregisterTransportClose?.();
+    this.unregisterTransportClose = null;
+    this.connection?.dispose();
+    this.connection = null;
+    this.transport?.dispose();
+    this.transport = null;
+    if (this.process) {
+      await this.process.shutdown().catch(() => {}); // best-effort
+      this.process = null;
+    }
+    this.loadedSessionId = null;
+    this.currentModeId = null;
+  }
+}
+
+function withTimeout<T>(promise: Promise<T>, ms: number, timeoutError: Error): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const timer = window.setTimeout(() => reject(timeoutError), ms);
+    promise.then(
+      (value) => { window.clearTimeout(timer); resolve(value); },
+      (error) => { window.clearTimeout(timer); reject(error); },
+    );
+  });
 }
