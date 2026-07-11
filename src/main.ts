@@ -151,8 +151,8 @@ export default class SpecoratorPlugin extends Plugin implements PluginContext {
     this.lifecycle = new PluginLifecycle(this);
     // installGitWatcher is light (object construction + 4 event registrations,
     // no IO until first subscriber attaches) but view restoration reads
-    // `gitStatusWatcher` synchronously in `buildHeader`, so it stays here to
-    // keep the git button wired on a restored leaf.
+    // `gitStatusWatcher` synchronously in the chat shell's mountGitActionHost, so
+    // it stays here to keep the git button wired on a restored leaf.
     this.lifecycle.installGitWatcher();
 
     this.viewActivator = new PluginViewActivator(this);

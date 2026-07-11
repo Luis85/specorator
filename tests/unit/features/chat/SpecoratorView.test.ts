@@ -13,120 +13,87 @@ jest.mock('@/features/chat/utils/editedFiles', () => ({
 
 const MockScope = Scope as typeof Scope & { instances: Scope[] };
 
-function createViewHarness(options: {
-  canCreateTab: boolean;
+// Builds a prototype-only view wired just enough to exercise the header
+// projection (projectChatShellHeader) that replaced the imperative tab-bar /
+// nav-row DOM writes at the Vue cutover. The Vue components render off this
+// projection, so the show/hide rules live here now.
+function projectionHarness(options: {
   tabBarPosition?: 'input' | 'header';
-  tabCount?: number;
+  chatCount?: number;
+  totalCount?: number;
   activeTabKind?: 'chat' | 'work-order';
-}): {
-  newTabButtonEl: ReturnType<typeof createMockEl>;
-  view: any;
-} {
-  const newTabButtonEl = createMockEl();
+  hasGit?: boolean;
+}): any {
   const view = Object.create(SpecoratorView.prototype) as any;
-
+  const activeTab = options.activeTabKind
+    ? { id: 't1', kind: options.activeTabKind, conversationId: 'c1' }
+    : null;
   view.plugin = {
-    settings: {
-      tabBarPosition: options.tabBarPosition ?? 'input',
-    },
+    settings: { tabBarPosition: options.tabBarPosition ?? 'input' },
+    // getTabProviderId / getTabTitle read the conversation snapshot.
+    getConversationSync: () => ({ providerId: 'claude', title: 'Session' }),
   };
   view.tabManager = {
-    canCreateTab: jest.fn().mockReturnValue(options.canCreateTab),
-    getTabCount: jest.fn().mockReturnValue(options.tabCount ?? 1),
-    countTabsByKind: jest.fn().mockReturnValue(options.tabCount ?? 1),
-    getActiveTab: jest.fn().mockReturnValue(
-      options.activeTabKind ? { kind: options.activeTabKind } : null,
-    ),
+    getActiveTab: () => activeTab,
+    countTabsByKind: (kind: string) => (kind === 'chat' ? options.chatCount ?? 0 : 0),
+    getTabCount: () => options.totalCount ?? options.chatCount ?? 0,
   };
-  view.tabBarContainerEl = createMockEl();
-  view.logoEl = createMockEl();
-  view.titleTextEl = createMockEl();
-  view.newTabButtonEl = newTabButtonEl;
-
-  return { newTabButtonEl, view };
+  view.gitActionButton = options.hasGit ? {} : null;
+  view.cachedBoundAgent = null;
+  view.cachedBoundAgentConversationId = null;
+  return view;
 }
 
-describe('SpecoratorView tab controls', () => {
-  it('creates the git action in the header actions instead of the input nav content', () => {
-    const view = Object.create(SpecoratorView.prototype) as any;
-    view.containerEl = createMockEl();
-    view.containerEl.ownerDocument.createDocumentFragment = () => createMockEl('fragment');
-    view.plugin = {
-      gitStatusWatcher: {
-        subscribe: jest.fn(() => jest.fn()),
-      },
-      settings: {},
-    };
-    view.tabManager = {
-      getActiveTab: jest.fn().mockReturnValue(null),
-    };
-    view.syncHeaderLogo = jest.fn();
-    const header = createMockEl();
-    view.buildHeader(header);
-
-    const navContent = view.buildNavRowContent();
-
-    expect(view.headerActionsEl.querySelector('.specorator-git-action')).not.toBeNull();
-    expect(navContent.querySelector('.specorator-git-action')).toBeNull();
-  });
-
-  it('hides the new-tab button when the tab manager is at capacity', () => {
-    const { newTabButtonEl, view } = createViewHarness({ canCreateTab: false });
-
-    view.refreshTabControls();
-
-    expect(newTabButtonEl.hasClass('specorator-hidden')).toBe(true);
-    expect(newTabButtonEl.getAttribute('aria-disabled')).toBe('true');
-    expect(newTabButtonEl.getAttribute('aria-hidden')).toBe('true');
-  });
-
-  it('shows the new-tab button when another tab can be created', () => {
-    const { newTabButtonEl, view } = createViewHarness({ canCreateTab: true });
-    newTabButtonEl.addClass('specorator-hidden');
-    newTabButtonEl.setAttribute('aria-disabled', 'true');
-    newTabButtonEl.setAttribute('aria-hidden', 'true');
-
-    view.refreshTabControls();
-
-    expect(newTabButtonEl.hasClass('specorator-hidden')).toBe(false);
-    expect(newTabButtonEl.getAttribute('aria-disabled')).toBeNull();
-    expect(newTabButtonEl.getAttribute('aria-hidden')).toBeNull();
-  });
-
+describe('SpecoratorView.projectChatShellHeader', () => {
   it('hides the tab bar with a single chat tab', () => {
-    const { view } = createViewHarness({ canCreateTab: true, tabCount: 1 });
-
-    view.updateTabBarVisibility();
-
-    expect(view.tabBarContainerEl.hasClass('specorator-hidden')).toBe(true);
+    expect(projectionHarness({ chatCount: 1 }).projectChatShellHeader().tabBarVisible).toBe(false);
   });
 
   it('shows the tab bar with two or more chat tabs', () => {
-    const { view } = createViewHarness({ canCreateTab: true, tabCount: 2 });
-
-    view.updateTabBarVisibility();
-
-    expect(view.tabBarContainerEl.hasClass('specorator-hidden')).toBe(false);
+    expect(projectionHarness({ chatCount: 2 }).projectChatShellHeader().tabBarVisible).toBe(true);
   });
 
   it('shows the tab bar when a work-order tab is active so a single chat tab stays reachable', () => {
     // One chat tab + a hidden, active work-order tab: without surfacing the bar
     // the user has no visible control to return to their only chat tab.
-    const { view } = createViewHarness({ canCreateTab: true, tabCount: 1, activeTabKind: 'work-order' });
-
-    view.updateTabBarVisibility();
-
-    expect(view.tabBarContainerEl.hasClass('specorator-hidden')).toBe(false);
+    const header = projectionHarness({ chatCount: 1, totalCount: 2, activeTabKind: 'work-order' })
+      .projectChatShellHeader();
+    expect(header.tabBarVisible).toBe(true);
   });
 
   it('keeps the tab bar hidden when a work-order tab is active but no chat tab remains', () => {
-    // Nothing to return to and work-order badges are omitted from the bar, so
-    // surfacing an empty bar would add no escape path.
-    const { view } = createViewHarness({ canCreateTab: true, tabCount: 0, activeTabKind: 'work-order' });
+    const header = projectionHarness({ chatCount: 0, totalCount: 1, activeTabKind: 'work-order' })
+      .projectChatShellHeader();
+    expect(header.tabBarVisible).toBe(false);
+  });
 
-    view.updateTabBarVisibility();
+  it('hides the logo only when the strip is visible in header mode', () => {
+    // header mode + strip visible → branding yields to the badges.
+    expect(
+      projectionHarness({ chatCount: 2, tabBarPosition: 'header' }).projectChatShellHeader().logoVisible,
+    ).toBe(false);
+    // input mode keeps the logo even with the strip visible (badges live in the nav row).
+    expect(
+      projectionHarness({ chatCount: 2, tabBarPosition: 'input' }).projectChatShellHeader().logoVisible,
+    ).toBe(true);
+  });
 
-    expect(view.tabBarContainerEl.hasClass('specorator-hidden')).toBe(true);
+  it('shows the meta row in header mode (the action cluster lives there) and, in input mode, only for a git action', () => {
+    // header mode with tabs → cluster is in the meta row → row shows.
+    expect(
+      projectionHarness({ chatCount: 1, totalCount: 1, activeTabKind: 'chat', tabBarPosition: 'header' })
+        .projectChatShellHeader().metaRowVisible,
+    ).toBe(true);
+    // input mode, no git, no bound agent → row collapses.
+    expect(
+      projectionHarness({ chatCount: 1, totalCount: 1, activeTabKind: 'chat', tabBarPosition: 'input' })
+        .projectChatShellHeader().metaRowVisible,
+    ).toBe(false);
+    // input mode with the git button present → row shows.
+    expect(
+      projectionHarness({ chatCount: 1, totalCount: 1, activeTabKind: 'chat', tabBarPosition: 'input', hasGit: true })
+        .projectChatShellHeader().metaRowVisible,
+    ).toBe(true);
   });
 });
 
@@ -916,65 +883,6 @@ describe('SpecoratorView.startTaskRunInFreshTab — stream buffering', () => {
   });
 });
 
-
-describe('SpecoratorView work-order activity', () => {
-  it('mounts an activity slot beside Quick Actions', () => {
-    const view = Object.create(SpecoratorView.prototype) as any;
-    view.containerEl = createMockEl();
-    view.containerEl.ownerDocument.createDocumentFragment = () => createMockEl('fragment');
-    view.plugin = {
-      gitStatusWatcher: null,
-      vaultSkillAggregator: null,
-      settings: {},
-      workOrderActivity: {
-        getSummary: () => ({ items: [], closableTabs: [], runningCount: 0, attentionCount: 0 }),
-        subscribe: jest.fn(() => jest.fn()),
-        openItem: jest.fn(),
-        closeTab: jest.fn(),
-      },
-    };
-    view.tabManager = { getActiveTab: jest.fn(() => null) };
-    view.syncHeaderLogo = jest.fn();
-    view.buildHeader(createMockEl());
-
-    const navContent = view.buildNavRowContent();
-
-    expect(navContent.querySelector('.specorator-work-order-activity-slot')).not.toBeNull();
-  });
-
-  it('places the work-order activity slot before quick actions in the header row', () => {
-    const view = Object.create(SpecoratorView.prototype) as any;
-    view.containerEl = createMockEl();
-    view.containerEl.ownerDocument.createDocumentFragment = () => createMockEl('fragment');
-    view.plugin = {
-      gitStatusWatcher: null,
-      vaultSkillAggregator: null,
-      settings: {},
-      workOrderActivity: {
-        getSummary: () => ({ items: [], closableTabs: [], runningCount: 0, attentionCount: 0 }),
-        subscribe: jest.fn(() => jest.fn()),
-        openItem: jest.fn(),
-        closeTab: jest.fn(),
-      },
-    };
-    view.tabManager = { getActiveTab: jest.fn(() => null) };
-    view.syncHeaderLogo = jest.fn();
-    view.buildHeader(createMockEl());
-    view.buildNavRowContent();
-
-    const actions = view.headerActionsContent;
-    const slotIndex = actions._children.findIndex((c: any) =>
-      c.hasClass('specorator-work-order-activity-slot'),
-    );
-    const quickIndex = actions._children.findIndex((c: any) =>
-      c.hasClass('specorator-header-btn') && !c.hasClass('specorator-new-tab-btn'),
-    );
-
-    expect(slotIndex).toBeGreaterThanOrEqual(0);
-    expect(quickIndex).toBeGreaterThanOrEqual(0);
-    expect(slotIndex).toBeLessThan(quickIndex);
-  });
-});
 
 describe('SpecoratorView applyEditedFilesSetting', () => {
   function viewWithTab(showAgentEditedFiles?: boolean): { view: any; state: ChatState } {
