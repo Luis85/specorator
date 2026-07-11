@@ -1,12 +1,21 @@
 ---
 title: Cursor SDK integration — implementation plan
 date: 2026-07-11
-status: draft
+status: rejected
 scope: cursor-sdk-migration
 spec: "[[2026-07-11-cursor-sdk-integration-design]]"
 ---
 
 # Cursor SDK Integration Implementation Plan
+
+> **OUTCOME (2026-07-11): NOT EXECUTED — rejected at Task 1.** The real esbuild
+> build proved `@cursor/sdk` cannot be embedded in this single-file
+> Electron-renderer plugin (webpack code-split dynamic chunk loader → 18.6 MB
+> bundle + 38 renderer-unsafe timer calls; the SDK runs its whole harness
+> in-process, unlike the out-of-process CLIs Claude/Codex wrap). Only Task 1
+> (add dependency) ran, and it was reverted. Decision: keep the `cursor-agent`
+> CLI and harden it. See the design doc's OUTCOME banner for the full rationale.
+> This plan is retained as a record of the intended approach.
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 

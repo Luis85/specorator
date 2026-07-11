@@ -1,12 +1,33 @@
 ---
 title: Cursor SDK integration — design
 date: 2026-07-11
-status: draft
+status: rejected
 scope: cursor-sdk-migration
 parent: "[[Multi Provider Support]]"
 ---
 
 # Cursor SDK integration — design
+
+> **OUTCOME (2026-07-11): REJECTED — do not implement. Kept as a record of the
+> evaluation.** During implementation Task 1, a real esbuild build proved
+> `@cursor/sdk` cannot be embedded in this plugin:
+> - Both its CJS and ESM builds are **webpack code-split** (20+ numbered runtime
+>   chunks loaded via a *computed* `require("./" + chunkFn())`). esbuild resolves
+>   that by globbing the whole package directory, which pulls in type-declaration
+>   files that re-export from non-existent runtime siblings. It only bundles at
+>   all after neutralizing those files — producing an **18.6 MB `main.js`** (6× the
+>   current bundle, inlining statsig/opentelemetry/connectrpc cloud code) with
+>   **38 renderer-unsafe `.unref()` timer calls** the Electron-realm guard can't patch.
+> - Unlike Claude's and Codex's SDKs (thin wrappers that spawn a **separate**
+>   user-installed CLI), `@cursor/sdk` runs its **entire agent harness in-process**,
+>   in Obsidian's Electron renderer — a hostile host for it — and has no
+>   "use my installed `cursor-agent`" mode. Running it in a child process would
+>   just recreate the `cursor-agent` CLI with more moving parts.
+>
+> **Decision:** keep the existing `cursor-agent` CLI integration and harden its
+> fragility at the root instead. See `docs/superpowers/plans/2026-05-30-cursor-integration-hardening.md`.
+> The verified SDK API facts below remain accurate and useful should Cursor later
+> ship a bundler-friendly / out-of-process SDK.
 
 ## Problem
 
