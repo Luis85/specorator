@@ -5,6 +5,10 @@ import type { AcpJsonRpcTransport } from '../../acp';
 
 export interface CursorAcpExtensionHost {
   askUser: AskUserQuestionCallback;
+  // Signal for the in-flight turn's blocking ask_question await. When the turn
+  // is canceled the runtime aborts it, so an otherwise-unbounded askUser await
+  // unblocks and the RPC gets answered (dismissed) instead of hanging.
+  getAskSignal?: () => AbortSignal | undefined;
   emitChunk: (chunk: StreamChunk) => void;
   patchTurnMetadata: (patch: Partial<ChatTurnMetadata>) => void;
 }
@@ -32,6 +36,13 @@ interface CursorAskQuestionParams {
 
 function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : 'Unknown error';
+}
+
+function isAbortError(error: unknown, signal?: AbortSignal): boolean {
+  if (signal?.aborted) {
+    return true;
+  }
+  return error instanceof Error && error.name === 'AbortError';
 }
 
 /**
@@ -89,11 +100,17 @@ export function registerCursorAcpExtensions(
     try {
       const parsed = (params ?? {}) as CursorAskQuestionParams;
       const askInput = buildAskUserInput(parsed);
+      const signal = host.getAskSignal?.();
 
       let answers: Record<string, string | string[]> | null;
       try {
-        answers = await host.askUser(askInput);
+        answers = await host.askUser(askInput, signal);
       } catch (error) {
+        // A cancel aborts the await: answer the RPC as a dismissal rather than
+        // surfacing the AbortError as a turn failure, so the agent unblocks.
+        if (isAbortError(error, signal)) {
+          return { rejected: true, reason: 'Question dismissed by user' };
+        }
         return { rejected: true, reason: `Failed to get user answers: ${errorMessage(error)}` };
       }
 

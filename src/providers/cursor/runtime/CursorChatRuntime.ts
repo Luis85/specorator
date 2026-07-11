@@ -62,6 +62,9 @@ export class CursorChatRuntime implements ChatRuntime {
   readonly providerId: ProviderId = 'cursor';
 
   private activeTurn: ActiveTurn | null = null;
+  // Aborts a pending blocking cursor/ask_question await so cancel()/cleanup can
+  // answer the still-open RPC instead of leaving the agent stuck on it.
+  private askQuestionAbortController: AbortController | null = null;
   private autoApprovePermissions = false;
   private connection: AcpClientConnection | null = null;
   private currentModeId: string | null = null;
@@ -118,6 +121,11 @@ export class CursorChatRuntime implements ChatRuntime {
       this.sessionInvalidated = false;
       this.sessionBootstrapNeeded = false;
       this.currentSessionModelId = null;
+      // The next session has no mode/model applied yet; clearing the caches
+      // forces applyMode/applySelectedModel to re-issue set_mode/set_config for
+      // it. Without the mode reset, a plan-mode UI can early-return against a
+      // stale cache and silently run the new session on the agent's default.
+      this.currentModeId = null;
     }
     this.sessionId = nextSessionId;
   }
@@ -151,6 +159,10 @@ export class CursorChatRuntime implements ChatRuntime {
     queryOptions?: ChatRuntimeQueryOptions,
   ): AsyncGenerator<StreamChunk> {
     this.turnMetadata = {};
+    // Fresh per-turn abort scope for the blocking ask_question RPC; aborting a
+    // controller left over from a prior turn is a no-op for this turn's await.
+    this.askQuestionAbortController?.abort();
+    this.askQuestionAbortController = new AbortController();
 
     const cli = this.plugin.getResolvedProviderCliPath('cursor');
     if (!cli) {
@@ -247,6 +259,10 @@ export class CursorChatRuntime implements ChatRuntime {
     if (this.connection && this.sessionId) {
       this.connection.cancel({ sessionId: this.sessionId });
     }
+    // A blocking cursor/ask_question awaits host.askUser with no other exit;
+    // aborting answers the open RPC so the agent isn't left hanging on cancel.
+    this.askQuestionAbortController?.abort();
+    this.askQuestionAbortController = new AbortController();
     this.host.dismissApproval();
   }
 
@@ -280,6 +296,9 @@ export class CursorChatRuntime implements ChatRuntime {
   async cleanup(): Promise<void> {
     this.activeTurn?.queue.close();
     this.activeTurn = null;
+    // Resolve any pending blocking ask_question before tearing down the process.
+    this.askQuestionAbortController?.abort();
+    this.askQuestionAbortController = null;
     await this.shutdownProcess();
     this.readyListeners.clear();
   }
@@ -351,6 +370,7 @@ export class CursorChatRuntime implements ChatRuntime {
     });
     this.unregisterExtensions = registerCursorAcpExtensions(transport, {
       askUser: this.host.askUser,
+      getAskSignal: () => this.askQuestionAbortController?.signal,
       emitChunk: (chunk) => {
         // cursor/create_plan delivers plan text through this side channel rather
         // than a session notification, so mark it as assistant content for the
@@ -426,8 +446,10 @@ export class CursorChatRuntime implements ChatRuntime {
       const response = await this.connection.newSession({ cwd, mcpServers: [] });
       this.loadedSessionId = response.sessionId;
       this.sessionId = response.sessionId;
-      // A fresh session starts on the agent's default model, so drop any tracked
-      // selection to force applySelectedModel to reapply it for this turn.
+      // A fresh session starts on the agent's default model and mode, so drop any
+      // tracked selection to force applyMode/applySelectedModel to reapply for
+      // this turn.
+      this.currentModeId = null;
       this.currentSessionModelId = null;
       return response.sessionId;
     } catch (error) {
@@ -436,6 +458,7 @@ export class CursorChatRuntime implements ChatRuntime {
           const response = await this.connection.newSession({ cwd, mcpServers: [] });
           this.loadedSessionId = response.sessionId;
           this.sessionId = response.sessionId;
+          this.currentModeId = null;
           this.currentSessionModelId = null;
           return response.sessionId;
         } catch (retryError) {
@@ -566,7 +589,10 @@ export class CursorChatRuntime implements ChatRuntime {
     request: AcpRequestPermissionRequest,
   ): Promise<AcpRequestPermissionResponse> {
     if (this.autoApprovePermissions) {
-      const auto = selectPermissionOption(request.options, ['allow_always', 'allow_once']);
+      // Prefer the one-turn grant: a yolo turn should not silently persist an
+      // allow_always rule, so allow_always is used only when it's the sole
+      // allow option the agent offers.
+      const auto = selectPermissionOption(request.options, ['allow_once', 'allow_always']);
       if (auto.outcome.outcome === 'selected') {
         return auto;
       }

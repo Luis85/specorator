@@ -55,6 +55,34 @@ describe('registerCursorAcpExtensions', () => {
     expect(response.rejected).toBe(true);
   });
 
+  it('answers the RPC as a dismissal when the ask signal aborts mid-await', async () => {
+    const { transport, requests } = makeFakeTransport();
+    const controller = new AbortController();
+    // askUser mirrors a blocking prompt that rejects with AbortError once the
+    // provided signal aborts — the shape a cancel() abort produces at runtime.
+    const askUser = jest.fn((_input: unknown, signal?: AbortSignal) => new Promise((_resolve, reject) => {
+      signal?.addEventListener('abort', () => {
+        const err = new Error('aborted');
+        err.name = 'AbortError';
+        reject(err);
+      });
+    }));
+    registerCursorAcpExtensions(transport as never, {
+      askUser: askUser as never,
+      getAskSignal: () => controller.signal,
+      emitChunk: () => {},
+      patchTurnMetadata: () => {},
+    });
+
+    const pending = requests.get('cursor/ask_question')!({ question: 'Q', options: [] }) as Promise<{ rejected?: boolean; reason?: string }>;
+    controller.abort();
+    const response = await pending;
+
+    expect(askUser).toHaveBeenCalledWith(expect.anything(), controller.signal);
+    expect(response.rejected).toBe(true);
+    expect(response.reason).toBe('Question dismissed by user');
+  });
+
   it('acknowledges cursor/create_plan and marks the turn plan-completed with the plan text emitted', async () => {
     const { transport, requests } = makeFakeTransport();
     const chunks: StreamChunk[] = [];
