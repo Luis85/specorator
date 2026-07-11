@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { inject } from 'vue';
+import { inject, onMounted, ref } from 'vue';
 
 import { CALLBACKS_KEY } from '../chatShellKeys';
 import { useChatShellStore } from '../stores/chatShellStore';
@@ -11,6 +11,11 @@ import TabStrip from './TabStrip.vue';
 const store = useChatShellStore();
 const cb = inject(CALLBACKS_KEY);
 if (!cb) throw new Error('ChatHeader mounted without CALLBACKS_KEY');
+
+const gitActionHost = ref<HTMLElement | null>(null);
+onMounted(() => {
+  if (gitActionHost.value) cb.mountGitActionHost(gitActionHost.value);
+});
 </script>
 
 <template>
@@ -21,7 +26,7 @@ if (!cb) throw new Error('ChatHeader mounted without CALLBACKS_KEY');
     </div>
     <div
       class="specorator-header-meta-row"
-      :class="{ 'specorator-hidden': !store.header.boundAgent }"
+      :class="{ 'specorator-hidden': !store.header.metaRowVisible }"
     >
       <div class="specorator-bound-agent-chip-slot">
         <BoundAgentChip
@@ -29,6 +34,10 @@ if (!cb) throw new Error('ChatHeader mounted without CALLBACKS_KEY');
           :agent="store.header.boundAgent"
         />
       </div>
+      <div
+        ref="gitActionHost"
+        class="specorator-header-actions specorator-header-actions-slot"
+      />
     </div>
     <TabStrip
       v-show="store.header.tabBarVisible"

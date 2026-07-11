@@ -33,4 +33,8 @@ export interface ChatShellCallbacks {
   /** Hosts the imperative history + work-order dropdowns into the header. */
   mountHistoryHost: (el: HTMLElement) => void;
   mountWorkOrderHost: (el: HTMLElement) => void;
+  /** Hosts the imperative GitActionButton into the meta-row actions slot —
+   *  the button only mounts when plugin.gitStatusWatcher exists (mirrors
+   *  SpecoratorView.buildHeader). */
+  mountGitActionHost: (el: HTMLElement) => void;
 }

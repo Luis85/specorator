@@ -17,10 +17,13 @@ export interface ChatShellHeader {
   activeProviderId: ProviderId | null;
   /** Drives the tab-strip show/hide (mirrors updateTabBarVisibility). */
   tabBarVisible: boolean;
+  /** Drives the meta-row show/hide (mirrors updateHeaderMetaRow: the row shows
+   *  when EITHER the bound-agent chip OR the git-action slot has content). */
+  metaRowVisible: boolean;
 }
 
 const DEFAULT_HEADER: ChatShellHeader = Object.freeze({
-  title: 'Specorator', boundAgent: null, activeProviderId: null, tabBarVisible: false,
+  title: 'Specorator', boundAgent: null, activeProviderId: null, tabBarVisible: false, metaRowVisible: false,
 });
 
 /**

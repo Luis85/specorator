@@ -10,7 +10,7 @@ import { useChatShellEventRouting } from '@/features/chat/ui/vue/useChatShellEve
 function snap(overrides: Partial<ChatShellSnapshot> = {}): ChatShellSnapshot {
   return {
     tabs: [], activeTabId: null,
-    header: { title: 'Specorator', boundAgent: null, activeProviderId: null, tabBarVisible: false },
+    header: { title: 'Specorator', boundAgent: null, activeProviderId: null, tabBarVisible: false, metaRowVisible: false },
     ...overrides,
   };
 }
@@ -43,7 +43,7 @@ describe('useChatShellEventRouting', () => {
   it('subscribes on mount and pushes snapshots into the store', () => {
     const { store, subscribe, push } = mountRouting();
     expect(subscribe).toHaveBeenCalledTimes(1);
-    push(snap({ activeTabId: 't1', header: { title: 'Fix', boundAgent: null, activeProviderId: 'claude', tabBarVisible: true } }));
+    push(snap({ activeTabId: 't1', header: { title: 'Fix', boundAgent: null, activeProviderId: 'claude', tabBarVisible: true, metaRowVisible: false } }));
     expect(store.activeTabId).toBe('t1');
     expect(store.header.title).toBe('Fix');
     expect(store.header.tabBarVisible).toBe(true);
