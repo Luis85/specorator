@@ -21,8 +21,9 @@ export interface ChatShellCallbacks {
   onNewTab: () => void;
   /** "New conversation" header button (square-pen) — distinct from onNewTab
    *  (square-plus): starts a fresh conversation in the ACTIVE tab rather than
-   *  opening a new tab. Thin delegator to SpecoratorView.buildNavRowContent's
-   *  newBtn handler (tabManager.createNewConversation() + history refresh). */
+   *  opening a new tab. Thin delegator to the former SpecoratorView.buildNavRowContent's
+   *  newBtn handler (tabManager.createNewConversation() + history refresh), which
+   *  was deleted in the chat-shell Vue cutover (ADR 0005). */
   onNewConversation: () => void;
   onOpenHistory: () => void;
   onOpenWorkOrders: () => void;
@@ -38,8 +39,9 @@ export interface ChatShellCallbacks {
   mountHistoryHost: (el: HTMLElement) => void;
   mountWorkOrderHost: (el: HTMLElement) => void;
   /** Hosts the imperative GitActionButton into the meta-row actions slot —
-   *  the button only mounts when plugin.gitStatusWatcher exists (mirrors
-   *  SpecoratorView.buildHeader). */
+   *  the button only mounts when plugin.gitStatusWatcher exists (mirrors the
+   *  former SpecoratorView.buildHeader, deleted in the chat-shell Vue cutover;
+   *  see ADR 0005). */
   mountGitActionHost: (el: HTMLElement) => void;
   /** Resolves the active tab's navRowEl for 'input' tabBarPosition mode
    *  (mirrors updateNavRowLocation's input-mode branch); null when there is

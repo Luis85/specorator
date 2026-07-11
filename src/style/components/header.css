@@ -32,14 +32,6 @@
   min-width: 0;  /* Allow flex item to shrink below content size */
 }
 
-/* Legacy class for backwards compatibility */
-.specorator-title {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  flex-shrink: 0;
-}
-
 .specorator-title-text {
   margin: 0;
   font-size: 14px;
@@ -67,11 +59,6 @@
 
 .specorator-header-actions-slot {
   /* No margin-inline-start: auto here; it's set by the base .specorator-header-actions */
-}
-
-.specorator-header .specorator-tab-bar-container {
-  display: flex;
-  gap: 4px;
 }
 
 .specorator-header-btn {
