@@ -854,6 +854,7 @@
       "doneWhen": "Завершено, когда",
       "boardNotices": "Уведомления доски",
       "skippedNotes": "Пропущенные заметки",
+      "loadError": "Не удалось загрузить доску: {message}",
       "queueHalted": "Очередь остановлена: {reason}",
       "failureOne": "{n} сбой",
       "failureMany": "{n} сбоев",

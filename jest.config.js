@@ -25,6 +25,13 @@ module.exports = {
     // (vitest.config.mts coverage.include + the CI component job); counting it
     // here at 0% would sink the Jest global floors.
     '!src/features/library/**',
+    // src/features/tasks/ui/vue/** (the Agent Board Vue island: store,
+    // useBoardEventRouting, vueIsland, SFCs) is likewise tested and
+    // coverage-gated in the Vitest lane; counting it here at 0% would sink the
+    // Jest global floors. Only the ui/vue/** subtree is excluded — the sibling
+    // pure helpers (laneEditorOccurrences.ts, workOrderTemplateEditorForm.ts,
+    // cardActions.ts) stay Jest-collected.
+    '!src/features/tasks/ui/vue/**',
   ],
   coverageDirectory: 'coverage',
   // Guardrail (Q-3): regression floors, not aspirations. Each floor sits a few

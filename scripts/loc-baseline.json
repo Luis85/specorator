@@ -23,8 +23,8 @@
       "reason": "Grandfathered hotspot. Track the split in docs/tech-debt/2026-06-07-oversized-modules-and-test-files.md; shrink only. Host⇆target session-path translation (toHostSessionPath/toTargetSessionPath/mapHostPathToTarget/mapRequiredHostPathsToTarget) extracted to codexSessionPathMapping.ts."
     },
     "src/features/tasks/ui/AgentBoardView.ts": {
-      "loc": 932,
-      "reason": "Grandfathered hotspot. Track the split in docs/tech-debt/2026-06-07-oversized-modules-and-test-files.md; shrink only. Live-heartbeat map + live-strip date math extracted to AgentBoardLiveHeartbeatTracker. +10 from openDetailForFile (the create→detail-modal tail extracted from addWorkOrderFromBoard and made public) so the file/folder right-click 'Create work order' opens the modal via plugin.openWorkOrderInBoard instead of the raw note."
+      "loc": 866,
+      "reason": "Grandfathered hotspot. Track the split in docs/tech-debt/2026-06-07-oversized-modules-and-test-files.md; shrink only. The Task 5b Vue cutover deleted the imperative render/patch layer here (render/patchCard/patchLiveStrip/refreshSlots/getQueueToolbarState/onStatusChanged/onPauseRequested/tickElapsed) and replaced it with a mounted Vue AgentBoardRoot island + a buildCallbacks seam; the file now owns the run engine (coordinator, sidecar sweep, orphan recovery, queue runner) plus the engine-model refresh + action methods the callbacks call. Ceiling +3 for the roster:changed persona-invalidation fix: refresh() bumps the store's rosterVersion after the awaited rosterAgents cache refresh."
     },
     "src/features/chat/services/SubagentManager.ts": {
       "loc": 869,
@@ -57,10 +57,6 @@
     "src/providers/codex/history/CodexHistoryStore.ts": {
       "loc": 746,
       "reason": "Grandfathered. Planned split: separate legacy, modern, and persisted parser families around shared turn-state types. See docs/tech-debt/2026-06-07-oversized-modules-and-test-files.md."
-    },
-    "src/features/tasks/ui/AgentBoardRenderer.ts": {
-      "loc": 690,
-      "reason": "Grew with the Agent Board redesign (rebuilt cards, hover action cluster, portal overflow menu, live strip). Planned split: extract card rendering and the overflow/portal menu into sibling modules. See docs/tech-debt/2026-06-07-oversized-modules-and-test-files.md; shrink only."
     },
     "src/features/chat/controllers/ConversationController.ts": {
       "loc": 677,

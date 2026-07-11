@@ -1,8 +1,7 @@
 <script setup lang="ts">
-import type { EventRef, TAbstractFile } from 'obsidian';
 import { normalizePath, Notice, setIcon } from 'obsidian';
 import type { ComponentPublicInstance } from 'vue';
-import { inject, onMounted, onUnmounted } from 'vue';
+import { inject, onMounted } from 'vue';
 
 import { t } from '../../../../i18n/i18n';
 import { confirm } from '../../../../shared/modals/ConfirmModal';
@@ -11,12 +10,14 @@ import { QuickActionStorage } from '../../../quickActions/QuickActionStorage';
 import { runQuickActionForFile } from '../../../quickActions/runQuickActionForFile';
 import type { QuickAction } from '../../../quickActions/types';
 import { QuickActionEditorModal } from '../../../quickActions/ui/QuickActionEditorModal';
+import IconButton from '../components/IconButton.vue';
 import LibraryCard from '../components/LibraryCard.vue';
 import LibraryEmptyState from '../components/LibraryEmptyState.vue';
 import LibraryToolbar from '../components/LibraryToolbar.vue';
 import { PLUGIN_KEY } from '../libraryKeys';
 import { quickActionLibraryAccessors } from '../quickActionLibraryAccessors';
 import { useQuickActionStore } from '../stores/quickActionStore';
+import { useFolderVaultRefresh } from '../useFolderVaultRefresh';
 import { useLibraryList } from '../useLibraryList';
 import { useRowActionPending } from '../useRowActionPending';
 
@@ -42,52 +43,15 @@ onMounted(() => void withErrorNotice(() => store.load(), t('quickActions.library
 // REGULAR vault folder (unlike the dot-folder skills Obsidian never indexes),
 // so vault events DO fire for them: subscribe folder-scoped, exactly like
 // QuickActionFavoritesCache.
-const VAULT_RELOAD_DEBOUNCE_MS = 300;
-const vaultRefs: EventRef[] = [];
-let reloadTimer: ReturnType<typeof setTimeout> | null = null;
-// Straight-line alias: the setup-top throw guard doesn't narrow `plugin`
-// inside function declarations for vue-tsc.
-const vaultPlugin = plugin;
-
-function resolvedFolder(): string {
+useFolderVaultRefresh({
+  vault: plugin.app.vault,
   // Same live folder resolution as the store's storage wiring (default +
   // normalizePath) — the subscription and the loader must scan ONE folder.
-  const raw = (vaultPlugin.settings.quickActionsFolder ?? 'Quick Actions').trim();
-  return raw ? normalizePath(raw) : '';
-}
-
-function isUnderFolder(path: string): boolean {
-  const folder = resolvedFolder();
-  if (!folder) return false;
-  return path === folder || path.startsWith(`${folder}/`);
-}
-
-function onVaultChange(file: TAbstractFile, oldPath?: string): void {
-  const path = (file as { path?: string })?.path ?? '';
-  const old = typeof oldPath === 'string' ? oldPath : '';
-  if (!isUnderFolder(path) && !(old && isUnderFolder(old))) return;
-  // Coalesce bursts (multi-file sync, folder renames) into one reload.
-  if (reloadTimer !== null) clearTimeout(reloadTimer);
-  reloadTimer = setTimeout(() => {
-    reloadTimer = null;
-    void store.load(); // load() captures failures into store.error, never throws
-  }, VAULT_RELOAD_DEBOUNCE_MS);
-}
-
-onMounted(() => {
-  vaultRefs.push(vaultPlugin.app.vault.on('create', onVaultChange));
-  vaultRefs.push(vaultPlugin.app.vault.on('modify', onVaultChange));
-  vaultRefs.push(vaultPlugin.app.vault.on('delete', onVaultChange));
-  vaultRefs.push(vaultPlugin.app.vault.on('rename', onVaultChange));
-});
-
-onUnmounted(() => {
-  if (reloadTimer !== null) {
-    clearTimeout(reloadTimer);
-    reloadTimer = null;
-  }
-  for (const ref of vaultRefs) vaultPlugin.app.vault.offref(ref);
-  vaultRefs.length = 0;
+  resolveFolder: () => {
+    const raw = (plugin.settings.quickActionsFolder ?? 'Quick Actions').trim();
+    return raw ? normalizePath(raw) : '';
+  },
+  reload: () => void store.load(),
 });
 
 function fail(error: unknown): void {
@@ -254,18 +218,18 @@ function onToggleFavorite(action: QuickAction): void {
           />
         </template>
         <template #name-chips>
-          <!-- .stop: the star sits inside the card's activate surface, and a
-            toggle must not also open the editor. -->
-          <button
-            :ref="(el) => applyIcon(el, 'star')"
-            type="button"
-            class="specorator-vue-qa-star"
-            :class="{ 'is-on': action.favorite === true }"
-            :aria-pressed="action.favorite === true ? 'true' : 'false'"
-            :aria-label="t('quickActions.library.favoriteAria')"
+          <!-- .stop: the star sits inside the card's activate surface (the
+            name-chips slot has no @click.stop wrapper), so a toggle must not
+            also open the editor — IconButton emits the native event so .stop
+            lands here at the call site. -->
+          <IconButton
+            icon="star"
+            :ariaLabel="t('quickActions.library.favoriteAria')"
             :title="t('quickActions.library.favoriteAria')"
+            :pressed="action.favorite === true"
+            filled
             :disabled="pending.isBusy(action.filePath)"
-            @click.stop="onToggleFavorite(action)"
+            @activate.stop="onToggleFavorite(action)"
           />
         </template>
         <div
@@ -329,43 +293,5 @@ function onToggleFavorite(action: QuickAction): void {
 .specorator-vue-qa-icon :deep(svg) {
   width: 20px;
   height: 20px;
-}
-
-/* Icon toggle: strip Obsidian's native button chrome so the star reads as a
-   favorite marker, not a third CTA in the name row, but keep a real icon-sized
-   hit area with a hover affordance. Scoped (0,2,0) beats the host button
-   baseline (0,1,1) by specificity. */
-.specorator-vue-qa-star {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  padding: var(--sp-space-3xs);
-  background: transparent;
-  border: none;
-  box-shadow: none;
-  border-radius: var(--sp-radius-s);
-  color: var(--sp-text-faint);
-  cursor: pointer;
-}
-
-/* setIcon() renders the lucide <svg> imperatively — no data-v, reach via
-   :deep(). Sized to match the card's leading icon. */
-.specorator-vue-qa-star :deep(svg) {
-  width: 18px;
-  height: 18px;
-}
-
-.specorator-vue-qa-star:hover {
-  color: var(--sp-text);
-  background: var(--sp-surface-hover);
-}
-
-.specorator-vue-qa-star.is-on {
-  color: var(--sp-accent);
-}
-
-/* Favorited: fill the outline star so the on-state reads at a glance. */
-.specorator-vue-qa-star.is-on :deep(svg) {
-  fill: currentColor;
 }
 </style>

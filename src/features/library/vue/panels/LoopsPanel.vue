@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Notice } from 'obsidian';
+import { normalizePath, Notice } from 'obsidian';
 import { inject, onMounted } from 'vue';
 
 import { t } from '../../../../i18n/i18n';
@@ -15,6 +15,7 @@ import LibraryEmptyState from '../components/LibraryEmptyState.vue';
 import LibraryToolbar from '../components/LibraryToolbar.vue';
 import { PLUGIN_KEY } from '../libraryKeys';
 import { useLoopLibraryStore } from '../stores/loopLibraryStore';
+import { useFolderVaultRefresh } from '../useFolderVaultRefresh';
 import { useLibraryList } from '../useLibraryList';
 import { useRowActionPending } from '../useRowActionPending';
 
@@ -37,6 +38,27 @@ onMounted(() => void withErrorNotice(() => store.load(), t('loopLibrary.actionFa
 function fail(error: unknown): void {
   plugin?.logger.scope('tasks').error('loop library action failed', error);
 }
+
+// Loops are regular vault notes, so an external writer — a note dropped in the
+// loop folder, an edit made outside the app, the preset installer running from
+// another leaf — persists without touching this store. Vault events DO fire
+// for them (unlike the dot-folder skills Obsidian never indexes), so subscribe
+// folder-scoped and reload, mirroring QuickActionsPanel.
+useFolderVaultRefresh({
+  vault: plugin.app.vault,
+  // Same live folder resolution as the store (default + normalizePath) — the
+  // subscription and the loader must scan ONE folder.
+  resolveFolder: () => {
+    const raw = (plugin.settings.agentBoardLoopFolder || 'Agent Board/loops').trim();
+    return raw ? normalizePath(raw) : '';
+  },
+  // The loop store's load() re-throws (no onError in useGuardedLoad), unlike
+  // the quick-action store which captures into store.error. Route the
+  // refresh reload through the same withErrorNotice the mounted load uses so
+  // a transient vault-list rejection surfaces as a Notice, not an unhandled
+  // promise rejection.
+  reload: () => void withErrorNotice(() => store.load(), t('loopLibrary.actionFailed'), fail),
+});
 
 function openEditor(existing: LoopDefinition | null): void {
   if (!plugin) return;

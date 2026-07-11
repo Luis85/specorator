@@ -1,20 +1,16 @@
-import { setIcon } from 'obsidian';
-
-import { t } from '../../../i18n/i18n';
 import type { TranslationKey } from '../../../i18n/types';
 import type { TaskSpec, TaskStatus } from '../model/taskTypes';
 import type { WorkOrderDetailModalCallbacks } from './WorkOrderDetailModal';
 
 // Footer button visual variant. `ghost` = transparent secondary; `cta` = the
 // accent primary; `danger` = the destructive red action. The visual tokens for
-// each live in CSS keyed off the modifier class in the modal renderer.
+// each live in CSS keyed off the modifier class in the Vue footer.
 export type FooterActionVariant = 'ghost' | 'cta' | 'danger';
 
-// One sticky-footer action: a real `<button>` with a leading Lucide icon and a
-// keyed label. `side` groups the button left (secondary/ghost) or right
-// (primary group); `run` is invoked after the modal closes (close-on-click is
-// preserved for every action). Actions whose callback is optional/missing are
-// filtered out before they are pushed.
+// One sticky-footer status action: a keyed label + leading Lucide icon. `side`
+// groups the button left (secondary/ghost) or right (primary group); `run` is
+// invoked after the modal closes (close-on-click). Actions whose callback is
+// optional/missing are filtered out before they are pushed.
 export interface FooterAction {
   variant: FooterActionVariant;
   icon: string;
@@ -28,10 +24,8 @@ export interface FooterAction {
  * Open note (ghost, left) and — when a conversation link exists and can be
  * opened — Open conversation (ghost, left). The right-side primary group is
  * status-specific. Statuses the spec does not tabulate fall back to a minimal
- * footer so none renders a dead footer.
- *
- * Behavior-preserving extraction of the modal's former `footerActions` method:
- * control flow, push order, and the per-callback presence guards are identical.
+ * footer so none renders a dead footer. The Vue footer (`WorkOrderFooter.vue`)
+ * renders these plus the inline Edit / Cancel / Save affordances.
  */
 export function footerActionsForStatus(
   task: TaskSpec,
@@ -247,93 +241,4 @@ function appendArchiveRightAction(
       run: () => callbacks.onArchive?.(task),
     });
   }
-}
-
-/**
- * State the modal hands the footer renderer on each (re)paint. The status
- * actions are derived from `task`; the edit affordances are gated on `editable`
- * and swap on `editing`.
- */
-export interface WorkOrderFooterRenderContext {
-  task: TaskSpec;
-  callbacks: WorkOrderDetailModalCallbacks;
-  /** True while the main pane shows the inline edit form. */
-  editing: boolean;
-  /** True for the editable statuses (inbox / ready / needs_fix). */
-  editable: boolean;
-  /** Close-on-click for status actions (Open note / Mark ready / …). */
-  close: () => void;
-  /** Enter edit mode (the "Edit" affordance). */
-  onEdit: () => void;
-  /** Leave edit mode without persisting (the "Cancel" affordance). */
-  onCancel: () => void;
-  /** Persist the in-progress edit (the "Save" affordance). */
-  onSave: () => void;
-}
-
-/**
- * Render the sticky footer: secondary (ghost) actions group left, the primary
- * group (CTA / danger) right. Status actions close the modal first then run
- * (close-on-click); the inline edit actions toggle in place. The Edit affordance
- * (view mode) and Cancel + Save (while editing) sit in the left group beside
- * Open note; while editing the status-specific right-side primary is suppressed.
- * Re-run on every edit toggle (clears the footer first).
- */
-export function renderWorkOrderFooter(parent: HTMLElement, ctx: WorkOrderFooterRenderContext): void {
-  parent.empty();
-  const left = parent.createDiv({
-    cls: 'specorator-work-order-modal-footer-group specorator-work-order-modal-footer-group--left',
-  });
-  const right = parent.createDiv({
-    cls: 'specorator-work-order-modal-footer-group specorator-work-order-modal-footer-group--right',
-  });
-
-  for (const action of footerActionsForStatus(ctx.task, ctx.callbacks)) {
-    if (ctx.editing && action.side === 'right') continue;
-    renderFooterButton(action.side === 'right' ? right : left, action, ctx.close);
-  }
-
-  if (!ctx.editable) return;
-  if (ctx.editing) {
-    // Cancel + Save sit beside Open note in the left group (no right-side
-    // primary while editing).
-    renderFooterButton(left, editAction('ghost', 'x', 'tasks.workOrderModal.actionCancelEdit', 'left', ctx.onCancel), null);
-    renderFooterButton(left, editAction('cta', 'check', 'tasks.workOrderModal.actionSaveSections', 'left', ctx.onSave), null);
-  } else {
-    renderFooterButton(left, editAction('ghost', 'pencil', 'tasks.workOrderModal.actionEdit', 'left', ctx.onEdit), null);
-  }
-}
-
-function editAction(
-  variant: FooterActionVariant,
-  icon: string,
-  labelKey: TranslationKey,
-  side: 'left' | 'right',
-  run: () => void,
-): FooterAction {
-  return { variant, icon, labelKey, side, run };
-}
-
-// `closeBeforeRun` carries the close-on-click contract for status actions; the
-// inline edit actions pass null so they toggle the modal in place.
-function renderFooterButton(
-  parent: HTMLElement,
-  action: FooterAction,
-  closeBeforeRun: (() => void) | null,
-): void {
-  const button = parent.createEl('button', {
-    cls: `specorator-work-order-modal-action specorator-work-order-modal-action--${action.variant}`,
-    attr: { type: 'button' },
-  });
-  const icon = button.createSpan({ cls: 'specorator-work-order-modal-action-icon' });
-  icon.setAttr('aria-hidden', 'true');
-  // The mock `setIcon` is a no-op; the data attribute records the icon intent
-  // so tests can assert it (consistent with the rest of the modal).
-  icon.setAttr('data-icon', action.icon);
-  setIcon(icon, action.icon);
-  button.createSpan({ cls: 'specorator-work-order-modal-action-label', text: t(action.labelKey) });
-  button.addEventListener('click', () => {
-    closeBeforeRun?.();
-    action.run();
-  });
 }

@@ -35,7 +35,7 @@ function setup(loops: unknown[]) {
   // One plugin object for BOTH init() and provide() — the panel re-inits the
   // store with the injected plugin, so they must be the same fake.
   const plugin = {
-    app: { vault: {} },
+    app: { vault: makeVaultFake().vault },
     settings: {},
     logger: { scope: () => ({ error: vi.fn(), warn: vi.fn() }) },
   } as never;
@@ -87,13 +87,33 @@ describe('LoopsPanel', () => {
   });
 });
 
+type VaultHandler = (file: { path?: string }, oldPath?: string) => void;
+
+/** Vault fake capturing the panel's folder-scoped event subscriptions so tests
+ * can fire create/modify/delete/rename as an external writer would. */
+function makeVaultFake() {
+  const handlers: Record<string, VaultHandler> = {};
+  return {
+    handlers,
+    vault: {
+      getAbstractFileByPath: vi.fn().mockReturnValue(null),
+      on: vi.fn((name: string, handler: VaultHandler) => {
+        handlers[name] = handler;
+        return { event: name }; // opaque EventRef token, asserted against offref
+      }),
+      offref: vi.fn(),
+    },
+  };
+}
+
 /** Mutation flows need a fuller note-store fake than the render-only setup. */
 function setupMutable(loops: unknown[], overrides: Record<string, unknown> = {}) {
   const pinia = createPinia();
   setActivePinia(pinia);
   const errorLog = vi.fn();
+  const { vault, handlers } = makeVaultFake();
   const plugin = {
-    app: { vault: { getAbstractFileByPath: vi.fn().mockReturnValue(null) } },
+    app: { vault },
     settings: {},
     logger: { scope: () => ({ error: errorLog, warn: vi.fn() }) },
   } as never;
@@ -109,7 +129,7 @@ function setupMutable(loops: unknown[], overrides: Record<string, unknown> = {})
   const utils = render(LoopsPanel, {
     global: { plugins: [pinia], provide: { [PLUGIN_KEY as symbol]: plugin } },
   });
-  return { store, plugin, noteStore, errorLog, ...utils };
+  return { store, plugin, noteStore, errorLog, vault, vaultHandlers: handlers, ...utils };
 }
 
 describe('LoopsPanel mutation flows', () => {
@@ -256,5 +276,103 @@ describe('LoopsPanel mutation flows', () => {
     setup([loop]);
     await screen.findByText('A loop');
     expect(document.querySelector('.specorator-vue-card')).toMatchSnapshot();
+  });
+});
+
+// Loops are regular vault notes under the loop folder (default
+// `Agent Board/loops`), so an external writer (a file dropped in the folder,
+// a note edited outside the app) fires vault events the mounted panel must
+// refresh from — a folder-scoped subscription, mirroring QuickActionsPanel.
+describe('LoopsPanel vault-event refresh', () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  it('reloads (debounced, coalescing bursts) after a create inside the loop folder', async () => {
+    const { noteStore, vaultHandlers } = setupMutable([loop]);
+    await screen.findByText('A loop');
+    const before = noteStore.list.mock.calls.length;
+    vi.useFakeTimers();
+    try {
+      vaultHandlers.create({ path: 'Agent Board/loops/new.md' });
+      vaultHandlers.modify({ path: 'Agent Board/loops/new.md' });
+      // Debounce window still open: no reload yet.
+      expect(noteStore.list.mock.calls.length).toBe(before);
+      await vi.advanceTimersByTimeAsync(400);
+    } finally {
+      vi.useRealTimers();
+    }
+    // The two-event burst coalesced into exactly one reload.
+    expect(noteStore.list.mock.calls.length).toBe(before + 1);
+  });
+
+  it('ignores vault events outside the loop folder', async () => {
+    const { noteStore, vaultHandlers } = setupMutable([loop]);
+    await screen.findByText('A loop');
+    const before = noteStore.list.mock.calls.length;
+    vi.useFakeTimers();
+    try {
+      vaultHandlers.modify({ path: 'Notes/unrelated.md' });
+      // Prefix must be path-segment-aware: a sibling folder sharing the
+      // configured folder's prefix is OUTSIDE.
+      vaultHandlers.create({ path: 'Agent Board/loopsish/nope.md' });
+      await vi.advanceTimersByTimeAsync(400);
+    } finally {
+      vi.useRealTimers();
+    }
+    expect(noteStore.list.mock.calls.length).toBe(before);
+  });
+
+  it('reloads when a rename moves a note OUT of the folder (old path was inside)', async () => {
+    const { noteStore, vaultHandlers } = setupMutable([loop]);
+    await screen.findByText('A loop');
+    const before = noteStore.list.mock.calls.length;
+    vi.useFakeTimers();
+    try {
+      vaultHandlers.rename({ path: 'Notes/moved-away.md' }, 'Agent Board/loops/a.md');
+      await vi.advanceTimersByTimeAsync(400);
+    } finally {
+      vi.useRealTimers();
+    }
+    expect(noteStore.list.mock.calls.length).toBe(before + 1);
+  });
+
+  it('routes a rejecting refresh reload through the error logger (no unhandled rejection)', async () => {
+    // The loop store's load() re-throws (no onError guard), so the refresh
+    // path must wrap it in withErrorNotice like the mounted load does — else
+    // a transient vault-list rejection escapes as an unhandled promise.
+    const list = vi
+      .fn()
+      .mockResolvedValueOnce({ loops: [loop], warnings: [] }) // mount load succeeds
+      .mockRejectedValue(new Error('vault boom')); // refresh reload rejects
+    const { errorLog, vaultHandlers } = setupMutable([loop], { list });
+    await screen.findByText('A loop');
+    vi.useFakeTimers();
+    try {
+      vaultHandlers.modify({ path: 'Agent Board/loops/a.md' });
+      await vi.advanceTimersByTimeAsync(400);
+    } finally {
+      vi.useRealTimers();
+    }
+    await waitFor(() => expect(errorLog).toHaveBeenCalled());
+  });
+
+  it('unmount offrefs all four subscriptions and drops a pending debounce (no leak)', async () => {
+    const { noteStore, vault, vaultHandlers, unmount } = setupMutable([loop]);
+    await screen.findByText('A loop');
+    expect(vault.on.mock.calls.map((c) => c[0]).sort())
+      .toEqual(['create', 'delete', 'modify', 'rename']);
+    const refs = vault.on.mock.results.map((r) => r.value);
+    const before = noteStore.list.mock.calls.length;
+    vi.useFakeTimers();
+    try {
+      vaultHandlers.delete({ path: 'Agent Board/loops/a.md' });
+      unmount();
+      await vi.advanceTimersByTimeAsync(400);
+    } finally {
+      vi.useRealTimers();
+    }
+    expect(vault.offref).toHaveBeenCalledTimes(4);
+    for (const ref of refs) expect(vault.offref).toHaveBeenCalledWith(ref);
+    // The queued reload died with the panel.
+    expect(noteStore.list.mock.calls.length).toBe(before);
   });
 });
