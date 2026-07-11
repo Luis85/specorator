@@ -12,11 +12,19 @@ import {
   TOOL_WRITE,
 } from '../../../core/tools/toolNames';
 import { AcpToolStreamAdapter } from '../../acp';
+import { mapCursorToolInput } from './cursorToolInputMapping';
+
+// Matches the local `TOOL_DELETE` in
+// `src/features/chat/utils/editedFiles.ts` and the `deleteToolCall` entry in
+// the legacy `cursorToolNameMap.ts` — not exported from `core/tools/toolNames`
+// because it is a Cursor-only concept. `collectRemovedPathsFromToolCall`
+// matches this literal to drop stale "edited files" chips on delete.
+const TOOL_DELETE = 'delete';
 
 const CURSOR_ACP_TOOL_NAME_MAP: Record<string, string> = {
   ask_question: TOOL_ASK_USER_QUESTION,
   bash: TOOL_BASH,
-  delete: TOOL_BASH,
+  delete: TOOL_DELETE,
   edit: TOOL_EDIT,
   fetch: TOOL_WEB_FETCH,
   glob: TOOL_GLOB,
@@ -121,11 +129,28 @@ export function normalizeCursorAcpToolName(rawName: string | undefined): string 
   return CURSOR_ACP_TOOL_NAME_MAP[knownName];
 }
 
+// Cursor-native file-tool ACP fields (`path`, `oldString`, `newString`, ...)
+// don't match the canonical shape (`file_path`, `old_string`, `new_string`)
+// the shared write/edit renderer, diff fallback, plan-path capture, and
+// edited-file bookkeeping read. `cursorToolInputMapping` already owns this
+// per-tool projection (keyed by the legacy `*ToolCall` kind names), so map
+// the resolved ACP tool name back onto the matching kind and reuse it here.
+// Scoped to the file tools for now; other known names stay pass-through,
+// same as unknown names.
+const CURSOR_ACP_FILE_TOOL_INPUT_KIND: Partial<Record<CursorAcpKnownToolName, string>> = {
+  delete: 'deleteToolCall',
+  edit: 'replaceEnvToolCall',
+  read: 'readToolCall',
+  write: 'writeToolCall',
+};
+
 export function normalizeCursorAcpToolInput(
-  _rawName: string | undefined,
+  rawName: string | undefined,
   input: Record<string, unknown>,
 ): Record<string, unknown> {
-  return input;
+  const knownName = toKnownToolName(rawName);
+  const inputKind = knownName ? CURSOR_ACP_FILE_TOOL_INPUT_KIND[knownName] : undefined;
+  return inputKind ? mapCursorToolInput(inputKind, input, undefined) : input;
 }
 
 // Deliberate v1 scoping: ACP tool results pass through generically for now,

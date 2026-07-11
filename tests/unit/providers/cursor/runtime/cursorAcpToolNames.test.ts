@@ -1,5 +1,9 @@
-import { TOOL_BASH, TOOL_READ, TOOL_WRITE } from '@/core/tools/toolNames';
-import { createCursorAcpToolStreamAdapter, CURSOR_ACP_CANONICAL_TOOL_NAMES } from '@/providers/cursor/runtime/cursorAcpToolNames';
+import { TOOL_BASH, TOOL_EDIT, TOOL_READ, TOOL_WRITE } from '@/core/tools/toolNames';
+import {
+  createCursorAcpToolStreamAdapter,
+  CURSOR_ACP_CANONICAL_TOOL_NAMES,
+  normalizeCursorAcpToolInput,
+} from '@/providers/cursor/runtime/cursorAcpToolNames';
 
 describe('cursorAcpToolNames', () => {
   it('normalizes cursor native tool identifiers to canonical names', () => {
@@ -25,5 +29,67 @@ describe('cursorAcpToolNames', () => {
     );
     const toolUse = chunks.find((c) => c.type === 'tool_use') as { name: string } | undefined;
     expect(toolUse?.name).toBe(TOOL_BASH);
+  });
+
+  it('keeps the delete tool identity distinct from Bash so removal bookkeeping still matches it', () => {
+    const adapter = createCursorAcpToolStreamAdapter();
+    const chunks = adapter.normalizeToolCall(
+      { toolCallId: 't3', title: 'delete', kind: 'delete', rawInput: { path: 'notes/todo.md' } },
+      [{ id: 't3', input: {}, name: 'unused', type: 'tool_use' }],
+    );
+    const toolUse = chunks.find((c) => c.type === 'tool_use') as { name: string } | undefined;
+    expect(toolUse?.name).toBe('delete');
+    expect(toolUse?.name).not.toBe(TOOL_BASH);
+    expect(CURSOR_ACP_CANONICAL_TOOL_NAMES.has('delete')).toBe(true);
+  });
+
+  describe('normalizeCursorAcpToolInput', () => {
+    it('canonicalizes edit tool input (path/oldString/newString -> file_path/old_string/new_string)', () => {
+      const result = normalizeCursorAcpToolInput('edit', {
+        path: 'notes/todo.md',
+        oldString: 'foo',
+        newString: 'bar',
+      });
+      expect(result).toEqual({
+        file_path: 'notes/todo.md',
+        old_string: 'foo',
+        new_string: 'bar',
+      });
+    });
+
+    it('canonicalizes write tool input (path/content -> file_path/content)', () => {
+      const result = normalizeCursorAcpToolInput('write', {
+        path: 'notes/new.md',
+        content: 'hello world',
+      });
+      expect(result.file_path).toBe('notes/new.md');
+      expect(result.content).toBe('hello world');
+    });
+
+    it('canonicalizes read tool input (path -> file_path)', () => {
+      const result = normalizeCursorAcpToolInput('read', { path: 'notes/todo.md' });
+      expect(result).toEqual({ file_path: 'notes/todo.md' });
+    });
+
+    it('canonicalizes delete tool input (path -> path, kept for removal bookkeeping)', () => {
+      const result = normalizeCursorAcpToolInput('delete', { path: 'notes/todo.md' });
+      expect(result).toEqual({ path: 'notes/todo.md' });
+    });
+
+    it('leaves unknown tool input untouched (tolerant pass-through)', () => {
+      const rawInput = { someField: 'value', nested: { a: 1 } };
+      const result = normalizeCursorAcpToolInput('mystery_tool', rawInput);
+      expect(result).toBe(rawInput);
+    });
+
+    it('leaves known non-file tool input untouched (e.g. bash)', () => {
+      const rawInput = { command: 'ls -la' };
+      const result = normalizeCursorAcpToolInput('bash', rawInput);
+      expect(result).toBe(rawInput);
+    });
+  });
+
+  it('registers TOOL_EDIT for the edit tool (sanity check, unrelated to input canonicalization)', () => {
+    expect(CURSOR_ACP_CANONICAL_TOOL_NAMES.has(TOOL_EDIT)).toBe(true);
   });
 });
