@@ -84,6 +84,52 @@ function isAbortError(error: unknown, signal?: AbortSignal): boolean {
   return error instanceof Error && error.name === 'AbortError';
 }
 
+type NormalizedTodo = Record<string, unknown>;
+
+function todoIdentity(todo: NormalizedTodo): { id: string; content: string } {
+  return {
+    id: typeof todo.id === 'string' ? todo.id : '',
+    content: typeof todo.content === 'string' ? todo.content : '',
+  };
+}
+
+/**
+ * Merges an incremental `cursor/update_todos` batch (`merge: true`) over the last
+ * emitted list. The shared StreamController REPLACES its todo panel from each
+ * TodoWrite chunk, so emitting only the changed items would erase the rest — the
+ * merge reconstructs the full list here. Incoming items match an existing entry
+ * by `id`, falling back to content-match only when the incoming id is absent;
+ * matches update in place (preserving position) and unmatched items append.
+ */
+function mergeCursorTodos(previous: NormalizedTodo[], incoming: NormalizedTodo[]): NormalizedTodo[] {
+  const result = previous.map((todo) => ({ ...todo }));
+  const indexById = new Map<string, number>();
+  const indexByContent = new Map<string, number>();
+  result.forEach((todo, index) => {
+    const { id, content } = todoIdentity(todo);
+    if (id) indexById.set(id, index);
+    if (content) indexByContent.set(content, index);
+  });
+
+  for (const item of incoming) {
+    const { id, content } = todoIdentity(item);
+    let matchIndex: number | undefined;
+    if (id) {
+      matchIndex = indexById.get(id);
+    } else if (content) {
+      matchIndex = indexByContent.get(content);
+    }
+    if (matchIndex !== undefined) {
+      result[matchIndex] = { ...item };
+      continue;
+    }
+    const appendedIndex = result.push({ ...item }) - 1;
+    if (id) indexById.set(id, appendedIndex);
+    if (content) indexByContent.set(content, appendedIndex);
+  }
+  return result;
+}
+
 function firstString(...values: unknown[]): string | undefined {
   for (const value of values) {
     if (typeof value === 'string' && value) {
@@ -219,6 +265,11 @@ export function registerCursorAcpExtensions(
 ): () => void {
   const unsubscribes: Array<() => void> = [];
   let todoCallCounter = 0;
+  // Last emitted normalized todo list per requesting session, keyed by
+  // params.sessionId (a single '' slot covers payloads without one). Feeds the
+  // merge path so an incremental `merge: true` batch rebuilds the full list the
+  // StreamController replaces its panel from.
+  const lastTodosBySession = new Map<string, NormalizedTodo[]>();
 
   unsubscribes.push(transport.onRequest('cursor/ask_question', async (params) => {
     try {
@@ -282,16 +333,28 @@ export function registerCursorAcpExtensions(
   }));
 
   unsubscribes.push(transport.onNotification('cursor/update_todos', (params) => {
-    const parsed = (params ?? {}) as { todos?: unknown[]; sessionId?: string };
+    const parsed = (params ?? {}) as { todos?: unknown[]; sessionId?: string; merge?: boolean };
     // Route through the same Cursor todo coercion the stream-json tool-call path
     // uses: the documented `cursor/update_todos` payload (`{id, content, status}`)
     // lacks `activeForm`, which the shared todo panel's `parseTodoInput()`
     // requires, so raw todos silently fail validation and the panel never
     // updates. `mapCursorToolInput('updateTodosToolCall', ...)` derives
     // `activeForm` from `content` and defaults `status`.
-    const input = mapCursorToolInput('updateTodosToolCall', { todos: parsed.todos ?? [] }, undefined);
+    const normalized = mapCursorToolInput('updateTodosToolCall', { todos: parsed.todos ?? [] }, undefined);
+    const incoming = (normalized.todos as NormalizedTodo[] | undefined) ?? [];
+
+    // Cursor sends `merge: true` with only the changed items for an incremental
+    // update; the StreamController replaces its whole panel from each TodoWrite
+    // chunk, so a bare incoming list would drop every unlisted todo. Merge over
+    // the last emitted list and cache the result for the next incremental batch.
+    const cacheKey = parsed.sessionId ?? '';
+    const todos = parsed.merge === true
+      ? mergeCursorTodos(lastTodosBySession.get(cacheKey) ?? [], incoming)
+      : incoming;
+    lastTodosBySession.set(cacheKey, todos);
+
     const id = `cursor-todos-${++todoCallCounter}`;
-    host.emitChunk({ type: 'tool_use', id, name: TOOL_TODO_WRITE, input }, parsed.sessionId);
+    host.emitChunk({ type: 'tool_use', id, name: TOOL_TODO_WRITE, input: { todos } }, parsed.sessionId);
     host.emitChunk({ type: 'tool_result', id, content: 'Todos updated', isError: false }, parsed.sessionId);
   }));
 
@@ -300,6 +363,7 @@ export function registerCursorAcpExtensions(
   unsubscribes.push(transport.onNotification('cursor/task', () => {}));
 
   return () => {
+    lastTodosBySession.clear();
     while (unsubscribes.length > 0) {
       unsubscribes.pop()?.();
     }

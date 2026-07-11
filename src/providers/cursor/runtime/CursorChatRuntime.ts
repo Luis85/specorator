@@ -727,12 +727,25 @@ export class CursorChatRuntime implements ChatRuntime {
     }
 
     const input = normalizeApprovalInput(request.toolCall.rawInput);
-    const decision = await this.host.approval(
-      request.toolCall.title ?? 'tool',
-      input,
-      request.toolCall.title ?? '',
-      { decisionOptions: buildAcpApprovalDecisionOptions(request.options) },
+    // Race the approval card against the per-turn cancel signal. cancel()/
+    // handleTransportClosed abort it and call host.dismissApproval(), which
+    // destroys the card WITHOUT resolving host.approval() — so without this race
+    // the still-open session/request_permission RPC would hang until the 5s
+    // cancel escalation restarts the process. On cancel, answer the RPC with the
+    // documented ACP `cancelled` outcome so the turn ends promptly and cleanly.
+    const signal = this.askQuestionAbortController?.signal;
+    const decision = await raceApprovalAgainstCancel(
+      this.host.approval(
+        request.toolCall.title ?? 'tool',
+        input,
+        request.toolCall.title ?? '',
+        { decisionOptions: buildAcpApprovalDecisionOptions(request.options) },
+      ),
+      signal,
     );
+    if (decision === APPROVAL_CANCELLED) {
+      return { outcome: { outcome: 'cancelled' } };
+    }
     return mapApprovalDecision(decision, request.options);
   }
 
@@ -826,6 +839,31 @@ export class CursorChatRuntime implements ChatRuntime {
     this.currentSessionModelId = null;
     this.advertisedModelValues = null;
   }
+}
+
+// Sentinel resolved by the approval race when the per-turn cancel signal fires
+// before the user decides. ApprovalDecision is a string|object union, so a
+// symbol can never collide with a real decision.
+const APPROVAL_CANCELLED = Symbol('cursor-approval-cancelled');
+
+function raceApprovalAgainstCancel<T>(
+  promise: Promise<T>,
+  signal?: AbortSignal,
+): Promise<T | typeof APPROVAL_CANCELLED> {
+  if (!signal) {
+    return promise;
+  }
+  if (signal.aborted) {
+    return Promise.resolve(APPROVAL_CANCELLED);
+  }
+  return new Promise<T | typeof APPROVAL_CANCELLED>((resolve, reject) => {
+    const onAbort = () => resolve(APPROVAL_CANCELLED);
+    signal.addEventListener('abort', onAbort, { once: true });
+    promise.then(
+      (value) => { signal.removeEventListener('abort', onAbort); resolve(value); },
+      (error) => { signal.removeEventListener('abort', onAbort); reject(error); },
+    );
+  });
 }
 
 function withTimeout<T>(promise: Promise<T>, ms: number, timeoutError: Error): Promise<T> {

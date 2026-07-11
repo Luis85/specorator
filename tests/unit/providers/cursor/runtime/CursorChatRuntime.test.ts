@@ -246,6 +246,61 @@ describe('CursorChatRuntime.handlePermissionRequest', () => {
     expect(approval).toHaveBeenCalled();
     expect(response.outcome.optionId).toBe('custom');
   });
+
+  it('resolves the RPC cancelled when cancel() aborts a pending approval', async () => {
+    // approval never settles on its own — the real card is destroyed by
+    // dismissApproval without resolving, so only the cancel abort can end it.
+    const approval = jest.fn(() => new Promise<never>(() => {}));
+    const dismissApproval = jest.fn();
+    const host = { ...createHeadlessRuntimeHost(), approval, dismissApproval };
+    const runtime = makeRuntime({}, host);
+    const bag = primeRuntime(runtime, { cancel: jest.fn() });
+    bag.sessionId = 'S1';
+    bag.askQuestionAbortController = new AbortController();
+    const request = makeRequest([{ kind: 'allow_once', optionId: 'ok', name: 'Allow' }]);
+
+    const pending = (bag.handlePermissionRequest as (r: unknown) => Promise<{ outcome: Record<string, unknown> }>)
+      .call(runtime, request);
+    // Cancel while the approval is still pending; this aborts the turn signal.
+    runtime.cancel();
+    const response = await pending;
+
+    expect(response.outcome).toEqual({ outcome: 'cancelled' });
+    expect(dismissApproval).toHaveBeenCalled();
+  });
+
+  it('resolves the RPC cancelled when the transport closes during a pending approval', async () => {
+    const approval = jest.fn(() => new Promise<never>(() => {}));
+    const host = { ...createHeadlessRuntimeHost(), approval };
+    const runtime = makeRuntime({}, host);
+    const bag = primeRuntime(runtime, {});
+    bag.activeTurn = { queue: new AcpStreamChunkQueue(), sessionId: 'S1', usageModel: null };
+    bag.askQuestionAbortController = new AbortController();
+    const request = makeRequest([{ kind: 'allow_once', optionId: 'ok', name: 'Allow' }]);
+
+    const pending = (bag.handlePermissionRequest as (r: unknown) => Promise<{ outcome: Record<string, unknown> }>)
+      .call(runtime, request);
+    (bag.handleTransportClosed as (t: unknown) => void).call(runtime, bag.transport);
+    const response = await pending;
+
+    expect(response.outcome).toEqual({ outcome: 'cancelled' });
+  });
+
+  it('resolves cancelled immediately when the turn signal is already aborted', async () => {
+    const approval = jest.fn(() => new Promise<never>(() => {}));
+    const host = { ...createHeadlessRuntimeHost(), approval };
+    const runtime = makeRuntime({}, host);
+    const bag = runtime as unknown as Record<string, unknown>;
+    const controller = new AbortController();
+    controller.abort();
+    bag.askQuestionAbortController = controller;
+    const request = makeRequest([{ kind: 'allow_once', optionId: 'ok', name: 'Allow' }]);
+
+    const response = await (bag.handlePermissionRequest as (r: unknown) => Promise<{ outcome: Record<string, unknown> }>)
+      .call(runtime, request);
+
+    expect(response.outcome).toEqual({ outcome: 'cancelled' });
+  });
 });
 
 describe('CursorChatRuntime.emitFinalUsage', () => {

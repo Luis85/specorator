@@ -373,6 +373,133 @@ describe('registerCursorAcpExtensions', () => {
     expect(() => notifications.get('cursor/update_todos')!({ todos: 'not-an-array' })).not.toThrow();
   });
 
+  it('replaces the todo list when merge is false/absent', async () => {
+    const { transport, notifications } = makeFakeTransport();
+    const chunks: StreamChunk[] = [];
+    registerCursorAcpExtensions(transport as never, {
+      askUser: jest.fn(),
+      emitChunk: (c) => chunks.push(c),
+      patchTurnMetadata: () => {},
+    });
+
+    await notifications.get('cursor/update_todos')!({
+      todos: [{ id: '1', content: 'a', status: 'pending' }, { id: '2', content: 'b', status: 'pending' }],
+    });
+    // Second full update (no merge flag) fully replaces the panel.
+    await notifications.get('cursor/update_todos')!({
+      todos: [{ id: '3', content: 'c', status: 'pending' }],
+    });
+
+    const lastToolUse = [...chunks].reverse().find((c) => c.type === 'tool_use') as
+      | { input: { todos: Array<{ id: string; content: string }> } }
+      | undefined;
+    expect(lastToolUse!.input.todos.map((t) => t.content)).toEqual(['c']);
+  });
+
+  it('merges an incremental update over the previous list, keeping unlisted items', async () => {
+    const { transport, notifications } = makeFakeTransport();
+    const chunks: StreamChunk[] = [];
+    registerCursorAcpExtensions(transport as never, {
+      askUser: jest.fn(),
+      emitChunk: (c) => chunks.push(c),
+      patchTurnMetadata: () => {},
+    });
+
+    await notifications.get('cursor/update_todos')!({
+      todos: [
+        { id: '1', content: 'step 1', status: 'pending' },
+        { id: '2', content: 'step 2', status: 'pending' },
+      ],
+    });
+    // merge with only the changed item — step 2 must survive.
+    await notifications.get('cursor/update_todos')!({
+      merge: true,
+      todos: [{ id: '1', content: 'step 1', status: 'completed' }],
+    });
+
+    const lastToolUse = [...chunks].reverse().find((c) => c.type === 'tool_use') as
+      | { input: { todos: Array<{ id: string; content: string; status: string }> } }
+      | undefined;
+    expect(lastToolUse!.input.todos).toEqual([
+      { id: '1', content: 'step 1', activeForm: 'step 1', status: 'completed' },
+      { id: '2', content: 'step 2', activeForm: 'step 2', status: 'pending' },
+    ]);
+  });
+
+  it('appends a new item on an incremental merge update', async () => {
+    const { transport, notifications } = makeFakeTransport();
+    const chunks: StreamChunk[] = [];
+    registerCursorAcpExtensions(transport as never, {
+      askUser: jest.fn(),
+      emitChunk: (c) => chunks.push(c),
+      patchTurnMetadata: () => {},
+    });
+
+    await notifications.get('cursor/update_todos')!({
+      todos: [{ id: '1', content: 'step 1', status: 'pending' }],
+    });
+    await notifications.get('cursor/update_todos')!({
+      merge: true,
+      todos: [{ id: '2', content: 'step 2', status: 'in_progress' }],
+    });
+
+    const lastToolUse = [...chunks].reverse().find((c) => c.type === 'tool_use') as
+      | { input: { todos: Array<{ id: string; content: string }> } }
+      | undefined;
+    expect(lastToolUse!.input.todos.map((t) => `${t.id}:${t.content}`)).toEqual([
+      '1:step 1',
+      '2:step 2',
+    ]);
+  });
+
+  it('matches by content when the merged item carries no id', async () => {
+    const { transport, notifications } = makeFakeTransport();
+    const chunks: StreamChunk[] = [];
+    registerCursorAcpExtensions(transport as never, {
+      askUser: jest.fn(),
+      emitChunk: (c) => chunks.push(c),
+      patchTurnMetadata: () => {},
+    });
+
+    await notifications.get('cursor/update_todos')!({
+      todos: [{ content: 'step 1', status: 'pending' }, { content: 'step 2', status: 'pending' }],
+    });
+    await notifications.get('cursor/update_todos')!({
+      merge: true,
+      todos: [{ content: 'step 1', status: 'completed' }],
+    });
+
+    const lastToolUse = [...chunks].reverse().find((c) => c.type === 'tool_use') as
+      | { input: { todos: Array<{ content: string; status: string }> } }
+      | undefined;
+    expect(lastToolUse!.input.todos).toEqual([
+      { id: '', content: 'step 1', activeForm: 'step 1', status: 'completed' },
+      { id: '', content: 'step 2', activeForm: 'step 2', status: 'pending' },
+    ]);
+  });
+
+  it('degrades a malformed merge payload without throwing', () => {
+    const { transport, notifications } = makeFakeTransport();
+    const chunks: StreamChunk[] = [];
+    registerCursorAcpExtensions(transport as never, {
+      askUser: jest.fn(),
+      emitChunk: (c) => chunks.push(c),
+      patchTurnMetadata: () => {},
+    });
+
+    // Seed a valid list, then merge a malformed batch.
+    notifications.get('cursor/update_todos')!({ todos: [{ id: '1', content: 'step 1', status: 'pending' }] });
+    expect(() => {
+      notifications.get('cursor/update_todos')!({ merge: true, todos: [null, 'oops', { status: 'pending' }] });
+    }).not.toThrow();
+
+    const lastToolUse = [...chunks].reverse().find((c) => c.type === 'tool_use') as
+      | { input: { todos: Array<{ content: string }> } }
+      | undefined;
+    // The malformed entries coerce to nothing, so the seeded item survives.
+    expect(lastToolUse!.input.todos.map((t) => t.content)).toEqual(['step 1']);
+  });
+
   it('resolves to the cancelled outcome (never rejects) when questions entries are null', async () => {
     const { transport, requests } = makeFakeTransport();
     registerCursorAcpExtensions(transport as never, {
