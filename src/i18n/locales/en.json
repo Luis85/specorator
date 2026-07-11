@@ -781,6 +781,7 @@
       "doneWhen": "Done when",
       "boardNotices": "Board notices",
       "skippedNotes": "Skipped notes",
+      "loadError": "Failed to load the board: {message}",
       "queueHalted": "Queue halted: {reason}",
       "failureOne": "{n} failure",
       "failureMany": "{n} failures",

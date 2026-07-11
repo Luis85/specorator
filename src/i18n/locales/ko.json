@@ -854,6 +854,7 @@
       "doneWhen": "완료 조건",
       "boardNotices": "보드 알림",
       "skippedNotes": "건너뛴 노트",
+      "loadError": "보드를 불러오지 못했습니다: {message}",
       "queueHalted": "대기열 중지됨: {reason}",
       "failureOne": "실패 {n}건",
       "failureMany": "실패 {n}건",

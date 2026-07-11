@@ -34,13 +34,16 @@ exports[`QuickActionsPanel > card structure snapshot (small, stable sub-tree) 1`
         Summarize
       </span>
       
-      <!-- .stop: the star sits inside the card's activate surface, and a
-            toggle must not also open the editor. -->
+      <!-- .stop: the star sits inside the card's activate surface (the
+            name-chips slot has no @click.stop wrapper), so a toggle must not
+            also open the editor — IconButton emits the native event so .stop
+            lands here at the call site. -->
       <button
         aria-label="Toggle favorite"
         aria-pressed="false"
-        class="specorator-vue-qa-star"
+        class="specorator-vue-icon-btn is-filled"
         data-v-00781362=""
+        data-v-91821aec=""
         title="Toggle favorite"
         type="button"
       />

@@ -1,7 +1,6 @@
 import { sharedRunRegistry } from '@/features/tasks/execution/activeRunRegistry';
 import { createQueueControlState } from '@/features/tasks/execution/QueueRunner';
 import { QueueSlotTracker } from '@/features/tasks/execution/QueueSlotTracker';
-import { AgentBoardLiveHeartbeatTracker } from '@/features/tasks/ui/agentBoardLiveHeartbeat';
 import { AgentBoardView } from '@/features/tasks/ui/AgentBoardView';
 
 describe('AgentBoardView.onToggleQueue', () => {
@@ -58,25 +57,23 @@ describe('AgentBoardView.onToggleQueue', () => {
 });
 
 describe('AgentBoardView.onQueueCapChanged', () => {
-  it('applies the live halt threshold, ticks, and re-renders on a settings wake', () => {
+  it('applies the live halt threshold and ticks the runner on a settings wake', () => {
     // The wake fires on any settings save. The global cap is applied by the
     // plugin; the per-runner halt threshold must be synced here too, and the
-    // board must re-render so the "Work-order tabs N/M" slot badge picks up the
-    // new cap immediately — otherwise the badge stays stale until the next
-    // unrelated status/run event ticks the board.
+    // runner ticked so a raised cap drains immediately. The "Work-order tabs N/M"
+    // slot badge is now repainted by the Vue store (task:queue-cap-changed is a
+    // full-refresh event → store.load() re-reads getTabSlotUsage()), so the view
+    // no longer renders here.
     const setHaltAfterFailures = jest.fn();
     const tick = jest.fn();
-    const render = jest.fn();
     const view = Object.create(AgentBoardView.prototype) as any;
     view.runner = { setHaltAfterFailures, tick };
-    view.render = render;
     view.plugin = { settings: { agentBoardQueueHaltAfter: 5 } };
 
     view.onQueueCapChanged();
 
     expect(setHaltAfterFailures).toHaveBeenCalledWith(5);
     expect(tick).toHaveBeenCalled();
-    expect(render).toHaveBeenCalledTimes(1);
   });
 });
 
@@ -371,79 +368,10 @@ describe('AgentBoardView.sweepStaleSidecars', () => {
   });
 });
 
-describe('AgentBoardView.patchLiveStrip live heartbeat', () => {
-  function buildLiveStripView(frontmatterHeartbeat: string | undefined) {
-    const patchLiveStrip = jest.fn();
-    const view = Object.create(AgentBoardView.prototype) as any;
-    view.renderer = { patchLiveStrip };
-    view.model = {
-      tasks: [{
-        path: 'tasks/wo.md',
-        frontmatter: {
-          id: 'wo-1',
-          started: new Date(Date.now() - 5_000).toISOString(),
-          heartbeat: frontmatterHeartbeat,
-          attempts: 1,
-        },
-        sections: { ledger: '' },
-      }],
-    };
-    view.heartbeatTracker = new AgentBoardLiveHeartbeatTracker();
-    return { view, patchLiveStrip };
-  }
-
-  it('prefers the live heartbeat event timestamp over stale frontmatter', () => {
-    // Frontmatter heartbeat is 10 minutes old (would render as very stale).
-    // A live event fired ~1s ago should make the rendered age small.
-    const stale = new Date(Date.now() - 10 * 60_000).toISOString();
-    const { view, patchLiveStrip } = buildLiveStripView(stale);
-    view.heartbeatTracker.record('wo-1', new Date(Date.now() - 1_000).toISOString());
-
-    view.patchLiveStrip('wo-1');
-
-    const payload = patchLiveStrip.mock.calls[0][1] as { heartbeatAgeMs: number };
-    expect(payload.heartbeatAgeMs).toBeLessThan(5_000);
-    expect(payload.heartbeatAgeMs).toBeGreaterThanOrEqual(0);
-  });
-
-  it('falls back to frontmatter heartbeat when no live tick has been captured', () => {
-    const stamp = new Date(Date.now() - 30_000).toISOString();
-    const { view, patchLiveStrip } = buildLiveStripView(stamp);
-
-    view.patchLiveStrip('wo-1');
-
-    const payload = patchLiveStrip.mock.calls[0][1] as { heartbeatAgeMs: number };
-    expect(payload.heartbeatAgeMs).toBeGreaterThanOrEqual(29_000);
-    expect(payload.heartbeatAgeMs).toBeLessThan(35_000);
-  });
-});
-
-describe('AgentBoardView.onStatusChanged liveHeartbeat eviction', () => {
-  function buildEvictView() {
-    const view = Object.create(AgentBoardView.prototype) as any;
-    view.pauseState = new Map();
-    view.heartbeatTracker = new AgentBoardLiveHeartbeatTracker();
-    view.heartbeatTracker.record('wo-1', '2026-06-06T00:00:00Z');
-    view.evictSpy = jest.spyOn(view.heartbeatTracker, 'evict');
-    view.patchCard = jest.fn();
-    return view;
-  }
-
-  it.each(['review', 'done', 'failed', 'canceled', 'needs_handoff'] as const)(
-    'drops the live heartbeat entry on terminal status %s',
-    (status) => {
-      const view = buildEvictView();
-      view.onStatusChanged({ taskId: 'wo-1', status });
-      expect(view.evictSpy).toHaveBeenCalledWith('wo-1');
-    },
-  );
-
-  it('keeps the live heartbeat entry on a non-terminal status change', () => {
-    const view = buildEvictView();
-    view.onStatusChanged({ taskId: 'wo-1', status: 'running' });
-    expect(view.evictSpy).not.toHaveBeenCalled();
-  });
-});
+// The live-strip heartbeat projection and the terminal heartbeat eviction moved
+// to the Vue surface in the board cutover: the pure projection is covered by
+// tests/vue/tasks/computeLiveStrip.test.ts and the store overlay/eviction by
+// tests/vue/tasks/{agentBoardStore,useBoardEventRouting}.test.ts.
 
 describe('AgentBoardView.finalizeLedgerToNote', () => {
   // Build a view stub with snapshotLedgerAsMarkdown + cleanupRun + applyNoteChange

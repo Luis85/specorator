@@ -24,6 +24,10 @@ export default defineConfig({
       provider: 'v8',
       include: [
         'src/features/library/**/*.{ts,vue}',
+        // Agent Board Vue island (store, useBoardEventRouting, vueIsland, and the
+        // board/editor SFCs) — tested in this lane (~400 vue specs) and excluded
+        // from Jest collection; gate its coverage here where it is exercised.
+        'src/features/tasks/ui/vue/**/*.{ts,vue}',
         // Shared accessor/action modules whose meaningful exercise lives in
         // this lane: the loop accessors feed LoopsPanel, and the roster pair
         // is only function-covered by AgentsPanel tests (the legacy

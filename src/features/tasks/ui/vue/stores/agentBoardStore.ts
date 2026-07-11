@@ -1,0 +1,374 @@
+import { defineStore } from 'pinia';
+import { ref, shallowRef } from 'vue';
+
+import type SpecoratorPlugin from '../../../../../main';
+import { mergeById } from '../../../../library/vue/mergeById';
+import { useGuardedLoad } from '../../../../library/vue/useGuardedLoad';
+import { loadBoardConfig } from '../../../config/BoardConfigStore';
+import type { ResolvedBoardLayout } from '../../../config/boardConfigTypes';
+import { boardWorkOrderFolder } from '../../../config/boardWorkOrderFolder';
+import { resolveBoardLayout } from '../../../config/resolveBoardLayout';
+import { TaskIndexer } from '../../../indexing/TaskIndexer';
+import { isRunnableTaskStatus } from '../../../model/taskStateMachine';
+import type { InvalidTaskNote, TaskSpec, TaskStatus } from '../../../model/taskTypes';
+import { TaskNoteStore } from '../../../storage/TaskNoteStore';
+import type { AgentBoardPauseState } from '../../cardActions';
+import { LIVE_STATUSES } from '../statusDot';
+
+/**
+ * Loader seam over the vault-reading services the view drives in `refresh()`.
+ * Production wires `TaskIndexer` + `loadBoardConfig` + `resolveBoardLayout`;
+ * tests inject a fake so the store stays a pure projection with no real I/O.
+ */
+export interface BoardLoaderDeps {
+  indexVaultFolder(vault: unknown, folder: string): Promise<{ tasks: TaskSpec[]; invalidNotes: unknown[] }>;
+  loadBoardConfig: typeof loadBoardConfig;
+  resolveBoardLayout: typeof resolveBoardLayout;
+}
+
+// Shared module-level initial value for every store's `layout`. Frozen so an
+// accidental reassignment of a field on this shared constant can't leak across
+// leaves; `load()` always replaces `layout.value` wholesale rather than mutating.
+const EMPTY_LAYOUT: ResolvedBoardLayout = Object.freeze({ lanes: [], errors: [] });
+
+/** Chat-tab usage the toolbar's "Work-order tabs N/M · K free" badge reads,
+ *  mirroring the imperative `AgentBoardRenderState.slots` (`plugin.getTabSlotUsage()`). */
+export interface BoardSlotUsage {
+  used: number;
+  max: number;
+}
+
+/**
+ * Value-only projection of the toolbar's queue chrome — the imperative
+ * `QueueToolbarState` MINUS its `onToggle` callback (the Vue toolbar routes that
+ * action through the callbacks contract like every other button, not the store).
+ * Sourced live from the plugin-level shared queue control + slot tracker, the
+ * same singletons the imperative `getQueueToolbarState()` reads.
+ */
+export interface BoardToolbarQueueState {
+  paused: boolean;
+  halted: boolean;
+  haltReason: string | null;
+  slotOccupied: number;
+  slotCapacity: number;
+  consecutiveFailures: number;
+}
+
+/**
+ * Snapshot the toolbar's queue chrome off the plugin's shared singletons. The
+ * imperative view reads `runner.isPaused()/isHalted()/…`, which all delegate to
+ * `plugin.queueControl`; reading the control directly is the identical value
+ * without needing a runner (the queue engine stays imperative and out of scope).
+ * `queueControl` is eagerly seeded `paused: true`, matching the imperative's
+ * `runner?.isPaused() ?? true` fallback before a runner exists.
+ */
+function readQueueToolbarState(p: SpecoratorPlugin): BoardToolbarQueueState {
+  const control = p.queueControl;
+  const tracker = p.queueSlotTracker;
+  return {
+    paused: control.paused,
+    halted: control.halted,
+    haltReason: control.haltReason,
+    slotOccupied: tracker.occupied(),
+    slotCapacity: tracker.capacity(),
+    consecutiveFailures: control.consecutiveFailures,
+  };
+}
+
+/**
+ * Reactive read-model over the Agent Board layout plus the two live overlays the
+ * imperative view keeps (heartbeat `at` per task, last ledger line per task).
+ * I/O stays in the wrapped services; every `load()` re-derives from disk and
+ * merges by task id so untouched cards keep their reference (no live-board
+ * flicker), mirroring the Library stores' projection contract.
+ */
+export const useAgentBoardStore = defineStore('agent-board', () => {
+  const layout = shallowRef<ResolvedBoardLayout>(EMPTY_LAYOUT);
+  // shallowRef: reactivity is driven purely by whole-Map reference replacement
+  // in the setters below, so the deep-proxy overhead of `ref` would go unused.
+  const liveHeartbeats = shallowRef<Map<string, string>>(new Map());
+  const liveLedger = shallowRef<Map<string, string>>(new Map());
+  // Event-sourced pause overlay: the imperative view's `pauseState` Map keyed by
+  // task id, populated from task:needs-input/needs-approval and consumed by the
+  // reply surface. The prompt (question / approval action + risk) lives in the
+  // run events, NOT the note, so it can't be re-derived by load() — this overlay
+  // carries it. shallowRef for the same whole-Map replacement reactivity contract
+  // as liveHeartbeats/liveLedger.
+  const pauseState = shallowRef<Map<string, AgentBoardPauseState>>(new Map());
+  // Event-sourced skip overlay: the runner's shared `control.lastSkipReasonByTask`
+  // is a plain (non-reactive) Map, so the imperative renderer re-read it on every
+  // render to paint the queue skip chip. The Vue card can't watch that map — and a
+  // skip/ack never changes the note, so load()'s mergeById keeps the identical task
+  // ref and a task-only computed would never invalidate. This overlay is the
+  // reactive mirror: set from task:queue-skipped, cleared wherever the runner clears
+  // its own entry (launch → task:attempt-started, the ack, and any status change /
+  // run-finished off the runnable state). shallowRef for the same whole-Map
+  // replacement contract as pauseState/liveHeartbeats.
+  const skipReasons = shallowRef<Map<string, string>>(new Map());
+  // Work-order notes that failed to parse — the imperative renderErrors' "Skipped
+  // notes" surface. Sourced from the loader's model, not the resolved layout.
+  const invalidNotes = shallowRef<InvalidTaskNote[]>([]);
+  // Toolbar chrome projections (Part 5a). Both mirror LIVE plugin singletons the
+  // imperative view re-reads every render — NOT the vault index — so `load()`
+  // refreshes them unconditionally (see below). shallowRef: reactivity is the
+  // whole-value replacement in `load()`, so deep tracking would be unused.
+  // `slots` = chat-tab usage (getTabSlotUsage); `queueState` = the shared queue
+  // control snapshot, null until the first load (no divider/switch/counters —
+  // the imperative renderer gates that whole block on `state.queue`).
+  const slots = shallowRef<BoardSlotUsage>({ used: 0, max: 0 });
+  const queueState = shallowRef<BoardToolbarQueueState | null>(null);
+  const { loading, run } = useGuardedLoad();
+  // Captured (not thrown) so callers can fire `void store.load()` without
+  // guarding a rejection: the fetch path awaits vault reads on files that can
+  // vanish mid delete/rename burst — exactly the vault events driving reloads.
+  const error = ref<string | null>(null);
+
+  // Reactive board clock: the O(1)-per-second freshness tick that replaces the
+  // imperative view's `tickElapsed` interval. Live strips read it so the dot
+  // escalates (green→amber→red) and elapsed advances on a hung run even when NO
+  // heartbeat arrives. Kept OFF the heartbeat path — a heartbeat never ticks it,
+  // preserving the per-strip O(1) heartbeat boundary; the 1s tick re-renders the
+  // (bounded) set of live strips, which is the correct, separate axis.
+  const nowMs = ref(Date.now());
+  function tick(): void {
+    nowMs.value = Date.now();
+  }
+
+  // Reactive roster-change counter. A card's assignee persona resolves through
+  // `callbacks.resolvePersona`, which reads the view's NON-reactive rosterAgents
+  // cache; on `roster:changed` the guarded reload keeps the unchanged task ref
+  // (mergeById), so a rename/recolor would not repaint the avatar until the card
+  // re-renders for another reason. Cards depend on this version so a bump forces
+  // the persona to re-resolve — the imperative board repainted on roster:changed.
+  const rosterVersion = ref(0);
+  function bumpRoster(): void {
+    rosterVersion.value += 1;
+  }
+
+  let plugin: SpecoratorPlugin | null = null;
+  let deps: BoardLoaderDeps | null = null;
+
+  function init(p: SpecoratorPlugin, override?: BoardLoaderDeps): void {
+    if (plugin) return;
+    plugin = p;
+    const indexer = new TaskIndexer(new TaskNoteStore());
+    deps = override ?? {
+      indexVaultFolder: (vault, folder) => indexer.indexVaultFolder(vault as never, folder),
+      loadBoardConfig,
+      resolveBoardLayout,
+    };
+  }
+
+  function folder(): string {
+    // Shared with the Vue event-routing composable's vault filter (see
+    // boardWorkOrderFolder) so the folder the loader indexes and the folder the
+    // filter accepts can never drift apart.
+    return plugin ? boardWorkOrderFolder(plugin.settings) : 'Agent Board/tasks';
+  }
+
+  // Lightweight toolbar-chrome refresh — re-reads ONLY the live plugin singletons
+  // the toolbar badge shows (chat-tab slot usage + the shared queue control
+  // snapshot), with NO vault re-index. The hot auto-run queue events route here
+  // instead of load(): task:queue-tick (per launch) and task:queue-state-changed
+  // (per settle) change the counters, not which lane a card sits in — the
+  // launching/settling card's move rides attempt-started/status-changed/
+  // run-finished — so re-indexing the whole work-order folder on each would make
+  // auto-run throughput scale with the note count.
+  function refreshToolbar(): void {
+    if (!plugin) return;
+    slots.value = plugin.getTabSlotUsage();
+    queueState.value = readQueueToolbarState(plugin);
+  }
+
+  async function load(): Promise<void> {
+    if (!plugin || !deps) return;
+    const p = plugin;
+    const d = deps;
+    // Toolbar chrome reads live plugin singletons (chat-tab usage + the shared
+    // queue control/slot tracker), independent of the vault index. Set BEFORE
+    // (and outside) `run()` so a transient index rejection can't stall the badge
+    // — the imperative view's refreshSlots()/getQueueToolbarState() likewise
+    // never gate on the index.
+    refreshToolbar();
+    await run(
+      async () => {
+        const model = await d.indexVaultFolder(p.app.vault, folder());
+        // Keep loadBoardConfig's parse warnings (duplicate lane ids / status
+        // mappings) — the imperative view merged them into layout.errors so the
+        // Board notices section explained the fallback lane behavior; dropping
+        // them leaves users with ambiguous lanes and no diagnostic.
+        const { config, errors: configErrors } = d.loadBoardConfig(p.settings);
+        const resolved = d.resolveBoardLayout(config, model as never);
+        return {
+          layout: { ...resolved, errors: [...configErrors, ...resolved.errors] },
+          invalidNotes: model.invalidNotes as InvalidTaskNote[],
+        };
+      },
+      ({ layout: next, invalidNotes: notes }) => {
+        const merged = next.lanes.map((lane) => ({
+          ...lane,
+          tasks: mergeById(currentTasks(lane.id), lane.tasks, (t) => t.frontmatter.id),
+        }));
+        layout.value = { lanes: merged, errors: next.errors };
+        invalidNotes.value = notes;
+        reconcileOverlays(merged);
+        error.value = null;
+      },
+      (e) => { error.value = e instanceof Error ? e.message : String(e); },
+    );
+  }
+
+  function currentTasks(laneId: string): TaskSpec[] {
+    return layout.value.lanes.find((l) => l.id === laneId)?.tasks ?? [];
+  }
+
+  // Prune the event-sourced overlays against the just-loaded statuses. The store
+  // is module-global (see globalPinia) and survives all board panes closing, but
+  // useBoardEventRouting unsubscribes on unmount — so an event that would clear an
+  // overlay (a terminal status-changed, an attempt-started) is MISSED while the
+  // board is closed, and a note-edit-driven reload fires no such event at all.
+  // Reconciling on every load recovers from either gap, keyed by the overlay's own
+  // validity rule:
+  //  - live heartbeat/ledger: valid only while the card is LIVE (running / needs
+  //    input / needs approval) — else a retry before the first new heartbeat would
+  //    paint the previous run's stale strip;
+  //  - skip chip: valid only while the card is RUNNABLE (ready / needs_fix) — the
+  //    only statuses the runner would try to launch and thus skip; a note edit that
+  //    moves the card off that status (or deletes it) leaves an orphan chip;
+  //  - pause prompt: valid only while the card is PAUSED (needs_input / needs_
+  //    approval) AND for the SAME run — a resume/terminal missed while closed leaves
+  //    a prompt from the prior run, and if the card later re-pauses in a new run the
+  //    status gate alone would keep that stale question/action (the note's run_id no
+  //    longer matches the overlay's), so pass the wrong-run payload rather than
+  //    falling back to the note's pause_reason.
+  // Unlike clearing on unmount, this preserves an overlay that is still valid in
+  // the reloaded layout (e.g. a genuinely-live card across a brief remount).
+  function reconcileOverlays(lanes: ResolvedBoardLayout['lanes']): void {
+    const metaById = new Map<string, { status: TaskStatus; runId?: string | null }>();
+    for (const lane of lanes) {
+      for (const task of lane.tasks) {
+        metaById.set(task.frontmatter.id, { status: task.frontmatter.status, runId: task.frontmatter.run_id });
+      }
+    }
+    liveHeartbeats.value = pruneOverlay(liveHeartbeats.value, metaById, (m) => LIVE_STATUSES.has(m.status)) ?? liveHeartbeats.value;
+    liveLedger.value = pruneOverlay(liveLedger.value, metaById, (m) => LIVE_STATUSES.has(m.status)) ?? liveLedger.value;
+    // Skip chip is the one overlay with an authoritative NON-event source: the
+    // runner's shared `queueControl.lastSkipReasonByTask`. Seed from it BEFORE the
+    // prune so a skip recorded before this board mounted stays visible — on a same-
+    // session reopen with auto-run active, AgentBoardView.refresh() runs
+    // syncRunner()/tick() (which can recordSkip + emit task:queue-skipped) BEFORE
+    // AgentBoardRoot mounts and subscribes, and QueueRunner debounces same-reason
+    // re-skips so no later event would repaint the chip. The prune then drops any
+    // seeded entry whose card is no longer runnable.
+    skipReasons.value = seedSkipsFromRunner() ?? skipReasons.value;
+    skipReasons.value = pruneOverlay(skipReasons.value, metaById, (m) => isRunnableTaskStatus(m.status)) ?? skipReasons.value;
+    pauseState.value = pruneOverlay(pauseState.value, metaById, (m, entry) => {
+      if (m.status !== 'needs_input' && m.status !== 'needs_approval') return false;
+      // Drop only on a definite run mismatch (both ids present) — keep when either
+      // is absent so a fresh overlay whose note run_id hasn't landed yet survives.
+      return !(entry.runId && m.runId && entry.runId !== m.runId);
+    }) ?? pauseState.value;
+  }
+
+  // Merge any skip reasons the runner recorded into its shared map that the
+  // reactive overlay is missing (or has under a different reason). Returns a new
+  // Map when it added/changed an entry, else null — so a load with nothing new to
+  // seed never churns the shallowRef. `ack`/launch delete from BOTH maps, so an
+  // acked chip is absent here and never resurrected.
+  function seedSkipsFromRunner(): Map<string, string> | null {
+    const shared = plugin?.queueControl?.lastSkipReasonByTask;
+    if (!shared) return null;
+    let seeded: Map<string, string> | null = null;
+    for (const [id, { reason }] of shared) {
+      if (skipReasons.value.get(id) === reason) continue;
+      seeded ??= new Map(skipReasons.value);
+      seeded.set(id, reason);
+    }
+    return seeded;
+  }
+
+  // Returns a new Map with every entry whose loaded task fails `keep` (or whose
+  // task is gone from the layout) dropped, or null when nothing was pruned — so
+  // load() only churns the shallowRef reference (and re-renders the bounded set of
+  // affected cards) when a stale entry actually existed.
+  function pruneOverlay<V>(
+    map: Map<string, V>,
+    metaById: Map<string, { status: TaskStatus; runId?: string | null }>,
+    keep: (meta: { status: TaskStatus; runId?: string | null }, entry: V) => boolean,
+  ): Map<string, V> | null {
+    let pruned: Map<string, V> | null = null;
+    for (const [id, entry] of map) {
+      const meta = metaById.get(id);
+      if (meta !== undefined && keep(meta, entry)) continue;
+      pruned ??= new Map(map);
+      pruned.delete(id);
+    }
+    return pruned;
+  }
+
+  function recordHeartbeat(taskId: string, at: string): void {
+    const next = new Map(liveHeartbeats.value);
+    next.set(taskId, at);
+    liveHeartbeats.value = next;
+  }
+
+  function recordLedger(taskId: string, message: string): void {
+    const next = new Map(liveLedger.value);
+    next.set(taskId, message);
+    liveLedger.value = next;
+  }
+
+  function evictLive(taskId: string): void {
+    if (liveHeartbeats.value.has(taskId)) {
+      const h = new Map(liveHeartbeats.value);
+      h.delete(taskId);
+      liveHeartbeats.value = h;
+    }
+    if (liveLedger.value.has(taskId)) {
+      const l = new Map(liveLedger.value);
+      l.delete(taskId);
+      liveLedger.value = l;
+    }
+  }
+
+  // New-reference-on-mutation like the live setters, so a shallowRef watch fires.
+  // Mirrors the imperative onPauseRequested `pauseState.set`.
+  function setPause(taskId: string, payload: AgentBoardPauseState): void {
+    const next = new Map(pauseState.value);
+    next.set(taskId, payload);
+    pauseState.value = next;
+  }
+
+  // Mirrors every imperative `pauseState.delete` (resume / terminal / status
+  // change off a pause status). Clearing an absent key is a no-op that leaves the
+  // reference untouched (no needless churn), matching evictLive's has-guard.
+  function clearPause(taskId: string): void {
+    if (!pauseState.value.has(taskId)) return;
+    const next = new Map(pauseState.value);
+    next.delete(taskId);
+    pauseState.value = next;
+  }
+
+  // Mirrors the runner's `recordSkip` set (task:queue-skipped). New-reference so a
+  // shallowRef watch fires and the card's skip chip paints without a note change.
+  function setSkip(taskId: string, reason: string): void {
+    const next = new Map(skipReasons.value);
+    next.set(taskId, reason);
+    skipReasons.value = next;
+  }
+
+  // Mirrors every point the runner clears `lastSkipReasonByTask` (launch/ack) plus
+  // the defensive status-change/finish clears. Absent-key clear is a no-reference
+  // no-op, matching clearPause/evictLive.
+  function clearSkip(taskId: string): void {
+    if (!skipReasons.value.has(taskId)) return;
+    const next = new Map(skipReasons.value);
+    next.delete(taskId);
+    skipReasons.value = next;
+  }
+
+  return {
+    layout, liveHeartbeats, liveLedger, pauseState, skipReasons, invalidNotes, slots, queueState, nowMs, rosterVersion, loading, error,
+    init, load, refreshToolbar, tick, bumpRoster, recordHeartbeat, recordLedger, evictLive, setPause, clearPause, setSkip, clearSkip,
+  };
+});

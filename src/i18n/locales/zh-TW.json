@@ -854,6 +854,7 @@
       "doneWhen": "完成條件",
       "boardNotices": "看板通知",
       "skippedNotes": "已略過的筆記",
+      "loadError": "載入看板失敗：{message}",
       "queueHalted": "佇列已停止：{reason}",
       "failureOne": "{n} 個失敗",
       "failureMany": "{n} 個失敗",

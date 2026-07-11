@@ -1,20 +1,20 @@
-import { type App, Component, MarkdownRenderer, Modal, setIcon } from 'obsidian';
+import { type App, Component, Modal } from 'obsidian';
+import { markRaw } from 'vue';
 
 import { t } from '../../../i18n/i18n';
 import { formatRelativeTime } from '../../../utils/date';
 import { type PersonaResolver } from '../../agents/personaRegistry';
-import { isPureAcceptanceChecklist, parseAcceptanceChecklist } from '../model/acceptanceChecklist';
-import { parseAcceptanceProgress } from '../model/acceptanceProgress';
 import type { TaskPriority, TaskSpec, TaskStatus } from '../model/taskTypes';
-import { renderSectionHeader } from './sectionHeader';
-import { renderWorkOrderActivity } from './workOrderActivitySection';
 import {
-  renderWorkOrderEditForm,
-  type WorkOrderEditFormHandle,
-  type WorkOrderSectionUpdate,
-} from './workOrderEditForm';
-import { renderWorkOrderFooter } from './workOrderFooterActions';
-import { renderWorkOrderProperties } from './workOrderPropertiesPanel';
+  DETAIL_APP_KEY,
+  DETAIL_CALLBACKS_KEY,
+  DETAIL_CLOSE_KEY,
+  DETAIL_MD_COMPONENT_KEY,
+  DETAIL_TASK_KEY,
+} from './vue/detailKeys';
+import { VueIsland } from './vue/vueIsland';
+import WorkOrderDetailRoot from './vue/WorkOrderDetailRoot.vue';
+import type { WorkOrderSectionUpdate } from './workOrderEditForm';
 
 export interface WorkOrderFieldUpdate {
   title?: string;
@@ -68,7 +68,7 @@ export interface WorkOrderDetailModalCallbacks {
   getLoopName?(loopId: string | undefined): string | undefined;
   /**
    * Combined persona + roster agent options for the agent picker. Preloaded at
-   * modal-open time by the caller so `renderAgentRow` stays synchronous.
+   * modal-open time by the caller so the agent row stays synchronous.
    * Both personas and roster agents are labelled by their plain name.
    */
   getAgentOptions(): WorkOrderOption[];
@@ -92,27 +92,16 @@ const EDITABLE_TITLE_STATUSES: ReadonlySet<TaskStatus> = new Set<TaskStatus>([
 // id is safe to use as the dialog's `aria-labelledby` target.
 const TITLE_ID = 'specorator-work-order-modal-title';
 
-/** Drop `undefined`-valued keys so a partial update merges cleanly into a snapshot. */
-function stripUndefined<T extends object>(value: T): Partial<T> {
-  return Object.fromEntries(
-    Object.entries(value).filter(([, v]) => v !== undefined),
-  ) as Partial<T>;
-}
-
 export class WorkOrderDetailModal extends Modal {
+  // Markdown-lifecycle component loaded for the whole open session and provided
+  // to the Vue island so every `MarkdownRenderer.render` inside it (objective /
+  // acceptance / handoff bodies) tears down when the modal closes.
   private readonly markdownComponent = new Component();
 
-  // Inline-edit state for the body sections. The header title + sidebar
-  // properties stay inline-editable in both modes; this toggle only swaps the
-  // main pane between the rendered sections and the textarea edit form.
-  private editing = false;
-  private mainEl: HTMLElement | null = null;
-  // The sticky footer is re-rendered on every edit toggle (it hosts the
-  // Edit / Cancel / Save actions), so keep a handle to it past onOpen.
-  private footerEl: HTMLElement | null = null;
-  // Live handle to the edit form's textareas while editing; the footer's Save
-  // button collects through it. Null in view mode.
-  private editForm: WorkOrderEditFormHandle | null = null;
+  // The Vue island mounted into `contentEl`. The shell (modalEl classes/CSS vars)
+  // and the pinned header stay imperative; the body + footer are Vue-owned. Shared
+  // create/provide/mount + unmount lifecycle with the template + lane editors.
+  private readonly island = new VueIsland();
 
   constructor(
     app: App,
@@ -142,86 +131,31 @@ export class WorkOrderDetailModal extends Modal {
     // `.modal-title`, which sits inside a `.modal-header` that is a SIBLING of
     // `.modal-content` — so it stays pinned above the scrolling content without a
     // custom sticky layer, and we reuse the native chrome instead of duplicating
-    // it. The body + footer live in the scrolling content.
+    // it. The body + footer live in the scrolling content, owned by the Vue island.
     const header = this.titleEl;
     header.addClass('specorator-work-order-modal-header');
     this.renderHeader(header);
 
     this.contentEl.addClass('specorator-work-order-modal-content');
-    const body = this.contentEl.createDiv({ cls: 'specorator-work-order-modal-body' });
-    const main = body.createDiv({ cls: 'specorator-work-order-modal-main' });
-    const sidebar = body.createDiv({ cls: 'specorator-work-order-modal-sidebar' });
-    const footer = this.contentEl.createDiv({ cls: 'specorator-work-order-modal-footer' });
-
-    renderWorkOrderProperties(sidebar, this.task, this.callbacks);
-
-    this.mainEl = main;
-    this.footerEl = footer;
-    this.renderMainPane();
-
-    this.renderFooter();
-  }
-
-  onClose(): void {
-    this.markdownComponent.unload();
-    this.contentEl.empty();
-    this.mainEl = null;
-    this.footerEl = null;
-    this.editForm = null;
-  }
-
-  /**
-   * Paints the scrolling main pane. In view mode it renders the read-only
-   * sections (Objective / Acceptance / Context / Constraints) plus the
-   * status-driven Activity block. In edit mode it swaps in the textarea form.
-   * The Edit / Cancel / Save affordances live in the sticky footer (not here),
-   * so a toggle repaints both this pane and the footer. Re-runs itself
-   * (clearing the pane first) on every Edit/Save/Cancel toggle.
-   */
-  private renderMainPane(): void {
-    const main = this.mainEl;
-    if (!main) return;
-    main.empty();
-    // The form handle is only valid while its DOM is mounted; drop it whenever
-    // the pane is repainted, then re-capture below if we're entering edit mode.
-    this.editForm = null;
-
-    if (this.editing) {
-      // Save / Cancel live in the footer (see renderFooter); the form only
-      // renders the textareas and hands back a collect() handle.
-      this.editForm = renderWorkOrderEditForm(main, this.task);
-      return;
-    }
-
-    this.renderObjective(main);
-    this.renderAcceptance(main);
-    this.renderProseSection(main, 'link', 'tasks.workOrderModal.sectionContext', this.task.sections.context);
-    this.renderProseSection(main, 'shield', 'tasks.workOrderModal.sectionConstraints', this.task.sections.constraints);
-    renderWorkOrderActivity(main, {
-      task: this.task,
-      app: this.app,
-      markdownComponent: this.markdownComponent,
+    // Mount the Vue island into contentEl. It owns the body (main + sidebar),
+    // the footer, and the inline-edit toggle. Obsidian objects are large/cyclic,
+    // so callbacks / app / markdown component are markRaw'd; the task is plain
+    // data provided as-is so the callbacks receive the same object identity.
+    this.island.mount(WorkOrderDetailRoot, this.contentEl, (app) => {
+      app.provide(DETAIL_TASK_KEY, this.task);
+      app.provide(DETAIL_CALLBACKS_KEY, markRaw(this.callbacks));
+      app.provide(DETAIL_APP_KEY, markRaw(this.app));
+      app.provide(DETAIL_MD_COMPONENT_KEY, markRaw(this.markdownComponent));
+      app.provide(DETAIL_CLOSE_KEY, () => this.close());
     });
   }
 
-  private isEditableStatus(): boolean {
-    return EDITABLE_TITLE_STATUSES.has(this.task.frontmatter.status);
-  }
-
-  // Edit / Cancel / Save are footer actions, so a toggle repaints BOTH the main
-  // pane (sections ↔ textareas) and the footer (Edit ↔ Cancel/Save).
-  private setEditing(editing: boolean): void {
-    this.editing = editing;
-    this.renderMainPane();
-    this.renderFooter();
-  }
-
-  private async commitSections(sections: WorkOrderSectionUpdate): Promise<void> {
-    await this.callbacks.onSaveSections?.(this.task, sections);
-    // Keep the in-memory snapshot current so the re-rendered view reflects the
-    // saved bodies (the modal holds its own copy; the board re-index is async).
-    this.task.sections = { ...this.task.sections, ...stripUndefined(sections) };
-    this.setEditing(false);
+  onClose(): void {
+    // Vue teardown first (runs onUnmounted hooks + drops mounted markdown), then
+    // the markdown component + the content shell.
+    this.island.unmount();
+    this.markdownComponent.unload();
+    this.contentEl.empty();
   }
 
   /**
@@ -283,8 +217,8 @@ export class WorkOrderDetailModal extends Modal {
    * keyboard-focusable `contenteditable="plaintext-only"` element (the
    * plaintext clamp blocks rich-paste DOM injection into a plain-text field):
    * Enter commits (blur), Esc reverts to the original and blurs, and a blur
-   * with a changed, non-empty value persists through `onSaveFields`. A rename
-   * hint sits under the title. Every other status renders plain, static text.
+   * with a changed, non-empty value persists through `onSaveFields`. Every other
+   * status renders plain, static text.
    */
   private renderHeaderTitle(header: HTMLElement): void {
     const { task } = this;
@@ -344,187 +278,6 @@ export class WorkOrderDetailModal extends Modal {
         title.setText(committed);
         title.blur();
       }
-    });
-  }
-
-  /**
-   * Objective: shared section header (target icon) over a paragraph whose body
-   * is rendered through `MarkdownRenderer` so Wikilinks / inline code / links
-   * stay interactive.
-   */
-  private renderObjective(parent: HTMLElement): void {
-    const { section } = renderSectionHeader(parent, {
-      icon: 'target',
-      label: t('tasks.workOrderModal.sectionObjective'),
-    });
-    const body = section.createDiv({ cls: 'specorator-work-order-modal-objective' });
-    void MarkdownRenderer.render(
-      this.app,
-      this.task.sections.objective || '—',
-      body,
-      this.task.path,
-      this.markdownComponent,
-    );
-  }
-
-  /**
-   * Context + Constraints prose: rendered through `MarkdownRenderer` (links /
-   * wikilinks / code stay live), mirroring Objective. They round out the modal
-   * so the whole work order is readable — and, via the Edit toggle, fillable —
-   * without opening the note. An empty section shows the em-dash placeholder
-   * rather than collapsing, so the document structure stays visible.
-   */
-  private renderProseSection(
-    parent: HTMLElement,
-    icon: string,
-    labelKey: Parameters<typeof t>[0],
-    markdown: string,
-  ): void {
-    const { section } = renderSectionHeader(parent, { icon, label: t(labelKey) });
-    const body = section.createDiv({ cls: 'specorator-work-order-modal-objective' });
-    void MarkdownRenderer.render(this.app, markdown || '—', body, this.task.path, this.markdownComponent);
-  }
-
-  /**
-   * Acceptance criteria: shared section header (list-checks icon) with a
-   * progress ring + done/total count in the right slot, over a read-only
-   * checklist card. Counts come from `parseAcceptanceProgress`; the rows come
-   * from `parseAcceptanceChecklist` (a sibling read-only parser) — no markdown
-   * is mutated. The ring stroke follows the status→color contract and flips to
-   * green at 100%.
-   */
-  private renderAcceptance(parent: HTMLElement): void {
-    const { task } = this;
-    const markdown = task.sections.acceptanceCriteria;
-    const progress = parseAcceptanceProgress(markdown);
-    const items = parseAcceptanceChecklist(markdown);
-
-    const { section, right } = renderSectionHeader(parent, {
-      icon: 'list-checks',
-      label: t('tasks.workOrderModal.sectionAcceptance'),
-    });
-
-    if (progress.total > 0) {
-      this.renderAcceptanceRing(right(), progress.done, progress.total, task.frontmatter.status);
-    }
-
-    // Render the custom checklist card only for a pure task-list. Anything else
-    // — prose, plain bullets, or checkboxes interleaved with prose/nested lines
-    // — renders as full markdown so no criteria are dropped from view.
-    if (!isPureAcceptanceChecklist(markdown)) {
-      if (markdown.trim().length === 0) {
-        // The em-dash placeholder is decorative and supplied via CSS (::before
-        // content), so no user-visible text literal lives in JS here.
-        section.createDiv({ cls: 'specorator-work-order-modal-checklist-empty' });
-      } else {
-        const prose = section.createDiv({ cls: 'specorator-work-order-modal-checklist-prose' });
-        void MarkdownRenderer.render(this.app, markdown, prose, this.task.path, this.markdownComponent);
-      }
-      return;
-    }
-
-    const card = section.createDiv({ cls: 'specorator-work-order-modal-checklist' });
-    for (const item of items) {
-      const row = card.createDiv({ cls: 'specorator-work-order-modal-checklist-item' });
-      // Read-only checkbox semantics so assistive tech hears the checked state;
-      // the visible box glyph below stays decorative (aria-hidden).
-      row.setAttr('role', 'checkbox');
-      row.setAttr('aria-checked', item.checked ? 'true' : 'false');
-      row.setAttr('aria-disabled', 'true');
-      if (item.checked) row.addClass('is-checked');
-      const box = row.createSpan({ cls: 'specorator-work-order-modal-checklist-box' });
-      box.setAttr('aria-hidden', 'true');
-      if (item.checked) {
-        // The white check glyph is the non-color cue carrying the checked signal.
-        const check = box.createSpan({ cls: 'specorator-work-order-modal-checklist-check' });
-        check.setAttr('data-icon', 'check');
-        setIcon(check, 'check');
-      }
-      // Render the label as markdown so inline links / wikilinks / code stay
-      // interactive, matching the full-markdown fallback used for non-pure sections.
-      const textEl = row.createDiv({ cls: 'specorator-work-order-modal-checklist-text' });
-      void MarkdownRenderer.render(this.app, item.text, textEl, this.task.path, this.markdownComponent);
-    }
-  }
-
-  /**
-   * 22px SVG progress ring (faint track + status-accent arc) plus a done/total
-   * count. The arc length is driven by `stroke-dasharray`/`stroke-dashoffset`
-   * from the done ratio; at 100% a `--complete` modifier flips the stroke and
-   * count color to green via CSS. Geometry mirrors the design prototype
-   * (r=9, 22×22 viewBox, 2.5 stroke, rotated -90° so the arc starts at top).
-   */
-  private renderAcceptanceRing(
-    parent: HTMLElement,
-    done: number,
-    total: number,
-    status: TaskStatus,
-  ): void {
-    const radius = 9;
-    const circumference = 2 * Math.PI * radius;
-    const ratio = total > 0 ? done / total : 0;
-    const complete = total > 0 && done >= total;
-
-    const meter = parent.createDiv({ cls: 'specorator-work-order-modal-ring-meter' });
-
-    const svg = meter.createSvg('svg', {
-      attr: { width: 22, height: 22, viewBox: '0 0 22 22' },
-    });
-    svg.setAttr('aria-hidden', 'true');
-    // Add the ring classes one token at a time. Obsidian's createSvg applies a
-    // `cls` value via classList.add(), which throws on any space-containing
-    // token — so never pass a joined string (or rely on array handling); set
-    // each class individually. A joined-string cls here previously crashed
-    // onOpen mid-render (no acceptance items, no activity, empty footer).
-    svg.addClass('specorator-work-order-modal-ring');
-    svg.addClass(`specorator-work-order-modal-ring--${status}`);
-    if (complete) svg.addClass('specorator-work-order-modal-ring--complete');
-    svg.createSvg('circle', {
-      cls: 'specorator-work-order-modal-ring-track',
-      attr: { cx: 11, cy: 11, r: radius, fill: 'none', 'stroke-width': 2.5 },
-    });
-    svg.createSvg('circle', {
-      cls: 'specorator-work-order-modal-ring-arc',
-      attr: {
-        cx: 11,
-        cy: 11,
-        r: radius,
-        fill: 'none',
-        'stroke-width': 2.5,
-        'stroke-linecap': 'round',
-        'stroke-dasharray': circumference,
-        'stroke-dashoffset': circumference * (1 - ratio),
-        transform: 'rotate(-90 11 11)',
-      },
-    });
-
-    meter.createSpan({
-      cls: 'specorator-work-order-modal-ring-count',
-      text: `${done}/${total}`,
-    });
-  }
-
-  /**
-   * (Re)paint the sticky footer. The status actions + inline edit affordances
-   * (Edit / Cancel / Save) are rendered by `renderWorkOrderFooter`; the modal
-   * only supplies its live state and the toggle/close callbacks. Called on open
-   * and on every edit toggle. Run is deliberately absent — in the redesign Run
-   * is a board-card action, not a modal action.
-   */
-  private renderFooter(): void {
-    if (!this.footerEl) return;
-    renderWorkOrderFooter(this.footerEl, {
-      task: this.task,
-      callbacks: this.callbacks,
-      editing: this.editing,
-      editable: this.isEditableStatus(),
-      close: () => this.close(),
-      onEdit: () => this.setEditing(true),
-      onCancel: () => this.setEditing(false),
-      onSave: () => {
-        const update = this.editForm?.collect();
-        if (update) void this.commitSections(update);
-      },
     });
   }
 }

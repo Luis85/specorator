@@ -43,6 +43,9 @@ function setup() {
   const plugin = {
     app: {},
     settings: {},
+    // Agents panel subscribes to `roster:changed` on mount; `on` returns a
+    // disposer (the real EventBus contract).
+    events: { on: vi.fn(() => vi.fn()) },
     logger: { scope: () => ({ error: vi.fn(), warn: vi.fn(), debug: vi.fn() }) },
     agentRosterStore: {
       list: vi.fn().mockImplementation(async () => [...backing.values()]),

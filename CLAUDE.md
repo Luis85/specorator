@@ -61,7 +61,7 @@ non-blocking backlog) are catalogued in
 | **features/inline-edit** | Inline edit modal and provider-backed edit services | `InlineEditModal` plus provider-owned inline edit services |
 | **features/settings** | Settings shell + registry renderer | All seven tabs render through the settings registry (`registry/`, parity tests in `tests/integration/settings/`); provider-owned widgets mount via the `widgets` map on each provider's `settingsTabRenderer`. Legacy imperative renderers remain as fallback until a dedicated deletion pass gated on manual vault verification (no version milestone — ADR 0003 retired the v4.0.0 framing) |
 | **features/library** | Unified Library view (Vue 3 island) | `LibraryView` mounts a per-leaf Vue app unconditionally — the `useVueLibrary` flag and the legacy roster/skill/loop views were deleted 2026-07-04 (hard cut, ADR 0003; a stale saved leaf shows Obsidian's empty pane once). Four tabs: Agents, Skills, Loops, and Quick Actions (full management: run/edit/duplicate/favorite/delete). One "Open Library" ribbon (`library-big`); the palette commands `open-library`, `open-agent-roster`, `open-skill-library`, `open-loop-library`, `open-quick-actions` are registrar-path tab deep-links. Pinia stores wrap `LoopNoteStore`/`VaultSkillAggregator`/`AgentRosterStore`/`QuickActionStorage`. Tab switches pass a shared tab guard (`TAB_GUARD_KEY` — a dirty detail editor can veto), and the Pinia stores are reactive projections over the existing source stores (I/O stays in the wrapped stores, never duplicated state). Tests run in the Vitest lane (`npm run test:vue`, `tests/vue/`). Vue surfaces style through the `.specorator-vue` baseline + `--sp-*` tokens (`src/style/vue/`, spec `docs/superpowers/specs/2026-07-03-vue-style-baseline-design.md`); `library.css`/`agent-roster.css` carry only the imperative remnants (editor modals, embedded detail editor). |
-| **features/tasks** | Agent Board work orders and run coordination | See [`src/features/tasks/CLAUDE.md`](src/features/tasks/CLAUDE.md) |
+| **features/tasks** | Agent Board work orders and run coordination | Board + all three editors are Vue 3 + Pinia islands (`ui/vue/`, ADR 0004) over the unchanged imperative run engine. See [`src/features/tasks/CLAUDE.md`](src/features/tasks/CLAUDE.md) |
 | **features/quickActions** | Quick action parsing and storage | Vault-defined quick actions surfaced in chat; managed end-to-end in the Library's Quick Actions tab |
 | **shared** | Reusable UI building blocks | Dropdowns, modals, mention UI, icons |
 | **i18n** | Internationalization | 10 locales |
@@ -102,9 +102,14 @@ Current coverage, by user-visible path:
 | `codexHistory.perf` | `parseCodexSessionContent` stays ~linear | transcript length |
 | `conversationHistory.perf` | history-dropdown DOM growth (windowed) + `loadConversations` load/sort | conversation count |
 | `navigationSidebar.perf` | prev/next scan stays O(mounted), bounded by render window | mounted messages |
-| `agentBoard.perf` | board render stays ~linear (flat per-card DOM/listeners); `patchLiveStrip`/`patchCard` stay O(1) | work-order count |
 | `taskRunCoordinator.perf` | launch validation stays O(1) vs active runs; drain pass bounded by slot cap × runnable, not board size | active runs / runnable cards |
 | `multiTabStreaming.perf` | per-tab pending frames stay constant per flush; one tab's render work independent of other tabs | concurrent streaming tabs |
+
+> The Agent Board render/heartbeat scaling guard (formerly `agentBoard.perf`)
+> moved to the Vue component lane as `tests/vue/tasks/agentBoardScaling.test.ts`
+> when the board became a Vue island: mounted DOM/listeners stay O(rendered
+> cards), and one heartbeat updates exactly one `LiveStrip`. The engine's own
+> scaling stays here in `taskRunCoordinator.perf`.
 
 ## Storage
 

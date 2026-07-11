@@ -44,10 +44,39 @@ const tabGuard = inject(TAB_GUARD_KEY, null);
 
 onMounted(() => void withErrorNotice(() => store.load(), t('agentRoster.actionFailed'), fail));
 
+// Roster agents are managed through agentRosterStore, not loose vault notes, so
+// a raw folder watch is the wrong seam. The store emits `roster:changed` on
+// every save/delete, so an external writer — an Agent Board edit, a chat-view
+// roster edit, provider sync, the preset installer from another leaf — signals
+// through the event bus. Subscribe and reload so same-tab external edits land
+// without a remount (same debounce shape as the vault-note panels).
+const ROSTER_RELOAD_DEBOUNCE_MS = 300;
+let rosterOff: (() => void) | null = null;
+let reloadTimer: ReturnType<typeof setTimeout> | null = null;
+const rosterPlugin = plugin;
+
+onMounted(() => {
+  rosterOff = rosterPlugin.events.on('roster:changed', () => {
+    // Coalesce bursts (a multi-agent sync fires one event per file) into one
+    // reload.
+    if (reloadTimer !== null) clearTimeout(reloadTimer);
+    reloadTimer = setTimeout(() => {
+      reloadTimer = null;
+      void withErrorNotice(() => store.load(), t('agentRoster.actionFailed'), fail);
+    }, ROSTER_RELOAD_DEBOUNCE_MS);
+  });
+});
+
 // Safety net: if the panel unmounts through any other path, never leave a
 // stale guard blocking the tab strip.
 onUnmounted(() => {
   if (tabGuard) tabGuard.value = null;
+  if (reloadTimer !== null) {
+    clearTimeout(reloadTimer);
+    reloadTimer = null;
+  }
+  rosterOff?.();
+  rosterOff = null;
 });
 
 function fail(error: unknown): void {

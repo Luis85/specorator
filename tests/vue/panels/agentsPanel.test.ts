@@ -50,10 +50,31 @@ const agent = {
   createdAt: 1, updatedAt: 2,
 };
 
+/** EventBus fake capturing the panel's `roster:changed` subscription: `on`
+ * returns a disposer (the real EventBus contract), so tests can emit as an
+ * external roster writer would and assert the panel unsubscribes on unmount. */
+function makeEventsFake() {
+  const handlers: Record<string, Set<() => void>> = {};
+  const disposers: ReturnType<typeof vi.fn>[] = [];
+  const events = {
+    on: vi.fn((name: string, handler: () => void) => {
+      (handlers[name] ??= new Set()).add(handler);
+      const off = vi.fn(() => { handlers[name]?.delete(handler); });
+      disposers.push(off);
+      return off;
+    }),
+  };
+  function emit(name: string): void {
+    for (const handler of [...(handlers[name] ?? [])]) handler();
+  }
+  return { events, emit, disposers };
+}
+
 function makePlugin() {
   return {
     agentRosterStore: { list: vi.fn().mockResolvedValue([agent]) },
     settings: {},
+    events: makeEventsFake().events,
     logger: { scope: () => ({ error: vi.fn() }) },
   } as never;
 }
@@ -104,9 +125,11 @@ function setupMutable(agents: unknown[], opts: { list?: ReturnType<typeof vi.fn>
   setActivePinia(pinia);
   const errorLog = vi.fn();
   const tabGuard = ref<(() => Promise<boolean>) | null>(null);
+  const { events, emit: emitRosterEvent, disposers: eventDisposers } = makeEventsFake();
   const plugin = {
     app: {},
     settings: {},
+    events,
     logger: { scope: () => ({ error: errorLog, warn: vi.fn() }) },
     agentRosterStore: {
       list: opts.list ?? vi.fn().mockResolvedValue(agents),
@@ -134,7 +157,7 @@ function setupMutable(agents: unknown[], opts: { list?: ReturnType<typeof vi.fn>
     openConversation: ReturnType<typeof vi.fn>;
     app: unknown;
   };
-  return { store, plugin, p, tabGuard, errorLog, ...utils };
+  return { store, plugin, p, tabGuard, errorLog, emitRosterEvent, eventDisposers, ...utils };
 }
 
 /** Callbacks the panel handed to the (mocked) detail editor's constructor. */
@@ -437,6 +460,50 @@ describe('AgentsPanel mutation flows', () => {
     resolveCreate({ id: 'conv-1' });
     await waitFor(() => expect(start.disabled).toBe(false));
     expect(p.openConversation).toHaveBeenCalledWith('conv-1', { requireNewTab: true });
+  });
+
+  // Roster agents are NOT loose vault notes — they're managed through
+  // agentRosterStore, which emits `roster:changed` on every save/delete. An
+  // external writer (Agent Board edit, chat-view roster edit, provider sync,
+  // preset install) therefore signals through the event bus, not a folder
+  // watch. The mounted panel subscribes and reloads so same-tab external edits
+  // land without a remount.
+  describe('roster-change refresh', () => {
+    it('reloads (debounced, coalescing bursts) when roster:changed fires', async () => {
+      const { p, emitRosterEvent } = setupMutable([agent]);
+      await screen.findByText('Alice');
+      const before = p.agentRosterStore.list.mock.calls.length;
+      vi.useFakeTimers();
+      try {
+        emitRosterEvent('roster:changed');
+        emitRosterEvent('roster:changed');
+        // Debounce window still open: no reload yet.
+        expect(p.agentRosterStore.list.mock.calls.length).toBe(before);
+        await vi.advanceTimersByTimeAsync(400);
+      } finally {
+        vi.useRealTimers();
+      }
+      // The burst coalesced into exactly one reload.
+      expect(p.agentRosterStore.list.mock.calls.length).toBe(before + 1);
+    });
+
+    it('unmount disposes the subscription and drops a pending debounce (no leak)', async () => {
+      const { p, emitRosterEvent, eventDisposers, unmount } = setupMutable([agent]);
+      await screen.findByText('Alice');
+      expect(eventDisposers.length).toBe(1);
+      const before = p.agentRosterStore.list.mock.calls.length;
+      vi.useFakeTimers();
+      try {
+        emitRosterEvent('roster:changed');
+        unmount();
+        await vi.advanceTimersByTimeAsync(400);
+      } finally {
+        vi.useRealTimers();
+      }
+      expect(eventDisposers[0]).toHaveBeenCalledTimes(1);
+      // The queued reload died with the panel.
+      expect(p.agentRosterStore.list.mock.calls.length).toBe(before);
+    });
   });
 
   // Spec DoD 5: snapshot ONE card (small stable sub-tree), never the whole

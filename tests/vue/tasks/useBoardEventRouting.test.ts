@@ -1,0 +1,316 @@
+import { render } from '@testing-library/vue';
+import { createPinia, setActivePinia } from 'pinia';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { defineComponent } from 'vue';
+
+import { useAgentBoardStore } from '@/features/tasks/ui/vue/stores/agentBoardStore';
+import { useBoardEventRouting } from '@/features/tasks/ui/vue/useBoardEventRouting';
+
+type EventHandler = (payload?: unknown) => void;
+type VaultHandler = (file: { path?: string }, oldPath?: string) => void;
+
+/** EventBus fake: captures every handler (arrays — an event can be subscribed
+ *  more than once, e.g. task:run-finished) and hands back a fresh disposer spy
+ *  per subscription so unmount can be asserted per-disposer. */
+function makeEventsFake() {
+  const handlers: Record<string, EventHandler[]> = {};
+  const disposers: Array<ReturnType<typeof vi.fn>> = [];
+  const on = vi.fn((name: string, handler: EventHandler) => {
+    (handlers[name] ??= []).push(handler);
+    const dispose = vi.fn();
+    disposers.push(dispose);
+    return dispose;
+  });
+  const fire = (name: string, payload?: unknown): void => {
+    for (const handler of handlers[name] ?? []) handler(payload);
+  };
+  return { handlers, disposers, on, fire };
+}
+
+/** Vault fake mirroring tests/vue/panels/loopsPanel.test.ts: capture the four
+ *  handlers, return an opaque EventRef token asserted against offref. */
+function makeVaultFake() {
+  const handlers: Record<string, VaultHandler> = {};
+  return {
+    handlers,
+    vault: {
+      on: vi.fn((name: string, handler: VaultHandler) => {
+        handlers[name] = handler;
+        return { event: name };
+      }),
+      offref: vi.fn(),
+    },
+  };
+}
+
+function makeDeps() {
+  return {
+    indexVaultFolder: vi.fn().mockResolvedValue({ tasks: [], invalidNotes: [] }),
+    loadBoardConfig: vi.fn().mockReturnValue({ config: {}, errors: [] }),
+    resolveBoardLayout: vi.fn().mockReturnValue({ lanes: [], errors: [] }),
+  };
+}
+
+function setup(settings: Record<string, unknown> = { agentBoardWorkOrderFolder: 'Agent Board/tasks' }) {
+  const pinia = createPinia();
+  setActivePinia(pinia);
+  const events = makeEventsFake();
+  const { vault, handlers: vaultHandlers } = makeVaultFake();
+  const plugin = {
+    app: { vault },
+    settings,
+    events: { on: events.on },
+    // The store's toolbar-state projection (read at the top of load()) sources
+    // these live singletons; a full-refresh event routes to the real load(), so
+    // the fake must expose them or the projection throws.
+    getTabSlotUsage: () => ({ used: 0, max: 3 }),
+    queueControl: { paused: true, halted: false, haltReason: null, consecutiveFailures: 0 },
+    queueSlotTracker: { occupied: () => 0, capacity: () => 3 },
+  } as never;
+  const store = useAgentBoardStore();
+  store.init(plugin, makeDeps() as never);
+  const utils = render(
+    defineComponent({
+      setup() {
+        useBoardEventRouting(plugin);
+        return () => null;
+      },
+    }),
+    { global: { plugins: [pinia] } },
+  );
+  return { store, plugin, events, vault, vaultHandlers, ...utils };
+}
+
+describe('useBoardEventRouting', () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  it('subscribes to the board events and the four vault events on mount', () => {
+    const { events, vault } = setup();
+    const subscribed = events.on.mock.calls.map((call) => call[0]);
+    for (const event of [
+      'task:heartbeat',
+      'task:ledger-appended',
+      'task:status-changed',
+      'task:board-config-changed',
+      'roster:changed',
+      'task:queue-paused',
+      'task:run-finished',
+    ]) {
+      expect(subscribed).toContain(event);
+    }
+    expect(vault.on.mock.calls.map((call) => call[0]).sort()).toEqual(['create', 'delete', 'modify', 'rename']);
+  });
+
+  it('routes task:heartbeat to recordHeartbeat and never to load', () => {
+    const { store, events } = setup();
+    const recordHeartbeat = vi.spyOn(store, 'recordHeartbeat');
+    const load = vi.spyOn(store, 'load').mockResolvedValue();
+    events.fire('task:heartbeat', { taskId: 'a', at: 'T' });
+    expect(recordHeartbeat).toHaveBeenCalledWith('a', 'T');
+    expect(load).not.toHaveBeenCalled();
+  });
+
+  it('routes task:ledger-appended to recordLedger (entry.message) and never to load', () => {
+    const { store, events } = setup();
+    const recordLedger = vi.spyOn(store, 'recordLedger');
+    const load = vi.spyOn(store, 'load').mockResolvedValue();
+    events.fire('task:ledger-appended', { taskId: 'a', entry: { message: 'm' } });
+    expect(recordLedger).toHaveBeenCalledWith('a', 'm');
+    expect(load).not.toHaveBeenCalled();
+  });
+
+  it('routes a full-refresh event (task:board-config-changed) to a guarded load', () => {
+    const { store, events } = setup();
+    const load = vi.spyOn(store, 'load').mockResolvedValue();
+    events.fire('task:board-config-changed');
+    expect(load).toHaveBeenCalled();
+  });
+
+  it('routes task:run-finished to evictLive, clearPause, clearSkip, AND load (terminal clears the overlays)', () => {
+    const { store, events } = setup();
+    const evictLive = vi.spyOn(store, 'evictLive');
+    const clearPause = vi.spyOn(store, 'clearPause');
+    const clearSkip = vi.spyOn(store, 'clearSkip');
+    const load = vi.spyOn(store, 'load').mockResolvedValue();
+    events.fire('task:run-finished', { taskId: 'a' });
+    expect(evictLive).toHaveBeenCalledWith('a');
+    expect(clearPause).toHaveBeenCalledWith('a');
+    expect(clearSkip).toHaveBeenCalledWith('a');
+    expect(load).toHaveBeenCalled();
+  });
+
+  it('evicts the live overlay on a terminal status-changed but not on a live one (auto-run has no run-finished)', () => {
+    const { store, events } = setup();
+    const evictLive = vi.spyOn(store, 'evictLive');
+    vi.spyOn(store, 'load').mockResolvedValue();
+    // Live status → keep the overlay (the run is active; a heartbeat refreshes it).
+    events.fire('task:status-changed', { taskId: 'a', path: 'p', status: 'running' });
+    expect(evictLive).not.toHaveBeenCalled();
+    // Terminal status → evict, so a retry before the next heartbeat can't paint
+    // the previous run's stale strip. Auto-run/queued runs fire only this event.
+    events.fire('task:status-changed', { taskId: 'a', path: 'p', status: 'done' });
+    expect(evictLive).toHaveBeenCalledWith('a');
+    evictLive.mockClear();
+    events.fire('task:status-changed', { taskId: 'b', path: 'p', status: 'failed' });
+    expect(evictLive).toHaveBeenCalledWith('b');
+  });
+
+  it('does NOT bump the roster version synchronously on roster:changed (the view bumps it after its async cache refresh)', () => {
+    const { store, events } = setup();
+    const bumpRoster = vi.spyOn(store, 'bumpRoster');
+    const load = vi.spyOn(store, 'load').mockResolvedValue();
+    events.fire('roster:changed', undefined);
+    // A sync bump here would fire before AgentBoardView.refresh() reloads the
+    // non-reactive persona cache, re-resolving cards against stale agents; the
+    // view owns that timing. roster:changed still drives a full reload.
+    expect(bumpRoster).not.toHaveBeenCalled();
+    expect(load).toHaveBeenCalled();
+  });
+
+  it('routes task:queue-tick to refreshToolbar (O(1) counters) and NOT load — no vault re-index per launch', () => {
+    const { store, events } = setup();
+    const refreshToolbar = vi.spyOn(store, 'refreshToolbar');
+    const load = vi.spyOn(store, 'load').mockResolvedValue();
+    events.fire('task:queue-tick', { taskId: 'a' });
+    expect(refreshToolbar).toHaveBeenCalled();
+    expect(load).not.toHaveBeenCalled();
+  });
+
+  it('routes task:queue-state-changed to refreshToolbar and NOT load (a settle updates counters, not lanes)', () => {
+    const { store, events } = setup();
+    const refreshToolbar = vi.spyOn(store, 'refreshToolbar');
+    const load = vi.spyOn(store, 'load').mockResolvedValue();
+    events.fire('task:queue-state-changed', undefined);
+    expect(refreshToolbar).toHaveBeenCalled();
+    expect(load).not.toHaveBeenCalled();
+  });
+
+  it('routes task:queue-skipped to setSkip (the reactive skip-chip overlay) AND load', () => {
+    const { store, events } = setup();
+    const setSkip = vi.spyOn(store, 'setSkip');
+    const load = vi.spyOn(store, 'load').mockResolvedValue();
+    events.fire('task:queue-skipped', { taskId: 'a', reason: 'no free slot' });
+    expect(setSkip).toHaveBeenCalledWith('a', 'no free slot');
+    expect(load).toHaveBeenCalled();
+  });
+
+  it('clears the skip overlay when a card starts (attempt-started) or changes status', () => {
+    const { store, events } = setup();
+    const clearSkip = vi.spyOn(store, 'clearSkip');
+    // Launch clears the runner's skip map → the card started running.
+    events.fire('task:attempt-started', { taskId: 'a', path: 'p', attemptNumber: 1 });
+    expect(clearSkip).toHaveBeenCalledWith('a');
+    clearSkip.mockClear();
+    // Any status change off the runnable state also clears it.
+    events.fire('task:status-changed', { taskId: 'b', path: 'p', status: 'running' });
+    expect(clearSkip).toHaveBeenCalledWith('b');
+  });
+
+  it('routes task:needs-input to setPause (question + default seed) AND load', () => {
+    const { store, events } = setup();
+    const setPause = vi.spyOn(store, 'setPause');
+    const load = vi.spyOn(store, 'load').mockResolvedValue();
+    events.fire('task:needs-input', { taskId: 'a', path: 'p', question: 'Q?', why: 'because', default: 'seed', runId: 'r1' });
+    expect(setPause).toHaveBeenCalledWith('a', { question: 'Q?', defaultValue: 'seed', runId: 'r1' });
+    expect(load).toHaveBeenCalled();
+  });
+
+  it('routes task:needs-approval to setPause (action + risk + reversible) AND load', () => {
+    const { store, events } = setup();
+    const setPause = vi.spyOn(store, 'setPause');
+    const load = vi.spyOn(store, 'load').mockResolvedValue();
+    events.fire('task:needs-approval', { taskId: 'a', path: 'p', action: 'Delete files', risk: 'high', reversible: false, runId: 'r1' });
+    expect(setPause).toHaveBeenCalledWith('a', { action: 'Delete files', risk: 'high', reversible: false, runId: 'r1' });
+    expect(load).toHaveBeenCalled();
+  });
+
+  it('routes task:resumed to clearPause AND load (drops the reply surface on resume)', () => {
+    const { store, events } = setup();
+    const clearPause = vi.spyOn(store, 'clearPause');
+    const load = vi.spyOn(store, 'load').mockResolvedValue();
+    events.fire('task:resumed', { taskId: 'a', path: 'p' });
+    expect(clearPause).toHaveBeenCalledWith('a');
+    expect(load).toHaveBeenCalled();
+  });
+
+  it('routes task:status-changed OFF a pause status to clearPause; a change TO a pause status keeps it', () => {
+    const { store, events } = setup();
+    const clearPause = vi.spyOn(store, 'clearPause');
+    events.fire('task:status-changed', { taskId: 'a', path: 'p', status: 'running' });
+    expect(clearPause).toHaveBeenCalledWith('a');
+
+    clearPause.mockClear();
+    // RunSession emits status-changed(needs_input) BEFORE the needs-input event
+    // that sets the pause, so this branch must NOT clear it.
+    events.fire('task:status-changed', { taskId: 'a', path: 'p', status: 'needs_input' });
+    events.fire('task:status-changed', { taskId: 'a', path: 'p', status: 'needs_approval' });
+    expect(clearPause).not.toHaveBeenCalled();
+  });
+
+  it('coalesces a burst of in-folder vault writes into one debounced load', async () => {
+    const { store, vaultHandlers } = setup();
+    const load = vi.spyOn(store, 'load').mockResolvedValue();
+    vi.useFakeTimers();
+    try {
+      vaultHandlers.create({ path: 'Agent Board/tasks/wo-1.md' });
+      vaultHandlers.modify({ path: 'Agent Board/tasks/wo-1.md' });
+      // Debounce window still open — no reload yet.
+      expect(load).not.toHaveBeenCalled();
+      await vi.advanceTimersByTimeAsync(200);
+    } finally {
+      vi.useRealTimers();
+    }
+    expect(load).toHaveBeenCalledTimes(1);
+  });
+
+  it('ignores vault writes outside the work-order folder', async () => {
+    const { store, vaultHandlers } = setup();
+    const load = vi.spyOn(store, 'load').mockResolvedValue();
+    vi.useFakeTimers();
+    try {
+      vaultHandlers.modify({ path: 'Notes/unrelated.md' });
+      // Segment-aware prefix: a sibling folder sharing the prefix is OUTSIDE.
+      vaultHandlers.create({ path: 'Agent Board/tasksish/nope.md' });
+      await vi.advanceTimersByTimeAsync(200);
+    } finally {
+      vi.useRealTimers();
+    }
+    expect(load).not.toHaveBeenCalled();
+  });
+
+  it('reloads when a rename moves a work order OUT of the folder (archive; oldPath was inside)', async () => {
+    // Archiving renames the note into the archive folder, so the rename event's
+    // new `file.path` is OUTSIDE the board folder — only the oldPath is inside.
+    // A new-path-only check would leave the archived card stale on the board.
+    const { store, vaultHandlers } = setup();
+    const load = vi.spyOn(store, 'load').mockResolvedValue();
+    vi.useFakeTimers();
+    try {
+      vaultHandlers.rename({ path: 'Agent Board/archive/wo-1.md' }, 'Agent Board/tasks/wo-1.md');
+      await vi.advanceTimersByTimeAsync(200);
+    } finally {
+      vi.useRealTimers();
+    }
+    expect(load).toHaveBeenCalledTimes(1);
+  });
+
+  it('disposes every EventBus subscription, offrefs all vault refs, and drops a pending vault reload on unmount', async () => {
+    const { store, events, vault, vaultHandlers, unmount } = setup();
+    const load = vi.spyOn(store, 'load').mockResolvedValue();
+    vi.useFakeTimers();
+    try {
+      vaultHandlers.create({ path: 'Agent Board/tasks/wo-1.md' });
+      unmount();
+      await vi.advanceTimersByTimeAsync(400);
+    } finally {
+      vi.useRealTimers();
+    }
+    // Every EventBus disposer ran exactly once.
+    expect(events.disposers.length).toBe(events.on.mock.calls.length);
+    for (const dispose of events.disposers) expect(dispose).toHaveBeenCalledTimes(1);
+    // All four vault refs were offref'd.
+    expect(vault.offref).toHaveBeenCalledTimes(4);
+    // The queued reload died with the component.
+    expect(load).not.toHaveBeenCalled();
+  });
+});

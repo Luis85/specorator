@@ -854,6 +854,7 @@
       "doneWhen": "Concluído quando",
       "boardNotices": "Avisos do quadro",
       "skippedNotes": "Notas ignoradas",
+      "loadError": "Falha ao carregar o quadro: {message}",
       "queueHalted": "Fila interrompida: {reason}",
       "failureOne": "{n} falha",
       "failureMany": "{n} falhas",

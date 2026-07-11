@@ -17,6 +17,9 @@ export function makePlugin() {
         offref: vi.fn(),
       },
     },
+    // Agents panel subscribes to `roster:changed` on mount; `on` returns an
+    // unsubscribe disposer (the real EventBus contract).
+    events: { on: vi.fn(() => vi.fn()) },
     logger: { scope: () => ({ error: vi.fn(), warn: vi.fn() }) },
     // Quick-action store wiring: real QuickActionStorage over a stub adapter
     // (loadAll resolves to [] when the folder listing is empty).
