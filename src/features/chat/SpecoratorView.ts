@@ -38,7 +38,7 @@ import { GitActionButton } from './ui/GitActionButton';
 import type { ChatShellCallbacks, ChatShellSnapshot } from './ui/vue/chatShellCallbacks';
 import { CALLBACKS_KEY, CONTENT_HOST_KEY, PLUGIN_KEY } from './ui/vue/chatShellKeys';
 import ChatShellRoot from './ui/vue/ChatShellRoot.vue';
-import { getChatShellPinia } from './ui/vue/globalPinia';
+import { createChatShellPinia } from './ui/vue/globalPinia';
 import type { ChatBoundAgent, ChatShellHeader } from './ui/vue/stores/chatShellStore';
 import { WorkOrderActivityDropdown } from './ui/WorkOrderActivityDropdown';
 import { deriveEditedFilesFromMessages } from './utils/editedFiles';
@@ -274,7 +274,9 @@ export class SpecoratorView extends ItemView {
     this.viewContainerEl.addClass('specorator-vue');
     this.viewContainerEl.addClass('specorator-chat-vue-root');
     const app = createApp(ChatShellRoot);
-    app.use(getChatShellPinia());
+    // Fresh per-view Pinia so two open chat leaves don't share the chat-shell
+    // store (each has its own TabManager / tab set). See createChatShellPinia.
+    app.use(createChatShellPinia());
     // markRaw: Obsidian objects are large and cyclic; never deep-proxy them.
     app.provide(PLUGIN_KEY, markRaw(this.plugin));
     app.provide(CALLBACKS_KEY, markRaw(this.buildChatShellCallbacks()));
