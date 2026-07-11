@@ -500,6 +500,90 @@ describe('registerCursorAcpExtensions', () => {
     expect(lastToolUse!.input.todos.map((t) => t.content)).toEqual(['step 1']);
   });
 
+  it('transitions a cached item from a status-only merge entry that carries no content', async () => {
+    const { transport, notifications } = makeFakeTransport();
+    const chunks: StreamChunk[] = [];
+    registerCursorAcpExtensions(transport as never, {
+      askUser: jest.fn(),
+      emitChunk: (c) => chunks.push(c),
+      patchTurnMetadata: () => {},
+    });
+
+    await notifications.get('cursor/update_todos')!({
+      todos: [{ id: '1', content: 'step 1', status: 'pending' }],
+    });
+    // Documented incremental shape: only the id + new status, no content. The
+    // content-requiring normalizer would drop this before the merge saw it, so
+    // the transition would silently vanish — the raw id-match path preserves it.
+    await notifications.get('cursor/update_todos')!({
+      merge: true,
+      todos: [{ id: '1', status: 'completed' }],
+    });
+
+    const lastToolUse = [...chunks].reverse().find((c) => c.type === 'tool_use') as
+      | { input: { todos: Array<{ id: string; content: string; status: string }> } }
+      | undefined;
+    expect(lastToolUse!.input.todos).toEqual([
+      { id: '1', content: 'step 1', activeForm: 'step 1', status: 'completed' },
+    ]);
+  });
+
+  it('applies a status-only patch and appends a new full item in one merge batch', async () => {
+    const { transport, notifications } = makeFakeTransport();
+    const chunks: StreamChunk[] = [];
+    registerCursorAcpExtensions(transport as never, {
+      askUser: jest.fn(),
+      emitChunk: (c) => chunks.push(c),
+      patchTurnMetadata: () => {},
+    });
+
+    await notifications.get('cursor/update_todos')!({
+      todos: [{ id: '1', content: 'step 1', status: 'pending' }],
+    });
+    await notifications.get('cursor/update_todos')!({
+      merge: true,
+      todos: [
+        { id: '1', status: 'completed' },
+        { id: '2', content: 'step 2', status: 'in_progress' },
+      ],
+    });
+
+    const lastToolUse = [...chunks].reverse().find((c) => c.type === 'tool_use') as
+      | { input: { todos: Array<{ id: string; content: string; status: string }> } }
+      | undefined;
+    expect(lastToolUse!.input.todos).toEqual([
+      { id: '1', content: 'step 1', activeForm: 'step 1', status: 'completed' },
+      { id: '2', content: 'step 2', activeForm: 'step 2', status: 'in_progress' },
+    ]);
+  });
+
+  it('drops an unmatched status-only merge entry (no cached id) harmlessly', async () => {
+    const { transport, notifications } = makeFakeTransport();
+    const chunks: StreamChunk[] = [];
+    registerCursorAcpExtensions(transport as never, {
+      askUser: jest.fn(),
+      emitChunk: (c) => chunks.push(c),
+      patchTurnMetadata: () => {},
+    });
+
+    await notifications.get('cursor/update_todos')!({
+      todos: [{ id: '1', content: 'step 1', status: 'pending' }],
+    });
+    // The id matches nothing cached and there is no content for the normalizer to
+    // build a full todo from, so the entry is dropped and the panel stays intact.
+    await notifications.get('cursor/update_todos')!({
+      merge: true,
+      todos: [{ id: '99', status: 'completed' }],
+    });
+
+    const lastToolUse = [...chunks].reverse().find((c) => c.type === 'tool_use') as
+      | { input: { todos: Array<{ id: string; content: string; status: string }> } }
+      | undefined;
+    expect(lastToolUse!.input.todos).toEqual([
+      { id: '1', content: 'step 1', activeForm: 'step 1', status: 'pending' },
+    ]);
+  });
+
   it('resolves to the cancelled outcome (never rejects) when questions entries are null', async () => {
     const { transport, requests } = makeFakeTransport();
     registerCursorAcpExtensions(transport as never, {

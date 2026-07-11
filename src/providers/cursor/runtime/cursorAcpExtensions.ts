@@ -3,6 +3,7 @@ import { TOOL_TODO_WRITE } from '../../../core/tools/toolNames';
 import type { StreamChunk } from '../../../core/types';
 import type { AcpJsonRpcTransport } from '../../acp';
 import { mapCursorToolInput } from './cursorToolInputMapping';
+import { stringValue } from './cursorToolValueCoercion';
 
 export interface CursorAcpExtensionHost {
   askUser: AskUserQuestionCallback;
@@ -133,6 +134,65 @@ function mergeCursorTodos(previous: NormalizedTodo[], incoming: NormalizedTodo[]
     if (content) indexByContent.set(content, appendedIndex);
   }
   return result;
+}
+
+// Patches a cached normalized todo from a RAW incoming entry (documented
+// `{id, content, status}` shape). status always wins when present; content and
+// its derived activeForm only overwrite when the raw entry actually carries
+// content — a status-only patch keeps the cached content intact.
+function patchTodoFromRaw(cached: NormalizedTodo, raw: Record<string, unknown>): NormalizedTodo {
+  const patched: NormalizedTodo = { ...cached };
+  const status = stringValue(raw.status);
+  if (status) {
+    patched.status = status;
+  }
+  const content = stringValue(raw.content ?? raw.title ?? raw.step ?? raw.text);
+  if (content) {
+    patched.content = content;
+    patched.activeForm = stringValue(raw.activeForm) || content;
+  }
+  return patched;
+}
+
+/**
+ * Merges a RAW `cursor/update_todos` batch (`merge: true`) over the cached
+ * normalized list. Runs BEFORE the content-requiring normalizer so a status-only
+ * transition (`{id, status}` with no `content`) isn't silently dropped: any raw
+ * entry whose id matches a cached item patches that item's status in place, no
+ * content required. Only the unmatched entries fall through to the normalizer
+ * (which needs content) and then the id/content append merge — so an unmatched
+ * status-only entry with no cached id normalizes to nothing and is dropped
+ * harmlessly, exactly as before.
+ */
+function mergeCursorTodosFromRaw(cached: NormalizedTodo[], rawIncoming: unknown[]): NormalizedTodo[] {
+  const result = cached.map((todo) => ({ ...todo }));
+  const indexById = new Map<string, number>();
+  result.forEach((todo, index) => {
+    const { id } = todoIdentity(todo);
+    if (id) indexById.set(id, index);
+  });
+
+  const unmatchedRaw: unknown[] = [];
+  for (const entry of rawIncoming) {
+    if (!entry || typeof entry !== 'object') {
+      unmatchedRaw.push(entry);
+      continue;
+    }
+    const raw = entry as Record<string, unknown>;
+    const id = stringValue(raw.id);
+    const matchIndex = id ? indexById.get(id) : undefined;
+    if (matchIndex === undefined) {
+      unmatchedRaw.push(entry);
+      continue;
+    }
+    result[matchIndex] = patchTodoFromRaw(result[matchIndex], raw);
+  }
+
+  // Unmatched entries need content (the normalizer drops those without), then
+  // fold in by id/content — new items append, content-matched items update.
+  const normalizedUnmatched = (mapCursorToolInput('updateTodosToolCall', { todos: unmatchedRaw }, undefined)
+    .todos as NormalizedTodo[] | undefined) ?? [];
+  return mergeCursorTodos(result, normalizedUnmatched);
 }
 
 function firstString(...values: unknown[]): string | undefined {
@@ -339,23 +399,23 @@ export function registerCursorAcpExtensions(
 
   unsubscribes.push(transport.onNotification('cursor/update_todos', (params) => {
     const parsed = (params ?? {}) as { todos?: unknown[]; sessionId?: string; merge?: boolean };
-    // Route through the same Cursor todo coercion the stream-json tool-call path
-    // uses: the documented `cursor/update_todos` payload (`{id, content, status}`)
-    // lacks `activeForm`, which the shared todo panel's `parseTodoInput()`
-    // requires, so raw todos silently fail validation and the panel never
-    // updates. `mapCursorToolInput('updateTodosToolCall', ...)` derives
-    // `activeForm` from `content` and defaults `status`.
-    const normalized = mapCursorToolInput('updateTodosToolCall', { todos: parsed.todos ?? [] }, undefined);
-    const incoming = (normalized.todos as NormalizedTodo[] | undefined) ?? [];
+    const rawTodos = parsed.todos ?? [];
 
     // Cursor sends `merge: true` with only the changed items for an incremental
     // update; the StreamController replaces its whole panel from each TodoWrite
     // chunk, so a bare incoming list would drop every unlisted todo. Merge over
     // the last emitted list and cache the result for the next incremental batch.
+    //
+    // The merge path works from the RAW entries so a status-only transition
+    // (`{id, status}`, no `content`) still lands — the shared todo normalizer
+    // drops entries lacking content, which would otherwise vanish the change.
+    // The full-replace path routes through the normalizer (which derives the
+    // panel-required `activeForm` from `content` and defaults `status`).
     const cacheKey = parsed.sessionId ?? '';
     const todos = parsed.merge === true
-      ? mergeCursorTodos(lastTodosBySession.get(cacheKey) ?? [], incoming)
-      : incoming;
+      ? mergeCursorTodosFromRaw(lastTodosBySession.get(cacheKey) ?? [], rawTodos)
+      : (mapCursorToolInput('updateTodosToolCall', { todos: rawTodos }, undefined)
+        .todos as NormalizedTodo[] | undefined) ?? [];
     lastTodosBySession.set(cacheKey, todos);
 
     const id = `cursor-todos-${++todoCallCounter}`;

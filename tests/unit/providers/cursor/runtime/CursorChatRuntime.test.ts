@@ -286,6 +286,34 @@ describe('CursorChatRuntime.handlePermissionRequest', () => {
     expect(response.outcome).toEqual({ outcome: 'cancelled' });
   });
 
+  it('keeps the signal aborted after cancel so a late permission request resolves cancelled at once', async () => {
+    // An agent that ignored session/cancel stays alive until the 5s escalation
+    // and can fire a late session/request_permission. cancel() only aborts the
+    // per-turn signal (it does NOT mint a fresh one), so that late request sees
+    // the still-aborted signal and its approval card never reopens.
+    const approval = jest.fn(() => new Promise<never>(() => {}));
+    const dismissApproval = jest.fn();
+    const host = { ...createHeadlessRuntimeHost(), approval, dismissApproval };
+    const runtime = makeRuntime({}, host);
+    const bag = primeRuntime(runtime, { cancel: jest.fn() });
+    bag.sessionId = 'S1';
+    const controller = new AbortController();
+    bag.askQuestionAbortController = controller;
+
+    runtime.cancel();
+
+    // Aborted in place — same controller instance, not replaced.
+    expect(controller.signal.aborted).toBe(true);
+    expect(bag.askQuestionAbortController).toBe(controller);
+
+    const request = makeRequest([{ kind: 'allow_once', optionId: 'ok', name: 'Allow' }]);
+    const response = await (bag.handlePermissionRequest as (r: unknown) => Promise<{ outcome: Record<string, unknown> }>)
+      .call(runtime, request);
+
+    // approval never settles on its own; only the still-aborted signal ends it.
+    expect(response.outcome).toEqual({ outcome: 'cancelled' });
+  });
+
   it('resolves cancelled immediately when the turn signal is already aborted', async () => {
     const approval = jest.fn(() => new Promise<never>(() => {}));
     const host = { ...createHeadlessRuntimeHost(), approval };
@@ -418,6 +446,30 @@ describe('CursorChatRuntime.query history bootstrap', () => {
 
     expect(prompt).toHaveBeenCalledTimes(1);
     expect(promptTextFrom(prompt)).toContain('PRIOR_MARKER');
+  });
+
+  it('mints a fresh unaborted signal for the next query after a cancel', async () => {
+    const runtime = makeRuntime();
+    const prompt = jest.fn().mockResolvedValue({ usage: null });
+    const loadSession = jest.fn().mockResolvedValue({ sessionId: 'S1' });
+    const setMode = jest.fn().mockResolvedValue({});
+    const bag = primeRuntime(runtime, { prompt, loadSession, setMode, cancel: jest.fn() });
+    bag.sessionId = 'S1';
+    bag.loadedSessionId = null;
+    const controllerBeforeCancel = new AbortController();
+    bag.askQuestionAbortController = controllerBeforeCancel;
+
+    runtime.cancel();
+    // cancel() leaves the aborted controller in place (item 1); the next query
+    // must be the one to abort-then-recreate it into a working signal.
+    expect(controllerBeforeCancel.signal.aborted).toBe(true);
+    expect(bag.askQuestionAbortController).toBe(controllerBeforeCancel);
+
+    await drain(runtime.query(turn as never));
+
+    const controllerAfterQuery = bag.askQuestionAbortController as AbortController;
+    expect(controllerAfterQuery).not.toBe(controllerBeforeCancel);
+    expect(controllerAfterQuery.signal.aborted).toBe(false);
   });
 
   it('does not re-inject history when an existing session loads cleanly', async () => {

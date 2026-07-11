@@ -311,10 +311,10 @@ export class CursorChatRuntime implements ChatRuntime {
         this.armCancelEscalation(turn);
       }
     }
-    // A blocking cursor/ask_question awaits host.askUser with no other exit;
-    // aborting answers the open RPC so the agent isn't left hanging on cancel.
+    // Abort the blocking ask/approval await and leave it aborted through turn end
+    // (query() mints the fresh controller). Recreating it here would hand a late
+    // request_permission/ask_question a live signal, reopening cancelled UI.
     this.askQuestionAbortController?.abort();
-    this.askQuestionAbortController = new AbortController();
     this.host.dismissApproval();
   }
 
