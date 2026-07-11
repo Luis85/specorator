@@ -329,6 +329,64 @@ describe('useAgentBoardStore', () => {
     expect(store.skipReasons).toBe(skipBefore); // nothing pruned → same reference
   });
 
+  it('load() evicts a stale pause overlay once the card leaves a paused status', async () => {
+    const paused = makeLane('needs_input', [makeTask('t1', 'needs_input')]);
+    const done = makeLane('done', [makeTask('t1', 'done')]);
+    const { store } = initStore([
+      { lanes: [paused], errors: [] },
+      { lanes: [done], errors: [] },
+    ]);
+
+    await store.load();
+    store.setPause('t1', { question: 'Q?', runId: 'r1' });
+    const before = store.pauseState;
+
+    await store.load(); // reload: t1 is now terminal
+
+    expect(store.pauseState.has('t1')).toBe(false);
+    expect(store.pauseState).not.toBe(before); // pruned → new reference
+  });
+
+  it('load() evicts a pause overlay whose run_id no longer matches the card (stale prompt from a prior run)', () => {
+    // Card paused in r1, board closed (resume/terminal missed), later re-paused in
+    // r2: the note's run_id is now r2 while the overlay still carries r1's prompt.
+    // The status gate alone keeps it (still needs_input) — the run_id check drops it.
+    const withRun = (runId: string): TaskSpec => {
+      const t = makeTask('t1', 'needs_input');
+      return { ...t, frontmatter: { ...t.frontmatter, run_id: runId } } as TaskSpec;
+    };
+    const { store } = initStore([
+      { lanes: [makeLane('needs_input', [withRun('r1')])], errors: [] },
+      { lanes: [makeLane('needs_input', [withRun('r2')])], errors: [] },
+    ]);
+
+    return store.load().then(() => {
+      store.setPause('t1', { question: 'Old question?', runId: 'r1' });
+      return store.load().then(() => {
+        expect(store.pauseState.has('t1')).toBe(false);
+      });
+    });
+  });
+
+  it('load() keeps a pause overlay while the card stays paused for the same run (no churn)', async () => {
+    const lane = makeLane('needs_input', [
+      { ...makeTask('t1', 'needs_input'), frontmatter: { ...makeTask('t1', 'needs_input').frontmatter, run_id: 'r1' } } as TaskSpec,
+    ]);
+    const { store } = initStore([
+      { lanes: [lane], errors: [] },
+      { lanes: [lane], errors: [] },
+    ]);
+
+    await store.load();
+    store.setPause('t1', { question: 'Q?', runId: 'r1' });
+    const before = store.pauseState;
+
+    await store.load(); // reload: still needs_input, still run r1
+
+    expect(store.pauseState.get('t1')).toMatchObject({ question: 'Q?' });
+    expect(store.pauseState).toBe(before); // nothing pruned → same reference
+  });
+
   it('load() captures a fetch rejection into store.error, resolves (never throws), and leaves layout unchanged', async () => {
     const store = useAgentBoardStore();
     const deps: BoardLoaderDeps = {

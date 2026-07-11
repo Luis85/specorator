@@ -234,32 +234,46 @@ export const useAgentBoardStore = defineStore('agent-board', () => {
   //    paint the previous run's stale strip;
   //  - skip chip: valid only while the card is RUNNABLE (ready / needs_fix) — the
   //    only statuses the runner would try to launch and thus skip; a note edit that
-  //    moves the card off that status (or deletes it) leaves an orphan chip.
+  //    moves the card off that status (or deletes it) leaves an orphan chip;
+  //  - pause prompt: valid only while the card is PAUSED (needs_input / needs_
+  //    approval) AND for the SAME run — a resume/terminal missed while closed leaves
+  //    a prompt from the prior run, and if the card later re-pauses in a new run the
+  //    status gate alone would keep that stale question/action (the note's run_id no
+  //    longer matches the overlay's), so pass the wrong-run payload rather than
+  //    falling back to the note's pause_reason.
   // Unlike clearing on unmount, this preserves an overlay that is still valid in
   // the reloaded layout (e.g. a genuinely-live card across a brief remount).
   function reconcileOverlays(lanes: ResolvedBoardLayout['lanes']): void {
-    const statusById = new Map<string, TaskStatus>();
+    const metaById = new Map<string, { status: TaskStatus; runId?: string | null }>();
     for (const lane of lanes) {
-      for (const task of lane.tasks) statusById.set(task.frontmatter.id, task.frontmatter.status);
+      for (const task of lane.tasks) {
+        metaById.set(task.frontmatter.id, { status: task.frontmatter.status, runId: task.frontmatter.run_id });
+      }
     }
-    liveHeartbeats.value = pruneOverlay(liveHeartbeats.value, statusById, (s) => LIVE_STATUSES.has(s)) ?? liveHeartbeats.value;
-    liveLedger.value = pruneOverlay(liveLedger.value, statusById, (s) => LIVE_STATUSES.has(s)) ?? liveLedger.value;
-    skipReasons.value = pruneOverlay(skipReasons.value, statusById, isRunnableTaskStatus) ?? skipReasons.value;
+    liveHeartbeats.value = pruneOverlay(liveHeartbeats.value, metaById, (m) => LIVE_STATUSES.has(m.status)) ?? liveHeartbeats.value;
+    liveLedger.value = pruneOverlay(liveLedger.value, metaById, (m) => LIVE_STATUSES.has(m.status)) ?? liveLedger.value;
+    skipReasons.value = pruneOverlay(skipReasons.value, metaById, (m) => isRunnableTaskStatus(m.status)) ?? skipReasons.value;
+    pauseState.value = pruneOverlay(pauseState.value, metaById, (m, entry) => {
+      if (m.status !== 'needs_input' && m.status !== 'needs_approval') return false;
+      // Drop only on a definite run mismatch (both ids present) — keep when either
+      // is absent so a fresh overlay whose note run_id hasn't landed yet survives.
+      return !(entry.runId && m.runId && entry.runId !== m.runId);
+    }) ?? pauseState.value;
   }
 
-  // Returns a new Map with every entry whose loaded status fails `keep` (or whose
+  // Returns a new Map with every entry whose loaded task fails `keep` (or whose
   // task is gone from the layout) dropped, or null when nothing was pruned — so
   // load() only churns the shallowRef reference (and re-renders the bounded set of
   // affected cards) when a stale entry actually existed.
   function pruneOverlay<V>(
     map: Map<string, V>,
-    statusById: Map<string, TaskStatus>,
-    keep: (status: TaskStatus) => boolean,
+    metaById: Map<string, { status: TaskStatus; runId?: string | null }>,
+    keep: (meta: { status: TaskStatus; runId?: string | null }, entry: V) => boolean,
   ): Map<string, V> | null {
     let pruned: Map<string, V> | null = null;
-    for (const id of map.keys()) {
-      const status = statusById.get(id);
-      if (status !== undefined && keep(status)) continue;
+    for (const [id, entry] of map) {
+      const meta = metaById.get(id);
+      if (meta !== undefined && keep(meta, entry)) continue;
       pruned ??= new Map(map);
       pruned.delete(id);
     }
