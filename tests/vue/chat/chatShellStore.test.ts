@@ -1,8 +1,11 @@
 import { createPinia, setActivePinia } from 'pinia';
 import { beforeEach, describe, expect, it } from 'vitest';
 
+import type { AgentPersona } from '@/features/agents/agentTypes';
 import type { TabBarItem } from '@/features/chat/tabs/types';
 import { useChatShellStore } from '@/features/chat/ui/vue/stores/chatShellStore';
+
+const PERSONA: AgentPersona = { id: 'reviewer', name: 'Reviewer', color: 'var(--color-purple)', initials: 'RV' };
 
 function item(id: string, overrides: Partial<TabBarItem> = {}): TabBarItem {
   return {
@@ -32,7 +35,7 @@ describe('useChatShellStore', () => {
 
   it('setHeader merges the projected header chrome', () => {
     const store = useChatShellStore();
-    store.setHeader({ title: 'Fix bug', boundAgent: { name: 'Reviewer', avatar: null }, activeProviderId: 'codex', tabBarVisible: true, metaRowVisible: true });
+    store.setHeader({ title: 'Fix bug', boundAgent: { name: 'Reviewer', persona: PERSONA }, activeProviderId: 'codex', tabBarVisible: true, metaRowVisible: true });
     expect(store.header.title).toBe('Fix bug');
     expect(store.header.boundAgent?.name).toBe('Reviewer');
     expect(store.header.tabBarVisible).toBe(true);

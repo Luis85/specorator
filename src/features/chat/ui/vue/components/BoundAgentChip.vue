@@ -1,8 +1,8 @@
 <script setup lang="ts">
-import { computed } from 'vue';
+import { computed, ref, watchEffect } from 'vue';
 
 import { t } from '../../../../../i18n/i18n';
-import { mountIcon } from '../mountIcon';
+import { renderAgentAvatar } from '../../../../agents/agentAvatar';
 import type { ChatBoundAgent } from '../stores/chatShellStore';
 
 const props = defineProps<{ agent: ChatBoundAgent }>();
@@ -13,9 +13,17 @@ const props = defineProps<{ agent: ChatBoundAgent }>();
 const chattingWith = computed(() => t('agentRoster.chattingWith', { name: props.agent.name }));
 const chipTitle = computed(() => `${chattingWith.value} — ${t('agentRoster.bindingHint')}`);
 
-function avatarHost(el: unknown): void {
-  mountIcon(el, 'user');
-}
+// Mount the imperative persona avatar into a template-ref host — same pattern as
+// the board's AgentAvatar.vue. renderAgentAvatar builds the colored
+// .specorator-agent-avatar (icon/initials from the persona) at 18px, matching
+// syncBoundAgentChip's renderAgentAvatar(el, persona, 18).
+const avatarHost = ref<HTMLElement | null>(null);
+watchEffect(() => {
+  const el = avatarHost.value;
+  if (!el) return;
+  el.textContent = '';
+  renderAgentAvatar(el, props.agent.persona, 18);
+});
 </script>
 
 <template>
@@ -25,19 +33,10 @@ function avatarHost(el: unknown): void {
     :aria-label="chattingWith"
   >
     <div
+      ref="avatarHost"
       class="specorator-bound-agent-chip-avatar"
       aria-hidden="true"
-    >
-      <img
-        v-if="agent.avatar"
-        :src="agent.avatar"
-        :alt="agent.name"
-      >
-      <span
-        v-else
-        :ref="avatarHost"
-      />
-    </div>
+    />
     <span class="specorator-bound-agent-chip-label">{{ agent.name }}</span>
   </div>
 </template>

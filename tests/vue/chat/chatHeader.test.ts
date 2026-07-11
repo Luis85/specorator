@@ -3,12 +3,15 @@ import { createPinia, setActivePinia } from 'pinia';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { markRaw } from 'vue';
 
+import type { AgentPersona } from '@/features/agents/agentTypes';
 import type { TabBarItem } from '@/features/chat/tabs/types';
 import type { ChatShellCallbacks } from '@/features/chat/ui/vue/chatShellCallbacks';
 import { CALLBACKS_KEY } from '@/features/chat/ui/vue/chatShellKeys';
 import ChatHeader from '@/features/chat/ui/vue/components/ChatHeader.vue';
 import type { ChatShellHeader } from '@/features/chat/ui/vue/stores/chatShellStore';
 import { useChatShellStore } from '@/features/chat/ui/vue/stores/chatShellStore';
+
+const PERSONA: AgentPersona = { id: 'reviewer', name: 'Reviewer', color: 'var(--color-purple)', initials: 'RV' };
 
 function item(id: string, overrides: Partial<TabBarItem> = {}): TabBarItem {
   return {
@@ -59,15 +62,18 @@ describe('ChatHeader', () => {
     expect(getByText('Fix the bug')).toBeTruthy();
   });
 
-  it('shows the bound-agent chip only when boundAgent is set', () => {
+  it('shows the bound-agent chip (persona avatar + name) only when boundAgent is set', () => {
     const store = useChatShellStore();
     store.setHeader(hdr());
     const { container, rerender } = mountHeader(fakeCallbacks());
     expect(container.querySelector('.specorator-bound-agent-chip')).toBeNull();
 
-    store.setHeader(hdr({ boundAgent: { name: 'Reviewer', avatar: null }, metaRowVisible: true }));
+    store.setHeader(hdr({ boundAgent: { name: 'Reviewer', persona: PERSONA }, metaRowVisible: true }));
     return rerender({}).then(() => {
-      expect(container.querySelector('.specorator-bound-agent-chip')).toBeTruthy();
+      const chip = container.querySelector('.specorator-bound-agent-chip');
+      expect(chip).toBeTruthy();
+      // renderAgentAvatar mounts the colored persona badge into the chip.
+      expect(chip?.querySelector('.specorator-agent-avatar')).toBeTruthy();
       expect(container.querySelector('.specorator-bound-agent-chip-label')?.textContent).toBe('Reviewer');
     });
   });
@@ -120,6 +126,18 @@ describe('ChatHeader', () => {
     const historyBtn = container.querySelector('.specorator-history-container .specorator-header-btn') as HTMLElement;
     await fireEvent.click(historyBtn);
     expect(cb.onOpenHistory).toHaveBeenCalledTimes(1);
+  });
+
+  it('Enter and Space on a header button fire its handler (wireHeaderButton keyboard parity)', async () => {
+    const store = useChatShellStore();
+    store.setHeader(hdr());
+    const cb = fakeCallbacks();
+    const { container } = mountHeader(cb);
+    const historyBtn = container.querySelector('.specorator-history-container .specorator-header-btn') as HTMLElement;
+    await fireEvent.keyDown(historyBtn, { key: 'Enter' });
+    expect(cb.onOpenHistory).toHaveBeenCalledTimes(1);
+    await fireEvent.keyDown(historyBtn, { key: ' ' });
+    expect(cb.onOpenHistory).toHaveBeenCalledTimes(2);
   });
 
   it('quick actions, new tab, and new conversation buttons call their respective callbacks', async () => {

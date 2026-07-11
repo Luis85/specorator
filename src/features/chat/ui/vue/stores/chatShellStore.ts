@@ -2,12 +2,15 @@ import { defineStore } from 'pinia';
 import { shallowRef } from 'vue';
 
 import type { ProviderId } from '../../../../../core/providers/types';
+import type { AgentPersona } from '../../../../agents/agentTypes';
 import type { TabBarItem, TabId } from '../../../tabs/types';
 
-/** Bound-agent chip projection (name + optional avatar data URI/icon). */
+/** Bound-agent chip projection: the agent name plus its persona, so the chip
+ *  renders the same colored persona avatar as SpecoratorView.syncBoundAgentChip
+ *  (renderAgentAvatar), not an image URL. */
 export interface ChatBoundAgent {
   name: string;
-  avatar: string | null;
+  persona: AgentPersona;
 }
 
 /** Header chrome the shell renders — projected off TabManager + the active tab. */

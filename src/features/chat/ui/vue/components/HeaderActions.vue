@@ -15,9 +15,12 @@ onMounted(() => {
   if (workOrderHost.value) cb.mountWorkOrderHost(workOrderHost.value);
 });
 
-function icon(name: string) {
-  return (el: unknown) => mountIcon(el, name);
-}
+// Stable named host functions per button (consistent with TabBadge.vue /
+// BoundAgentChip.vue) so each `:ref` is not a fresh closure per render.
+function quickActionsHost(el: unknown): void { mountIcon(el, 'zap'); }
+function newTabHost(el: unknown): void { mountIcon(el, 'square-plus'); }
+function newConversationHost(el: unknown): void { mountIcon(el, 'square-pen'); }
+function historyHostIcon(el: unknown): void { mountIcon(el, 'history'); }
 
 // Mirrors SpecoratorView.wireHeaderButton: click + Enter/Space both activate,
 // so each specorator-header-btn is keyboard-operable.
@@ -37,7 +40,7 @@ function onKeydown(e: KeyboardEvent, fn: () => void): void {
     />
 
     <div
-      :ref="icon('zap')"
+      :ref="quickActionsHost"
       class="specorator-header-btn"
       role="button"
       tabindex="0"
@@ -48,7 +51,7 @@ function onKeydown(e: KeyboardEvent, fn: () => void): void {
     />
 
     <div
-      :ref="icon('square-plus')"
+      :ref="newTabHost"
       class="specorator-header-btn specorator-new-tab-btn"
       role="button"
       tabindex="0"
@@ -58,7 +61,7 @@ function onKeydown(e: KeyboardEvent, fn: () => void): void {
     />
 
     <div
-      :ref="icon('square-pen')"
+      :ref="newConversationHost"
       class="specorator-header-btn"
       role="button"
       tabindex="0"
@@ -69,7 +72,7 @@ function onKeydown(e: KeyboardEvent, fn: () => void): void {
 
     <div class="specorator-history-container">
       <div
-        :ref="icon('history')"
+        :ref="historyHostIcon"
         class="specorator-header-btn"
         role="button"
         tabindex="0"
