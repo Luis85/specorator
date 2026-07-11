@@ -95,4 +95,54 @@ describe('TabStrip (Vue parity with TabBar)', () => {
     expect(bs[1].getAttribute('tabindex')).toBe('0');
     expect(bs[0].getAttribute('tabindex')).toBe('-1');
   });
+
+  // The following mirror the roving assertions in
+  // tests/unit/features/chat/tabs/TabBar.test.ts so parity holds across every key.
+  it('ArrowLeft moves the tab stop to the previous badge', async () => {
+    const { container } = mountStrip([item('a'), item('b', { isActive: true })]);
+    const [first, second] = badges(container);
+    expect(second.getAttribute('tabindex')).toBe('0');
+    await fireEvent.keyDown(second, { key: 'ArrowLeft' });
+    expect(first.getAttribute('tabindex')).toBe('0');
+    expect(second.getAttribute('tabindex')).toBe('-1');
+  });
+
+  it('ArrowRight wraps from the last badge to the first', async () => {
+    const { container } = mountStrip([item('a'), item('b', { isActive: true })]);
+    const [first, second] = badges(container);
+    await fireEvent.keyDown(second, { key: 'ArrowRight' });
+    expect(first.getAttribute('tabindex')).toBe('0');
+    expect(second.getAttribute('tabindex')).toBe('-1');
+  });
+
+  it('ArrowLeft wraps from the first badge to the last', async () => {
+    const { container } = mountStrip([item('a', { isActive: true }), item('b')]);
+    const [first, last] = badges(container);
+    await fireEvent.keyDown(first, { key: 'ArrowLeft' });
+    expect(last.getAttribute('tabindex')).toBe('0');
+    expect(first.getAttribute('tabindex')).toBe('-1');
+  });
+
+  it('Home moves the tab stop to the first badge; End to the last', async () => {
+    const { container } = mountStrip([item('a'), item('b', { isActive: true }), item('c')]);
+    const [first, middle, last] = badges(container);
+    await fireEvent.keyDown(middle, { key: 'End' });
+    expect(last.getAttribute('tabindex')).toBe('0');
+    expect(middle.getAttribute('tabindex')).toBe('-1');
+    await fireEvent.keyDown(last, { key: 'Home' });
+    expect(first.getAttribute('tabindex')).toBe('0');
+    expect(last.getAttribute('tabindex')).toBe('-1');
+  });
+
+  it('single-badge strip: ArrowRight/ArrowLeft are no-ops (badge stays tabindex 0)', async () => {
+    const { container, onTabClick } = mountStrip([item('only', { isActive: true })]);
+    const [only] = badges(container);
+    expect(only.getAttribute('tabindex')).toBe('0');
+    await fireEvent.keyDown(only, { key: 'ArrowRight' });
+    expect(only.getAttribute('tabindex')).toBe('0');
+    await fireEvent.keyDown(only, { key: 'ArrowLeft' });
+    expect(only.getAttribute('tabindex')).toBe('0');
+    // Manual activation: arrows never switch the active tab.
+    expect(onTabClick).not.toHaveBeenCalled();
+  });
 });
