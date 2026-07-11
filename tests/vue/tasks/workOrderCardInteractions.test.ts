@@ -159,6 +159,33 @@ describe('WorkOrderCard reply surface + skip chip', () => {
     expect(callbacks.onOpenDetail).not.toHaveBeenCalled();
   });
 
+  it('needs_input: re-seeds the input from a pause default that arrives AFTER the surface mounts (status-changed precedes needs-input)', async () => {
+    // RunSession emits task:status-changed (which mounts this surface via the
+    // status gate, keyed on status not pause) BEFORE task:needs-input, so the
+    // surface mounts with pause=null and the default lands a beat later. Without
+    // the resync watch the once-seeded ref would miss it and Enter would send an
+    // empty reply.
+    const layout: ResolvedBoardLayout = { lanes: [makeLane('running', [makeTask('c-ni', 'needs_input')])], errors: [] };
+    const { store, container } = mountBoard(layout, makeCallbacks());
+    expect(replyField(container).value).toBe(''); // pause default not yet delivered
+
+    store.setPause('c-ni', { question: 'Q?', defaultValue: 'seed answer', runId: 'r1' });
+    await nextTick();
+
+    expect(replyField(container).value).toBe('seed answer');
+  });
+
+  it('needs_input: a late pause default does NOT clobber text the user already typed', async () => {
+    const layout: ResolvedBoardLayout = { lanes: [makeLane('running', [makeTask('c-ni', 'needs_input')])], errors: [] };
+    const { store, container } = mountBoard(layout, makeCallbacks());
+
+    await fireEvent.update(replyField(container), 'my own words');
+    store.setPause('c-ni', { question: 'Q?', defaultValue: 'seed answer', runId: 'r1' });
+    await nextTick();
+
+    expect(replyField(container).value).toBe('my own words');
+  });
+
   it('needs_approval: renders prompt + risk + Approve/Reject, wires Approve → onApprove and Reject → onReject(task, reason)', async () => {
     const callbacks = makeCallbacks();
     const layout: ResolvedBoardLayout = { lanes: [makeLane('running', [makeTask('c-na', 'needs_approval')])], errors: [] };

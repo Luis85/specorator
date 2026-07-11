@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, inject, ref } from 'vue';
+import { computed, inject, ref, watch } from 'vue';
 
 import { t } from '../../../../../i18n/i18n';
 import type { TaskSpec } from '../../../model/taskTypes';
@@ -46,6 +46,22 @@ const riskText = computed(() =>
 // Seed from the pause payload's default (needs_input) — parity with the
 // imperative `field.value = pause.defaultValue`. needs_approval carries none.
 const fieldValue = ref(props.pause?.defaultValue ?? '');
+
+// Re-seed when the pause default arrives late. RunSession emits
+// task:status-changed BEFORE task:needs-input, and WorkOrderCard gates this
+// surface on STATUS (keyed on status, not the pause), so the surface can mount
+// while `pause` is still null — the once-initialized ref above then misses the
+// default that lands a beat later, and Enter would send an empty reply. Adopt the
+// new default ONLY while the field still holds the prior seed (untouched); once
+// the user has typed, leave their edit alone. Mirrors LaneCriteriaField's resync.
+let lastSeed = fieldValue.value;
+watch(
+  () => props.pause?.defaultValue ?? '',
+  (next) => {
+    if (fieldValue.value === lastSeed) fieldValue.value = next;
+    lastSeed = next;
+  },
+);
 
 function submitReply(): void {
   callbacks?.onReply?.(props.task, fieldValue.value);
