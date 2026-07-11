@@ -140,9 +140,14 @@ instead of a `child_process`:
 - Resume via `Agent.resume(id)` (replaces `--resume`).
 
 Everything downstream (chat UI, message renderer, `providerState`) is untouched
-because it only ever sees `StreamChunk`s. The runtime holds one `Agent` for its
-lifetime and resumes by id when synced to a conversation. Capability flags stay
-as today; `supportsPersistentRuntime` stays `false` for v1 (no promotion into
+because it only ever sees `StreamChunk`s. The `Agent` handle is **per turn**,
+not per runtime: each `query()` calls `Agent.resume(activeResumeId)` (or
+`Agent.create` when none) and `close()`s in its `finally`. Conversation
+switches within the same tab only call `syncConversationState(...)`
+(`ConversationController.switchTo` does not rebuild the runtime), so the
+resume id is re-read from the synced conversation on every turn — no SDK state
+can leak across conversations (review finding). Capability flags stay as
+today; `supportsPersistentRuntime` stays `false` for v1 (no promotion into
 shared coordinators).
 
 ## Auth, helper binaries & permission-mode mapping (Milestone 1)
@@ -153,8 +158,14 @@ At `ensureReady()`:
   `plugin.getResolvedEnvironmentVariables('cursor')` (falling back to host
   `process.env.CURSOR_API_KEY`) and pass as the SDK `apiKey` option. Today these
   are plumbed as subprocess env via `cursorAgentEnv.ts`; that file is deleted
-  and the values become SDK options. A loopback `CURSOR_BASE_URL` is rejected
-  (see the TLS footgun above). The reconciler's
+  and the values become SDK options. Loopback guard (TLS footgun above) works
+  at **both** layers, because the SDK runs in-process and reads `process.env`
+  directly: a loopback settings-box `CURSOR_BASE_URL` is rejected, **and**
+  loopback host-env values of the vars the SDK itself reads
+  (`CURSOR_API_BASE_URL`, `CURSOR_BACKEND_URL`, `CURSOR_BASE_URL`) are cleared
+  from `process.env` before every agent creation (review finding — rejecting
+  only the configured option is insufficient when Obsidian was launched with a
+  loopback var already set). The reconciler's
   `ENV_HASH_KEYS = ['CURSOR_API_KEY','CURSOR_BASE_URL']` session-invalidation
   contract is retained verbatim.
 - **Helper binaries** — the agent harness itself is bundled JS (in-process);
@@ -316,33 +327,43 @@ generation stays provider-routed by the global `titleGenerationModel`.
   `supportsProviderCommands`, `supportsMcpTools`, `supportsPersistentRuntime`
   stay `false`. SDK MCP and persistent-runtime are explicit non-goals here.
 
-## File plan (21 DELETE / 12 REWRITE / 21 KEEP)
+## File plan (20 DELETE / 11 REWRITE / 23 KEEP)
 
-**DELETE (21)** — CLI orchestration cluster:
+**DELETE (20)** — CLI orchestration cluster:
 `runtime/cursorStreamMapper`, `cursorToolNormalization`, `cursorToolNameMap`,
 `cursorToolInputMapping`, `cursorToolValueCoercion`, `cursorGrepFormatting`,
 `cursorTaskPayload`, `cursorTaskSubagent`, `cursorAskUserQuestion`,
 `cursorAgentSpawnLock`, `cursorProcessKill`, `cursorLaunchArgs`, `cursorLaunch`,
-`cursorWindowsSpawn`, `cursorCliPrompt`, `cursorAgentEnv`, `cursorMcpCleanup`,
+`cursorWindowsSpawn`, `cursorCliPrompt`, `cursorAgentEnv`,
 `cursorQueryLaunch`, `cursorQueryLifecycle`, `cursorQueryProcessing`,
 `cursorUsageMapping` (small usage→`UsageInfo` adapter may be re-homed if history
 still needs it).
 
-**REWRITE (12)** — reimplement on the SDK:
+`cursorMcpCleanup` moves to **KEEP** (review finding): with
+`settingSources: ['project', 'user']` the SDK re-reads user-level Cursor
+settings including `~/.cursor/mcp.json`, so the one-shot migration that strips
+the dead loopback `specorator` MCP entry older builds wrote there must survive
+— otherwise affected users pay connection retries (or failed turns) on every
+send. The SDK runtime keeps invoking it once per runtime before the first
+agent creation, exactly as the CLI runtime does today.
+
+**REWRITE (11)** — reimplement on the SDK:
 `runtime/CursorChatRuntime`, `runtime/CursorAuxCliRunner`,
 `auxiliary/CursorTitleGenerationService`, `auxiliary/CursorInstructionRefineService`,
 `auxiliary/CursorInlineEditService`, `history/CursorConversationHistoryService`,
-`history/cursorHistoryStore`, `env/CursorSettingsReconciler` (env-hash contract
-retained; API-key application changes), `prompt/encodeCursorTurn`,
+`history/cursorHistoryStore`, `prompt/encodeCursorTurn`,
 `runtime/CursorCliResolver` + `runtime/CursorBinaryLocator` (repurposed to
 discover ripgrep for `CURSOR_RIPGREP_PATH`; no agent binary exists to resolve),
 `runtime/CursorTaskResultInterpreter`
 (reimplement on SDK subagent types).
 
-**KEEP (21)** — provider-neutral / still needed:
+**KEEP (23)** — provider-neutral / still needed:
 `capabilities`, `settings`, `types`, `types/agent`, `modelLabels`,
 `runtime/cursorModelFamily`, `cursorModelId`, `cursorModelWindowCatalog`,
 `cursorModelCatalog` (live-listing swaps to SDK), `cursorCliModel`,
+`runtime/cursorMcpCleanup` (one-shot `~/.cursor/mcp.json` migration, see above),
+`env/CursorSettingsReconciler` (its env-hash session invalidation and model
+reconciliation have no CLI coupling — already SDK-correct as-is),
 `registration`, `app/CursorWorkspaceServices`, `app/cursorWorkspaceAccess`,
 `agents/CursorAgentMentionProvider`, `storage/CursorAgentStorage`, and all
 settings UI (`ui/CursorChatUIConfig`, `CursorSettingsTab`, `CursorAgentSettings`,
@@ -373,10 +394,11 @@ settings UI (`ui/CursorChatUIConfig`, `CursorSettingsTab`, `CursorAgentSettings`
    metadata (`CreatePlan` completion → `planCompleted`).
 3. **Session resume + AskUserQuestion custom tool** (model-uptake validated
    here).
-4. **History rewrite** (clean break, `Agent.messages.list`/`listRuns`) +
-   settings reconciler.
+4. **History rewrite** (clean break, `Agent.messages.list`/`listRuns`); verify
+   the reconciler's env-hash invalidation still fires on key change (no code
+   change expected — it has no CLI coupling).
 5. **Aux services** + model listing (`Cursor.models.list()`).
-6. **Delete the 21 CLI files** + rewrite tests + integration smoke; update
+6. **Delete the 20 CLI files** + rewrite tests + integration smoke; update
    `CLAUDE.md` (Cursor entries) and the install guide (API-key requirement).
 
 ## Risks & open questions
