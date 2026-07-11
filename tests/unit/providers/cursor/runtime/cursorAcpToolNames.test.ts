@@ -43,6 +43,58 @@ describe('cursorAcpToolNames', () => {
     expect(CURSOR_ACP_CANONICAL_TOOL_NAMES.has('delete')).toBe(true);
   });
 
+  it('resolves a file-mutating edit kind to Edit even when the title is prose', () => {
+    const adapter = createCursorAcpToolStreamAdapter();
+    const chunks = adapter.normalizeToolCall(
+      { toolCallId: 'e1', title: 'Applying changes', kind: 'edit', rawInput: {} },
+      [{ id: 'e1', input: {}, name: 'unused', type: 'tool_use' }],
+    );
+    const toolUse = chunks.find((c) => c.type === 'tool_use') as { name: string } | undefined;
+    expect(toolUse?.name).toBe(TOOL_EDIT);
+  });
+
+  it('resolves a delete kind to the delete identity even when the title is prose', () => {
+    const adapter = createCursorAcpToolStreamAdapter();
+    const chunks = adapter.normalizeToolCall(
+      { toolCallId: 'd1', title: 'Delete file', kind: 'delete', rawInput: { path: 'notes/todo.md' } },
+      [{ id: 'd1', input: {}, name: 'unused', type: 'tool_use' }],
+    );
+    const toolUse = chunks.find((c) => c.type === 'tool_use') as { name: string } | undefined;
+    expect(toolUse?.name).toBe('delete');
+    expect(toolUse?.name).not.toBe(TOOL_BASH);
+  });
+
+  describe('normalizeCursorAcpToolUseResult (ACP edit diffs)', () => {
+    it('surfaces the unified diff + file path from an edit tool_call_update diff block', () => {
+      const adapter = createCursorAcpToolStreamAdapter();
+      const chunks = adapter.normalizeToolCallUpdate(
+        {
+          toolCallId: 'edit-1',
+          kind: 'edit',
+          title: 'Applying changes',
+          content: [{ type: 'diff', path: 'notes/todo.md', oldText: 'foo', newText: 'bar' }],
+        },
+        [{ id: 'edit-1', content: 'done', type: 'tool_result' }],
+      );
+      const result = chunks.find((c) => c.type === 'tool_result') as {
+        toolUseResult?: { filePath?: string; unifiedDiff?: string };
+      };
+      expect(result.toolUseResult?.filePath).toBe('notes/todo.md');
+      expect(result.toolUseResult?.unifiedDiff).toContain('-foo');
+      expect(result.toolUseResult?.unifiedDiff).toContain('+bar');
+    });
+
+    it('leaves the tool_result untouched for a non-file tool carrying no diff', () => {
+      const adapter = createCursorAcpToolStreamAdapter();
+      const chunks = adapter.normalizeToolCallUpdate(
+        { toolCallId: 'bash-1', kind: 'execute', title: 'shell', rawInput: { command: 'ls' } },
+        [{ id: 'bash-1', content: 'ok', type: 'tool_result' }],
+      );
+      const result = chunks.find((c) => c.type === 'tool_result') as { toolUseResult?: unknown };
+      expect(result.toolUseResult).toBeUndefined();
+    });
+  });
+
   describe('normalizeCursorAcpToolInput', () => {
     it('canonicalizes edit tool input (path/oldString/newString -> file_path/old_string/new_string)', () => {
       const result = normalizeCursorAcpToolInput('edit', {

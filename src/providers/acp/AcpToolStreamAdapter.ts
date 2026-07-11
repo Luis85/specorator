@@ -1,6 +1,6 @@
 import type { StreamChunk } from '../../core/types';
 import type { SDKToolUseResult } from '../../core/types/diff';
-import type { AcpToolCall, AcpToolCallUpdate } from './types';
+import type { AcpToolCall, AcpToolCallContent, AcpToolCallUpdate } from './types';
 
 interface AcpToolStreamState {
   input: Record<string, unknown>;
@@ -14,6 +14,7 @@ export interface AcpToolStreamPresentationAdapter {
     rawName: string | undefined,
     input: Record<string, unknown>,
     rawOutput: unknown,
+    content?: AcpToolCallContent[] | null,
   ): SDKToolUseResult | undefined;
   resolveRawToolName(
     currentRawName: string | undefined,
@@ -40,7 +41,7 @@ export class AcpToolStreamAdapter {
       title: toolCall.title,
     });
     this.toolStates.set(toolCall.toolCallId, state);
-    return chunks.map((chunk) => this.normalizeChunk(chunk, state, toolCall.rawOutput));
+    return chunks.map((chunk) => this.normalizeChunk(chunk, state, toolCall.rawOutput, toolCall.content));
   }
 
   normalizeToolCallUpdate(toolCallUpdate: AcpToolCallUpdate, chunks: StreamChunk[]): StreamChunk[] {
@@ -62,7 +63,7 @@ export class AcpToolStreamAdapter {
     }
 
     for (const chunk of chunks) {
-      result.push(this.normalizeChunk(chunk, state, toolCallUpdate.rawOutput));
+      result.push(this.normalizeChunk(chunk, state, toolCallUpdate.rawOutput, toolCallUpdate.content));
     }
 
     return result;
@@ -105,6 +106,7 @@ export class AcpToolStreamAdapter {
     chunk: StreamChunk,
     state: AcpToolStreamState,
     rawOutput?: unknown,
+    content?: AcpToolCallContent[] | null,
   ): StreamChunk {
     switch (chunk.type) {
       case 'tool_use':
@@ -114,7 +116,7 @@ export class AcpToolStreamAdapter {
           name: this.adapter.normalizeToolName(state.rawName),
         };
       case 'tool_result': {
-        const toolUseResult = this.adapter.normalizeToolUseResult(state.rawName, state.input, rawOutput);
+        const toolUseResult = this.adapter.normalizeToolUseResult(state.rawName, state.input, rawOutput, content);
         return toolUseResult
           ? { ...chunk, toolUseResult }
           : chunk;

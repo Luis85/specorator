@@ -1,5 +1,6 @@
 import { ProviderSettingsCoordinator } from '@/core/providers/ProviderSettingsCoordinator';
 import { createHeadlessRuntimeHost, type RuntimeHost } from '@/core/runtime/RuntimeHost';
+import { AcpStreamChunkQueue } from '@/providers/acp';
 import * as acpBuild from '@/providers/acp/buildAcpUsageInfo';
 import { CursorChatRuntime } from '@/providers/cursor/runtime/CursorChatRuntime';
 
@@ -375,6 +376,30 @@ describe('CursorChatRuntime.query history bootstrap', () => {
 
     expect(prompt).toHaveBeenCalledTimes(1);
     expect(promptTextFrom(prompt)).not.toContain('PRIOR_MARKER');
+  });
+});
+
+describe('CursorChatRuntime terminal-push dedup', () => {
+  it('emits exactly one error and one done when transport close races the rejected prompt', async () => {
+    const runtime = makeRuntime() as unknown as Record<string, unknown>;
+    const queue = new AcpStreamChunkQueue();
+    const activeTurn = { queue, sessionId: 'S', terminalPushed: false };
+    const pushTermination = (runtime.pushTurnTermination as (t: unknown, c: unknown[]) => void).bind(runtime);
+
+    // Transport onClose lands first, then the rejected prompt's .catch fires on
+    // the same turn — the second push must be a no-op.
+    pushTermination(activeTurn, [{ type: 'error', content: 'exited' }, { type: 'done' }]);
+    pushTermination(activeTurn, [{ type: 'error', content: 'request failed' }, { type: 'done' }]);
+
+    const chunks: Array<{ type: string }> = [];
+    let chunk = await queue.next();
+    while (chunk !== null) {
+      chunks.push(chunk as { type: string });
+      chunk = await queue.next();
+    }
+
+    expect(chunks.filter((c) => c.type === 'error')).toHaveLength(1);
+    expect(chunks.filter((c) => c.type === 'done')).toHaveLength(1);
   });
 });
 

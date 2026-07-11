@@ -11,7 +11,8 @@ import {
   TOOL_WEB_SEARCH,
   TOOL_WRITE,
 } from '../../../core/tools/toolNames';
-import { AcpToolStreamAdapter } from '../../acp';
+import type { SDKToolUseResult } from '../../../core/types/diff';
+import { type AcpDiffToolContent, type AcpToolCallContent, AcpToolStreamAdapter } from '../../acp';
 import { mapCursorToolInput } from './cursorToolInputMapping';
 
 // Matches the local `TOOL_DELETE` in
@@ -108,7 +109,16 @@ export function resolveCursorAcpRawToolName(
     return currentRawName;
   }
 
+  // File-mutating ACP kinds resolve from the kind BEFORE the title fallback:
+  // a `delete`/`edit` call whose title is prose ("Delete file", "Applying
+  // changes") would otherwise fall through to the title and lose the canonical
+  // id that `isEditTool()`/`collectRemovedPathsFromToolCall()` bookkeeping
+  // matches against.
   switch (update.kind) {
+    case 'delete':
+      return 'delete';
+    case 'edit':
+      return 'edit';
     case 'execute':
       return 'bash';
     case 'fetch':
@@ -153,12 +163,64 @@ export function normalizeCursorAcpToolInput(
   return inputKind ? mapCursorToolInput(inputKind, input, undefined) : input;
 }
 
-// Deliberate v1 scoping: ACP tool results pass through generically for now,
-// so there's no Cursor-specific toolUseResult to build yet (see plan Task 2,
-// docs/superpowers/plans/2026-07-11-cursor-acp-runtime.md). Revisit once a
-// consumer needs rich per-tool result shaping (e.g. diffs, todo snapshots).
-export function normalizeCursorAcpToolUseResult(): undefined {
+function firstDiffContent(
+  content: AcpToolCallContent[] | null | undefined,
+): AcpDiffToolContent | undefined {
+  if (!Array.isArray(content)) {
+    return undefined;
+  }
+  for (const item of content) {
+    if (item && item.type === 'diff') {
+      return item;
+    }
+  }
   return undefined;
+}
+
+// Cursor delivers write/edit diffs as an ACP `diff` content block (oldText /
+// newText / path). Project it into the provider-neutral unified-diff shape the
+// shared `extractDiffData` consumer reads (`filePath` + `unifiedDiff`). Old
+// lines emit as deletes, new lines as inserts — mirrors the Edit fallback in
+// `diffFromToolInput`, and `parseUnifiedDiffLines` tolerates the header-less form.
+function buildAcpUnifiedDiff(oldText: string | null | undefined, newText: string): string {
+  const oldLines = typeof oldText === 'string' && oldText.length > 0 ? oldText.split('\n') : [];
+  const newLines = newText.length > 0 ? newText.split('\n') : [];
+  return [
+    ...oldLines.map((line) => `-${line}`),
+    ...newLines.map((line) => `+${line}`),
+  ].join('\n');
+}
+
+// Only file-mutating tools carry a renderable diff; everything else passes
+// through with no Cursor-specific toolUseResult.
+export function normalizeCursorAcpToolUseResult(
+  rawName: string | undefined,
+  input: Record<string, unknown>,
+  _rawOutput: unknown,
+  content?: AcpToolCallContent[] | null,
+): SDKToolUseResult | undefined {
+  const knownName = toKnownToolName(rawName);
+  if (knownName !== 'edit' && knownName !== 'write') {
+    return undefined;
+  }
+
+  const diff = firstDiffContent(content);
+  if (!diff) {
+    return undefined;
+  }
+
+  const filePath = firstTrimmedString(diff.path, input.file_path, input.filePath);
+  const unifiedDiff = buildAcpUnifiedDiff(diff.oldText, diff.newText);
+
+  const result: SDKToolUseResult = {};
+  if (filePath) {
+    result.filePath = filePath;
+  }
+  if (unifiedDiff) {
+    result.unifiedDiff = unifiedDiff;
+  }
+
+  return Object.keys(result).length > 0 ? result : undefined;
 }
 
 export function createCursorAcpToolStreamAdapter(): AcpToolStreamAdapter {

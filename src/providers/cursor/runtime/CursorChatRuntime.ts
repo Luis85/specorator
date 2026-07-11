@@ -52,6 +52,9 @@ import { extractCursorUsage } from './cursorUsageMapping';
 interface ActiveTurn {
   queue: AcpStreamChunkQueue;
   sessionId: string;
+  // Dedup guard: a mid-turn transport close and the rejected prompt both race to
+  // push a terminal error+done, and the queue drains post-close pushes.
+  terminalPushed: boolean;
 }
 
 const CURSOR_ACP_INIT_TIMEOUT_MS = 20_000;
@@ -221,7 +224,7 @@ export class CursorChatRuntime implements ChatRuntime {
     await this.applySelectedModel(sessionId, queryOptions);
 
     this.activeTurn?.queue.close();
-    const activeTurn: ActiveTurn = { queue: new AcpStreamChunkQueue(), sessionId };
+    const activeTurn: ActiveTurn = { queue: new AcpStreamChunkQueue(), sessionId, terminalPushed: false };
     this.activeTurn = activeTurn;
     this.currentTurnSawAssistantContent = false;
     this.contextUsage = null;
@@ -236,12 +239,9 @@ export class CursorChatRuntime implements ChatRuntime {
     }).then((response) => {
       this.emitFinalUsage(activeTurn, response.usage ?? null, queryOptions);
       this.finalizePlanTurnMetadata();
-      activeTurn.queue.push({ type: 'done' });
-      activeTurn.queue.close();
+      this.pushTurnTermination(activeTurn, [{ type: 'done' }]);
     }).catch((error) => {
-      activeTurn.queue.push({ type: 'error', content: this.formatRuntimeError(error) });
-      activeTurn.queue.push({ type: 'done' });
-      activeTurn.queue.close();
+      this.pushTurnTermination(activeTurn, [{ type: 'error', content: this.formatRuntimeError(error) }, { type: 'done' }]);
     }).finally(() => {
       if (this.activeTurn === activeTurn) {
         this.activeTurn = null;
@@ -358,14 +358,13 @@ export class CursorChatRuntime implements ChatRuntime {
     this.process = proc;
     this.transport = transport;
     this.unregisterTransportClose = transport.onClose(() => {
-      if (this.transport === transport) {
-        this.setReady(false);
-        this.activeTurn?.queue.push({
-          type: 'error',
-          content: this.formatRuntimeError(new Error('Cursor ACP process exited unexpectedly.')),
-        });
-        this.activeTurn?.queue.push({ type: 'done' });
-        this.activeTurn?.queue.close();
+      if (this.transport !== transport) {
+        return;
+      }
+      this.setReady(false);
+      if (this.activeTurn) {
+        const content = this.formatRuntimeError(new Error('Cursor ACP process exited unexpectedly.'));
+        this.pushTurnTermination(this.activeTurn, [{ type: 'error', content }, { type: 'done' }]);
       }
     });
 
@@ -545,6 +544,20 @@ export class CursorChatRuntime implements ChatRuntime {
       catalogIds: getCachedCursorModelIds(),
       enabledIds: getCursorEnabledModels(settingsBag),
     });
+  }
+
+  // Idempotent terminal push: the first of the racing paths (resolved/rejected
+  // prompt or transport onClose) wins and closes the queue; later callers on the
+  // same turn are no-ops so a mid-turn crash can't emit a second error+done.
+  private pushTurnTermination(activeTurn: ActiveTurn, chunks: StreamChunk[]): void {
+    if (activeTurn.terminalPushed) {
+      return;
+    }
+    activeTurn.terminalPushed = true;
+    for (const chunk of chunks) {
+      activeTurn.queue.push(chunk);
+    }
+    activeTurn.queue.close();
   }
 
   private finalizePlanTurnMetadata(): void {

@@ -142,17 +142,19 @@ describe('AcpToolStreamAdapter', () => {
       expect(chunk).toEqual(input[0]);
     });
 
-    it('passes rawOutput from the tool call into normalizeToolUseResult', () => {
+    it('passes rawOutput and ACP content from the tool call into normalizeToolUseResult', () => {
       const { adapter, calls } = makePresentation();
       const stream = new AcpToolStreamAdapter(adapter);
+      const content = [{ type: 'diff' as const, path: 'a.md', oldText: 'x', newText: 'y' }];
       stream.normalizeToolCall(
-        toolCall({ kind: 'read', rawInput: { expectResult: true }, rawOutput: { v: 1 } }),
+        toolCall({ kind: 'read', rawInput: { expectResult: true }, rawOutput: { v: 1 }, content }),
         [{ type: 'tool_result', id: 'tc-1', content: '' }],
       );
       expect(calls.normalizeToolUseResult).toHaveBeenCalledWith(
         'read',
         { expectResult: true, normalized: true },
         { v: 1 },
+        content,
       );
     });
   });

@@ -79,8 +79,8 @@
       "reason": "Grandfathered hotspot. Track the split in docs/tech-debt/2026-06-07-oversized-modules-and-test-files.md; shrink only."
     },
     "src/providers/cursor/runtime/CursorChatRuntime.ts": {
-      "loc": 663,
-      "reason": "Grandfathered hotspot from the ACP rewrite (agent-acp session lifecycle, mode/model application, usage emission, ACP dialect wiring) landed in the Cursor ACP runtime plan Task 6; the retired stream-json one-shot path (cursorQueryLaunch/cursorQueryProcessing/cursorStreamMapper) was deleted in Task 7 without shrinking this file, which now owns that surface directly. Grew for the PR review fixes: forced ACP restart handling in ensureReady, authoritative context-usage preservation across the final usage emission, and the applyActiveTurnEffectState extraction that keeps that mirror from tripping the clone ratchet. Track the split in docs/tech-debt/2026-06-07-oversized-modules-and-test-files.md; shrink only."
+      "loc": 675,
+      "reason": "Grandfathered hotspot from the ACP rewrite (agent-acp session lifecycle, mode/model application, usage emission, ACP dialect wiring) landed in the Cursor ACP runtime plan Task 6; the retired stream-json one-shot path (cursorQueryLaunch/cursorQueryProcessing/cursorStreamMapper) was deleted in Task 7 without shrinking this file, which now owns that surface directly. Grew for the PR review fixes: forced ACP restart handling in ensureReady, authoritative context-usage preservation across the final usage emission, and the applyActiveTurnEffectState extraction that keeps that mirror from tripping the clone ratchet. Grew again for the idempotent pushTurnTermination guard that dedupes the mid-turn-crash error+done race between the transport onClose handler and the rejected prompt. Track the split in docs/tech-debt/2026-06-07-oversized-modules-and-test-files.md; shrink only."
     },
     "src/features/chat/rendering/SubagentRenderer.ts": {
       "loc": 566,
