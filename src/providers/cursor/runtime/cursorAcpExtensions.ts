@@ -10,7 +10,12 @@ export interface CursorAcpExtensionHost {
   // is canceled the runtime aborts it, so an otherwise-unbounded askUser await
   // unblocks and the RPC gets answered (cancelled) instead of hanging.
   getAskSignal?: () => AbortSignal | undefined;
-  emitChunk: (chunk: StreamChunk) => void;
+  // `sessionId` is the requesting session when the emitting extension carries
+  // one (cursor/create_plan, cursor/update_todos). The runtime drops a chunk
+  // whose session id is present but no longer matches the active turn, so a
+  // blocking extension request racing a turn boundary can't misroute into the
+  // next turn's queue. An absent id keeps the prior unconditional behavior.
+  emitChunk: (chunk: StreamChunk, sessionId?: string) => void;
   patchTurnMetadata: (patch: Partial<ChatTurnMetadata>) => void;
 }
 
@@ -257,7 +262,7 @@ export function registerCursorAcpExtensions(
   }));
 
   unsubscribes.push(transport.onRequest('cursor/create_plan', async (params) => {
-    const parsed = (params ?? {}) as { plan?: string; content?: string; text?: string };
+    const parsed = (params ?? {}) as { plan?: string; content?: string; text?: string; sessionId?: string };
     const planText = parsed.plan ?? parsed.content ?? parsed.text ?? '';
     // planCompleted stays inside the content guard: an empty or
     // unrecognized-key payload emits no plan text, and marking the turn
@@ -265,7 +270,7 @@ export function registerCursorAcpExtensions(
     // no plan visible (the same empty-plan gate finalizePlanTurnMetadata
     // enforces for streamed plan content).
     if (planText) {
-      host.emitChunk({ type: 'text', content: `\n\n${planText}\n` });
+      host.emitChunk({ type: 'text', content: `\n\n${planText}\n` }, parsed.sessionId);
       host.patchTurnMetadata({ planCompleted: true });
     }
     // Specorator's plan approval happens post-turn via the shared approval card
@@ -277,7 +282,7 @@ export function registerCursorAcpExtensions(
   }));
 
   unsubscribes.push(transport.onNotification('cursor/update_todos', (params) => {
-    const parsed = (params ?? {}) as { todos?: unknown[] };
+    const parsed = (params ?? {}) as { todos?: unknown[]; sessionId?: string };
     // Route through the same Cursor todo coercion the stream-json tool-call path
     // uses: the documented `cursor/update_todos` payload (`{id, content, status}`)
     // lacks `activeForm`, which the shared todo panel's `parseTodoInput()`
@@ -286,8 +291,8 @@ export function registerCursorAcpExtensions(
     // `activeForm` from `content` and defaults `status`.
     const input = mapCursorToolInput('updateTodosToolCall', { todos: parsed.todos ?? [] }, undefined);
     const id = `cursor-todos-${++todoCallCounter}`;
-    host.emitChunk({ type: 'tool_use', id, name: TOOL_TODO_WRITE, input });
-    host.emitChunk({ type: 'tool_result', id, content: 'Todos updated', isError: false });
+    host.emitChunk({ type: 'tool_use', id, name: TOOL_TODO_WRITE, input }, parsed.sessionId);
+    host.emitChunk({ type: 'tool_result', id, content: 'Todos updated', isError: false }, parsed.sessionId);
   }));
 
   // cursor/task carries live subagent lifecycle updates — deferred until the

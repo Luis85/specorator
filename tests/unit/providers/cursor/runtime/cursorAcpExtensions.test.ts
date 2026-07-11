@@ -268,6 +268,40 @@ describe('registerCursorAcpExtensions', () => {
     expect(emptyPlan).toEqual({ outcome: { outcome: 'accepted' } });
   });
 
+  it('forwards the create_plan sessionId to emitChunk for the runtime session guard', async () => {
+    const { transport, requests } = makeFakeTransport();
+    const emitted: Array<{ chunk: StreamChunk; sessionId?: string }> = [];
+    registerCursorAcpExtensions(transport as never, {
+      askUser: jest.fn(),
+      emitChunk: (chunk, sessionId) => emitted.push({ chunk, sessionId }),
+      patchTurnMetadata: () => {},
+    });
+
+    await requests.get('cursor/create_plan')!({ sessionId: 'S-42', plan: '# Plan\n1. go' });
+
+    expect(emitted).toHaveLength(1);
+    expect(emitted[0].sessionId).toBe('S-42');
+    expect(emitted[0].chunk.type).toBe('text');
+  });
+
+  it('forwards the update_todos sessionId to both emitted chunks', async () => {
+    const { transport, notifications } = makeFakeTransport();
+    const emitted: Array<{ chunk: StreamChunk; sessionId?: string }> = [];
+    registerCursorAcpExtensions(transport as never, {
+      askUser: jest.fn(),
+      emitChunk: (chunk, sessionId) => emitted.push({ chunk, sessionId }),
+      patchTurnMetadata: () => {},
+    });
+
+    await notifications.get('cursor/update_todos')!({
+      sessionId: 'S-99',
+      todos: [{ content: 'step 1', status: 'pending' }],
+    });
+
+    expect(emitted).toHaveLength(2);
+    expect(emitted.every((e) => e.sessionId === 'S-99')).toBe(true);
+  });
+
   it('maps cursor/update_todos to a TodoWrite tool chunk', async () => {
     const { transport, notifications } = makeFakeTransport();
     const chunks: StreamChunk[] = [];

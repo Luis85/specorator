@@ -414,7 +414,14 @@ export class CursorChatRuntime implements ChatRuntime {
     this.unregisterExtensions = registerCursorAcpExtensions(transport, {
       askUser: this.host.askUser,
       getAskSignal: () => this.askQuestionAbortController?.signal,
-      emitChunk: (chunk) => {
+      emitChunk: (chunk, sessionId) => {
+        // A blocking extension request (create_plan / update_todos) can resolve
+        // just as the turn rolls over; drop its chunk when it names a session
+        // that is no longer the active turn's, or it would misroute into the
+        // next turn's queue. An absent id keeps the prior unconditional path.
+        if (sessionId !== undefined && sessionId !== this.activeTurn?.sessionId) {
+          return;
+        }
         // cursor/create_plan delivers plan text through this side channel rather
         // than a session notification, so mark it as assistant content for the
         // plan-completed gate — otherwise a plan-only turn never sees content.
