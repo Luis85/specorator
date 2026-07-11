@@ -1,6 +1,8 @@
 import {
   computeCursorAssistantTextDelta,
+  createCursorAssistantTextState,
   CursorNdjsonStreamReducer,
+  mergeCursorAssistantText,
 } from '@/providers/cursor/runtime/cursorStreamMapper';
 
 import { SAMPLE_CURSOR_MULTI_SEGMENT_STREAM_LINES } from '../../../../fixtures/providers/cursor/sampleMultiSegmentStream';
@@ -170,6 +172,64 @@ describe('CursorNdjsonStreamReducer partial assistant fixture', () => {
     expect(text.match(/ALPHA/g)?.length).toBe(1);
     expect(text.match(/BETA/g)?.length).toBe(1);
     expect(text.match(/GAMMA/g)?.length).toBe(1);
+  });
+
+  it('emits each tail exactly once for growing post-tool whole-turn snapshots', () => {
+    // Older cursor-agent behavior: after a tool call, every assistant event is
+    // a whole-turn cumulative snapshot that re-includes the committed pre-tool
+    // text and grows. The 2nd and 3rd snapshots must not fall through to the
+    // plain-delta branch and re-emit the committed prefix.
+    const assistant = (text: string): string => JSON.stringify({
+      type: 'assistant',
+      session_id: 's',
+      message: { role: 'assistant', content: [{ type: 'text', text }] },
+    });
+    const lines = [
+      JSON.stringify({ type: 'system', model: 'auto', session_id: 's' }),
+      assistant('Shell output: hi'),
+      assistant('Shell output: hi'), // segment-local closing snapshot
+      JSON.stringify({ type: 'tool_call', subtype: 'started', call_id: 't1', session_id: 's', tool_call: { shellToolCall: { args: { command: 'echo hi' } } } }),
+      JSON.stringify({ type: 'tool_call', subtype: 'completed', call_id: 't1', session_id: 's', tool_call: { shellToolCall: { args: { command: 'echo hi' }, result: { success: { stdout: 'hi\n' } } } } }),
+      assistant('Shell output: hi\n\nA'),
+      assistant('Shell output: hi\n\nAB'),
+      assistant('Shell output: hi\n\nABC'),
+      JSON.stringify({ type: 'result', subtype: 'success', is_error: false, session_id: 's' }),
+    ];
+
+    const text = textFromStream(lines);
+    expect(text).toBe('Shell output: hi\n\nABC');
+    expect(text.match(/Shell output: hi/g)?.length).toBe(1);
+  });
+
+  it('renders genuine post-tool text that happens to equal the pre-tool text', () => {
+    // "Done" → tool call (commits "Done") → a genuinely new post-tool "Done".
+    // Post-tool snapshots are segment-local per the captured contract, so an
+    // event equal to the committed prefix is new text, not a whole-turn restate.
+    const assistant = (text: string): string => JSON.stringify({
+      type: 'assistant',
+      session_id: 's',
+      message: { role: 'assistant', content: [{ type: 'text', text }] },
+    });
+    const lines = [
+      JSON.stringify({ type: 'system', model: 'auto', session_id: 's' }),
+      assistant('Done'),
+      assistant('Done'), // segment-local closing snapshot
+      JSON.stringify({ type: 'tool_call', subtype: 'started', call_id: 't1', session_id: 's', tool_call: { lsToolCall: { args: {} } } }),
+      JSON.stringify({ type: 'tool_call', subtype: 'completed', call_id: 't1', session_id: 's', tool_call: { lsToolCall: { args: {}, result: { success: {} } } } }),
+      assistant('Done'),
+      JSON.stringify({ type: 'result', subtype: 'success', is_error: false, session_id: 's' }),
+    ];
+
+    expect(textFromStream(lines)).toBe('DoneDone');
+  });
+
+  it('keeps a genuinely repeated phrase when the cumulative extension is space-separated', () => {
+    // The model really says "Yes. Yes." — arriving as a fragment then a
+    // cumulative extension. Only newline-separated re-sends are the observed
+    // CLI hiccup; a space-separated repeat is real prose and must render.
+    const state = createCursorAssistantTextState();
+    expect(mergeCursorAssistantText(state, 'Yes.')).toBe('Yes.');
+    expect(mergeCursorAssistantText(state, 'Yes. Yes.')).toBe(' Yes.');
   });
 
   it('treats a post-tool segment snapshot as segment-local, not whole-turn cumulative', () => {

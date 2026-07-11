@@ -85,9 +85,10 @@ function isDoubled(text: string, incoming: string): boolean {
 }
 
 /**
- * True when `tail` is just `text` repeated (optionally after a single newline or
- * space separator). Used to drop a cumulative snapshot that re-sends the segment
- * it just streamed — an exact-equality check, not a fuzzy ratio.
+ * True when `tail` is just `text` repeated verbatim or after a newline-only
+ * separator — the observed CLI re-send hiccup is line-based. A space-separated
+ * repeat ("Yes. Yes.") is genuine prose and must NOT match, so the separator
+ * check is deliberately newline-only, not any-whitespace.
  */
 function isExactRepeat(text: string, tail: string): boolean {
   if (!text) {
@@ -97,7 +98,7 @@ function isExactRepeat(text: string, tail: string): boolean {
     return true;
   }
   const sep = tail.slice(0, tail.length - text.length);
-  return tail.endsWith(text) && /^[\s]*$/.test(sep) && sep.length <= 2;
+  return tail.endsWith(text) && /^[\r\n]*$/.test(sep) && sep.length <= 2;
 }
 
 /**
@@ -120,7 +121,10 @@ export function mergeCursorAssistantText(
   }
 
   // Cumulative snapshot of the whole turn so far (defensive; not seen live).
-  if (incoming === whole) {
+  // Only meaningful while a segment is open: with an empty segment, incoming
+  // equal to the committed prefix is genuine new post-tool text that happens
+  // to repeat earlier prose ("Done" → tool → "Done"), not a restate.
+  if (state.committed && state.segment && incoming === whole) {
     return '';
   }
 
@@ -140,14 +144,16 @@ export function mergeCursorAssistantText(
     return delta;
   }
 
-  // Whole-turn cumulative snapshot that re-includes the committed prefix (older
-  // cursor-agent behavior where a post-tool snapshot restates pre-tool text).
-  // Emit only the new tail and adopt it as the current segment so subsequent
-  // fragments append correctly. Guard against the empty-committed case so a
-  // normal first fragment isn't misread (every string startsWith '').
-  if (state.committed && state.segment === '' && incoming.startsWith(state.committed)) {
-    const delta = incoming.slice(state.committed.length);
-    state.segment = delta;
+  // Whole-turn cumulative snapshot that re-includes everything emitted so far
+  // (older cursor-agent behavior where post-tool snapshots restate pre-tool
+  // text and keep growing). Matching against committed + segment — not just
+  // committed — keeps this branch sticky across a run of growing snapshots, so
+  // the 2nd and 3rd never fall through to plain-delta and re-emit the prefix.
+  // Guard against the empty-committed case so a normal first fragment isn't
+  // misread (every string startsWith '').
+  if (state.committed && incoming.length > whole.length && incoming.startsWith(whole)) {
+    const delta = incoming.slice(whole.length);
+    state.segment += delta;
     return delta;
   }
 
