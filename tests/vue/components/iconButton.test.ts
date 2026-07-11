@@ -1,4 +1,6 @@
 import { fireEvent, render, screen } from '@testing-library/vue';
+import { setIcon } from 'obsidian';
+import type { Mock } from 'vitest';
 import { describe, expect, it } from 'vitest';
 
 import IconButton from '@/features/library/vue/components/IconButton.vue';
@@ -8,6 +10,15 @@ describe('IconButton', () => {
     render(IconButton, { props: { icon: 'star', ariaLabel: 'Toggle favorite' } });
     const btn = screen.getByRole('button', { name: 'Toggle favorite' });
     expect(btn.classList.contains('specorator-vue-icon-btn')).toBe(true);
+  });
+
+  it('renders the glyph via setIcon on mount (the function ref stamps the button — a blank button means the guard rejected it)', () => {
+    (setIcon as unknown as Mock).mockClear();
+    render(IconButton, { props: { icon: 'star', ariaLabel: 'Toggle favorite' } });
+    const btn = screen.getByRole('button', { name: 'Toggle favorite' });
+    // Guarded on nodeType (not instanceof HTMLElement) so a popout-window button —
+    // a different window's HTMLElement — still gets its glyph.
+    expect(setIcon).toHaveBeenCalledWith(btn, 'star');
   });
 
   it('reflects the pressed prop as aria-pressed + is-on, and omits aria-pressed when pressed is undefined', () => {

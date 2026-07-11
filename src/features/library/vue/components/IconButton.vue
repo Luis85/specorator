@@ -33,9 +33,14 @@ function onClick(event: MouseEvent): void {
   emit('activate', event);
 }
 
-/** setIcon host (function ref — no template ref needed for a single glyph). */
+/** setIcon host (function ref — no template ref needed for a single glyph).
+ *  Guard on nodeType, NOT `instanceof HTMLElement`: in an Obsidian popout the
+ *  button comes from the popout window, whose HTMLElement is a different
+ *  constructor than the main window's, so `instanceof` is false and the glyph
+ *  never renders. `nodeType === 1` is an Element in ANY window. */
 function applyIcon(el: Element | ComponentPublicInstance | null): void {
-  if (el instanceof HTMLElement) setIcon(el, props.icon);
+  if (el == null || (el as Partial<Node>).nodeType !== 1) return;
+  setIcon(el as HTMLElement, props.icon);
 }
 </script>
 
