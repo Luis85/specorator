@@ -5,20 +5,20 @@ import { markRaw } from 'vue';
 import { t } from '../../../i18n/i18n';
 import type SpecoratorPlugin from '../../../main';
 import type { WorkOrderTemplate } from '../templates/templateTypes';
-import { ModalIsland } from './vue/modalIsland';
 import {
   TEMPLATE_EDITOR_CLOSE_KEY,
   TEMPLATE_EDITOR_EXISTING_KEY,
   TEMPLATE_EDITOR_PLUGIN_KEY,
   TEMPLATE_EDITOR_SAVE_KEY,
 } from './vue/templateEditorKeys';
+import { VueIsland } from './vue/vueIsland';
 import WorkOrderTemplateEditorRoot from './vue/WorkOrderTemplateEditorRoot.vue';
 import type { WorkOrderTemplateEditorPayload } from './workOrderTemplateEditorForm';
 
 export class WorkOrderTemplateEditorModal extends Modal {
   // The Vue island mounted into `contentEl`. The shell (modalEl classes + native
   // title) stays imperative; the form + save flow are Vue-owned.
-  private readonly island = new ModalIsland();
+  private readonly island = new VueIsland();
 
   constructor(
     app: App,

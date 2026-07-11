@@ -15,7 +15,7 @@ import {
   type TemplateEditorOption,
 } from '../workOrderTemplateEditorForm';
 import LucideIconField from './components/LucideIconField.vue';
-import TemplateEditorRow from './components/TemplateEditorRow.vue';
+import SettingRow from './components/SettingRow.vue';
 import {
   TEMPLATE_EDITOR_CLOSE_KEY,
   TEMPLATE_EDITOR_EXISTING_KEY,
@@ -112,7 +112,7 @@ async function submit(): Promise<void> {
 </script>
 
 <template>
-  <TemplateEditorRow
+  <SettingRow
     :name="t('tasks.templateEditor.nameName')"
     :desc="t('tasks.templateEditor.nameDesc')"
   >
@@ -122,9 +122,9 @@ async function submit(): Promise<void> {
       data-field="name"
       :disabled="isEdit"
     >
-  </TemplateEditorRow>
+  </SettingRow>
 
-  <TemplateEditorRow
+  <SettingRow
     :name="t('tasks.templateEditor.descriptionName')"
     :desc="t('tasks.templateEditor.descriptionDesc')"
   >
@@ -133,9 +133,9 @@ async function submit(): Promise<void> {
       type="text"
       data-field="description"
     >
-  </TemplateEditorRow>
+  </SettingRow>
 
-  <TemplateEditorRow
+  <SettingRow
     :name="t('tasks.templateEditor.iconName')"
     :desc="t('tasks.templateEditor.iconDesc')"
     extra-class="specorator-icon-picker-setting"
@@ -144,9 +144,9 @@ async function submit(): Promise<void> {
       :value="icon"
       @change="icon = $event"
     />
-  </TemplateEditorRow>
+  </SettingRow>
 
-  <TemplateEditorRow
+  <SettingRow
     :name="t('tasks.templateEditor.providerName')"
     :desc="t('tasks.templateEditor.providerDesc')"
   >
@@ -164,9 +164,9 @@ async function submit(): Promise<void> {
         {{ option.label }}
       </option>
     </select>
-  </TemplateEditorRow>
+  </SettingRow>
 
-  <TemplateEditorRow
+  <SettingRow
     :name="t('tasks.templateEditor.modelName')"
     :desc="t('tasks.templateEditor.modelDesc')"
   >
@@ -183,9 +183,9 @@ async function submit(): Promise<void> {
         {{ option.label }}
       </option>
     </select>
-  </TemplateEditorRow>
+  </SettingRow>
 
-  <TemplateEditorRow
+  <SettingRow
     :name="t('tasks.templateEditor.priorityName')"
     :desc="t('tasks.templateEditor.priorityDesc')"
   >
@@ -202,9 +202,9 @@ async function submit(): Promise<void> {
         {{ priorityLabel(option) }}
       </option>
     </select>
-  </TemplateEditorRow>
+  </SettingRow>
 
-  <TemplateEditorRow
+  <SettingRow
     :name="t('tasks.templateEditor.loopName')"
     :desc="t('tasks.templateEditor.loopDesc')"
   >
@@ -224,9 +224,9 @@ async function submit(): Promise<void> {
         {{ option.label }}
       </option>
     </select>
-  </TemplateEditorRow>
+  </SettingRow>
 
-  <TemplateEditorRow
+  <SettingRow
     :name="t('tasks.templateEditor.agentName')"
     :desc="t('tasks.templateEditor.agentDesc')"
   >
@@ -246,9 +246,9 @@ async function submit(): Promise<void> {
         {{ option.label }}
       </option>
     </select>
-  </TemplateEditorRow>
+  </SettingRow>
 
-  <TemplateEditorRow
+  <SettingRow
     :name="t('tasks.templateEditor.bodyName')"
     :desc="t('tasks.templateEditor.bodyDesc')"
     extra-class="specorator-wo-template-body-setting"
@@ -259,7 +259,7 @@ async function submit(): Promise<void> {
       data-field="body"
       :rows="12"
     />
-  </TemplateEditorRow>
+  </SettingRow>
 
   <div class="setting-item">
     <div class="setting-item-info" />
