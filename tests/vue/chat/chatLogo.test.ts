@@ -74,4 +74,23 @@ describe('ChatLogo', () => {
     expect(cb.renderProviderLogo).toHaveBeenCalledTimes(2);
     expect(cb.renderProviderLogo).toHaveBeenLastCalledWith(expect.anything(), 'codex');
   });
+
+  it('clears the host before each render so a provider switch replaces the SVG rather than stacking', async () => {
+    // A realistic renderProviderLogo: append one SVG per call, as syncHeaderLogo
+    // does. Only ChatLogo's own `el.textContent = ''` keeps the count at one.
+    const renderProviderLogo = vi.fn((el: HTMLElement, providerId: string) => {
+      const svg = el.ownerDocument.createElementNS('http://www.w3.org/2000/svg', 'svg');
+      svg.setAttribute('data-provider', providerId);
+      el.appendChild(svg);
+    });
+    const cb = fakeCallbacks({ renderProviderLogo });
+    const { container, rerender } = mountLogo(cb, { providerId: 'claude', visible: true });
+    await nextTick();
+    const host = container.querySelector('.specorator-logo') as HTMLElement;
+    expect(host.querySelectorAll('svg')).toHaveLength(1);
+
+    await rerender({ providerId: 'codex', visible: true });
+    expect(host.querySelectorAll('svg')).toHaveLength(1);
+    expect(host.querySelector('svg')?.getAttribute('data-provider')).toBe('codex');
+  });
 });

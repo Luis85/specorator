@@ -2,6 +2,7 @@ import { defineStore } from 'pinia';
 import { shallowRef } from 'vue';
 
 import type { ProviderId } from '../../../../../core/providers/types';
+import type { TabBarPosition } from '../../../../../core/types/settings';
 import type { AgentPersona } from '../../../../agents/agentTypes';
 import type { TabBarItem, TabId } from '../../../tabs/types';
 
@@ -26,7 +27,7 @@ export interface ChatShellHeader {
   /** Mirrors settings.tabBarPosition: 'header' keeps badges + actions in the
    *  header chrome; 'input' teleports both into the active tab's navRowEl
    *  (see updateNavRowLocation). */
-  tabBarPosition: 'header' | 'input';
+  tabBarPosition: TabBarPosition;
   /** Provider whose logo renders in the title slot (mirrors syncHeaderLogo). */
   logoProviderId: ProviderId | null;
   /** Hides the logo when the tab strip is visible in header mode (mirrors the

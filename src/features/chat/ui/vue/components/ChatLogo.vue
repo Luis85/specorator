@@ -12,6 +12,9 @@ const host = ref<HTMLElement | null>(null);
 watchEffect(() => {
   const el = host.value;
   if (!el || !props.providerId) return;
+  // Clear before re-render so a provider switch replaces the SVG rather than
+  // stacking a second one (same idiom as AgentAvatar.vue).
+  el.textContent = '';
   cb.renderProviderLogo(el, props.providerId);
 });
 </script>

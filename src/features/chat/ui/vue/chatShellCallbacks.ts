@@ -43,6 +43,7 @@ export interface ChatShellCallbacks {
    *  no active tab yet. */
   resolveNavRowEl: (tabId: TabId | null) => HTMLElement | null;
   /** Renders the per-provider logo SVG into the given host element (mirrors
-   *  SpecoratorView.syncHeaderLogo). */
+   *  SpecoratorView.syncHeaderLogo). The host is cleared by the caller
+   *  (ChatLogo) before each render, so this only appends. */
   renderProviderLogo: (el: HTMLElement, providerId: ProviderId) => void;
 }

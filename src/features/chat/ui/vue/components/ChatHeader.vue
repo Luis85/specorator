@@ -23,9 +23,9 @@ onMounted(() => {
 // tab's navRowEl, re-targeting reactively when the active tab changes.
 const headerMode = computed(() => store.header.tabBarPosition === 'header');
 const navRowTarget = computed(() => (headerMode.value ? null : cb.resolveNavRowEl(store.activeTabId)));
-// A null target (no active tab yet) falls back to in-place rendering instead
-// of Teleport erroring on a missing target.
-const teleportDisabled = computed(() => headerMode.value || navRowTarget.value == null);
+// A null target — header mode, or input mode with no active tab yet — falls
+// back to in-place rendering instead of Teleport erroring on a missing target.
+const teleportDisabled = computed(() => navRowTarget.value == null);
 </script>
 
 <template>
