@@ -127,10 +127,25 @@ export class InlineExitPlanMode {
   }
 
   private extractPlanContent(): string {
-    if (this.planContent) {
-      return `Implement this plan:\n\n${this.planContent}`;
+    const content = this.planContent ?? this.readInlinePlanContent();
+    if (content) {
+      return `Implement this plan:\n\n${content}`;
     }
     return 'Implement the approved plan.';
+  }
+
+  /**
+   * Inline plan text carried on the exit-plan input itself (`input.plan`), used
+   * only when there is no plan FILE — Cursor supplies the plan inline via
+   * cursor/create_plan rather than writing it to `.cursor/plans/`. planFilePath
+   * always wins when present (Claude's flow), so a file read that failed keeps
+   * its error path instead of silently substituting the inline text.
+   */
+  private readInlinePlanContent(): string | null {
+    if (this.input.planFilePath) return null;
+    const inline = this.input.plan;
+    if (typeof inline !== 'string') return null;
+    return inline.trim() || null;
   }
 
   private handleResolve(decision: ExitPlanModeDecision | null): void {

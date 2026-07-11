@@ -468,6 +468,10 @@ export class CursorChatRuntime implements ChatRuntime {
         }
         this.currentTurnPlanDecidedInline = true;
       },
+      // approve-new-session abandons this turn for a fresh session; the host only
+      // sets cancelRequested (unwinds the consumer loop, never reaches the agent),
+      // so fire session/cancel here or the agent keeps implementing the plan.
+      requestTurnCancel: () => this.cancel(),
     });
 
     transport.start();

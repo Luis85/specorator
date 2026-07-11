@@ -72,6 +72,60 @@ describe('InlineExitPlanMode', () => {
     expect(root.getEventListenerCount('keydown')).toBe(0);
   });
 
+  it('carries inline plan text into the new-session follow-up when there is no plan file', () => {
+    const container = createMockEl();
+    const resolve = jest.fn();
+
+    // Cursor passes the plan inline (`input.plan`) with no planFilePath.
+    const widget = new InlineExitPlanMode(
+      container,
+      { plan: '# Cursor plan\n1. do it\n2. verify\n' },
+      resolve,
+    );
+
+    widget.render();
+
+    const root = findRoot(container);
+    expect(root).toBeTruthy();
+
+    fireKeyDown(root, 'Enter');
+
+    expect(resolve).toHaveBeenCalledWith({
+      type: 'approve-new-session',
+      planContent: 'Implement this plan:\n\n# Cursor plan\n1. do it\n2. verify',
+    });
+  });
+
+  it('prefers plan file content over inline plan text when both are present', () => {
+    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'specorator-'));
+    const plansDir = path.join(tmpDir, '.claude', 'plans');
+    fs.mkdirSync(plansDir, { recursive: true });
+    const planFilePath = path.join(plansDir, 'plan.md');
+    fs.writeFileSync(planFilePath, 'File step 1\nFile step 2\n', 'utf8');
+
+    const container = createMockEl();
+    const resolve = jest.fn();
+
+    const widget = new InlineExitPlanMode(
+      container,
+      { planFilePath, plan: 'inline should be ignored' },
+      resolve,
+      undefined,
+      undefined,
+      '/.claude/plans/',
+    );
+
+    widget.render();
+
+    const root = findRoot(container);
+    fireKeyDown(root, 'Enter');
+
+    expect(resolve).toHaveBeenCalledWith({
+      type: 'approve-new-session',
+      planContent: 'Implement this plan:\n\nFile step 1\nFile step 2',
+    });
+  });
+
   it('shows a read error when plan file cannot be read', () => {
     const container = createMockEl();
     const resolve = jest.fn();

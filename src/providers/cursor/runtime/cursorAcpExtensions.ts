@@ -30,6 +30,12 @@ export interface CursorAcpExtensionHost {
   // turn names its old session and is dropped. An absent id keeps the
   // unconditional path.
   markPlanDecidedInline: (sessionId?: string) => void;
+  // Proactively stops the running turn. The `approve-new-session` plan decision
+  // abandons the current session for a fresh one, but the RuntimeHost only sets
+  // cancelRequested — that breaks the local consumer loop and never reaches the
+  // agent, so without this hook the agent keeps implementing in the discarded
+  // session. Wired to the runtime's own `cancel()` (session/cancel + escalation).
+  requestTurnCancel?: () => void;
 }
 
 // Documented cursor/ask_question option: `{ id, label }` per cursor.com/docs/cli/acp.
@@ -97,10 +103,12 @@ type CursorCreatePlanOutcome =
 
 /**
  * Maps the exit-plan-mode decision (or a turn-cancel abort) onto the documented
- * cursor/create_plan outcome union (cursor.com/docs/cli/acp): approve /
- * approve-new-session -> accepted, feedback -> rejected + the feedback reason, a
- * deliberate dismissal (null with no abort) -> rejected, and a turn cancel ->
- * cancelled.
+ * cursor/create_plan outcome union (cursor.com/docs/cli/acp): approve (current
+ * session) -> accepted, approve-new-session -> rejected (the plan is NOT approved
+ * for THIS session — the user is abandoning it, so the agent must not implement
+ * here; resolveCreatePlanOutcome also fires requestTurnCancel to actually stop
+ * the turn), feedback -> rejected + the feedback reason, a deliberate dismissal
+ * (null with no abort) -> rejected, and a turn cancel -> cancelled.
  */
 function mapPlanDecisionToOutcome(
   decision: ExitPlanModeDecision | null,
@@ -115,7 +123,29 @@ function mapPlanDecisionToOutcome(
   if (decision.type === 'feedback') {
     return { outcome: 'rejected', reason: decision.text };
   }
+  if (decision.type === 'approve-new-session') {
+    return { outcome: 'rejected', reason: 'Plan approved for a new session' };
+  }
   return { outcome: 'accepted' };
+}
+
+/**
+ * Maps the settled plan decision to its outcome and applies the one side effect
+ * `approve-new-session` needs: rejecting the plan (above) tells the agent not to
+ * implement, but on its own that reads like feedback and the agent may keep
+ * planning in this session. The user is starting fresh, so actively cancel the
+ * running turn (session/cancel via the runtime) — the RuntimeHost's
+ * cancelRequested only unwinds the local consumer loop, never the agent.
+ */
+function settlePlanDecision(
+  host: CursorAcpExtensionHost,
+  decision: ExitPlanModeDecision | null,
+  signal: AbortSignal | undefined,
+): CursorCreatePlanOutcome {
+  if (decision?.type === 'approve-new-session') {
+    host.requestTurnCancel?.();
+  }
+  return mapPlanDecisionToOutcome(decision, signal?.aborted ?? false);
 }
 
 /**
@@ -137,7 +167,7 @@ async function resolveCreatePlanOutcome(
       return { outcome: 'cancelled' };
     }
     const decision = await host.exitPlanMode({ plan: planText }, signal);
-    return mapPlanDecisionToOutcome(decision, signal?.aborted ?? false);
+    return settlePlanDecision(host, decision, signal);
   } catch (error) {
     if (isAbortError(error, signal)) {
       return { outcome: 'cancelled' };

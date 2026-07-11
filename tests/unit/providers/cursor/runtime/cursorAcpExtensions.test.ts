@@ -274,6 +274,51 @@ describe('registerCursorAcpExtensions', () => {
     expect(response).toEqual({ outcome: { outcome: 'rejected', reason: 'tighten step 3' } });
   });
 
+  it('rejects cursor/create_plan and cancels the turn on approve-new-session', async () => {
+    const { transport, requests } = makeFakeTransport();
+    // The user approved the plan but for a FRESH session — the agent must not
+    // implement it in this (abandoned) session.
+    const exitPlanMode = jest.fn().mockResolvedValue({
+      type: 'approve-new-session',
+      planContent: 'Implement this plan:\n\n# Plan\n1. go',
+    });
+    const requestTurnCancel = jest.fn();
+    const markPlanDecidedInline = jest.fn();
+    registerCursorAcpExtensions(transport as never, {
+      askUser: jest.fn(),
+      exitPlanMode: exitPlanMode as never,
+      emitChunk: () => {},
+      markPlanDecidedInline,
+      requestTurnCancel,
+    });
+
+    const response = await requests.get('cursor/create_plan')!({ plan: '# Plan\n1. go' });
+
+    // rejected (NOT accepted) so the agent stops implementing here, plus an
+    // explicit turn cancel — cancelRequested alone never reaches the agent.
+    expect(response).toEqual({ outcome: { outcome: 'rejected', reason: 'Plan approved for a new session' } });
+    expect(requestTurnCancel).toHaveBeenCalledTimes(1);
+    expect(markPlanDecidedInline).toHaveBeenCalled();
+  });
+
+  it('does not cancel the turn for an approve (current session) decision', async () => {
+    const { transport, requests } = makeFakeTransport();
+    const exitPlanMode = jest.fn().mockResolvedValue({ type: 'approve' });
+    const requestTurnCancel = jest.fn();
+    registerCursorAcpExtensions(transport as never, {
+      askUser: jest.fn(),
+      exitPlanMode: exitPlanMode as never,
+      emitChunk: () => {},
+      markPlanDecidedInline: () => {},
+      requestTurnCancel,
+    });
+
+    const response = await requests.get('cursor/create_plan')!({ plan: '# Plan\n1. go' });
+
+    expect(response).toEqual({ outcome: { outcome: 'accepted' } });
+    expect(requestTurnCancel).not.toHaveBeenCalled();
+  });
+
   it('rejects cursor/create_plan when the user dismisses the plan card without deciding', async () => {
     const { transport, requests } = makeFakeTransport();
     // A null decision with no abort is a deliberate dismissal (Escape).
