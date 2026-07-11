@@ -3,6 +3,7 @@ import { createPinia, setActivePinia } from 'pinia';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { nextTick } from 'vue';
 
+import { resolvePersona as realResolvePersona } from '@/features/agents/personaRegistry';
 import type { ResolvedBoardLayout, ResolvedLane } from '@/features/tasks/config/boardConfigTypes';
 import type { TaskSpec, TaskStatus } from '@/features/tasks/model/taskTypes';
 import type { AgentBoardRenderCallbacks } from '@/features/tasks/ui/cardActions';
@@ -320,5 +321,25 @@ describe('WorkOrderCard reply surface + skip chip', () => {
     const layout: ResolvedBoardLayout = { lanes: [makeLane('ready', [makeTask('c-r', 'ready')])], errors: [] };
     const { container } = mountBoard(layout, makeCallbacks());
     expect(container.querySelector('.specorator-agent-board-card-skip-host')).toBeNull();
+  });
+});
+
+describe('WorkOrderCard assignee persona', () => {
+  it('re-resolves the persona when the roster version bumps (roster:changed repaint)', async () => {
+    // The resolver reads the view's non-reactive roster cache; a rename/recolor
+    // fires roster:changed → store.bumpRoster(), which must invalidate this
+    // card's persona even though mergeById kept the unchanged task ref.
+    const resolvePersona = vi.fn((id?: string) => realResolvePersona(id));
+    const callbacks = makeCallbacks({ resolvePersona });
+    const layout: ResolvedBoardLayout = {
+      lanes: [makeLane('ready', [makeTask('c-a', 'ready', { agent: 'roster:alice' })])],
+      errors: [],
+    };
+    const { store } = mountBoard(layout, callbacks);
+    const before = resolvePersona.mock.calls.length;
+    expect(before).toBeGreaterThan(0); // resolved on first render
+    store.bumpRoster();
+    await nextTick();
+    expect(resolvePersona.mock.calls.length).toBeGreaterThan(before);
   });
 });

@@ -132,6 +132,17 @@ export const useAgentBoardStore = defineStore('agent-board', () => {
     nowMs.value = Date.now();
   }
 
+  // Reactive roster-change counter. A card's assignee persona resolves through
+  // `callbacks.resolvePersona`, which reads the view's NON-reactive rosterAgents
+  // cache; on `roster:changed` the guarded reload keeps the unchanged task ref
+  // (mergeById), so a rename/recolor would not repaint the avatar until the card
+  // re-renders for another reason. Cards depend on this version so a bump forces
+  // the persona to re-resolve — the imperative board repainted on roster:changed.
+  const rosterVersion = ref(0);
+  function bumpRoster(): void {
+    rosterVersion.value += 1;
+  }
+
   let plugin: SpecoratorPlugin | null = null;
   let deps: BoardLoaderDeps | null = null;
 
@@ -258,7 +269,7 @@ export const useAgentBoardStore = defineStore('agent-board', () => {
   }
 
   return {
-    layout, liveHeartbeats, liveLedger, pauseState, skipReasons, invalidNotes, slots, queueState, nowMs, loading, error,
-    init, load, tick, recordHeartbeat, recordLedger, evictLive, setPause, clearPause, setSkip, clearSkip,
+    layout, liveHeartbeats, liveLedger, pauseState, skipReasons, invalidNotes, slots, queueState, nowMs, rosterVersion, loading, error,
+    init, load, tick, bumpRoster, recordHeartbeat, recordLedger, evictLive, setPause, clearPause, setSkip, clearSkip,
   };
 });

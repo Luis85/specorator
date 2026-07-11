@@ -155,6 +155,14 @@ describe('useBoardEventRouting', () => {
     expect(evictLive).toHaveBeenCalledWith('b');
   });
 
+  it('bumps the reactive roster version on roster:changed (so assignee personas re-resolve)', () => {
+    const { store, events } = setup();
+    const bumpRoster = vi.spyOn(store, 'bumpRoster');
+    vi.spyOn(store, 'load').mockResolvedValue();
+    events.fire('roster:changed', undefined);
+    expect(bumpRoster).toHaveBeenCalled();
+  });
+
   it('routes task:queue-skipped to setSkip (the reactive skip-chip overlay) AND load', () => {
     const { store, events } = setup();
     const setSkip = vi.spyOn(store, 'setSkip');

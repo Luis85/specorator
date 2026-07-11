@@ -152,6 +152,13 @@ export function useBoardEventRouting(plugin: SpecoratorPlugin): void {
     // pause entry — keyed by a taskId no longer in any lane — never renders. Same
     // deferral already accepted for liveHeartbeats/liveLedger.
 
+    // roster:changed also triggers a full reload below, but mergeById keeps the
+    // unchanged task refs, so bump the reactive roster version to force each
+    // card's assignee persona (resolved off the view's non-reactive roster
+    // cache) to re-resolve — a rename/recolor repaints immediately, as the
+    // imperative board did.
+    disposers.push(plugin.events.on('roster:changed', () => store.bumpRoster()));
+
     for (const event of FULL_REFRESH_EVENTS) {
       disposers.push(plugin.events.on(event, () => void store.load()));
     }

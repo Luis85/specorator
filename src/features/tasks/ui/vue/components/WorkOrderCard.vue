@@ -68,8 +68,14 @@ const fillWidth = computed(() =>
 
 // The persona resolves through the callback's resolver when the board supplies
 // one (roster-backed), else the built-in Standard resolver — parity with
-// renderFooter's `(callbacks.resolvePersona ?? resolvePersona)(agent)`.
-const persona = computed(() => (cb.resolvePersona ?? resolvePersona)(props.task.frontmatter.agent));
+// renderFooter's `(callbacks.resolvePersona ?? resolvePersona)(agent)`. The
+// resolver reads the view's non-reactive roster cache, so depend on the store's
+// roster version too: a `roster:changed` bump re-resolves the avatar/name even
+// though mergeById kept this card's (unchanged) task ref.
+const persona = computed(() => {
+  void store.rosterVersion;
+  return (cb.resolvePersona ?? resolvePersona)(props.task.frontmatter.agent);
+});
 </script>
 
 <template>
