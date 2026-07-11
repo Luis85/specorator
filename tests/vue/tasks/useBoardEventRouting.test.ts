@@ -139,6 +139,22 @@ describe('useBoardEventRouting', () => {
     expect(load).toHaveBeenCalled();
   });
 
+  it('evicts the live overlay on a terminal status-changed but not on a live one (auto-run has no run-finished)', () => {
+    const { store, events } = setup();
+    const evictLive = vi.spyOn(store, 'evictLive');
+    vi.spyOn(store, 'load').mockResolvedValue();
+    // Live status → keep the overlay (the run is active; a heartbeat refreshes it).
+    events.fire('task:status-changed', { taskId: 'a', path: 'p', status: 'running' });
+    expect(evictLive).not.toHaveBeenCalled();
+    // Terminal status → evict, so a retry before the next heartbeat can't paint
+    // the previous run's stale strip. Auto-run/queued runs fire only this event.
+    events.fire('task:status-changed', { taskId: 'a', path: 'p', status: 'done' });
+    expect(evictLive).toHaveBeenCalledWith('a');
+    evictLive.mockClear();
+    events.fire('task:status-changed', { taskId: 'b', path: 'p', status: 'failed' });
+    expect(evictLive).toHaveBeenCalledWith('b');
+  });
+
   it('routes task:queue-skipped to setSkip (the reactive skip-chip overlay) AND load', () => {
     const { store, events } = setup();
     const setSkip = vi.spyOn(store, 'setSkip');

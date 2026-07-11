@@ -4,6 +4,7 @@ import { onMounted, onUnmounted } from 'vue';
 import type { SpecoratorEventMap } from '../../../../app/events/specoratorEvents';
 import type SpecoratorPlugin from '../../../../main';
 import { boardWorkOrderFolder } from '../../config/boardWorkOrderFolder';
+import { LIVE_STATUSES } from './statusDot';
 import { useAgentBoardStore } from './stores/agentBoardStore';
 
 // Same 100ms window AgentBoardView.scheduleRefresh uses (schedule-once, not the
@@ -135,6 +136,14 @@ export function useBoardEventRouting(plugin: SpecoratorPlugin): void {
       // means it no longer does (a skip never itself changes status, so this can't
       // wipe a still-valid chip). Mirrors the runner clearing on launch.
       store.clearSkip(p.taskId);
+      // Evict the live overlay when the card leaves the live states. The view's
+      // task:run-finished emit (manual runTask path) already evicts, but auto-run
+      // / queued terminal runs fire ONLY this status-changed from RunSession (no
+      // run-finished), so without this a retry before the next heartbeat/ledger
+      // would paint the previous run's stale live strip. Mirrors the imperative
+      // "evict on terminal status". Idempotent — a double-evict on the manual
+      // path is a no-op.
+      if (!LIVE_STATUSES.has(p.status)) store.evictLive(p.taskId);
     }));
     // NB: vault `delete` intentionally does NOT clear the pause overlay. The
     // imperative evictInMemoryStateForPath maps path→taskId, but this overlay is
