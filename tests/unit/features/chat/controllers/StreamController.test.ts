@@ -3017,6 +3017,27 @@ describe('StreamController - edited files', () => {
     expect(deps.state.editedFiles).toEqual([]);
   });
 
+  it('adopts a corrected tool name on a repeated tool_use so edit bookkeeping runs', async () => {
+    // ACP first renders the call under a prose title; a later tool_use for the
+    // same id supplies the canonical Edit name + canonicalized input. The
+    // corrected name must reach edited-file bookkeeping at tool_result time.
+    const msg = createTestMessage();
+    await controller.handleStreamChunk(
+      { type: 'tool_use', id: 't1', name: 'Applying changes', input: {} },
+      msg,
+    );
+    await controller.handleStreamChunk(
+      { type: 'tool_use', id: 't1', name: 'Edit', input: { file_path: 'notes/e.md' } },
+      msg,
+    );
+    await controller.handleStreamChunk(
+      { type: 'tool_result', id: 't1', content: 'ok' },
+      msg,
+    );
+
+    expect(deps.state.editedFiles.map((entry) => entry.path)).toEqual(['notes/e.md']);
+  });
+
   it('records a file edited by a sync sub-agent', async () => {
     const msg = createTestMessage();
     const subToolCalls: Array<{ id: string; name: string; input: Record<string, unknown>; status: string }> = [];

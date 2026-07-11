@@ -430,7 +430,16 @@ export class CursorChatRuntime implements ChatRuntime {
         }
         this.activeTurn?.queue.push(chunk);
       },
-      patchTurnMetadata: (patch) => Object.assign(this.turnMetadata, patch),
+      patchTurnMetadata: (patch, sessionId) => {
+        // Same guard as emitChunk: a blocking create_plan that resolves against a
+        // superseded turn names its old session, so drop the metadata patch —
+        // otherwise a stale/cancelled plan's planCompleted flag opens an empty
+        // approval card on a later turn. An absent id keeps the prior path.
+        if (sessionId !== undefined && sessionId !== this.activeTurn?.sessionId) {
+          return;
+        }
+        Object.assign(this.turnMetadata, patch);
+      },
     });
 
     transport.start();

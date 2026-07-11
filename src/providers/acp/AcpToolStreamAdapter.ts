@@ -36,11 +36,17 @@ export interface AcpToolStreamPresentationAdapter {
 
 export class AcpToolStreamAdapter {
   private readonly toolStates = new Map<string, AcpToolStreamState>();
+  // Last tool name actually emitted in a `tool_use` chunk per tool id. A later
+  // update can carry the semantic `kind` (edit/delete) that corrects a call
+  // first rendered under a prose title; comparing against this lets the adapter
+  // re-emit the corrected name even when the update carries no rawInput.
+  private readonly emittedNames = new Map<string, string>();
 
   constructor(private readonly adapter: AcpToolStreamPresentationAdapter) {}
 
   reset(): void {
     this.toolStates.clear();
+    this.emittedNames.clear();
   }
 
   normalizeToolCall(toolCall: AcpToolCall, chunks: StreamChunk[]): StreamChunk[] {
@@ -51,7 +57,9 @@ export class AcpToolStreamAdapter {
     });
     rememberResultPayload(state, toolCall.content, toolCall.rawOutput);
     this.toolStates.set(toolCall.toolCallId, state);
-    return chunks.map((chunk) => this.normalizeChunk(chunk, state));
+    const mapped = chunks.map((chunk) => this.normalizeChunk(chunk, state));
+    this.rememberEmittedName(toolCall.toolCallId, mapped);
+    return mapped;
   }
 
   normalizeToolCallUpdate(toolCallUpdate: AcpToolCallUpdate, chunks: StreamChunk[]): StreamChunk[] {
@@ -63,12 +71,20 @@ export class AcpToolStreamAdapter {
     rememberResultPayload(state, toolCallUpdate.content, toolCallUpdate.rawOutput);
     this.toolStates.set(toolCallUpdate.toolCallId, state);
 
+    const normalizedName = this.adapter.normalizeToolName(state.rawName);
+    const previousName = this.emittedNames.get(toolCallUpdate.toolCallId);
+    // Re-emit the tool_use when a later update's normalized name DIFFERS from the
+    // one already shown for this id, so the corrected kind reaches the consumer
+    // even without accompanying rawInput. Otherwise the rendered name and the
+    // isWriteEditTool()/delete bookkeeping stay pinned to the prose title.
+    const nameChanged = previousName !== undefined && previousName !== normalizedName;
+
     const result: StreamChunk[] = [];
-    if (toolCallUpdate.rawInput !== undefined) {
+    if (toolCallUpdate.rawInput !== undefined || nameChanged) {
       result.push({
         id: toolCallUpdate.toolCallId,
         input: state.input,
-        name: this.adapter.normalizeToolName(state.rawName),
+        name: normalizedName,
         type: 'tool_use',
       });
     }
@@ -77,7 +93,18 @@ export class AcpToolStreamAdapter {
       result.push(this.normalizeChunk(chunk, state));
     }
 
+    this.rememberEmittedName(toolCallUpdate.toolCallId, result);
     return result;
+  }
+
+  private rememberEmittedName(toolCallId: string, chunks: StreamChunk[]): void {
+    for (let i = chunks.length - 1; i >= 0; i--) {
+      const chunk = chunks[i];
+      if (chunk.type === 'tool_use') {
+        this.emittedNames.set(toolCallId, chunk.name);
+        return;
+      }
+    }
   }
 
   private updateToolState(

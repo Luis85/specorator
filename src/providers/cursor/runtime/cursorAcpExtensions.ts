@@ -16,7 +16,12 @@ export interface CursorAcpExtensionHost {
   // blocking extension request racing a turn boundary can't misroute into the
   // next turn's queue. An absent id keeps the prior unconditional behavior.
   emitChunk: (chunk: StreamChunk, sessionId?: string) => void;
-  patchTurnMetadata: (patch: Partial<ChatTurnMetadata>) => void;
+  // `sessionId` mirrors emitChunk's guard: a blocking create_plan that resolves
+  // against a superseded turn names its old session, so the runtime drops the
+  // metadata patch rather than letting a stale/cancelled plan open an empty
+  // approval card on a later turn. An absent id keeps the prior unconditional
+  // behavior.
+  patchTurnMetadata: (patch: Partial<ChatTurnMetadata>, sessionId?: string) => void;
 }
 
 // Documented cursor/ask_question option: `{ id, label }` per cursor.com/docs/cli/acp.
@@ -322,7 +327,7 @@ export function registerCursorAcpExtensions(
     // enforces for streamed plan content).
     if (planText) {
       host.emitChunk({ type: 'text', content: `\n\n${planText}\n` }, parsed.sessionId);
-      host.patchTurnMetadata({ planCompleted: true });
+      host.patchTurnMetadata({ planCompleted: true }, parsed.sessionId);
     }
     // Specorator's plan approval happens post-turn via the shared approval card
     // (planCompleted → InputController), not at the protocol level. So the

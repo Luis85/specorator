@@ -406,7 +406,7 @@ export class StreamController {
     // Check if this is an update to an existing tool call
     const existingToolCall = this.findToolCall(msg, chunk.id);
     if (existingToolCall) {
-      this.mergeExistingToolCallInput(existingToolCall, chunk.input, chunk.id);
+      this.mergeExistingToolCallInput(existingToolCall, chunk.input, chunk.id, chunk.name);
       return;
     }
 
@@ -432,16 +432,31 @@ export class StreamController {
    * same panel/plan side effects as a fresh tool, and refreshes the rendered
    * header if the block is already on screen. If still pending, the merged input
    * is already on the toolCall object and gets picked up at render time.
+   *
+   * A repeated tool_use for the same id can also correct the tool NAME: an ACP
+   * call first rendered under a prose title, then re-emitted with the semantic
+   * kind (edit/delete), arrives here with a changed `chunkName`. Adopting it is
+   * what lets isWriteEditTool()/delete bookkeeping run at tool_result time — so
+   * a name-only change (empty input) still updates state and re-renders.
    */
   private mergeExistingToolCallInput(
     existingToolCall: ToolCallInfo,
     chunkInput: Record<string, unknown>,
     toolId: string,
+    chunkName?: string,
   ): void {
-    const newInput = chunkInput || {};
-    if (Object.keys(newInput).length === 0) return;
+    const nameChanged = chunkName !== undefined && chunkName !== existingToolCall.name;
+    if (nameChanged) {
+      existingToolCall.name = chunkName;
+    }
 
-    existingToolCall.input = { ...existingToolCall.input, ...newInput };
+    const newInput = chunkInput || {};
+    const hasNewInput = Object.keys(newInput).length > 0;
+    if (!hasNewInput && !nameChanged) return;
+
+    if (hasNewInput) {
+      existingToolCall.input = { ...existingToolCall.input, ...newInput };
+    }
 
     // Re-run side effects on input updates (streaming may complete the input)
     this.applyToolInputSideEffects(existingToolCall.name, existingToolCall.input);

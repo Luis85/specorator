@@ -244,6 +244,42 @@ describe('CursorChatRuntime ACP stream (scripted fake server over in-memory stre
     expect(toolResult?.toolUseResult?.unifiedDiff).toContain('+bar');
   });
 
+  it('propagates a later kind to a call first rendered under a prose title', async () => {
+    // Initial tool_call carries a prose title and no kind, so it renders under
+    // the prose name; the LATER update supplies the semantic `edit` kind plus
+    // rawInput. The consumer's final view of the id must be the canonical Edit
+    // name with canonicalized input, not the prose title.
+    const chunks = await runScenario(({ emit }) => {
+      emit({
+        sessionUpdate: 'tool_call',
+        toolCallId: 'tc-kind',
+        title: 'Applying changes',
+        status: 'pending',
+      });
+      emit({
+        sessionUpdate: 'tool_call_update',
+        toolCallId: 'tc-kind',
+        kind: 'edit',
+        status: 'in_progress',
+        rawInput: { path: '/notes/a.md', oldString: 'foo', newString: 'bar' },
+      });
+      emit({
+        sessionUpdate: 'tool_call_update',
+        toolCallId: 'tc-kind',
+        status: 'completed',
+        content: [{ type: 'diff', path: '/notes/a.md', oldText: 'foo', newText: 'bar' }],
+      });
+      return { stopReason: 'end_turn' };
+    });
+
+    const toolUses = chunks.filter(
+      (c): c is Extract<StreamChunk, { type: 'tool_use' }> => c.type === 'tool_use' && c.id === 'tc-kind',
+    );
+    const finalToolUse = toolUses.at(-1);
+    expect(finalToolUse?.name).toBe(TOOL_EDIT);
+    expect(finalToolUse?.input).toMatchObject({ file_path: '/notes/a.md', old_string: 'foo', new_string: 'bar' });
+  });
+
   it('threads the usage_update authoritative window into the final usage chunk', async () => {
     const chunks = await runScenario(({ emit }) => {
       emit({ sessionUpdate: 'agent_message_chunk', messageId: 'a1', content: { type: 'text', text: 'done' } });
@@ -319,5 +355,58 @@ describe('CursorChatRuntime extension emitChunk session guard', () => {
     expect(seen).toEqual(['match', 'legacy']);
 
     await runtime.cleanup();
+  });
+});
+
+describe('CursorChatRuntime create_plan metadata session guard', () => {
+  async function captureHostAgainstTurn(sessionId: string): Promise<{
+    host: CursorAcpExtensionHost;
+    metadata: () => Record<string, unknown>;
+    cleanup: () => Promise<void>;
+  }> {
+    const captured: { host?: CursorAcpExtensionHost } = {};
+    jest.spyOn(cursorAcpExtensions, 'registerCursorAcpExtensions')
+      .mockImplementation((_transport, host) => {
+        captured.host = host;
+        return () => {};
+      });
+
+    const runtime = setupRuntime(() => ({ stopReason: 'end_turn' }));
+    await drive(runtime);
+    expect(captured.host).toBeDefined();
+
+    const bag = runtime as unknown as Record<string, unknown>;
+    bag.activeTurn = { queue: new AcpStreamChunkQueue(), sessionId, usageModel: null };
+    // Start from a clean metadata slot so the guard's effect is observable.
+    bag.turnMetadata = {};
+
+    return {
+      host: captured.host!,
+      metadata: () => bag.turnMetadata as Record<string, unknown>,
+      cleanup: () => runtime.cleanup(),
+    };
+  }
+
+  it('drops a metadata patch naming a superseded session', async () => {
+    const { host, metadata, cleanup } = await captureHostAgainstTurn('S-current');
+    // A stale/cancelled create_plan resolves against the PREVIOUS turn and names
+    // its old session — planCompleted must not leak onto the current turn.
+    host.patchTurnMetadata({ planCompleted: true }, 'S-old');
+    expect(metadata().planCompleted).toBeUndefined();
+    await cleanup();
+  });
+
+  it('applies a metadata patch matching the active session', async () => {
+    const { host, metadata, cleanup } = await captureHostAgainstTurn('S-current');
+    host.patchTurnMetadata({ planCompleted: true }, 'S-current');
+    expect(metadata().planCompleted).toBe(true);
+    await cleanup();
+  });
+
+  it('applies a metadata patch with no session id (legacy unconditional path)', async () => {
+    const { host, metadata, cleanup } = await captureHostAgainstTurn('S-current');
+    host.patchTurnMetadata({ planCompleted: true });
+    expect(metadata().planCompleted).toBe(true);
+    await cleanup();
   });
 });

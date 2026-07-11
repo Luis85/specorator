@@ -208,6 +208,40 @@ describe('AcpToolStreamAdapter', () => {
       ]);
     });
 
+    it('re-emits a tool_use when a later update changes the normalized name, even without rawInput', () => {
+      // A call first emitted under a prose title, then corrected by a semantic
+      // kind on a later update, must re-emit the tool_use so the consumer adopts
+      // the canonical name — the update here carries no rawInput.
+      const { adapter } = makePresentation();
+      const stream = new AcpToolStreamAdapter(adapter);
+      stream.normalizeToolCall(
+        toolCall({ title: 'Applying changes' }),
+        [{ type: 'tool_use', id: 'tc-1', name: 'ignored', input: {} }],
+      );
+      const result = stream.normalizeToolCallUpdate(toolCallUpdate({ kind: 'edit' }), []);
+      expect(result).toEqual([
+        {
+          type: 'tool_use',
+          id: 'tc-1',
+          name: 'norm:edit',
+          input: { normalized: true },
+        },
+      ]);
+    });
+
+    it('does not re-emit a tool_use when the normalized name is unchanged and rawInput is absent', () => {
+      const { adapter } = makePresentation();
+      const stream = new AcpToolStreamAdapter(adapter);
+      stream.normalizeToolCall(
+        toolCall({ kind: 'edit' }),
+        [{ type: 'tool_use', id: 'tc-1', name: 'ignored', input: {} }],
+      );
+      const result = stream.normalizeToolCallUpdate(toolCallUpdate({ kind: 'edit' }), [
+        { type: 'text', content: 'tail' },
+      ]);
+      expect(result).toEqual([{ type: 'text', content: 'tail' }]);
+    });
+
     it('merges new rawInput fields into the existing state (additive)', () => {
       const { adapter } = makePresentation();
       const stream = new AcpToolStreamAdapter(adapter);
