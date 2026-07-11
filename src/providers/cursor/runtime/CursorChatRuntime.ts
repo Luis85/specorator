@@ -62,6 +62,10 @@ interface ActiveTurn {
   // settings snapshot per frame. Null suppresses usage chunks (usage contract:
   // never emit without a model).
   usageModel: string | null;
+  // Set by the prompt RPC's settle chain, NOT generator teardown. The cancel
+  // escalation reads this instead of this.activeTurn, which a consumer bail-out
+  // nulls while the prompt (and agent) is still live.
+  promptSettled: boolean;
 }
 
 const CURSOR_ACP_INIT_TIMEOUT_MS = 20_000;
@@ -247,6 +251,7 @@ export class CursorChatRuntime implements ChatRuntime {
       queue: new AcpStreamChunkQueue(),
       sessionId,
       usageModel: this.resolveActiveModel(queryOptions),
+      promptSettled: false,
     };
     this.activeTurn = activeTurn;
     this.currentTurnSawAssistantContent = false;
@@ -266,6 +271,10 @@ export class CursorChatRuntime implements ChatRuntime {
     }).catch((error) => {
       this.pushTurnTermination(activeTurn, [{ type: 'error', content: this.formatRuntimeError(error) }, { type: 'done' }]);
     }).finally(() => {
+      // Prompt settled: the one signal that stands the escalation timer down.
+      // Set before nulling activeTurn so the timer can't see a nulled activeTurn
+      // paired with an unsettled prompt.
+      activeTurn.promptSettled = true;
       if (this.activeTurn === activeTurn) {
         this.activeTurn = null;
       }
@@ -302,13 +311,16 @@ export class CursorChatRuntime implements ChatRuntime {
     this.host.dismissApproval();
   }
 
-  // session/cancel is only a request: an agent that hangs mid-tool never
-  // settles the prompt promise, and without escalation the drain loop would
-  // await the queue forever. If the turn is still live after the grace period,
-  // terminate it locally and recycle the process — the next send respawns.
+  // session/cancel is only a request: a hung agent never settles the prompt, and
+  // without escalation the drain loop awaits the queue forever. Liveness keys off
+  // turn.promptSettled, NOT this.activeTurn — a consumer breaking out of query()
+  // on cancel nulls activeTurn while the prompt is still live, and checking it
+  // here would silently no-op the escalation on a wedged agent. If unsettled
+  // after the grace period, terminate locally (terminal push no-ops on a closed
+  // queue) and recycle the process — the next send respawns.
   private armCancelEscalation(turn: ActiveTurn): void {
     window.setTimeout(() => {
-      if (this.activeTurn !== turn || turn.queue.isClosed) {
+      if (turn.promptSettled) {
         return;
       }
       this.pushTurnTermination(turn, [

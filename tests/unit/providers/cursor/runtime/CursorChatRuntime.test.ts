@@ -469,16 +469,18 @@ describe('CursorChatRuntime.cancel escalation', () => {
   function primeCancellableTurn(runtime: CursorChatRuntime): {
     bag: Record<string, unknown>;
     queue: AcpStreamChunkQueue;
+    turn: { queue: AcpStreamChunkQueue; sessionId: string; usageModel: null; promptSettled: boolean };
     shutdownProcess: jest.Mock;
   } {
     const cancel = jest.fn();
     const bag = primeRuntime(runtime, { cancel });
     bag.sessionId = 'S1';
     const queue = new AcpStreamChunkQueue();
-    bag.activeTurn = { queue, sessionId: 'S1', usageModel: null };
+    const turn = { queue, sessionId: 'S1', usageModel: null, promptSettled: false };
+    bag.activeTurn = turn;
     const shutdownProcess = jest.fn().mockResolvedValue(undefined);
     bag.shutdownProcess = shutdownProcess;
-    return { bag, queue, shutdownProcess };
+    return { bag, queue, turn, shutdownProcess };
   }
 
   it('terminates the turn and recycles the process when the agent ignores cancel', async () => {
@@ -497,15 +499,40 @@ describe('CursorChatRuntime.cancel escalation', () => {
     expect(shutdownProcess).toHaveBeenCalledTimes(1);
   });
 
-  it('does not escalate when the turn terminates within the grace period', async () => {
+  it('stays armed after the consumer bails out of the generator with the prompt still in flight', async () => {
     jest.useFakeTimers();
     const runtime = makeRuntime();
-    const { bag, queue, shutdownProcess } = primeCancellableTurn(runtime);
+    const { bag, queue, turn, shutdownProcess } = primeCancellableTurn(runtime);
 
     runtime.cancel();
-    // The agent honors session/cancel: the prompt settles and the turn closes.
+    // Consumer bail-out: the chat controller breaks out of query() as soon as a
+    // late chunk wakes it, and query()'s finally nulls this.activeTurn. The
+    // fake prompt never settles (agent still running), so promptSettled stays
+    // false — escalation MUST NOT be disarmed by the nulled activeTurn.
+    bag.activeTurn = null;
+    expect(turn.promptSettled).toBe(false);
+
+    jest.advanceTimersByTime(5_000);
+
+    const first = await queue.next() as { type: string };
+    const second = await queue.next() as { type: string };
+    expect(first.type).toBe('error');
+    expect(second.type).toBe('done');
+    expect(queue.isClosed).toBe(true);
+    expect(shutdownProcess).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not escalate when the prompt settles within the grace period', async () => {
+    jest.useFakeTimers();
+    const runtime = makeRuntime();
+    const { bag, queue, turn, shutdownProcess } = primeCancellableTurn(runtime);
+
+    runtime.cancel();
+    // The agent honors session/cancel: the prompt settles (its .finally sets
+    // promptSettled and nulls activeTurn) and the turn closes.
     (bag.pushTurnTermination as (t: unknown, c: unknown[]) => void)
-      .call(runtime, bag.activeTurn, [{ type: 'done' }]);
+      .call(runtime, turn, [{ type: 'done' }]);
+    turn.promptSettled = true;
     bag.activeTurn = null;
     jest.advanceTimersByTime(5_000);
 
