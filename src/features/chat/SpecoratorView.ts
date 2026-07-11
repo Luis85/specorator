@@ -527,12 +527,12 @@ export class SpecoratorView extends ItemView {
         ? this.cachedBoundAgent
         : null;
 
-    // metaRowVisible mirrors updateHeaderMetaRow + updateNavRowLocation: in
-    // header mode the action cluster lives in the meta row (so it always shows
-    // once there are tabs); in input mode the row shows only for a bound-agent
-    // chip or the git button.
+    // metaRowVisible mirrors updateHeaderMetaRow + updateNavRowLocation: header
+    // mode shows the action cluster in the meta row once there are tabs; input
+    // mode shows it only for a bound-agent chip or the git button. Gate the git
+    // button on a live runtime so the empty state hides all tab-less controls.
     const hasTabs = (tm?.getTabCount() ?? 0) > 0;
-    const hasGitAction = this.gitActionButton != null;
+    const hasGitAction = this.gitActionButton != null && tm != null;
     const metaRowVisible =
       (tabBarPosition === 'header' && hasTabs) || boundAgent != null || hasGitAction;
 

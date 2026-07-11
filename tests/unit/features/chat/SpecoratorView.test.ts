@@ -98,6 +98,15 @@ describe('SpecoratorView.projectChatShellHeader', () => {
     ).toBe(true);
   });
 
+  it('hides the meta row in the empty state even when a git button object lingers (no tab runtime)', () => {
+    // Configure-first / all-providers-disabled: the git button persists (the shell
+    // stays mounted) but there's no active tab. The meta row — and thus the git
+    // button AND the New tab / History / Quick Actions cluster — must stay hidden.
+    const view = projectionHarness({ chatCount: 0, hasGit: true });
+    view.tabManager = null;
+    expect(view.projectChatShellHeader().metaRowVisible).toBe(false);
+  });
+
   it('hides the title alongside the logo only when the strip is visible in header mode', () => {
     // The old hideBranding rule hid BOTH the logo and the title on the same
     // condition; titleVisible must track logoVisible.
