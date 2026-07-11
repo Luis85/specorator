@@ -94,7 +94,7 @@
       },
       {
         "from": "provider-cursor",
-        "allow": ["app", "core", "shared", "utils", "i18n"]
+        "allow": ["app", "core", "shared", "utils", "i18n", "acp"]
       },
       {
         "from": "provider-opencode",

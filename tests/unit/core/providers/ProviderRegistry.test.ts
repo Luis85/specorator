@@ -145,18 +145,23 @@ describe('ProviderRegistry', () => {
       expect(tools.has('WebSearch')).toBe(true);
     });
 
-    it('cursor includes the direct-map keys plus Write (argument-shape resolved)', () => {
+    it('cursor exposes the ACP canonical tool names (Cursor runs over the ACP transport)', () => {
       const tools = ProviderRegistry.getCanonicalToolNames('cursor');
-      // Direct map keys
+      // Value-set of CURSOR_ACP_TOOL_NAME_MAP (cursorAcpToolNames.ts).
       expect(tools.has('Read')).toBe(true);
       expect(tools.has('Bash')).toBe(true);
       expect(tools.has('Glob')).toBe(true);
       expect(tools.has('Grep')).toBe(true);
-      expect(tools.has('LS')).toBe(true);
       expect(tools.has('Edit')).toBe(true);
-      // Write is resolved by argument-shape (oldString / content) inside
-      // resolveCursorToolKind, not via the direct map — still surface it.
       expect(tools.has('Write')).toBe(true);
+      expect(tools.has('WebFetch')).toBe(true);
+      expect(tools.has('WebSearch')).toBe(true);
+      expect(tools.has('TodoWrite')).toBe(true);
+      expect(tools.has('AskUserQuestion')).toBe(true);
+      expect(tools.has('Agent')).toBe(true);
+      // `ls` is folded into Bash by the ACP tool-name map, so LS is no longer
+      // a distinct canonical name (unlike the pre-ACP stream-json mapping).
+      expect(tools.has('LS')).toBe(false);
     });
   });
 

@@ -128,6 +128,10 @@ export function normalizeCursorAcpToolInput(
   return input;
 }
 
+// Deliberate v1 scoping: ACP tool results pass through generically for now,
+// so there's no Cursor-specific toolUseResult to build yet (see plan Task 2,
+// docs/superpowers/plans/2026-07-11-cursor-acp-runtime.md). Revisit once a
+// consumer needs rich per-tool result shaping (e.g. diffs, todo snapshots).
 export function normalizeCursorAcpToolUseResult(): undefined {
   return undefined;
 }

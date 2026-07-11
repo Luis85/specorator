@@ -16,4 +16,14 @@ describe('cursorAcpToolNames', () => {
     expect(CURSOR_ACP_CANONICAL_TOOL_NAMES.has(TOOL_READ)).toBe(true);
     expect(CURSOR_ACP_CANONICAL_TOOL_NAMES.has(TOOL_WRITE)).toBe(true);
   });
+
+  it('falls back to the kind switch (not the title) when the title has no known mapping', () => {
+    const adapter = createCursorAcpToolStreamAdapter();
+    const chunks = adapter.normalizeToolCall(
+      { toolCallId: 't2', title: 'Something Unmapped', kind: 'execute', rawInput: {} },
+      [{ id: 't2', input: {}, name: 'unused', type: 'tool_use' }],
+    );
+    const toolUse = chunks.find((c) => c.type === 'tool_use') as { name: string } | undefined;
+    expect(toolUse?.name).toBe(TOOL_BASH);
+  });
 });
