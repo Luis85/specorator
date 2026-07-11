@@ -227,6 +227,46 @@ describe('useAgentBoardStore', () => {
     expect(store.liveLedger).not.toBe(ledger);
   });
 
+  it('load() evicts a stale live overlay for a task that came back terminal (missed evict while board closed)', async () => {
+    // A task is live with a heartbeat/ledger overlay, the board closes (routing
+    // unsubscribes but this module-global store survives), the run finishes off
+    // screen, then the board reopens and reloads with the note now terminal.
+    const running = makeLane('running', [makeTask('t1', 'running')]);
+    const done = makeLane('done', [makeTask('t1', 'done')]);
+    const { store } = initStore([
+      { lanes: [running], errors: [] },
+      { lanes: [done], errors: [] },
+    ]);
+
+    await store.load();
+    store.recordHeartbeat('t1', '2026-07-10T00:00:00Z');
+    store.recordLedger('t1', 'ran a tool');
+    const hbBefore = store.liveHeartbeats;
+
+    await store.load(); // reopen: t1 is now terminal
+
+    expect(store.liveHeartbeats.has('t1')).toBe(false);
+    expect(store.liveLedger.has('t1')).toBe(false);
+    expect(store.liveHeartbeats).not.toBe(hbBefore); // pruned → new reference
+  });
+
+  it('load() keeps a live overlay whose task is still live (no churn when nothing to prune)', async () => {
+    const running = makeLane('running', [makeTask('t1', 'running')]);
+    const { store } = initStore([
+      { lanes: [running], errors: [] },
+      { lanes: [running], errors: [] },
+    ]);
+
+    await store.load();
+    store.recordHeartbeat('t1', '2026-07-10T00:00:00Z');
+    const hbBefore = store.liveHeartbeats;
+
+    await store.load(); // reload: t1 still running
+
+    expect(store.liveHeartbeats.get('t1')).toBe('2026-07-10T00:00:00Z');
+    expect(store.liveHeartbeats).toBe(hbBefore); // nothing pruned → same reference, no re-render
+  });
+
   it('load() captures a fetch rejection into store.error, resolves (never throws), and leaves layout unchanged', async () => {
     const store = useAgentBoardStore();
     const deps: BoardLoaderDeps = {

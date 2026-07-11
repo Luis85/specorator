@@ -12,6 +12,7 @@ import { TaskIndexer } from '../../../indexing/TaskIndexer';
 import type { InvalidTaskNote, TaskSpec } from '../../../model/taskTypes';
 import { TaskNoteStore } from '../../../storage/TaskNoteStore';
 import type { AgentBoardPauseState } from '../../cardActions';
+import { LIVE_STATUSES } from '../statusDot';
 
 /**
  * Loader seam over the vault-reading services the view drives in `refresh()`.
@@ -197,6 +198,7 @@ export const useAgentBoardStore = defineStore('agent-board', () => {
         }));
         layout.value = { lanes: merged, errors: next.errors };
         invalidNotes.value = notes;
+        reconcileLiveOverlays(merged);
         error.value = null;
       },
       (e) => { error.value = e instanceof Error ? e.message : String(e); },
@@ -205,6 +207,40 @@ export const useAgentBoardStore = defineStore('agent-board', () => {
 
   function currentTasks(laneId: string): TaskSpec[] {
     return layout.value.lanes.find((l) => l.id === laneId)?.tasks ?? [];
+  }
+
+  // Prune the live-heartbeat/ledger overlays against the just-loaded statuses.
+  // The store is module-global (see globalPinia) and survives all board panes
+  // closing, but useBoardEventRouting unsubscribes on unmount — so a terminal
+  // event (task:run-finished / task:status-changed off a live state) that would
+  // call evictLive is MISSED while the board is closed. Without this, reopening
+  // leaves a stale heartbeat/ledger line keyed to the now-terminal task, which a
+  // retry before the first new heartbeat would paint on LiveStrip. Reconciling on
+  // every load recovers from any missed terminal event, not just the closed-board
+  // case, and — unlike clearing on unmount — preserves a genuinely-live overlay
+  // across a brief remount (the task is still live in the reloaded layout).
+  function reconcileLiveOverlays(lanes: ResolvedBoardLayout['lanes']): void {
+    const liveIds = new Set<string>();
+    for (const lane of lanes) {
+      for (const task of lane.tasks) {
+        if (LIVE_STATUSES.has(task.frontmatter.status)) liveIds.add(task.frontmatter.id);
+      }
+    }
+    liveHeartbeats.value = pruneToLive(liveHeartbeats.value, liveIds) ?? liveHeartbeats.value;
+    liveLedger.value = pruneToLive(liveLedger.value, liveIds) ?? liveLedger.value;
+  }
+
+  // Returns a new Map with every non-live key dropped, or null when nothing was
+  // pruned — so load() only churns the shallowRef reference (and re-renders the
+  // bounded set of live strips) when a stale entry actually existed.
+  function pruneToLive(map: Map<string, string>, liveIds: Set<string>): Map<string, string> | null {
+    let pruned: Map<string, string> | null = null;
+    for (const id of map.keys()) {
+      if (liveIds.has(id)) continue;
+      pruned ??= new Map(map);
+      pruned.delete(id);
+    }
+    return pruned;
   }
 
   function recordHeartbeat(taskId: string, at: string): void {
