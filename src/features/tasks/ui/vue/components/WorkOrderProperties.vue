@@ -44,7 +44,8 @@ const PRIORITY_FILLED_BARS: Record<TaskPriority, number> = {
 
 const fm = computed(() => props.task.frontmatter);
 const status = computed(() => fm.value.status);
-// Provider / Model / Priority + Conversation edit-gate: anything but a live run.
+// Provider / Model / Priority edit-gate: anything but a live run. (Conversation
+// is gated independently on id + onOpenConversation + canOpenConversation.)
 const editable = computed(() => status.value !== 'running');
 const assignEditable = computed(() => EDITABLE_ASSIGN_STATUSES.has(status.value));
 
@@ -167,7 +168,7 @@ function openConversation(): void {
       <EditableChip
         v-if="assignEditable"
         class="specorator-work-order-modal-chip--agent"
-        :model-value="selectedAgent"
+        :value="selectedAgent"
         :options="agentOptions"
         @change="onAgentChange"
       >
@@ -197,7 +198,7 @@ function openConversation(): void {
     >
       <EditableChip
         v-if="editable"
-        :model-value="selectedProvider"
+        :value="selectedProvider"
         :options="providerOptions"
         @change="onProviderChange"
       />
@@ -214,7 +215,7 @@ function openConversation(): void {
     >
       <EditableChip
         v-if="editable"
-        :model-value="selectedModel"
+        :value="selectedModel"
         :options="modelOptions"
         :empty-option="modelEmptyOption"
         @change="onModelChange"
@@ -257,7 +258,7 @@ function openConversation(): void {
     >
       <EditableChip
         v-if="editable"
-        :model-value="selectedPriority"
+        :value="selectedPriority"
         :options="priorityOptions"
         @change="onPriorityChange"
       />

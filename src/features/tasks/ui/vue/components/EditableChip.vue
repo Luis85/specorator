@@ -12,12 +12,13 @@ export interface EditableChipOption {
 // showing the current label + a decorative chevron, with a transparent native
 // `<select>` overlaying the whole chip so the picker stays keyboard-operable.
 // The `lead` slot lets the Agent row prepend a persona avatar as the first chip
-// child (parity: `insertBefore(avatar, firstChild)`). Controlled by `modelValue`
-// — the parent updates its own ref on `change`, which flows back as the new
-// label, so a dependent field (Model after Provider) resets by the parent
-// clearing the bound value.
+// child (parity: `insertBefore(avatar, firstChild)`). This is a CONTROLLED select
+// with an explicit change→save side effect, NOT two-way binding: it exposes
+// `value` + `change` (deliberately not `modelValue`/`update:modelValue`), so the
+// parent owns the ref and a dependent field (Model after Provider) resets by the
+// parent clearing the bound value on `change`.
 const props = defineProps<{
-  modelValue: string;
+  value: string;
   options: EditableChipOption[];
   emptyOption?: EditableChipOption;
 }>();
@@ -25,8 +26,8 @@ const props = defineProps<{
 const emit = defineEmits<{ (event: 'change', value: string): void }>();
 
 const label = computed(() => {
-  if (props.emptyOption && props.modelValue === props.emptyOption.value) return props.emptyOption.label;
-  return props.options.find((o) => o.value === props.modelValue)?.label ?? props.modelValue;
+  if (props.emptyOption && props.value === props.emptyOption.value) return props.emptyOption.label;
+  return props.options.find((o) => o.value === props.value)?.label ?? props.value;
 });
 
 function onChange(event: Event): void {
@@ -45,7 +46,7 @@ function onChange(event: Event): void {
     />
     <select
       class="specorator-work-order-modal-chip-select"
-      :value="modelValue"
+      :value="value"
       @change="onChange"
     >
       <option
