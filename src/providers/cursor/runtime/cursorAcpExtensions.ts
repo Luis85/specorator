@@ -30,6 +30,10 @@ interface CursorAskQuestionParams {
   options?: CursorAskQuestionOption[];
 }
 
+function errorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : 'Unknown error';
+}
+
 /**
  * Builds the `AskUserQuestionCallback` input shape the rest of the app already
  * understands (`{ questions: [{ question, header, options, multiSelect }] }`),
@@ -37,20 +41,29 @@ interface CursorAskQuestionParams {
  * shape the stream-json `AskUserQuestion` tool_use carried. Reusing it means
  * the inline widget (`InlineAskUserQuestion`) and answer re-keying
  * (`resolveCursorAnswerLabels`) work unchanged for the ACP path.
+ *
+ * Malformed payloads (non-array `questions`, null entries, non-array
+ * `options`) must degrade to an empty-but-valid shape rather than throw — a
+ * throw here would otherwise escape as a JSON-RPC -32603 error to the agent
+ * instead of the intended tolerant response.
  */
 function buildAskUserInput(params: CursorAskQuestionParams): Record<string, unknown> {
-  const entries = params.questions?.length
+  const rawEntries = Array.isArray(params.questions) && params.questions.length > 0
     ? params.questions
     : [{ question: params.question, header: params.header, options: params.options }];
+
+  const entries = rawEntries.filter(
+    (entry): entry is CursorAskQuestionEntry => Boolean(entry) && typeof entry === 'object',
+  );
 
   return {
     questions: entries.map((entry, index) => ({
       ...(entry.id ? { id: entry.id } : {}),
       question: entry.question || `Question ${index + 1}`,
       header: entry.header || `Q${index + 1}`,
-      options: (entry.options ?? []).map((option) => ({
-        label: option.label ?? '',
-        description: option.description ?? '',
+      options: (Array.isArray(entry.options) ? entry.options : []).map((option) => ({
+        label: option?.label ?? '',
+        description: option?.description ?? '',
       })),
       multiSelect: Boolean(entry.multiSelect),
     })),
@@ -74,20 +87,27 @@ export function registerCursorAcpExtensions(
   let todoCallCounter = 0;
 
   unsubscribes.push(transport.onRequest('cursor/ask_question', async (params) => {
-    const parsed = (params ?? {}) as CursorAskQuestionParams;
-    const askInput = buildAskUserInput(parsed);
-
-    let answers: Record<string, string | string[]> | null;
     try {
-      answers = await host.askUser(askInput);
-    } catch {
-      answers = null;
-    }
+      const parsed = (params ?? {}) as CursorAskQuestionParams;
+      const askInput = buildAskUserInput(parsed);
 
-    if (!answers || Object.keys(answers).length === 0) {
-      return { rejected: true, reason: 'Question dismissed by user' };
+      let answers: Record<string, string | string[]> | null;
+      try {
+        answers = await host.askUser(askInput);
+      } catch (error) {
+        return { rejected: true, reason: `Failed to get user answers: ${errorMessage(error)}` };
+      }
+
+      if (!answers || Object.keys(answers).length === 0) {
+        return { rejected: true, reason: 'Question dismissed by user' };
+      }
+      return { answers };
+    } catch (error) {
+      // Defensive backstop: buildAskUserInput is written to be tolerant of
+      // malformed payloads, but any residual synchronous throw must still
+      // resolve to a rejected shape rather than reject the RPC (-32603).
+      return { rejected: true, reason: `Failed to get user answers: ${errorMessage(error)}` };
     }
-    return { answers };
   }));
 
   unsubscribes.push(transport.onRequest('cursor/create_plan', async (params) => {

@@ -86,6 +86,56 @@ describe('registerCursorAcpExtensions', () => {
     expect(toolUse?.name).toBe(TOOL_TODO_WRITE);
   });
 
+  it('resolves with a rejected shape (never rejects) when questions entries are null', async () => {
+    const { transport, requests } = makeFakeTransport();
+    registerCursorAcpExtensions(transport as never, {
+      askUser: jest.fn().mockResolvedValue(null),
+      emitChunk: () => {},
+      patchTurnMetadata: () => {},
+    });
+
+    const response = await requests.get('cursor/ask_question')!({ questions: [null] }) as { rejected?: boolean };
+    expect(response.rejected).toBe(true);
+  });
+
+  it('resolves with a rejected shape (never rejects) when questions is not an array', async () => {
+    const { transport, requests } = makeFakeTransport();
+    registerCursorAcpExtensions(transport as never, {
+      askUser: jest.fn().mockResolvedValue(null),
+      emitChunk: () => {},
+      patchTurnMetadata: () => {},
+    });
+
+    const response = await requests.get('cursor/ask_question')!({ questions: 'oops' }) as { rejected?: boolean };
+    expect(response.rejected).toBe(true);
+  });
+
+  it('resolves with a rejected shape (never rejects) when options is not an array', async () => {
+    const { transport, requests } = makeFakeTransport();
+    registerCursorAcpExtensions(transport as never, {
+      askUser: jest.fn().mockResolvedValue(null),
+      emitChunk: () => {},
+      patchTurnMetadata: () => {},
+    });
+
+    const response = await requests.get('cursor/ask_question')!({ question: 'Q', options: 'not-an-array' }) as { rejected?: boolean };
+    expect(response.rejected).toBe(true);
+  });
+
+  it('distinguishes a thrown askUser error from a plain dismissal in the reason text', async () => {
+    const { transport, requests } = makeFakeTransport();
+    registerCursorAcpExtensions(transport as never, {
+      askUser: jest.fn().mockRejectedValue(new Error('boom')),
+      emitChunk: () => {},
+      patchTurnMetadata: () => {},
+    });
+
+    const response = await requests.get('cursor/ask_question')!({ question: 'Q', options: [] }) as { rejected?: boolean; reason?: string };
+    expect(response.rejected).toBe(true);
+    expect(response.reason).toContain('Failed to get user answers');
+    expect(response.reason).toContain('boom');
+  });
+
   it('returns an unsubscribe that removes every handler', () => {
     const { transport, requests, notifications } = makeFakeTransport();
     const unregister = registerCursorAcpExtensions(transport as never, {
