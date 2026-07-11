@@ -33,6 +33,7 @@ import {
 } from '../../acp';
 import { CURSOR_PROVIDER_CAPABILITIES } from '../capabilities';
 import { encodeCursorTurn } from '../prompt/encodeCursorTurn';
+import { getCursorEnabledModels } from '../settings';
 import { getCursorState, resolveCursorSessionId } from '../types';
 import { registerCursorAcpExtensions } from './cursorAcpExtensions';
 import { buildCursorAcpLaunchSpec, startCursorAcpProcess } from './cursorAcpLaunch';
@@ -41,7 +42,9 @@ import { resolveCursorAcpMode } from './cursorAcpSession';
 import { createCursorAcpToolStreamAdapter } from './cursorAcpToolNames';
 import { buildCursorAgentEnvironment } from './cursorAgentEnv';
 import { runWithCursorAgentSpawnLock } from './cursorAgentSpawnLock';
+import { resolveCursorModelSelectionForCli } from './cursorCliModel';
 import { cleanupStaleCursorMcpServer } from './cursorMcpCleanup';
+import { getCachedCursorModelIds } from './cursorModelCatalog';
 import { extractCursorUsage } from './cursorUsageMapping';
 
 interface ActiveTurn {
@@ -62,7 +65,9 @@ export class CursorChatRuntime implements ChatRuntime {
   private autoApprovePermissions = false;
   private connection: AcpClientConnection | null = null;
   private currentModeId: string | null = null;
+  private currentSessionModelId: string | null = null;
   private currentTurnIsPlan = false;
+  private currentTurnSawAssistantContent = false;
   private lastStartupErrorMessage: string | null = null;
   private loadedSessionId: string | null = null;
   private process: AcpSubprocess | null = null;
@@ -112,6 +117,7 @@ export class CursorChatRuntime implements ChatRuntime {
     if (this.sessionId !== nextSessionId) {
       this.sessionInvalidated = false;
       this.sessionBootstrapNeeded = false;
+      this.currentSessionModelId = null;
     }
     this.sessionId = nextSessionId;
   }
@@ -172,6 +178,11 @@ export class CursorChatRuntime implements ChatRuntime {
     }
 
     const cwd = getVaultPath(this.plugin.app) ?? process.cwd();
+    // Capture the session id BEFORE ensureSession, which may mint a fresh one.
+    // A turn that starts without a session id (fork, provider switch, resume of a
+    // conversation whose native session never loaded) still carries history that
+    // has to be re-injected into the prompt, or the agent loses all prior context.
+    const sessionIdAtTurnStart = this.sessionId;
     const sessionId = await this.ensureSession(cwd);
     if (!sessionId) {
       yield { type: 'error', content: this.lastStartupErrorMessage ?? 'Failed to open a Cursor session.' };
@@ -179,28 +190,31 @@ export class CursorChatRuntime implements ChatRuntime {
       return;
     }
 
+    const shouldBootstrapHistory = (conversationHistory?.length ?? 0) > 0
+      && (!sessionIdAtTurnStart || this.sessionInvalidated || this.sessionBootstrapNeeded);
+    this.sessionBootstrapNeeded = false;
+
     const mode = resolveCursorAcpMode(this.plugin.settings.permissionMode);
     this.autoApprovePermissions = mode.autoApprove;
     this.currentTurnIsPlan = mode.modeId === 'plan';
     await this.applyMode(sessionId, mode.modeId);
+    await this.applySelectedModel(sessionId, queryOptions);
 
     this.activeTurn?.queue.close();
     const activeTurn: ActiveTurn = { queue: new AcpStreamChunkQueue(), sessionId };
     this.activeTurn = activeTurn;
+    this.currentTurnSawAssistantContent = false;
     this.sessionUpdateNormalizer.reset();
     this.toolStreamAdapter.reset();
 
-    const history = this.sessionBootstrapNeeded ? (conversationHistory ?? []) : [];
-    this.sessionBootstrapNeeded = false;
+    const history = shouldBootstrapHistory ? (conversationHistory ?? []) : [];
 
     const promptPromise = this.connection.prompt({
       prompt: buildCursorAcpPromptBlocks(turn, history, queryOptions?.boundAgentPrompt),
       sessionId,
     }).then((response) => {
       this.emitFinalUsage(activeTurn, response.usage ?? null, queryOptions);
-      if (this.currentTurnIsPlan) {
-        this.turnMetadata.planCompleted = true;
-      }
+      this.finalizePlanTurnMetadata();
       activeTurn.queue.push({ type: 'done' });
       activeTurn.queue.close();
     }).catch((error) => {
@@ -242,6 +256,7 @@ export class CursorChatRuntime implements ChatRuntime {
     this.sessionInvalidated = false;
     this.sessionBootstrapNeeded = false;
     this.currentModeId = null;
+    this.currentSessionModelId = null;
   }
 
   getSessionId(): string | null {
@@ -336,7 +351,15 @@ export class CursorChatRuntime implements ChatRuntime {
     });
     this.unregisterExtensions = registerCursorAcpExtensions(transport, {
       askUser: this.host.askUser,
-      emitChunk: (chunk) => this.activeTurn?.queue.push(chunk),
+      emitChunk: (chunk) => {
+        // cursor/create_plan delivers plan text through this side channel rather
+        // than a session notification, so mark it as assistant content for the
+        // plan-completed gate — otherwise a plan-only turn never sees content.
+        if (this.currentTurnIsPlan && chunk.type === 'text') {
+          this.currentTurnSawAssistantContent = true;
+        }
+        this.activeTurn?.queue.push(chunk);
+      },
       patchTurnMetadata: (patch) => Object.assign(this.turnMetadata, patch),
     });
 
@@ -403,6 +426,9 @@ export class CursorChatRuntime implements ChatRuntime {
       const response = await this.connection.newSession({ cwd, mcpServers: [] });
       this.loadedSessionId = response.sessionId;
       this.sessionId = response.sessionId;
+      // A fresh session starts on the agent's default model, so drop any tracked
+      // selection to force applySelectedModel to reapply it for this turn.
+      this.currentSessionModelId = null;
       return response.sessionId;
     } catch (error) {
       if (await this.tryAuthenticate()) {
@@ -410,6 +436,7 @@ export class CursorChatRuntime implements ChatRuntime {
           const response = await this.connection.newSession({ cwd, mcpServers: [] });
           this.loadedSessionId = response.sessionId;
           this.sessionId = response.sessionId;
+          this.currentSessionModelId = null;
           return response.sessionId;
         } catch (retryError) {
           this.lastStartupErrorMessage = this.formatRuntimeError(retryError);
@@ -447,6 +474,55 @@ export class CursorChatRuntime implements ChatRuntime {
     }
   }
 
+  private async applySelectedModel(
+    sessionId: string,
+    queryOptions?: ChatRuntimeQueryOptions,
+  ): Promise<void> {
+    if (!this.connection) {
+      return;
+    }
+    const model = this.resolveCursorModelForSession(queryOptions);
+    if (!model || model === this.currentSessionModelId) {
+      return;
+    }
+    try {
+      await this.connection.setConfigOption({
+        configId: 'model',
+        sessionId,
+        type: 'select',
+        value: model,
+      });
+      this.currentSessionModelId = model;
+    } catch (error) {
+      // Best-effort: whether Cursor's ACP dialect implements
+      // session/set_config_option is doc-unknown, so a rejection just leaves the
+      // turn on the agent's default model rather than failing the turn.
+      this.plugin.logger.scope('cursor.acp').warn('setConfigOption(model) failed', error);
+    }
+  }
+
+  // Mirrors the pre-ACP CLI launch path (resolveCursorQueryLaunch): the picked
+  // model family plus effort mode resolved against the enabled/catalog id sets.
+  private resolveCursorModelForSession(queryOptions?: ChatRuntimeQueryOptions): string | undefined {
+    const settingsBag = asSettingsBag(this.plugin.settings);
+    const snapshot = ProviderSettingsCoordinator.getProviderSettingsSnapshot(settingsBag, 'cursor');
+    const familyValue = queryOptions?.model
+      ?? (typeof snapshot.model === 'string' && snapshot.model.trim() ? snapshot.model.trim() : undefined);
+    const mode = typeof snapshot.effortLevel === 'string' ? snapshot.effortLevel : undefined;
+    return resolveCursorModelSelectionForCli(familyValue, mode, {
+      catalogIds: getCachedCursorModelIds(),
+      enabledIds: getCursorEnabledModels(settingsBag),
+    });
+  }
+
+  private finalizePlanTurnMetadata(): void {
+    // A plan turn only "completed" once the agent actually produced plan
+    // content; an empty plan turn must not open the post-plan approval card.
+    if (this.currentTurnIsPlan && this.currentTurnSawAssistantContent) {
+      this.turnMetadata.planCompleted = true;
+    }
+  }
+
   private async handleSessionNotification(notification: AcpSessionNotification): Promise<void> {
     if (!this.activeTurn || notification.sessionId !== this.activeTurn.sessionId) {
       return;
@@ -470,7 +546,18 @@ export class CursorChatRuntime implements ChatRuntime {
     if (effect.metadataPatch) {
       Object.assign(this.turnMetadata, effect.metadataPatch);
     }
+    if (effect.sawAssistantContent) {
+      this.currentTurnSawAssistantContent = true;
+    }
     for (const chunk of effect.chunks) {
+      // query() already yields a single synthetic user_message_start /
+      // assistant_message_start pair per turn, so those are the sole message
+      // boundaries. The shared normalizer ALSO emits these from the first
+      // message chunk of each role; forwarding them here would double the
+      // boundaries and split the transcript into duplicate message frames.
+      if (chunk.type === 'user_message_start' || chunk.type === 'assistant_message_start') {
+        continue;
+      }
       this.activeTurn.queue.push(chunk);
     }
   }
@@ -576,6 +663,7 @@ export class CursorChatRuntime implements ChatRuntime {
     }
     this.loadedSessionId = null;
     this.currentModeId = null;
+    this.currentSessionModelId = null;
   }
 }
 
