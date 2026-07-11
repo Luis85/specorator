@@ -1,5 +1,5 @@
 {
-  "description": "Fallow quality baseline. Counters may shrink but not grow; averageMaintainability may rise but not drop. Regenerate with `npm run check:quality -- --update` (commit the diff in the same PR that moves the metric).",
+  "description": "Fallow quality baseline. Counters may shrink but not grow; averageMaintainability may rise but not drop. Regenerate with `npm run check:quality -- --update` (commit the diff in the same PR that moves the metric). IMPORTANT — measure in a coverage-free environment: complexFunctions/criticalComplexity are CRAP-based and CRAP depends on coverage. fallow auto-ingests a local istanbul `coverage/coverage-final.json` (gitignored, absent in CI's fresh checkout), which drops these to ~76/0 via the `istanbul` model; CI has no coverage report so fallow uses the `static_estimated` model and measures 231/1. This baseline is pinned to the CI-true static_estimated numbers. To reproduce CI locally, run `rm -rf coverage .fallow && npm run check:quality` (or measure in a fresh `git clone`); a run with `coverage/` present will report lower values and pass as an unlocked improvement.",
   "fallowVersion": "2.91.0",
   "metrics": {
     "deadCodeIssues": 0,
@@ -8,8 +8,8 @@
     "boundaryViolations": 0,
     "cloneGroups": 38,
     "duplicatedLines": 998,
-    "complexFunctions": 76,
-    "criticalComplexity": 0,
+    "complexFunctions": 231,
+    "criticalComplexity": 1,
     "averageMaintainability": 90.1
   }
 }
