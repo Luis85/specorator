@@ -19,6 +19,8 @@ import { getVaultPath } from '../../../utils/path';
 import type { AcpJsonRpcTransport, AcpSubprocess } from '../../acp';
 import {
   AcpClientConnection,
+  type AcpLoadSessionResponse,
+  type AcpNewSessionResponse,
   type AcpRequestPermissionRequest,
   type AcpRequestPermissionResponse,
   type AcpSessionNotification,
@@ -29,6 +31,7 @@ import {
   buildAcpApprovalDecisionOptions,
   buildAcpUsageInfo,
   buildActiveTurnEffect,
+  extractAcpSessionModelState,
   mapApprovalDecision,
   normalizeApprovalInput,
   selectPermissionOption,
@@ -47,6 +50,7 @@ import { runWithCursorAgentSpawnLock } from './cursorAgentSpawnLock';
 import { resolveCursorModelSelectionForCli } from './cursorCliModel';
 import { cleanupStaleCursorMcpServer } from './cursorMcpCleanup';
 import { getCachedCursorModelIds } from './cursorModelCatalog';
+import { resolveCursorFamilyId } from './cursorModelFamily';
 import { extractCursorUsage } from './cursorUsageMapping';
 
 interface ActiveTurn {
@@ -67,6 +71,11 @@ export class CursorChatRuntime implements ChatRuntime {
   readonly providerId: ProviderId = 'cursor';
 
   private activeTurn: ActiveTurn | null = null;
+  // Wire ids from the session's advertised model `configOptions`/`models`. Cursor
+  // ACP rejects a bare CLI id (`gpt-5.4-medium`) that is not one of these exact
+  // values — it can report the model as selected yet fail the next prompt with
+  // "AI Model Not Found". applySelectedModel only sends an advertised value.
+  private advertisedModelValues: string[] | null = null;
   // Aborts a pending blocking cursor/ask_question await so cancel()/cleanup can
   // answer the still-open RPC instead of leaving the agent stuck on it.
   private askQuestionAbortController: AbortController | null = null;
@@ -127,6 +136,7 @@ export class CursorChatRuntime implements ChatRuntime {
       this.sessionInvalidated = false;
       this.sessionBootstrapNeeded = false;
       this.currentSessionModelId = null;
+      this.advertisedModelValues = null;
       // The next session has no mode/model applied yet; clearing the caches
       // forces applyMode/applySelectedModel to re-issue set_mode/set_config for
       // it. Without the mode reset, a plan-mode UI can early-return against a
@@ -282,6 +292,7 @@ export class CursorChatRuntime implements ChatRuntime {
     this.sessionBootstrapNeeded = false;
     this.currentModeId = null;
     this.currentSessionModelId = null;
+    this.advertisedModelValues = null;
   }
 
   getSessionId(): string | null {
@@ -431,6 +442,7 @@ export class CursorChatRuntime implements ChatRuntime {
         });
         this.loadedSessionId = response.sessionId;
         this.sessionId = response.sessionId;
+        this.captureAdvertisedModelValues(response);
         return response.sessionId;
       } catch (error) {
         // Load-bearing no-spike fallback: an id-mapping mismatch degrades to a
@@ -451,24 +463,11 @@ export class CursorChatRuntime implements ChatRuntime {
       return null;
     }
     try {
-      const response = await this.connection.newSession({ cwd, mcpServers: [] });
-      this.loadedSessionId = response.sessionId;
-      this.sessionId = response.sessionId;
-      // A fresh session starts on the agent's default model and mode, so drop any
-      // tracked selection to force applyMode/applySelectedModel to reapply for
-      // this turn.
-      this.currentModeId = null;
-      this.currentSessionModelId = null;
-      return response.sessionId;
+      return this.adoptFreshSession(await this.connection.newSession({ cwd, mcpServers: [] }));
     } catch (error) {
       if (await this.tryAuthenticate()) {
         try {
-          const response = await this.connection.newSession({ cwd, mcpServers: [] });
-          this.loadedSessionId = response.sessionId;
-          this.sessionId = response.sessionId;
-          this.currentModeId = null;
-          this.currentSessionModelId = null;
-          return response.sessionId;
+          return this.adoptFreshSession(await this.connection.newSession({ cwd, mcpServers: [] }));
         } catch (retryError) {
           this.lastStartupErrorMessage = this.formatRuntimeError(retryError);
           return null;
@@ -477,6 +476,18 @@ export class CursorChatRuntime implements ChatRuntime {
       this.lastStartupErrorMessage = CURSOR_LOGIN_MESSAGE + '\n\n' + this.formatRuntimeError(error);
       return null;
     }
+  }
+
+  // Adopts a freshly minted session: a new session starts on the agent's default
+  // model and mode, so drop the tracked selections to force applyMode/
+  // applySelectedModel to reapply, and record its advertised model wire ids.
+  private adoptFreshSession(response: AcpNewSessionResponse): string {
+    this.loadedSessionId = response.sessionId;
+    this.sessionId = response.sessionId;
+    this.currentModeId = null;
+    this.currentSessionModelId = null;
+    this.captureAdvertisedModelValues(response);
+    return response.sessionId;
   }
 
   private async tryAuthenticate(): Promise<boolean> {
@@ -505,6 +516,42 @@ export class CursorChatRuntime implements ChatRuntime {
     }
   }
 
+  // Records the session's advertised model wire ids from a session/new or
+  // session/load response so applySelectedModel can send an exact-matching value
+  // (Cursor ACP rejects bare CLI ids). Config-driven `configOptions` win over the
+  // legacy `models` state, mirroring extractAcpSessionModelState's precedence.
+  private captureAdvertisedModelValues(
+    response: AcpNewSessionResponse | AcpLoadSessionResponse,
+  ): void {
+    const state = extractAcpSessionModelState({
+      configOptions: response.configOptions,
+      models: response.models,
+    });
+    this.advertisedModelValues = state.availableModels.map((model) => model.id);
+  }
+
+  // Resolves the CLI-picked id to an advertised wire id: an exact value match, or
+  // the advertised value whose family prefix (everything before `[`) matches the
+  // CLI-resolved family. Returns null when nothing is advertised or no family
+  // lines up — the caller then skips the update rather than sending a bare id
+  // that Cursor would accept-then-reject on the next prompt.
+  private matchAdvertisedModelValue(resolvedId: string): string | null {
+    const advertised = this.advertisedModelValues;
+    if (!advertised || advertised.length === 0) {
+      return null;
+    }
+    if (advertised.includes(resolvedId)) {
+      return resolvedId;
+    }
+    const resolvedFamily = resolveCursorFamilyId(resolvedId, getCachedCursorModelIds());
+    for (const value of advertised) {
+      if (value.split('[', 1)[0] === resolvedFamily) {
+        return value;
+      }
+    }
+    return null;
+  }
+
   private async applySelectedModel(
     sessionId: string,
     queryOptions?: ChatRuntimeQueryOptions,
@@ -512,8 +559,20 @@ export class CursorChatRuntime implements ChatRuntime {
     if (!this.connection) {
       return;
     }
-    const model = this.resolveCursorModelForSession(queryOptions);
-    if (!model || model === this.currentSessionModelId) {
+    const resolved = this.resolveCursorModelForSession(queryOptions);
+    if (!resolved) {
+      return;
+    }
+    const wireValue = this.matchAdvertisedModelValue(resolved);
+    if (!wireValue) {
+      // No advertised value matches: sending the bare id here would let Cursor
+      // report it selected yet break the next prompt ("AI Model Not Found"), so
+      // stay on the session's current model instead.
+      this.plugin.logger.scope('cursor.acp')
+        .warn('no advertised model value matches selection; skipping setConfigOption', resolved);
+      return;
+    }
+    if (wireValue === this.currentSessionModelId) {
       return;
     }
     try {
@@ -521,9 +580,9 @@ export class CursorChatRuntime implements ChatRuntime {
         configId: 'model',
         sessionId,
         type: 'select',
-        value: model,
+        value: wireValue,
       });
-      this.currentSessionModelId = model;
+      this.currentSessionModelId = wireValue;
     } catch (error) {
       // Best-effort: whether Cursor's ACP dialect implements
       // session/set_config_option is doc-unknown, so a rejection just leaves the
@@ -730,6 +789,7 @@ export class CursorChatRuntime implements ChatRuntime {
     this.loadedSessionId = null;
     this.currentModeId = null;
     this.currentSessionModelId = null;
+    this.advertisedModelValues = null;
   }
 }
 

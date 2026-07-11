@@ -1,8 +1,11 @@
-import { TOOL_BASH, TOOL_EDIT, TOOL_READ, TOOL_WRITE } from '@/core/tools/toolNames';
+import { TOOL_BASH, TOOL_EDIT, TOOL_READ, TOOL_WEB_FETCH, TOOL_WRITE } from '@/core/tools/toolNames';
 import {
   createCursorAcpToolStreamAdapter,
   CURSOR_ACP_CANONICAL_TOOL_NAMES,
   normalizeCursorAcpToolInput,
+  normalizeCursorAcpToolName,
+  normalizeCursorAcpToolUseResult,
+  resolveCursorAcpRawToolName,
 } from '@/providers/cursor/runtime/cursorAcpToolNames';
 
 describe('cursorAcpToolNames', () => {
@@ -143,5 +146,65 @@ describe('cursorAcpToolNames', () => {
 
   it('registers TOOL_EDIT for the edit tool (sanity check, unrelated to input canonicalization)', () => {
     expect(CURSOR_ACP_CANONICAL_TOOL_NAMES.has(TOOL_EDIT)).toBe(true);
+  });
+
+  describe('resolveCursorAcpRawToolName', () => {
+    it('prefers a known title over the current raw name', () => {
+      expect(resolveCursorAcpRawToolName('bash', { title: 'read', kind: null })).toBe('read');
+    });
+
+    it('keeps the current raw name when the title is unknown prose', () => {
+      expect(resolveCursorAcpRawToolName('grep', { title: 'Searching files', kind: null })).toBe('grep');
+    });
+
+    it('resolves a fetch kind to webfetch when title and current name are absent', () => {
+      expect(resolveCursorAcpRawToolName(undefined, { title: null, kind: 'fetch' })).toBe('webfetch');
+    });
+
+    it('resolves a read kind to read when title and current name are absent', () => {
+      expect(resolveCursorAcpRawToolName(undefined, { title: null, kind: 'read' })).toBe('read');
+    });
+
+    it('falls back to the prose title for an unrecognised kind', () => {
+      expect(resolveCursorAcpRawToolName(undefined, { title: 'Mystery', kind: 'think' })).toBe('Mystery');
+    });
+
+    it('falls back to the literal tool sentinel with neither title, name, nor known kind', () => {
+      expect(resolveCursorAcpRawToolName(undefined, { title: null, kind: null })).toBe('tool');
+    });
+  });
+
+  describe('normalizeCursorAcpToolName', () => {
+    it('maps a known raw name to its canonical id', () => {
+      expect(normalizeCursorAcpToolName('webfetch')).toBe(TOOL_WEB_FETCH);
+    });
+
+    it('passes an unknown raw name through trimmed', () => {
+      expect(normalizeCursorAcpToolName('  mystery  ')).toBe('mystery');
+    });
+
+    it('falls back to the tool sentinel for an empty raw name', () => {
+      expect(normalizeCursorAcpToolName(undefined)).toBe('tool');
+    });
+  });
+
+  describe('normalizeCursorAcpToolUseResult edge cases', () => {
+    it('returns undefined for a non-file tool', () => {
+      expect(normalizeCursorAcpToolUseResult('bash', {}, undefined, null)).toBeUndefined();
+    });
+
+    it('returns undefined for an edit tool carrying no diff content', () => {
+      expect(normalizeCursorAcpToolUseResult('edit', {}, undefined, undefined)).toBeUndefined();
+    });
+
+    it('falls back to the input file path when the diff block omits its path', () => {
+      const result = normalizeCursorAcpToolUseResult(
+        'write',
+        { file_path: 'notes/from-input.md' },
+        undefined,
+        [{ type: 'diff', path: '', oldText: '', newText: 'x' }],
+      );
+      expect(result?.filePath).toBe('notes/from-input.md');
+    });
   });
 });

@@ -48,6 +48,27 @@ describe('buildActiveTurnEffect — message_chunk', () => {
     );
     expect(effect.sawAssistantContent).toBe(false);
   });
+
+  it('does not flag assistant content for a boundary-only chunk (start, no text)', () => {
+    const boundaryOnly = [{ type: 'assistant_message_start', itemId: 'a1' }] as never;
+    const effect = buildActiveTurnEffect(
+      { type: 'message_chunk', role: 'assistant', messageId: 'a1', content, streamChunks: boundaryOnly },
+      makeContext(),
+    );
+    // The boundary chunk is not real content, so the post-plan gate must stay closed.
+    expect(effect.sawAssistantContent).toBe(false);
+    // ...but the boundary chunk still forwards as a stream chunk.
+    expect(effect.chunks).toEqual(boundaryOnly);
+  });
+
+  it('flags assistant content for a thinking chunk', () => {
+    const thinking = [{ type: 'thinking', content: 'reasoning' }] as never;
+    const effect = buildActiveTurnEffect(
+      { type: 'message_chunk', role: 'assistant', messageId: 'a1', content, streamChunks: thinking },
+      makeContext(),
+    );
+    expect(effect.sawAssistantContent).toBe(true);
+  });
 });
 
 describe('buildActiveTurnEffect — tool calls', () => {

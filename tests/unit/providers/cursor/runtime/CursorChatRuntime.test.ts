@@ -403,6 +403,510 @@ describe('CursorChatRuntime terminal-push dedup', () => {
   });
 });
 
+describe('CursorChatRuntime.applySelectedModel (advertised wire ids)', () => {
+  afterEach(() => jest.restoreAllMocks());
+
+  function primeModel(
+    runtime: CursorChatRuntime,
+    setConfigOption: jest.Mock,
+    resolved: string | undefined,
+    advertised: string[] | null,
+  ): Record<string, unknown> {
+    const bag = primeRuntime(runtime, { setConfigOption });
+    bag.advertisedModelValues = advertised;
+    jest.spyOn(runtime as unknown as { resolveCursorModelForSession: () => string | undefined }, 'resolveCursorModelForSession')
+      .mockReturnValue(resolved);
+    return bag;
+  }
+
+  async function applyModel(bag: Record<string, unknown>, runtime: CursorChatRuntime): Promise<void> {
+    await (bag.applySelectedModel as (s: string, q?: unknown) => Promise<void>).call(runtime, 'S1', undefined);
+  }
+
+  it('sends the advertised wire id when the resolved family prefix matches', async () => {
+    const runtime = makeRuntime();
+    const setConfigOption = jest.fn().mockResolvedValue({ configOptions: [] });
+    const bag = primeModel(runtime, setConfigOption, 'gpt-5.4-medium', [
+      'gpt-5.4[reasoning=medium]',
+      'gpt-5.4[reasoning=high]',
+    ]);
+
+    await applyModel(bag, runtime);
+
+    expect(setConfigOption).toHaveBeenCalledWith({
+      configId: 'model',
+      sessionId: 'S1',
+      type: 'select',
+      value: 'gpt-5.4[reasoning=medium]',
+    });
+    expect(bag.currentSessionModelId).toBe('gpt-5.4[reasoning=medium]');
+  });
+
+  it('sends an exact advertised value untouched', async () => {
+    const runtime = makeRuntime();
+    const setConfigOption = jest.fn().mockResolvedValue({ configOptions: [] });
+    const bag = primeModel(runtime, setConfigOption, 'auto', ['auto', 'gpt-5.4[reasoning=medium]']);
+
+    await applyModel(bag, runtime);
+
+    expect(setConfigOption.mock.calls[0][0].value).toBe('auto');
+  });
+
+  it('skips setConfigOption entirely when no advertised value matches the family', async () => {
+    const runtime = makeRuntime();
+    const setConfigOption = jest.fn().mockResolvedValue({ configOptions: [] });
+    const bag = primeModel(runtime, setConfigOption, 'gpt-5.4-medium', ['claude-4.6-opus[thinking]']);
+
+    await applyModel(bag, runtime);
+
+    expect(setConfigOption).not.toHaveBeenCalled();
+    expect(bag.currentSessionModelId).toBeNull();
+  });
+
+  it('skips setConfigOption when the session advertised no models at all', async () => {
+    const runtime = makeRuntime();
+    const setConfigOption = jest.fn().mockResolvedValue({ configOptions: [] });
+    const bag = primeModel(runtime, setConfigOption, 'gpt-5.4-medium', null);
+
+    await applyModel(bag, runtime);
+
+    expect(setConfigOption).not.toHaveBeenCalled();
+  });
+
+  it('returns early without a warn when nothing resolves', async () => {
+    const runtime = makeRuntime();
+    const setConfigOption = jest.fn().mockResolvedValue({ configOptions: [] });
+    const bag = primeModel(runtime, setConfigOption, undefined, ['gpt-5.4[reasoning=medium]']);
+
+    await applyModel(bag, runtime);
+
+    expect(setConfigOption).not.toHaveBeenCalled();
+  });
+
+  it('does not re-send when the matched wire id is already the current model', async () => {
+    const runtime = makeRuntime();
+    const setConfigOption = jest.fn().mockResolvedValue({ configOptions: [] });
+    const bag = primeModel(runtime, setConfigOption, 'gpt-5.4-medium', ['gpt-5.4[reasoning=medium]']);
+    bag.currentSessionModelId = 'gpt-5.4[reasoning=medium]';
+
+    await applyModel(bag, runtime);
+
+    expect(setConfigOption).not.toHaveBeenCalled();
+  });
+
+  it('swallows a setConfigOption rejection without advancing the cache', async () => {
+    const runtime = makeRuntime();
+    const setConfigOption = jest.fn().mockRejectedValue(new Error('unsupported'));
+    const bag = primeModel(runtime, setConfigOption, 'gpt-5.4-medium', ['gpt-5.4[reasoning=medium]']);
+
+    await applyModel(bag, runtime);
+
+    expect(setConfigOption).toHaveBeenCalled();
+    expect(bag.currentSessionModelId).toBeNull();
+  });
+});
+
+describe('CursorChatRuntime.captureAdvertisedModelValues', () => {
+  it('captures wire ids from a session response config option', () => {
+    const runtime = makeRuntime() as unknown as Record<string, unknown>;
+    (runtime.captureAdvertisedModelValues as (r: unknown) => void).call(runtime, {
+      sessionId: 'S1',
+      configOptions: [{
+        id: 'model',
+        name: 'Model',
+        type: 'select',
+        category: 'model',
+        currentValue: 'gpt-5.4[reasoning=medium]',
+        options: [
+          { name: 'GPT-5.4 Medium', value: 'gpt-5.4[reasoning=medium]' },
+          { name: 'GPT-5.4 High', value: 'gpt-5.4[reasoning=high]' },
+        ],
+      }],
+    });
+    expect(runtime.advertisedModelValues).toEqual([
+      'gpt-5.4[reasoning=medium]',
+      'gpt-5.4[reasoning=high]',
+    ]);
+  });
+
+  it('falls back to the legacy models state when no config option is advertised', () => {
+    const runtime = makeRuntime() as unknown as Record<string, unknown>;
+    (runtime.captureAdvertisedModelValues as (r: unknown) => void).call(runtime, {
+      sessionId: 'S1',
+      models: { availableModels: [{ id: 'auto', name: 'Auto' }], currentModelId: 'auto' },
+    });
+    expect(runtime.advertisedModelValues).toEqual(['auto']);
+  });
+
+  it('is populated by a fresh createSession and cleared by resetSession', async () => {
+    const runtime = makeRuntime();
+    const newSession = jest.fn().mockResolvedValue({
+      sessionId: 'S3',
+      models: { availableModels: [{ id: 'auto', name: 'Auto' }], currentModelId: 'auto' },
+    });
+    const bag = primeRuntime(runtime, { newSession });
+
+    await (bag.createSession as (c: string) => Promise<string | null>).call(runtime, '/cwd');
+    expect(bag.advertisedModelValues).toEqual(['auto']);
+
+    runtime.resetSession();
+    expect(bag.advertisedModelValues).toBeNull();
+  });
+
+  it('is populated by a successful session/load', async () => {
+    const runtime = makeRuntime();
+    const loadSession = jest.fn().mockResolvedValue({
+      sessionId: 'S1',
+      models: { availableModels: [{ id: 'gpt-5.4[reasoning=high]', name: 'High' }], currentModelId: 'gpt-5.4[reasoning=high]' },
+    });
+    const bag = primeRuntime(runtime, { loadSession });
+    bag.sessionId = 'S1';
+    bag.loadedSessionId = null;
+
+    await (bag.ensureSession as (c: string) => Promise<string | null>).call(runtime, '/cwd');
+
+    expect(bag.advertisedModelValues).toEqual(['gpt-5.4[reasoning=high]']);
+  });
+});
+
+describe('CursorChatRuntime.handleSessionNotification plan-content gate', () => {
+  beforeEach(stubProviderSnapshot);
+  afterEach(() => jest.restoreAllMocks());
+
+  function makeNotification(text: string) {
+    return {
+      sessionId: 'S1',
+      update: { sessionUpdate: 'agent_message_chunk', content: { type: 'text', text }, messageId: 'm1' },
+    };
+  }
+
+  async function feed(runtime: CursorChatRuntime, notification: unknown): Promise<Record<string, unknown>> {
+    const bag = runtime as unknown as Record<string, unknown>;
+    bag.activeTurn = { queue: new AcpStreamChunkQueue(), sessionId: 'S1', terminalPushed: false };
+    bag.currentTurnIsPlan = true;
+    bag.currentTurnSawAssistantContent = false;
+    await (bag.handleSessionNotification as (n: unknown) => Promise<void>).call(runtime, notification);
+    return bag;
+  }
+
+  it('does not mark a plan turn complete for a boundary-only (empty) assistant chunk', async () => {
+    const runtime = makeRuntime({ settings: { permissionMode: 'plan' } });
+    const bag = await feed(runtime, makeNotification(''));
+
+    (bag.finalizePlanTurnMetadata as () => void).call(runtime);
+
+    expect(bag.currentTurnSawAssistantContent).toBe(false);
+    expect((bag.turnMetadata as { planCompleted?: boolean }).planCompleted).toBeUndefined();
+  });
+
+  it('marks a plan turn complete once the assistant chunk carries real text', async () => {
+    const runtime = makeRuntime({ settings: { permissionMode: 'plan' } });
+    const bag = await feed(runtime, makeNotification('Here is the plan'));
+
+    (bag.finalizePlanTurnMetadata as () => void).call(runtime);
+
+    expect(bag.currentTurnSawAssistantContent).toBe(true);
+    expect((bag.turnMetadata as { planCompleted?: boolean }).planCompleted).toBe(true);
+  });
+
+  it('ignores notifications for a session other than the active turn', async () => {
+    const runtime = makeRuntime();
+    const bag = runtime as unknown as Record<string, unknown>;
+    const queue = new AcpStreamChunkQueue();
+    bag.activeTurn = { queue, sessionId: 'S1', terminalPushed: false };
+    bag.currentTurnIsPlan = true;
+
+    await (bag.handleSessionNotification as (n: unknown) => Promise<void>).call(runtime, {
+      sessionId: 'OTHER',
+      update: { sessionUpdate: 'agent_message_chunk', content: { type: 'text', text: 'x' }, messageId: 'm1' },
+    });
+
+    expect(bag.currentTurnSawAssistantContent).toBe(false);
+  });
+
+  it('drops normalized updates that are not stream-forwardable (e.g. current_mode)', async () => {
+    const runtime = makeRuntime();
+    const bag = runtime as unknown as Record<string, unknown>;
+    bag.activeTurn = { queue: new AcpStreamChunkQueue(), sessionId: 'S1', terminalPushed: false };
+
+    await (bag.handleSessionNotification as (n: unknown) => Promise<void>).call(runtime, {
+      sessionId: 'S1',
+      update: { sessionUpdate: 'current_mode_update', currentModeId: 'plan' },
+    });
+
+    // Nothing forwarded and no assistant content recorded.
+    expect(bag.currentTurnSawAssistantContent).toBe(false);
+  });
+
+  it('records the context window carried by a usage_update', async () => {
+    const runtime = makeRuntime();
+    const bag = runtime as unknown as Record<string, unknown>;
+    bag.activeTurn = { queue: new AcpStreamChunkQueue(), sessionId: 'S1', terminalPushed: false };
+
+    await (bag.handleSessionNotification as (n: unknown) => Promise<void>).call(runtime, {
+      sessionId: 'S1',
+      update: { sessionUpdate: 'usage_update', size: 222_000, used: 4_096 },
+    });
+
+    expect(bag.contextUsage).toMatchObject({ size: 222_000, used: 4_096 });
+  });
+});
+
+describe('CursorChatRuntime lifecycle + accessor methods', () => {
+  afterEach(() => jest.restoreAllMocks());
+
+  it('encodes a turn through the sectioned prompt encoder', () => {
+    const prepared = makeRuntime().prepareTurn({ text: 'hello', images: [] } as never);
+    expect(prepared.prompt).toContain('hello');
+  });
+
+  it('consumes and clears turn metadata', () => {
+    const runtime = makeRuntime();
+    const bag = runtime as unknown as Record<string, unknown>;
+    bag.turnMetadata = { planCompleted: true };
+    expect(runtime.consumeTurnMetadata()).toEqual({ planCompleted: true });
+    expect(runtime.consumeTurnMetadata()).toEqual({});
+  });
+
+  it('notifies then detaches ready-state listeners', () => {
+    const runtime = makeRuntime();
+    const bag = runtime as unknown as Record<string, unknown>;
+    const seen: boolean[] = [];
+    const off = runtime.onReadyStateChange((ready) => seen.push(ready));
+
+    (bag.setReady as (r: boolean) => void).call(runtime, true);
+    off();
+    (bag.setReady as (r: boolean) => void).call(runtime, false);
+
+    expect(seen).toEqual([true]);
+  });
+
+  it('does not re-notify ready listeners when the value is unchanged', () => {
+    const runtime = makeRuntime();
+    const bag = runtime as unknown as Record<string, unknown>;
+    const seen: boolean[] = [];
+    runtime.onReadyStateChange((ready) => seen.push(ready));
+
+    (bag.setReady as (r: boolean) => void).call(runtime, false);
+    expect(seen).toEqual([]);
+  });
+
+  it('setResumeCheckpoint and reloadMcpServers are inert no-ops', async () => {
+    const runtime = makeRuntime();
+    expect(() => runtime.setResumeCheckpoint('cp')).not.toThrow();
+    await expect(runtime.reloadMcpServers()).resolves.toBeUndefined();
+    await expect(runtime.getSupportedCommands()).resolves.toEqual([]);
+    expect(runtime.resolveSessionIdForFork(null)).toBeNull();
+  });
+
+  it('adopts a conversation session id and clears caches on a session switch', () => {
+    const runtime = makeRuntime();
+    const bag = runtime as unknown as Record<string, unknown>;
+    bag.currentModeId = 'plan';
+    bag.currentSessionModelId = 'gpt-5.4[reasoning=medium]';
+    bag.advertisedModelValues = ['gpt-5.4[reasoning=medium]'];
+
+    runtime.syncConversationState({ sessionId: 'NEW', providerState: { chatSessionId: 'NEW' } } as never);
+
+    expect(runtime.getSessionId()).toBe('NEW');
+    expect(bag.currentModeId).toBeNull();
+    expect(bag.currentSessionModelId).toBeNull();
+    expect(bag.advertisedModelValues).toBeNull();
+  });
+
+  it('keeps caches when syncConversationState resolves the same session id', () => {
+    const runtime = makeRuntime();
+    const bag = runtime as unknown as Record<string, unknown>;
+    bag.sessionId = 'SAME';
+    bag.currentModeId = 'plan';
+
+    runtime.syncConversationState({ sessionId: 'SAME', providerState: undefined } as never);
+
+    expect(bag.currentModeId).toBe('plan');
+  });
+
+  it('cancel() cancels the connection, aborts ask, and dismisses approval', () => {
+    const dismissApproval = jest.fn();
+    const host = { ...createHeadlessRuntimeHost(), dismissApproval };
+    const runtime = makeRuntime({}, host);
+    const cancel = jest.fn();
+    const bag = primeRuntime(runtime, { cancel });
+    bag.sessionId = 'S1';
+
+    runtime.cancel();
+
+    expect(cancel).toHaveBeenCalledWith({ sessionId: 'S1' });
+    expect(dismissApproval).toHaveBeenCalled();
+  });
+
+  it('resetSession clears every session-scoped field', () => {
+    const runtime = makeRuntime();
+    const bag = runtime as unknown as Record<string, unknown>;
+    Object.assign(bag, {
+      sessionId: 'S1',
+      loadedSessionId: 'S1',
+      sessionInvalidated: true,
+      sessionBootstrapNeeded: true,
+      currentModeId: 'plan',
+      currentSessionModelId: 'm',
+      advertisedModelValues: ['m'],
+    });
+
+    runtime.resetSession();
+
+    expect(runtime.getSessionId()).toBeNull();
+    expect(bag.loadedSessionId).toBeNull();
+    expect(bag.advertisedModelValues).toBeNull();
+  });
+
+  it('consumeSessionInvalidation reports then clears the flag', () => {
+    const runtime = makeRuntime();
+    const bag = runtime as unknown as Record<string, unknown>;
+    bag.sessionInvalidated = true;
+    expect(runtime.consumeSessionInvalidation()).toBe(true);
+    expect(runtime.consumeSessionInvalidation()).toBe(false);
+  });
+
+  it('isReady reflects the internal ready flag', () => {
+    const runtime = makeRuntime();
+    const bag = runtime as unknown as Record<string, unknown>;
+    expect(runtime.isReady()).toBe(false);
+    (bag.setReady as (r: boolean) => void).call(runtime, true);
+    expect(runtime.isReady()).toBe(true);
+  });
+
+  it('cleanup tears down the connection, transport, and process', async () => {
+    const runtime = makeRuntime();
+    const dispose = jest.fn();
+    const shutdown = jest.fn().mockResolvedValue(undefined);
+    const bag = runtime as unknown as Record<string, unknown>;
+    bag.connection = { dispose };
+    bag.transport = { dispose };
+    bag.process = { isAlive: () => true, shutdown };
+    bag.activeTurn = { queue: new AcpStreamChunkQueue(), sessionId: 'S1', terminalPushed: false };
+
+    await runtime.cleanup();
+
+    expect(dispose).toHaveBeenCalledTimes(2);
+    expect(shutdown).toHaveBeenCalledTimes(1);
+    expect(bag.connection).toBeNull();
+    expect(bag.process).toBeNull();
+  });
+});
+
+describe('CursorChatRuntime.buildSessionUpdates branches', () => {
+  it('nulls the session when invalidated with a conversation and no live session id', () => {
+    const runtime = makeRuntime();
+    const result = runtime.buildSessionUpdates({
+      conversation: { providerState: { chatSessionId: 'gone' } } as never,
+      sessionInvalidated: true,
+    });
+    expect(result.updates).toEqual({ sessionId: null, providerState: undefined });
+  });
+
+  it('merges the live session id onto the existing provider state', () => {
+    const runtime = makeRuntime();
+    const bag = runtime as unknown as Record<string, unknown>;
+    bag.sessionId = 'LIVE';
+    const result = runtime.buildSessionUpdates({
+      conversation: { providerState: { chatSessionId: 'OLD' } } as never,
+      sessionInvalidated: false,
+    });
+    expect(result.updates.sessionId).toBe('LIVE');
+    expect((result.updates.providerState as { chatSessionId: string }).chatSessionId).toBe('LIVE');
+  });
+
+  it('omits provider state entirely when there is no session id', () => {
+    const runtime = makeRuntime();
+    const result = runtime.buildSessionUpdates({ conversation: null, sessionInvalidated: false });
+    expect(result.updates.sessionId).toBeNull();
+    expect(result.updates.providerState).toBeUndefined();
+  });
+});
+
+describe('CursorChatRuntime.applyMode', () => {
+  afterEach(() => jest.restoreAllMocks());
+
+  it('short-circuits when the requested mode is already applied', async () => {
+    const runtime = makeRuntime();
+    const setMode = jest.fn();
+    const bag = primeRuntime(runtime, { setMode });
+    bag.currentModeId = 'plan';
+
+    await (bag.applyMode as (s: string, m: string) => Promise<void>).call(runtime, 'S1', 'plan');
+
+    expect(setMode).not.toHaveBeenCalled();
+  });
+
+  it('swallows a setMode rejection and leaves the mode cache unadvanced', async () => {
+    const runtime = makeRuntime();
+    const setMode = jest.fn().mockRejectedValue(new Error('rejected'));
+    const bag = primeRuntime(runtime, { setMode });
+    bag.currentModeId = null;
+
+    await (bag.applyMode as (s: string, m: string) => Promise<void>).call(runtime, 'S1', 'plan');
+
+    expect(setMode).toHaveBeenCalled();
+    expect(bag.currentModeId).toBeNull();
+  });
+});
+
+describe('CursorChatRuntime.query early exits', () => {
+  afterEach(() => jest.restoreAllMocks());
+
+  const turn = { persistedContent: 'hi', prompt: 'ask', request: { images: [] } };
+
+  async function collect(gen: AsyncGenerator<unknown>): Promise<Array<{ type: string; content?: string }>> {
+    const out: Array<{ type: string; content?: string }> = [];
+    for await (const chunk of gen) {
+      out.push(chunk as { type: string; content?: string });
+    }
+    return out;
+  }
+
+  it('errors out when no CLI path resolves', async () => {
+    const runtime = makeRuntime({ getResolvedProviderCliPath: () => null });
+    const chunks = await collect(runtime.query(turn as never));
+    expect(chunks.some((c) => c.type === 'error' && /not found/i.test(c.content ?? ''))).toBe(true);
+    expect(chunks.some((c) => c.type === 'done')).toBe(true);
+  });
+
+  it('surfaces the recorded startup error when ensureReady fails', async () => {
+    const runtime = makeRuntime();
+    const bag = runtime as unknown as Record<string, unknown>;
+    bag.staleMcpCleaned = true;
+    bag.lastStartupErrorMessage = 'CLI too old';
+    jest.spyOn(runtime, 'ensureReady').mockResolvedValue(false);
+
+    const chunks = await collect(runtime.query(turn as never));
+
+    expect(chunks.some((c) => c.type === 'error' && c.content === 'CLI too old')).toBe(true);
+  });
+
+  it('errors when the session cannot be opened', async () => {
+    const runtime = makeRuntime();
+    const bag = primeRuntime(runtime, {});
+    bag.staleMcpCleaned = true;
+    jest.spyOn(runtime, 'ensureReady').mockResolvedValue(true);
+    jest.spyOn(runtime as unknown as { ensureSession: () => Promise<string | null> }, 'ensureSession')
+      .mockResolvedValue(null);
+
+    const chunks = await collect(runtime.query(turn as never));
+
+    expect(chunks.some((c) => c.type === 'error' && /open a Cursor session/i.test(c.content ?? ''))).toBe(true);
+  });
+});
+
+describe('CursorChatRuntime.describeStartupFailure', () => {
+  it('appends the captured stderr snapshot to the update-CLI guidance', () => {
+    const runtime = makeRuntime() as unknown as Record<string, unknown>;
+    runtime.process = { getStderrSnapshot: () => 'acp: unknown subcommand' };
+    const msg = (runtime.describeStartupFailure as (e: unknown) => string).call(runtime, new Error('x'));
+    expect(msg).toContain('unknown subcommand');
+    expect(msg).toMatch(/cursor-agent/);
+  });
+});
+
 describe('CursorChatRuntime mode cache across session switch', () => {
   beforeEach(stubProviderSnapshot);
   afterEach(() => jest.restoreAllMocks());

@@ -46,7 +46,12 @@ function buildMessageChunkEffect(
   return {
     chunks: [...update.streamChunks],
     metadataPatch,
-    sawAssistantContent: update.role === 'assistant' && update.streamChunks.length > 0,
+    // Only real content counts: an empty assistant message_chunk still carries
+    // the `assistant_message_start` boundary chunk, so gating on chunk *presence*
+    // would let a content-free plan turn open the post-plan approval card. Count
+    // only text/thinking chunks so the "produced assistant content" gate is true.
+    sawAssistantContent: update.role === 'assistant'
+      && update.streamChunks.some((chunk) => chunk.type === 'text' || chunk.type === 'thinking'),
   };
 }
 
