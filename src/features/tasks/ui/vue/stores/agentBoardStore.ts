@@ -9,7 +9,8 @@ import type { ResolvedBoardLayout } from '../../../config/boardConfigTypes';
 import { boardWorkOrderFolder } from '../../../config/boardWorkOrderFolder';
 import { resolveBoardLayout } from '../../../config/resolveBoardLayout';
 import { TaskIndexer } from '../../../indexing/TaskIndexer';
-import type { InvalidTaskNote, TaskSpec } from '../../../model/taskTypes';
+import { isRunnableTaskStatus } from '../../../model/taskStateMachine';
+import type { InvalidTaskNote, TaskSpec, TaskStatus } from '../../../model/taskTypes';
 import { TaskNoteStore } from '../../../storage/TaskNoteStore';
 import type { AgentBoardPauseState } from '../../cardActions';
 import { LIVE_STATUSES } from '../statusDot';
@@ -198,7 +199,7 @@ export const useAgentBoardStore = defineStore('agent-board', () => {
         }));
         layout.value = { lanes: merged, errors: next.errors };
         invalidNotes.value = notes;
-        reconcileLiveOverlays(merged);
+        reconcileOverlays(merged);
         error.value = null;
       },
       (e) => { error.value = e instanceof Error ? e.message : String(e); },
@@ -209,34 +210,44 @@ export const useAgentBoardStore = defineStore('agent-board', () => {
     return layout.value.lanes.find((l) => l.id === laneId)?.tasks ?? [];
   }
 
-  // Prune the live-heartbeat/ledger overlays against the just-loaded statuses.
-  // The store is module-global (see globalPinia) and survives all board panes
-  // closing, but useBoardEventRouting unsubscribes on unmount — so a terminal
-  // event (task:run-finished / task:status-changed off a live state) that would
-  // call evictLive is MISSED while the board is closed. Without this, reopening
-  // leaves a stale heartbeat/ledger line keyed to the now-terminal task, which a
-  // retry before the first new heartbeat would paint on LiveStrip. Reconciling on
-  // every load recovers from any missed terminal event, not just the closed-board
-  // case, and — unlike clearing on unmount — preserves a genuinely-live overlay
-  // across a brief remount (the task is still live in the reloaded layout).
-  function reconcileLiveOverlays(lanes: ResolvedBoardLayout['lanes']): void {
-    const liveIds = new Set<string>();
+  // Prune the event-sourced overlays against the just-loaded statuses. The store
+  // is module-global (see globalPinia) and survives all board panes closing, but
+  // useBoardEventRouting unsubscribes on unmount — so an event that would clear an
+  // overlay (a terminal status-changed, an attempt-started) is MISSED while the
+  // board is closed, and a note-edit-driven reload fires no such event at all.
+  // Reconciling on every load recovers from either gap, keyed by the overlay's own
+  // validity rule:
+  //  - live heartbeat/ledger: valid only while the card is LIVE (running / needs
+  //    input / needs approval) — else a retry before the first new heartbeat would
+  //    paint the previous run's stale strip;
+  //  - skip chip: valid only while the card is RUNNABLE (ready / needs_fix) — the
+  //    only statuses the runner would try to launch and thus skip; a note edit that
+  //    moves the card off that status (or deletes it) leaves an orphan chip.
+  // Unlike clearing on unmount, this preserves an overlay that is still valid in
+  // the reloaded layout (e.g. a genuinely-live card across a brief remount).
+  function reconcileOverlays(lanes: ResolvedBoardLayout['lanes']): void {
+    const statusById = new Map<string, TaskStatus>();
     for (const lane of lanes) {
-      for (const task of lane.tasks) {
-        if (LIVE_STATUSES.has(task.frontmatter.status)) liveIds.add(task.frontmatter.id);
-      }
+      for (const task of lane.tasks) statusById.set(task.frontmatter.id, task.frontmatter.status);
     }
-    liveHeartbeats.value = pruneToLive(liveHeartbeats.value, liveIds) ?? liveHeartbeats.value;
-    liveLedger.value = pruneToLive(liveLedger.value, liveIds) ?? liveLedger.value;
+    liveHeartbeats.value = pruneOverlay(liveHeartbeats.value, statusById, (s) => LIVE_STATUSES.has(s)) ?? liveHeartbeats.value;
+    liveLedger.value = pruneOverlay(liveLedger.value, statusById, (s) => LIVE_STATUSES.has(s)) ?? liveLedger.value;
+    skipReasons.value = pruneOverlay(skipReasons.value, statusById, isRunnableTaskStatus) ?? skipReasons.value;
   }
 
-  // Returns a new Map with every non-live key dropped, or null when nothing was
-  // pruned — so load() only churns the shallowRef reference (and re-renders the
-  // bounded set of live strips) when a stale entry actually existed.
-  function pruneToLive(map: Map<string, string>, liveIds: Set<string>): Map<string, string> | null {
-    let pruned: Map<string, string> | null = null;
+  // Returns a new Map with every entry whose loaded status fails `keep` (or whose
+  // task is gone from the layout) dropped, or null when nothing was pruned — so
+  // load() only churns the shallowRef reference (and re-renders the bounded set of
+  // affected cards) when a stale entry actually existed.
+  function pruneOverlay<V>(
+    map: Map<string, V>,
+    statusById: Map<string, TaskStatus>,
+    keep: (status: TaskStatus) => boolean,
+  ): Map<string, V> | null {
+    let pruned: Map<string, V> | null = null;
     for (const id of map.keys()) {
-      if (liveIds.has(id)) continue;
+      const status = statusById.get(id);
+      if (status !== undefined && keep(status)) continue;
       pruned ??= new Map(map);
       pruned.delete(id);
     }

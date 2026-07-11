@@ -267,6 +267,49 @@ describe('useAgentBoardStore', () => {
     expect(store.liveHeartbeats).toBe(hbBefore); // nothing pruned → same reference, no re-render
   });
 
+  it('load() evicts a stale skip chip once the card leaves a runnable status (missed clear while board closed / note-edit reload)', async () => {
+    // A ready card is queue-skipped (chip shows), then the note is edited off the
+    // runnable status through a path that fires no task:status-changed (manual
+    // edit, or a change while no pane is mounted). The next reload must drop the
+    // now-orphaned chip — the runner only skips ready/needs_fix cards.
+    const ready = makeLane('ready', [makeTask('t1', 'ready')]);
+    const done = makeLane('done', [makeTask('t1', 'done')]);
+    const { store } = initStore([
+      { lanes: [ready], errors: [] },
+      { lanes: [done], errors: [] },
+    ]);
+
+    await store.load();
+    store.setSkip('t1', 'no free slot');
+    const skipBefore = store.skipReasons;
+
+    await store.load(); // reload: t1 is now terminal
+
+    expect(store.skipReasons.has('t1')).toBe(false);
+    expect(store.skipReasons).not.toBe(skipBefore); // pruned → new reference
+  });
+
+  it('load() keeps a skip chip while the card is still runnable (the skip event also drives a reload)', async () => {
+    // Parity guard: task:queue-skipped is in FULL_REFRESH_EVENTS, so setSkip is
+    // immediately followed by a load() with the card STILL ready — the reconcile
+    // must not wipe the just-set chip.
+    const ready = makeLane('ready', [makeTask('t1', 'ready')]);
+    const needsFix = makeLane('needs_fix', [makeTask('t1', 'needs_fix')]);
+    const { store } = initStore([
+      { lanes: [ready], errors: [] },
+      { lanes: [needsFix], errors: [] },
+    ]);
+
+    await store.load();
+    store.setSkip('t1', 'no free slot');
+    const skipBefore = store.skipReasons;
+
+    await store.load(); // reload: t1 still runnable (needs_fix)
+
+    expect(store.skipReasons.get('t1')).toBe('no free slot');
+    expect(store.skipReasons).toBe(skipBefore); // nothing pruned → same reference
+  });
+
   it('load() captures a fetch rejection into store.error, resolves (never throws), and leaves layout unchanged', async () => {
     const store = useAgentBoardStore();
     const deps: BoardLoaderDeps = {
