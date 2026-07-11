@@ -252,6 +252,15 @@ export const useAgentBoardStore = defineStore('agent-board', () => {
     }
     liveHeartbeats.value = pruneOverlay(liveHeartbeats.value, metaById, (m) => LIVE_STATUSES.has(m.status)) ?? liveHeartbeats.value;
     liveLedger.value = pruneOverlay(liveLedger.value, metaById, (m) => LIVE_STATUSES.has(m.status)) ?? liveLedger.value;
+    // Skip chip is the one overlay with an authoritative NON-event source: the
+    // runner's shared `queueControl.lastSkipReasonByTask`. Seed from it BEFORE the
+    // prune so a skip recorded before this board mounted stays visible — on a same-
+    // session reopen with auto-run active, AgentBoardView.refresh() runs
+    // syncRunner()/tick() (which can recordSkip + emit task:queue-skipped) BEFORE
+    // AgentBoardRoot mounts and subscribes, and QueueRunner debounces same-reason
+    // re-skips so no later event would repaint the chip. The prune then drops any
+    // seeded entry whose card is no longer runnable.
+    skipReasons.value = seedSkipsFromRunner() ?? skipReasons.value;
     skipReasons.value = pruneOverlay(skipReasons.value, metaById, (m) => isRunnableTaskStatus(m.status)) ?? skipReasons.value;
     pauseState.value = pruneOverlay(pauseState.value, metaById, (m, entry) => {
       if (m.status !== 'needs_input' && m.status !== 'needs_approval') return false;
@@ -259,6 +268,23 @@ export const useAgentBoardStore = defineStore('agent-board', () => {
       // is absent so a fresh overlay whose note run_id hasn't landed yet survives.
       return !(entry.runId && m.runId && entry.runId !== m.runId);
     }) ?? pauseState.value;
+  }
+
+  // Merge any skip reasons the runner recorded into its shared map that the
+  // reactive overlay is missing (or has under a different reason). Returns a new
+  // Map when it added/changed an entry, else null — so a load with nothing new to
+  // seed never churns the shallowRef. `ack`/launch delete from BOTH maps, so an
+  // acked chip is absent here and never resurrected.
+  function seedSkipsFromRunner(): Map<string, string> | null {
+    const shared = plugin?.queueControl?.lastSkipReasonByTask;
+    if (!shared) return null;
+    let seeded: Map<string, string> | null = null;
+    for (const [id, { reason }] of shared) {
+      if (skipReasons.value.get(id) === reason) continue;
+      seeded ??= new Map(skipReasons.value);
+      seeded.set(id, reason);
+    }
+    return seeded;
   }
 
   // Returns a new Map with every entry whose loaded task fails `keep` (or whose

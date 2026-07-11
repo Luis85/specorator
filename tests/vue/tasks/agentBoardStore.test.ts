@@ -329,6 +329,32 @@ describe('useAgentBoardStore', () => {
     expect(store.skipReasons).toBe(skipBefore); // nothing pruned → same reference
   });
 
+  it('load() seeds the skip chip from the runner shared map for a skip recorded before the board mounted', async () => {
+    // Same-session reopen with auto-run active: AgentBoardView.refresh() runs
+    // syncRunner()/tick() (which can recordSkip) BEFORE AgentBoardRoot mounts and
+    // subscribes, so the skip lives in queueControl.lastSkipReasonByTask but the
+    // overlay is empty; QueueRunner debounces the re-emit, so load() must seed it.
+    const plugin = makePlugin();
+    (plugin.queueControl as { lastSkipReasonByTask?: Map<string, { reason: string; at: number }> })
+      .lastSkipReasonByTask = new Map([['t1', { reason: 'no free slot', at: 0 }]]);
+    const { store } = initStore([{ lanes: [makeLane('ready', [makeTask('t1', 'ready')])], errors: [] }], plugin);
+
+    await store.load();
+
+    expect(store.skipReasons.get('t1')).toBe('no free slot');
+  });
+
+  it('load() does not surface a seeded skip for a card that is no longer runnable (seed then prune)', async () => {
+    const plugin = makePlugin();
+    (plugin.queueControl as { lastSkipReasonByTask?: Map<string, { reason: string; at: number }> })
+      .lastSkipReasonByTask = new Map([['t1', { reason: 'no free slot', at: 0 }]]);
+    const { store } = initStore([{ lanes: [makeLane('done', [makeTask('t1', 'done')])], errors: [] }], plugin);
+
+    await store.load();
+
+    expect(store.skipReasons.has('t1')).toBe(false);
+  });
+
   it('load() evicts a stale pause overlay once the card leaves a paused status', async () => {
     const paused = makeLane('needs_input', [makeTask('t1', 'needs_input')]);
     const done = makeLane('done', [makeTask('t1', 'done')]);
