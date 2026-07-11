@@ -274,9 +274,7 @@ export class SpecoratorView extends ItemView {
     this.viewContainerEl.addClass('specorator-vue');
     this.viewContainerEl.addClass('specorator-chat-vue-root');
     const app = createApp(ChatShellRoot);
-    // Fresh per-view Pinia so two open chat leaves don't share the chat-shell
-    // store (each has its own TabManager / tab set). See createChatShellPinia.
-    app.use(createChatShellPinia());
+    app.use(createChatShellPinia()); // fresh per-view Pinia — see createChatShellPinia
     // markRaw: Obsidian objects are large and cyclic; never deep-proxy them.
     app.provide(PLUGIN_KEY, markRaw(this.plugin));
     app.provide(CALLBACKS_KEY, markRaw(this.buildChatShellCallbacks()));
