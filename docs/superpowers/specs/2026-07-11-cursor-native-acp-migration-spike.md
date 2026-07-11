@@ -1,7 +1,7 @@
 ---
 title: Cursor native-ACP migration — spike plan and design sketch
 date: 2026-07-11
-status: proposed (spike gated)
+status: superseded (2026-07-11) — decision to proceed without a spike; see 2026-07-11-cursor-acp-runtime-design.md
 scope: src/providers/cursor, src/providers/acp, src/core/transport
 relates-to: docs/adr/0002-cursor-askuserquestion-transport.md, docs/adr/0001-transport-agnostic-provider-seam.md
 ---
