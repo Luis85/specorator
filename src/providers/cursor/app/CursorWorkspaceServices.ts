@@ -35,7 +35,7 @@ function warmCursorModelCatalog(plugin: PluginContext, cliResolver: ProviderCliR
   if (!cliPath) {
     return;
   }
-  const env = buildCursorAgentEnvironment(plugin);
+  const env = buildCursorAgentEnvironment(plugin, cliPath);
   const cwd = getVaultPath(plugin.app) ?? process.cwd();
   void refreshCursorModelCatalog(cliPath, env, cwd).catch((err: unknown) => {
     const message = err instanceof Error ? err.message : String(err);

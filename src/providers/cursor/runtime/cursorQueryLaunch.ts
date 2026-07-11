@@ -67,7 +67,7 @@ export function resolveCursorQueryLaunch(params: {
     approveMcps: (turn.request.enabledMcpServers?.size ?? 0) > 0,
   });
 
-  const env = buildCursorAgentEnvironment(plugin);
+  const env = buildCursorAgentEnvironment(plugin, cli);
   const isPlanTurn = permissionMode === 'plan';
   const cliPrompt = buildCursorAgentPrompt({
     turn,

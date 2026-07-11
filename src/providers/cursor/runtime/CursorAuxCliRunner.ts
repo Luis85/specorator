@@ -62,7 +62,7 @@ export class CursorAuxCliRunner implements AuxQueryRunner {
       : prompt;
     const { arg: promptArg, cleanup: cleanupPromptFile } = resolveCursorCliPromptArg(fullPrompt);
 
-    const env = buildCursorAgentEnvironment(this.plugin);
+    const env = buildCursorAgentEnvironment(this.plugin, cli);
     let result: { stdout: string; stderr: string; code: number | null; signal: NodeJS.Signals | null };
     try {
       result = await this.spawnOnce(

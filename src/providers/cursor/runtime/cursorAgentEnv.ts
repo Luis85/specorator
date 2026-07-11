@@ -92,13 +92,19 @@ function applyWindowsCursorAgentShellEnvironment(
   }
 }
 
-export function buildCursorAgentEnvironment(plugin: PluginContext): Record<string, string> {
+export function buildCursorAgentEnvironment(
+  plugin: PluginContext,
+  cliPath?: string,
+): Record<string, string> {
   const customEnv = plugin.getResolvedEnvironmentVariables('cursor');
   const env = buildAllowlistedSubprocessEnvironment({
     processEnv: process.env,
     customEnv,
     providerPrefixPattern: /^CURSOR_/i,
-    pathOverride: getEnhancedPath(customEnv.PATH),
+    // Passing the CLI path (parity with Claude/Opencode) lets getEnhancedPath
+    // add the install dir when it carries a bundled node, so the agent's own
+    // child tools can resolve node and sibling binaries.
+    pathOverride: getEnhancedPath(customEnv.PATH, cliPath),
   });
 
   if (process.platform === 'win32') {

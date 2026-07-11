@@ -65,6 +65,16 @@ describe('buildCursorAgentEnvironment', () => {
     expect(env.CURSOR_API_KEY).toBe('override');
   });
 
+  it('threads the resolved CLI path into enhanced-PATH construction', () => {
+    // Parity with Claude/Opencode: the cursor-agent install dir carries its own
+    // bundled node; passing the CLI path lets getEnhancedPath add that dir so
+    // the agent's child tools can resolve node/binaries.
+    const { getEnhancedPath } = jest.requireMock('@/utils/env') as { getEnhancedPath: jest.Mock };
+    getEnhancedPath.mockClear();
+    buildCursorAgentEnvironment(makePlugin(''), '/home/test/.local/bin/cursor-agent');
+    expect(getEnhancedPath).toHaveBeenCalledWith(undefined, '/home/test/.local/bin/cursor-agent');
+  });
+
   describe('on Windows', () => {
     beforeEach(() => {
       setPlatform('win32');

@@ -176,7 +176,7 @@ async function discoverCursorModels(
     }
     return false;
   }
-  const env = buildCursorAgentEnvironment(context.plugin);
+  const env = buildCursorAgentEnvironment(context.plugin, cliPath);
   const cwd = getVaultPath(context.plugin.app) ?? process.cwd();
   try {
     const ids = await refreshCursorModelCatalog(cliPath, env, cwd);
