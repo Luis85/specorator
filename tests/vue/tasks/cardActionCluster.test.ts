@@ -4,7 +4,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { defineComponent, h, nextTick } from 'vue';
 
 import type { TaskSpec, TaskStatus } from '@/features/tasks/model/taskTypes';
-import type { AgentBoardRenderCallbacks } from '@/features/tasks/ui/agentBoardCardActions';
+import type { AgentBoardRenderCallbacks } from '@/features/tasks/ui/cardActions';
 import { CALLBACKS_KEY } from '@/features/tasks/ui/vue/boardKeys';
 import CardActionCluster from '@/features/tasks/ui/vue/components/CardActionCluster.vue';
 
@@ -296,7 +296,7 @@ describe('CardActionCluster', () => {
         calls.filter((c) => c[0] === name && (capture === undefined ? c[2] !== true : c[2] === capture)).length;
 
       await openMenu(container);
-      // The three listeners portalPopover registers: doc mousedown (capture),
+      // The three listeners the overflow menu registers: doc mousedown (capture),
       // window scroll (capture), window resize (bubble).
       expect(count(docAdd.mock.calls, 'mousedown', true)).toBe(1);
       expect(count(winAdd.mock.calls, 'scroll', true)).toBe(1);
@@ -325,8 +325,7 @@ describe('CardActionCluster', () => {
     const origHeight = window.innerHeight;
     const origWidth = window.innerWidth;
     // A trigger near the viewport bottom with room above → flip up; a right edge
-    // past the (narrow) viewport → left clamps to viewportWidth - 180 - 8. Mirrors
-    // the imperative AgentBoardRenderer popover geometry test's stubbing pattern.
+    // past the (narrow) viewport → left clamps to viewportWidth - 180 - 8.
     trigger.getBoundingClientRect = (() => ({
       top: 80,
       bottom: 90,

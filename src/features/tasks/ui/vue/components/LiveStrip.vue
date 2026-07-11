@@ -13,8 +13,8 @@ import {
 } from '../../agentBoardLiveHeartbeat';
 import { useAgentBoardStore } from '../stores/agentBoardStore';
 
-// Parity target: AgentBoardRenderer.applyLiveStrip. Only mounted for live
-// statuses (running / needs_input / needs_approval); the card gates rendering.
+// The live heartbeat/ledger strip. Only mounted for live statuses (running /
+// needs_input / needs_approval); the card gates rendering.
 const props = defineProps<{ task: TaskSpec }>();
 
 const store = useAgentBoardStore();

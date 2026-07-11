@@ -5,7 +5,7 @@ import { nextTick } from 'vue';
 
 import type { ResolvedBoardLayout, ResolvedLane } from '@/features/tasks/config/boardConfigTypes';
 import type { TaskSpec, TaskStatus } from '@/features/tasks/model/taskTypes';
-import type { AgentBoardRenderCallbacks } from '@/features/tasks/ui/agentBoardCardActions';
+import type { AgentBoardRenderCallbacks } from '@/features/tasks/ui/cardActions';
 import AgentBoardRoot from '@/features/tasks/ui/vue/AgentBoardRoot.vue';
 import { CALLBACKS_KEY, PLUGIN_KEY } from '@/features/tasks/ui/vue/boardKeys';
 import { useAgentBoardStore } from '@/features/tasks/ui/vue/stores/agentBoardStore';
@@ -400,9 +400,8 @@ describe('Agent Board Vue components', () => {
   });
 
   it('renders the no-free-slots hint at the board root only when the slot count is exhausted', async () => {
-    // Parity with AgentBoardRenderer's `free <= 0` branch (deleted in the Task 5b
-    // cutover): the banner reads the same `free = max(0, max - used)` from
-    // store.slots that the toolbar's `--full` badge derives from.
+    // The banner's `free <= 0` branch: it reads the same `free = max(0, max - used)`
+    // from store.slots that the toolbar's `--full` badge derives from.
     const { store, container } = mountBoard({ lanes: [], errors: [] }, makeCallbacks());
     // Pre-load default {0,0}: the `max > 0` guard suppresses the first-frame flash.
     expect(container.querySelector('.specorator-agent-board-hint')).toBeNull();

@@ -723,7 +723,7 @@
 
 /* Reduced-motion gated: the freshness dot only pulses when the user has not
    requested reduced motion. Scoped to the live card-status classes so a strip
-   left behind by a patchCard transition to a non-live status stops pulsing. */
+   left behind by a transition to a non-live status stops pulsing. */
 @media (prefers-reduced-motion: no-preference) {
   .specorator-agent-board-card--running .specorator-agent-board-card-live-strip--dot,
   .specorator-agent-board-card--needs_input .specorator-agent-board-card-live-strip--dot,

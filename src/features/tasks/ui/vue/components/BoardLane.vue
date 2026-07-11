@@ -7,7 +7,7 @@ import { CALLBACKS_KEY } from '../boardKeys';
 import { mountLucide } from '../mountLucide';
 import WorkOrderCard from './WorkOrderCard.vue';
 
-// Parity target: AgentBoardRenderer.renderLane / renderCollapsedLane / renderCriteria.
+// One lane column: header + collapse toggle + DoR/DoD criteria + cards + Inbox add-row.
 const props = defineProps<{ lane: ResolvedLane }>();
 
 const callbacks = inject(CALLBACKS_KEY);

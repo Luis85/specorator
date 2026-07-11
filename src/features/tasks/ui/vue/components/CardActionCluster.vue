@@ -3,15 +3,15 @@ import { type ComponentPublicInstance, computed, inject, onBeforeUnmount, ref } 
 
 import { t } from '../../../../../i18n/i18n';
 import type { TaskSpec, TaskStatus } from '../../../model/taskTypes';
-import { CARD_ACTIONS, type CardAction, type CardActionModel, FALLBACK_CARD_ACTIONS } from '../../agentBoardCardActions';
+import { CARD_ACTIONS, type CardAction, type CardActionModel, FALLBACK_CARD_ACTIONS } from '../../cardActions';
 import { CALLBACKS_KEY } from '../boardKeys';
 import { mountLucide } from '../mountLucide';
 import { LIVE_STATUSES } from '../statusDot';
 import { useOpenMenu } from '../useOpenMenu';
 import OverflowMenu from './OverflowMenu.vue';
 
-// Parity target: AgentBoardCardActions.renderCardActions — the per-status
-// primary button + optional secondary + ⋯ overflow menu. There is NO
+// The per-card action cluster: per-status primary button + optional secondary +
+// ⋯ overflow menu, driven by the CARD_ACTIONS spec table. There is NO
 // busy/disabled state in this layer: actions gate ONLY on their `available`
 // predicate and on `primary: null`.
 const props = defineProps<{ task: TaskSpec; status: TaskStatus }>();

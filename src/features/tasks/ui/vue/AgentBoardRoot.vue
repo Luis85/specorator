@@ -9,8 +9,8 @@ import BoardToolbar from './components/BoardToolbar.vue';
 import { useAgentBoardStore } from './stores/agentBoardStore';
 import { useBoardEventRouting } from './useBoardEventRouting';
 
-// Parity target: AgentBoardRenderer.render — the board shell. Mounted live by
-// AgentBoardView (Task 5b cutover); the imperative renderer was deleted.
+// The board shell (toolbar + lanes + errors). Mounted by AgentBoardView; owns
+// the EventBus→store routing lifecycle via useBoardEventRouting.
 const plugin = inject(PLUGIN_KEY);
 if (!plugin) throw new Error('AgentBoardRoot mounted without PLUGIN_KEY');
 
@@ -48,8 +48,8 @@ onUnmounted(() => {
   clockId = null;
 });
 
-// "No free slots" hint (parity: AgentBoardRenderer.ts:123-129). Shown at the
-// board root when the chat-tab slot count is exhausted — the same
+// "No free slots" hint. Shown at the board root when the chat-tab slot count is
+// exhausted — the same
 // `free = max(0, max - used)` the toolbar's `--full` badge derives from
 // `store.slots`. The toolbar owns the `--full` class; this owns the banner.
 // The `max > 0` guard suppresses a one-frame flash: `store.slots` defaults to
@@ -60,8 +60,8 @@ const noFreeSlots = computed(
   () => store.slots.max > 0 && Math.max(0, store.slots.max - store.slots.used) <= 0,
 );
 
-// Parity with AgentBoardRenderer.truncateErrorLine: cap a long path/stack so one
-// error line can't blow out the lane width; the full text stays on the title.
+// Cap a long path/stack so one error line can't blow out the lane width; the
+// full text stays on the title attribute.
 const ERROR_LINE_CAP = 300;
 function truncateErrorLine(value: string): string {
   return value.length <= ERROR_LINE_CAP ? value : `${value.slice(0, ERROR_LINE_CAP - 1)}…`;

@@ -11,7 +11,7 @@ import { resolveBoardLayout } from '../../../config/resolveBoardLayout';
 import { TaskIndexer } from '../../../indexing/TaskIndexer';
 import type { InvalidTaskNote, TaskSpec } from '../../../model/taskTypes';
 import { TaskNoteStore } from '../../../storage/TaskNoteStore';
-import type { AgentBoardPauseState } from '../../agentBoardCardActions';
+import type { AgentBoardPauseState } from '../../cardActions';
 
 /**
  * Loader seam over the vault-reading services the view drives in `refresh()`.

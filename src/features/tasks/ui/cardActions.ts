@@ -2,11 +2,12 @@ import type { TranslationKey } from '../../../i18n/types';
 import type { PersonaResolver } from '../../agents/personaRegistry';
 import type { TaskSpec, TaskStatus } from '../model/taskTypes';
 
-// Data + contract module for the Agent Board card surface. The imperative
-// DOM-building (`AgentBoardCardActions`, the portal popover) was deleted in the
-// Task 5b Vue cutover; the Vue `CardActionCluster`/`OverflowMenu`/`CardReplySurface`
-// components consume the `CARD_ACTIONS` spec table plus the `AgentBoardRenderCallbacks`
-// and `AgentBoardPauseState` types re-homed here.
+// Data-only module for the Agent Board card surface: the per-status card-action
+// spec table plus the board's shared view→card contracts. No DOM is built here —
+// the Vue `CardActionCluster`/`OverflowMenu`/`CardReplySurface` components (and the
+// board view that provides the callbacks) consume the `CARD_ACTIONS` spec table
+// and the `CardAction`/`CardActionModel`/`AgentBoardRenderCallbacks`/
+// `AgentBoardPauseState` types exported below.
 
 /** Pause payload surfaced on a card while a run waits for input or approval. */
 export interface AgentBoardPauseState {

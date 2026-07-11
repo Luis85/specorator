@@ -14,9 +14,8 @@ import CardActionCluster from './CardActionCluster.vue';
 import CardReplySurface from './CardReplySurface.vue';
 import LiveStrip from './LiveStrip.vue';
 
-// Parity target: AgentBoardRenderer.renderCard (+ renderMetaRow / renderFooter /
-// applyStatusDot). The per-status action cluster (Task 4) and the reply surface +
-// skip chip (Task 4b) are all live now.
+// One work-order card: title row + status dot + meta + footer + live strip +
+// per-status action cluster + reply surface + skip chip.
 const props = defineProps<{ task: TaskSpec }>();
 
 const callbacks = inject(CALLBACKS_KEY);
@@ -28,7 +27,7 @@ const store = useAgentBoardStore();
 // The live pause overlay only ENRICHES the reply prompt (event-sourced question /
 // approval action + risk). It does NOT gate the surface — CardReplySurface falls
 // back to the note's `pause_reason` when this is null, so a reloaded paused card
-// stays answerable (parity: renderReplySurface AgentBoardRenderer.ts:621,643).
+// stays answerable.
 const pause = computed(() => store.pauseState.get(props.task.frontmatter.id) ?? null);
 
 // Queue skip chip: the reactive store overlay (mirrors the runner's non-reactive
@@ -52,8 +51,7 @@ const statusDotCls = computed(() => statusDotClass(status.value));
 
 // Parity with renderCard's `showReply`: the reply surface + hidden footer are
 // driven by STATUS alone (needs_input / needs_approval), NOT by the presence of a
-// live pause overlay — so a reloaded paused card is still answerable
-// (AgentBoardRenderer.ts:459,461,168).
+// live pause overlay — so a reloaded paused card is still answerable.
 const showReply = computed(() => status.value === 'needs_input' || status.value === 'needs_approval');
 
 const engineText = computed(
@@ -155,10 +153,9 @@ const persona = computed(() => (cb.resolvePersona ?? resolvePersona)(props.task.
     />
 
     <!-- Key on status so a direct needs_input↔needs_approval flip remounts the
-      surface and re-seeds its reply field — parity with the imperative patchCard
-      rebuilding the field on every status patch (no stale typed text carried
-      across a branch change). An in-place prompt change (same status, new pause
-      overlay) keeps the key stable, so the prompt re-derives without a remount. -->
+      surface and re-seeds its reply field (no stale typed text carried across a
+      branch change). An in-place prompt change (same status, new pause overlay)
+      keeps the key stable, so the prompt re-derives without a remount. -->
     <CardReplySurface
       v-if="showReply"
       :key="status"

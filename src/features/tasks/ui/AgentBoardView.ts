@@ -31,7 +31,7 @@ import { canTransitionTaskStatus, isRunnableTaskStatus } from '../model/taskStat
 import type { TaskBoardModel, TaskSpec, TaskStatus } from '../model/taskTypes';
 import { renderTaskPrompt } from '../prompt/TaskPromptRenderer';
 import { TaskNoteStore } from '../storage/TaskNoteStore';
-import type { AgentBoardRenderCallbacks } from './agentBoardCardActions';
+import type { AgentBoardRenderCallbacks } from './cardActions';
 import { createWorkOrderInteractive } from './createWorkOrderInteractive';
 import { loadLatestTaskSpec } from './loadLatestTaskSpec';
 import { chooseLoop } from './LoopPickerModal';

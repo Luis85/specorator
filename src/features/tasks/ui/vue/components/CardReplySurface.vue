@@ -3,13 +3,12 @@ import { computed, inject, ref } from 'vue';
 
 import { t } from '../../../../../i18n/i18n';
 import type { TaskSpec } from '../../../model/taskTypes';
-import type { AgentBoardPauseState } from '../../agentBoardCardActions';
+import type { AgentBoardPauseState } from '../../cardActions';
 import { CALLBACKS_KEY } from '../boardKeys';
 
-// Parity target: AgentBoardRenderer.renderReplySurface (+ renderPromptText). The
-// live run's own control set — Send/Stop for needs_input, Approve/Reject for
-// needs_approval — distinct from the hover action cluster. Signature mirrors the
-// imperative `renderReplySurface(card, task, pause)`: `pause` is nullable, so the
+// The paused-run reply surface: the live run's own control set — Send/Stop for
+// needs_input, Approve/Reject for needs_approval — distinct from the hover
+// action cluster. `pause` is nullable, so the
 // prompt honors the same note-frontmatter fallback chain. WorkOrderCard gates the
 // mount on STATUS (needs_input/needs_approval); the pause overlay only enriches
 // the prompt, so the `?.` fallbacks below still hold when `pause` is null.

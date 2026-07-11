@@ -1,5 +1,38 @@
 # Agent Board Vue 3 + Pinia Migration — Implementation Plan
 
+> **Status: completed** (2026-07-11). The board and all three editors ship as Vue
+> 3 + Pinia islands over the unchanged run engine; the imperative renderer, card-
+> actions class, portal popover, live-heartbeat tracker, and the imperative detail
+> sub-panels are deleted. See the migration decision record in
+> [`docs/adr/0004-agent-board-vue-migration.md`](../../adr/0004-agent-board-vue-migration.md).
+>
+> **As-built deltas from this plan (fold in when reading):**
+> - **Board folder key** is `agentBoardWorkOrderFolder`, read through the shared
+>   `boardWorkOrderFolder(settings)` accessor (default `Agent Board/tasks`) — NOT
+>   the `agentBoardFolder` this plan guessed. Both the store loader and the vault
+>   filter route through that one accessor so they can't drift.
+> - **Shared island helper** shipped as `ui/vue/vueIsland.ts` (`VueIsland`), not
+>   the spec's `modalIsland` — element-generic (modal `contentEl` or settings
+>   host), with three consumers: the detail + template editor modals and the lane
+>   editor render-fn. **Shared row atom** shipped as `ui/vue/components/SettingRow.vue`,
+>   not the spec's `TemplateEditorRow`.
+> - **Lane editor** internals became `ui/vue/LaneEditorRoot.vue`, mounted by the
+>   unchanged `renderAgentBoardLaneEditor(container, plugin)` settings render-fn
+>   (it has no Settings-host disposer, so it unmounts on a MutationObserver detach
+>   watch) — the imperative DOM builder is gone.
+> - **Task split as executed:** Task 4 → 4 (action cluster) + 4b (reply surface +
+>   pause overlay + skip chip); Task 5 → 5a (store/routing wiring) + 5b (the live
+>   cutover + renderer deletion); Task 7 → 7a (template editor) + 7b (lane editor).
+> - **Corrections carried through:** no drag-and-drop existed (dropped from the
+>   spec's Risk #4); the lane editor is a settings render-fn, not a board modal;
+>   and no busy/disabled action state was added (none existed — the cluster gates
+>   only on `available` + `primary:null`).
+> - **Card-actions data module** was renamed `agentBoardCardActions.ts` →
+>   `ui/cardActions.ts` in Task 8 (it is data + contracts only; the DOM class it
+>   used to sit beside is gone). The board scaling guard moved to the Vitest lane
+>   as `tests/vue/tasks/agentBoardScaling.test.ts` (the old `agentBoard.perf` spec
+>   was deleted).
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Replace the imperative Agent Board view (`AgentBoardRenderer` + `agentBoardCardActions` + `patchCard`/`patchLiveStrip`) with a reactive Vue 3 + Pinia surface over the untouched run engine, then migrate the detail/lane/template editors to Vue islands, deleting the hand-rolled DOM-patch machinery.
@@ -14,7 +47,7 @@
 
 **Board view:** `AgentBoardView extends ItemView` (`src/features/tasks/ui/AgentBoardView.ts:53`). `getViewType()` → `VIEW_TYPE_SPECORATOR_AGENT_BOARD` (`:156`), `getIcon()` → `'kanban-square'`. Renderer is a field `private readonly renderer = new AgentBoardRenderer()` (`:56`), heartbeat tracker `new AgentBoardLiveHeartbeatTracker()` (`:98`). `render()` (`:322`) empties `contentEl`, creates `.specorator-agent-board-host` (`:331`), calls `renderer.render(host, state, callbacks)`.
 
-**Board load composition** (`AgentBoardView.refresh()`, `:257`): `TaskIndexer.indexVaultFolder(vault, folder)` → `TaskBoardModel` → `loadBoardConfig(plugin.settings)` → `resolveBoardLayout(config, model)` → `ResolvedBoardLayout`. Folder setting: `plugin.settings.agentBoardFolder` (confirm the exact key when implementing Task 1 by reading `AgentBoardView.refresh`).
+**Board load composition** (`AgentBoardView.refresh()`, `:257`): `TaskIndexer.indexVaultFolder(vault, folder)` → `TaskBoardModel` → `loadBoardConfig(plugin.settings)` → `resolveBoardLayout(config, model)` → `ResolvedBoardLayout`. Folder setting: `plugin.settings.agentBoardWorkOrderFolder`, read via the `boardWorkOrderFolder(settings)` accessor (as-built; this plan originally guessed `agentBoardFolder`).
 
 **Layout types** (`src/features/tasks/config/boardConfigTypes.ts`): `ResolvedBoardLayout = { lanes: ResolvedLane[]; errors: string[] }` (`:41`). `ResolvedLane = { id; title; tasks: TaskSpec[]; hostsNewWorkOrders; definitionOfReady: string[]; definitionOfDone: string[]; isCatchAll; collapsible; collapsed }` (`:25`). `resolveBoardLayout(config, model)` at `src/features/tasks/config/resolveBoardLayout.ts:10`. `loadBoardConfig(settings)` at `src/features/tasks/config/BoardConfigStore.ts:10`.
 
@@ -232,7 +265,7 @@ export const useAgentBoardStore = defineStore('agent-board', () => {
 
   function folder(): string {
     // Confirm the exact setting key against AgentBoardView.refresh() in Step 1.
-    return (plugin?.settings.agentBoardFolder as string) || 'Agent Board';
+    return plugin ? boardWorkOrderFolder(plugin.settings) : 'Agent Board/tasks'; // as-built key: agentBoardWorkOrderFolder
   }
 
   async function load(): Promise<void> {
@@ -325,7 +358,7 @@ Assert: after mount, `bus.on` was called with `'task:heartbeat'`, `'task:ledger-
 
 - [ ] **Step 2: Run it, confirm it fails** (module missing).
 
-- [ ] **Step 3: Implement the composable.** Route every board event. Full-refresh set → `store.load()` (guarded, so concurrent fires coalesce): `task:board-config-changed`, `roster:changed`, `chat:tabs-changed`, `task:queue-paused|-resumed|-halted|-tick|-skipped|-state-changed|-cap-changed`, `task:run-finished`, `task:attempt-started`, `task:status-changed`, `task:resumed`, `task:needs-input`, `task:needs-approval` (these last five change a card's status/pause → the layout re-buckets it into the right lane, so a guarded `load()` is the correct reactive equivalent of `patchCard`). Granular set → `task:heartbeat` → `store.recordHeartbeat(p.taskId, p.at)`; `task:ledger-appended` → `store.recordLedger(p.taskId, p.entry.message)`. On any status→terminal transition, also `store.evictLive(p.taskId)` (mirror the renderer's eviction). Own the 4 vault subs too (`create/modify/delete/rename`, debounced 100ms → `store.load`) — reuse `useFolderVaultRefresh` semantics but the board watches its whole `agentBoardFolder`. Register all disposers in an array; `onUnmounted` runs them all + clears any debounce timer.
+- [ ] **Step 3: Implement the composable.** Route every board event. Full-refresh set → `store.load()` (guarded, so concurrent fires coalesce): `task:board-config-changed`, `roster:changed`, `chat:tabs-changed`, `task:queue-paused|-resumed|-halted|-tick|-skipped|-state-changed|-cap-changed`, `task:run-finished`, `task:attempt-started`, `task:status-changed`, `task:resumed`, `task:needs-input`, `task:needs-approval` (these last five change a card's status/pause → the layout re-buckets it into the right lane, so a guarded `load()` is the correct reactive equivalent of `patchCard`). Granular set → `task:heartbeat` → `store.recordHeartbeat(p.taskId, p.at)`; `task:ledger-appended` → `store.recordLedger(p.taskId, p.entry.message)`. On any status→terminal transition, also `store.evictLive(p.taskId)` (mirror the renderer's eviction). Own the 4 vault subs too (`create/modify/delete/rename`, debounced 100ms → `store.load`) — reuse `useFolderVaultRefresh` semantics but the board watches its whole `agentBoardWorkOrderFolder`. Register all disposers in an array; `onUnmounted` runs them all + clears any debounce timer.
 
 ```ts
 import { onMounted, onUnmounted } from 'vue';
@@ -565,4 +598,4 @@ git push
 
 **Placeholder scan:** The bulk SFC template bodies (card/lane/toolbar/modal panels) are specified by exact class-parity lists + callback maps rather than full line-by-line SFC source — this matches how the Library plan handled its panels and is deliberate for a 6k-LOC migration; each is gated by a characterization/parity test that names the exact assertions. The store, event-routing composable, pure helpers, injection keys, and the load-bearing test are given as complete code. No "TBD"/"handle edge cases" left.
 
-**Type consistency:** `AgentBoardRenderCallbacks` (imported, not redefined), `CARD_ACTIONS`/`CardAction`/`CardActionModel` (imported from the existing module until Task 8 moves them), `ResolvedBoardLayout`/`ResolvedLane`/`TaskSpec`/`TaskStatus` (imported from their real modules), `useGuardedLoad`/`mergeById`/`useFolderVaultRefresh`/`IconButton` (shipped, reused). `store.load()`/`recordHeartbeat`/`recordLedger`/`evictLive` names are consistent across Tasks 1–5. One flagged verify: the board folder setting key (`agentBoardFolder`) is marked to confirm against `AgentBoardView.refresh()` in Task 1 Step 1 before the store hardcodes it.
+**Type consistency:** `AgentBoardRenderCallbacks` (imported, not redefined), `CARD_ACTIONS`/`CardAction`/`CardActionModel` (imported from the existing module until Task 8 moves them), `ResolvedBoardLayout`/`ResolvedLane`/`TaskSpec`/`TaskStatus` (imported from their real modules), `useGuardedLoad`/`mergeById`/`useFolderVaultRefresh`/`IconButton` (shipped, reused). `store.load()`/`recordHeartbeat`/`recordLedger`/`evictLive` names are consistent across Tasks 1–5. One flagged verify: the board folder setting key was confirmed as `agentBoardWorkOrderFolder` (via `boardWorkOrderFolder(settings)`), not the `agentBoardFolder` this plan first guessed.

@@ -3,15 +3,15 @@ import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
 
 import { t } from '../../../../../i18n/i18n';
 import type { TaskSpec } from '../../../model/taskTypes';
-import type { AgentBoardRenderCallbacks, CardAction } from '../../agentBoardCardActions';
+import type { AgentBoardRenderCallbacks, CardAction } from '../../cardActions';
 import { mountLucide } from '../mountLucide';
 
-// Parity target: portalPopover.ts (PortalPopover), reimplemented as a Vue
-// <Teleport>. Same leak-safe contract: a body-portaled node positioned
-// `fixed`-from-rect that flips up near the viewport bottom, closing on
-// outside-mousedown / scroll / resize / Escape — every listener torn down
-// together (once), the trigger refocused. The node itself is Vue-owned: the
-// parent unmounts us (v-if) to remove it, so teardown only sheds listeners.
+// The ⋯ overflow popover as a Vue <Teleport> to body. Leak-safe contract: a
+// body-portaled node positioned `fixed`-from-rect that flips up near the
+// viewport bottom, closing on outside-mousedown / scroll / resize / Escape —
+// every listener torn down together (once), the trigger refocused. The node
+// itself is Vue-owned: the parent unmounts us (v-if) to remove it, so teardown
+// only sheds listeners.
 const props = defineProps<{
   trigger: HTMLElement | null;
   menu: CardAction[];
@@ -22,7 +22,7 @@ const props = defineProps<{
 // Self-close paths ask the parent to unmount us; the parent owns the open flag.
 const emit = defineEmits<{ close: [] }>();
 
-// Positioning constants — mirror portalPopover.ts exactly.
+// Positioning constants for the body-portaled menu geometry.
 const ITEM_HEIGHT = 34;
 const MENU_PADDING = 8;
 const MENU_MIN_WIDTH = 180;

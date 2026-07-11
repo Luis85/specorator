@@ -7,10 +7,9 @@ import { CALLBACKS_KEY } from '../boardKeys';
 import { mountLucide } from '../mountLucide';
 import { useAgentBoardStore } from '../stores/agentBoardStore';
 
-// Parity target: AgentBoardRenderer.renderBoardToolbar — the board actions plus
-// the auto-run switch + queue/slot counters. Reads the store's toolbar-state
-// projection (slots / queueState); the imperative view sources the same values
-// from plugin.getTabSlotUsage() + the shared queue control/slot tracker.
+// The board toolbar: board actions plus the auto-run switch + queue/slot
+// counters. Reads the store's toolbar-state projection (slots / queueState),
+// sourced from plugin.getTabSlotUsage() + the shared queue control/slot tracker.
 const store = useAgentBoardStore();
 
 const callbacks = inject(CALLBACKS_KEY);

@@ -2,8 +2,8 @@ import { describe, expect, it } from 'vitest';
 
 import { staleTier, statusDotClass } from '@/features/tasks/ui/vue/statusDot';
 
-// Characterization: these strings/thresholds are the byte-exact parity target
-// for the later cutover from AgentBoardRenderer.applyStatusDot / staleTier.
+// Characterization: these strings/thresholds are the byte-exact class + stale
+// contract the board CSS keys off (status dot + stale tier).
 describe('statusDotClass', () => {
   it('a live status carries the base, status, and --live classes', () => {
     const cls = statusDotClass('running');

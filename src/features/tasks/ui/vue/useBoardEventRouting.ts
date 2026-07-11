@@ -13,9 +13,9 @@ const VAULT_REFRESH_DEBOUNCE_MS = 100;
 /**
  * Board events that invalidate the whole layout. A guarded `store.load()`
  * re-derives from disk and coalesces concurrent fires, so it is the reactive
- * equivalent of two imperative drivers at once:
- *  - the full render()/refresh() calls (queue/config/roster/tabs events); and
- *  - the per-card patchCard — the last five (attempt-started, status-changed,
+ * equivalent of two invalidation kinds at once:
+ *  - a full board re-derive (queue/config/roster/tabs events); and
+ *  - a targeted card repaint — the last five (attempt-started, status-changed,
  *    resumed, needs-input, needs-approval) change a card's status/pause, which
  *    re-buckets it into a different lane, so the reactive model expresses that
  *    targeted repaint as a reload.
@@ -42,9 +42,8 @@ const FULL_REFRESH_EVENTS = [
 ] as const satisfies readonly (keyof SpecoratorEventMap)[];
 
 /**
- * Routes the Agent Board's EventBus + vault events into the Pinia store,
- * replacing the imperative view's patchCard/patchLiveStrip/render wiring. Two
- * tiers mirror the view's own split: granular O(1) live-overlay setters
+ * Routes the Agent Board's EventBus + vault events into the Pinia store. Two
+ * tiers split the work: granular O(1) live-overlay setters
  * (heartbeat/ledger) for the fast path, and a guarded `store.load()` for
  * everything that re-buckets or invalidates the board. Owns its own
  * onMounted/onUnmounted — call once from a component `setup`, like the
@@ -86,7 +85,7 @@ export function useBoardEventRouting(plugin: SpecoratorPlugin): void {
   }
 
   onMounted(() => {
-    // Granular live-overlay setters — the O(1) replacement for patchLiveStrip.
+    // Granular live-overlay setters — the O(1) fast path for heartbeat/ledger.
     disposers.push(plugin.events.on('task:heartbeat', (p) => store.recordHeartbeat(p.taskId, p.at)));
     disposers.push(plugin.events.on('task:ledger-appended', (p) => store.recordLedger(p.taskId, p.entry.message)));
     // task:run-finished is in BOTH tiers: evict the stale live overlay (so no

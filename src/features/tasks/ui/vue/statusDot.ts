@@ -1,9 +1,8 @@
 import type { TaskPriority, TaskStatus } from '../../model/taskTypes';
 
-// The live-strip presentation helpers live in the shared (imperative + Vue)
-// live-heartbeat module so the Vue side and AgentBoardRenderer keep exactly one
-// copy each. Re-exported here so the Vue board components import their board
-// parity helpers from a single module.
+// The live-strip presentation helpers live in the shared live-heartbeat module
+// (also home to the pure `computeLiveStrip`); re-exported here so the Vue board
+// components import their strip/dot helpers from a single module.
 export {
   formatElapsed,
   staleAriaLabel,
@@ -14,7 +13,7 @@ export {
 
 export const LIVE_STATUSES: ReadonlySet<TaskStatus> = new Set(['running', 'needs_input', 'needs_approval']);
 
-/** Parity with AgentBoardRenderer.applyStatusDot. */
+/** Status-dot class list the board CSS keys the per-status color + live pulse off. */
 export function statusDotClass(status: TaskStatus): string {
   const live = LIVE_STATUSES.has(status) ? ' specorator-agent-board-card-status-dot--live' : '';
   return `specorator-agent-board-card-status-dot specorator-agent-board-card-status-dot--${status}${live}`;
@@ -24,7 +23,7 @@ const PRIORITY_TOTAL_BARS = 3;
 
 /**
  * Priority → { filled-bar count, modifier suffix } for the card's ascending
- * priority bars + label. Parity with AgentBoardRenderer.PRIORITY_META.
+ * priority bars + label.
  */
 const PRIORITY_META: Record<TaskPriority, { bars: number; modifier: string }> = {
   '0 - urgent': { bars: 3, modifier: 'urgent' },
@@ -39,8 +38,8 @@ export interface PriorityBars {
 }
 
 /**
- * Parity with AgentBoardRenderer.renderPriority: resolves the modifier class
- * and the ascending filled/empty bar flags. An unrecognized (legacy /
+ * Resolves the priority modifier class and the ascending filled/empty bar
+ * flags for the card's priority meter. An unrecognized (legacy /
  * hand-authored) priority falls back to normal styling so one bad value can't
  * abort the render; the label still shows the raw value at the call site.
  */

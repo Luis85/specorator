@@ -5,7 +5,7 @@ import { nextTick } from 'vue';
 
 import type { ResolvedBoardLayout, ResolvedLane } from '@/features/tasks/config/boardConfigTypes';
 import type { TaskSpec, TaskStatus } from '@/features/tasks/model/taskTypes';
-import type { AgentBoardRenderCallbacks } from '@/features/tasks/ui/agentBoardCardActions';
+import type { AgentBoardRenderCallbacks } from '@/features/tasks/ui/cardActions';
 import AgentBoardRoot from '@/features/tasks/ui/vue/AgentBoardRoot.vue';
 import { CALLBACKS_KEY, PLUGIN_KEY } from '@/features/tasks/ui/vue/boardKeys';
 import { useAgentBoardStore } from '@/features/tasks/ui/vue/stores/agentBoardStore';

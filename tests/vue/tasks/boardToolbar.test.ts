@@ -4,7 +4,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { ResolvedBoardLayout, ResolvedLane } from '@/features/tasks/config/boardConfigTypes';
 import type { TaskSpec, TaskStatus } from '@/features/tasks/model/taskTypes';
-import type { AgentBoardRenderCallbacks } from '@/features/tasks/ui/agentBoardCardActions';
+import type { AgentBoardRenderCallbacks } from '@/features/tasks/ui/cardActions';
 import { CALLBACKS_KEY } from '@/features/tasks/ui/vue/boardKeys';
 import BoardToolbar from '@/features/tasks/ui/vue/components/BoardToolbar.vue';
 import type { BoardSlotUsage, BoardToolbarQueueState } from '@/features/tasks/ui/vue/stores/agentBoardStore';

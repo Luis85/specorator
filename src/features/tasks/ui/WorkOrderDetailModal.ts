@@ -1,5 +1,5 @@
 import { type App, Component, Modal } from 'obsidian';
-import { type App as VueApp, createApp, markRaw } from 'vue';
+import { markRaw } from 'vue';
 
 import { t } from '../../../i18n/i18n';
 import { formatRelativeTime } from '../../../utils/date';
@@ -12,6 +12,7 @@ import {
   DETAIL_MD_COMPONENT_KEY,
   DETAIL_TASK_KEY,
 } from './vue/detailKeys';
+import { VueIsland } from './vue/vueIsland';
 import WorkOrderDetailRoot from './vue/WorkOrderDetailRoot.vue';
 import type { WorkOrderSectionUpdate } from './workOrderEditForm';
 
@@ -98,8 +99,9 @@ export class WorkOrderDetailModal extends Modal {
   private readonly markdownComponent = new Component();
 
   // The Vue island mounted into `contentEl`. The shell (modalEl classes/CSS vars)
-  // and the pinned header stay imperative; the body + footer are Vue-owned.
-  private vueApp: VueApp | null = null;
+  // and the pinned header stay imperative; the body + footer are Vue-owned. Shared
+  // create/provide/mount + unmount lifecycle with the template + lane editors.
+  private readonly island = new VueIsland();
 
   constructor(
     app: App,
@@ -139,21 +141,19 @@ export class WorkOrderDetailModal extends Modal {
     // the footer, and the inline-edit toggle. Obsidian objects are large/cyclic,
     // so callbacks / app / markdown component are markRaw'd; the task is plain
     // data provided as-is so the callbacks receive the same object identity.
-    const app = createApp(WorkOrderDetailRoot);
-    app.provide(DETAIL_TASK_KEY, this.task);
-    app.provide(DETAIL_CALLBACKS_KEY, markRaw(this.callbacks));
-    app.provide(DETAIL_APP_KEY, markRaw(this.app));
-    app.provide(DETAIL_MD_COMPONENT_KEY, markRaw(this.markdownComponent));
-    app.provide(DETAIL_CLOSE_KEY, () => this.close());
-    app.mount(this.contentEl);
-    this.vueApp = app;
+    this.island.mount(WorkOrderDetailRoot, this.contentEl, (app) => {
+      app.provide(DETAIL_TASK_KEY, this.task);
+      app.provide(DETAIL_CALLBACKS_KEY, markRaw(this.callbacks));
+      app.provide(DETAIL_APP_KEY, markRaw(this.app));
+      app.provide(DETAIL_MD_COMPONENT_KEY, markRaw(this.markdownComponent));
+      app.provide(DETAIL_CLOSE_KEY, () => this.close());
+    });
   }
 
   onClose(): void {
     // Vue teardown first (runs onUnmounted hooks + drops mounted markdown), then
     // the markdown component + the content shell.
-    this.vueApp?.unmount();
-    this.vueApp = null;
+    this.island.unmount();
     this.markdownComponent.unload();
     this.contentEl.empty();
   }

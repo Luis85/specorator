@@ -368,11 +368,10 @@ describe('AgentBoardView.sweepStaleSidecars', () => {
   });
 });
 
-// The live-strip heartbeat projection (formerly AgentBoardView.patchLiveStrip via
-// AgentBoardLiveHeartbeatTracker) and the terminal heartbeat eviction (formerly
-// onStatusChanged) moved to the Vue surface in the Task 5b cutover: the pure
-// projection is covered by tests/vue/tasks/computeLiveStrip.test.ts and the store
-// overlay/eviction by tests/vue/tasks/{agentBoardStore,useBoardEventRouting}.test.ts.
+// The live-strip heartbeat projection and the terminal heartbeat eviction moved
+// to the Vue surface in the board cutover: the pure projection is covered by
+// tests/vue/tasks/computeLiveStrip.test.ts and the store overlay/eviction by
+// tests/vue/tasks/{agentBoardStore,useBoardEventRouting}.test.ts.
 
 describe('AgentBoardView.finalizeLedgerToNote', () => {
   // Build a view stub with snapshotLedgerAsMarkdown + cleanupRun + applyNoteChange

@@ -3,8 +3,7 @@
 //
 // SCOPE (deliberate divergence): `activeClose` is MODULE-GLOBAL, so the invariant
 // spans ALL Agent Board leaves/windows — one open card ⋯ menu across the entire
-// app, not one per board. The imperative `AgentBoardCardActions.openPopover` is
-// per-board-instance (one open menu per leaf). This module-global choice is
+// app, not one per board leaf. This module-global choice is
 // intentional and low-impact: a transient popover is only ever open under the
 // pointer, so two side-by-side boards each holding a menu open is a marginal case,
 // and "close any stray popover anywhere" is benign (arguably better) UX. If a
