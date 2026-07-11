@@ -7,6 +7,11 @@ export interface AcpSubprocessLaunchSpec {
   command: string;
   cwd: string;
   env: NodeJS.ProcessEnv;
+  /**
+   * cmd.exe verbatim-args flag for a resolved Windows `.cmd`/`.bat` batch
+   * shim. Threaded straight through to `AgentSubprocess`.
+   */
+  windowsVerbatimArguments?: boolean;
 }
 
 type CloseListener = (error?: Error) => void;

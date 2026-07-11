@@ -56,9 +56,12 @@ describe('AgentSubprocess', () => {
       }));
     });
 
-    it('passes windowsVerbatimArguments only when set', () => {
+    it('passes windowsVerbatimArguments through to spawn when set, and omits it otherwise', () => {
+      new AgentSubprocess(SPEC).start();
+      expect(mockSpawn.mock.calls[0][2]).not.toHaveProperty('windowsVerbatimArguments');
+
       new AgentSubprocess({ ...SPEC, windowsVerbatimArguments: true }).start();
-      expect(mockSpawn.mock.calls[0][2]).toMatchObject({ windowsVerbatimArguments: true });
+      expect(mockSpawn.mock.calls[1][2]).toMatchObject({ windowsVerbatimArguments: true });
     });
 
     it('is idempotent', () => {
