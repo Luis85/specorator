@@ -13,6 +13,8 @@ import {
 } from '../../../core/tools/toolNames';
 import type { SDKToolUseResult } from '../../../core/types/diff';
 import { type AcpDiffToolContent, type AcpToolCallContent, AcpToolStreamAdapter } from '../../acp';
+import { buildCursorTaskToolUseResult } from './cursorTaskPayload';
+import { readTaskSuccessFromPersistedResult } from './cursorTaskSubagent';
 import { mapCursorToolInput } from './cursorToolInputMapping';
 
 // Matches the local `TOOL_DELETE` in
@@ -105,7 +107,11 @@ export function resolveCursorAcpRawToolName(
     return knownTitleName;
   }
 
-  if (currentRawName) {
+  // A resolved known name stays pinned (no identity flapping), but a prose
+  // fallback must stay correctable: a first call with an unrecognized kind and
+  // a prose title would otherwise pin the prose forever, and a later update
+  // carrying the real file-mutating kind could never restore the canonical id.
+  if (currentRawName && isKnownToolName(currentRawName)) {
     return currentRawName;
   }
 
@@ -126,7 +132,7 @@ export function resolveCursorAcpRawToolName(
     case 'read':
       return 'read';
     default:
-      return titleName ?? 'tool';
+      return currentRawName ?? titleName ?? 'tool';
   }
 }
 
@@ -191,15 +197,21 @@ function buildAcpUnifiedDiff(oldText: string | null | undefined, newText: string
   ].join('\n');
 }
 
-// Only file-mutating tools carry a renderable diff; everything else passes
-// through with no Cursor-specific toolUseResult.
+// File-mutating tools carry a renderable diff, and Task completions carry the
+// structured subagent payload (agent id, nested tool calls, transcript) the
+// live subagent detail view reads; everything else passes through with no
+// Cursor-specific toolUseResult.
 export function normalizeCursorAcpToolUseResult(
   rawName: string | undefined,
   input: Record<string, unknown>,
-  _rawOutput: unknown,
+  rawOutput: unknown,
   content?: AcpToolCallContent[] | null,
 ): SDKToolUseResult | undefined {
   const knownName = toKnownToolName(rawName);
+  if (knownName === 'task') {
+    const success = readTaskSuccessFromPersistedResult(rawOutput);
+    return success ? buildCursorTaskToolUseResult(success, input) : undefined;
+  }
   if (knownName !== 'edit' && knownName !== 'write') {
     return undefined;
   }

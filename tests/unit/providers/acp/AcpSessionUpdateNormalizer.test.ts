@@ -91,6 +91,50 @@ describe('AcpSessionUpdateNormalizer', () => {
     });
   });
 
+  it('caps accumulated tool output at maxToolOutputChars', () => {
+    const normalizer = new AcpSessionUpdateNormalizer({ maxToolOutputChars: 10 });
+
+    normalizer.normalize({
+      sessionUpdate: 'tool_call',
+      title: 'grep',
+      toolCallId: 'tool-1',
+    });
+    const done = normalizer.normalize({
+      content: [{
+        content: { text: 'x'.repeat(50), type: 'text' },
+        type: 'content',
+      }],
+      sessionUpdate: 'tool_call_update',
+      status: 'completed',
+      toolCallId: 'tool-1',
+    });
+
+    const result = (done as { streamChunks: Array<{ type: string; content?: string }> })
+      .streamChunks.find((chunk) => chunk.type === 'tool_result');
+    expect(result?.content).toBe(`${'x'.repeat(10)}\n… [truncated 40 characters]`);
+  });
+
+  it('does not re-truncate the retained output on a payload-less terminal update', () => {
+    const normalizer = new AcpSessionUpdateNormalizer({ maxToolOutputChars: 10 });
+
+    normalizer.normalize({ sessionUpdate: 'tool_call', title: 'grep', toolCallId: 'tool-1' });
+    normalizer.normalize({
+      content: [{ content: { text: 'y'.repeat(30), type: 'text' }, type: 'content' }],
+      sessionUpdate: 'tool_call_update',
+      status: 'in_progress',
+      toolCallId: 'tool-1',
+    });
+    const done = normalizer.normalize({
+      sessionUpdate: 'tool_call_update',
+      status: 'completed',
+      toolCallId: 'tool-1',
+    });
+
+    const result = (done as { streamChunks: Array<{ type: string; content?: string }> })
+      .streamChunks.find((chunk) => chunk.type === 'tool_result');
+    expect(result?.content).toBe(`${'y'.repeat(10)}\n… [truncated 20 characters]`);
+  });
+
   it('maps ACP commands into slash commands', () => {
     const normalizer = new AcpSessionUpdateNormalizer();
 

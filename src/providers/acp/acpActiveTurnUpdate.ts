@@ -23,7 +23,9 @@ export interface ActiveTurnUpdateContext {
   sessionId: string;
   // Resolved lazily: the display model is only needed for usage updates, and
   // resolving it can be expensive (or fail before the session is fully set up).
-  resolveUsageModel: () => string;
+  // Returning null suppresses the usage chunk (usage contract: never emit
+  // without a model) while still recording the authoritative context window.
+  resolveUsageModel: () => string | null;
   promptUsage: AcpUsage | null;
 }
 
@@ -48,10 +50,11 @@ function buildMessageChunkEffect(
     metadataPatch,
     // Only real content counts: an empty assistant message_chunk still carries
     // the `assistant_message_start` boundary chunk, so gating on chunk *presence*
-    // would let a content-free plan turn open the post-plan approval card. Count
-    // only text/thinking chunks so the "produced assistant content" gate is true.
+    // would let a content-free plan turn open the post-plan approval card.
+    // Thinking chunks never arrive here under role 'assistant' (the normalizer
+    // emits them only on role 'thinking' updates), so only text is checked.
     sawAssistantContent: update.role === 'assistant'
-      && update.streamChunks.some((chunk) => chunk.type === 'text' || chunk.type === 'thinking'),
+      && update.streamChunks.some((chunk) => chunk.type === 'text'),
   };
 }
 
@@ -69,9 +72,13 @@ function buildUsageEffect(
   update: Extract<AcpNormalizedUpdate, { type: 'usage' }>,
   context: ActiveTurnUpdateContext,
 ): ActiveTurnEffect {
+  const model = context.resolveUsageModel();
+  if (!model) {
+    return { chunks: [], contextUsage: update.usage };
+  }
   const usage = buildAcpUsageInfo({
     contextWindow: update.usage,
-    model: context.resolveUsageModel(),
+    model,
     promptUsage: context.promptUsage,
   });
   return {

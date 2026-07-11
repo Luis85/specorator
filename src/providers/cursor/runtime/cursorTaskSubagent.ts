@@ -69,7 +69,7 @@ export function extractCursorNestedToolCalls(
   return toolCalls;
 }
 
-function readTaskSuccessFromPersistedResult(result: unknown): Record<string, unknown> | undefined {
+export function readTaskSuccessFromPersistedResult(result: unknown): Record<string, unknown> | undefined {
   if (!result || typeof result !== 'object') {
     return undefined;
   }

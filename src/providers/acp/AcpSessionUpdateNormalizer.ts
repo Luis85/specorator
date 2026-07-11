@@ -71,9 +71,19 @@ type MessageRole = 'assistant' | 'thinking' | 'user';
 // Sentinel key for anonymous (messageId-less) streams so we only emit one start per role.
 const ANONYMOUS_MESSAGE_KEY = '\u0000anonymous';
 
+export interface AcpSessionUpdateNormalizerOptions {
+  // Display cap for accumulated tool output. A single tool result (e.g. a
+  // whole-vault grep) can be many megabytes; rendering that synchronously in
+  // the chat panel freezes Obsidian's UI thread, so providers can bound what
+  // reaches the renderer. The agent still receives the full result.
+  maxToolOutputChars?: number;
+}
+
 export class AcpSessionUpdateNormalizer {
   private readonly seenMessages = new Map<MessageRole, Set<string>>();
   private readonly toolCalls = new Map<string, AcpToolCallSnapshot>();
+
+  constructor(private readonly options: AcpSessionUpdateNormalizerOptions = {}) {}
 
   reset(): void {
     this.seenMessages.clear();
@@ -152,7 +162,7 @@ export class AcpSessionUpdateNormalizer {
     const toolState: AcpToolCallSnapshot = {
       input: normalizeToolInput(toolCall.rawInput),
       name: normalizeToolName(toolCall.title, toolCall.kind),
-      output: renderToolPayload(toolCall.content, toolCall.rawOutput),
+      output: this.capToolOutput(renderToolPayload(toolCall.content, toolCall.rawOutput)),
       status: toolCall.status,
     };
     this.toolCalls.set(toolCall.toolCallId, toolState);
@@ -196,8 +206,10 @@ export class AcpSessionUpdateNormalizer {
       current.input = normalizeToolInput(toolCallUpdate.rawInput);
     }
 
-    const nextOutput = renderToolPayload(toolCallUpdate.content ?? undefined, toolCallUpdate.rawOutput)
-      || current.output;
+    // Cap only the freshly rendered payload: `current.output` is already capped,
+    // and re-capping a marker-bearing string would corrupt the truncation count.
+    const rendered = renderToolPayload(toolCallUpdate.content ?? undefined, toolCallUpdate.rawOutput);
+    const nextOutput = rendered ? this.capToolOutput(rendered) : current.output;
     const streamChunks: StreamChunk[] = [];
 
     // Emit only the delta so the UI can append incrementally without re-rendering prior output.
@@ -231,6 +243,14 @@ export class AcpSessionUpdateNormalizer {
       toolState: { ...current },
       type: 'tool_call_update',
     };
+  }
+
+  private capToolOutput(output: string): string {
+    const max = this.options.maxToolOutputChars;
+    if (!max || output.length <= max) {
+      return output;
+    }
+    return `${output.slice(0, max)}\n… [truncated ${output.length - max} characters]`;
   }
 
   // A message-start chunk must fire exactly once per (role, messageId). Anonymous streams

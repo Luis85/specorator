@@ -260,6 +260,44 @@ describe('AcpToolStreamAdapter', () => {
       expect(lastCall).toEqual(['read', { expectResult: true, normalized: true }, 'updated-output']);
     });
 
+    it('re-normalizes partial updates from the accumulated RAW input, not the normalized shape', () => {
+      // A non-idempotent normalizer (like Cursor's `path` → `file_path`
+      // projection) reads only raw keys; feeding it its own output back would
+      // drop the projected fields on every partial update.
+      const { adapter } = makePresentation();
+      (adapter.normalizeToolInput as jest.Mock).mockImplementation(
+        (_raw: string | undefined, input: Record<string, unknown>) => ({
+          file_path: input.path ?? '',
+          content: input.content ?? '',
+        }),
+      );
+      const stream = new AcpToolStreamAdapter(adapter);
+      stream.normalizeToolCall(toolCall({ kind: 'edit', rawInput: { path: 'a.md' } }), []);
+      const [synthetic] = stream.normalizeToolCallUpdate(
+        toolCallUpdate({ rawInput: { content: 'body' } }),
+        [],
+      );
+      expect(synthetic).toMatchObject({
+        input: { file_path: 'a.md', content: 'body' },
+      });
+    });
+
+    it('retains the last-seen content and rawOutput for a terminal update that carries neither', () => {
+      // Protocol-allowed split: the diff/output arrives on an in_progress
+      // update, the terminal completed update carries only the status.
+      const { adapter, calls } = makePresentation();
+      const stream = new AcpToolStreamAdapter(adapter);
+      const content = [{ type: 'diff' as const, path: 'a.md', oldText: 'x', newText: 'y' }];
+      stream.normalizeToolCall(toolCall({ kind: 'edit', rawInput: { expectResult: true } }), []);
+      stream.normalizeToolCallUpdate(toolCallUpdate({ content, rawOutput: { ok: true } }), []);
+      stream.normalizeToolCallUpdate(toolCallUpdate({ status: 'completed' }), [
+        { type: 'tool_result', id: 'tc-1', content: '' },
+      ]);
+      const lastCall = calls.normalizeToolUseResult.mock.calls.at(-1);
+      expect(lastCall?.[2]).toEqual({ ok: true });
+      expect(lastCall?.[3]).toEqual(content);
+    });
+
     it('consults resolveRawToolName on every update so name resolution stays delegated', () => {
       const { adapter, calls } = makePresentation();
       const stream = new AcpToolStreamAdapter(adapter);

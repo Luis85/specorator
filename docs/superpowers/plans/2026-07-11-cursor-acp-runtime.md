@@ -1,3 +1,11 @@
+---
+title: Cursor ACP runtime (hard cutover) — implementation plan
+date: 2026-07-11
+status: implemented (2026-07-11) — first-run validation pending
+scope: src/providers/cursor, src/providers/acp, src/core/transport, tests, docs
+relates-to: docs/superpowers/specs/2026-07-11-cursor-acp-runtime-design.md
+---
+
 # Cursor ACP Runtime (Hard Cutover) Implementation Plan
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.

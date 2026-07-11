@@ -45,23 +45,29 @@ import { buildCursorAcpLaunchSpec, startCursorAcpProcess } from './cursorAcpLaun
 import { buildCursorAcpPromptBlocks } from './cursorAcpPrompt';
 import { resolveCursorAcpMode } from './cursorAcpSession';
 import { createCursorAcpToolStreamAdapter } from './cursorAcpToolNames';
+import { matchAdvertisedModelValue } from './cursorAdvertisedModels';
 import { buildCursorAgentEnvironment } from './cursorAgentEnv';
 import { runWithCursorAgentSpawnLock } from './cursorAgentSpawnLock';
 import { resolveCursorModelSelectionForCli } from './cursorCliModel';
 import { cleanupStaleCursorMcpServer } from './cursorMcpCleanup';
 import { getCachedCursorModelIds } from './cursorModelCatalog';
-import { resolveCursorFamilyId } from './cursorModelFamily';
+import { MAX_CURSOR_TOOL_RESULT_CHARS } from './cursorToolNormalization';
 import { extractCursorUsage } from './cursorUsageMapping';
 
 interface ActiveTurn {
   queue: AcpStreamChunkQueue;
   sessionId: string;
-  // Dedup guard: a mid-turn transport close and the rejected prompt both race to
-  // push a terminal error+done, and the queue drains post-close pushes.
-  terminalPushed: boolean;
+  // Resolved once at turn start: the model cannot change mid-turn, and usage
+  // updates arrive on the streaming hot path where re-resolving would clone the
+  // settings snapshot per frame. Null suppresses usage chunks (usage contract:
+  // never emit without a model).
+  usageModel: string | null;
 }
 
 const CURSOR_ACP_INIT_TIMEOUT_MS = 20_000;
+// session/cancel is cooperative and the prompt RPC has no timeout; if the agent
+// ignores it, the turn is terminated locally after this grace period.
+const CURSOR_CANCEL_ESCALATION_MS = 5_000;
 const CURSOR_OLD_CLI_MESSAGE =
   'Cursor CLI does not support ACP (`agent acp`). Update cursor-agent (`cursor-agent update` or reinstall from cursor.com/cli), then retry.';
 const CURSOR_LOGIN_MESSAGE =
@@ -91,10 +97,11 @@ export class CursorChatRuntime implements ChatRuntime {
   private process: AcpSubprocess | null = null;
   private ready = false;
   private readonly readyListeners = new Set<(ready: boolean) => void>();
-  private sessionBootstrapNeeded = false;
   private sessionId: string | null = null;
   private sessionInvalidated = false;
-  private readonly sessionUpdateNormalizer = new AcpSessionUpdateNormalizer();
+  private readonly sessionUpdateNormalizer = new AcpSessionUpdateNormalizer({
+    maxToolOutputChars: MAX_CURSOR_TOOL_RESULT_CHARS,
+  });
   private staleMcpCleaned = false;
   private readonly toolStreamAdapter = createCursorAcpToolStreamAdapter();
   private transport: AcpJsonRpcTransport | null = null;
@@ -134,7 +141,6 @@ export class CursorChatRuntime implements ChatRuntime {
     const nextSessionId = conversation ? resolveCursorSessionId(conversation) : null;
     if (this.sessionId !== nextSessionId) {
       this.sessionInvalidated = false;
-      this.sessionBootstrapNeeded = false;
       this.currentSessionModelId = null;
       this.advertisedModelValues = null;
       // The next session has no mode/model applied yet; clearing the caches
@@ -224,17 +230,24 @@ export class CursorChatRuntime implements ChatRuntime {
     }
 
     const shouldBootstrapHistory = (conversationHistory?.length ?? 0) > 0
-      && (!sessionIdAtTurnStart || this.sessionInvalidated || this.sessionBootstrapNeeded);
-    this.sessionBootstrapNeeded = false;
+      && (!sessionIdAtTurnStart || this.sessionInvalidated);
 
     const mode = resolveCursorAcpMode(this.plugin.settings.permissionMode);
     this.autoApprovePermissions = mode.autoApprove;
     this.currentTurnIsPlan = mode.modeId === 'plan';
-    await this.applyMode(sessionId, mode.modeId);
-    await this.applySelectedModel(sessionId, queryOptions);
+    // Independent RPCs on the same session — issued concurrently so the turn
+    // doesn't pay two sequential round-trips before the prompt is sent.
+    await Promise.all([
+      this.applyMode(sessionId, mode.modeId),
+      this.applySelectedModel(sessionId, queryOptions),
+    ]);
 
     this.activeTurn?.queue.close();
-    const activeTurn: ActiveTurn = { queue: new AcpStreamChunkQueue(), sessionId, terminalPushed: false };
+    const activeTurn: ActiveTurn = {
+      queue: new AcpStreamChunkQueue(),
+      sessionId,
+      usageModel: this.resolveActiveModel(queryOptions),
+    };
     this.activeTurn = activeTurn;
     this.currentTurnSawAssistantContent = false;
     this.contextUsage = null;
@@ -247,7 +260,7 @@ export class CursorChatRuntime implements ChatRuntime {
       prompt: buildCursorAcpPromptBlocks(turn, history, queryOptions?.boundAgentPrompt),
       sessionId,
     }).then((response) => {
-      this.emitFinalUsage(activeTurn, response.usage ?? null, queryOptions);
+      this.emitFinalUsage(activeTurn, response.usage ?? null);
       this.finalizePlanTurnMetadata();
       this.pushTurnTermination(activeTurn, [{ type: 'done' }]);
     }).catch((error) => {
@@ -275,8 +288,12 @@ export class CursorChatRuntime implements ChatRuntime {
   }
 
   cancel(): void {
+    const turn = this.activeTurn;
     if (this.connection && this.sessionId) {
       this.connection.cancel({ sessionId: this.sessionId });
+      if (turn) {
+        this.armCancelEscalation(turn);
+      }
     }
     // A blocking cursor/ask_question awaits host.askUser with no other exit;
     // aborting answers the open RPC so the agent isn't left hanging on cancel.
@@ -285,11 +302,27 @@ export class CursorChatRuntime implements ChatRuntime {
     this.host.dismissApproval();
   }
 
+  // session/cancel is only a request: an agent that hangs mid-tool never
+  // settles the prompt promise, and without escalation the drain loop would
+  // await the queue forever. If the turn is still live after the grace period,
+  // terminate it locally and recycle the process — the next send respawns.
+  private armCancelEscalation(turn: ActiveTurn): void {
+    window.setTimeout(() => {
+      if (this.activeTurn !== turn || turn.queue.isClosed) {
+        return;
+      }
+      this.pushTurnTermination(turn, [
+        { type: 'error', content: 'Cursor agent did not stop after cancel; restarting the agent process.' },
+        { type: 'done' },
+      ]);
+      void this.shutdownProcess();
+    }, CURSOR_CANCEL_ESCALATION_MS);
+  }
+
   resetSession(): void {
     this.sessionId = null;
     this.loadedSessionId = null;
     this.sessionInvalidated = false;
-    this.sessionBootstrapNeeded = false;
     this.currentModeId = null;
     this.currentSessionModelId = null;
     this.advertisedModelValues = null;
@@ -368,16 +401,7 @@ export class CursorChatRuntime implements ChatRuntime {
     );
     this.process = proc;
     this.transport = transport;
-    this.unregisterTransportClose = transport.onClose(() => {
-      if (this.transport !== transport) {
-        return;
-      }
-      this.setReady(false);
-      if (this.activeTurn) {
-        const content = this.formatRuntimeError(new Error('Cursor ACP process exited unexpectedly.'));
-        this.pushTurnTermination(this.activeTurn, [{ type: 'error', content }, { type: 'done' }]);
-      }
-    });
+    this.unregisterTransportClose = transport.onClose(() => this.handleTransportClosed(transport));
 
     this.connection = new AcpClientConnection({
       clientInfo: { name: 'specorator', version: this.plugin.manifest?.version ?? '0.0.0' },
@@ -417,6 +441,23 @@ export class CursorChatRuntime implements ChatRuntime {
     this.setReady(true);
   }
 
+  private handleTransportClosed(transport: AcpJsonRpcTransport): void {
+    if (this.transport !== transport) {
+      return;
+    }
+    this.setReady(false);
+    // The agent behind any pending blocking ask/approval is gone: abort the
+    // in-flight cursor/ask_question (which unmounts its card and restores the
+    // composer) and drop the approval card, or both stay stranded.
+    this.askQuestionAbortController?.abort();
+    this.askQuestionAbortController = null;
+    this.host.dismissApproval();
+    if (this.activeTurn) {
+      const content = this.formatRuntimeError(new Error('Cursor ACP process exited unexpectedly.'));
+      this.pushTurnTermination(this.activeTurn, [{ type: 'error', content }, { type: 'done' }]);
+    }
+  }
+
   private describeStartupFailure(_error: unknown): string {
     // Any failure before initialize resolves — immediate exit ("unknown
     // subcommand"), closed transport, or timeout — means the installed
@@ -449,7 +490,6 @@ export class CursorChatRuntime implements ChatRuntime {
         // fresh session with history re-injected on the next prompt.
         this.plugin.logger.scope('cursor.acp').warn('session/load failed; falling back to new session', error);
         this.sessionInvalidated = true;
-        this.sessionBootstrapNeeded = true;
         this.sessionId = null;
         this.loadedSessionId = null;
       }
@@ -530,28 +570,6 @@ export class CursorChatRuntime implements ChatRuntime {
     this.advertisedModelValues = state.availableModels.map((model) => model.id);
   }
 
-  // Resolves the CLI-picked id to an advertised wire id: an exact value match, or
-  // the advertised value whose family prefix (everything before `[`) matches the
-  // CLI-resolved family. Returns null when nothing is advertised or no family
-  // lines up — the caller then skips the update rather than sending a bare id
-  // that Cursor would accept-then-reject on the next prompt.
-  private matchAdvertisedModelValue(resolvedId: string): string | null {
-    const advertised = this.advertisedModelValues;
-    if (!advertised || advertised.length === 0) {
-      return null;
-    }
-    if (advertised.includes(resolvedId)) {
-      return resolvedId;
-    }
-    const resolvedFamily = resolveCursorFamilyId(resolvedId, getCachedCursorModelIds());
-    for (const value of advertised) {
-      if (value.split('[', 1)[0] === resolvedFamily) {
-        return value;
-      }
-    }
-    return null;
-  }
-
   private async applySelectedModel(
     sessionId: string,
     queryOptions?: ChatRuntimeQueryOptions,
@@ -563,7 +581,7 @@ export class CursorChatRuntime implements ChatRuntime {
     if (!resolved) {
       return;
     }
-    const wireValue = this.matchAdvertisedModelValue(resolved);
+    const wireValue = matchAdvertisedModelValue(this.advertisedModelValues, resolved);
     if (!wireValue) {
       // No advertised value matches: sending the bare id here would let Cursor
       // report it selected yet break the next prompt ("AI Model Not Found"), so
@@ -596,8 +614,7 @@ export class CursorChatRuntime implements ChatRuntime {
   private resolveCursorModelForSession(queryOptions?: ChatRuntimeQueryOptions): string | undefined {
     const settingsBag = asSettingsBag(this.plugin.settings);
     const snapshot = ProviderSettingsCoordinator.getProviderSettingsSnapshot(settingsBag, 'cursor');
-    const familyValue = queryOptions?.model
-      ?? (typeof snapshot.model === 'string' && snapshot.model.trim() ? snapshot.model.trim() : undefined);
+    const familyValue = this.resolveActiveModel(queryOptions) ?? undefined;
     const mode = typeof snapshot.effortLevel === 'string' ? snapshot.effortLevel : undefined;
     return resolveCursorModelSelectionForCli(familyValue, mode, {
       catalogIds: getCachedCursorModelIds(),
@@ -605,14 +622,13 @@ export class CursorChatRuntime implements ChatRuntime {
     });
   }
 
-  // Idempotent terminal push: the first of the racing paths (resolved/rejected
-  // prompt or transport onClose) wins and closes the queue; later callers on the
-  // same turn are no-ops so a mid-turn crash can't emit a second error+done.
+  // First terminal writer wins: the racing paths (resolved/rejected prompt,
+  // transport onClose, cancel escalation) all funnel here, and the closed queue
+  // makes later calls no-ops so a mid-turn crash can't emit a second error+done.
   private pushTurnTermination(activeTurn: ActiveTurn, chunks: StreamChunk[]): void {
-    if (activeTurn.terminalPushed) {
+    if (activeTurn.queue.isClosed) {
       return;
     }
-    activeTurn.terminalPushed = true;
     for (const chunk of chunks) {
       activeTurn.queue.push(chunk);
     }
@@ -628,7 +644,20 @@ export class CursorChatRuntime implements ChatRuntime {
   }
 
   private async handleSessionNotification(notification: AcpSessionNotification): Promise<void> {
-    if (!this.activeTurn || notification.sessionId !== this.activeTurn.sessionId) {
+    // Agent-initiated mode switches (e.g. leaving plan mode after an accepted
+    // cursor/create_plan) must refresh the cache even between turns, or
+    // applyMode early-returns against stale state and the next plan turn runs
+    // in the agent's current server-side mode. Checked on the raw update so
+    // out-of-turn notifications never touch the per-turn normalizer state.
+    if (notification.update.sessionUpdate === 'current_mode_update') {
+      if (notification.sessionId === this.sessionId) {
+        this.currentModeId = notification.update.currentModeId;
+      }
+      return;
+    }
+
+    const activeTurn = this.activeTurn;
+    if (!activeTurn || notification.sessionId !== activeTurn.sessionId) {
       return;
     }
     const normalized = this.sessionUpdateNormalizer.normalize(notification.update);
@@ -643,7 +672,7 @@ export class CursorChatRuntime implements ChatRuntime {
 
     const effect = buildActiveTurnEffect(normalized, {
       promptUsage: null,
-      resolveUsageModel: () => this.resolveActiveModel() ?? 'cursor',
+      resolveUsageModel: () => activeTurn.usageModel,
       sessionId: notification.sessionId,
       toolStreamAdapter: this.toolStreamAdapter,
     });
@@ -657,7 +686,7 @@ export class CursorChatRuntime implements ChatRuntime {
       if (chunk.type === 'user_message_start' || chunk.type === 'assistant_message_start') {
         continue;
       }
-      this.activeTurn.queue.push(chunk);
+      activeTurn.queue.push(chunk);
     }
   }
 
@@ -703,9 +732,8 @@ export class CursorChatRuntime implements ChatRuntime {
   private emitFinalUsage(
     activeTurn: ActiveTurn,
     promptUsage: Parameters<typeof buildAcpUsageInfo>[0]['promptUsage'],
-    queryOptions?: ChatRuntimeQueryOptions,
   ): void {
-    const model = this.resolveActiveModel(queryOptions);
+    const model = activeTurn.usageModel;
     if (!model) {
       return; // usage contract: never emit without a model
     }

@@ -67,6 +67,69 @@ describe('cursorAcpToolNames', () => {
     expect(toolUse?.name).not.toBe(TOOL_BASH);
   });
 
+  it('keeps the canonical file_path when a later update carries only partial rawInput', () => {
+    // Regression: the file-tool mappers read only cursor-native keys (`path`),
+    // so re-normalizing already-normalized state on a partial update used to
+    // wipe file_path mid-stream.
+    const adapter = createCursorAcpToolStreamAdapter();
+    adapter.normalizeToolCall(
+      { toolCallId: 'e2', kind: 'edit', title: 'edit', rawInput: { path: 'a.md', oldString: 'x' } },
+      [],
+    );
+    const chunks = adapter.normalizeToolCallUpdate(
+      { toolCallId: 'e2', rawInput: { newString: 'y' } },
+      [],
+    );
+    const toolUse = chunks.find((c) => c.type === 'tool_use') as
+      | { input: Record<string, unknown> }
+      | undefined;
+    expect(toolUse?.input).toEqual({ file_path: 'a.md', old_string: 'x', new_string: 'y' });
+  });
+
+  it('lets a later file-mutating kind correct a prose-pinned raw name', () => {
+    // A first call with no kind and a prose title pins the prose; the follow-up
+    // update carrying kind 'delete' must restore the canonical identity that
+    // removal bookkeeping matches against.
+    const adapter = createCursorAcpToolStreamAdapter();
+    adapter.normalizeToolCall(
+      { toolCallId: 'd2', title: 'Deleting stale note', rawInput: { path: 'notes/stale.md' } },
+      [],
+    );
+    const chunks = adapter.normalizeToolCallUpdate(
+      { toolCallId: 'd2', kind: 'delete', rawInput: {} },
+      [],
+    );
+    const toolUse = chunks.find((c) => c.type === 'tool_use') as { name: string } | undefined;
+    expect(toolUse?.name).toBe('delete');
+  });
+
+  it('attaches the diff toolUseResult when the terminal update carries no content of its own', () => {
+    // Protocol-allowed split: the diff arrives on an in_progress update; the
+    // completed update carries only the status.
+    const adapter = createCursorAcpToolStreamAdapter();
+    adapter.normalizeToolCall(
+      { toolCallId: 'e3', kind: 'edit', title: 'edit', rawInput: { path: 'a.md' } },
+      [],
+    );
+    adapter.normalizeToolCallUpdate(
+      {
+        toolCallId: 'e3',
+        status: 'in_progress',
+        content: [{ type: 'diff', path: 'a.md', oldText: 'foo', newText: 'bar' }],
+      },
+      [],
+    );
+    const chunks = adapter.normalizeToolCallUpdate(
+      { toolCallId: 'e3', status: 'completed' },
+      [{ id: 'e3', content: 'done', type: 'tool_result' }],
+    );
+    const result = chunks.find((c) => c.type === 'tool_result') as {
+      toolUseResult?: { filePath?: string; unifiedDiff?: string };
+    };
+    expect(result.toolUseResult?.filePath).toBe('a.md');
+    expect(result.toolUseResult?.unifiedDiff).toContain('+bar');
+  });
+
   describe('normalizeCursorAcpToolUseResult (ACP edit diffs)', () => {
     it('surfaces the unified diff + file path from an edit tool_call_update diff block', () => {
       const adapter = createCursorAcpToolStreamAdapter();
@@ -185,6 +248,34 @@ describe('cursorAcpToolNames', () => {
 
     it('falls back to the tool sentinel for an empty raw name', () => {
       expect(normalizeCursorAcpToolName(undefined)).toBe('tool');
+    });
+  });
+
+  describe('normalizeCursorAcpToolUseResult (task subagent payloads)', () => {
+    it('builds the structured task toolUseResult from a rawOutput success envelope', () => {
+      const steps = [{ assistantMessage: { text: 'subagent done' } }];
+      const result = normalizeCursorAcpToolUseResult(
+        'task',
+        { description: 'Explore', prompt: 'look around' },
+        { success: { agentId: 'agent-7', conversationSteps: steps } },
+        null,
+      );
+      expect(result).toEqual({ agentId: 'agent-7', conversationSteps: steps });
+    });
+
+    it('tolerates a bare success payload without the envelope', () => {
+      const result = normalizeCursorAcpToolUseResult(
+        'task',
+        {},
+        { agentId: 'agent-9' },
+        null,
+      );
+      expect(result).toEqual({ agentId: 'agent-9' });
+    });
+
+    it('returns undefined when the task rawOutput carries no subagent payload', () => {
+      expect(normalizeCursorAcpToolUseResult('task', {}, undefined, null)).toBeUndefined();
+      expect(normalizeCursorAcpToolUseResult('task', {}, 'plain text', null)).toBeUndefined();
     });
   });
 

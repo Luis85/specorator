@@ -16,7 +16,7 @@ export interface CursorAcpExtensionHost {
 
 // Documented cursor/ask_question option: `{ id, label }` per cursor.com/docs/cli/acp.
 // `title` is a tolerated legacy alias for `label`; `description` is not part of the
-// documented shape but is carried through harmlessly when present.
+// documented shape but is preserved so the inline widget can render it when present.
 interface CursorAskQuestionOption {
   id?: string;
   label?: string;
@@ -56,6 +56,7 @@ interface CursorAskQuestionParams {
 interface ParsedCursorOption {
   id?: string;
   label: string;
+  description?: string;
 }
 
 interface ParsedCursorQuestion {
@@ -105,6 +106,7 @@ function parseCursorOptions(raw: unknown): ParsedCursorOption[] {
     out.push({
       id: typeof entry.id === 'string' && entry.id ? entry.id : undefined,
       label: firstString(entry.label, entry.title) ?? '',
+      description: firstString(entry.description),
     });
   }
   return out;
@@ -158,7 +160,10 @@ function buildAskUserInput(questions: ParsedCursorQuestion[]): Record<string, un
       ...(question.hasId ? { id: question.key } : {}),
       question: question.prompt,
       header: question.header,
-      options: question.options.map((option) => ({ label: option.label, description: '' })),
+      options: question.options.map((option) => ({
+        label: option.label,
+        description: option.description ?? '',
+      })),
       multiSelect: question.multiSelect,
     })),
   };
@@ -254,10 +259,15 @@ export function registerCursorAcpExtensions(
   unsubscribes.push(transport.onRequest('cursor/create_plan', async (params) => {
     const parsed = (params ?? {}) as { plan?: string; content?: string; text?: string };
     const planText = parsed.plan ?? parsed.content ?? parsed.text ?? '';
+    // planCompleted stays inside the content guard: an empty or
+    // unrecognized-key payload emits no plan text, and marking the turn
+    // completed anyway would open the post-plan approval card over a turn with
+    // no plan visible (the same empty-plan gate finalizePlanTurnMetadata
+    // enforces for streamed plan content).
     if (planText) {
       host.emitChunk({ type: 'text', content: `\n\n${planText}\n` });
+      host.patchTurnMetadata({ planCompleted: true });
     }
-    host.patchTurnMetadata({ planCompleted: true });
     // Specorator's plan approval happens post-turn via the shared approval card
     // (planCompleted → InputController), not at the protocol level. So the
     // documented `accepted` outcome here purely lets the turn complete; the

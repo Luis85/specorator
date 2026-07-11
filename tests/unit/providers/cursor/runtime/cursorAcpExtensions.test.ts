@@ -141,6 +141,37 @@ describe('registerCursorAcpExtensions', () => {
     });
   });
 
+  it('carries agent-supplied option descriptions through to the inline widget', async () => {
+    const { transport, requests } = makeFakeTransport();
+    let capturedInput: unknown;
+    const askUser = jest.fn((input: unknown) => {
+      capturedInput = input;
+      return Promise.resolve({ q1: 'Refactor' });
+    });
+    registerCursorAcpExtensions(transport as never, {
+      askUser: askUser as never,
+      emitChunk: () => {},
+      patchTurnMetadata: () => {},
+    });
+
+    await requests.get('cursor/ask_question')!({
+      questions: [{
+        id: 'q1',
+        prompt: 'How should we proceed?',
+        options: [
+          { id: 'a', label: 'Refactor', description: 'Rewrite the module in place' },
+          { id: 'b', label: 'Patch' },
+        ],
+      }],
+    });
+
+    const input = capturedInput as { questions: Array<{ options: Array<{ label: string; description: string }> }> };
+    expect(input.questions[0].options).toEqual([
+      { label: 'Refactor', description: 'Rewrite the module in place' },
+      { label: 'Patch', description: '' },
+    ]);
+  });
+
   it('falls back to the label as the id for free-form answers with no matching option', async () => {
     const { transport, requests } = makeFakeTransport();
     const askUser = jest.fn().mockResolvedValue({ q1: 'Something else' });
@@ -214,6 +245,27 @@ describe('registerCursorAcpExtensions', () => {
     expect(chunks.some((c) => c.type === 'text' && c.content.includes('The plan'))).toBe(true);
     expect(patches).toContainEqual({ planCompleted: true });
     expect(response).toEqual({ outcome: { outcome: 'accepted' } });
+  });
+
+  it('accepts an empty cursor/create_plan without marking the turn plan-completed', async () => {
+    const { transport, requests } = makeFakeTransport();
+    const chunks: StreamChunk[] = [];
+    const patches: Record<string, unknown>[] = [];
+    registerCursorAcpExtensions(transport as never, {
+      askUser: jest.fn(),
+      emitChunk: (c) => chunks.push(c),
+      patchTurnMetadata: (p) => patches.push(p),
+    });
+
+    // Empty payload and empty plan text: no plan is visible, so planCompleted
+    // must not open the post-plan approval card over a plan-less turn.
+    const emptyPayload = await requests.get('cursor/create_plan')!({});
+    const emptyPlan = await requests.get('cursor/create_plan')!({ plan: '' });
+
+    expect(chunks).toHaveLength(0);
+    expect(patches).toHaveLength(0);
+    expect(emptyPayload).toEqual({ outcome: { outcome: 'accepted' } });
+    expect(emptyPlan).toEqual({ outcome: { outcome: 'accepted' } });
   });
 
   it('maps cursor/update_todos to a TodoWrite tool chunk', async () => {
