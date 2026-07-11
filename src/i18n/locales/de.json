@@ -854,6 +854,7 @@
       "doneWhen": "Fertig, wenn",
       "boardNotices": "Board-Hinweise",
       "skippedNotes": "Übersprungene Notizen",
+      "loadError": "Board konnte nicht geladen werden: {message}",
       "queueHalted": "Warteschlange angehalten: {reason}",
       "failureOne": "{n} Fehler",
       "failureMany": "{n} Fehler",

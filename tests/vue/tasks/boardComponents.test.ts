@@ -269,6 +269,29 @@ describe('Agent Board Vue components', () => {
     expect(line?.textContent?.endsWith('…')).toBe(true);
   });
 
+  it('surfaces store.error (a caught vault/index load failure) in the errors block, truncated with the full text on title', () => {
+    // load() routes an index failure into store.error and RESOLVES, so without
+    // this the board would sit silently empty/stale. Mock load so the on-mount
+    // fire-and-forget load() can't clear the seeded error before we assert.
+    const pinia = createPinia();
+    setActivePinia(pinia);
+    const store = useAgentBoardStore();
+    vi.spyOn(store, 'load').mockResolvedValue();
+    const long = `boom: ${'x'.repeat(400)}`;
+    store.error = long;
+    const { container } = render(AgentBoardRoot, {
+      global: {
+        plugins: [pinia],
+        provide: { [PLUGIN_KEY as symbol]: makePlugin(), [CALLBACKS_KEY as symbol]: makeCallbacks() },
+      },
+    });
+    const loadError = container.querySelector('.specorator-agent-board-errors-load');
+    expect(loadError).toBeTruthy();
+    expect(loadError?.getAttribute('title')).toBe(long);
+    expect(loadError?.textContent).toContain('Failed to load the board');
+    expect(loadError?.textContent).toContain('…'); // long message truncated
+  });
+
   it('wires card click → onOpenDetail(task), toolbar/inbox add → onAddWorkOrder, run-next → onRunNextReady', async () => {
     const callbacks = makeCallbacks();
     const { container } = mountBoard(structuralLayout(), callbacks);

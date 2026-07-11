@@ -854,6 +854,7 @@
       "doneWhen": "Hecho cuando",
       "boardNotices": "Avisos del tablero",
       "skippedNotes": "Notas omitidas",
+      "loadError": "No se pudo cargar el tablero: {message}",
       "queueHalted": "Cola detenida: {reason}",
       "failureOne": "{n} fallo",
       "failureMany": "{n} fallos",

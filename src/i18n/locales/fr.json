@@ -854,6 +854,7 @@
       "doneWhen": "Terminé quand",
       "boardNotices": "Avis du tableau",
       "skippedNotes": "Notes ignorées",
+      "loadError": "Échec du chargement du tableau : {message}",
       "queueHalted": "File d’attente arrêtée : {reason}",
       "failureOne": "{n} échec",
       "failureMany": "{n} échecs",

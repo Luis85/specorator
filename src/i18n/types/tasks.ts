@@ -53,6 +53,7 @@ export type TasksTranslationKey =
   | 'tasks.board.doneWhen'
   | 'tasks.board.boardNotices'
   | 'tasks.board.skippedNotes'
+  | 'tasks.board.loadError'
   | 'tasks.board.queueHalted'
   | 'tasks.board.failureOne'
   | 'tasks.board.failureMany'

@@ -854,6 +854,7 @@
       "doneWhen": "完了の条件",
       "boardNotices": "ボードの通知",
       "skippedNotes": "スキップされたノート",
+      "loadError": "ボードの読み込みに失敗しました: {message}",
       "queueHalted": "キューを停止しました: {reason}",
       "failureOne": "{n} 件の失敗",
       "failureMany": "{n} 件の失敗",

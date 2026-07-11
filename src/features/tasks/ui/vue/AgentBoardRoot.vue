@@ -91,9 +91,19 @@ function invalidNoteLine(note: InvalidTaskNote): string {
       />
     </div>
     <div
-      v-if="store.layout.errors.length > 0 || store.invalidNotes.length > 0"
+      v-if="store.error || store.layout.errors.length > 0 || store.invalidNotes.length > 0"
       class="specorator-agent-board-errors"
     >
+      <!-- A load() that caught a vault/index failure resolves with store.error set
+        but no fresh layout; surface it here so the board doesn't sit silently empty
+        or stale. layout.errors (parse warnings) + invalidNotes render below it. -->
+      <div
+        v-if="store.error"
+        class="specorator-agent-board-errors-load"
+        :title="store.error"
+      >
+        {{ t('tasks.board.loadError', { message: truncateErrorLine(store.error) }) }}
+      </div>
       <template v-if="store.layout.errors.length > 0">
         <h4>{{ t('tasks.board.boardNotices') }}</h4>
         <div
