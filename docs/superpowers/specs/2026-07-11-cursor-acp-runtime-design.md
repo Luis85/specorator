@@ -1,7 +1,7 @@
 ---
 title: Cursor ACP runtime — hard-cutover migration design
 date: 2026-07-11
-status: approved (brainstorm-validated)
+status: implemented (2026-07-11) — first-run validation pending
 scope: src/providers/cursor, src/providers/acp, src/core/transport, docs
 relates-to: docs/adr/0002-cursor-askuserquestion-transport.md, docs/adr/0001-transport-agnostic-provider-seam.md, docs/superpowers/specs/2026-07-11-cursor-native-acp-migration-spike.md (superseded)
 ---

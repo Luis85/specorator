@@ -29,6 +29,14 @@ ACP now. Any future migration is **gated on the empirical spike** defined
 below proving that an ACP path actually solves the problem without regressing
 Cursor's native history/session model.
 
+**Superseded by implementation — 2026-07-11.** The Cursor adaptor has been
+rewritten on first-party ACP (`agent acp`), replacing the resume-based
+follow-up delivery below with the blocking `cursor/ask_question` server
+request described here as the target state. See
+`docs/superpowers/specs/2026-07-11-cursor-acp-runtime-design.md` for the
+shipped design and `docs/superpowers/plans/2026-07-11-cursor-acp-runtime.md`
+for the implementing PR.
+
 ## Context
 
 Cursor runs as `cursor-agent --print --output-format stream-json` — a
