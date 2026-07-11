@@ -358,10 +358,10 @@ describe('CursorChatRuntime extension emitChunk session guard', () => {
   });
 });
 
-describe('CursorChatRuntime create_plan metadata session guard', () => {
+describe('CursorChatRuntime create_plan in-turn decision session guard', () => {
   async function captureHostAgainstTurn(sessionId: string): Promise<{
     host: CursorAcpExtensionHost;
-    metadata: () => Record<string, unknown>;
+    decidedInline: () => boolean;
     cleanup: () => Promise<void>;
   }> {
     const captured: { host?: CursorAcpExtensionHost } = {};
@@ -377,36 +377,36 @@ describe('CursorChatRuntime create_plan metadata session guard', () => {
 
     const bag = runtime as unknown as Record<string, unknown>;
     bag.activeTurn = { queue: new AcpStreamChunkQueue(), sessionId, usageModel: null };
-    // Start from a clean metadata slot so the guard's effect is observable.
-    bag.turnMetadata = {};
+    // Start from a clean flag so the guard's effect is observable.
+    bag.currentTurnPlanDecidedInline = false;
 
     return {
       host: captured.host!,
-      metadata: () => bag.turnMetadata as Record<string, unknown>,
+      decidedInline: () => bag.currentTurnPlanDecidedInline as boolean,
       cleanup: () => runtime.cleanup(),
     };
   }
 
-  it('drops a metadata patch naming a superseded session', async () => {
-    const { host, metadata, cleanup } = await captureHostAgainstTurn('S-current');
+  it('drops an in-turn plan decision naming a superseded session', async () => {
+    const { host, decidedInline, cleanup } = await captureHostAgainstTurn('S-current');
     // A stale/cancelled create_plan resolves against the PREVIOUS turn and names
-    // its old session — planCompleted must not leak onto the current turn.
-    host.patchTurnMetadata({ planCompleted: true }, 'S-old');
-    expect(metadata().planCompleted).toBeUndefined();
+    // its old session — it must not suppress the current turn's plan card.
+    host.markPlanDecidedInline('S-old');
+    expect(decidedInline()).toBe(false);
     await cleanup();
   });
 
-  it('applies a metadata patch matching the active session', async () => {
-    const { host, metadata, cleanup } = await captureHostAgainstTurn('S-current');
-    host.patchTurnMetadata({ planCompleted: true }, 'S-current');
-    expect(metadata().planCompleted).toBe(true);
+  it('records an in-turn plan decision matching the active session', async () => {
+    const { host, decidedInline, cleanup } = await captureHostAgainstTurn('S-current');
+    host.markPlanDecidedInline('S-current');
+    expect(decidedInline()).toBe(true);
     await cleanup();
   });
 
-  it('applies a metadata patch with no session id (legacy unconditional path)', async () => {
-    const { host, metadata, cleanup } = await captureHostAgainstTurn('S-current');
-    host.patchTurnMetadata({ planCompleted: true });
-    expect(metadata().planCompleted).toBe(true);
+  it('records an in-turn plan decision with no session id (legacy unconditional path)', async () => {
+    const { host, decidedInline, cleanup } = await captureHostAgainstTurn('S-current');
+    host.markPlanDecidedInline();
+    expect(decidedInline()).toBe(true);
     await cleanup();
   });
 });

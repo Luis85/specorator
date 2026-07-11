@@ -41,7 +41,8 @@ describe('registerCursorAcpExtensions', () => {
     registerCursorAcpExtensions(transport as never, {
       askUser,
       emitChunk: () => {},
-      patchTurnMetadata: () => {},
+      exitPlanMode: async () => null,
+      markPlanDecidedInline: () => {},
     });
 
     const response = await requests.get('cursor/ask_question')!({
@@ -76,7 +77,8 @@ describe('registerCursorAcpExtensions', () => {
     registerCursorAcpExtensions(transport as never, {
       askUser: askUser as never,
       emitChunk: () => {},
-      patchTurnMetadata: () => {},
+      exitPlanMode: async () => null,
+      markPlanDecidedInline: () => {},
     });
 
     const response = await requests.get('cursor/ask_question')!({
@@ -151,7 +153,8 @@ describe('registerCursorAcpExtensions', () => {
     registerCursorAcpExtensions(transport as never, {
       askUser: askUser as never,
       emitChunk: () => {},
-      patchTurnMetadata: () => {},
+      exitPlanMode: async () => null,
+      markPlanDecidedInline: () => {},
     });
 
     await requests.get('cursor/ask_question')!({
@@ -178,7 +181,8 @@ describe('registerCursorAcpExtensions', () => {
     registerCursorAcpExtensions(transport as never, {
       askUser,
       emitChunk: () => {},
-      patchTurnMetadata: () => {},
+      exitPlanMode: async () => null,
+      markPlanDecidedInline: () => {},
     });
 
     const response = await requests.get('cursor/ask_question')!({
@@ -196,7 +200,8 @@ describe('registerCursorAcpExtensions', () => {
     registerCursorAcpExtensions(transport as never, {
       askUser: jest.fn().mockResolvedValue(null),
       emitChunk: () => {},
-      patchTurnMetadata: () => {},
+      exitPlanMode: async () => null,
+      markPlanDecidedInline: () => {},
     });
 
     const response = await requests.get('cursor/ask_question')!({ question: 'Q', options: [] }) as AskResponse;
@@ -219,7 +224,8 @@ describe('registerCursorAcpExtensions', () => {
       askUser: askUser as never,
       getAskSignal: () => controller.signal,
       emitChunk: () => {},
-      patchTurnMetadata: () => {},
+      exitPlanMode: async () => null,
+      markPlanDecidedInline: () => {},
     });
 
     const pending = requests.get('cursor/ask_question')!({ question: 'Q', options: [] }) as Promise<AskResponse>;
@@ -230,40 +236,104 @@ describe('registerCursorAcpExtensions', () => {
     expect(response.outcome).toEqual({ outcome: 'cancelled' });
   });
 
-  it('accepts cursor/create_plan and marks the turn plan-completed with the plan text emitted', async () => {
+  it('blocks cursor/create_plan on the plan decision and accepts on approve, emitting the plan text', async () => {
     const { transport, requests } = makeFakeTransport();
     const chunks: StreamChunk[] = [];
-    const patches: Record<string, unknown>[] = [];
+    const exitPlanMode = jest.fn().mockResolvedValue({ type: 'approve' });
+    const markPlanDecidedInline = jest.fn();
     registerCursorAcpExtensions(transport as never, {
       askUser: jest.fn(),
+      exitPlanMode: exitPlanMode as never,
       emitChunk: (c) => chunks.push(c),
-      patchTurnMetadata: (p) => patches.push(p),
+      markPlanDecidedInline,
     });
 
     const response = await requests.get('cursor/create_plan')!({ plan: '# The plan\n1. do it' });
 
     expect(chunks.some((c) => c.type === 'text' && c.content.includes('The plan'))).toBe(true);
-    expect(patches).toContainEqual({ planCompleted: true });
+    // The plan approval blocks in-turn (not on the post-turn card), so the RPC
+    // resolves accepted only after the user approves, and the runtime is told to
+    // suppress the post-turn planCompleted card.
+    expect(exitPlanMode).toHaveBeenCalled();
+    expect(markPlanDecidedInline).toHaveBeenCalled();
     expect(response).toEqual({ outcome: { outcome: 'accepted' } });
   });
 
-  it('accepts an empty cursor/create_plan without marking the turn plan-completed', async () => {
+  it('rejects cursor/create_plan with the feedback text when the user asks to keep planning', async () => {
     const { transport, requests } = makeFakeTransport();
-    const chunks: StreamChunk[] = [];
-    const patches: Record<string, unknown>[] = [];
+    const exitPlanMode = jest.fn().mockResolvedValue({ type: 'feedback', text: 'tighten step 3' });
     registerCursorAcpExtensions(transport as never, {
       askUser: jest.fn(),
-      emitChunk: (c) => chunks.push(c),
-      patchTurnMetadata: (p) => patches.push(p),
+      exitPlanMode: exitPlanMode as never,
+      emitChunk: () => {},
+      markPlanDecidedInline: () => {},
     });
 
-    // Empty payload and empty plan text: no plan is visible, so planCompleted
-    // must not open the post-plan approval card over a plan-less turn.
+    const response = await requests.get('cursor/create_plan')!({ plan: '# Plan\n1. go' });
+
+    expect(response).toEqual({ outcome: { outcome: 'rejected', reason: 'tighten step 3' } });
+  });
+
+  it('rejects cursor/create_plan when the user dismisses the plan card without deciding', async () => {
+    const { transport, requests } = makeFakeTransport();
+    // A null decision with no abort is a deliberate dismissal (Escape).
+    registerCursorAcpExtensions(transport as never, {
+      askUser: jest.fn(),
+      exitPlanMode: async () => null,
+      emitChunk: () => {},
+      markPlanDecidedInline: () => {},
+    });
+
+    const response = await requests.get('cursor/create_plan')!({ plan: '# Plan\n1. go' });
+
+    expect(response).toEqual({ outcome: { outcome: 'rejected' } });
+  });
+
+  it('answers cursor/create_plan as cancelled when the turn signal aborts mid-decision', async () => {
+    const { transport, requests } = makeFakeTransport();
+    const controller = new AbortController();
+    // exitPlanMode mirrors the inline card: it resolves null once its signal
+    // aborts (the shape a turn cancel produces at runtime).
+    const exitPlanMode = jest.fn((_input: unknown, signal?: AbortSignal) => new Promise((resolve) => {
+      signal?.addEventListener('abort', () => resolve(null));
+    }));
+    const markPlanDecidedInline = jest.fn();
+    registerCursorAcpExtensions(transport as never, {
+      askUser: jest.fn(),
+      exitPlanMode: exitPlanMode as never,
+      getAskSignal: () => controller.signal,
+      emitChunk: () => {},
+      markPlanDecidedInline,
+    });
+
+    const pending = requests.get('cursor/create_plan')!({ plan: '# Plan\n1. go' });
+    controller.abort();
+    const response = await pending;
+
+    expect(response).toEqual({ outcome: { outcome: 'cancelled' } });
+    expect(markPlanDecidedInline).toHaveBeenCalled();
+  });
+
+  it('accepts an empty cursor/create_plan without blocking on a plan decision', async () => {
+    const { transport, requests } = makeFakeTransport();
+    const chunks: StreamChunk[] = [];
+    const exitPlanMode = jest.fn();
+    const markPlanDecidedInline = jest.fn();
+    registerCursorAcpExtensions(transport as never, {
+      askUser: jest.fn(),
+      exitPlanMode: exitPlanMode as never,
+      emitChunk: (c) => chunks.push(c),
+      markPlanDecidedInline,
+    });
+
+    // Empty payload and empty plan text: no plan is visible, so there is nothing
+    // to approve — accept so the turn completes without prompting.
     const emptyPayload = await requests.get('cursor/create_plan')!({});
     const emptyPlan = await requests.get('cursor/create_plan')!({ plan: '' });
 
     expect(chunks).toHaveLength(0);
-    expect(patches).toHaveLength(0);
+    expect(exitPlanMode).not.toHaveBeenCalled();
+    expect(markPlanDecidedInline).not.toHaveBeenCalled();
     expect(emptyPayload).toEqual({ outcome: { outcome: 'accepted' } });
     expect(emptyPlan).toEqual({ outcome: { outcome: 'accepted' } });
   });
@@ -274,7 +344,8 @@ describe('registerCursorAcpExtensions', () => {
     registerCursorAcpExtensions(transport as never, {
       askUser: jest.fn(),
       emitChunk: (chunk, sessionId) => emitted.push({ chunk, sessionId }),
-      patchTurnMetadata: () => {},
+      exitPlanMode: async () => null,
+      markPlanDecidedInline: () => {},
     });
 
     await requests.get('cursor/create_plan')!({ sessionId: 'S-42', plan: '# Plan\n1. go' });
@@ -290,7 +361,8 @@ describe('registerCursorAcpExtensions', () => {
     registerCursorAcpExtensions(transport as never, {
       askUser: jest.fn(),
       emitChunk: (chunk, sessionId) => emitted.push({ chunk, sessionId }),
-      patchTurnMetadata: () => {},
+      exitPlanMode: async () => null,
+      markPlanDecidedInline: () => {},
     });
 
     await notifications.get('cursor/update_todos')!({
@@ -308,7 +380,8 @@ describe('registerCursorAcpExtensions', () => {
     registerCursorAcpExtensions(transport as never, {
       askUser: jest.fn(),
       emitChunk: (c) => chunks.push(c),
-      patchTurnMetadata: () => {},
+      exitPlanMode: async () => null,
+      markPlanDecidedInline: () => {},
     });
 
     await notifications.get('cursor/update_todos')!({ todos: [{ content: 'step 1', status: 'pending' }] });
@@ -323,7 +396,8 @@ describe('registerCursorAcpExtensions', () => {
     registerCursorAcpExtensions(transport as never, {
       askUser: jest.fn(),
       emitChunk: (c) => chunks.push(c),
-      patchTurnMetadata: () => {},
+      exitPlanMode: async () => null,
+      markPlanDecidedInline: () => {},
     });
 
     // Documented cursor/update_todos shape per cursor.com/docs/cli/acp:
@@ -354,7 +428,8 @@ describe('registerCursorAcpExtensions', () => {
     registerCursorAcpExtensions(transport as never, {
       askUser: jest.fn(),
       emitChunk: (c) => chunks.push(c),
-      patchTurnMetadata: () => {},
+      exitPlanMode: async () => null,
+      markPlanDecidedInline: () => {},
     });
 
     expect(() => {
@@ -379,7 +454,8 @@ describe('registerCursorAcpExtensions', () => {
     registerCursorAcpExtensions(transport as never, {
       askUser: jest.fn(),
       emitChunk: (c) => chunks.push(c),
-      patchTurnMetadata: () => {},
+      exitPlanMode: async () => null,
+      markPlanDecidedInline: () => {},
     });
 
     await notifications.get('cursor/update_todos')!({
@@ -402,7 +478,8 @@ describe('registerCursorAcpExtensions', () => {
     registerCursorAcpExtensions(transport as never, {
       askUser: jest.fn(),
       emitChunk: (c) => chunks.push(c),
-      patchTurnMetadata: () => {},
+      exitPlanMode: async () => null,
+      markPlanDecidedInline: () => {},
     });
 
     await notifications.get('cursor/update_todos')!({
@@ -432,7 +509,8 @@ describe('registerCursorAcpExtensions', () => {
     registerCursorAcpExtensions(transport as never, {
       askUser: jest.fn(),
       emitChunk: (c) => chunks.push(c),
-      patchTurnMetadata: () => {},
+      exitPlanMode: async () => null,
+      markPlanDecidedInline: () => {},
     });
 
     await notifications.get('cursor/update_todos')!({
@@ -458,7 +536,8 @@ describe('registerCursorAcpExtensions', () => {
     registerCursorAcpExtensions(transport as never, {
       askUser: jest.fn(),
       emitChunk: (c) => chunks.push(c),
-      patchTurnMetadata: () => {},
+      exitPlanMode: async () => null,
+      markPlanDecidedInline: () => {},
     });
 
     await notifications.get('cursor/update_todos')!({
@@ -484,7 +563,8 @@ describe('registerCursorAcpExtensions', () => {
     registerCursorAcpExtensions(transport as never, {
       askUser: jest.fn(),
       emitChunk: (c) => chunks.push(c),
-      patchTurnMetadata: () => {},
+      exitPlanMode: async () => null,
+      markPlanDecidedInline: () => {},
     });
 
     // Seed a valid list, then merge a malformed batch.
@@ -506,7 +586,8 @@ describe('registerCursorAcpExtensions', () => {
     registerCursorAcpExtensions(transport as never, {
       askUser: jest.fn(),
       emitChunk: (c) => chunks.push(c),
-      patchTurnMetadata: () => {},
+      exitPlanMode: async () => null,
+      markPlanDecidedInline: () => {},
     });
 
     await notifications.get('cursor/update_todos')!({
@@ -534,7 +615,8 @@ describe('registerCursorAcpExtensions', () => {
     registerCursorAcpExtensions(transport as never, {
       askUser: jest.fn(),
       emitChunk: (c) => chunks.push(c),
-      patchTurnMetadata: () => {},
+      exitPlanMode: async () => null,
+      markPlanDecidedInline: () => {},
     });
 
     await notifications.get('cursor/update_todos')!({
@@ -563,7 +645,8 @@ describe('registerCursorAcpExtensions', () => {
     registerCursorAcpExtensions(transport as never, {
       askUser: jest.fn(),
       emitChunk: (c) => chunks.push(c),
-      patchTurnMetadata: () => {},
+      exitPlanMode: async () => null,
+      markPlanDecidedInline: () => {},
     });
 
     await notifications.get('cursor/update_todos')!({
@@ -589,7 +672,8 @@ describe('registerCursorAcpExtensions', () => {
     registerCursorAcpExtensions(transport as never, {
       askUser: jest.fn().mockResolvedValue(null),
       emitChunk: () => {},
-      patchTurnMetadata: () => {},
+      exitPlanMode: async () => null,
+      markPlanDecidedInline: () => {},
     });
 
     const response = await requests.get('cursor/ask_question')!({ questions: [null] }) as AskResponse;
@@ -601,7 +685,8 @@ describe('registerCursorAcpExtensions', () => {
     registerCursorAcpExtensions(transport as never, {
       askUser: jest.fn().mockResolvedValue(null),
       emitChunk: () => {},
-      patchTurnMetadata: () => {},
+      exitPlanMode: async () => null,
+      markPlanDecidedInline: () => {},
     });
 
     const response = await requests.get('cursor/ask_question')!({ questions: 'oops' }) as AskResponse;
@@ -613,7 +698,8 @@ describe('registerCursorAcpExtensions', () => {
     registerCursorAcpExtensions(transport as never, {
       askUser: jest.fn().mockResolvedValue(null),
       emitChunk: () => {},
-      patchTurnMetadata: () => {},
+      exitPlanMode: async () => null,
+      markPlanDecidedInline: () => {},
     });
 
     const response = await requests.get('cursor/ask_question')!({ question: 'Q', options: 'not-an-array' }) as AskResponse;
@@ -625,7 +711,8 @@ describe('registerCursorAcpExtensions', () => {
     registerCursorAcpExtensions(transport as never, {
       askUser: jest.fn().mockRejectedValue(new Error('boom')),
       emitChunk: () => {},
-      patchTurnMetadata: () => {},
+      exitPlanMode: async () => null,
+      markPlanDecidedInline: () => {},
     });
 
     const response = await requests.get('cursor/ask_question')!({ question: 'Q', options: [] }) as AskResponse;
@@ -643,7 +730,8 @@ describe('registerCursorAcpExtensions', () => {
     registerCursorAcpExtensions(transport as never, {
       askUser,
       emitChunk: () => {},
-      patchTurnMetadata: () => {},
+      exitPlanMode: async () => null,
+      markPlanDecidedInline: () => {},
     });
 
     const response = await requests.get('cursor/ask_question')!({
@@ -661,7 +749,8 @@ describe('registerCursorAcpExtensions', () => {
     const unregister = registerCursorAcpExtensions(transport as never, {
       askUser: jest.fn(),
       emitChunk: () => {},
-      patchTurnMetadata: () => {},
+      exitPlanMode: async () => null,
+      markPlanDecidedInline: () => {},
     });
     unregister();
     expect(requests.size).toBe(0);

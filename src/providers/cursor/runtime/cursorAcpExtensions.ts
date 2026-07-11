@@ -1,15 +1,21 @@
-import type { AskUserQuestionCallback, ChatTurnMetadata } from '../../../core/runtime/types';
+import type { AskUserQuestionCallback, ExitPlanModeCallback } from '../../../core/runtime/types';
 import { TOOL_TODO_WRITE } from '../../../core/tools/toolNames';
-import type { StreamChunk } from '../../../core/types';
+import type { ExitPlanModeDecision, StreamChunk } from '../../../core/types';
 import type { AcpJsonRpcTransport } from '../../acp';
 import { mapCursorToolInput } from './cursorToolInputMapping';
 import { stringValue } from './cursorToolValueCoercion';
 
 export interface CursorAcpExtensionHost {
   askUser: AskUserQuestionCallback;
-  // Signal for the in-flight turn's blocking ask_question await. When the turn
-  // is canceled the runtime aborts it, so an otherwise-unbounded askUser await
-  // unblocks and the RPC gets answered (cancelled) instead of hanging.
+  // Plan-mode exit decision prompt. cursor/create_plan is a BLOCKING plan-
+  // approval request (cursor.com/docs/cli/acp), so its handler blocks on this
+  // the same way ask_question blocks on askUser — the user's accept/reject/
+  // feedback decision resolves the RPC in-turn.
+  exitPlanMode: ExitPlanModeCallback;
+  // Per-turn abort signal, shared by the blocking ask_question and create_plan
+  // awaits. When the turn is canceled the runtime aborts it, so an otherwise-
+  // unbounded await unblocks and the RPC gets answered (cancelled) instead of
+  // hanging.
   getAskSignal?: () => AbortSignal | undefined;
   // `sessionId` is the requesting session when the emitting extension carries
   // one (cursor/create_plan, cursor/update_todos). The runtime drops a chunk
@@ -17,12 +23,13 @@ export interface CursorAcpExtensionHost {
   // blocking extension request racing a turn boundary can't misroute into the
   // next turn's queue. An absent id keeps the prior unconditional behavior.
   emitChunk: (chunk: StreamChunk, sessionId?: string) => void;
-  // `sessionId` mirrors emitChunk's guard: a blocking create_plan that resolves
-  // against a superseded turn names its old session, so the runtime drops the
-  // metadata patch rather than letting a stale/cancelled plan open an empty
-  // approval card on a later turn. An absent id keeps the prior unconditional
-  // behavior.
-  patchTurnMetadata: (patch: Partial<ChatTurnMetadata>, sessionId?: string) => void;
+  // Signals the runtime that cursor/create_plan already settled the user's plan
+  // decision in-turn (via exitPlanMode), so the post-turn planCompleted approval
+  // card must be suppressed — otherwise one plan is prompted twice. Session-
+  // guarded like emitChunk: a stale create_plan resolving against a superseded
+  // turn names its old session and is dropped. An absent id keeps the
+  // unconditional path.
+  markPlanDecidedInline: (sessionId?: string) => void;
 }
 
 // Documented cursor/ask_question option: `{ id, label }` per cursor.com/docs/cli/acp.
@@ -81,6 +88,64 @@ interface ParsedCursorQuestion {
 
 function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : 'Unknown error';
+}
+
+type CursorCreatePlanOutcome =
+  | { outcome: 'accepted' }
+  | { outcome: 'rejected'; reason?: string }
+  | { outcome: 'cancelled' };
+
+/**
+ * Maps the exit-plan-mode decision (or a turn-cancel abort) onto the documented
+ * cursor/create_plan outcome union (cursor.com/docs/cli/acp): approve /
+ * approve-new-session -> accepted, feedback -> rejected + the feedback reason, a
+ * deliberate dismissal (null with no abort) -> rejected, and a turn cancel ->
+ * cancelled.
+ */
+function mapPlanDecisionToOutcome(
+  decision: ExitPlanModeDecision | null,
+  aborted: boolean,
+): CursorCreatePlanOutcome {
+  if (aborted) {
+    return { outcome: 'cancelled' };
+  }
+  if (decision === null) {
+    return { outcome: 'rejected' };
+  }
+  if (decision.type === 'feedback') {
+    return { outcome: 'rejected', reason: decision.text };
+  }
+  return { outcome: 'accepted' };
+}
+
+/**
+ * Blocks on the user's plan decision for a non-empty cursor/create_plan and
+ * returns the documented outcome. Emits the plan text (session-guarded), then
+ * awaits the exit-plan-mode prompt, racing the per-turn cancel signal so a turn
+ * cancel resolves `cancelled` instead of hanging. `markPlanDecidedInline` fires
+ * in every path (finally) so the settled decision suppresses the post-turn card.
+ */
+async function resolveCreatePlanOutcome(
+  host: CursorAcpExtensionHost,
+  planText: string,
+  sessionId: string | undefined,
+): Promise<CursorCreatePlanOutcome> {
+  host.emitChunk({ type: 'text', content: `\n\n${planText}\n` }, sessionId);
+  const signal = host.getAskSignal?.();
+  try {
+    if (signal?.aborted) {
+      return { outcome: 'cancelled' };
+    }
+    const decision = await host.exitPlanMode({ plan: planText }, signal);
+    return mapPlanDecisionToOutcome(decision, signal?.aborted ?? false);
+  } catch (error) {
+    if (isAbortError(error, signal)) {
+      return { outcome: 'cancelled' };
+    }
+    return { outcome: 'rejected', reason: `Failed to get plan decision: ${errorMessage(error)}` };
+  } finally {
+    host.markPlanDecidedInline(sessionId);
+  }
 }
 
 function isAbortError(error: unknown, signal?: AbortSignal): boolean {
@@ -380,21 +445,23 @@ export function registerCursorAcpExtensions(
   unsubscribes.push(transport.onRequest('cursor/create_plan', async (params) => {
     const parsed = (params ?? {}) as { plan?: string; content?: string; text?: string; sessionId?: string };
     const planText = parsed.plan ?? parsed.content ?? parsed.text ?? '';
-    // planCompleted stays inside the content guard: an empty or
-    // unrecognized-key payload emits no plan text, and marking the turn
-    // completed anyway would open the post-plan approval card over a turn with
-    // no plan visible (the same empty-plan gate finalizePlanTurnMetadata
-    // enforces for streamed plan content).
-    if (planText) {
-      host.emitChunk({ type: 'text', content: `\n\n${planText}\n` }, parsed.sessionId);
-      host.patchTurnMetadata({ planCompleted: true }, parsed.sessionId);
+    // An empty or unrecognized-key payload carries no plan to approve: emit
+    // nothing and accept so the turn completes, matching the streamed empty-plan
+    // gate (finalizePlanTurnMetadata) that never opens a card over a plan-less turn.
+    if (!planText) {
+      return { outcome: { outcome: 'accepted' } };
     }
-    // Specorator's plan approval happens post-turn via the shared approval card
-    // (planCompleted → InputController), not at the protocol level. So the
-    // documented `accepted` outcome here purely lets the turn complete; the
-    // user's real accept/reject decision gates the follow-up implement turn, not
-    // this response.
-    return { outcome: { outcome: 'accepted' } };
+
+    // cursor/create_plan is a BLOCKING plan-APPROVAL request (cursor.com/docs/cli/acp):
+    // the agent waits on this response before it may implement. The OLD path
+    // patched planCompleted and returned `accepted` unconditionally, letting the
+    // agent proceed as approved while the real decision waited on the post-turn
+    // card — a reject there came too late. Now resolveCreatePlanOutcome blocks on
+    // the exit-plan-mode prompt and settles the decision in-turn (and calls
+    // markPlanDecidedInline so the post-turn card doesn't double-prompt). Plan
+    // turns that plan via plain assistant text WITHOUT calling create_plan still
+    // fall through to finalizePlanTurnMetadata's gated finalize.
+    return { outcome: await resolveCreatePlanOutcome(host, planText, parsed.sessionId) };
   }));
 
   unsubscribes.push(transport.onNotification('cursor/update_todos', (params) => {

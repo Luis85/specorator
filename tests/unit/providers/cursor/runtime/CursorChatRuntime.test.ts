@@ -488,6 +488,53 @@ describe('CursorChatRuntime.query history bootstrap', () => {
   });
 });
 
+describe('CursorChatRuntime.query cancel during startup', () => {
+  beforeEach(stubProviderSnapshot);
+  afterEach(() => jest.restoreAllMocks());
+
+  const turn = { persistedContent: 'hi', prompt: 'go', request: { images: [] } };
+
+  async function collect(gen: AsyncGenerator<unknown>): Promise<Array<{ type: string }>> {
+    const out: Array<{ type: string }> = [];
+    for await (const chunk of gen) out.push(chunk as { type: string });
+    return out;
+  }
+
+  it('does not send the prompt when cancel fires during session setup, ending with done', async () => {
+    const runtime = makeRuntime();
+    const prompt = jest.fn().mockResolvedValue({ usage: null });
+    const setMode = jest.fn().mockResolvedValue({});
+    // Stop is pressed while newSession is in flight — the per-turn signal aborts
+    // before any activeTurn exists, so cancel() has nothing to interrupt. The
+    // post-setup abort gate is the only thing that keeps the prompt from firing.
+    const newSession = jest.fn().mockImplementation(async () => {
+      runtime.cancel();
+      return { sessionId: 'S-new' };
+    });
+    const bag = primeRuntime(runtime, { prompt, setMode, newSession, cancel: jest.fn() });
+    bag.sessionId = null;
+
+    const chunks = await collect(runtime.query(turn as never));
+
+    expect(prompt).not.toHaveBeenCalled();
+    expect(chunks.some((c) => c.type === 'done')).toBe(true);
+    expect(chunks.some((c) => c.type === 'error')).toBe(false);
+  });
+
+  it('sends the prompt normally when no cancel occurs during setup', async () => {
+    const runtime = makeRuntime();
+    const prompt = jest.fn().mockResolvedValue({ usage: null });
+    const setMode = jest.fn().mockResolvedValue({});
+    const newSession = jest.fn().mockResolvedValue({ sessionId: 'S-new' });
+    const bag = primeRuntime(runtime, { prompt, setMode, newSession });
+    bag.sessionId = null;
+
+    await collect(runtime.query(turn as never));
+
+    expect(prompt).toHaveBeenCalledTimes(1);
+  });
+});
+
 describe('CursorChatRuntime.query plan arming', () => {
   beforeEach(stubProviderSnapshot);
   afterEach(() => jest.restoreAllMocks());
@@ -966,6 +1013,18 @@ describe('CursorChatRuntime.handleSessionNotification plan-content gate', () => 
 
     expect(bag.currentTurnSawAssistantContent).toBe(true);
     expect((bag.turnMetadata as { planCompleted?: boolean }).planCompleted).toBe(true);
+  });
+
+  it('suppresses planCompleted when create_plan already settled the decision in-turn', async () => {
+    const runtime = makeRuntime({ settings: { permissionMode: 'plan' } });
+    const bag = await feed(runtime, makeNotification('Here is the plan'));
+    // create_plan blocked on host.exitPlanMode this turn, so the decision is
+    // already made — the post-turn approval card must not double-prompt.
+    bag.currentTurnPlanDecidedInline = true;
+
+    (bag.finalizePlanTurnMetadata as () => void).call(runtime);
+
+    expect((bag.turnMetadata as { planCompleted?: boolean }).planCompleted).toBeUndefined();
   });
 
   it('ignores notifications for a session other than the active turn', async () => {

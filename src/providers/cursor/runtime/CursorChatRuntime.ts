@@ -96,6 +96,10 @@ export class CursorChatRuntime implements ChatRuntime {
   private currentSessionModelId: string | null = null;
   private currentTurnIsPlan = false;
   private currentTurnSawAssistantContent = false;
+  // Set once cursor/create_plan has blocked on the user's decision in-turn
+  // (host.exitPlanMode); suppresses the post-turn planCompleted card so the plan
+  // isn't prompted a second time.
+  private currentTurnPlanDecidedInline = false;
   private lastStartupErrorMessage: string | null = null;
   private loadedSessionId: string | null = null;
   private process: AcpSubprocess | null = null;
@@ -190,10 +194,12 @@ export class CursorChatRuntime implements ChatRuntime {
     queryOptions?: ChatRuntimeQueryOptions,
   ): AsyncGenerator<StreamChunk> {
     this.turnMetadata = {};
-    // Fresh per-turn abort scope for the blocking ask_question RPC; aborting a
-    // controller left over from a prior turn is a no-op for this turn's await.
+    // Fresh per-turn abort scope for the blocking ask_question / create_plan RPCs
+    // and for the startup-cancel check below; aborting a controller left over from
+    // a prior turn is a no-op for this turn's await.
     this.askQuestionAbortController?.abort();
     this.askQuestionAbortController = new AbortController();
+    const turnSignal = this.askQuestionAbortController.signal;
 
     const cli = this.plugin.getResolvedProviderCliPath('cursor');
     if (!cli) {
@@ -253,6 +259,14 @@ export class CursorChatRuntime implements ChatRuntime {
     // genuinely plans.
     this.currentTurnIsPlan = mode.modeId === 'plan' && this.currentModeId === 'plan';
 
+    // Stop pressed during startup (ensureReady / ensureSession / mode+model
+    // setup) aborts the per-turn signal but has no activeTurn for cancel() to
+    // interrupt; bail before creating the turn so session/prompt never fires.
+    if (turnSignal.aborted) {
+      yield { type: 'done' };
+      return;
+    }
+
     this.activeTurn?.queue.close();
     const activeTurn: ActiveTurn = {
       queue: new AcpStreamChunkQueue(),
@@ -262,6 +276,7 @@ export class CursorChatRuntime implements ChatRuntime {
     };
     this.activeTurn = activeTurn;
     this.currentTurnSawAssistantContent = false;
+    this.currentTurnPlanDecidedInline = false;
     this.contextUsage = null;
     this.sessionUpdateNormalizer.reset();
     this.toolStreamAdapter.reset();
@@ -432,6 +447,7 @@ export class CursorChatRuntime implements ChatRuntime {
     });
     this.unregisterExtensions = registerCursorAcpExtensions(transport, {
       askUser: this.host.askUser,
+      exitPlanMode: this.host.exitPlanMode,
       getAskSignal: () => this.askQuestionAbortController?.signal,
       emitChunk: (chunk, sessionId) => {
         // A blocking extension request (create_plan / update_todos) can resolve
@@ -441,23 +457,16 @@ export class CursorChatRuntime implements ChatRuntime {
         if (sessionId !== undefined && sessionId !== this.activeTurn?.sessionId) {
           return;
         }
-        // cursor/create_plan delivers plan text through this side channel rather
-        // than a session notification, so mark it as assistant content for the
-        // plan-completed gate — otherwise a plan-only turn never sees content.
-        if (this.currentTurnIsPlan && chunk.type === 'text') {
-          this.currentTurnSawAssistantContent = true;
-        }
         this.activeTurn?.queue.push(chunk);
       },
-      patchTurnMetadata: (patch, sessionId) => {
-        // Same guard as emitChunk: a blocking create_plan that resolves against a
-        // superseded turn names its old session, so drop the metadata patch —
-        // otherwise a stale/cancelled plan's planCompleted flag opens an empty
-        // approval card on a later turn. An absent id keeps the prior path.
+      markPlanDecidedInline: (sessionId) => {
+        // Same guard as emitChunk: a stale create_plan that resolves against a
+        // superseded turn names its old session, so ignore it — only the active
+        // turn's in-turn plan decision may suppress its own post-turn card.
         if (sessionId !== undefined && sessionId !== this.activeTurn?.sessionId) {
           return;
         }
-        Object.assign(this.turnMetadata, patch);
+        this.currentTurnPlanDecidedInline = true;
       },
     });
 
@@ -671,9 +680,12 @@ export class CursorChatRuntime implements ChatRuntime {
   }
 
   private finalizePlanTurnMetadata(): void {
-    // A plan turn only "completed" once the agent actually produced plan
-    // content; an empty plan turn must not open the post-plan approval card.
-    if (this.currentTurnIsPlan && this.currentTurnSawAssistantContent) {
+    // A plan turn only "completed" once the agent produced plan content (an empty
+    // plan turn must not open the card) AND create_plan did not already settle the
+    // decision in-turn via host.exitPlanMode (which would double-prompt). This
+    // gated finalize is the path for plan turns that plan via plain assistant text
+    // without ever calling create_plan.
+    if (this.currentTurnIsPlan && this.currentTurnSawAssistantContent && !this.currentTurnPlanDecidedInline) {
       this.turnMetadata.planCompleted = true;
     }
   }
