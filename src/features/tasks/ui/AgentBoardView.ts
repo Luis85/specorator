@@ -38,6 +38,7 @@ import { chooseLoop } from './LoopPickerModal';
 import AgentBoardRoot from './vue/AgentBoardRoot.vue';
 import { CALLBACKS_KEY, PLUGIN_KEY } from './vue/boardKeys';
 import { getAgentBoardPinia } from './vue/globalPinia';
+import { useAgentBoardStore } from './vue/stores/agentBoardStore';
 import { showWorkOrderContextMenu } from './WorkOrderContextMenu';
 import { buildWorkOrderConversationBindings } from './workOrderConversationBindings';
 import { WorkOrderDetailModal, type WorkOrderFieldUpdate } from './WorkOrderDetailModal';
@@ -276,6 +277,14 @@ export class AgentBoardView extends ItemView {
     // Preload roster agents so the callbacks' persona resolver reads a current
     // snapshot when the Vue cards render (no async resolver race on first paint).
     this.rosterAgents = (await this.plugin.agentRosterStore?.list()) ?? [];
+    // Now — and only now — invalidate the cards' assignee personas. rosterVersion
+    // is the reactive "the persona cache changed" signal, and this view owns the
+    // (non-reactive) `rosterAgents` cache the resolver reads, so the bump must fire
+    // AFTER the awaited list() above. Bumping from the composable's synchronous
+    // roster:changed handler ran BEFORE this async refresh resolved, so cards
+    // re-resolved against the STALE cache with nothing to re-trigger once it
+    // updated; firing it here guarantees a rename/recolor repaints immediately.
+    useAgentBoardStore(getAgentBoardPinia()).bumpRoster();
     this.model = await this.indexer.indexVaultFolder(this.plugin.app.vault, this.folder);
     this.config = loadBoardConfig(settings).config;
     // Rebuild the slug→name cache so the modal's properties panel can resolve

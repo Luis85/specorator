@@ -155,12 +155,16 @@ describe('useBoardEventRouting', () => {
     expect(evictLive).toHaveBeenCalledWith('b');
   });
 
-  it('bumps the reactive roster version on roster:changed (so assignee personas re-resolve)', () => {
+  it('does NOT bump the roster version synchronously on roster:changed (the view bumps it after its async cache refresh)', () => {
     const { store, events } = setup();
     const bumpRoster = vi.spyOn(store, 'bumpRoster');
-    vi.spyOn(store, 'load').mockResolvedValue();
+    const load = vi.spyOn(store, 'load').mockResolvedValue();
     events.fire('roster:changed', undefined);
-    expect(bumpRoster).toHaveBeenCalled();
+    // A sync bump here would fire before AgentBoardView.refresh() reloads the
+    // non-reactive persona cache, re-resolving cards against stale agents; the
+    // view owns that timing. roster:changed still drives a full reload.
+    expect(bumpRoster).not.toHaveBeenCalled();
+    expect(load).toHaveBeenCalled();
   });
 
   it('routes task:queue-skipped to setSkip (the reactive skip-chip overlay) AND load', () => {
