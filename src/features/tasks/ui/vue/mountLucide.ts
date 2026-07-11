@@ -11,7 +11,13 @@ export function mountLucide(
   el: Element | ComponentPublicInstance | null,
   icon: string,
 ): void {
-  if (!(el instanceof HTMLElement)) return;
-  el.setAttribute('data-icon', icon);
-  setIcon(el, icon);
+  // Cross-window-safe element check. `el instanceof HTMLElement` is bound to the
+  // MAIN window's constructor, so in an Obsidian popout (its own window) every
+  // node fails the check and the icon renders blank. `nodeType` is a standard,
+  // window-independent property: a DOM element node is 1; a Vue
+  // ComponentPublicInstance (or null) has none.
+  if (el == null || (el as Partial<Node>).nodeType !== 1) return;
+  const host = el as HTMLElement;
+  host.setAttribute('data-icon', icon);
+  setIcon(host, icon);
 }
