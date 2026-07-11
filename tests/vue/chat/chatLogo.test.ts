@@ -16,6 +16,7 @@ function fakeCallbacks(overrides: Partial<ChatShellCallbacks> = {}): ChatShellCa
     onOpenHistory: vi.fn(),
     onOpenWorkOrders: vi.fn(),
     onQuickActions: vi.fn(),
+    onQuickActionsHover: vi.fn(),
     onRename: vi.fn(),
     onOpenSettings: vi.fn(),
     mountHistoryHost: vi.fn(),

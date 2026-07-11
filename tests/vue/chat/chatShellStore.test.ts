@@ -24,7 +24,7 @@ describe('useChatShellStore', () => {
     expect(store.activeTabId).toBeNull();
     expect(store.header).toEqual({
       title: 'Specorator', boundAgent: null, activeProviderId: null, tabBarVisible: false, metaRowVisible: false,
-      tabBarPosition: 'input', logoProviderId: null, logoVisible: false,
+      tabBarPosition: 'input', logoProviderId: null, logoVisible: false, titleVisible: true, canCreateTab: true,
     });
   });
 
@@ -40,7 +40,7 @@ describe('useChatShellStore', () => {
     const store = useChatShellStore();
     store.setHeader({
       title: 'Fix bug', boundAgent: { name: 'Reviewer', persona: PERSONA }, activeProviderId: 'codex', tabBarVisible: true, metaRowVisible: true,
-      tabBarPosition: 'input', logoProviderId: null, logoVisible: false,
+      tabBarPosition: 'input', logoProviderId: null, logoVisible: false, titleVisible: true, canCreateTab: true,
     });
     expect(store.header.title).toBe('Fix bug');
     expect(store.header.boundAgent?.name).toBe('Reviewer');

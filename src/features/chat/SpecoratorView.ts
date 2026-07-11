@@ -440,6 +440,12 @@ export class SpecoratorView extends ItemView {
       // the callbacks contract.
       onOpenWorkOrders: () => {},
       onQuickActions: () => this.openQuickActionsForActiveTab(),
+      // Pre-warm the Skills-tab cache on hover so the Quick Actions modal opens
+      // against a hot cache (old buildNavRowContent mouseenter). Idempotent:
+      // VaultSkillAggregator dedupes concurrent fetches per provider.
+      onQuickActionsHover: () => {
+        void this.plugin.vaultSkillAggregator?.listAllStreaming(() => {});
+      },
       onRename: (title) => this.renameActiveConversation(title),
       onOpenSettings: () => this.openPluginSettings(),
       mountHistoryHost: (el) => {
@@ -505,9 +511,12 @@ export class SpecoratorView extends ItemView {
     const activeIsWorkOrder = activeTab?.kind === 'work-order';
     const tabBarVisible = chatCount >= 2 || (activeIsWorkOrder && chatCount >= 1);
 
-    // logoVisible mirrors the hideBranding rule: the logo yields to the badges
-    // only when the strip is visible in header mode.
-    const logoVisible = !(tabBarVisible && tabBarPosition === 'header');
+    // logoVisible/titleVisible mirror the hideBranding rule: both the logo AND
+    // the title text yield to the badges when the strip is visible in header
+    // mode (old updateTabBarVisibility hid both on the same condition).
+    const brandingVisible = !(tabBarVisible && tabBarPosition === 'header');
+    const logoVisible = brandingVisible;
+    const titleVisible = brandingVisible;
 
     // Bound-agent chip is resolved async; project the cache only when it still
     // matches the active conversation (else null until refreshBoundAgentChip
@@ -536,6 +545,9 @@ export class SpecoratorView extends ItemView {
       tabBarPosition,
       logoProviderId: activeProviderId,
       logoVisible,
+      titleVisible,
+      // Gates the new-tab (+) button at the tab cap (old updateNewTabButtonVisibility).
+      canCreateTab: tm?.canCreateTab() ?? true,
     };
   }
 

@@ -36,7 +36,10 @@ const teleportDisabled = computed(() => navRowTarget.value == null);
           :provider-id="store.header.logoProviderId"
           :visible="store.header.logoVisible"
         />
-        <ChatTitle :title="store.header.title" />
+        <ChatTitle
+          v-show="store.header.titleVisible"
+          :title="store.header.title"
+        />
         <Teleport
           :to="navRowTarget"
           :disabled="teleportDisabled"

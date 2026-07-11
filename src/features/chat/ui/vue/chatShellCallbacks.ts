@@ -27,6 +27,9 @@ export interface ChatShellCallbacks {
   onOpenHistory: () => void;
   onOpenWorkOrders: () => void;
   onQuickActions: () => void;
+  /** Hover pre-warm for the Quick Actions modal — warms the Skills-tab cache so
+   *  the modal opens hot (mirrors the old buildNavRowContent mouseenter). */
+  onQuickActionsHover: () => void;
   onRename: (title: string) => void;
   /** Empty-state "Open settings" CTA — thin delegator to
    *  SpecoratorView.openPluginSettings(). */

@@ -26,6 +26,7 @@ function hdr(overrides: Partial<ChatShellHeader> = {}): ChatShellHeader {
     title: 'Specorator', boundAgent: null, activeProviderId: null,
     tabBarVisible: false, metaRowVisible: false,
     tabBarPosition: 'input', logoProviderId: null, logoVisible: false,
+    titleVisible: true, canCreateTab: true,
     ...overrides,
   };
 }
@@ -40,6 +41,7 @@ function fakeCallbacks(overrides: Partial<ChatShellCallbacks> = {}): ChatShellCa
     onOpenHistory: vi.fn(),
     onOpenWorkOrders: vi.fn(),
     onQuickActions: vi.fn(),
+    onQuickActionsHover: vi.fn(),
     onRename: vi.fn(),
     onOpenSettings: vi.fn(),
     mountHistoryHost: vi.fn(),
@@ -276,6 +278,51 @@ describe('ChatHeader', () => {
       const { container } = mountHeader(cb);
       const logo = container.querySelector('.specorator-logo') as HTMLElement;
       expect(logo.style.display).toBe('none');
+    });
+  });
+
+  describe('title visibility (header-mode branding parity)', () => {
+    it('hides the title text (display:none) when titleVisible is false and shows it when true', async () => {
+      const store = useChatShellStore();
+      store.setHeader(hdr({ titleVisible: false }));
+      const { container, rerender } = mountHeader(fakeCallbacks());
+      const title = container.querySelector('.specorator-title-text') as HTMLElement;
+      expect(title.style.display).toBe('none');
+
+      store.setHeader(hdr({ titleVisible: true }));
+      await rerender({});
+      expect(title.style.display).not.toBe('none');
+    });
+  });
+
+  describe('new-tab button capacity gating (updateNewTabButtonVisibility parity)', () => {
+    it('hides + disables the new-tab button when canCreateTab is false', async () => {
+      const store = useChatShellStore();
+      store.setHeader(hdr({ canCreateTab: false }));
+      const { container, rerender } = mountHeader(fakeCallbacks());
+      const newTabBtn = container.querySelector('.specorator-new-tab-btn') as HTMLElement;
+      expect(newTabBtn.classList.contains('specorator-hidden')).toBe(true);
+      expect(newTabBtn.getAttribute('aria-disabled')).toBe('true');
+      expect(newTabBtn.getAttribute('aria-hidden')).toBe('true');
+
+      store.setHeader(hdr({ canCreateTab: true }));
+      await rerender({});
+      expect(newTabBtn.classList.contains('specorator-hidden')).toBe(false);
+      expect(newTabBtn.getAttribute('aria-disabled')).toBeNull();
+      expect(newTabBtn.getAttribute('aria-hidden')).toBeNull();
+    });
+  });
+
+  describe('quick-actions hover prewarm', () => {
+    it('mouseenter on the quick-actions button fires onQuickActionsHover', async () => {
+      const store = useChatShellStore();
+      store.setHeader(hdr());
+      const cb = fakeCallbacks();
+      const { container } = mountHeader(cb);
+      // First header button in the actions cluster is Quick Actions (see order test).
+      const quickBtn = container.querySelector('.specorator-header-actions > .specorator-header-btn') as HTMLElement;
+      await fireEvent.mouseEnter(quickBtn);
+      expect(cb.onQuickActionsHover).toHaveBeenCalledTimes(1);
     });
   });
 });

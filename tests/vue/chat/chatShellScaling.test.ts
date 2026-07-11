@@ -49,6 +49,8 @@ function header(overrides: Partial<ChatShellHeader> = {}): ChatShellHeader {
     tabBarPosition: 'header',
     logoProviderId: 'claude',
     logoVisible: false,
+    titleVisible: false,
+    canCreateTab: true,
     ...overrides,
   };
 }
@@ -67,6 +69,7 @@ function seededCallbacks(snapshot: ChatShellSnapshot): ChatShellCallbacks {
     onOpenHistory: vi.fn(),
     onOpenWorkOrders: vi.fn(),
     onQuickActions: vi.fn(),
+    onQuickActionsHover: vi.fn(),
     onRename: vi.fn(),
     onOpenSettings: vi.fn(),
     mountHistoryHost: vi.fn(),

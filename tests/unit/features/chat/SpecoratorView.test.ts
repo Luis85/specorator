@@ -23,6 +23,7 @@ function projectionHarness(options: {
   totalCount?: number;
   activeTabKind?: 'chat' | 'work-order';
   hasGit?: boolean;
+  canCreateTab?: boolean;
 }): any {
   const view = Object.create(SpecoratorView.prototype) as any;
   const activeTab = options.activeTabKind
@@ -37,6 +38,7 @@ function projectionHarness(options: {
     getActiveTab: () => activeTab,
     countTabsByKind: (kind: string) => (kind === 'chat' ? options.chatCount ?? 0 : 0),
     getTabCount: () => options.totalCount ?? options.chatCount ?? 0,
+    canCreateTab: () => options.canCreateTab ?? true,
   };
   view.gitActionButton = options.hasGit ? {} : null;
   view.cachedBoundAgent = null;
@@ -94,6 +96,26 @@ describe('SpecoratorView.projectChatShellHeader', () => {
       projectionHarness({ chatCount: 1, totalCount: 1, activeTabKind: 'chat', tabBarPosition: 'input', hasGit: true })
         .projectChatShellHeader().metaRowVisible,
     ).toBe(true);
+  });
+
+  it('hides the title alongside the logo only when the strip is visible in header mode', () => {
+    // The old hideBranding rule hid BOTH the logo and the title on the same
+    // condition; titleVisible must track logoVisible.
+    const headerMode = projectionHarness({ chatCount: 2, tabBarPosition: 'header' }).projectChatShellHeader();
+    expect(headerMode.titleVisible).toBe(false);
+    expect(headerMode.logoVisible).toBe(false);
+    // input mode keeps both even with the strip visible.
+    const inputMode = projectionHarness({ chatCount: 2, tabBarPosition: 'input' }).projectChatShellHeader();
+    expect(inputMode.titleVisible).toBe(true);
+    // Single chat tab in header mode: strip hidden → title shows.
+    expect(
+      projectionHarness({ chatCount: 1, tabBarPosition: 'header' }).projectChatShellHeader().titleVisible,
+    ).toBe(true);
+  });
+
+  it('gates canCreateTab on the tab manager capacity (new-tab button hide/disable)', () => {
+    expect(projectionHarness({ chatCount: 1, canCreateTab: false }).projectChatShellHeader().canCreateTab).toBe(false);
+    expect(projectionHarness({ chatCount: 1, canCreateTab: true }).projectChatShellHeader().canCreateTab).toBe(true);
   });
 });
 

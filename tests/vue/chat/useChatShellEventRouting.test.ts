@@ -12,7 +12,7 @@ function snap(overrides: Partial<ChatShellSnapshot> = {}): ChatShellSnapshot {
     tabs: [], activeTabId: null,
     header: {
       title: 'Specorator', boundAgent: null, activeProviderId: null, tabBarVisible: false, metaRowVisible: false,
-      tabBarPosition: 'input', logoProviderId: null, logoVisible: false,
+      tabBarPosition: 'input', logoProviderId: null, logoVisible: false, titleVisible: true, canCreateTab: true,
     },
     ...overrides,
   };
@@ -50,7 +50,7 @@ describe('useChatShellEventRouting', () => {
       activeTabId: 't1',
       header: {
         title: 'Fix', boundAgent: null, activeProviderId: 'claude', tabBarVisible: true, metaRowVisible: false,
-        tabBarPosition: 'input', logoProviderId: null, logoVisible: false,
+        tabBarPosition: 'input', logoProviderId: null, logoVisible: false, titleVisible: true, canCreateTab: true,
       },
     }));
     expect(store.activeTabId).toBe('t1');

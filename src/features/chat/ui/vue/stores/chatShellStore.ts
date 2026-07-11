@@ -33,11 +33,18 @@ export interface ChatShellHeader {
   /** Hides the logo when the tab strip is visible in header mode (mirrors the
    *  hideBranding computation in updateNavRowLocation's header-mode branch). */
   logoVisible: boolean;
+  /** Hides the title text when the tab strip is visible in header mode — the old
+   *  hideBranding rule hid BOTH the logo and the title (updateTabBarVisibility),
+   *  so it tracks logoVisible. */
+  titleVisible: boolean;
+  /** Gates the new-tab (+) button: disabled + hidden at the tab cap (mirrors
+   *  updateNewTabButtonVisibility's canCreateTab check). */
+  canCreateTab: boolean;
 }
 
 const DEFAULT_HEADER: ChatShellHeader = Object.freeze({
   title: 'Specorator', boundAgent: null, activeProviderId: null, tabBarVisible: false, metaRowVisible: false,
-  tabBarPosition: 'input', logoProviderId: null, logoVisible: false,
+  tabBarPosition: 'input', logoProviderId: null, logoVisible: false, titleVisible: true, canCreateTab: true,
 });
 
 /**
