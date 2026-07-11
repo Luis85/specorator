@@ -1039,7 +1039,68 @@ git commit -m "feat(chat): header chrome + content host + empty state Vue compon
 
 ---
 
-## Task 6: `ChatShellRoot` + cutover in `SpecoratorView`
+## Task 6a: Dual-mode header layout + provider logo + nav-row Teleport (unwired)
+
+**Files:**
+- Modify: `src/features/chat/ui/vue/stores/chatShellStore.ts` (extend `ChatShellHeader`)
+- Modify: `src/features/chat/ui/vue/chatShellCallbacks.ts` (add `resolveNavRowEl`, `renderProviderLogo`)
+- Create: `src/features/chat/ui/vue/components/ChatLogo.vue`
+- Modify: `src/features/chat/ui/vue/components/ChatHeader.vue` (restructure for both modes + logo)
+- Test: `tests/vue/chat/chatHeader.test.ts` (extend), `tests/vue/chat/chatLogo.test.ts`
+
+**Why:** `tabBarPosition` defaults to `'input'`, and `SpecoratorView.updateNavRowLocation` reflows the header by mode: in **`'header'`** mode the tab badges go to the **title slot** (after the logo) and the action cluster goes to the **meta row** (`headerActionsEl`); in **`'input'`** mode the badges AND the action cluster both move into the **active tab's `navRowEl`** (`specorator-input-nav-row`, `tab.dom.navRowEl`, re-targeted on every tab switch), while the git button stays in the meta row. Plus `syncHeaderLogo` renders a per-provider SVG in the title slot, hidden when `tabBarVisible && header-mode`. The current `ChatHeader` fixed layout matches neither mode. This task makes `ChatHeader` faithful to both, still UNWIRED (Task 6b projects the real values). READ `SpecoratorView.buildHeader`/`updateNavRowLocation`/`syncHeaderLogo` first — the source is the contract.
+
+- [ ] **Step 1: Extend `ChatShellHeader`** (`stores/chatShellStore.ts`). Add fields:
+  - `tabBarPosition: 'header' | 'input'` — the layout mode.
+  - `logoProviderId: ProviderId | null` — which provider's SVG the logo shows (null → no logo).
+  - `logoVisible: boolean` — the logo's show/hide (engine computes `!(tabBarVisible && headerMode)`; store just holds it).
+  `DEFAULT_HEADER` gains `tabBarPosition: 'input'` (matches `defaultSettings.tabBarPosition`), `logoProviderId: null`, `logoVisible: false`. Update the default-header `toEqual` in `chatShellStore.test.ts` and the `snap()` helper in `useChatShellEventRouting.test.ts` accordingly.
+
+- [ ] **Step 2: Extend `ChatShellCallbacks`** (`chatShellCallbacks.ts`):
+  - `resolveNavRowEl: (tabId: TabId | null) => HTMLElement | null` — returns the active tab's `navRowEl` (input-mode Teleport target); null when no active tab.
+  - `renderProviderLogo: (el: HTMLElement, providerId: ProviderId) => void` — imperative SVG render (owns `ProviderRegistry.getChatUIConfig(id).getProviderIcon()` + `createProviderIconSvg`); empties `el` then appends the 18×18 SVG, mirroring `syncHeaderLogo`.
+
+- [ ] **Step 3: `ChatLogo.vue`** — `v-show="visible"` on a `specorator-logo` span host; `watchEffect` calls `cb.renderProviderLogo(host, providerId)` when `providerId` changes (skip when null). Props: `{ providerId: ProviderId | null; visible: boolean }`. Test `chatLogo.test.ts`: renders the SVG via a fake `renderProviderLogo` (called with the host + providerId); hidden via `v-show` when `visible=false`; re-renders when providerId changes.
+
+- [ ] **Step 4: Restructure `ChatHeader.vue`** to reproduce both modes. Target structure (match the real DOM):
+  ```
+  specorator-header
+    specorator-header-title-row
+      specorator-title-slot
+        ChatLogo(:provider-id="header.logoProviderId" :visible="header.logoVisible")
+        ChatTitle(:title="header.title")
+        <Teleport :to="navRowTarget" :disabled="headerMode || !navRowTarget">
+          TabStrip(v-show="header.tabBarVisible", :items, :on-tab-click, :on-tab-close)
+        </Teleport>
+    specorator-header-meta-row (:class specorator-hidden = !header.metaRowVisible)
+      specorator-bound-agent-chip-slot > BoundAgentChip(v-if header.boundAgent)
+      specorator-header-actions specorator-header-actions-slot
+        <div ref=gitActionHost> (cb.mountGitActionHost on mount — KEEP from Task 5)
+        <Teleport :to="navRowTarget" :disabled="headerMode || !navRowTarget">
+          HeaderActions
+        </Teleport>
+  ```
+  where `headerMode = computed(() => store.header.tabBarPosition === 'header')` and `navRowTarget = computed(() => headerMode.value ? null : cb.resolveNavRowEl(store.activeTabId))`. Two Teleports share `navRowTarget`: in header mode both are `:disabled` → TabStrip renders in the title slot and HeaderActions in the meta-row actions slot (the real header-mode placement); in input mode both teleport into the active tab's `navRowEl` (the real input-mode placement), re-targeting reactively when `store.activeTabId` changes. Guard `:disabled` on `!navRowTarget` so a null target (no active tab yet) falls back to in-place rendering instead of erroring.
+
+  > Note: `resolveNavRowEl` reads `store.activeTabId`, so the `navRowTarget` computed must depend on `store.activeTabId` to re-run on tab switch. Confirm the git host stays in the meta row in BOTH modes (only the main cluster teleports).
+
+- [ ] **Step 5: Extend `chatHeader.test.ts`** — provide a fake `resolveNavRowEl` returning a test element. Assert:
+  - **header mode** (`tabBarPosition:'header'`): `TabStrip` renders inside `specorator-title-slot`; `HeaderActions` renders inside the meta-row `specorator-header-actions-slot`; the provided nav-row element is EMPTY.
+  - **input mode** (`tabBarPosition:'input'`): `TabStrip` + `HeaderActions` render INSIDE the provided nav-row element (teleported); they are NOT in the title slot / meta row; the git host stays in the meta row.
+  - **tab switch**: with `resolveNavRowEl` returning element A for tab 1 and B for tab 2, changing `store.activeTabId` moves the teleported content from A to B.
+  - logo: `ChatLogo` shows/hides per `header.logoVisible`.
+
+- [ ] **Step 6: Gates + commit.** `npx vitest run tests/vue/chat`; `npm run typecheck && npm run typecheck:vue && npm run lint` (exit 0). Commit:
+  ```
+  git commit -m "feat(chat): dual-mode header layout + provider logo + nav-row teleport (unwired)"
+  ```
+  (trailers as in prior tasks).
+
+- [ ] **Constraints:** still UNWIRED — no `SpecoratorView` changes, no imperative deletions. The store fields are pure projection holders (defaults only); the engine sets them in Task 6b.
+
+---
+
+## Task 6b: `ChatShellRoot` + cutover in `SpecoratorView`
 
 **Files:**
 - Create: `src/features/chat/ui/vue/ChatShellRoot.vue`
@@ -1116,9 +1177,16 @@ private buildChatShellCallbacks(): ChatShellCallbacks {
     onOpenHistory: () => this.toggleHistoryDropdown(),
     onOpenWorkOrders: () => this.toggleWorkOrderDropdown(),
     onQuickActions: () => this.openQuickActions(),
+    onNewConversation: () => this.tabManager?.createNewConversation(),
+    onOpenSettings: () => this.openPluginSettings(),
     onRename: (title) => this.renameActiveTab(title),
     mountHistoryHost: (el) => this.mountHistoryDropdownInto(el),
     mountWorkOrderHost: (el) => this.mountWorkOrderDropdownInto(el),
+    mountGitActionHost: (el) => this.mountGitActionInto(el),
+    // Input-mode Teleport target: the active tab's imperative nav row.
+    resolveNavRowEl: (tabId) => (tabId ? this.tabManager?.getTab(tabId)?.dom.navRowEl ?? null : null),
+    // Provider logo SVG (owns ProviderRegistry + createProviderIconSvg), mirrors syncHeaderLogo.
+    renderProviderLogo: (el, providerId) => this.renderProviderLogoInto(el, providerId),
   };
 }
 
@@ -1137,11 +1205,22 @@ private emitChatShellChange(): void {
 }
 ```
 
-Then in the `TabManager` callbacks object (`SpecoratorView:277–314`), replace each `this.updateTabBar()` with `this.emitChatShellChange()` (and keep any non-tab-bar side effects those callbacks already do). `projectChatShellHeader()` computes `{ title, boundAgent, activeProviderId, tabBarVisible }` — port the title source, the bound-agent chip derivation (`SpecoratorView:~930`), and the `updateTabBarVisibility` rule (`tabCount >= 2 || (activeIsWorkOrder && tabCount >= 1)`) into `tabBarVisible`.
+Then in the `TabManager` callbacks object (`SpecoratorView:277–314`), replace each `this.updateTabBar()` with `this.emitChatShellChange()` (and keep any non-tab-bar side effects those callbacks already do). ALSO call `this.emitChatShellChange()` from the settings path that changes `tabBarPosition` (the old `updateLayoutForPosition`) so a mode switch re-projects.
+
+`projectChatShellHeader()` computes the FULL `ChatShellHeader` — port each field from the imperative source it replaces:
+- `title` — the title source (`titleTextEl` text).
+- `boundAgent` — `null` when unbound, else `{ name, persona: rosterAgentToPersona(agent) }` (the derivation in `syncBoundAgentChip` ~930–947). `ChatBoundAgent` carries a persona (Task 5 model), NOT an image.
+- `activeProviderId` — the active tab's provider.
+- `tabBarVisible` — the `updateTabBarVisibility` rule (`tabCount >= 2 || (activeIsWorkOrder && tabCount >= 1)`).
+- `metaRowVisible` — the `updateHeaderMetaRow` OR-condition (bound-agent chip present OR the header-actions/git slot has visible content).
+- `tabBarPosition` — `plugin.settings.tabBarPosition`.
+- `logoProviderId` — the active provider (drives `renderProviderLogo`); `logoVisible` — `!(tabBarVisible && tabBarPosition === 'header')` (the `syncHeaderLogo`/`hideBranding` rule).
+
+Add the imperative helpers the new callbacks delegate to (thin wrappers over existing behavior): `mountGitActionInto(el)` (move the existing `GitActionButton` DOM into `el`, or construct it there — match `buildHeader`'s git wiring), `renderProviderLogoInto(el, providerId)` (the `syncHeaderLogo` body: `getProviderIcon()` → `createProviderIconSvg` → append), and confirm `tabManager.getTab(id)`/`createNewConversation()` + `openPluginSettings()` exist (they're referenced above).
 
 - [ ] **Step 3: Delete the imperative frame**
 
-Remove `buildHeader`, `updateTabBar`, `updateTabBarVisibility` (its DOM writes; the rule now lives in `projectChatShellHeader`), the `tabBar`/`tabBarContainerEl`/`pendingTabBarUpdate` fields, the rAF debounce (Vue batches renders), and `import { TabBar }`. Delete `src/features/chat/tabs/TabBar.ts`. Keep the imperative history + work-order dropdown components (now mounted via `mountHistoryDropdownInto`/`mountWorkOrderDropdownInto` into the Vue-provided refs).
+Remove the imperative frame builders now replaced by the Vue shell + projection: `buildHeader`/`buildNavRowContent`, `updateTabBar`, `updateTabBarVisibility`, `updateNavRowLocation`/`updateLayoutForPosition` (the mode reflow is now `ChatHeader`'s Teleport driven by projected `tabBarPosition`), `updateHeaderMetaRow` (now `metaRowVisible`), `syncHeaderLogo` (now `renderProviderLogoInto` called via the callback), and the fields they own (`tabBar`, `tabBarContainerEl`, `headerActionsContent`, `navRowContent`, `logoEl`, `titleSlotEl`, `headerActionsEl`, `pendingTabBarUpdate`, the rAF debounce), and `import { TabBar }`. Delete `src/features/chat/tabs/TabBar.ts`. KEEP the imperative history + work-order dropdown components and the `GitActionButton` (now mounted via `mountHistoryDropdownInto`/`mountWorkOrderDropdownInto`/`mountGitActionInto` into the Vue-provided refs). Verify no other caller references the deleted methods (e.g. settings' `updateLayoutForPosition` call site → point it at `emitChatShellChange`; `InlineAskUserQuestion.renderTabBar` → see Step 6 audit).
 
 - [ ] **Step 4: Update `SpecoratorView.onClose`**
 
