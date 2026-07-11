@@ -501,8 +501,8 @@ export class CursorChatRuntime implements ChatRuntime {
     }
   }
 
-  // Mirrors the pre-ACP CLI launch path (resolveCursorQueryLaunch): the picked
-  // model family plus effort mode resolved against the enabled/catalog id sets.
+  // Mirrors the retired pre-ACP stream-json launch path: the picked model
+  // family plus effort mode resolved against the enabled/catalog id sets.
   private resolveCursorModelForSession(queryOptions?: ChatRuntimeQueryOptions): string | undefined {
     const settingsBag = asSettingsBag(this.plugin.settings);
     const snapshot = ProviderSettingsCoordinator.getProviderSettingsSnapshot(settingsBag, 'cursor');

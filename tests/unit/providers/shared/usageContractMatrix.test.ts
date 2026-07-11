@@ -9,7 +9,6 @@ import {
   transformSDKMessage,
 } from '@/providers/claude/stream/transformClaudeMessage';
 import { CodexNotificationRouter } from '@/providers/codex/runtime/CodexNotificationRouter';
-import { CursorNdjsonStreamReducer } from '@/providers/cursor/runtime/cursorStreamMapper';
 
 /**
  * Shared contract that every provider's UsageInfo emitter must satisfy.
@@ -132,18 +131,20 @@ describe('UsageInfo cross-provider contract matrix', () => {
     assertUsageInfoContract(usage as UsageInfo);
   });
 
-  it('Cursor emits a contract-conformant UsageInfo', () => {
-    const reducer = new CursorNdjsonStreamReducer();
-    reducer.reduceLine(JSON.stringify({ type: 'system', model: 'claude-sonnet-4' }));
-    const { chunks } = reducer.reduceLine(
-      JSON.stringify({
-        type: 'usage',
-        usage: { input_tokens: 100, output_tokens: 50, total_tokens: 150 },
-      }),
-    );
-    const usageChunks = chunks.filter(c => c.type === 'usage');
-    expect(usageChunks).toHaveLength(1);
-    const usage = (usageChunks[0] as { type: 'usage'; usage: UsageInfo }).usage;
-    assertUsageInfoContract(usage);
+  it('Cursor emits a contract-conformant UsageInfo via buildAcpUsageInfo (ACP prompt-usage passthrough)', () => {
+    // CursorChatRuntime.emitFinalUsage's primary path: the ACP `session/prompt`
+    // response's `usage` field flows straight into the shared ACP usage builder,
+    // same as Opencode above.
+    const usage = buildAcpUsageInfo({
+      contextWindow: null,
+      model: 'claude-sonnet-4',
+      promptUsage: {
+        inputTokens: 100,
+        outputTokens: 50,
+        totalTokens: 150,
+      },
+    });
+    expect(usage).not.toBeNull();
+    assertUsageInfoContract(usage as UsageInfo);
   });
 });

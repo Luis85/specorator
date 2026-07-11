@@ -11,7 +11,7 @@ import type {
 } from '../../../core/providers/types';
 import { buildUsageInfo } from '../../../core/providers/usage';
 import type { Conversation, UsageInfo } from '../../../core/types';
-import { extractCursorUsage } from '../runtime/cursorStreamMapper';
+import { extractCursorUsage } from '../runtime/cursorUsageMapping';
 import { type CursorProviderState, getCursorState, resolveCursorSessionId } from '../types';
 import {
   cursorWorkspaceHash,

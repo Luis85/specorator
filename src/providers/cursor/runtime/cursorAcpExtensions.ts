@@ -74,10 +74,9 @@ function buildAskUserInput(params: CursorAskQuestionParams): Record<string, unkn
  * Registers Cursor's ACP dialect extensions on top of the shared JSON-RPC
  * transport. `cursor/ask_question` and `cursor/create_plan` are BLOCKING
  * agent→client requests — the agent waits on the RPC response — which
- * replaces the stream-json auto-reject + resumed-follow-up-turn delivery
- * (`cursorAskUserQuestion.ts`, ADR-0002) with an in-turn answer once Cursor
- * runs over ACP. `cursor/update_todos` and `cursor/task` are one-way
- * notifications.
+ * replaces the retired stream-json auto-reject + resumed-follow-up-turn
+ * delivery (ADR-0002) with an in-turn answer now that Cursor runs over ACP.
+ * `cursor/update_todos` and `cursor/task` are one-way notifications.
  */
 export function registerCursorAcpExtensions(
   transport: AcpJsonRpcTransport,
