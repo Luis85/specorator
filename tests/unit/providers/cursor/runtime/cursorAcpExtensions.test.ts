@@ -4,6 +4,14 @@ import { registerCursorAcpExtensions } from '@/providers/cursor/runtime/cursorAc
 
 type Handler = (params: unknown) => Promise<unknown>;
 
+// Mirrors the documented cursor/ask_question outcome union
+// (cursor.com/docs/cli/acp) so assertions read against the real shape.
+type AskOutcome =
+  | { outcome: 'answered'; answers: Array<{ questionId: string; selectedOptionIds: string[] }> }
+  | { outcome: 'skipped'; reason?: string }
+  | { outcome: 'cancelled' };
+type AskResponse = { outcome: AskOutcome };
+
 function makeFakeTransport() {
   const requests = new Map<string, Handler>();
   const notifications = new Map<string, Handler>();
@@ -24,9 +32,11 @@ function makeFakeTransport() {
 }
 
 describe('registerCursorAcpExtensions', () => {
-  it('answers cursor/ask_question in-turn through host.askUser', async () => {
+  it('answers cursor/ask_question with the documented answered outcome, mapping labels to option ids', async () => {
     const { transport, requests } = makeFakeTransport();
-    const askUser = jest.fn().mockResolvedValue({ 'Pick one': 'B' });
+    // The inline widget keys its answer record by `id ?? question` (here the
+    // documented id `q1`) with the selected LABEL as the value.
+    const askUser = jest.fn().mockResolvedValue({ q1: 'B' });
     registerCursorAcpExtensions(transport as never, {
       askUser,
       emitChunk: () => {},
@@ -34,16 +44,122 @@ describe('registerCursorAcpExtensions', () => {
     });
 
     const response = await requests.get('cursor/ask_question')!({
-      sessionId: 's1',
-      question: 'Pick one',
-      options: [{ label: 'A' }, { label: 'B' }],
-    });
+      toolCallId: 't1',
+      title: 'Pick one',
+      questions: [{
+        id: 'q1',
+        prompt: 'Pick one',
+        options: [{ id: 'opt-a', label: 'A' }, { id: 'opt-b', label: 'B' }],
+      }],
+    }) as AskResponse;
 
     expect(askUser).toHaveBeenCalled();
-    expect(JSON.stringify(response)).toContain('B');
+    expect(response.outcome).toEqual({
+      outcome: 'answered',
+      answers: [{ questionId: 'q1', selectedOptionIds: ['opt-b'] }],
+    });
   });
 
-  it('returns a rejected shape when the user dismisses the question', async () => {
+  it('maps the full documented request shape (two questions, allowMultiple, ids != labels) end to end', async () => {
+    const { transport, requests } = makeFakeTransport();
+    let capturedInput: unknown;
+    // Answer keyed by the documented question ids; multi-select question returns
+    // a label array, single-select returns a scalar label.
+    const askUser = jest.fn((input: unknown) => {
+      capturedInput = input;
+      return Promise.resolve({
+        colors: ['Red', 'Blue'],
+        size: 'Large',
+      });
+    });
+    registerCursorAcpExtensions(transport as never, {
+      askUser: askUser as never,
+      emitChunk: () => {},
+      patchTurnMetadata: () => {},
+    });
+
+    const response = await requests.get('cursor/ask_question')!({
+      toolCallId: 't2',
+      title: 'Configure',
+      questions: [
+        {
+          id: 'colors',
+          prompt: 'Which colors?',
+          allowMultiple: true,
+          options: [
+            { id: 'c-red', label: 'Red' },
+            { id: 'c-green', label: 'Green' },
+            { id: 'c-blue', label: 'Blue' },
+          ],
+        },
+        {
+          id: 'size',
+          prompt: 'Which size?',
+          options: [
+            { id: 's-sm', label: 'Small' },
+            { id: 's-lg', label: 'Large' },
+          ],
+        },
+      ],
+    }) as AskResponse;
+
+    // The widget received the documented prompt as `question` and allowMultiple
+    // as `multiSelect`, keyed by the documented ids.
+    expect(capturedInput).toEqual({
+      questions: [
+        {
+          id: 'colors',
+          question: 'Which colors?',
+          header: 'Configure',
+          options: [
+            { label: 'Red', description: '' },
+            { label: 'Green', description: '' },
+            { label: 'Blue', description: '' },
+          ],
+          multiSelect: true,
+        },
+        {
+          id: 'size',
+          question: 'Which size?',
+          header: 'Configure',
+          options: [
+            { label: 'Small', description: '' },
+            { label: 'Large', description: '' },
+          ],
+          multiSelect: false,
+        },
+      ],
+    });
+
+    expect(response.outcome).toEqual({
+      outcome: 'answered',
+      answers: [
+        { questionId: 'colors', selectedOptionIds: ['c-red', 'c-blue'] },
+        { questionId: 'size', selectedOptionIds: ['s-lg'] },
+      ],
+    });
+  });
+
+  it('falls back to the label as the id for free-form answers with no matching option', async () => {
+    const { transport, requests } = makeFakeTransport();
+    const askUser = jest.fn().mockResolvedValue({ q1: 'Something else' });
+    registerCursorAcpExtensions(transport as never, {
+      askUser,
+      emitChunk: () => {},
+      patchTurnMetadata: () => {},
+    });
+
+    const response = await requests.get('cursor/ask_question')!({
+      questions: [{ id: 'q1', prompt: 'Pick', options: [{ id: 'opt-a', label: 'A' }] }],
+    }) as AskResponse;
+
+    expect(response.outcome).toEqual({
+      outcome: 'answered',
+      answers: [{ questionId: 'q1', selectedOptionIds: ['Something else'] }],
+    });
+  });
+
+  it('returns the cancelled outcome when the user dismisses the question', async () => {
     const { transport, requests } = makeFakeTransport();
     registerCursorAcpExtensions(transport as never, {
       askUser: jest.fn().mockResolvedValue(null),
@@ -51,11 +167,11 @@ describe('registerCursorAcpExtensions', () => {
       patchTurnMetadata: () => {},
     });
 
-    const response = await requests.get('cursor/ask_question')!({ question: 'Q', options: [] }) as { rejected?: boolean };
-    expect(response.rejected).toBe(true);
+    const response = await requests.get('cursor/ask_question')!({ question: 'Q', options: [] }) as AskResponse;
+    expect(response.outcome).toEqual({ outcome: 'cancelled' });
   });
 
-  it('answers the RPC as a dismissal when the ask signal aborts mid-await', async () => {
+  it('answers the RPC as cancelled when the ask signal aborts mid-await', async () => {
     const { transport, requests } = makeFakeTransport();
     const controller = new AbortController();
     // askUser mirrors a blocking prompt that rejects with AbortError once the
@@ -74,16 +190,15 @@ describe('registerCursorAcpExtensions', () => {
       patchTurnMetadata: () => {},
     });
 
-    const pending = requests.get('cursor/ask_question')!({ question: 'Q', options: [] }) as Promise<{ rejected?: boolean; reason?: string }>;
+    const pending = requests.get('cursor/ask_question')!({ question: 'Q', options: [] }) as Promise<AskResponse>;
     controller.abort();
     const response = await pending;
 
     expect(askUser).toHaveBeenCalledWith(expect.anything(), controller.signal);
-    expect(response.rejected).toBe(true);
-    expect(response.reason).toBe('Question dismissed by user');
+    expect(response.outcome).toEqual({ outcome: 'cancelled' });
   });
 
-  it('acknowledges cursor/create_plan and marks the turn plan-completed with the plan text emitted', async () => {
+  it('accepts cursor/create_plan and marks the turn plan-completed with the plan text emitted', async () => {
     const { transport, requests } = makeFakeTransport();
     const chunks: StreamChunk[] = [];
     const patches: Record<string, unknown>[] = [];
@@ -93,10 +208,11 @@ describe('registerCursorAcpExtensions', () => {
       patchTurnMetadata: (p) => patches.push(p),
     });
 
-    await requests.get('cursor/create_plan')!({ plan: '# The plan\n1. do it' });
+    const response = await requests.get('cursor/create_plan')!({ plan: '# The plan\n1. do it' });
 
     expect(chunks.some((c) => c.type === 'text' && c.content.includes('The plan'))).toBe(true);
     expect(patches).toContainEqual({ planCompleted: true });
+    expect(response).toEqual({ outcome: { outcome: 'accepted' } });
   });
 
   it('maps cursor/update_todos to a TodoWrite tool chunk', async () => {
@@ -114,7 +230,7 @@ describe('registerCursorAcpExtensions', () => {
     expect(toolUse?.name).toBe(TOOL_TODO_WRITE);
   });
 
-  it('resolves with a rejected shape (never rejects) when questions entries are null', async () => {
+  it('resolves to the cancelled outcome (never rejects) when questions entries are null', async () => {
     const { transport, requests } = makeFakeTransport();
     registerCursorAcpExtensions(transport as never, {
       askUser: jest.fn().mockResolvedValue(null),
@@ -122,11 +238,11 @@ describe('registerCursorAcpExtensions', () => {
       patchTurnMetadata: () => {},
     });
 
-    const response = await requests.get('cursor/ask_question')!({ questions: [null] }) as { rejected?: boolean };
-    expect(response.rejected).toBe(true);
+    const response = await requests.get('cursor/ask_question')!({ questions: [null] }) as AskResponse;
+    expect(response.outcome).toEqual({ outcome: 'cancelled' });
   });
 
-  it('resolves with a rejected shape (never rejects) when questions is not an array', async () => {
+  it('resolves to the cancelled outcome (never rejects) when questions is not an array', async () => {
     const { transport, requests } = makeFakeTransport();
     registerCursorAcpExtensions(transport as never, {
       askUser: jest.fn().mockResolvedValue(null),
@@ -134,11 +250,11 @@ describe('registerCursorAcpExtensions', () => {
       patchTurnMetadata: () => {},
     });
 
-    const response = await requests.get('cursor/ask_question')!({ questions: 'oops' }) as { rejected?: boolean };
-    expect(response.rejected).toBe(true);
+    const response = await requests.get('cursor/ask_question')!({ questions: 'oops' }) as AskResponse;
+    expect(response.outcome).toEqual({ outcome: 'cancelled' });
   });
 
-  it('resolves with a rejected shape (never rejects) when options is not an array', async () => {
+  it('resolves to the cancelled outcome (never rejects) when options is not an array', async () => {
     const { transport, requests } = makeFakeTransport();
     registerCursorAcpExtensions(transport as never, {
       askUser: jest.fn().mockResolvedValue(null),
@@ -146,11 +262,11 @@ describe('registerCursorAcpExtensions', () => {
       patchTurnMetadata: () => {},
     });
 
-    const response = await requests.get('cursor/ask_question')!({ question: 'Q', options: 'not-an-array' }) as { rejected?: boolean };
-    expect(response.rejected).toBe(true);
+    const response = await requests.get('cursor/ask_question')!({ question: 'Q', options: 'not-an-array' }) as AskResponse;
+    expect(response.outcome).toEqual({ outcome: 'cancelled' });
   });
 
-  it('distinguishes a thrown askUser error from a plain dismissal in the reason text', async () => {
+  it('returns the skipped outcome with the failure reason when askUser throws', async () => {
     const { transport, requests } = makeFakeTransport();
     registerCursorAcpExtensions(transport as never, {
       askUser: jest.fn().mockRejectedValue(new Error('boom')),
@@ -158,10 +274,32 @@ describe('registerCursorAcpExtensions', () => {
       patchTurnMetadata: () => {},
     });
 
-    const response = await requests.get('cursor/ask_question')!({ question: 'Q', options: [] }) as { rejected?: boolean; reason?: string };
-    expect(response.rejected).toBe(true);
-    expect(response.reason).toContain('Failed to get user answers');
-    expect(response.reason).toContain('boom');
+    const response = await requests.get('cursor/ask_question')!({ question: 'Q', options: [] }) as AskResponse;
+    expect(response.outcome.outcome).toBe('skipped');
+    const skipped = response.outcome as { outcome: 'skipped'; reason?: string };
+    expect(skipped.reason).toContain('Failed to get user answers');
+    expect(skipped.reason).toContain('boom');
+  });
+
+  it('tolerates the legacy question/options field aliases and maps them through', async () => {
+    const { transport, requests } = makeFakeTransport();
+    // Legacy per-question shape: `question` instead of `prompt`, `multiSelect`
+    // instead of `allowMultiple`, and no option ids so labels echo back.
+    const askUser = jest.fn().mockResolvedValue({ 'Legacy?': 'Yes' });
+    registerCursorAcpExtensions(transport as never, {
+      askUser,
+      emitChunk: () => {},
+      patchTurnMetadata: () => {},
+    });
+
+    const response = await requests.get('cursor/ask_question')!({
+      questions: [{ question: 'Legacy?', multiSelect: false, options: [{ label: 'Yes' }, { label: 'No' }] }],
+    }) as AskResponse;
+
+    expect(response.outcome).toEqual({
+      outcome: 'answered',
+      answers: [{ questionId: 'Legacy?', selectedOptionIds: ['Yes'] }],
+    });
   });
 
   it('returns an unsubscribe that removes every handler', () => {
