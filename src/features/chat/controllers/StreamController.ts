@@ -461,15 +461,60 @@ export class StreamController {
     // Re-run side effects on input updates (streaming may complete the input)
     this.applyToolInputSideEffects(existingToolCall.name, existingToolCall.input);
 
-    const toolEl = this.deps.state.toolCallElements.get(toolId);
-    if (toolEl) {
-      updateRenderedToolCallHeader(
-        this.deps.plugin.app,
-        toolEl,
-        existingToolCall.name,
-        existingToolCall.input,
-      );
+    this.reconcileRenderedToolBlock(toolId, existingToolCall, nameChanged);
+  }
+
+  /**
+   * Reconciles an on-screen tool block after a merged tool_use. A still-buffered
+   * block needs nothing (the flush path picks the right block type). A name
+   * adoption that reclassifies an already-rendered generic block to Write/Edit
+   * has no `writeEditStates` entry, so the eventual tool_result would fall through
+   * to the generic renderer and skip the diff — rebuild it as a write/edit block.
+   * Otherwise just refresh the rendered header.
+   */
+  private reconcileRenderedToolBlock(
+    toolId: string,
+    toolCall: ToolCallInfo,
+    nameChanged: boolean,
+  ): void {
+    const { state } = this.deps;
+    const toolEl = state.toolCallElements.get(toolId);
+    if (!toolEl) return;
+
+    if (nameChanged && isWriteEditTool(toolCall.name) && !state.writeEditStates.has(toolId)) {
+      this.rebuildAsWriteEditBlock(toolId, toolCall, toolEl);
+      return;
     }
+
+    updateRenderedToolCallHeader(this.deps.plugin.app, toolEl, toolCall.name, toolCall.input);
+  }
+
+  /**
+   * Replaces an already-rendered generic tool block with a write/edit block after
+   * a repeated tool_use reclassifies the tool to Write/Edit. Seeds the matching
+   * `writeEditStates` entry and repoints `toolCallElements` so the eventual
+   * tool_result finalizes through the diff renderer.
+   */
+  private rebuildAsWriteEditBlock(
+    toolId: string,
+    toolCall: ToolCallInfo,
+    genericToolEl: HTMLElement,
+  ): void {
+    const parentEl = genericToolEl.parentElement;
+    if (!parentEl) return;
+
+    const { state } = this.deps;
+    const writeEditState = createWriteEditBlock(
+      this.deps.plugin.app,
+      parentEl,
+      toolCall,
+      { initiallyExpanded: this.deps.plugin.settings.expandFileEditsByDefault === true },
+    );
+    // createWriteEditBlock appends to parentEl; move it into the generic block's
+    // slot and drop the stale generic element so ordering and the DOM stay intact.
+    genericToolEl.replaceWith(writeEditState.wrapperEl);
+    state.writeEditStates.set(toolId, writeEditState);
+    state.toolCallElements.set(toolId, writeEditState.wrapperEl);
   }
 
   /**

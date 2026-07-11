@@ -238,13 +238,20 @@ export class CursorChatRuntime implements ChatRuntime {
 
     const mode = resolveCursorAcpMode(this.plugin.settings.permissionMode);
     this.autoApprovePermissions = mode.autoApprove;
-    this.currentTurnIsPlan = mode.modeId === 'plan';
     // Independent RPCs on the same session — issued concurrently so the turn
     // doesn't pay two sequential round-trips before the prompt is sent.
     await Promise.all([
       this.applyMode(sessionId, mode.modeId),
       this.applySelectedModel(sessionId, queryOptions),
     ]);
+    // Arm the plan flag only once plan mode is actually in effect. applyMode
+    // records currentModeId on a successful set_mode (or leaves it 'plan' when
+    // plan was already applied earlier in the session) and swallows rejections —
+    // so a requested plan turn whose set_mode failed runs as non-plan and its
+    // ordinary assistant text won't spuriously open the post-plan approval card.
+    // The cursor/create_plan side-channel still sets planCompleted if the agent
+    // genuinely plans.
+    this.currentTurnIsPlan = mode.modeId === 'plan' && this.currentModeId === 'plan';
 
     this.activeTurn?.queue.close();
     const activeTurn: ActiveTurn = {

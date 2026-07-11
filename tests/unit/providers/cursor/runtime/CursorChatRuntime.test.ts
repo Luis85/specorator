@@ -436,6 +436,85 @@ describe('CursorChatRuntime.query history bootstrap', () => {
   });
 });
 
+describe('CursorChatRuntime.query plan arming', () => {
+  beforeEach(stubProviderSnapshot);
+  afterEach(() => jest.restoreAllMocks());
+
+  const turn = { persistedContent: 'plan it', prompt: 'plan it', request: { images: [] } };
+
+  async function drain(gen: AsyncGenerator<unknown>): Promise<void> {
+    const iterator = gen[Symbol.asyncIterator]();
+    while (!(await iterator.next()).done) { /* consume every chunk */ }
+  }
+
+  function feedPlanText(runtime: CursorChatRuntime): Promise<void> {
+    const bag = runtime as unknown as Record<string, unknown>;
+    return (bag.handleSessionNotification as (n: unknown) => Promise<void>).call(runtime, {
+      sessionId: 'S1',
+      update: { sessionUpdate: 'agent_message_chunk', content: { type: 'text', text: 'Here is the plan' }, messageId: 'm1' },
+    });
+  }
+
+  it('does not arm the plan flag when set_mode is rejected, so assistant text never completes the plan', async () => {
+    const runtime = makeRuntime({ settings: { permissionMode: 'plan' } });
+    const setMode = jest.fn().mockRejectedValue(new Error('rejected'));
+    const prompt = jest.fn().mockImplementation(async () => {
+      await feedPlanText(runtime);
+      return { usage: null };
+    });
+    const loadSession = jest.fn().mockResolvedValue({ sessionId: 'S1' });
+    const bag = primeRuntime(runtime, { setMode, prompt, loadSession });
+    bag.sessionId = 'S1';
+    bag.loadedSessionId = null;
+    bag.currentModeId = null;
+
+    await drain(runtime.query(turn as never));
+
+    // set_mode was attempted but rejected, so the tracked mode never advanced to
+    // 'plan' — the turn runs non-plan and its assistant text stays out of the gate.
+    expect(setMode).toHaveBeenCalled();
+    expect(bag.currentModeId).toBeNull();
+    expect(bag.currentTurnIsPlan).toBe(false);
+    expect((bag.turnMetadata as { planCompleted?: boolean }).planCompleted).toBeUndefined();
+  });
+
+  it('arms the plan flag and completes the plan once set_mode succeeds and the agent produces content', async () => {
+    const runtime = makeRuntime({ settings: { permissionMode: 'plan' } });
+    const setMode = jest.fn().mockResolvedValue({});
+    const prompt = jest.fn().mockImplementation(async () => {
+      await feedPlanText(runtime);
+      return { usage: null };
+    });
+    const loadSession = jest.fn().mockResolvedValue({ sessionId: 'S1' });
+    const bag = primeRuntime(runtime, { setMode, prompt, loadSession });
+    bag.sessionId = 'S1';
+    bag.loadedSessionId = null;
+    bag.currentModeId = null;
+
+    await drain(runtime.query(turn as never));
+
+    expect(setMode).toHaveBeenCalledWith({ modeId: 'plan', sessionId: 'S1' });
+    expect(bag.currentTurnIsPlan).toBe(true);
+    expect((bag.turnMetadata as { planCompleted?: boolean }).planCompleted).toBe(true);
+  });
+
+  it('arms the plan flag without re-issuing set_mode when the session is already in plan mode', async () => {
+    const runtime = makeRuntime({ settings: { permissionMode: 'plan' } });
+    const setMode = jest.fn().mockResolvedValue({});
+    const prompt = jest.fn().mockResolvedValue({ usage: null });
+    const loadSession = jest.fn().mockResolvedValue({ sessionId: 'S1' });
+    const bag = primeRuntime(runtime, { setMode, prompt, loadSession });
+    bag.sessionId = 'S1';
+    bag.loadedSessionId = null;
+    bag.currentModeId = 'plan';
+
+    await drain(runtime.query(turn as never));
+
+    expect(setMode).not.toHaveBeenCalled();
+    expect(bag.currentTurnIsPlan).toBe(true);
+  });
+});
+
 describe('CursorChatRuntime terminal-push dedup', () => {
   it('emits exactly one error and one done when transport close races the rejected prompt', async () => {
     const runtime = makeRuntime() as unknown as Record<string, unknown>;

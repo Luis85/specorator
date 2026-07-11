@@ -1094,6 +1094,70 @@ describe('StreamController - Text Content', () => {
       expect(createWriteEditBlock).toHaveBeenCalled();
     });
 
+    it('rebuilds an already-rendered generic block as a write/edit block when a repeated tool_use reclassifies it to Edit', async () => {
+      const { renderToolCall } = jest.requireMock('@/features/chat/rendering/ToolCallRenderer');
+      const { createWriteEditBlock, finalizeWriteEditBlock, updateWriteEditWithDiff } =
+        jest.requireMock('@/features/chat/rendering/WriteEditRenderer');
+
+      // Model the generic block already on screen: production's renderToolCall
+      // records the element in toolCallElements, so mirror that. The rebuild
+      // relies on parentElement/replaceWith, which the bare mock element lacks.
+      const parentEl = createMockEl();
+      const genericEl = createMockEl();
+      Object.defineProperty(genericEl, 'parentElement', { value: parentEl, configurable: true });
+      genericEl.replaceWith = jest.fn();
+      renderToolCall.mockImplementation(
+        (_app: unknown, _parent: unknown, toolCall: { id: string }, elements: Map<string, unknown>) => {
+          elements.set(toolCall.id, genericEl);
+          return genericEl;
+        },
+      );
+
+      const wrapperEl = createMockEl();
+      createWriteEditBlock.mockReturnValue({ wrapperEl });
+
+      const msg = createTestMessage();
+      deps.state.currentContentEl = createMockEl();
+
+      // 1) Prose-named tool renders as a generic block (buffered, then flushed).
+      await controller.handleStreamChunk(
+        { type: 'tool_use', id: 't1', name: 'Applying changes', input: {} },
+        msg,
+      );
+      deps.state.currentTextEl = createMockEl();
+      await controller.handleStreamChunk({ type: 'text', content: 'flush' }, msg);
+
+      expect(deps.state.toolCallElements.get('t1')).toBe(genericEl);
+      expect(deps.state.writeEditStates.has('t1')).toBe(false);
+
+      // 2) Repeated tool_use corrects the name to Edit — the generic block is
+      // swapped for a write/edit block and its state is seeded.
+      await controller.handleStreamChunk(
+        { type: 'tool_use', id: 't1', name: 'Edit', input: { file_path: 'notes/e.md' } },
+        msg,
+      );
+
+      expect(createWriteEditBlock).toHaveBeenCalled();
+      expect(genericEl.replaceWith).toHaveBeenCalledWith(wrapperEl);
+      expect(deps.state.writeEditStates.get('t1')).toEqual({ wrapperEl });
+      expect(deps.state.toolCallElements.get('t1')).toBe(wrapperEl);
+
+      // 3) The successful tool_result with a diff-bearing toolUseResult now
+      // finalizes through the write/edit diff renderer, not the generic path.
+      await controller.handleStreamChunk(
+        {
+          type: 'tool_result',
+          id: 't1',
+          content: 'ok',
+          toolUseResult: { unifiedDiff: '@@ -1 +1 @@\n-old\n+new\n', filePath: 'notes/e.md' },
+        } as never,
+        msg,
+      );
+
+      expect(updateWriteEditWithDiff).toHaveBeenCalled();
+      expect(finalizeWriteEditBlock).toHaveBeenCalled();
+    });
+
     it('should flush pending tools before rendering blocked message', async () => {
       const { renderToolCall } = jest.requireMock('@/features/chat/rendering/ToolCallRenderer');
       const msg = createTestMessage();
