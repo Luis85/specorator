@@ -22,6 +22,12 @@ const VAULT_REFRESH_DEBOUNCE_MS = 100;
  *    targeted repaint as a reload.
  * `task:run-finished` is also a full-refresh driver; it additionally evicts the
  * live overlay via its dedicated granular handler below.
+ *
+ * NB: the two auto-run HOT queue events — `task:queue-tick` (per launch) and
+ * `task:queue-state-changed` (per settle) — are deliberately NOT here. They only
+ * move the toolbar counters, not a card's lane, so they route to the O(1)
+ * `store.refreshToolbar()` below; a full vault re-index on each would make
+ * auto-run throughput scale with the work-order count.
  */
 const FULL_REFRESH_EVENTS = [
   'task:board-config-changed',
@@ -30,9 +36,7 @@ const FULL_REFRESH_EVENTS = [
   'task:queue-paused',
   'task:queue-resumed',
   'task:queue-halted',
-  'task:queue-tick',
   'task:queue-skipped',
-  'task:queue-state-changed',
   'task:queue-cap-changed',
   'task:run-finished',
   'task:attempt-started',
@@ -100,6 +104,14 @@ export function useBoardEventRouting(plugin: SpecoratorPlugin): void {
       // A finished run is no longer a skippable-Ready card — drop any stale chip.
       store.clearSkip(p.taskId);
     }));
+
+    // Auto-run hot queue events → O(1) toolbar refresh, NOT a full vault re-index.
+    // A queue tick (per launch) and a settle (per queue-state-changed) only advance
+    // the slot/queue counters; the launching/settling card's lane move rides
+    // attempt-started/status-changed/run-finished (all still full-refresh). Routing
+    // these through load() made auto-run throughput scale with the note count.
+    disposers.push(plugin.events.on('task:queue-tick', () => store.refreshToolbar()));
+    disposers.push(plugin.events.on('task:queue-state-changed', () => store.refreshToolbar()));
 
     // Skip-chip overlay (the reactive replacement for reading the runner's
     // non-reactive `control.lastSkipReasonByTask` on every render). setSkip mirrors

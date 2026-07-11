@@ -167,6 +167,24 @@ describe('useBoardEventRouting', () => {
     expect(load).toHaveBeenCalled();
   });
 
+  it('routes task:queue-tick to refreshToolbar (O(1) counters) and NOT load — no vault re-index per launch', () => {
+    const { store, events } = setup();
+    const refreshToolbar = vi.spyOn(store, 'refreshToolbar');
+    const load = vi.spyOn(store, 'load').mockResolvedValue();
+    events.fire('task:queue-tick', { taskId: 'a' });
+    expect(refreshToolbar).toHaveBeenCalled();
+    expect(load).not.toHaveBeenCalled();
+  });
+
+  it('routes task:queue-state-changed to refreshToolbar and NOT load (a settle updates counters, not lanes)', () => {
+    const { store, events } = setup();
+    const refreshToolbar = vi.spyOn(store, 'refreshToolbar');
+    const load = vi.spyOn(store, 'load').mockResolvedValue();
+    events.fire('task:queue-state-changed', undefined);
+    expect(refreshToolbar).toHaveBeenCalled();
+    expect(load).not.toHaveBeenCalled();
+  });
+
   it('routes task:queue-skipped to setSkip (the reactive skip-chip overlay) AND load', () => {
     const { store, events } = setup();
     const setSkip = vi.spyOn(store, 'setSkip');

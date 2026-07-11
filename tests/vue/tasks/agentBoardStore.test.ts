@@ -145,6 +145,25 @@ describe('useAgentBoardStore', () => {
     });
   });
 
+  it('refreshToolbar() re-reads slots + queueState from the live singletons WITHOUT indexing the vault', () => {
+    // The auto-run hot queue events (queue-tick / queue-state-changed) route here,
+    // not load(): they update the toolbar counters only, so a vault re-index per
+    // launch would make throughput scale with the note count.
+    const plugin = makePlugin('Agent Board/tasks', {
+      slots: { used: 1, max: 3 },
+      occupied: 1,
+      capacity: 3,
+      queue: { paused: true, halted: false, haltReason: null, consecutiveFailures: 0 },
+    });
+    const { store, folders } = initStore([{ lanes: [], errors: [] }], plugin);
+
+    store.refreshToolbar();
+
+    expect(store.slots).toEqual({ used: 1, max: 3 });
+    expect(store.queueState).toMatchObject({ paused: true, slotOccupied: 1, slotCapacity: 3 });
+    expect(folders).toEqual([]); // never touched the vault index
+  });
+
   it('load() projects a halted queue (reason + failure streak) for the toolbar halt caption', async () => {
     const plugin = makePlugin('Agent Board/tasks', {
       queue: { paused: false, halted: true, haltReason: '3 consecutive failures', consecutiveFailures: 3 },

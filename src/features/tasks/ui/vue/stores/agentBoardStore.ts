@@ -166,6 +166,20 @@ export const useAgentBoardStore = defineStore('agent-board', () => {
     return plugin ? boardWorkOrderFolder(plugin.settings) : 'Agent Board/tasks';
   }
 
+  // Lightweight toolbar-chrome refresh — re-reads ONLY the live plugin singletons
+  // the toolbar badge shows (chat-tab slot usage + the shared queue control
+  // snapshot), with NO vault re-index. The hot auto-run queue events route here
+  // instead of load(): task:queue-tick (per launch) and task:queue-state-changed
+  // (per settle) change the counters, not which lane a card sits in — the
+  // launching/settling card's move rides attempt-started/status-changed/
+  // run-finished — so re-indexing the whole work-order folder on each would make
+  // auto-run throughput scale with the note count.
+  function refreshToolbar(): void {
+    if (!plugin) return;
+    slots.value = plugin.getTabSlotUsage();
+    queueState.value = readQueueToolbarState(plugin);
+  }
+
   async function load(): Promise<void> {
     if (!plugin || !deps) return;
     const p = plugin;
@@ -174,10 +188,8 @@ export const useAgentBoardStore = defineStore('agent-board', () => {
     // queue control/slot tracker), independent of the vault index. Set BEFORE
     // (and outside) `run()` so a transient index rejection can't stall the badge
     // — the imperative view's refreshSlots()/getQueueToolbarState() likewise
-    // never gate on the index. Every event that changes these (chat:tabs-changed,
-    // task:queue-*) already routes to load() in useBoardEventRouting.
-    slots.value = p.getTabSlotUsage();
-    queueState.value = readQueueToolbarState(p);
+    // never gate on the index.
+    refreshToolbar();
     await run(
       async () => {
         const model = await d.indexVaultFolder(p.app.vault, folder());
@@ -317,6 +329,6 @@ export const useAgentBoardStore = defineStore('agent-board', () => {
 
   return {
     layout, liveHeartbeats, liveLedger, pauseState, skipReasons, invalidNotes, slots, queueState, nowMs, rosterVersion, loading, error,
-    init, load, tick, bumpRoster, recordHeartbeat, recordLedger, evictLive, setPause, clearPause, setSkip, clearSkip,
+    init, load, refreshToolbar, tick, bumpRoster, recordHeartbeat, recordLedger, evictLive, setPause, clearPause, setSkip, clearSkip,
   };
 });
