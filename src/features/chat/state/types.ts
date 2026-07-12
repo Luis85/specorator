@@ -100,6 +100,15 @@ export interface ChatStateData {
   // imperative DOM state during Tasks 15–17 (dual-write).
   activeMessageId: string | null;
   activeBlockIndex: number;
+  /**
+   * Which form the imperative streaming indicator (`StreamingIndicator` /
+   * `thinkingEl`) is currently rendering, mirrored for the Vue transcript's
+   * `StreamingIndicator`. `'thinking'` ⇔ the debounced flavor indicator is on
+   * screen, `'writing'` ⇔ the immediate `Writing response…` placeholder, `null`
+   * ⇔ hidden. This tracks the INDICATOR's show/showWriting/hide state, not the
+   * reasoning/text block state. Written alongside the imperative DOM (dual-write).
+   */
+  streamingIndicatorMode: 'thinking' | 'writing' | null;
   thinkingEl: HTMLElement | null;
   queueIndicatorEl: HTMLElement | null;
   /** Debounce timeout for showing thinking indicator after inactivity. */

@@ -716,7 +716,11 @@ describe('StreamController - Text Content', () => {
         expect(deps.state.getActiveStreamSnapshot()).toBeNull();
       });
 
-      it('reflects the open text block (isWriting)', async () => {
+      // StreamController drives the block pointers (messageId + blockIndex);
+      // the isThinking/isWriting flags mirror the streaming *indicator* mode
+      // (owned by StreamingIndicator, covered in streamingIndicator.test.ts /
+      // ChatState.test.ts) and are null in these live-render flows.
+      it('tracks the open text block pointers', async () => {
         const msg = createTestMessage();
         deps.state.activeMessageId = msg.id;
         deps.state.responseStartTime = performance.now();
@@ -727,12 +731,12 @@ describe('StreamController - Text Content', () => {
           messageId: msg.id,
           blockIndex: 0,
           isThinking: false,
-          isWriting: true,
+          isWriting: false,
           elapsedSeconds: expect.any(Number),
         });
       });
 
-      it('reflects the open thinking block (isThinking)', async () => {
+      it('tracks the open thinking block pointers', async () => {
         const { createThinkingBlock } = jest.requireMock('@/features/chat/rendering/ThinkingBlockRenderer');
         createThinkingBlock.mockReturnValueOnce({
           container: createMockEl(),
@@ -746,9 +750,11 @@ describe('StreamController - Text Content', () => {
         await controller.appendThinking('mm', msg);
 
         const snap = deps.state.getActiveStreamSnapshot();
-        expect(snap?.isThinking).toBe(true);
-        expect(snap?.isWriting).toBe(false);
         expect(snap?.blockIndex).toBe(0);
+        expect(snap?.messageId).toBe(msg.id);
+        // Flavor indicator is suppressed while a reasoning block is open.
+        expect(snap?.isThinking).toBe(false);
+        expect(snap?.isWriting).toBe(false);
         expect(snap?.elapsedSeconds).toBe(0); // responseStartTime null → 0
       });
     });

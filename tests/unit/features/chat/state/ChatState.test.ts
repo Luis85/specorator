@@ -52,6 +52,7 @@ describe('ChatState', () => {
       expect(state.currentTextEl).toBeNull();
       expect(state.currentTextContent).toBe('');
       expect(state.currentThinkingState).toBeNull();
+      expect(state.streamingIndicatorMode).toBeNull();
       expect(state.thinkingEl).toBeNull();
       expect(state.queueIndicatorEl).toBeNull();
       expect(state.thinkingIndicatorTimeout).toBeNull();
@@ -251,11 +252,11 @@ describe('ChatState', () => {
       expect(chatState.getActiveStreamSnapshot()).toBeNull();
     });
 
-    it('maps the open block + elapsed time when a message is streaming', () => {
+    it('maps writing indicator mode + elapsed time when a message is streaming', () => {
       const chatState = new ChatState();
       chatState.activeMessageId = 'assistant-1';
       chatState.activeBlockIndex = 1;
-      chatState.currentTextEl = {} as HTMLElement;
+      chatState.streamingIndicatorMode = 'writing';
       chatState.responseStartTime = performance.now() - 3200;
 
       const snap = chatState.getActiveStreamSnapshot();
@@ -267,10 +268,10 @@ describe('ChatState', () => {
       expect(snap!.elapsedSeconds).toBeGreaterThanOrEqual(3);
     });
 
-    it('reports isThinking from currentThinkingState and elapsedSeconds 0 when the timer is unset', () => {
+    it("reports isThinking when the indicator mode is 'thinking', elapsedSeconds 0 when the timer is unset", () => {
       const chatState = new ChatState();
       chatState.activeMessageId = 'assistant-1';
-      chatState.currentThinkingState = { content: 'x' } as any;
+      chatState.streamingIndicatorMode = 'thinking';
 
       const snap = chatState.getActiveStreamSnapshot();
       expect(snap!.isThinking).toBe(true);
@@ -278,15 +279,31 @@ describe('ChatState', () => {
       expect(snap!.elapsedSeconds).toBe(0);
     });
 
-    it('resetStreamingState clears the active-stream pointers', () => {
+    it('reports neither thinking nor writing when the indicator is hidden mid-turn', () => {
+      const chatState = new ChatState();
+      chatState.activeMessageId = 'assistant-1';
+      // A reasoning/text block can be open while the indicator itself is hidden;
+      // the snapshot mirrors the indicator, not the block.
+      chatState.currentTextEl = {} as HTMLElement;
+      chatState.currentThinkingState = { content: 'x' } as any;
+      chatState.streamingIndicatorMode = null;
+
+      const snap = chatState.getActiveStreamSnapshot();
+      expect(snap!.isThinking).toBe(false);
+      expect(snap!.isWriting).toBe(false);
+    });
+
+    it('resetStreamingState clears the active-stream pointers and indicator mode', () => {
       const chatState = new ChatState();
       chatState.activeMessageId = 'assistant-1';
       chatState.activeBlockIndex = 3;
+      chatState.streamingIndicatorMode = 'thinking';
 
       chatState.resetStreamingState();
 
       expect(chatState.activeMessageId).toBeNull();
       expect(chatState.activeBlockIndex).toBe(-1);
+      expect(chatState.streamingIndicatorMode).toBeNull();
       expect(chatState.getActiveStreamSnapshot()).toBeNull();
     });
   });

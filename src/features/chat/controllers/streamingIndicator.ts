@@ -60,6 +60,8 @@ export class StreamingIndicator {
 
       const text = overrideText || FLAVOR_TEXTS[Math.floor(Math.random() * FLAVOR_TEXTS.length)];
       this.render(text, overrideCls);
+      // Reactive mirror (dual-write): the flavor indicator is now on screen.
+      state.streamingIndicatorMode = 'thinking';
     }, StreamingIndicator.DELAY), timerWindow);
   }
 
@@ -84,6 +86,8 @@ export class StreamingIndicator {
     } else {
       this.render(STREAMING_RESPONSE_LABEL);
     }
+    // Reactive mirror (dual-write): the writing placeholder is now on screen.
+    state.streamingIndicatorMode = 'writing';
     this.deps.updateQueueIndicator();
   }
 
@@ -104,6 +108,8 @@ export class StreamingIndicator {
       state.thinkingEl.remove();
       state.thinkingEl = null;
     }
+    // Reactive mirror (dual-write): the indicator is hidden.
+    state.streamingIndicatorMode = null;
   }
 
   /**

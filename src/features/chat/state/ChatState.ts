@@ -30,6 +30,7 @@ function createInitialState(): ChatStateData {
     currentThinkingState: null,
     activeMessageId: null,
     activeBlockIndex: -1,
+    streamingIndicatorMode: null,
     thinkingEl: null,
     queueIndicatorEl: null,
     thinkingIndicatorTimeout: null,
@@ -240,11 +241,22 @@ export class ChatState {
     this.state.activeBlockIndex = value;
   }
 
+  get streamingIndicatorMode(): 'thinking' | 'writing' | null {
+    return this.state.streamingIndicatorMode;
+  }
+
+  set streamingIndicatorMode(value: 'thinking' | 'writing' | null) {
+    this.state.streamingIndicatorMode = value;
+  }
+
   /**
    * Snapshot of the in-flight turn for the Vue transcript, or null when no turn
-   * is streaming. `isThinking`/`isWriting` derive from the open block: a live
-   * thinking block ⇔ `currentThinkingState` is set, a live text block ⇔
-   * `currentTextEl` is set (the same signals `StreamController.blockState` reads).
+   * is streaming. `isThinking`/`isWriting` mirror the imperative streaming
+   * indicator's on-screen form (`streamingIndicatorMode`): `'thinking'` ⇔ the
+   * debounced flavor indicator, `'writing'` ⇔ the `Writing response…`
+   * placeholder — the same element the Vue `StreamingIndicator` reproduces. This
+   * tracks the indicator's show/showWriting/hide state, not the reasoning/text
+   * block state. `elapsedSeconds` derives from `responseStartTime`.
    */
   getActiveStreamSnapshot(): ActiveStreamState | null {
     if (this.state.activeMessageId === null) return null;
@@ -252,8 +264,8 @@ export class ChatState {
     return {
       messageId: this.state.activeMessageId,
       blockIndex: this.state.activeBlockIndex,
-      isThinking: this.state.currentThinkingState !== null,
-      isWriting: this.state.currentTextEl !== null,
+      isThinking: this.state.streamingIndicatorMode === 'thinking',
+      isWriting: this.state.streamingIndicatorMode === 'writing',
       elapsedSeconds: start === null ? 0 : Math.floor((performance.now() - start) / 1000),
     };
   }
@@ -483,6 +495,7 @@ export class ChatState {
     this.state.currentThinkingState = null;
     this.state.activeMessageId = null;
     this.state.activeBlockIndex = -1;
+    this.state.streamingIndicatorMode = null;
     this.state.isStreaming = false;
     this.state.cancelRequested = false;
     // Clear thinking indicator timeout
