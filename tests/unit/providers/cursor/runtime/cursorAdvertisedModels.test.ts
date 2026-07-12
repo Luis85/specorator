@@ -56,10 +56,39 @@ describe('matchAdvertisedModelValue', () => {
       .toBe('claude-opus-4-7[reasoning=low,thinking,fast=true]');
   });
 
-  it('still matches a simple effort selection when the advertised value carries extra axes', () => {
-    // Only the effort axis is specified, so the unconstrained fast field is fine.
+  it('does not match a plain effort selection against a sibling carrying an unrequested fast axis', () => {
+    // Only the effort axis is specified, but `fast` changes cost/latency, so a
+    // plain `medium` selection must not silently pin the fast variant.
     expect(matchAdvertisedModelValue(['gpt-5.4[reasoning=medium,fast=true]'], 'gpt-5.4-medium'))
+      .toBeNull();
+  });
+
+  it('matches a plain effort selection against the plain reasoning-only sibling, even when the fast sibling is listed first', () => {
+    const advertised = ['gpt-5.4[reasoning=medium,fast=true]', 'gpt-5.4[reasoning=medium]'];
+    expect(matchAdvertisedModelValue(advertised, 'gpt-5.4-medium')).toBe('gpt-5.4[reasoning=medium]');
+  });
+
+  it('still matches a compound fast selection against the fast-carrying sibling', () => {
+    const advertised = ['gpt-5.4[reasoning=medium]', 'gpt-5.4[reasoning=medium,fast=true]'];
+    expect(matchAdvertisedModelValue(advertised, 'gpt-5.4-medium-fast'))
       .toBe('gpt-5.4[reasoning=medium,fast=true]');
+  });
+
+  it('does not match an effort selection against a sibling carrying an unrequested thinking axis', () => {
+    expect(matchAdvertisedModelValue(['claude-opus-4-7[reasoning=low,thinking]'], 'claude-opus-4-7-low'))
+      .toBeNull();
+  });
+
+  it('matches an effort selection against the non-thinking sibling, even when the thinking sibling is listed first', () => {
+    const advertised = ['claude-opus-4-7[reasoning=low,thinking]', 'claude-opus-4-7[reasoning=low]'];
+    expect(matchAdvertisedModelValue(advertised, 'claude-opus-4-7-low'))
+      .toBe('claude-opus-4-7[reasoning=low]');
+  });
+
+  it('still matches a thinking selection against the thinking-carrying sibling', () => {
+    const advertised = ['claude-opus-4-7[reasoning=low]', 'claude-opus-4-7[reasoning=low,thinking]'];
+    expect(matchAdvertisedModelValue(advertised, 'claude-opus-4-7-thinking-low'))
+      .toBe('claude-opus-4-7[reasoning=low,thinking]');
   });
 
   it('skips (returns null) when a compound selection has no satisfying advertised value', () => {

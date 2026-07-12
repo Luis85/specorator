@@ -89,8 +89,12 @@ function bracketHasFlag(fields: BracketFields, axis: string): boolean {
 // An advertised value matches the resolved compound suffix when EVERY axis the
 // selection specifies is satisfied by a corresponding bracket field: effort
 // against `reasoning=<level>` (or a bare effort token), and the thinking/fast
-// flags against `thinking`/`fast=true`. Axes the selection doesn't specify are
-// unconstrained, so a bare `medium` still matches `[reasoning=medium,...]`.
+// flags against `thinking`/`fast=true`. The effort axis stays unconstrained
+// when unrequested (Cursor advertises `reasoning=` on everything, so a bare
+// `medium` still matches `[reasoning=medium,...]`), but the thinking/fast
+// flags are cost/latency-changing toggles: an advertised value that carries
+// one the selection didn't ask for must NOT match, or a plain `medium`
+// selection could silently pin the `fast` or `thinking` variant instead.
 function advertisedVariantMatches(wireValue: string, mode: string): boolean {
   const fields = parseBracketFields(wireValue);
   if (!fields) {
@@ -100,10 +104,10 @@ function advertisedVariantMatches(wireValue: string, mode: string): boolean {
   if (effort !== CURSOR_STANDARD_MODE && !fields.values.has(effort)) {
     return false;
   }
-  if (thinking && !bracketHasFlag(fields, 'thinking')) {
+  if (thinking !== bracketHasFlag(fields, 'thinking')) {
     return false;
   }
-  if (fast && !bracketHasFlag(fields, 'fast')) {
+  if (fast !== bracketHasFlag(fields, 'fast')) {
     return false;
   }
   return true;
