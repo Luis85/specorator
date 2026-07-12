@@ -3,6 +3,7 @@ import { computed } from 'vue';
 
 import { getToolIcon } from '../../../../../../core/tools/toolIcons';
 import {
+  TOOL_APPLY_PATCH,
   TOOL_BASH,
   TOOL_GLOB,
   TOOL_GREP,
@@ -11,23 +12,31 @@ import {
   TOOL_TOOL_SEARCH,
   TOOL_WEB_FETCH,
 } from '../../../../../../core/tools/toolNames';
+import type { ApplyPatchFileDiff } from '../../../../../../utils/diff';
+import { parseApplyPatchDiffs, parseFileUpdateChangeDiffs } from '../../../../../../utils/diff';
 import IconSpan from '../IconSpan.vue';
 import ToolLinesExpanded from '../ToolLinesExpanded.vue';
+import DiffView from './DiffView.vue';
 
 /**
  * Generic tool-content body: ports the non-specialized branches of
  * `rendering/ToolCallRenderer.ts`'s `renderExpandedContent` (plus
  * `renderBashContent` / `renderFileSearchExpanded` / `renderWebFetchExpanded`
- * / `renderToolSearchExpanded`) — everything that isn't TodoWrite,
- * AskUserQuestion, or WebSearch (those get their own dedicated components).
+ * / `renderToolSearchExpanded` / `renderApplyPatchDiffSections`) —
+ * everything that isn't TodoWrite, AskUserQuestion, or WebSearch (those get
+ * their own dedicated components).
  *
- * Known gaps (documented, not characterized by this task's representative
- * cases): `apply_patch`'s diff-section rendering (Task 6 — DiffView/
- * WriteEditView scope) and the agent-lifecycle JSON-object expansion both
- * fall through to the plain 20-line default here instead of their richer
- * legacy views. `Glob`/`Grep`/`LS`/`Read` vault-file-link decoration
- * (`decorateVaultFileLink`, which needs an injected `App`) is not
- * reproduced — lines render as plain (non-linked) text.
+ * `apply_patch` restores the legacy `renderApplyPatchDiffSections` behavior
+ * (per-file diff sections, reusing `DiffView`) when the patch/changes input
+ * parses into file diffs; it deliberately does not port the rest of
+ * `renderApplyPatchExpanded`'s fallback chain (`applyPatchExpandedHelpers.ts`'s
+ * change-list / raw-patch-text / free-text-result-file-match rendering, or
+ * the leading verification-failure line dump) — those remain a documented
+ * gap, falling through to the plain 20-line default alongside the
+ * agent-lifecycle JSON-object expansion. `Glob`/`Grep`/`LS`/`Read`
+ * vault-file-link decoration (`decorateVaultFileLink`, which needs an
+ * injected `App`) is not reproduced — lines render as plain (non-linked)
+ * text.
  */
 const props = defineProps<{ name: string; input: Record<string, unknown>; result?: string }>();
 
@@ -78,6 +87,18 @@ const toolSearchNames = computed<string[]>(() => {
     return [];
   }
 });
+
+const isApplyPatch = computed(() => props.name === TOOL_APPLY_PATCH);
+
+// Mirrors `ToolCallRenderer.ts`'s `getApplyPatchFileDiffs`: prefer the
+// `*** Begin Patch` text format, falling back to the structured
+// `input.changes` shape (Codex `apply_patch` calls use either).
+const applyPatchFileDiffs = computed<ApplyPatchFileDiff[]>(() => {
+  if (!isApplyPatch.value) return [];
+  const patchText = typeof props.input.patch === 'string' ? props.input.patch : '';
+  const parsedDiffs = patchText ? parseApplyPatchDiffs(patchText) : [];
+  return parsedDiffs.length > 0 ? parsedDiffs : parseFileUpdateChangeDiffs(props.input.changes);
+});
 </script>
 
 <template>
@@ -96,6 +117,43 @@ const toolSearchNames = computed<string[]>(() => {
       v-else
       class="specorator-tool-empty"
     >No result</div>
+  </template>
+
+  <template v-else-if="isApplyPatch">
+    <template v-if="applyPatchFileDiffs.length > 0">
+      <div
+        v-for="(fileDiff, i) in applyPatchFileDiffs"
+        :key="i"
+        class="specorator-tool-patch-section"
+      >
+        <div
+          v-if="fileDiff.operation === 'delete' && fileDiff.diffLines.length === 0"
+          class="specorator-tool-empty"
+        >File deleted</div>
+        <div
+          v-else-if="fileDiff.diffLines.length === 0"
+          class="specorator-tool-empty"
+        >No textual diff available</div>
+        <div
+          v-else
+          class="specorator-write-edit-diff-row"
+        >
+          <DiffView
+            :diff-data="fileDiff"
+            part="diff"
+          />
+        </div>
+      </div>
+    </template>
+    <div
+      v-else-if="!result"
+      class="specorator-tool-empty"
+    >No result</div>
+    <ToolLinesExpanded
+      v-else
+      :result="resolvedResult"
+      :max-lines="20"
+    />
   </template>
 
   <div
