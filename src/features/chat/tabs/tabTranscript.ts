@@ -1,4 +1,4 @@
-import type { ChatMessage } from '../../../core/types';
+import type { ChatMessage, SubagentInfo } from '../../../core/types';
 import type { ChatState } from '../state/ChatState';
 import type { TranscriptHydrationError } from '../ui/vue/transcript/stores/transcriptStore';
 import type { TranscriptSnapshot, TranscriptSubscribe } from '../ui/vue/transcript/transcriptCallbacks';
@@ -120,14 +120,21 @@ export class TabTranscriptProjection {
 }
 
 /**
- * Shallow clone giving `message`, each of its tool calls, AND each tool call's
- * nested `subagent` a fresh identity. Content blocks are NOT cloned: `BlockList`
- * re-derives text/thinking item strings from the (mutated) blocks once
- * `props.msg` identity changes. But tool calls are passed to `ToolCall` /
- * `SubagentBlock` by object reference, and `SubagentBlock` further reads
- * `toolCall.subagent` through a computed whose downstream `statusPill`/result
- * computeds only recompute when the `subagent` REFERENCE changes — so both need
- * a fresh reference. O(tool calls on this one message).
+ * Shallow clone giving `message`, each of its tool calls, each tool call's
+ * nested `subagent`, AND every nested `subagent.toolCalls` entry a fresh
+ * identity. Content blocks are NOT cloned: `BlockList` re-derives text/thinking
+ * item strings from the (mutated) blocks once `props.msg` identity changes. But
+ * tool calls are passed to `ToolCall` / `SubagentBlock` by object reference, and
+ * `SubagentBlock` further reads `toolCall.subagent` through a computed whose
+ * downstream `statusPill`/result computeds only recompute when the `subagent`
+ * REFERENCE changes — so both need a fresh reference. The nested tool items are
+ * keyed `SubagentToolItem` children fed `subagent.toolCalls[i]` by reference;
+ * `SubagentStreamCoordinator.handleSubagentChunk` mutates those entries IN PLACE
+ * on a live SYNC subagent (nested `toolCall.status`/`result`), so without a
+ * fresh entry identity the keyed child keeps the old prop object and stays stuck
+ * on `running`. Snapshot-ONLY: every clone is a copy — `ChatState`'s real
+ * message/subagent/toolCall objects are never touched, so the engine's live refs
+ * keep growing. O(tool calls + nested tool calls on this one message).
  */
 function refreshMessageIdentity(message: ChatMessage): ChatMessage {
   return {
@@ -135,8 +142,17 @@ function refreshMessageIdentity(message: ChatMessage): ChatMessage {
     toolCalls: message.toolCalls
       ? message.toolCalls.map((toolCall) => ({
           ...toolCall,
-          subagent: toolCall.subagent ? { ...toolCall.subagent } : toolCall.subagent,
+          subagent: toolCall.subagent ? cloneSubagentIdentity(toolCall.subagent) : toolCall.subagent,
         }))
       : message.toolCalls,
+  };
+}
+
+function cloneSubagentIdentity(subagent: SubagentInfo): SubagentInfo {
+  return {
+    ...subagent,
+    toolCalls: subagent.toolCalls
+      ? subagent.toolCalls.map((nestedToolCall) => ({ ...nestedToolCall }))
+      : subagent.toolCalls,
   };
 }

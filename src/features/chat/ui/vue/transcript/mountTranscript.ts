@@ -2,6 +2,7 @@ import type { Component } from 'obsidian';
 import { type App as VueApp, createApp, markRaw } from 'vue';
 
 import type SpecoratorPlugin from '../../../../../main';
+import { registerFileLinkHandler } from '../../../../../utils/fileLink';
 import type { TranscriptCallbacks } from './transcriptCallbacks';
 import {
   APP_KEY,
@@ -56,6 +57,15 @@ export function mountTranscript(
   app.provide(CALLBACKS_KEY, markRaw(callbacks));
   app.provide(SCROLL_HOST_KEY, (el: HTMLElement) => {
     scrollEl = el;
+    // The transcript's markdown renders through `MarkdownHost` → `processFileLinks`,
+    // which turns assistant-authored wikilinks / inline vault paths into
+    // `.specorator-file-link` anchors whose CLICKS are opened by this DELEGATED
+    // handler (the deleted `MessageRenderer` used to register it in its
+    // constructor). Bind it to the scroll host, which contains every rendered
+    // message. `registerFileLinkHandler` goes through `component.registerDomEvent`,
+    // so Obsidian removes the listener when the tab's `component` unloads — no
+    // explicit disposal needed on `unmount()`.
+    registerFileLinkHandler(plugin.app, el, component);
   });
   app.mount(containerEl);
 

@@ -154,6 +154,44 @@ describe('mountTranscript', () => {
     container.remove();
   });
 
+  it('registers the delegated file-link handler on the scroll host so generated links open files', async () => {
+    const container = document.createElement('div');
+    document.body.appendChild(container);
+    const { callbacks } = makeProjectingCallbacks({
+      messages: userMessages(1),
+      activeStream: null,
+      greeting: '',
+      loadingText: null,
+      hydrationError: null,
+    });
+
+    const plugin = makePlugin();
+    const component = new Component();
+    const mounted = mountTranscript(container, plugin, component, callbacks);
+    await flushPromises();
+
+    // The wikilink/inline-path anchors that `processFileLinks` generates in the
+    // rendered markdown are opened by a DELEGATED click handler bound to the
+    // scroll host via `registerFileLinkHandler(app, scrollEl, component)`.
+    const scrollEl = container.querySelector('.specorator-messages') as HTMLElement;
+    const domCalls = (component.registerDomEvent as unknown as Mock).mock.calls;
+    const clickCall = domCalls.find(([el, ev]) => el === scrollEl && ev === 'click');
+    expect(clickCall).toBeDefined();
+
+    // Driving the registered handler over a generated link opens the vault file.
+    const openLinkText = vi.fn();
+    plugin.app.workspace.openLinkText = openLinkText;
+    const link = document.createElement('a');
+    link.className = 'specorator-file-link';
+    link.setAttribute('data-href', 'Note.md');
+    scrollEl.appendChild(link);
+    clickCall![2]({ target: link, preventDefault: vi.fn() } as unknown as MouseEvent);
+    expect(openLinkText).toHaveBeenCalledWith('Note.md', '', 'tab');
+
+    mounted.unmount();
+    container.remove();
+  });
+
   it('disposes the projection subscription on unmount', async () => {
     const container = document.createElement('div');
     document.body.appendChild(container);

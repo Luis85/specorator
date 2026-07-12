@@ -188,4 +188,62 @@ describe('transcript live in-place mutation', () => {
 
     dispose();
   });
+
+  it('C3: flips a live SYNC subagent NESTED tool status when its nested toolCall mutates in place', async () => {
+    const state = new ChatState();
+    // A nested tool inside a sync subagent, still running — exactly the state
+    // `handleSubagentChunk` leaves it in on `subagent_tool_use`.
+    const nestedTool: ToolCallInfo = {
+      id: 'n1',
+      name: 'Read',
+      input: { file_path: 'x.md' },
+      status: 'running',
+      isExpanded: false,
+    };
+    const subagent: SubagentInfo = {
+      id: 'task1',
+      description: 'do the thing',
+      prompt: 'go',
+      status: 'running',
+      toolCalls: [nestedTool],
+      isExpanded: false,
+    };
+    const taskToolCall: ToolCallInfo = {
+      id: 'task1',
+      name: TOOL_TASK,
+      input: {},
+      status: 'running',
+      isExpanded: false,
+      subagent,
+    };
+    const msg: ChatMessage = {
+      id: 'a1',
+      role: 'assistant',
+      content: '',
+      timestamp: 0,
+      contentBlocks: [{ type: 'subagent', subagentId: 'task1' }],
+      toolCalls: [taskToolCall],
+    };
+    state.addMessage(msg);
+    state.activeMessageId = 'a1'; // live streaming turn
+
+    const projection = new TabTranscriptProjection(state);
+    const { container, dispose } = mount(state, projection);
+    await flushPromises();
+
+    expect(container.querySelector('.specorator-subagent-tool-status.status-running')).not.toBeNull();
+    expect(container.querySelector('.specorator-subagent-tool-status.status-completed')).toBeNull();
+
+    // Exactly what `SubagentStreamCoordinator.handleSubagentChunk` does on a
+    // `subagent_tool_result` chunk: mutate the nested entry IN PLACE.
+    nestedTool.status = 'completed';
+    nestedTool.result = 'file contents';
+    projection.emit();
+    await flushPromises();
+
+    expect(container.querySelector('.specorator-subagent-tool-status.status-completed')).not.toBeNull();
+    expect(container.querySelector('.specorator-subagent-tool-status.status-running')).toBeNull();
+
+    dispose();
+  });
 });
