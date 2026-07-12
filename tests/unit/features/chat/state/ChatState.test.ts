@@ -53,12 +53,9 @@ describe('ChatState', () => {
       expect(state.currentTextContent).toBe('');
       expect(state.currentThinkingState).toBeNull();
       expect(state.streamingIndicatorMode).toBeNull();
-      expect(state.thinkingEl).toBeNull();
       expect(state.queueIndicatorEl).toBeNull();
       expect(state.thinkingIndicatorTimeout).toBeNull();
       expect(state.toolCallElements).toBeInstanceOf(Map);
-      expect(state.writeEditStates).toBeInstanceOf(Map);
-      expect(state.pendingTools).toBeInstanceOf(Map);
       expect(state.usage).toBeNull();
       expect(state.ignoreUsageUpdates).toBe(false);
       expect(state.currentTodos).toBeNull();
@@ -213,13 +210,6 @@ describe('ChatState', () => {
       expect(chatState.currentThinkingState).toBe(state);
     });
 
-    it('stores thinkingEl', () => {
-      const chatState = new ChatState();
-      const el = {} as HTMLElement;
-      chatState.thinkingEl = el;
-      expect(chatState.thinkingEl).toBe(el);
-    });
-
     it('stores queueIndicatorEl', () => {
       const chatState = new ChatState();
       const el = {} as HTMLElement;
@@ -316,19 +306,6 @@ describe('ChatState', () => {
       expect(chatState.toolCallElements.get('tool-1')).toBe(el);
     });
 
-    it('returns mutable writeEditStates map', () => {
-      const chatState = new ChatState();
-      const state = {} as any;
-      chatState.writeEditStates.set('we-1', state);
-      expect(chatState.writeEditStates.get('we-1')).toBe(state);
-    });
-
-    it('returns mutable pendingTools map', () => {
-      const chatState = new ChatState();
-      const pt = { toolCall: {} as any, parentEl: null };
-      chatState.pendingTools.set('pt-1', pt);
-      expect(chatState.pendingTools.get('pt-1')).toBe(pt);
-    });
   });
 
   describe('usage', () => {
@@ -581,14 +558,10 @@ describe('ChatState', () => {
     it('clears all tracking maps', () => {
       const chatState = new ChatState();
       chatState.toolCallElements.set('a', {} as HTMLElement);
-      chatState.writeEditStates.set('b', {} as any);
-      chatState.pendingTools.set('c', { toolCall: {} as any, parentEl: null });
 
       chatState.clearMaps();
 
       expect(chatState.toolCallElements.size).toBe(0);
-      expect(chatState.writeEditStates.size).toBe(0);
-      expect(chatState.pendingTools.size).toBe(0);
     });
   });
 
@@ -627,8 +600,6 @@ describe('ChatState', () => {
       expect(chatState.cancelRequested).toBe(false);
       expect(chatState.currentContentEl).toBeNull();
       expect(chatState.toolCallElements.size).toBe(0);
-      expect(chatState.writeEditStates.size).toBe(0);
-      expect(chatState.pendingTools.size).toBe(0);
       expect(chatState.queuedMessage).toBeNull();
       expect(chatState.usage).toBeNull();
       expect(chatState.currentTodos).toBeNull();

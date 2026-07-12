@@ -49,8 +49,6 @@ export interface ConversationControllerDeps {
   /** Sets/clears the history-hydration failure banner in the Vue transcript store. */
   setTranscriptHydrationError: (error: { code: string; message: string } | null) => void;
   getHistoryDropdown: () => HTMLElement | null;
-  getWelcomeEl: () => HTMLElement | null;
-  setWelcomeEl: (el: HTMLElement | null) => void;
   getMessagesEl: () => HTMLElement;
   getInputEl: () => HTMLTextAreaElement;
   getFileContextManager: () => FileContextManager | null;
@@ -198,7 +196,6 @@ export class ConversationController {
       state.currentTextContent = '';
       state.currentThinkingState = null;
       state.toolCallElements.clear();
-      state.writeEditStates.clear();
       state.isStreaming = false;
 
       // Reset to entry point state - no conversation created yet

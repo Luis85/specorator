@@ -1,8 +1,8 @@
 <script setup lang="ts">
 import { onBeforeUnmount, onMounted, ref } from 'vue';
 
+import type { PlanApprovalDecision } from '../../../../../../core/types/tools';
 import { CHOICE_CARD_HINTS_TEXT, type InlineChoiceRowSpec } from '../../../../rendering/inlineChoiceCard';
-import type { PlanApprovalDecision } from '../../../../rendering/InlinePlanApproval';
 import InlineChoiceList from './InlineChoiceList.vue';
 import PlanContentPreview from './PlanContentPreview.vue';
 

@@ -64,7 +64,6 @@ function initializeContextManagers(tab: TabData, plugin: SpecoratorPlugin): void
         tab.controllers.browserSelectionController?.updateContextRowVisibility();
         tab.controllers.canvasSelectionController?.updateContextRowVisibility();
         autoResizeTextarea(dom.inputEl);
-        tab.renderer?.scrollToBottomIfNeeded();
       },
       getExternalContexts: () => tab.ui.externalContextSelector?.getExternalContexts() || [],
     },
@@ -82,7 +81,6 @@ function initializeContextManagers(tab: TabData, plugin: SpecoratorPlugin): void
         tab.controllers.browserSelectionController?.updateContextRowVisibility();
         tab.controllers.canvasSelectionController?.updateContextRowVisibility();
         autoResizeTextarea(dom.inputEl);
-        tab.renderer?.scrollToBottomIfNeeded();
       },
     },
     dom.contextRowEl
@@ -510,7 +508,6 @@ export function initializeTabUI(
     onEditedFilesChanged: (files) => {
       tab.ui.editedFilesView?.render(files);
       autoResizeTextarea(dom.inputEl);
-      tab.renderer?.scrollToBottomIfNeeded();
     },
   };
   tab.ui.editedFilesView.render(state.editedFiles);

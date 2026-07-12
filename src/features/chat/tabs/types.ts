@@ -12,7 +12,6 @@ import type { InputController } from '../controllers/InputController';
 import type { NavigationController } from '../controllers/NavigationController';
 import type { SelectionController } from '../controllers/SelectionController';
 import type { StreamController } from '../controllers/StreamController';
-import type { MessageRenderer } from '../rendering/MessageRenderer';
 import type { SubagentManager } from '../services/SubagentManager';
 import type { ChatState } from '../state/ChatState';
 import type { BangBashModeManager } from '../ui/BangBashModeManager';
@@ -173,7 +172,6 @@ export interface TabUIComponents {
 export interface TabDOMElements {
   contentEl: HTMLElement;
   messagesEl: HTMLElement;
-  welcomeEl: HTMLElement | null;
 
   /** Container for status panel (fixed between messages and input). */
   statusPanelContainerEl: HTMLElement;
@@ -308,13 +306,6 @@ export interface TabData {
 
   /** Per-tab DOM elements. */
   dom: TabDOMElements;
-
-  /**
-   * Per-tab imperative renderer. Left null since the Vue transcript island
-   * replaced it (Task 18a); the field + `MessageRenderer` type stay until the
-   * imperative renderer files are deleted in Task 18b.
-   */
-  renderer: MessageRenderer | null;
 
   /** Per-tab Vue transcript projection source (engine → store snapshot fan-out). */
   transcript: TabTranscriptProjection | null;

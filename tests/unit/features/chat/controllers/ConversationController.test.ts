@@ -21,7 +21,6 @@ function createMockDeps(overrides: Partial<ConversationControllerDeps> = {}): Co
   const state = new ChatState();
   const inputEl = { value: '', focus: jest.fn() } as unknown as HTMLTextAreaElement;
   const historyDropdown = createMockEl();
-  let welcomeEl: any = createMockEl();
   const messagesEl = createMockEl();
 
   const fileContextManager = {
@@ -76,8 +75,6 @@ function createMockDeps(overrides: Partial<ConversationControllerDeps> = {}): Co
       clear: jest.fn(),
     } as any,
     getHistoryDropdown: () => historyDropdown as any,
-    getWelcomeEl: () => welcomeEl,
-    setWelcomeEl: (el: any) => { welcomeEl = el; },
     getMessagesEl: () => messagesEl as any,
     getInputEl: () => inputEl,
     getFileContextManager: () => fileContextManager as any,
@@ -344,15 +341,6 @@ describe('ConversationController', () => {
 
       expect(fileContextManager.resetForNewConversation).toHaveBeenCalled();
       expect(fileContextManager.autoAttachActiveFile).toHaveBeenCalled();
-    });
-
-    it('should not throw if welcomeEl is null', () => {
-      const depsWithNullWelcome = createMockDeps({
-        getWelcomeEl: () => null,
-      });
-      const controllerWithNullWelcome = new ConversationController(depsWithNullWelcome);
-
-      expect(() => controllerWithNullWelcome.initializeWelcome()).not.toThrow();
     });
 
     it('seeds the transcript greeting for the Vue welcome banner', () => {
@@ -1268,13 +1256,12 @@ describe('ConversationController', () => {
   });
 
   describe('loadActive with greeting', () => {
-    it('should show welcome and return early when no conversation exists', async () => {
+    it('seeds the greeting and returns early when no conversation exists', async () => {
       deps.state.currentConversationId = null;
 
       await controller.loadActive();
 
-      const welcomeEl = deps.getWelcomeEl();
-      expect(welcomeEl?.style.display).not.toBe('none');
+      expect(deps.setTranscriptGreeting).toHaveBeenCalled();
     });
   });
 

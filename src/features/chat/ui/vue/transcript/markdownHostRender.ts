@@ -4,7 +4,7 @@ import { MarkdownRenderer } from 'obsidian';
 import { processFileLinks } from '../../../../../utils/fileLink';
 import { replaceImageEmbedsWithHtml } from '../../../../../utils/imageEmbed';
 import { escapeMathDelimitersForStreaming } from '../../../../../utils/markdownMath';
-import { formatCodeBlocks } from '../../../rendering/codeBlockFormatter';
+import { formatCodeBlocks } from './codeBlockFormatter';
 
 export interface RenderMarkdownArgs {
   app: App;

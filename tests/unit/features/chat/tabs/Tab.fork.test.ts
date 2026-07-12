@@ -83,14 +83,6 @@ jest.mock('@/shared/components/SlashCommandDropdown', () => ({
   SlashCommandDropdown: jest.fn().mockImplementation(() => createMockSlashCommandDropdown()),
 }));
 
-// Mock rendering
-jest.mock('@/features/chat/rendering/MessageRenderer', () => ({
-  MessageRenderer: jest.fn().mockImplementation(() => ({
-    scrollToBottomIfNeeded: jest.fn(),
-    setAsyncSubagentClickCallback: jest.fn(),
-  })),
-}));
-
 jest.mock('@/features/chat/rendering/ThinkingBlockRenderer', () => ({
   cleanupThinkingBlock: jest.fn(),
 }));

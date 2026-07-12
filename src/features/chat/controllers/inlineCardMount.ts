@@ -2,9 +2,8 @@ import type { Component } from 'obsidian';
 import { type Component as VueComponent, createApp, markRaw } from 'vue';
 
 import type { ApprovalCallbackOptions } from '../../../core/runtime/types';
-import type { ApprovalDecision, ExitPlanModeDecision } from '../../../core/types';
+import type { ApprovalDecision, ExitPlanModeDecision, PlanApprovalDecision } from '../../../core/types';
 import type SpecoratorPlugin from '../../../main';
-import type { PlanApprovalDecision } from '../rendering/InlinePlanApproval';
 import InlineApproval from '../ui/vue/transcript/inline/InlineApproval.vue';
 import InlineAskUserQuestion from '../ui/vue/transcript/inline/InlineAskUserQuestion.vue';
 import InlineExitPlanMode from '../ui/vue/transcript/inline/InlineExitPlanMode.vue';

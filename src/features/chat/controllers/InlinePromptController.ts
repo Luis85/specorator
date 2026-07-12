@@ -2,9 +2,8 @@ import * as fs from 'fs';
 import * as nodePath from 'path';
 
 import type { ApprovalCallbackOptions } from '../../../core/runtime/types';
-import type { ApprovalDecision, ExitPlanModeDecision } from '../../../core/types';
+import type { ApprovalDecision, ExitPlanModeDecision, PlanApprovalDecision } from '../../../core/types';
 import { buildPlanArtifactFromChatState, readPlanMarkdownFromArtifact } from '../../../utils/planArtifact';
-import type { PlanApprovalDecision } from '../rendering/InlinePlanApproval';
 import type { ChatState } from '../state/ChatState';
 import type { InlineCardHandle, InlineCardMounter } from './inlineCardMount';
 

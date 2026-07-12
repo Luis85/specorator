@@ -46,6 +46,11 @@ export type ExitPlanModeDecision =
   | { type: 'approve-new-session'; planContent: string }
   | { type: 'feedback'; text: string };
 
+export type PlanApprovalDecision =
+  | { type: 'implement' }
+  | { type: 'revise'; text: string }
+  | { type: 'cancel' };
+
 export type ExitPlanModeCallback = (
   input: Record<string, unknown>,
   signal?: AbortSignal,

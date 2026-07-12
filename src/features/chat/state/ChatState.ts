@@ -5,11 +5,9 @@ import type {
   ChatMessage,
   ChatStateCallbacks,
   ChatStateData,
-  PendingToolCall,
   QueuedMessage,
   ThinkingBlockState,
   TodoItem,
-  WriteEditState,
 } from './types';
 
 function createInitialState(): ChatStateData {
@@ -31,12 +29,9 @@ function createInitialState(): ChatStateData {
     activeMessageId: null,
     activeBlockIndex: -1,
     streamingIndicatorMode: null,
-    thinkingEl: null,
     queueIndicatorEl: null,
     thinkingIndicatorTimeout: null,
     toolCallElements: new Map(),
-    writeEditStates: new Map(),
-    pendingTools: new Map(),
     usage: null,
     ignoreUsageUpdates: false,
     currentTodos: null,
@@ -270,14 +265,6 @@ export class ChatState {
     };
   }
 
-  get thinkingEl(): HTMLElement | null {
-    return this.state.thinkingEl;
-  }
-
-  set thinkingEl(value: HTMLElement | null) {
-    this.state.thinkingEl = value;
-  }
-
   get queueIndicatorEl(): HTMLElement | null {
     return this.state.queueIndicatorEl;
   }
@@ -301,14 +288,6 @@ export class ChatState {
 
   get toolCallElements(): Map<string, HTMLElement> {
     return this.state.toolCallElements;
-  }
-
-  get writeEditStates(): Map<string, WriteEditState> {
-    return this.state.writeEditStates;
-  }
-
-  get pendingTools(): Map<string, PendingToolCall> {
-    return this.state.pendingTools;
   }
 
   // ============================================
@@ -507,8 +486,6 @@ export class ChatState {
 
   clearMaps(): void {
     this.state.toolCallElements.clear();
-    this.state.writeEditStates.clear();
-    this.state.pendingTools.clear();
   }
 
   resetForNewConversation(): void {

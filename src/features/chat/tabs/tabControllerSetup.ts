@@ -33,10 +33,10 @@ import type { TabData } from './types';
 /**
  * Per-tab controller wiring extracted from `initializeTabControllers`.
  *
- * Each builder mutates `tab.renderer` / `tab.controllers` in place and is
- * invoked in a fixed order by the orchestrator. The order matters: later
- * builders read controllers (and the renderer) constructed by earlier ones,
- * so these functions are not independently reorderable. Fork affordances are
+ * Each builder mutates `tab.controllers` in place and is invoked in a fixed
+ * order by the orchestrator. The order matters: later builders read controllers
+ * constructed by earlier ones, so these functions are not independently
+ * reorderable. Fork affordances are
  * passed in as already-bound callbacks so this module never imports the fork
  * handlers from `tabControllers.ts` (which would form an import cycle).
  */
@@ -135,8 +135,6 @@ export function buildTabConversationController(
       setTranscriptLoading: (loadingText) => tab.transcript?.setLoadingText(loadingText),
       setTranscriptHydrationError: (error) => tab.transcript?.setHydrationError(error),
       getHistoryDropdown: () => null, // Tab doesn't have its own history dropdown
-      getWelcomeEl: () => dom.welcomeEl,
-      setWelcomeEl: (el) => { dom.welcomeEl = el; },
       getMessagesEl: () => dom.messagesEl,
       getInputEl: () => dom.inputEl,
       getFileContextManager: () => ui.fileContextManager,
@@ -261,7 +259,6 @@ export function buildTabInputController(
     conversationController: controllers.conversationController!,
     getInputEl: () => dom.inputEl,
     getInputContainerEl: () => dom.inputContainerEl,
-    getWelcomeEl: () => dom.welcomeEl,
     getMessagesEl: () => dom.messagesEl,
     getFileContextManager: () => ui.fileContextManager,
     getImageContextManager: () => ui.imageContextManager,

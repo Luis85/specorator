@@ -13,7 +13,6 @@ import type { BrowserSelectionContext } from '../../../utils/browser';
 import type { CanvasSelectionContext } from '../../../utils/canvas';
 import type { EditorSelectionContext } from '../../../utils/editor';
 import type { ThinkingBlockState } from '../rendering/ThinkingBlockRenderer';
-import type { WriteEditState } from '../rendering/WriteEditRenderer';
 import type { EditedFileEntry } from '../utils/editedFiles';
 
 /** Queued message waiting to be sent after current streaming completes. */
@@ -101,24 +100,19 @@ export interface ChatStateData {
   activeMessageId: string | null;
   activeBlockIndex: number;
   /**
-   * Which form the imperative streaming indicator (`StreamingIndicator` /
-   * `thinkingEl`) is currently rendering, mirrored for the Vue transcript's
-   * `StreamingIndicator`. `'thinking'` ⇔ the debounced flavor indicator is on
+   * Which form the streaming indicator is currently rendering, driving the Vue
+   * transcript's `StreamingIndicator`. `'thinking'` ⇔ the debounced flavor indicator is on
    * screen, `'writing'` ⇔ the immediate `Writing response…` placeholder, `null`
    * ⇔ hidden. This tracks the INDICATOR's show/showWriting/hide state, not the
    * reasoning/text block state. Written alongside the imperative DOM (dual-write).
    */
   streamingIndicatorMode: 'thinking' | 'writing' | null;
-  thinkingEl: HTMLElement | null;
   queueIndicatorEl: HTMLElement | null;
   /** Debounce timeout for showing thinking indicator after inactivity. */
   thinkingIndicatorTimeout: number | null;
 
   // Tool tracking maps
   toolCallElements: Map<string, HTMLElement>;
-  writeEditStates: Map<string, WriteEditState>;
-  /** Pending tool calls buffered until input is complete (for non-streaming-style render). */
-  pendingTools: Map<string, PendingToolCall>;
 
   // Context window usage
   usage: UsageInfo | null;
@@ -182,5 +176,4 @@ export type {
   TodoItem,
   ToolCallInfo,
   UsageInfo,
-  WriteEditState,
 };

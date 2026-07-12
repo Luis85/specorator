@@ -28,10 +28,6 @@ function createMockInputEl() {
   } as unknown as HTMLTextAreaElement;
 }
 
-function createMockWelcomeEl() {
-  return createMockEl();
-}
-
 function createMockFileContextManager() {
   return {
     startSession: jest.fn(),
@@ -196,7 +192,6 @@ function createMockDeps(overrides: Partial<InputControllerDeps> = {}): InputCont
     } as any,
     getInputEl: () => inputEl,
     getInputContainerEl: () => createMockEl() as any,
-    getWelcomeEl: () => null,
     getMessagesEl: () => createMockEl() as any,
     getFileContextManager: () => ({
       startSession: jest.fn(),
@@ -226,17 +221,15 @@ function createMockDeps(overrides: Partial<InputControllerDeps> = {}): InputCont
 
 /**
  * Composite helper for tests that need a complete "sendable" deps setup.
- * Creates welcomeEl + fileContextManager and sets conversationId by default,
+ * Creates fileContextManager and sets conversationId by default,
  * eliminating the repeated boilerplate in send-path tests.
  */
 function createSendableDeps(
   overrides: Partial<InputControllerDeps> = {},
   conversationId: string | null = 'conv-1',
 ): InputControllerDeps & { mockAgentService: ReturnType<typeof createMockAgentService>; inlineResolves: Record<string, (value: any) => void> } {
-  const welcomeEl = createMockWelcomeEl();
   const fileContextManager = createMockFileContextManager();
   const result = createMockDeps({
-    getWelcomeEl: () => welcomeEl,
     getFileContextManager: () => fileContextManager as any,
     ...overrides,
   });
@@ -980,12 +973,10 @@ describe('InputController - Message Queue', () => {
   });
 
   describe('Sending messages', () => {
-    it('should send message, hide welcome, and save conversation', async () => {
-      const welcomeEl = createMockWelcomeEl();
+    it('should send message and save conversation', async () => {
       const fileContextManager = createMockFileContextManager();
       const imageContextManager = deps.getImageContextManager()!;
 
-      deps.getWelcomeEl = () => welcomeEl;
       deps.getFileContextManager = () => fileContextManager as any;
       deps.state.currentConversationId = 'conv-1';
       (deps as any).mockAgentService.query = jest.fn().mockImplementation(() => createMockStream([{ type: 'done' }]));
@@ -994,7 +985,6 @@ describe('InputController - Message Queue', () => {
 
       await controller.sendMessage();
 
-      expect(welcomeEl.style.display).toBe('none');
       expect(fileContextManager.startSession).toHaveBeenCalled();
       expect(deps.state.messages).toHaveLength(2);
       // Without XML context tags, content equals displayContent (no <query> wrapper)

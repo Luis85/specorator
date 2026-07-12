@@ -83,7 +83,6 @@ export interface InputControllerDeps {
   canvasSelectionController: CanvasSelectionController;
   conversationController: ConversationController;
   getInputEl: () => HTMLTextAreaElement;
-  getWelcomeEl: () => HTMLElement | null;
   getMessagesEl: () => HTMLElement;
   getFileContextManager: () => FileContextManager | null;
   getImageContextManager: () => ImageContextManager | null;

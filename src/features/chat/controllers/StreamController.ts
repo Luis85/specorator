@@ -26,7 +26,6 @@ import {
 import { extractDiffData } from '../../../utils/diff';
 import { toVaultRelativeOpenPath } from '../../../utils/fileLink';
 import { scrollMessagesToBottom } from '../rendering/scrollToBottom';
-import { resolveSubagentLifecycleAdapter } from '../rendering/subagentLifecycleResolution';
 import { isBlockedToolResult } from '../rendering/ToolCallRenderer';
 import type { SubagentManager } from '../services/SubagentManager';
 import type { ChatState } from '../state/ChatState';
@@ -42,6 +41,7 @@ import {
   projectNoticeText,
   projectUsage,
 } from './StreamProjection';
+import { resolveSubagentLifecycleAdapter } from './subagentLifecycleResolution';
 import { SubagentStreamCoordinator } from './SubagentStreamCoordinator';
 import { TextRenderCoordinator } from './TextRenderCoordinator';
 import { ThinkingRenderCoordinator } from './ThinkingRenderCoordinator';
@@ -698,7 +698,6 @@ export class StreamController {
     state.activeMessageId = null;
     state.activeBlockIndex = -1;
     this.deps.subagentManager.resetStreamingState();
-    state.pendingTools.clear();
     // Reset response timer (duration already captured at this point)
     state.responseStartTime = null;
     void this.deps.plugin.gitStatusWatcher?.refresh();

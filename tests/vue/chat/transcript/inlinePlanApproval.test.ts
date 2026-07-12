@@ -2,7 +2,7 @@ import { mount } from '@vue/test-utils';
 import { App, Component, MarkdownRenderer } from 'obsidian';
 import { afterEach, beforeAll, beforeEach, describe, expect, it, type Mock, vi } from 'vitest';
 
-import type { PlanApprovalDecision } from '@/features/chat/rendering/InlinePlanApproval';
+import type { PlanApprovalDecision } from '@/core/types/tools';
 import InlinePlanApproval from '@/features/chat/ui/vue/transcript/inline/InlinePlanApproval.vue';
 import { APP_KEY, COMPONENT_KEY, PLUGIN_KEY } from '@/features/chat/ui/vue/transcript/transcriptKeys';
 import type SpecoratorPlugin from '@/main';

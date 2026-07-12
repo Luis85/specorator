@@ -54,12 +54,6 @@ jest.mock('@/features/chat/rendering/ToolCallRenderer', () => ({
   decorateToolSummaryPath: jest.fn(),
 }));
 
-jest.mock('@/features/chat/rendering/WriteEditRenderer', () => ({
-  createWriteEditBlock: jest.fn().mockReturnValue({}),
-  finalizeWriteEditBlock: jest.fn(),
-  updateWriteEditWithDiff: jest.fn(),
-}));
-
 jest.mock('@/utils/path', () => ({
   getVaultPath: jest.fn().mockReturnValue('/test/vault'),
 }));
@@ -1174,7 +1168,6 @@ describe('StreamController - Text Content', () => {
 
       controller.resetStreamingState();
 
-      expect(deps.state.pendingTools.size).toBe(0);
       expect(deps.state.currentContentEl).toBeNull();
     });
 
@@ -2998,11 +2991,6 @@ describe('StreamController - reactive tool-call data (Task 16 write-side)', () =
     jest.useFakeTimers();
     installTestWindow();
     deps = createMockDeps();
-    // createWriteEditBlock's return is stored in state.writeEditStates; the
-    // result path only extracts diffData when a write/edit state exists, so it
-    // must be a truthy object (the default {} mock suffices, but be explicit).
-    const { createWriteEditBlock } = jest.requireMock('@/features/chat/rendering/WriteEditRenderer');
-    (createWriteEditBlock as jest.Mock).mockReturnValue({ wrapperEl: createMockEl() });
     controller = new StreamController(deps);
     deps.state.currentContentEl = createMockEl();
   });

@@ -144,13 +144,6 @@ jest.mock('@/shared/components/SlashCommandDropdown', () => ({
   }),
 }));
 
-// Mock rendering. The per-tab MessageRenderer was replaced by the Vue
-// transcript island; nothing constructs it now, so the module is mocked only to
-// keep the real (Vue-heavy) module from loading during these tests.
-jest.mock('@/features/chat/rendering/MessageRenderer', () => ({
-  MessageRenderer: jest.fn(),
-}));
-
 // The auto-turn path scrolls via scrollMessagesToBottom(dom.messagesEl) rather
 // than a renderer handle; mock it so the scroll can be asserted.
 jest.mock('@/features/chat/rendering/scrollToBottom', () => ({
@@ -303,12 +296,6 @@ describe('Tab - Runtime Host', () => {
         configurable: true,
       });
 
-      tab.renderer = {
-        addMessage,
-        renderContent: jest.fn(),
-        addTextCopyButton: jest.fn(),
-        scrollToBottom,
-      } as any;
       tab.controllers.streamController = {
         handleStreamChunk,
         appendText: jest.fn().mockResolvedValue(undefined),
@@ -599,8 +586,7 @@ describe('Tab - Controller Initialization', () => {
       initializeTabControllers(tab, options.plugin, mockComponent);
 
       // The per-tab MessageRenderer was replaced by a Vue transcript island:
-      // tab.renderer stays null, and the projection + mounted handle are wired.
-      expect(tab.renderer).toBeNull();
+      // the projection + mounted handle are wired.
       expect(tab.transcript).not.toBeNull();
       expect(tab.mountedTranscript).not.toBeNull();
     });
@@ -1226,50 +1212,6 @@ describe('Tab - UI Callback Wiring', () => {
   });
 
   describe('initializeTabUI callbacks', () => {
-    it('should wire onChipsChanged to scroll to bottom', () => {
-      const options = createMockOptions();
-      const tab = createTab(options);
-
-      // Initialize UI to wire callbacks
-      initializeTabUI(tab, options.plugin);
-
-      // The chip/image scroll callbacks still fan out through the optional
-      // tab.renderer handle (tab.renderer?.scrollToBottomIfNeeded()); the
-      // MessageRenderer that used to populate it is retired, so provide a
-      // minimal stand-in to assert the wiring.
-      const renderer = { scrollToBottomIfNeeded: jest.fn() };
-      tab.renderer = renderer as any;
-
-      // Get the FileContextManager constructor call arguments
-      const { FileContextManager } = jest.requireMock('@/features/chat/ui/FileContext');
-      const constructorCall = FileContextManager.mock.calls[0];
-      const callbacks = constructorCall[3]; // 4th argument is callbacks
-
-      // Trigger onChipsChanged callback
-      callbacks.onChipsChanged();
-
-      expect(renderer.scrollToBottomIfNeeded).toHaveBeenCalled();
-    });
-
-    it('should wire onImagesChanged to scroll to bottom', () => {
-      const options = createMockOptions();
-      const tab = createTab(options);
-
-      initializeTabUI(tab, options.plugin);
-
-      const renderer = { scrollToBottomIfNeeded: jest.fn() };
-      tab.renderer = renderer as any;
-
-      // Get the ImageContextManager constructor call
-      const { ImageContextManager } = jest.requireMock('@/features/chat/ui/ImageContext');
-      const constructorCall = ImageContextManager.mock.calls[0];
-      const callbacks = constructorCall[2]; // 3rd argument is callbacks (app parameter was removed)
-
-      callbacks.onImagesChanged();
-
-      expect(renderer.scrollToBottomIfNeeded).toHaveBeenCalled();
-    });
-
     it('should wire getExcludedTags to return plugin settings', () => {
       const plugin = createMockPlugin({
         settings: {
@@ -1764,29 +1706,6 @@ describe('Tab - Controller Configuration', () => {
       const config = constructorCall[0];
 
       expect(config.getHistoryDropdown()).toBeNull();
-    });
-
-    it('should wire welcome element getters and setters', () => {
-      const { ConversationController } = jest.requireMock('@/features/chat/controllers/ConversationController');
-      const options = createMockOptions();
-      const tab = createTab(options);
-      const mockComponent = {} as any;
-
-      initializeTabUI(tab, options.plugin);
-      initializeTabControllers(tab, options.plugin, mockComponent);
-
-      const constructorCall = ConversationController.mock.calls[0];
-      const config = constructorCall[0];
-
-      // Test getter - use mock element
-      const mockWelcome = { id: 'welcome-el' } as any;
-      tab.dom.welcomeEl = mockWelcome;
-      expect(config.getWelcomeEl()).toBe(mockWelcome);
-
-      // Test setter
-      const newWelcomeEl = { id: 'new-welcome-el' } as any;
-      config.setWelcomeEl(newWelcomeEl);
-      expect(tab.dom.welcomeEl).toBe(newWelcomeEl);
     });
 
     it('should reset slash-command cache across conversation lifecycle events', () => {

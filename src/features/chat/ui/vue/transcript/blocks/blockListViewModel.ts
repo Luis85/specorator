@@ -5,7 +5,7 @@ import {
   TOOL_WRITE_STDIN,
 } from '../../../../../../core/tools/toolNames';
 import type { ChatMessage, ContentBlock, ToolCallInfo } from '../../../../../../core/types';
-import { resolveSubagentLifecycleAdapter } from '../../../../rendering/subagentLifecycleResolution';
+import { resolveSubagentLifecycleAdapter } from '../../../../controllers/subagentLifecycleResolution';
 
 /**
  * Pure dispatch resolution for `BlockList.vue`, mirroring
