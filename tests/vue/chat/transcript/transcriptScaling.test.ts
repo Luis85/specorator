@@ -5,11 +5,11 @@ import { App, Component, MarkdownRenderer } from 'obsidian';
 import { beforeEach, describe, expect, it, type Mock, vi } from 'vitest';
 
 import type { ChatMessage, ToolCallInfo } from '@/core/types';
-import { RENDER_WINDOW_SIZE } from '@/features/chat/rendering/windowedRenderSetup';
 import { ChatState } from '@/features/chat/state/ChatState';
 import { TabTranscriptProjection } from '@/features/chat/tabs/tabTranscript';
 import { mountTranscript } from '@/features/chat/ui/vue/transcript/mountTranscript';
 import type { TranscriptCallbacks } from '@/features/chat/ui/vue/transcript/transcriptCallbacks';
+import { RENDER_WINDOW_SIZE } from '@/features/chat/ui/vue/transcript/windowedRenderSetup';
 import type SpecoratorPlugin from '@/main';
 
 /**

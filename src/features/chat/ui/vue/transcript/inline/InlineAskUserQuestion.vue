@@ -2,9 +2,9 @@
 import { onBeforeUnmount, onMounted, ref, watch } from 'vue';
 
 import type { AskUserQuestionItem, AskUserQuestionOption } from '../../../../../../core/types/tools';
-import { coerceOption, deduplicateOptions } from '../../../../rendering/askUserQuestionOptions';
 import AskCustomInputRow from './AskCustomInputRow.vue';
 import AskOptionRow from './AskOptionRow.vue';
+import { coerceOption, deduplicateOptions } from './askUserQuestionOptions';
 
 /**
  * Vue port of `rendering/InlineAskUserQuestion.ts`. Owns ONLY input capture +

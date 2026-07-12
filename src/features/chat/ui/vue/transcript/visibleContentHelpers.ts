@@ -1,12 +1,10 @@
 /**
- * Specorator - message visibility predicates.
- *
- * Extracted from MessageRenderer so `hasVisibleContent` stays below the
- * complexity thresholds: the per-block-type switch carries most of the
- * branching weight and is pure once tool visibility is supplied as a callback.
+ * Message visibility predicates for the Vue transcript island. Extracted so the
+ * per-block-type switch (which carries most of the branching weight) stays pure
+ * once tool visibility is supplied as a callback. Consumed by `MessageBubble.vue`.
  */
 
-import type { ChatMessage, ContentBlock } from '../../../core/types';
+import type { ChatMessage, ContentBlock } from '../../../../../core/types';
 
 /**
  * Whether a single content block contributes visible output. `isToolVisible`

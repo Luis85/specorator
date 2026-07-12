@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { type ComponentPublicInstance, ref } from 'vue';
 
-import type { InlineChoiceRowSpec } from '../../../../rendering/inlineChoiceCard';
+import type { InlineChoiceRowSpec } from './inlineChoiceCard';
 
 type VNodeRefEl = Element | ComponentPublicInstance | null;
 

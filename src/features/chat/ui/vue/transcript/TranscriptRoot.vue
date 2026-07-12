@@ -1,7 +1,6 @@
 <script setup lang="ts">
 import { inject, nextTick, onMounted, ref, watch } from 'vue';
 
-import { RENDER_WINDOW_SIZE, windowStartIndex } from '../../../rendering/windowedRenderSetup';
 import LoadEarlierControl from './LoadEarlierControl.vue';
 import MessageList from './MessageList.vue';
 import { useTranscriptStore } from './stores/transcriptStore';
@@ -9,6 +8,7 @@ import StreamingIndicator from './StreamingIndicator.vue';
 import { CALLBACKS_KEY, SCROLL_HOST_KEY } from './transcriptKeys';
 import { useTranscriptEventRouting } from './useTranscriptEventRouting';
 import WelcomeBanner from './WelcomeBanner.vue';
+import { RENDER_WINDOW_SIZE, windowStartIndex } from './windowedRenderSetup';
 
 /**
  * The transcript island root. Reproduces `MessageRenderer.renderMessages`'s

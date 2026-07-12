@@ -1,4 +1,4 @@
-import type { AskUserQuestionOption } from '../../../core/types/tools';
+import type { AskUserQuestionOption } from '../../../../../../core/types/tools';
 
 function extractLabel(obj: Record<string, unknown>): string {
   if (typeof obj.label === 'string') return obj.label;

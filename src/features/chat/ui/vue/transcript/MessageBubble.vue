@@ -5,7 +5,6 @@ import { computed, inject } from 'vue';
 import { DEFAULT_CHAT_PROVIDER_ID } from '../../../../../core/providers/types';
 import type { ChatMessage } from '../../../../../core/types';
 import { extractVaultMentions } from '../../../../../utils/vaultMentions';
-import { hasVisibleBlock, hasVisibleText } from '../../../rendering/visibleContentHelpers';
 import BlockList from './blocks/BlockList.vue';
 import { shouldRenderToolCall } from './blocks/blockListViewModel';
 import TextBlock from './blocks/TextBlock.vue';
@@ -13,6 +12,7 @@ import MessageActionBar from './cards/MessageActionBar.vue';
 import MessageContextCard from './cards/MessageContextCard.vue';
 import MessageImages from './cards/MessageImages.vue';
 import { APP_KEY, CALLBACKS_KEY } from './transcriptKeys';
+import { hasVisibleBlock, hasVisibleText } from './visibleContentHelpers';
 
 /**
  * Reproduces `rendering/MessageRenderer.ts`'s message shell —

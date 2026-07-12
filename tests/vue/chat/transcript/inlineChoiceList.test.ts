@@ -1,7 +1,7 @@
 import { mount } from '@vue/test-utils';
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 
-import type { InlineChoiceRowSpec } from '@/features/chat/rendering/inlineChoiceCard';
+import type { InlineChoiceRowSpec } from '@/features/chat/ui/vue/transcript/inline/inlineChoiceCard';
 import InlineChoiceList from '@/features/chat/ui/vue/transcript/inline/InlineChoiceList.vue';
 
 /**

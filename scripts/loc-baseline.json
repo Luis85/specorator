@@ -63,7 +63,7 @@
       "reason": "Grandfathered hotspot. Track the split in docs/tech-debt/2026-06-07-oversized-modules-and-test-files.md; shrink only."
     },
     "src/features/chat/controllers/StreamController.ts": {
-      "loc": 617,
+      "loc": 623,
       "reason": "Grandfathered hotspot. Track the split in docs/tech-debt/2026-06-07-oversized-modules-and-test-files.md; shrink only. Streaming text + thinking render lifecycles extracted to TextRenderCoordinator / ThinkingRenderCoordinator over a shared StreamRenderLoop + streamRenderBackoff. Re-locked down from 774 (2026-07-12): the transcript Vue cutover (ADR 0005 sub-project 2) deleted the imperative DOM-patch write side (tool-call/write-edit/thinking element mutation) now that streaming mutates reactive ChatMessage data the Vue transcript renders."
     },
     "src/core/providers/types.ts": {

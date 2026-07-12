@@ -1,5 +1,5 @@
 {
-  "description": "Fallow quality baseline. Counters may shrink but not grow; averageMaintainability may rise but not drop. Regenerate with `npm run check:quality -- --update` (commit the diff in the same PR that moves the metric). 2026-07-12 (ADR 0005 sub-project 2, transcript Vue island): cloneGroups 32->36 and duplicatedLines 787->1048 rose deliberately — the additive-then-cut migration re-implemented a few pure `rendering/*` helpers as Vue viewmodels (e.g. webSearchRenderer.ts <-> webSearchViewModel.ts) and the two inline plan cards (InlineExitPlanMode.vue <-> InlinePlanApproval.vue) share ~64 lines. Extracting the shared clone groups is the tracked helper-extraction follow-up; complexFunctions (230->226) and averageMaintainability (90.1->90.2) improved in the same pass.",
+  "description": "Fallow quality baseline. Counters may shrink but not grow; averageMaintainability may rise but not drop. Regenerate with `npm run check:quality -- --update` (commit the diff in the same PR that moves the metric). 2026-07-12 (ADR 0005 sub-project 2, transcript Vue island): cloneGroups 32->36 and duplicatedLines 787->1048 rose deliberately during the migration — a few pure `rendering/*` helpers were re-implemented as Vue viewmodels (e.g. webSearchRenderer.ts <-> webSearchViewModel.ts) and the two inline plan cards (InlineExitPlanMode.vue <-> InlinePlanApproval.vue) share ~64 lines; extracting those shared clone groups is the tracked helper-extraction follow-up. The Jest-coverage-recovery follow-up (same day) relocated the surviving Vue-only pure helpers (windowedRenderSetup / visibleContentHelpers / askUserQuestionOptions / inlineChoiceCard) under ui/vue/** and deleted orphaned imperative render code (streamRenderBackoff.ts + the dead InlineChoiceList DOM class + setupWindowedRender): complexFunctions improved 226->225 (dead class methods gone), and averageMaintainability drifted 90.2->90.1 — a benign averaging artifact of removing above-average-maintainability dead files, not any file getting less maintainable.",
   "fallowVersion": "2.91.0",
   "metrics": {
     "deadCodeIssues": 0,
@@ -8,8 +8,8 @@
     "boundaryViolations": 0,
     "cloneGroups": 36,
     "duplicatedLines": 1048,
-    "complexFunctions": 226,
+    "complexFunctions": 225,
     "criticalComplexity": 0,
-    "averageMaintainability": 90.2
+    "averageMaintainability": 90.1
   }
 }
