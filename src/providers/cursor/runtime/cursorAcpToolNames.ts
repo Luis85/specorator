@@ -4,6 +4,7 @@ import {
   TOOL_EDIT,
   TOOL_GLOB,
   TOOL_GREP,
+  TOOL_LS,
   TOOL_READ,
   TOOL_TASK,
   TOOL_TODO_WRITE,
@@ -32,7 +33,7 @@ const CURSOR_ACP_TOOL_NAME_MAP: Record<string, string> = {
   fetch: TOOL_WEB_FETCH,
   glob: TOOL_GLOB,
   grep: TOOL_GREP,
-  ls: TOOL_BASH,
+  ls: TOOL_LS,
   question: TOOL_ASK_USER_QUESTION,
   read: TOOL_READ,
   shell: TOOL_BASH,
@@ -151,11 +152,14 @@ export function normalizeCursorAcpToolName(rawName: string | undefined): string 
 // edited-file bookkeeping read. `cursorToolInputMapping` already owns this
 // per-tool projection (keyed by the legacy `*ToolCall` kind names), so map
 // the resolved ACP tool name back onto the matching kind and reuse it here.
-// Scoped to the file tools for now; other known names stay pass-through,
-// same as unknown names.
+// `ls` rides along even though its canonical field (`path`) already matches
+// the raw name: the `lsToolCall` mapper also defaults a missing/empty path to
+// `'.'`, which `decorateToolSummaryPath`/`getPathFromToolInput` (TOOL_LS) rely
+// on. Other known names stay pass-through, same as unknown names.
 const CURSOR_ACP_FILE_TOOL_INPUT_KIND: Partial<Record<CursorAcpKnownToolName, string>> = {
   delete: 'deleteToolCall',
   edit: 'replaceEnvToolCall',
+  ls: 'lsToolCall',
   read: 'readToolCall',
   write: 'writeToolCall',
 };

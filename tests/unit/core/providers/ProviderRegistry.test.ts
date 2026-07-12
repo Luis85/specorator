@@ -159,9 +159,9 @@ describe('ProviderRegistry', () => {
       expect(tools.has('TodoWrite')).toBe(true);
       expect(tools.has('AskUserQuestion')).toBe(true);
       expect(tools.has('Agent')).toBe(true);
-      // `ls` is folded into Bash by the ACP tool-name map, so LS is no longer
-      // a distinct canonical name (unlike the pre-ACP stream-json mapping).
-      expect(tools.has('LS')).toBe(false);
+      // `ls` maps to the shared LS tool (matching the pre-ACP stream-json
+      // mapping) so directory listings render as reads, not shell commands.
+      expect(tools.has('LS')).toBe(true);
     });
   });
 
