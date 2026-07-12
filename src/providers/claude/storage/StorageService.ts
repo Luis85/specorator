@@ -5,6 +5,7 @@ import { persistTabManagerState, readTabManagerState } from '../../../app/storag
 import { SESSIONS_PATH, SessionStorage } from '../../../core/bootstrap/SessionStorage';
 import { SPECORATOR_STORAGE_PATH } from '../../../core/bootstrap/StoragePaths';
 import type { AppTabManagerState } from '../../../core/providers/types';
+import { HomeFileAdapter } from '../../../core/storage/HomeFileAdapter';
 import { VaultFileAdapter } from '../../../core/storage/VaultFileAdapter';
 import type {
   SlashCommand,
@@ -54,7 +55,9 @@ export class StorageService {
     this.ccSettings = new CCSettingsStorage(this.adapter);
     this.specoratorSettings = new SpecoratorSettingsStorage(this.adapter);
     this.commands = new SlashCommandStorage(this.adapter);
-    this.skills = new SkillStorage(this.adapter);
+    // Home adapter lets SkillStorage also discover the user's global
+    // `~/.claude/skills/` (read-only); harmless where homedir has none.
+    this.skills = new SkillStorage(this.adapter, new HomeFileAdapter());
     this.sessions = new SessionStorage(this.adapter);
     this.mcp = new McpStorage(this.adapter);
     this.agents = new AgentVaultStorage(this.adapter);

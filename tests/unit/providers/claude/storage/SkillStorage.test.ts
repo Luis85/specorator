@@ -1,5 +1,35 @@
+import type { HomeFileAdapter } from '@/core/storage/HomeFileAdapter';
 import type { VaultFileAdapter } from '@/core/storage/VaultFileAdapter';
 import { SKILLS_PATH,SkillStorage } from '@/providers/claude/storage/SkillStorage';
+
+/** Mock home adapter: home-relative reads, host-absolute `getAbsolutePath`. */
+function createMockHomeAdapter(files: Record<string, string> = {}, homeRoot = '/home/user'): HomeFileAdapter {
+  return {
+    exists: jest.fn(async (path: string) => path in files || Object.keys(files).some(k => k.startsWith(path + '/'))),
+    read: jest.fn(async (path: string) => {
+      if (!(path in files)) throw new Error(`File not found: ${path}`);
+      return files[path];
+    }),
+    listFolders: jest.fn(async (folder: string) => {
+      const prefix = folder.endsWith('/') ? folder : folder + '/';
+      const folders = new Set<string>();
+      for (const path of Object.keys(files)) {
+        if (path.startsWith(prefix)) {
+          const rest = path.slice(prefix.length);
+          const firstSlash = rest.indexOf('/');
+          if (firstSlash >= 0) folders.add(prefix + rest.slice(0, firstSlash));
+        }
+      }
+      return Array.from(folders);
+    }),
+    getAbsolutePath: jest.fn((p: string) => `${homeRoot}/${p}`),
+    write: jest.fn(),
+    delete: jest.fn(),
+    deleteFolder: jest.fn(),
+    listFiles: jest.fn(),
+    ensureFolder: jest.fn(),
+  } as unknown as HomeFileAdapter;
+}
 
 function createMockAdapter(files: Record<string, string> = {}): VaultFileAdapter {
   const mockAdapter = {
@@ -60,6 +90,7 @@ Do the thing`,
       expect(skill.userInvocable).toBe(true);
       expect(skill.content).toBe('Do the thing');
       expect(skill.source).toBe('user');
+      expect(loaded[0].readOnly).toBe(false);
     });
 
     it('returns the SKILL.md path alongside each skill', async () => {
@@ -199,6 +230,73 @@ Prompt`,
 
       // Invalid skill has no frontmatter but still loads (content only)
       expect(loaded).toHaveLength(2);
+    });
+  });
+
+  describe('loadUserAll', () => {
+    it('returns [] when no home adapter is wired', async () => {
+      const storage = new SkillStorage(createMockAdapter({}));
+      expect(await storage.loadUserAll()).toEqual([]);
+    });
+
+    it('discovers ~/.claude/skills/ as read-only with host-absolute paths', async () => {
+      const home = createMockHomeAdapter({
+        '.claude/skills/global-tdd/SKILL.md': `---
+description: Global TDD
+---
+Prompt`,
+      });
+      const storage = new SkillStorage(createMockAdapter({}), home);
+      const loaded = await storage.loadUserAll();
+
+      expect(loaded).toHaveLength(1);
+      expect(loaded[0].skill.name).toBe('global-tdd');
+      expect(loaded[0].skill.description).toBe('Global TDD');
+      expect(loaded[0].readOnly).toBe(true);
+      expect(loaded[0].filePath).toBe('/home/user/.claude/skills/global-tdd/SKILL.md');
+    });
+
+    it('skips home folders without SKILL.md', async () => {
+      const home = createMockHomeAdapter({
+        '.claude/skills/good/SKILL.md': `---
+description: Good
+---
+Prompt`,
+        '.claude/skills/nope/README.md': 'not a skill',
+      });
+      const storage = new SkillStorage(createMockAdapter({}), home);
+      const loaded = await storage.loadUserAll();
+      expect(loaded.map((l) => l.skill.name)).toEqual(['good']);
+    });
+
+    it('loads vault (read-write) and home (read-only) skills independently', async () => {
+      const vault = createMockAdapter({
+        '.claude/skills/vault-only/SKILL.md': `---
+description: Vault
+---
+Prompt`,
+      });
+      const home = createMockHomeAdapter({
+        '.claude/skills/home-only/SKILL.md': `---
+description: Home
+---
+Prompt`,
+      });
+      const storage = new SkillStorage(vault, home);
+
+      const vaultSkills = await storage.loadAll();
+      const userSkills = await storage.loadUserAll();
+      expect(vaultSkills.map((s) => s.skill.name)).toEqual(['vault-only']);
+      expect(vaultSkills[0].readOnly).toBe(false);
+      expect(userSkills.map((s) => s.skill.name)).toEqual(['home-only']);
+      expect(userSkills[0].readOnly).toBe(true);
+    });
+
+    it('returns [] when home listing throws', async () => {
+      const home = createMockHomeAdapter({});
+      (home.listFolders as jest.Mock).mockRejectedValue(new Error('nope'));
+      const storage = new SkillStorage(createMockAdapter({}), home);
+      expect(await storage.loadUserAll()).toEqual([]);
     });
   });
 

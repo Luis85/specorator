@@ -19,6 +19,13 @@ describe('toSkillLibraryRows', () => {
     expect(rows.find((r) => r.id === 'opencode:x')?.editable).toBe(false);
   });
 
+  it('marks host-absolute (home-scope) skills read-only', () => {
+    const rows = toSkillLibraryRows([
+      entry({ id: 'claude:home', sourceFilePath: '/home/user/.claude/skills/home/SKILL.md' }),
+    ]);
+    expect(rows.find((r) => r.id === 'claude:home')?.editable).toBe(false);
+  });
+
   it('sorts by name', () => {
     const rows = toSkillLibraryRows([
       entry({ id: 'b', name: 'beta' }),

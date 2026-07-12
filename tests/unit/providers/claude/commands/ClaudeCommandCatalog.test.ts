@@ -1,11 +1,40 @@
 import type { SpecoratorEventMap } from '@/app/events/specoratorEvents';
 import { EventBus } from '@/core/events/EventBus';
 import type { ProviderCommandEntry } from '@/core/providers/commands/ProviderCommandEntry';
+import type { HomeFileAdapter } from '@/core/storage/HomeFileAdapter';
 import type { VaultFileAdapter } from '@/core/storage/VaultFileAdapter';
 import type { SlashCommand } from '@/core/types';
 import { ClaudeCommandCatalog } from '@/providers/claude/commands/ClaudeCommandCatalog';
 import { SkillStorage } from '@/providers/claude/storage/SkillStorage';
 import { SlashCommandStorage } from '@/providers/claude/storage/SlashCommandStorage';
+
+function createMockHomeAdapter(files: Record<string, string> = {}, homeRoot = '/home/user'): HomeFileAdapter {
+  return {
+    exists: jest.fn(async (path: string) => path in files || Object.keys(files).some(k => k.startsWith(path + '/'))),
+    read: jest.fn(async (path: string) => {
+      if (!(path in files)) throw new Error(`File not found: ${path}`);
+      return files[path];
+    }),
+    listFolders: jest.fn(async (folder: string) => {
+      const prefix = folder.endsWith('/') ? folder : folder + '/';
+      const folders = new Set<string>();
+      for (const path of Object.keys(files)) {
+        if (path.startsWith(prefix)) {
+          const rest = path.slice(prefix.length);
+          const firstSlash = rest.indexOf('/');
+          if (firstSlash >= 0) folders.add(prefix + rest.slice(0, firstSlash));
+        }
+      }
+      return Array.from(folders);
+    }),
+    getAbsolutePath: jest.fn((p: string) => `${homeRoot}/${p}`),
+    write: jest.fn(),
+    delete: jest.fn(),
+    deleteFolder: jest.fn(),
+    listFiles: jest.fn(),
+    ensureFolder: jest.fn(),
+  } as unknown as HomeFileAdapter;
+}
 
 function createMockAdapter(files: Record<string, string> = {}): VaultFileAdapter {
   return {
@@ -261,6 +290,82 @@ Deploy the app`,
       const command = entries.find((e) => e.kind === 'command');
       expect(skill?.sourceFilePath).toBe('.claude/skills/deploy/SKILL.md');
       expect(command?.sourceFilePath).toBeUndefined();
+    });
+
+    it('includes read-only user-scope skills from ~/.claude/skills/', async () => {
+      const adapter = createMockAdapter({
+        '.claude/skills/deploy/SKILL.md': `---
+description: Deploy
+---
+Deploy`,
+      });
+      const home = createMockHomeAdapter({
+        '.claude/skills/global-review/SKILL.md': `---
+description: Global review
+---
+Review`,
+      });
+      const catalog = new ClaudeCommandCatalog(
+        new SlashCommandStorage(adapter),
+        new SkillStorage(adapter, home),
+      );
+
+      const entries = await catalog.listVaultEntries();
+
+      const user = entries.find((e) => e.name === 'global-review');
+      expect(user).toBeDefined();
+      expect(user!.scope).toBe('user');
+      expect(user!.isEditable).toBe(false);
+      expect(user!.isDeletable).toBe(false);
+      expect(user!.sourceFilePath).toBe('/home/user/.claude/skills/global-review/SKILL.md');
+
+      const vault = entries.find((e) => e.name === 'deploy');
+      expect(vault!.scope).toBe('vault');
+      expect(vault!.isEditable).toBe(true);
+    });
+
+    it('shadows a user skill when a vault skill claims the same name (project > user)', async () => {
+      const adapter = createMockAdapter({
+        '.claude/skills/shared/SKILL.md': `---
+description: Vault shared
+---
+Vault`,
+      });
+      const home = createMockHomeAdapter({
+        '.claude/skills/shared/SKILL.md': `---
+description: Home shared
+---
+Home`,
+      });
+      const catalog = new ClaudeCommandCatalog(
+        new SlashCommandStorage(adapter),
+        new SkillStorage(adapter, home),
+      );
+
+      const shared = (await catalog.listVaultEntries()).filter((e) => e.name === 'shared');
+      expect(shared).toHaveLength(1);
+      expect(shared[0].scope).toBe('vault');
+      expect(shared[0].isEditable).toBe(true);
+    });
+
+    it('omits user skills when the loadUserSettings gate is off', async () => {
+      const adapter = createMockAdapter({});
+      const home = createMockHomeAdapter({
+        '.claude/skills/global/SKILL.md': `---
+description: Global
+---
+Prompt`,
+      });
+      const catalog = new ClaudeCommandCatalog(
+        new SlashCommandStorage(adapter),
+        new SkillStorage(adapter, home),
+        undefined,
+        undefined,
+        () => false,
+      );
+
+      const entries = await catalog.listVaultEntries();
+      expect(entries.find((e) => e.name === 'global')).toBeUndefined();
     });
   });
 

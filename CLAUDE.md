@@ -119,7 +119,8 @@ Current coverage, by user-visible path:
 | `.specorator/specorator-settings.json` | Shared Specorator app settings plus provider-specific configuration |
 | `.claude/mcp.json` | Specorator-managed MCP servers for Claude |
 | `.claude/commands/**/*.md` | Claude slash commands |
-| `.claude/skills/*/SKILL.md` | Claude skills |
+| `.claude/skills/*/SKILL.md` | Claude vault skills (editable) |
+| `~/.claude/skills/*/SKILL.md` | Claude user (global) skills — discovered read-only when `loadUserSettings` is on; view/run only (host-absolute path, outside the vault) |
 | `.claude/agents/*.md` | Claude vault agents |
 | `.specorator/sessions/*.meta.json` | Provider-neutral session metadata |
 | `.specorator/runs/<runId>/heartbeat.json` | Per-run sidecar heartbeat (`{ at, status, pauseReason? }`) — moved off the work-order note to avoid racing the agent's `Edit` tool; GC'd at terminal |

@@ -12,9 +12,14 @@ import type { SlashCommandStorage } from '../storage/SlashCommandStorage';
 
 function slashCommandToEntry(
   cmd: SlashCommand,
-  options: { sourceFilePath?: string } = {},
+  options: { sourceFilePath?: string; readOnly?: boolean } = {},
 ): ProviderCommandEntry {
   const skill = isSkill(cmd);
+  // Home-scope (`~/.claude/skills/`) skills are view/run only: the vault adapter
+  // can't write outside the vault, so surface them as user-scope and gate the
+  // Library's edit/delete affordances off.
+  const readOnly = options.readOnly ?? false;
+  const editable = !readOnly && cmd.source !== 'sdk';
   return {
     id: cmd.id,
     providerId: 'claude',
@@ -30,10 +35,10 @@ function slashCommandToEntry(
     context: cmd.context,
     agent: cmd.agent,
     hooks: cmd.hooks,
-    scope: cmd.source === 'sdk' ? 'runtime' : 'vault',
+    scope: readOnly ? 'user' : cmd.source === 'sdk' ? 'runtime' : 'vault',
     source: cmd.source ?? 'user',
-    isEditable: cmd.source !== 'sdk',
-    isDeletable: cmd.source !== 'sdk',
+    isEditable: editable,
+    isDeletable: editable,
     displayPrefix: '/',
     insertPrefix: '/',
     ...(options.sourceFilePath ? { sourceFilePath: options.sourceFilePath } : {}),
@@ -76,6 +81,10 @@ export class ClaudeCommandCatalog implements ProviderCommandCatalog {
     private skillStorage: SkillStorage,
     private probe?: CommandProbe,
     private eventBus?: EventBus<SpecoratorEventMap>,
+    // Gates read-only `~/.claude/skills/` discovery. Wired to the
+    // `loadUserSettings` toggle so home skills surface exactly when the SDK also
+    // loads user scope and can resolve their `/name` invocation. Defaults on.
+    private shouldLoadUserSkills: () => boolean = () => true,
   ) {}
 
   setRuntimeCommands(commands: SlashCommand[]): void {
@@ -117,12 +126,33 @@ export class ClaudeCommandCatalog implements ProviderCommandCatalog {
     await this.probePromise;
   }
 
+  /**
+   * Vault commands + skills, plus read-only user-scope (`~/.claude/skills/`)
+   * skills. The name predates home discovery — it is the seam the Library Skills
+   * tab and the cold-start dropdown fallback read, not a vault-only listing.
+   * Home skills carry a host-absolute `sourceFilePath`, so the downstream
+   * `isCloneableSkillPath` gate keeps them view/run only; save/delete never
+   * reach them.
+   */
   async listVaultEntries(): Promise<ProviderCommandEntry[]> {
     const commands = await this.commandStorage.loadAll();
     const skills = await this.skillStorage.loadAll();
+    const userSkills = this.shouldLoadUserSkills()
+      ? await this.skillStorage.loadUserAll()
+      : [];
+    // Project scope shadows user scope (Claude's own precedence): drop a home
+    // skill whose name a vault skill already claims so the same skill can't
+    // appear twice.
+    const vaultSkillNames = new Set(skills.map((entry) => entry.skill.name.toLowerCase()));
+    const readOnlyUserSkills = userSkills.filter(
+      (entry) => !vaultSkillNames.has(entry.skill.name.toLowerCase()),
+    );
     return [
       ...commands.map((cmd) => slashCommandToEntry(cmd)),
       ...skills.map((entry) => slashCommandToEntry(entry.skill, { sourceFilePath: entry.filePath })),
+      ...readOnlyUserSkills.map((entry) =>
+        slashCommandToEntry(entry.skill, { sourceFilePath: entry.filePath, readOnly: true }),
+      ),
     ];
   }
 

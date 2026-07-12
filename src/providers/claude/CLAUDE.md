@@ -64,6 +64,12 @@ The SDK can send messages without a registered handler (e.g., background subagen
 
 SDK session files are tree-structured — rewind + re-prompt creates branches. `sdkBranchFilter` finds the canonical branch by locating the latest leaf, walking ancestry to root, then including non-user-branch siblings (tool results belonging to ancestors). This is the most algorithmically complex part of the history layer.
 
+### User-Scope Skill Discovery
+
+`SkillStorage` scans two roots: the vault's `.claude/skills/` (editable) and, via an injected `HomeFileAdapter`, the user's global `~/.claude/skills/` (`loadUserAll`, read-only). `ClaudeCommandCatalog.listVaultEntries` folds the home skills in with `readOnly: true` — surfaced as `scope: 'user'`, `isEditable/isDeletable: false`, and a **host-absolute `sourceFilePath`** so the Library's `isCloneableSkillPath` gate and `SkillEditorModal` keep them view/run only. A vault skill shadows a same-named home skill (project > user precedence).
+
+This feeds the Library Skills tab and the cold-start dropdown fallback. Warm-state dropdown entries still come from the SDK, which discovers `~/.claude/skills/` natively when `settingSources` includes `'user'`. Both are gated on the same `loadUserSettings` toggle, so home skills surface exactly when the runtime can also resolve their `/name` invocation — Specorator only sends `/name`; the provider resolves it. `~/.claude/` is outside the vault (no file watcher), so freshness relies on the aggregator TTL + manual refresh.
+
 ## Storage Traps
 
 ### CC Settings Merge
