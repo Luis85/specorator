@@ -158,6 +158,22 @@ function resolveContentBlockItem(
   }
 }
 
+/** Shared by both fallback passes: appends a render item for each not-yet-rendered tool call. */
+function appendToolItems(
+  toolCalls: ToolCallInfo[],
+  providerId: string,
+  msg: ChatMessage,
+  renderedToolIds: Set<string>,
+  items: BlockListItem[],
+): void {
+  for (const toolCall of toolCalls) {
+    if (renderedToolIds.has(toolCall.id)) continue;
+    renderedToolIds.add(toolCall.id);
+    const item = toolItem(toolCall, providerId, msg, renderedToolIds);
+    if (item) items.push(item);
+  }
+}
+
 /** Defensive fallback: preserves tool visibility when contentBlocks/toolCalls drift on reload. */
 function appendLeftoverItems(
   msg: ChatMessage,
@@ -166,12 +182,7 @@ function appendLeftoverItems(
   items: BlockListItem[],
 ): void {
   if (!msg.toolCalls) return;
-  for (const toolCall of msg.toolCalls) {
-    if (renderedToolIds.has(toolCall.id)) continue;
-    renderedToolIds.add(toolCall.id);
-    const item = toolItem(toolCall, providerId, msg, renderedToolIds);
-    if (item) items.push(item);
-  }
+  appendToolItems(msg.toolCalls, providerId, msg, renderedToolIds, items);
 }
 
 /** Fallback for old conversations without contentBlocks. */
@@ -181,13 +192,7 @@ function resolveLegacyItems(msg: ChatMessage, providerId: string): BlockListItem
     items.push({ key: 'text:0', kind: 'text', content: msg.content });
   }
   if (msg.toolCalls) {
-    const renderedToolIds = new Set<string>();
-    for (const toolCall of msg.toolCalls) {
-      if (renderedToolIds.has(toolCall.id)) continue;
-      renderedToolIds.add(toolCall.id);
-      const item = toolItem(toolCall, providerId, msg, renderedToolIds);
-      if (item) items.push(item);
-    }
+    appendToolItems(msg.toolCalls, providerId, msg, new Set<string>(), items);
   }
   return items;
 }

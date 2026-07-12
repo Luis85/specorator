@@ -3,12 +3,12 @@ import { computed } from 'vue';
 
 import { getToolIcon } from '../../../../../../core/tools/toolIcons';
 import type { ToolCallInfo } from '../../../../../../core/types';
-import { getToolName, getToolSummary } from '../../../../rendering/ToolCallRenderer';
 import { getToolLabel } from '../../../../rendering/toolLabel';
 import { useCollapsible } from '../collapsible';
 import { useIconDiv } from './subagentIconDiv';
 import { shouldShowRunningPlaceholder } from './subagentViewModel';
 import ToolContentLines from './ToolContentLines.vue';
+import { useToolNameSummary } from './toolNameSummary';
 
 /**
  * Nested tool item inside a subagent block — reproduces
@@ -30,8 +30,7 @@ const SUBAGENT_TOOL_STATUS_ICONS: Partial<Record<ToolCallInfo['status'], string>
   blocked: 'shield-off',
 };
 
-const toolName = computed(() => getToolName(props.toolCall.name, props.toolCall.input));
-const toolSummary = computed(() => getToolSummary(props.toolCall.name, props.toolCall.input));
+const { toolName, toolSummary } = useToolNameSummary(() => props.toolCall);
 const statusIcon = computed(() => SUBAGENT_TOOL_STATUS_ICONS[props.toolCall.status] ?? null);
 const showRunningPlaceholder = computed(() => shouldShowRunningPlaceholder(props.toolCall));
 

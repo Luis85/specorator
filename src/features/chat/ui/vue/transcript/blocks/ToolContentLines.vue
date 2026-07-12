@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, inject } from 'vue';
+import { computed } from 'vue';
 
 import { getToolIcon } from '../../../../../../core/tools/toolIcons';
 import {
@@ -14,10 +14,9 @@ import {
 } from '../../../../../../core/tools/toolNames';
 import type { ApplyPatchFileDiff } from '../../../../../../utils/diff';
 import { parseApplyPatchDiffs, parseFileUpdateChangeDiffs } from '../../../../../../utils/diff';
-import { resolveOpenableVaultPath } from '../../../../../../utils/fileLink';
 import IconSpan from '../IconSpan.vue';
 import ToolLinesExpanded from '../ToolLinesExpanded.vue';
-import { APP_KEY, CALLBACKS_KEY } from '../transcriptKeys';
+import { useFileLink } from '../useFileLink';
 import DiffView from './DiffView.vue';
 
 /**
@@ -39,17 +38,17 @@ import DiffView from './DiffView.vue';
  *
  * `Glob`/`Grep`/`LS` file-search result lines reproduce
  * `renderFileSearchExpanded`'s `decorateVaultFileLink` treatment: each
- * non-header line resolves against the injected `App` via the shared
- * `resolveOpenableVaultPath` helper and becomes clickable when it resolves.
- * (`Read`'s content here is the file's line-numbered text, not a path list —
- * it has no line-level link decoration in the legacy renderer either; only
- * its `.specorator-tool-summary` gets the link treatment, reproduced in
- * `ToolCall.vue`.)
+ * non-header line resolves via the shared `useFileLink` composable (same
+ * `resolveOpenableVaultPath` resolver `decorateVaultFileLink` uses, shared
+ * with `ToolCall.vue` and `WriteEditView.vue`) and becomes clickable when it
+ * resolves. (`Read`'s content here is the file's line-numbered text, not a
+ * path list — it has no line-level link decoration in the legacy renderer
+ * either; only its `.specorator-tool-summary` gets the link treatment,
+ * reproduced in `ToolCall.vue`.)
  */
 const props = defineProps<{ name: string; input: Record<string, unknown>; result?: string }>();
 
-const app = inject(APP_KEY, undefined);
-const callbacks = inject(CALLBACKS_KEY, undefined);
+const { resolve: resolveLink, open: openLink } = useFileLink();
 
 const command = computed(() => (typeof props.input.command === 'string' ? props.input.command : ''));
 // `ToolLinesExpanded` requires a non-optional `result: string`; every branch
@@ -78,15 +77,13 @@ const fileSearchLines = computed<FileSearchLine[]>(() => {
   return lines.map(line => {
     const stripped = line.replace(/^\s*\d+→/, '').trim();
     const hoverable = !isFileSearchHeaderLine(stripped);
-    const linkPath = hoverable && app ? resolveOpenableVaultPath(app, stripped) : null;
+    const linkPath = hoverable ? resolveLink(stripped) : null;
     return { text: stripped || ' ', hoverable, linkPath };
   });
 });
 
 function onFileSearchLineClick(linkPath: string | null): void {
-  if (linkPath) {
-    callbacks?.openFile(linkPath);
-  }
+  openLink(linkPath);
 }
 
 const WEB_FETCH_MAX_CHARS = 500;

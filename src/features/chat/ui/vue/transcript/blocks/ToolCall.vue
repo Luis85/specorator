@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, inject } from 'vue';
+import { computed } from 'vue';
 
 import type { TodoItem } from '../../../../../../core/tools/todo';
 import { getToolIcon } from '../../../../../../core/tools/toolIcons';
@@ -14,24 +14,24 @@ import {
   TOOL_WRITE,
 } from '../../../../../../core/tools/toolNames';
 import type { ToolCallInfo } from '../../../../../../core/types';
-import { resolveOpenableVaultPath } from '../../../../../../utils/fileLink';
-import { getToolName, getToolSummary } from '../../../../rendering/ToolCallRenderer';
 import { getInputText, getToolLabel } from '../../../../rendering/toolLabel';
 import { useCollapsible } from '../collapsible';
 import IconSpan from '../IconSpan.vue';
-import { APP_KEY, CALLBACKS_KEY } from '../transcriptKeys';
+import { useFileLink } from '../useFileLink';
 import AskQuestionResult from './AskQuestionResult.vue';
 import TodoListView from './TodoListView.vue';
 import ToolContentLines from './ToolContentLines.vue';
+import { useToolNameSummary } from './toolNameSummary';
 import WebSearchView from './WebSearchView.vue';
 
 /**
  * Reproduces `rendering/ToolCallRenderer.ts`'s `renderStoredToolCall` DOM
  * contract for a STORED (non-streaming) tool call — collapsed by default,
- * dispatching to the specialized body components. `getToolName`/
- * `getToolSummary` are reused directly from `ToolCallRenderer.ts` (pure,
- * exported functions; only that file's DOM-writing exports are ported
- * rather than reused).
+ * dispatching to the specialized body components. `toolName`/`toolSummary`
+ * come from the shared `useToolNameSummary` composable (also used by
+ * `SubagentToolItem.vue`), which wraps `getToolName`/`getToolSummary` —
+ * pure, exported functions from `ToolCallRenderer.ts`; only that file's
+ * DOM-writing exports are ported rather than reused.
  *
  * `initiallyExpanded` is always `false` here, matching
  * `renderStoredToolCall`'s hardcoded `{ initiallyExpanded: false }` — the
@@ -46,15 +46,14 @@ import WebSearchView from './WebSearchView.vue';
  *
  * The `.specorator-tool-summary` link decoration reproduces
  * `decorateToolSummaryPath`: only Read/Write/Edit (`input.file_path`) and LS
- * (`input.path`, when not `.`) resolve against the injected `App` via the
- * shared `resolveOpenableVaultPath` helper (same resolver `decorateVaultFileLink`
- * uses) — the raw tool-input path is resolved, not the displayed
- * filename-only summary text.
+ * (`input.path`, when not `.`) resolve via the shared `useFileLink` composable
+ * (same `resolveOpenableVaultPath` resolver `decorateVaultFileLink` uses,
+ * shared with `ToolContentLines.vue` and `WriteEditView.vue`) — the raw
+ * tool-input path is resolved, not the displayed filename-only summary text.
  */
 const props = defineProps<{ toolCall: ToolCallInfo }>();
 
-const app = inject(APP_KEY, undefined);
-const callbacks = inject(CALLBACKS_KEY, undefined);
+const { resolve: resolveLink, open: openLink } = useFileLink();
 
 const STATUS_ICONS: Record<string, string> = { completed: 'check', error: 'x', blocked: 'shield-off' };
 
@@ -63,27 +62,22 @@ const isTodoWrite = computed(() => props.toolCall.name === TOOL_TODO_WRITE);
 const isAskUserQuestion = computed(() => props.toolCall.name === TOOL_ASK_USER_QUESTION);
 const isWebSearch = computed(() => props.toolCall.name === TOOL_WEB_SEARCH);
 
-const toolName = computed(() => getToolName(props.toolCall.name, props.toolCall.input));
-const toolSummary = computed(() => getToolSummary(props.toolCall.name, props.toolCall.input));
+const { toolName, toolSummary } = useToolNameSummary(() => props.toolCall);
 
 const summaryLinkPath = computed<string | null>(() => {
-  if (!app) return null;
   const { name, input } = props.toolCall;
   if (name === TOOL_READ || name === TOOL_WRITE || name === TOOL_EDIT) {
-    const filePath = getInputText(input, 'file_path');
-    return filePath ? resolveOpenableVaultPath(app, filePath) : null;
+    return resolveLink(getInputText(input, 'file_path'));
   }
   if (name === TOOL_LS) {
     const path = getInputText(input, 'path', '.');
-    return path && path !== '.' ? resolveOpenableVaultPath(app, path) : null;
+    return path !== '.' ? resolveLink(path) : null;
   }
   return null;
 });
 
 function onSummaryClick(): void {
-  if (summaryLinkPath.value) {
-    callbacks?.openFile(summaryLinkPath.value);
-  }
+  openLink(summaryLinkPath.value);
 }
 
 function getTodos(): TodoItem[] | undefined {
