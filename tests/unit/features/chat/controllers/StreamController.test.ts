@@ -3265,3 +3265,167 @@ describe('StreamController - edited files', () => {
     expect(deps.state.editedFiles.map((entry) => entry.path)).toEqual(['b/new.md']);
   });
 });
+
+// Task 16 write-side: the reactive DATA the Vue transcript's ToolCall /
+// WriteEditView / SubagentBlock / BlockList components consume must be produced
+// live during a tool turn (not only on reload), so the Task 18 DOM-render cut
+// keeps rendering tools correctly. These characterize the DATA outcomes on
+// `msg.toolCalls` / `msg.contentBlocks` — never DOM — through `handleStreamChunk`.
+// (Status flips, `.result`, `.resolvedAnswers`, tool_output growth, input merge,
+// and subagent linkage are covered in the tool-handling blocks above; the
+// remaining uncharacterized fact is `.diffData`, WriteEditView's whole diff.)
+describe('StreamController - reactive tool-call data (Task 16 write-side)', () => {
+  let controller: StreamController;
+  let deps: StreamControllerDeps;
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+    jest.useFakeTimers();
+    installTestWindow();
+    deps = createMockDeps();
+    // createWriteEditBlock's return is stored in state.writeEditStates; the
+    // result path only extracts diffData when a write/edit state exists, so it
+    // must be a truthy object (the default {} mock suffices, but be explicit).
+    const { createWriteEditBlock } = jest.requireMock('@/features/chat/rendering/WriteEditRenderer');
+    (createWriteEditBlock as jest.Mock).mockReturnValue({ wrapperEl: createMockEl() });
+    controller = new StreamController(deps);
+    deps.state.currentContentEl = createMockEl();
+  });
+
+  afterEach(() => {
+    deps.state.resetStreamingState();
+    restoreTestWindow();
+    jest.useRealTimers();
+  });
+
+  it('seeds a running ToolCallInfo carrying the input, keyed by a tool_use content block', async () => {
+    const msg = createTestMessage();
+
+    await controller.handleStreamChunk(
+      { type: 'tool_use', id: 'read-1', name: 'Read', input: { file_path: 'notes/test.md' } },
+      msg,
+    );
+
+    // BlockList resolves the tool_use block's toolId to this ToolCallInfo; ToolCall.vue
+    // renders name/summary from `.input`, so the input must be present on the FIRST chunk.
+    expect(msg.contentBlocks).toEqual([{ type: 'tool_use', toolId: 'read-1' }]);
+    expect(msg.toolCalls).toEqual([
+      expect.objectContaining({
+        id: 'read-1',
+        name: 'Read',
+        status: 'running',
+        input: { file_path: 'notes/test.md' },
+      }),
+    ]);
+  });
+
+  it('populates Write diffData from tool input on tool_result (WriteEditView diff)', async () => {
+    const msg = createTestMessage();
+
+    await controller.handleStreamChunk(
+      { type: 'tool_use', id: 'write-1', name: 'Write', input: { file_path: 'notes/a.md', content: 'line1\nline2' } },
+      msg,
+    );
+    await controller.handleStreamChunk(
+      { type: 'tool_result', id: 'write-1', content: 'ok' },
+      msg,
+    );
+
+    const toolCall = msg.toolCalls![0];
+    expect(toolCall.status).toBe('completed');
+    // WriteEditView.vue: `hasDiff` gates on diffData.diffLines.length — a Write with
+    // content projects one insert line per content line, so the diff renders live.
+    expect(toolCall.diffData).toBeDefined();
+    expect(toolCall.diffData!.filePath).toBe('notes/a.md');
+    expect(toolCall.diffData!.diffLines).toHaveLength(2);
+    expect(toolCall.diffData!.stats).toEqual({ added: 2, removed: 0 });
+  });
+
+  it('populates Edit diffData from old/new strings on tool_result', async () => {
+    const msg = createTestMessage();
+
+    await controller.handleStreamChunk(
+      { type: 'tool_use', id: 'edit-1', name: 'Edit', input: { file_path: 'notes/b.md', old_string: 'foo', new_string: 'bar' } },
+      msg,
+    );
+    await controller.handleStreamChunk(
+      { type: 'tool_result', id: 'edit-1', content: 'ok' },
+      msg,
+    );
+
+    const toolCall = msg.toolCalls![0];
+    expect(toolCall.diffData).toBeDefined();
+    expect(toolCall.diffData!.filePath).toBe('notes/b.md');
+    // One delete (old_string) + one insert (new_string).
+    expect(toolCall.diffData!.stats).toEqual({ added: 1, removed: 1 });
+  });
+
+  it('prefers the SDK structuredPatch over input when the result carries one', async () => {
+    const msg = createTestMessage();
+
+    await controller.handleStreamChunk(
+      { type: 'tool_use', id: 'write-2', name: 'Write', input: { file_path: 'notes/c.md', content: 'ignored' } },
+      msg,
+    );
+    await controller.handleStreamChunk(
+      {
+        type: 'tool_result',
+        id: 'write-2',
+        content: 'ok',
+        toolUseResult: {
+          filePath: 'notes/from-patch.md',
+          structuredPatch: [
+            { oldStart: 1, oldLines: 1, newStart: 1, newLines: 2, lines: [' keep', '+added'] },
+          ],
+        },
+      } as any,
+      msg,
+    );
+
+    const toolCall = msg.toolCalls![0];
+    // The structuredPatch path wins: filePath + line counts come from the patch, not input.
+    expect(toolCall.diffData!.filePath).toBe('notes/from-patch.md');
+    expect(toolCall.diffData!.stats).toEqual({ added: 1, removed: 0 });
+    expect(toolCall.diffData!.diffLines).toHaveLength(2);
+  });
+
+  it('does not attach diffData to a blocked write (WriteEditView error branch)', async () => {
+    const { isBlockedToolResult } = jest.requireMock('@/features/chat/rendering/ToolCallRenderer');
+    (isBlockedToolResult as jest.Mock).mockReturnValueOnce(true);
+    const msg = createTestMessage();
+
+    await controller.handleStreamChunk(
+      { type: 'tool_use', id: 'write-3', name: 'Write', input: { file_path: 'notes/d.md', content: 'x' } },
+      msg,
+    );
+    await controller.handleStreamChunk(
+      { type: 'tool_result', id: 'write-3', content: 'blocked by approval' },
+      msg,
+    );
+
+    const toolCall = msg.toolCalls![0];
+    expect(toolCall.status).toBe('blocked');
+    // WriteEditView.vue treats blocked/error as the no-diff branch; the data must
+    // reflect that — no diffData is attached so `hasDiff` stays false.
+    expect(toolCall.diffData).toBeUndefined();
+  });
+
+  it('does not attach diffData to an errored write', async () => {
+    const msg = createTestMessage();
+
+    await controller.handleStreamChunk(
+      { type: 'tool_use', id: 'write-4', name: 'Write', input: { file_path: 'notes/e.md', content: 'x' } },
+      msg,
+    );
+    await controller.handleStreamChunk(
+      { type: 'tool_result', id: 'write-4', content: 'disk full', isError: true },
+      msg,
+    );
+
+    const toolCall = msg.toolCalls![0];
+    expect(toolCall.status).toBe('error');
+    expect(toolCall.diffData).toBeUndefined();
+    // The error text is still the tool result WriteEditView renders in its error row.
+    expect(toolCall.result).toBe('disk full');
+  });
+});
