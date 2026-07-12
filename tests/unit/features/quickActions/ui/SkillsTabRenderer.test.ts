@@ -457,5 +457,23 @@ describe('SkillsTabRenderer', () => {
       const editOrder = onEditSkill.mock.invocationCallOrder[0];
       expect(closeOrder).toBeLessThan(editOrder);
     });
+
+    it('hides the edit button for a read-only user skill (host-absolute path)', async () => {
+      // ~/.claude/skills has a truthy host-absolute sourceFilePath but is not
+      // editable — the settings manager filters it out, so an Edit button would
+      // dead-end. It must not render.
+      const entry = makeEntry({
+        id: 'claude:user-skill-global',
+        name: 'global',
+        sourceFilePath: '/home/user/.claude/skills/global/SKILL.md',
+      });
+      const source = makeSource({ cached: [entry], defer: true });
+      const renderer = new SkillsTabRenderer(source, jest.fn(), jest.fn(), jest.fn());
+
+      const host = makeHost();
+      await renderer.render(host);
+
+      expect(host.querySelector('.specorator-quick-actions-skill-edit')).toBeNull();
+    });
   });
 });
