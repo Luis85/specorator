@@ -220,8 +220,6 @@ export class CursorChatRuntime implements ChatRuntime {
     conversationHistory?: ChatMessage[],
     queryOptions?: ChatRuntimeQueryOptions,
   ): AsyncGenerator<StreamChunk> {
-    this.turnMetadata = {};
-
     const cli = this.plugin.getResolvedProviderCliPath('cursor');
     if (!cli) {
       yield { type: 'error', content: 'Cursor Agent CLI not found. Configure it in Cursor settings.' };
@@ -235,6 +233,8 @@ export class CursorChatRuntime implements ChatRuntime {
     // rotating the abort controller keeps A's aborted signal current so A's late
     // requests resolve cancelled instead.
     await this.awaitPriorTurnSettled();
+    // Reset AFTER the wait: a cancelled prior turn's finalize runs during it and would else leave stale planCompleted.
+    this.turnMetadata = {};
 
     // Fresh per-turn abort scope for the blocking ask_question / create_plan RPCs
     // and for the startup-cancel check below; aborting a controller left over from

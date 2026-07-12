@@ -83,6 +83,28 @@ describe('CursorChatRuntime (ACP)', () => {
       .call(runtime, new Error('transport closed'));
     expect(msg).toMatch(/update.*cursor-agent|Cursor CLI/i);
   });
+
+  it('does not leak a cancelled prior turn planCompleted into the next turn', async () => {
+    // The prior turn's finalizePlanTurnMetadata runs while the next turn is blocked
+    // in awaitPriorTurnSettled, writing planCompleted into the shared turnMetadata.
+    // Resetting metadata AFTER that wait (not at turn entry) must drop the stale flag.
+    const runtime = makeRuntime();
+    const bag = primeRuntime(runtime, {
+      newSession: jest.fn(async () => { throw new Error('no session'); }),
+      authenticate: jest.fn(async () => { throw new Error('no auth'); }),
+    });
+    bag.pendingPromptSettled = Promise.resolve().then(() => {
+      (bag.turnMetadata as Record<string, unknown>).planCompleted = true;
+    });
+
+    const turn = { persistedContent: 'x', prompt: 'x', request: { images: [] } };
+    // Drains to completion — the turn errors out at ensureSession, AFTER the reset.
+    for await (const _chunk of runtime.query(turn as never, undefined, undefined)) {
+      void _chunk;
+    }
+
+    expect(runtime.consumeTurnMetadata().planCompleted).toBeUndefined();
+  });
 });
 
 describe('CursorChatRuntime.ensureReady force restart', () => {
