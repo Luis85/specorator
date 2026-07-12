@@ -122,6 +122,45 @@ describe('buildAllowlistedSubprocessEnvironment', () => {
     expect(result.Path).toBe('C:\\Windows\\System32');
   });
 
+  it('collapses Windows `Path` + `pathOverride` into a single enhanced `PATH` key', () => {
+    // The original bug: the allowlist copied Windows' `Path` (minimal GUI PATH)
+    // and pathOverride added a separate uppercase `PATH` (Git dirs appended).
+    // The child shell resolves PATH case-insensitively and could pick the
+    // un-enhanced `Path`, so git/node were "not on PATH".
+    const result = buildAllowlistedSubprocessEnvironment({
+      processEnv: { Path: 'C:\\Windows\\System32' },
+      customEnv: {},
+      providerPrefixPattern: /^CURSOR_/i,
+      pathOverride: 'C:\\Windows\\System32;C:\\Program Files\\Git\\bin',
+    });
+    const pathKeys = Object.keys(result).filter((key) => key.toUpperCase() === 'PATH');
+    expect(pathKeys).toEqual(['PATH']);
+    expect(result.PATH).toBe('C:\\Windows\\System32;C:\\Program Files\\Git\\bin');
+    expect(result.Path).toBeUndefined();
+  });
+
+  it('collapses a customEnv-supplied case-variant PATH, keeping the last-written value', () => {
+    const result = buildAllowlistedSubprocessEnvironment({
+      processEnv: { Path: '/host/bin' },
+      customEnv: { PATH: '/custom/bin' },
+      providerPrefixPattern: /^CURSOR_/i,
+    });
+    const pathKeys = Object.keys(result).filter((key) => key.toUpperCase() === 'PATH');
+    expect(pathKeys).toEqual(['PATH']);
+    expect(result.PATH).toBe('/custom/bin');
+    expect(result.Path).toBeUndefined();
+  });
+
+  it('leaves a lone `Path` key untouched when there is no duplicate', () => {
+    const result = buildAllowlistedSubprocessEnvironment({
+      processEnv: { Path: 'C:\\Windows\\System32' },
+      customEnv: {},
+      providerPrefixPattern: /^CURSOR_/i,
+    });
+    expect(result.Path).toBe('C:\\Windows\\System32');
+    expect(result.PATH).toBeUndefined();
+  });
+
   it('forwards XDG base-dir keys so host XDG_DATA_HOME flows through to the CLI', () => {
     // Opencode reads XDG_DATA_HOME to locate its database under
     // $XDG_DATA_HOME/opencode/. Our DB-path resolution and the CLI must see

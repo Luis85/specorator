@@ -121,11 +121,8 @@ function mapPlanDecisionToOutcome(
   return { outcome: 'accepted' };
 }
 
-/**
- * Maps the settled plan decision to its outcome and applies the one side effect
- * `approve-new-session` needs: it also actively cancels the running turn, since
- * RuntimeHost's cancelRequested alone never reaches the agent.
- */
+// Maps the settled plan decision to its outcome; approve-new-session also
+// cancels the running turn (RuntimeHost's cancelRequested never reaches the agent).
 function settlePlanDecision(
   host: CursorAcpExtensionHost,
   decision: ExitPlanModeDecision | null,
@@ -187,12 +184,8 @@ function todoIdentity(todo: NormalizedTodo): { id: string; content: string } {
   };
 }
 
-/**
- * Merges an incremental `cursor/update_todos` batch (`merge: true`) over the last
- * emitted list — the shared StreamController REPLACES its panel from each
- * TodoWrite chunk, so a bare changed-items list would erase the rest. Matches
- * by `id` (falling back to content); unmatched items append.
- */
+// Folds a batch over the last emitted list (the panel is fully replaced from
+// each chunk). Matches by `id`, falling back to content; unmatched items append.
 function mergeCursorTodos(previous: NormalizedTodo[], incoming: NormalizedTodo[]): NormalizedTodo[] {
   const result = previous.map((todo) => ({ ...todo }));
   const indexById = new Map<string, number>();
@@ -222,10 +215,9 @@ function mergeCursorTodos(previous: NormalizedTodo[], incoming: NormalizedTodo[]
   return result;
 }
 
-// Patches a cached normalized todo from a RAW incoming entry (documented
-// `{id, content, status}` shape). status always wins when present; content and
-// its derived activeForm only overwrite when the raw entry actually carries
-// content — a status-only patch keeps the cached content intact.
+// Patches a cached todo from a RAW entry: status always wins when present;
+// content/activeForm overwrite only when the entry carries content (so a
+// status-only `{id, status}` patch keeps the cached content intact).
 function patchTodoFromRaw(cached: NormalizedTodo, raw: Record<string, unknown>): NormalizedTodo {
   const patched: NormalizedTodo = { ...cached };
   const status = stringValue(raw.status);
@@ -240,12 +232,9 @@ function patchTodoFromRaw(cached: NormalizedTodo, raw: Record<string, unknown>):
   return patched;
 }
 
-/**
- * Merges a RAW `cursor/update_todos` batch (`merge: true`) over the cached
- * normalized list, BEFORE the content-requiring normalizer, so a status-only
- * transition (`{id, status}`, no `content`) isn't silently dropped. Only
- * unmatched entries fall through to the normalizer/append merge below.
- */
+// Merges a RAW batch over the cached list BEFORE the content-requiring
+// normalizer, so a status-only `{id, status}` transition isn't dropped; only
+// unmatched entries fall through to the normalizer/append merge below.
 function mergeCursorTodosFromRaw(cached: NormalizedTodo[], rawIncoming: unknown[]): NormalizedTodo[] {
   const result = cached.map((todo) => ({ ...todo }));
   const indexById = new Map<string, number>();
@@ -435,10 +424,11 @@ async function resolveAskQuestionOutcome(
  * `cursor/ask_question` and `cursor/create_plan` are BLOCKING agent→client
  * requests, answered in-turn with the documented outcome unions from
  * cursor.com/docs/cli/acp (replacing the retired stream-json auto-reject +
- * resumed-follow-up-turn delivery, ADR-0002). `cursor/update_todos` is a one-way
- * notification; `cursor/task` and `cursor/generate_image` are blocking requests
- * acked with their documented outcome unions (subagent lifecycle and in-chat
- * image generation are both unsupported, so both ack a benign non-`{}` outcome).
+ * resumed-follow-up-turn delivery, ADR-0002). `cursor/update_todos`, `cursor/task`,
+ * and `cursor/generate_image` also arrive as blocking requests (docs mislabel them
+ * notifications) and are acked with their documented outcome unions; update_todos
+ * is registered as both request and notification so either frame shape updates the
+ * panel, while subagent lifecycle and in-chat image generation stay unsupported.
  */
 export function registerCursorAcpExtensions(
   transport: AcpJsonRpcTransport,
@@ -496,30 +486,37 @@ export function registerCursorAcpExtensions(
     return { outcome: await resolveCreatePlanOutcome(host, planText, parsed.sessionId) };
   }));
 
-  unsubscribes.push(transport.onNotification('cursor/update_todos', (params) => {
+  // Merges an incoming batch into the cached list and emits the TodoWrite
+  // chunk pair, returning the raw accepted todos for the request outcome.
+  // `merge: true` carries only changed items; the StreamController replaces its
+  // whole panel from each chunk, so a bare list would drop unlisted todos. The
+  // merge path works from RAW entries so a status-only `{id, status}` (no
+  // `content`) still lands — the normalizer drops content-less entries — while
+  // the full-replace path routes through the normalizer for `activeForm`/status.
+  const applyTodoUpdate = (params: unknown): unknown[] => {
     const parsed = (params ?? {}) as { todos?: unknown[]; sessionId?: string; merge?: boolean };
     const rawTodos = parsed.todos ?? [];
-
-    // Cursor sends `merge: true` with only the changed items for an incremental
-    // update; the StreamController replaces its whole panel from each TodoWrite
-    // chunk, so a bare incoming list would drop every unlisted todo. Merge over
-    // the last emitted list and cache the result for the next incremental batch.
-    //
-    // The merge path works from the RAW entries so a status-only transition
-    // (`{id, status}`, no `content`) still lands — the shared todo normalizer
-    // drops entries lacking content, which would otherwise vanish the change.
-    // The full-replace path routes through the normalizer (which derives the
-    // panel-required `activeForm` from `content` and defaults `status`).
     const cacheKey = parsed.sessionId ?? '';
     const todos = parsed.merge === true
       ? mergeCursorTodosFromRaw(lastTodosBySession.get(cacheKey) ?? [], rawTodos)
       : (mapCursorToolInput('updateTodosToolCall', { todos: rawTodos }, undefined)
         .todos as NormalizedTodo[] | undefined) ?? [];
     lastTodosBySession.set(cacheKey, todos);
-
     const id = `cursor-todos-${++todoCallCounter}`;
     host.emitChunk({ type: 'tool_use', id, name: TOOL_TODO_WRITE, input: { todos } }, parsed.sessionId);
     host.emitChunk({ type: 'tool_result', id, content: 'Todos updated', isError: false }, parsed.sessionId);
+    return rawTodos;
+  };
+
+  // cursor/update_todos arrives as a BLOCKING request (id present) on the real
+  // wire despite the docs' "notification" label — the same trap as cursor/task.
+  // An unregistered request -32601s and the panel never updates in agent mode;
+  // handle both frame shapes, echoing the documented `accepted` outcome.
+  unsubscribes.push(transport.onRequest('cursor/update_todos', async (params) => ({
+    outcome: { outcome: 'accepted', todos: applyTodoUpdate(params) },
+  })));
+  unsubscribes.push(transport.onNotification('cursor/update_todos', (params) => {
+    applyTodoUpdate(params);
   }));
 
   // cursor/task is a BLOCKING request (real captures 2026-07-12); ack with the

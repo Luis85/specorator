@@ -133,5 +133,28 @@ export function buildAllowlistedSubprocessEnvironment(
   if (opts.pathOverride !== undefined) {
     out.PATH = opts.pathOverride;
   }
+  collapseDuplicatePathKeys(out);
   return out;
+}
+
+/**
+ * Windows env-var names are case-insensitive, so `process.env` carries `Path`
+ * while a `pathOverride` (or a customEnv entry) writes `PATH`. Shipping BOTH
+ * case-variants to the child means its shell resolves PATH case-insensitively
+ * and may pick the un-enhanced `Path`, silently discarding the override —
+ * `git`/`node` report "not on PATH" even though we appended their dirs. When
+ * two or more variants exist, collapse them onto a single canonical `PATH`
+ * holding the last-written value (preserving pathOverride/customEnv precedence).
+ * A lone PATH key of any casing is left untouched.
+ */
+function collapseDuplicatePathKeys(env: Record<string, string>): void {
+  const pathKeys = Object.keys(env).filter((key) => key.toUpperCase() === 'PATH');
+  if (pathKeys.length < 2) {
+    return;
+  }
+  const winner = env[pathKeys[pathKeys.length - 1]];
+  for (const key of pathKeys) {
+    delete env[key];
+  }
+  env.PATH = winner;
 }

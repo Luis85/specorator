@@ -536,6 +536,32 @@ describe('registerCursorAcpExtensions', () => {
     expect(emitted.every((e) => e.sessionId === 'S-99')).toBe(true);
   });
 
+  it('answers the blocking cursor/update_todos REQUEST with the documented accepted outcome and still emits chunks', async () => {
+    // Real captures 2026-07-12: cursor/update_todos arrives as a REQUEST (id
+    // present), not a notification — an unregistered request -32601s and the
+    // panel never updates in agent mode.
+    const { transport, requests } = makeFakeTransport();
+    const chunks: StreamChunk[] = [];
+    registerCursorAcpExtensions(transport as never, {
+      askUser: jest.fn(),
+      emitChunk: (c) => chunks.push(c),
+      exitPlanMode: async () => null,
+      markPlanDecidedInline: () => {},
+    });
+
+    const handler = requests.get('cursor/update_todos');
+    expect(handler).toBeDefined();
+    const rawTodos = [{ id: '1', content: 'step 1', status: 'in_progress' }];
+    const response = await handler!({ toolCallId: 't1', todos: rawTodos, merge: true }) as {
+      outcome: { outcome: string; todos?: unknown };
+    };
+
+    expect(response.outcome.outcome).toBe('accepted');
+    expect(response.outcome.todos).toEqual(rawTodos);
+    expect(chunks.find((c) => c.type === 'tool_use')).toBeDefined();
+    expect(chunks.find((c) => c.type === 'tool_result')).toBeDefined();
+  });
+
   it('maps cursor/update_todos to a TodoWrite tool chunk', async () => {
     const { transport, notifications } = makeFakeTransport();
     const chunks: StreamChunk[] = [];
