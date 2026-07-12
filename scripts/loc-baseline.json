@@ -4,19 +4,19 @@
   "allowlist": {
     "src/providers/claude/runtime/ClaudeChatRuntime.ts": {
       "loc": 1662,
-      "reason": "Grandfathered. Planned split: extract persistent-query lifecycle (ensureReady, needsRestart, response-consumer startup) behind a smaller module interface. See docs/tech-debt/2026-06-07-oversized-modules-and-test-files.md. +1 from the getSpecoratorToolKey dynamic-update dep wiring (tool-scope staleness key). Library-views-overhaul: bound-agent native SDK activation (syncBoundAgentState + threading boundAgentPrompt/slug/model/description through query → runPersistentTurn → queryViaPersistent and the config/options builders)."
+      "reason": "Grandfathered. Planned split: extract persistent-query lifecycle (ensureReady, needsRestart, response-consumer startup) behind a smaller module interface. See docs/tech-debt/2026-06-07-oversized-modules-and-test-files.md. +1 from the getSpecoratorToolKey dynamic-update dep wiring (tool-scope staleness key). Library-views-overhaul: bound-agent native SDK activation (syncBoundAgentState + threading boundAgentPrompt/slug/model/description through query \u2192 runPersistentTurn \u2192 queryViaPersistent and the config/options builders)."
     },
     "src/features/chat/controllers/InputController.ts": {
-      "loc": 1194,
-      "reason": "Grandfathered. Planned split: the resume dropdown is now extracted to ResumeSessionDropdownCoordinator; the plan/approval state machine remains a follow-up. See docs/tech-debt/2026-06-07-oversized-modules-and-test-files.md. +1 from importing the named BoundAgentProjection type for the resolved bound-agent value. +6 from threading the conversation provider into resolveBoundAgent so a bound agent's cross-provider model id is dropped after a disabled-provider fallback. +9 from the public seedComposerDraft composer-draft prefill seam (library loop prompting) plus the autoResumeWith refactor that reuses it. +6 from the seedComposerDraft keepExisting/focus polish (preserve an unsent draft above the seeded content, focus the composer, caret to end). Re-locked down from 1199 (2026-07-12): the transcript Vue cutover (ADR 0005 sub-project 2) moved assistant-message activation/discard bookkeeping into this file, then extracted it back out to controllers/streamingMessageLifecycle.ts to keep the ceiling shrinking rather than grow — helper-extraction of the remaining plan/approval and streaming-target logic is the tracked follow-up."
+      "loc": 1205,
+      "reason": "Grandfathered. Planned split: the resume dropdown is now extracted to ResumeSessionDropdownCoordinator; the plan/approval state machine remains a follow-up. See docs/tech-debt/2026-06-07-oversized-modules-and-test-files.md. +1 from importing the named BoundAgentProjection type for the resolved bound-agent value. +6 from threading the conversation provider into resolveBoundAgent so a bound agent's cross-provider model id is dropped after a disabled-provider fallback. +9 from the public seedComposerDraft composer-draft prefill seam (library loop prompting) plus the autoResumeWith refactor that reuses it. +6 from the seedComposerDraft keepExisting/focus polish (preserve an unsent draft above the seeded content, focus the composer, caret to end). Re-locked down from 1199 (2026-07-12): the transcript Vue cutover (ADR 0005 sub-project 2) moved assistant-message activation/discard bookkeeping into this file, then extracted it back out to controllers/streamingMessageLifecycle.ts to keep the ceiling shrinking rather than grow \u2014 helper-extraction of the remaining plan/approval and streaming-target logic is the tracked follow-up. +11 (Codex PR#486 round-4 fix): clearRetryableTurn() + retry-turn clearing so reloaded/switched transcripts don't offer a stale no-op runtime-error Retry."
     },
     "src/providers/opencode/runtime/OpencodeChatRuntime.ts": {
       "loc": 1116,
-      "reason": "Grandfathered hotspot. Track the split in docs/tech-debt/2026-06-07-oversized-modules-and-test-files.md; shrink only. Runtime-discovered slash-command state extracted to OpencodeSupportedCommandsRegistry. +12 from threading the bound-agent tool grant through query → ensureReady → prepareLaunchArtifacts into the scoped getHttpToolServerConfig call (HTTP tool-tier grant scoping P1b)."
+      "reason": "Grandfathered hotspot. Track the split in docs/tech-debt/2026-06-07-oversized-modules-and-test-files.md; shrink only. Runtime-discovered slash-command state extracted to OpencodeSupportedCommandsRegistry. +12 from threading the bound-agent tool grant through query \u2192 ensureReady \u2192 prepareLaunchArtifacts into the scoped getHttpToolServerConfig call (HTTP tool-tier grant scoping P1b)."
     },
     "src/providers/codex/runtime/CodexChatRuntime.ts": {
       "loc": 1051,
-      "reason": "Grandfathered hotspot. Track the split in docs/tech-debt/2026-06-07-oversized-modules-and-test-files.md; shrink only. Host⇆target session-path translation (toHostSessionPath/toTargetSessionPath/mapHostPathToTarget/mapRequiredHostPathsToTarget) extracted to codexSessionPathMapping.ts."
+      "reason": "Grandfathered hotspot. Track the split in docs/tech-debt/2026-06-07-oversized-modules-and-test-files.md; shrink only. Host\u21c6target session-path translation (toHostSessionPath/toTargetSessionPath/mapHostPathToTarget/mapRequiredHostPathsToTarget) extracted to codexSessionPathMapping.ts."
     },
     "src/features/chat/SpecoratorView.ts": {
       "loc": 957,
@@ -51,8 +51,8 @@
       "reason": "Grandfathered. Planned split: separate legacy, modern, and persisted parser families around shared turn-state types. See docs/tech-debt/2026-06-07-oversized-modules-and-test-files.md."
     },
     "src/features/chat/controllers/ConversationController.ts": {
-      "loc": 655,
-      "reason": "Grandfathered hotspot. Track the split in docs/tech-debt/2026-06-07-oversized-modules-and-test-files.md; shrink only. Re-locked down from 677 (2026-07-12): the transcript Vue cutover (ADR 0005 sub-project 2) replaced the renderer.renderMessages/renderLoading DOM calls on switch/load with transcript-projection store pushes."
+      "loc": 662,
+      "reason": "Grandfathered hotspot. Track the split in docs/tech-debt/2026-06-07-oversized-modules-and-test-files.md; shrink only. Re-locked down from 677 (2026-07-12): the transcript Vue cutover (ADR 0005 sub-project 2) replaced the renderer.renderMessages/renderLoading DOM calls on switch/load with transcript-projection store pushes. +7 (Codex PR#486 round-4 fix): thread clearRetryableTurn through the createNew/loadActive/switchTo (re)bind paths."
     },
     "src/features/chat/rendering/ToolCallRenderer.ts": {
       "loc": 628,
@@ -63,8 +63,8 @@
       "reason": "Grandfathered hotspot. Track the split in docs/tech-debt/2026-06-07-oversized-modules-and-test-files.md; shrink only."
     },
     "src/features/chat/controllers/StreamController.ts": {
-      "loc": 623,
-      "reason": "Grandfathered hotspot. Track the split in docs/tech-debt/2026-06-07-oversized-modules-and-test-files.md; shrink only. Streaming text + thinking render lifecycles extracted to TextRenderCoordinator / ThinkingRenderCoordinator over a shared StreamRenderLoop + streamRenderBackoff. Re-locked down from 774 (2026-07-12): the transcript Vue cutover (ADR 0005 sub-project 2) deleted the imperative DOM-patch write side (tool-call/write-edit/thinking element mutation) now that streaming mutates reactive ChatMessage data the Vue transcript renders."
+      "loc": 627,
+      "reason": "Grandfathered hotspot. Track the split in docs/tech-debt/2026-06-07-oversized-modules-and-test-files.md; shrink only. Streaming text + thinking render lifecycles extracted to TextRenderCoordinator / ThinkingRenderCoordinator over a shared StreamRenderLoop + streamRenderBackoff. Re-locked down from 774 (2026-07-12): the transcript Vue cutover (ADR 0005 sub-project 2) deleted the imperative DOM-patch write side (tool-call/write-edit/thinking element mutation) now that streaming mutates reactive ChatMessage data the Vue transcript renders. +4 (Codex PR#486 round-4 fix): shouldDeferMathRendering dep wiring to restore live streaming math deferral."
     },
     "src/core/providers/types.ts": {
       "loc": 613,
