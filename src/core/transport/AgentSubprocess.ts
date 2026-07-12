@@ -18,6 +18,14 @@ export interface AgentSubprocessSpec {
   stderrBufferLimit?: number;
   /** SIGTERM→SIGKILL escalation delay in ms (default 3000). */
   sigkillTimeoutMs?: number;
+  /**
+   * Optional hard tree-kill used by `shutdown()` INSTEAD of the SIGTERM→SIGKILL
+   * escalation. A bare kill on Windows only signals the direct child, orphaning
+   * grandchildren (a CLI agent's shell/git tools); a provider that forks such
+   * grandchildren passes a `taskkill /T /F`-style reaper here so recycling a
+   * wedged process doesn't leak the tree.
+   */
+  killProcessTree?: (proc: ChildProcess) => void;
 }
 
 export interface AgentSubprocessCloseInfo {
@@ -128,32 +136,39 @@ export class AgentSubprocess {
       return;
     }
 
+    const killTree = this.spec.killProcessTree;
     await new Promise<void>((resolve) => {
       let settled = false;
+      // Hard ceiling: never let teardown hang if 'exit' never fires. Element type
+      // is inferred (avoids the DOM-vs-node `setTimeout` return-type clash).
+      const timers = [window.setTimeout(() => finish(), this.sigkillTimeoutMs * 2)];
       const finish = () => {
         if (settled) return;
         settled = true;
-        window.clearTimeout(killTimer);
-        window.clearTimeout(giveUpTimer);
+        timers.forEach((timer) => window.clearTimeout(timer));
         proc.off('exit', onExit);
         resolve();
       };
       const onExit = () => finish();
-      const killTimer = window.setTimeout(() => {
-        try {
-          if (this.alive) {
-            proc.kill('SIGKILL');
-          }
-        } catch {
-          // already exited / not killable — the give-up timer will resolve
-        }
-      }, this.sigkillTimeoutMs);
-      // Hard ceiling: never let teardown hang if 'exit' never fires.
-      const giveUpTimer = window.setTimeout(finish, this.sigkillTimeoutMs * 2);
 
       proc.once('exit', onExit);
       try {
-        proc.kill('SIGTERM');
+        if (killTree) {
+          // Reap the whole tree in one shot — a bare SIGTERM/SIGKILL on Windows
+          // only hits the direct child and orphans its shell/git grandchildren.
+          killTree(proc);
+        } else {
+          proc.kill('SIGTERM');
+          timers.push(window.setTimeout(() => {
+            try {
+              if (this.alive) {
+                proc.kill('SIGKILL');
+              }
+            } catch {
+              // already exited / not killable — the give-up timer will resolve
+            }
+          }, this.sigkillTimeoutMs));
+        }
       } catch {
         // Process already gone between the guard and the kill — nothing to await.
         finish();

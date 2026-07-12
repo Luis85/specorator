@@ -191,5 +191,16 @@ describe('AgentSubprocess', () => {
       await expect(new AgentSubprocess(SPEC).shutdown()).resolves.toBeUndefined();
       expect(mockProc.kill).not.toHaveBeenCalled();
     });
+
+    it('uses the killProcessTree hook (tree kill) instead of SIGTERM/SIGKILL when provided', async () => {
+      const killProcessTree = jest.fn();
+      const p = new AgentSubprocess({ ...SPEC, killProcessTree });
+      p.start();
+      const done = p.shutdown();
+      expect(killProcessTree).toHaveBeenCalledWith(mockProc);
+      expect(mockProc.kill).not.toHaveBeenCalled();
+      mockProc.emit('exit', 0, 'SIGKILL');
+      await expect(done).resolves.toBeUndefined();
+    });
   });
 });

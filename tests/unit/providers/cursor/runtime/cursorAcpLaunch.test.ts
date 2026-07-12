@@ -11,4 +11,9 @@ describe('buildCursorAcpLaunchSpec', () => {
     expect(spec.cwd).toBe('/vault');
     expect(spec.env.PATH).toBe('/usr/bin');
   });
+
+  it('wires a tree-kill so shutdown reaps cursor-agent grandchildren (no Windows orphan leak)', () => {
+    const spec = buildCursorAcpLaunchSpec('/home/u/.local/bin/cursor-agent', '/vault', {});
+    expect(typeof spec.killProcessTree).toBe('function');
+  });
 });

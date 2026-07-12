@@ -1,3 +1,4 @@
+import type { ChildProcess } from 'node:child_process';
 import type { Readable, Writable } from 'node:stream';
 
 import { AgentSubprocess } from '../../core/transport/AgentSubprocess';
@@ -17,6 +18,12 @@ export interface AcpSubprocessLaunchSpec {
    * buffer. Never throws upstream — calls are try/catch-wrapped.
    */
   onStderrData?: (chunk: string) => void;
+  /**
+   * Optional hard tree-kill for `shutdown()` (see `AgentSubprocessSpec`). A
+   * provider whose CLI forks shell/git grandchildren passes a `taskkill /T /F`
+   * reaper so recycling the process doesn't orphan them on Windows.
+   */
+  killProcessTree?: (proc: ChildProcess) => void;
 }
 
 type CloseListener = (error?: Error) => void;
