@@ -4,7 +4,11 @@ import { AcpStreamChunkQueue } from '@/providers/acp';
 import * as acpBuild from '@/providers/acp/buildAcpUsageInfo';
 import { CursorChatRuntime } from '@/providers/cursor/runtime/CursorChatRuntime';
 
-import { CURSOR_LOAD_SESSION_RESULT } from '../../../../fixtures/providers/cursor/realAcpCaptures';
+import {
+  CURSOR_ADVERTISED_MODEL_VALUES,
+  CURSOR_LOAD_SESSION_RESULT,
+  CURSOR_NEW_SESSION_RESULT,
+} from '../../../../fixtures/providers/cursor/realAcpCaptures';
 
 function makeRuntime(
   overrides: Record<string, unknown> = {},
@@ -1150,6 +1154,72 @@ describe('CursorChatRuntime.captureAdvertisedModelValues', () => {
     await (bag.ensureSession as (c: string) => Promise<string | null>).call(runtime, '/cwd');
 
     expect(bag.advertisedModelValues).toEqual(['gpt-5.4[reasoning=high]']);
+  });
+
+  // Real session/load responses advertise no models/configOptions at all
+  // (CURSOR_LOAD_SESSION_RESULT, tests/fixtures/providers/cursor/realAcpCaptures.ts:84-90).
+  // Capturing that empty payload over a real session/new catalog used to wipe
+  // the wire-id list a resumed session still needs, so a post-resume model
+  // selection could never match.
+  it('keeps the session/new catalog when a real session/load response advertises none', () => {
+    const runtime = makeRuntime() as unknown as Record<string, unknown>;
+    (runtime.captureAdvertisedModelValues as (r: unknown) => void).call(runtime, CURSOR_NEW_SESSION_RESULT);
+    expect(runtime.advertisedModelValues).toEqual(CURSOR_ADVERTISED_MODEL_VALUES);
+
+    (runtime.captureAdvertisedModelValues as (r: unknown) => void).call(runtime, CURSOR_LOAD_SESSION_RESULT);
+    expect(runtime.advertisedModelValues).toEqual(CURSOR_ADVERTISED_MODEL_VALUES);
+  });
+
+  it('retains the catalog across ensureSession session/new then session/load, and applySelectedModel still matches a bracket-variant selection', async () => {
+    const runtime = makeRuntime();
+    const newSession = jest.fn().mockResolvedValue(CURSOR_NEW_SESSION_RESULT);
+    const loadSession = jest.fn().mockResolvedValue(CURSOR_LOAD_SESSION_RESULT);
+    const setConfigOption = jest.fn().mockResolvedValue({ configOptions: [] });
+    const bag = primeRuntime(runtime, { newSession, loadSession, setConfigOption });
+
+    await (bag.createSession as (c: string) => Promise<string | null>).call(runtime, '/cwd');
+    expect(bag.advertisedModelValues).toEqual(CURSOR_ADVERTISED_MODEL_VALUES);
+
+    // Force the session/load branch on the next ensureSession call, mirroring a
+    // resumed conversation whose session id is already known.
+    bag.loadedSessionId = null;
+    await (bag.ensureSession as (c: string) => Promise<string | null>).call(runtime, '/cwd');
+    expect(bag.advertisedModelValues).toEqual(CURSOR_ADVERTISED_MODEL_VALUES);
+
+    jest.spyOn(runtime as unknown as { resolveCursorModelForSession: () => string | undefined }, 'resolveCursorModelForSession')
+      .mockReturnValue('claude-opus-4-5[thinking=true]');
+    await (bag.applySelectedModel as (s: string, q?: unknown) => Promise<void>).call(
+      runtime,
+      bag.sessionId as string,
+      undefined,
+    );
+
+    expect(setConfigOption).toHaveBeenCalledWith({
+      configId: 'model',
+      sessionId: bag.sessionId,
+      type: 'select',
+      value: 'claude-opus-4-5[thinking=true]',
+    });
+  });
+
+  it('stores an empty catalog when the FIRST response advertises none, and applySelectedModel skips (existing behavior)', async () => {
+    const runtime = makeRuntime();
+    const newSession = jest.fn().mockResolvedValue({ sessionId: 'S1', models: { availableModels: [] }, configOptions: [] });
+    const setConfigOption = jest.fn().mockResolvedValue({ configOptions: [] });
+    const bag = primeRuntime(runtime, { newSession, setConfigOption });
+
+    await (bag.createSession as (c: string) => Promise<string | null>).call(runtime, '/cwd');
+    expect(bag.advertisedModelValues).toEqual([]);
+
+    jest.spyOn(runtime as unknown as { resolveCursorModelForSession: () => string | undefined }, 'resolveCursorModelForSession')
+      .mockReturnValue('gpt-5.4-medium');
+    await (bag.applySelectedModel as (s: string, q?: unknown) => Promise<void>).call(
+      runtime,
+      bag.sessionId as string,
+      undefined,
+    );
+
+    expect(setConfigOption).not.toHaveBeenCalled();
   });
 });
 

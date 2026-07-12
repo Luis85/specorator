@@ -719,6 +719,10 @@ export class CursorChatRuntime implements ChatRuntime {
   // session/load response so applySelectedModel can send an exact-matching value
   // (Cursor ACP rejects bare CLI ids). Config-driven `configOptions` win over the
   // legacy `models` state, mirroring extractAcpSessionModelState's precedence.
+  // Real session/load responses carry empty configOptions/models.availableModels
+  // (realAcpCaptures.ts:84-90, CURSOR_LOAD_SESSION_RESULT) though the resumed
+  // session still only accepts wire ids from session/new — so an empty
+  // extraction only replaces a previously empty/unset catalog, never a known one.
   private captureAdvertisedModelValues(
     response: AcpNewSessionResponse | AcpLoadSessionResponse,
   ): void {
@@ -726,7 +730,11 @@ export class CursorChatRuntime implements ChatRuntime {
       configOptions: response.configOptions,
       models: response.models,
     });
-    this.advertisedModelValues = state.availableModels.map((model) => model.id);
+    const values = state.availableModels.map((model) => model.id);
+    if (values.length === 0 && this.advertisedModelValues && this.advertisedModelValues.length > 0) {
+      return;
+    }
+    this.advertisedModelValues = values;
   }
 
   private async applySelectedModel(
