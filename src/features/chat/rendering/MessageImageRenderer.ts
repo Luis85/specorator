@@ -1,9 +1,7 @@
-import { type App, Notice } from 'obsidian';
+import type { App } from 'obsidian';
 
 import type { ImageAttachment } from '../../../core/types';
-import { t } from '../../../i18n/i18n';
-import { getVaultFileByPath } from '../../../utils/obsidianCompat';
-import { openImageModal } from '../ui/imageModal';
+import { resolveImageAttachmentSrc, showFullImageAttachment } from '../utils/imageAttachment';
 
 /**
  * App + owner-document escapes the image renderer reads from the owning
@@ -28,12 +26,7 @@ export class MessageImageRenderer {
    * file exists, base64 data URI otherwise, null if neither is usable.
    */
   private resolveImageSrc(image: ImageAttachment): string | null {
-    if (image.path) {
-      const file = getVaultFileByPath(this.deps.app, image.path);
-      if (file) return this.deps.app.vault.getResourcePath(file);
-    }
-    if (image.data) return `data:${image.mediaType};base64,${image.data}`;
-    return null;
+    return resolveImageAttachmentSrc(this.deps.app, image);
   }
 
   /**
@@ -80,14 +73,6 @@ export class MessageImageRenderer {
    * Shows full-size image in modal overlay.
    */
   showFullImage(image: ImageAttachment): void {
-    const src = this.resolveImageSrc(image);
-    if (!src) {
-      // Nothing to show — surface a brief fallback rather than a blank modal.
-      new Notice(t('chat.image.unavailable'));
-      return;
-    }
-
-    const ownerDocument = this.deps.getOwnerDocument();
-    openImageModal({ ownerDocument, src, alt: image.name });
+    showFullImageAttachment(this.deps.app, this.deps.getOwnerDocument(), image);
   }
 }
