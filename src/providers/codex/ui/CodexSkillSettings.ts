@@ -1,10 +1,10 @@
 import { type App, Modal, Notice, Setting } from 'obsidian';
 
-import type { ProviderCommandCatalog } from '../../../core/providers/commands/ProviderCommandCatalog';
 import type { ProviderCommandEntry } from '../../../core/providers/commands/ProviderCommandEntry';
 import { t } from '../../../i18n/i18n';
 import { renderSettingsListItem, type SettingsActionButtonOptions } from '../../../shared/components/settingsListUI';
 import { validateCommandName } from '../../../utils/slashCommand';
+import type { CodexSkillCatalog } from '../commands/CodexSkillCatalog';
 import {
   CODEX_SKILL_ROOT_OPTIONS,
   type CodexSkillRootId,
@@ -146,10 +146,10 @@ export class CodexSkillModal extends Modal {
 }
 
 export class CodexSkillSettings extends CodexVaultListSettings<ProviderCommandEntry> {
-  private catalog: ProviderCommandCatalog;
+  private catalog: CodexSkillCatalog;
   private app?: App;
 
-  constructor(containerEl: HTMLElement, catalog: ProviderCommandCatalog, app?: App) {
+  constructor(containerEl: HTMLElement, catalog: CodexSkillCatalog, app?: App) {
     super(containerEl);
     this.catalog = catalog;
     this.app = app;
@@ -175,7 +175,7 @@ export class CodexSkillSettings extends CodexVaultListSettings<ProviderCommandEn
   }
 
   protected async loadItems(): Promise<ProviderCommandEntry[]> {
-    return (await this.catalog.listVaultEntries()).filter(entry => entry.isEditable);
+    return this.catalog.listManagedVaultSkills();
   }
 
   protected onRefresh(): void {

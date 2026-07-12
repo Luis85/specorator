@@ -221,7 +221,7 @@ Prompt`,
       expect(entries.find(e => e.name === 'other-repo-skill')).toBeUndefined();
     });
 
-    it('retains disabled repo skills (editable) so they stay manageable in settings', async () => {
+    it('excludes disabled repo skills from the runnable listing (they are not invocable)', async () => {
       const vaultAdapter = createMockAdapter({
         '.codex/skills/disabled-vault-skill/SKILL.md': `---
 description: Disabled but editable
@@ -240,17 +240,48 @@ Prompt`,
       ]);
       const catalog = new CodexSkillCatalog(storage, listProvider, '/test/vault');
 
-      // The dropdown/run surface hides it (not invocable while disabled)...
+      // Neither the dropdown nor the runnable Library listing shows it — a
+      // disabled skill's `$name` won't resolve, so it must not be a Prompt row.
       const dropdown = await catalog.listDropdownEntries({ includeBuiltIns: false });
       expect(dropdown.find(e => e.name === 'disabled-vault-skill')).toBeUndefined();
-
-      // ...but the management listing keeps it editable so the user can still
-      // edit/delete it in Codex settings without touching files by hand.
       const vaultEntries = await catalog.listVaultEntries();
-      const disabled = vaultEntries.find(e => e.name === 'disabled-vault-skill')!;
-      expect(disabled).toBeDefined();
-      expect(disabled.isEditable).toBe(true);
-      expect(disabled.isDeletable).toBe(true);
+      expect(vaultEntries.find(e => e.name === 'disabled-vault-skill')).toBeUndefined();
+    });
+
+    it('never runs a lower-priority same-named skill (repo wins over global)', async () => {
+      const vaultAdapter = createMockAdapter({
+        '.codex/skills/shared/SKILL.md': `---
+description: Repo copy
+---
+Repo prompt`,
+      });
+      const storage = new CodexSkillStorage(vaultAdapter, createMockAdapter({}));
+      const listProvider = createMockSkillListProvider([
+        {
+          name: 'shared',
+          description: 'Global copy',
+          path: '/Users/test/.codex/skills/shared/SKILL.md',
+          scope: 'user',
+          enabled: true,
+        },
+        {
+          name: 'shared',
+          description: 'Repo copy',
+          path: '/test/vault/.codex/skills/shared/SKILL.md',
+          scope: 'repo',
+          enabled: true,
+        },
+      ]);
+      const catalog = new CodexSkillCatalog(storage, listProvider, '/test/vault');
+
+      // `$shared` resolves to the repo skill (higher priority), so only ONE
+      // `shared` card may appear — the repo one — never the global card that
+      // would silently invoke the repo skill instead.
+      const entries = await catalog.listVaultEntries();
+      const shared = entries.filter(e => e.name === 'shared');
+      expect(shared).toHaveLength(1);
+      expect(shared[0].scope).toBe('vault');
+      expect(shared[0].isEditable).toBe(true);
     });
 
     it('excludes disabled read-only globals (neither editable nor runnable)', async () => {
@@ -337,6 +368,38 @@ Prompt`,
       expect(entries[0].scope).toBe('vault');
     });
 
+  });
+
+  describe('listManagedVaultSkills', () => {
+    it('returns every editable vault skill on disk, including disabled ones', async () => {
+      // The filesystem has two skills; the app-server reports one of them as
+      // disabled. The management listing is disk-sourced, so both appear —
+      // disabling a skill must not strip its in-app edit/delete affordance.
+      const vaultAdapter = createMockAdapter({
+        '.codex/skills/enabled-one/SKILL.md': '---\ndescription: On\n---\nPrompt A',
+        '.codex/skills/disabled-one/SKILL.md': '---\ndescription: Off\n---\nPrompt B',
+      });
+      const storage = new CodexSkillStorage(vaultAdapter, createMockAdapter({}));
+      const listProvider = createMockSkillListProvider([
+        {
+          name: 'disabled-one',
+          description: 'Off',
+          path: '/test/vault/.codex/skills/disabled-one/SKILL.md',
+          scope: 'repo',
+          enabled: false,
+        },
+      ]);
+      const catalog = new CodexSkillCatalog(storage, listProvider, '/test/vault');
+
+      const managed = await catalog.listManagedVaultSkills();
+      expect(managed.map(e => e.name).sort()).toEqual(['disabled-one', 'enabled-one']);
+      for (const entry of managed) {
+        expect(entry.isEditable).toBe(true);
+        expect(entry.isDeletable).toBe(true);
+        expect(entry.scope).toBe('vault');
+        expect(entry.sourceFilePath).toBe(`.codex/skills/${entry.name}/SKILL.md`);
+      }
+    });
   });
 
   describe('saveVaultEntry', () => {
