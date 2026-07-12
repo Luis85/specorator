@@ -143,7 +143,8 @@ export function createTab(options: TabCreateOptions): TabData {
       navigationSidebar: null,
     },
     dom,
-    renderer: null,
+    transcript: null,
+    mountedTranscript: null,
   };
 
   return tab;
@@ -154,8 +155,13 @@ export function createTab(options: TabCreateOptions): TabData {
  */
 function buildTabDOM(contentEl: HTMLElement): TabDOMElements {
   const messagesWrapperEl = contentEl.createDiv({ cls: 'specorator-messages-wrapper' });
-  const messagesEl = messagesWrapperEl.createDiv({ cls: 'specorator-messages' });
-  const welcomeEl = messagesEl.createDiv({ cls: 'specorator-welcome' });
+  // The Vue transcript island (mounted into `messagesWrapperEl` by
+  // `initializeTabControllers`) renders the real `.specorator-messages` scroll
+  // container itself and hands it back via `SCROLL_HOST_KEY`, which overwrites
+  // `dom.messagesEl`. Until then `messagesEl` points at the wrapper as a
+  // non-null placeholder; no controller reads it before the mount. The Vue
+  // `WelcomeBanner` owns the welcome block now.
+  const messagesEl = messagesWrapperEl;
   const statusPanelContainerEl = contentEl.createDiv({ cls: 'specorator-status-panel-container' });
   const inputContainerEl = contentEl.createDiv({ cls: 'specorator-input-container' });
   const queueIndicatorEl = inputContainerEl.createDiv({ cls: 'specorator-input-queue-row' });
@@ -175,7 +181,6 @@ function buildTabDOM(contentEl: HTMLElement): TabDOMElements {
   return {
     contentEl,
     messagesEl,
-    welcomeEl,
     statusPanelContainerEl,
     inputContainerEl,
     queueIndicatorEl,

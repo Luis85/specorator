@@ -13,7 +13,6 @@ import type { BrowserSelectionContext } from '../../../utils/browser';
 import type { CanvasSelectionContext } from '../../../utils/canvas';
 import type { EditorSelectionContext } from '../../../utils/editor';
 import type { ThinkingBlockState } from '../rendering/ThinkingBlockRenderer';
-import type { WriteEditState } from '../rendering/WriteEditRenderer';
 import type { EditedFileEntry } from '../utils/editedFiles';
 
 /** Queued message waiting to be sent after current streaming completes. */
@@ -31,6 +30,27 @@ export interface QueuedMessage {
 export interface PendingToolCall {
   toolCall: ToolCallInfo;
   parentEl: HTMLElement | null;
+}
+
+/**
+ * The in-flight turn's reactive state, consumed by the Vue transcript island.
+ * Null when no turn is streaming. Lives here (not in the store) so `ChatState`
+ * can build it without importing the Pinia store; the store re-exports this type.
+ */
+export interface ActiveStreamState {
+  /** id of the assistant ChatMessage currently being appended to. */
+  messageId: string;
+  /** index into that message's contentBlocks of the block being written (−1 when none open). */
+  blockIndex: number;
+  isThinking: boolean;
+  isWriting: boolean;
+  elapsedSeconds: number;
+  /**
+   * Custom indicator label for the thinking flavor slot (e.g. `Compacting...`
+   * for `/compact`). When present, the Vue `StreamingIndicator` prefers it over
+   * the deterministic flavor phrase. Undefined ⇒ default flavor.
+   */
+  label?: string;
 }
 
 /** Stored selection state from editor polling. */
@@ -77,16 +97,34 @@ export interface ChatStateData {
   currentTextEl: HTMLElement | null;
   currentTextContent: string;
   currentThinkingState: ThinkingBlockState | null;
-  thinkingEl: HTMLElement | null;
+
+  // Active reactive-stream pointers (the Vue transcript renders the in-flight
+  // turn from these). `activeMessageId` is the streaming assistant message id;
+  // `activeBlockIndex` indexes its `contentBlocks` at the block currently
+  // growing (−1 when no text/thinking block is open). Written alongside the
+  // imperative DOM state during Tasks 15–17 (dual-write).
+  activeMessageId: string | null;
+  activeBlockIndex: number;
+  /**
+   * Which form the streaming indicator is currently rendering, driving the Vue
+   * transcript's `StreamingIndicator`. `'thinking'` ⇔ the debounced flavor indicator is on
+   * screen, `'writing'` ⇔ the immediate `Writing response…` placeholder, `null`
+   * ⇔ hidden. This tracks the INDICATOR's show/showWriting/hide state, not the
+   * reasoning/text block state. Written alongside the imperative DOM (dual-write).
+   */
+  streamingIndicatorMode: 'thinking' | 'writing' | null;
+  /**
+   * Custom label for the thinking-mode indicator (e.g. `Compacting...`), set by
+   * `StreamingIndicator.show(overrideText)` and surfaced through
+   * `getActiveStreamSnapshot().label`. Null ⇒ the default deterministic flavor.
+   */
+  streamingIndicatorLabel: string | null;
   queueIndicatorEl: HTMLElement | null;
   /** Debounce timeout for showing thinking indicator after inactivity. */
   thinkingIndicatorTimeout: number | null;
 
   // Tool tracking maps
   toolCallElements: Map<string, HTMLElement>;
-  writeEditStates: Map<string, WriteEditState>;
-  /** Pending tool calls buffered until input is complete (for non-streaming-style render). */
-  pendingTools: Map<string, PendingToolCall>;
 
   // Context window usage
   usage: UsageInfo | null;
@@ -150,5 +188,4 @@ export type {
   TodoItem,
   ToolCallInfo,
   UsageInfo,
-  WriteEditState,
 };

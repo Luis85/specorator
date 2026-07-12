@@ -7,11 +7,11 @@ import type SpecoratorPlugin from '../../../main';
 import { BrowserSelectionController } from '../controllers/BrowserSelectionController';
 import { CanvasSelectionController } from '../controllers/CanvasSelectionController';
 import { ConversationController } from '../controllers/ConversationController';
+import { createInlineCardMounter } from '../controllers/inlineCardMount';
 import { InputController } from '../controllers/InputController';
 import { NavigationController } from '../controllers/NavigationController';
 import { SelectionController } from '../controllers/SelectionController';
 import { StreamController } from '../controllers/StreamController';
-import { MessageRenderer } from '../rendering/MessageRenderer';
 import { autoResizeTextarea } from '../ui/textareaResize';
 import { getTabProviderId } from './providerResolution';
 import { initializeTabService } from './tabLifecycle';
@@ -19,7 +19,6 @@ import {
   applyProviderUIGating,
   cleanupTabRuntime,
   generateMessageId,
-  getTabCapabilities,
   getTabPermissionMode,
   type ProviderCatalogInfo,
   refreshTabProviderUI,
@@ -34,10 +33,10 @@ import type { TabData } from './types';
 /**
  * Per-tab controller wiring extracted from `initializeTabControllers`.
  *
- * Each builder mutates `tab.renderer` / `tab.controllers` in place and is
- * invoked in a fixed order by the orchestrator. The order matters: later
- * builders read controllers (and the renderer) constructed by earlier ones,
- * so these functions are not independently reorderable. Fork affordances are
+ * Each builder mutates `tab.controllers` in place and is invoked in a fixed
+ * order by the orchestrator. The order matters: later builders read controllers
+ * constructed by earlier ones, so these functions are not independently
+ * reorderable. Fork affordances are
  * passed in as already-bound callbacks so this module never imports the fork
  * handlers from `tabControllers.ts` (which would form an import cycle).
  */
@@ -48,30 +47,6 @@ import type { TabData } from './types';
  */
 interface PendingHydrationErrorHost {
   consumePendingHydrationError(conversationId: string): { code: string; message: string } | null;
-}
-
-/**
- * Builds the tab's `MessageRenderer` and assigns it to `tab.renderer`.
- * Returns nothing — later builders read `tab.renderer` directly.
- */
-export function buildTabMessageRenderer(
-  tab: TabData,
-  plugin: SpecoratorPlugin,
-  component: Component,
-  forkMessageCallback?: (userMessageId: string) => Promise<void>,
-): void {
-  const { dom } = tab;
-
-  tab.renderer = new MessageRenderer(plugin, component, dom.messagesEl, {
-    rewindCallback: (id, mode) => tab.controllers.conversationController!.rewind(id, mode),
-    forkCallback: forkMessageCallback ? (id) => forkMessageCallback(id) : undefined,
-    getCapabilities: () => getTabCapabilities(tab, plugin),
-    getWorkOrderPath: () =>
-      tab.workOrderPath
-      ?? (tab.conversationId
-        ? plugin.getConversationSync(tab.conversationId)?.workOrderPath ?? null
-        : null),
-  });
 }
 
 /** Builds the editor/browser/canvas selection controllers. */
@@ -112,17 +87,15 @@ export function buildTabSelectionControllers(tab: TabData, plugin: SpecoratorPlu
 export function buildTabStreamController(tab: TabData, plugin: SpecoratorPlugin): void {
   const { dom, state, services, ui } = tab;
 
-  // The orchestrator builds the renderer before this builder, so it is present.
-  const renderer = tab.renderer!;
-
   tab.controllers.streamController = new StreamController({
     plugin,
     state,
-    renderer,
     subagentManager: services.subagentManager,
     getMessagesEl: () => dom.messagesEl,
     getFileContextManager: () => ui.fileContextManager,
     updateQueueIndicator: () => tab.controllers.inputController?.updateQueueIndicator(),
+    emitTranscript: () => tab.transcript?.emit(),
+    refreshTranscriptMessage: (messageId) => tab.transcript?.refreshMessage(messageId),
     getAgentService: () => tab.service,
     onRetryLastTurn: () => tab.controllers.inputController?.retryLastTurn(),
   });
@@ -153,18 +126,15 @@ export function buildTabConversationController(
 ): void {
   const { dom, state, services, ui } = tab;
 
-  // The orchestrator builds the renderer before this builder, so it is present.
-  const renderer = tab.renderer!;
-
   tab.controllers.conversationController = new ConversationController(
     {
       plugin,
       state,
-      renderer,
       subagentManager: services.subagentManager,
+      setTranscriptGreeting: (greeting) => tab.transcript?.setGreeting(greeting),
+      setTranscriptLoading: (loadingText) => tab.transcript?.setLoadingText(loadingText),
+      setTranscriptHydrationError: (error) => tab.transcript?.setHydrationError(error),
       getHistoryDropdown: () => null, // Tab doesn't have its own history dropdown
-      getWelcomeEl: () => dom.welcomeEl,
-      setWelcomeEl: (el) => { dom.welcomeEl = el; },
       getMessagesEl: () => dom.messagesEl,
       getInputEl: () => dom.inputEl,
       getFileContextManager: () => ui.fileContextManager,
@@ -172,6 +142,7 @@ export function buildTabConversationController(
       getMcpServerSelector: () => ui.mcpServerSelector,
       getExternalContextSelector: () => ui.externalContextSelector,
       clearQueuedMessage: () => tab.controllers.inputController?.clearQueuedMessage(),
+      clearRetryableTurn: () => tab.controllers.inputController?.clearRetryableTurn(),
       getTitleGenerationService: () => services.titleGenerationService,
       getStatusPanel: () => ui.statusPanel,
       getAgentService: () => tab.service, // Use tab's service instead of plugin's
@@ -267,20 +238,22 @@ export function buildTabConversationController(
 export function buildTabInputController(
   tab: TabData,
   plugin: SpecoratorPlugin,
+  component: Component,
   openConversation?: (conversationId: string) => Promise<void>,
   forkAllCallback?: () => Promise<void>,
 ): void {
   const { dom, state, services, ui } = tab;
 
-  // The orchestrator builds the renderer and these controllers before this
-  // builder, so all are present at this point.
-  const renderer = tab.renderer!;
+  // The orchestrator builds these controllers before this builder, so all are
+  // present at this point.
   const { controllers } = tab;
 
   tab.controllers.inputController = new InputController({
     plugin,
     state,
-    renderer,
+    mountInlineCard: createInlineCardMounter(plugin, component),
+    emitTranscript: () => tab.transcript?.emit(),
+    refreshTranscriptMessage: (messageId) => tab.transcript?.refreshMessage(messageId),
     streamController: controllers.streamController!,
     selectionController: controllers.selectionController!,
     browserSelectionController: controllers.browserSelectionController!,
@@ -288,7 +261,6 @@ export function buildTabInputController(
     conversationController: controllers.conversationController!,
     getInputEl: () => dom.inputEl,
     getInputContainerEl: () => dom.inputContainerEl,
-    getWelcomeEl: () => dom.welcomeEl,
     getMessagesEl: () => dom.messagesEl,
     getFileContextManager: () => ui.fileContextManager,
     getImageContextManager: () => ui.imageContextManager,

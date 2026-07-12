@@ -49,6 +49,7 @@ export {
   type AsyncSubagentStatus,
   type ExitPlanModeCallback,
   type ExitPlanModeDecision,
+  type PlanApprovalDecision,
   type SubagentInfo,
   type SubagentMode,
   type ToolCallInfo,

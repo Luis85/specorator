@@ -25,28 +25,13 @@ import {
 } from '../../../utils/animationFrame';
 import { extractDiffData } from '../../../utils/diff';
 import { toVaultRelativeOpenPath } from '../../../utils/fileLink';
-import { hasStreamingMathDelimiters } from '../../../utils/markdownMath';
-import { openSpecoratorProviderSettings } from '../../../utils/obsidianPrivateApi';
-import { renderInlineRuntimeError } from '../rendering/InlineRuntimeError';
-import type { MessageRenderer, RenderContentOptions } from '../rendering/MessageRenderer';
 import { scrollMessagesToBottom } from '../rendering/scrollToBottom';
-import { resolveSubagentLifecycleAdapter } from '../rendering/subagentLifecycleResolution';
-import {
-  isBlockedToolResult,
-  renderToolCall,
-  updateToolCallResult,
-} from '../rendering/ToolCallRenderer';
-import {
-  createWriteEditBlock,
-  finalizeWriteEditBlock,
-  updateWriteEditWithDiff,
-} from '../rendering/WriteEditRenderer';
+import { isBlockedToolResult } from '../rendering/ToolCallRenderer';
 import type { SubagentManager } from '../services/SubagentManager';
 import type { ChatState } from '../state/ChatState';
 import type { FileContextManager } from '../ui/FileContext';
 import { collectEditedPathsFromToolCall, collectRemovedPathsFromToolCall } from '../utils/editedFiles';
 import { ProviderLifecycleSubagentCoordinator } from './ProviderLifecycleSubagentCoordinator';
-import { classifyRuntimeError } from './runtimeErrorClassification';
 import { StreamingIndicator } from './streamingIndicator';
 import {
   type BlockTransitionDecision,
@@ -56,14 +41,13 @@ import {
   projectNoticeText,
   projectUsage,
 } from './StreamProjection';
-import { scheduleStreamContinuation } from './streamRenderBackoff';
+import { resolveSubagentLifecycleAdapter } from './subagentLifecycleResolution';
 import { SubagentStreamCoordinator } from './SubagentStreamCoordinator';
 import { TextRenderCoordinator } from './TextRenderCoordinator';
 import { ThinkingRenderCoordinator } from './ThinkingRenderCoordinator';
 import {
   appendToolCallToMessage,
   createRunningToolCall,
-  updateRenderedToolCallHeader,
 } from './toolCallAppend';
 import { ToolCallIndex } from './toolCallIndex';
 import { notifyVaultForToolResult } from './vaultFileNotifier';
@@ -71,11 +55,15 @@ import { notifyVaultForToolResult } from './vaultFileNotifier';
 export interface StreamControllerDeps {
   plugin: SpecoratorPlugin;
   state: ChatState;
-  renderer: MessageRenderer;
   subagentManager: SubagentManager;
   getMessagesEl: () => HTMLElement;
   getFileContextManager: () => FileContextManager | null;
   updateQueueIndicator: () => void;
+  /** Re-projects the transcript snapshot into the Vue store (per-tab). */
+  emitTranscript?: () => void;
+  /** Re-projects a single message (fresh identity) — used for off-stream
+   *  async/background subagent completions. */
+  refreshTranscriptMessage?: (messageId: string) => void;
   /** Get the agent service from the tab. */
   getAgentService?: () => ChatRuntime | null;
   /**
@@ -90,7 +78,6 @@ export class StreamController {
   private deps: StreamControllerDeps;
   private readonly textRender: TextRenderCoordinator;
   private readonly thinkingRender: ThinkingRenderCoordinator;
-  private pendingToolOutputFrames = new Map<string, ScheduledAnimationFrame>();
   private pendingScrollFrame: ScheduledAnimationFrame | null = null;
 
   // O(1) tool-call lookup accelerator for the streaming hot path (avoids
@@ -116,6 +103,7 @@ export class StreamController {
       state: deps.state,
       getMessagesEl: deps.getMessagesEl,
       updateQueueIndicator: deps.updateQueueIndicator,
+      emit: () => this.emitTranscript(),
     });
     this.subagents = new SubagentStreamCoordinator({
       state: deps.state,
@@ -130,6 +118,7 @@ export class StreamController {
         notifyVaultForToolResult(this.deps.plugin.app, toolCall);
         this.recordEditedFiles(toolCall);
       },
+      refreshTranscriptMessage: (messageId) => this.deps.refreshTranscriptMessage?.(messageId),
     });
     this.lifecycleSubagents = new ProviderLifecycleSubagentCoordinator({
       plugin: deps.plugin,
@@ -141,23 +130,20 @@ export class StreamController {
     });
     this.thinkingRender = new ThinkingRenderCoordinator({
       state: deps.state,
-      renderer: deps.renderer,
       hideThinkingIndicator: () => this.hideThinkingIndicator(),
-      getStreamingRenderOptions: (content) => this.getStreamingRenderOptions(content),
-      scrollToBottom: () => this.scrollToBottom(),
-      getMessagesWindow: () => this.getMessagesWindow(),
     });
     this.textRender = new TextRenderCoordinator({
       state: deps.state,
-      renderer: deps.renderer,
       showWriting: () => this.indicator.showWriting(),
       hideThinkingIndicator: () => this.hideThinkingIndicator(),
-      scrollToBottom: () => this.scrollToBottom(),
-      getStreamingRenderOptions: (content) => this.getStreamingRenderOptions(content),
-      shouldDeferMathRendering: () => this.shouldDeferMathRendering(),
       shouldCollapseStreamingResponse: () => this.shouldCollapseStreamingResponse(),
-      getMessagesWindow: () => this.getMessagesWindow(),
+      shouldDeferMathRendering: () => this.shouldDeferMathRendering(),
     });
+  }
+
+  /** Re-projects the transcript snapshot (per-tab). No-op when unwired (tests). */
+  private emitTranscript(): void {
+    this.deps.emitTranscript?.();
   }
 
   /**
@@ -227,6 +213,9 @@ export class StreamController {
     if (!(await this.routeContentChunk(chunk, msg))) {
       await this.routeLifecycleChunk(chunk, msg);
     }
+    // In-place block/tool growth doesn't fire onMessagesChanged, so an explicit
+    // re-projection per chunk is required for the shallowRef store to update.
+    this.emitTranscript();
     this.scrollToBottom();
   }
 
@@ -235,13 +224,13 @@ export class StreamController {
     switch (chunk.type) {
       case 'thinking':
         await this.applyBlockTransition(projectBlockTransition('thinking', this.blockState()), msg);
-        await this.appendThinking(chunk.content);
+        await this.appendThinking(chunk.content, msg);
         return true;
 
       case 'text':
         await this.applyBlockTransition(projectBlockTransition('text', this.blockState()), msg);
         msg.content += chunk.content;
-        await this.appendText(chunk.content);
+        await this.appendText(chunk.content, msg);
         return true;
 
       case 'tool_use':
@@ -276,7 +265,7 @@ export class StreamController {
     switch (chunk.type) {
       case 'notice':
         this.flushPendingTools();
-        await this.appendText(projectNoticeText(chunk));
+        await this.appendText(projectNoticeText(chunk), msg);
         break;
 
       case 'error':
@@ -305,8 +294,9 @@ export class StreamController {
   private async handleContextCompactedChunk(msg: ChatMessage): Promise<void> {
     await this.applyBlockTransition(projectCompactBoundary(this.blockState()), msg);
     msg.contentBlocks = msg.contentBlocks || [];
+    // The Vue transcript renders the boundary from this reactive block.
     msg.contentBlocks.push({ type: 'context_compacted' });
-    this.renderCompactBoundary();
+    this.hideThinkingIndicator();
   }
 
   private handleUsageChunk(chunk: Extract<StreamChunk, { type: 'usage' }>): void {
@@ -385,8 +375,16 @@ export class StreamController {
     await this.finalizeCurrentThinkingBlock(msg);
     await this.finalizeCurrentTextBlock(msg);
     msg.contentBlocks = msg.contentBlocks || [];
-    msg.contentBlocks.push({ type: 'runtime_error', content: chunk.content });
-    this.renderRuntimeError(chunk.content);
+    // The Vue RuntimeErrorCard renders this reactive block and wires its
+    // open-settings / retry affordances through TranscriptCallbacks. An
+    // auto-triggered (background) turn suppresses Retry: retrying would
+    // re-send the user's last *normal* prompt, not this background turn.
+    msg.contentBlocks.push({
+      type: 'runtime_error',
+      content: chunk.content,
+      ...(this.renderingAutoTurn ? { suppressRetry: true } : {}),
+    });
+    this.hideThinkingIndicator();
   }
 
   // ============================================
@@ -406,55 +404,36 @@ export class StreamController {
     // Check if this is an update to an existing tool call
     const existingToolCall = this.findToolCall(msg, chunk.id);
     if (existingToolCall) {
-      this.mergeExistingToolCallInput(existingToolCall, chunk.input, chunk.id);
+      this.mergeExistingToolCallInput(existingToolCall, chunk.input);
       return;
     }
 
-    // Create new tool call
+    // Create the tool call as reactive data — the Vue `ToolCall` renders it live
+    // from `msg.toolCalls`; no buffering/DOM.
     const toolCall = createRunningToolCall(chunk);
     appendToolCallToMessage(msg, toolCall);
-
-    // Apply panel/plan side effects immediately, but still buffer the render
     this.applyToolInputSideEffects(chunk.name, chunk.input);
 
-    // Buffer the tool call instead of rendering immediately
     if (state.currentContentEl) {
-      state.pendingTools.set(chunk.id, {
-        toolCall,
-        parentEl: state.currentContentEl,
-      });
       this.showThinkingIndicator();
     }
   }
 
   /**
-   * Merges a later tool_use chunk's input into an existing tool call, applies the
-   * same panel/plan side effects as a fresh tool, and refreshes the rendered
-   * header if the block is already on screen. If still pending, the merged input
-   * is already on the toolCall object and gets picked up at render time.
+   * Merges a later tool_use chunk's input into an existing tool call and re-runs
+   * the same panel/plan side effects as a fresh tool. The merged input lands on
+   * the reactive `toolCall` object, so the Vue block updates on the next emit.
    */
   private mergeExistingToolCallInput(
     existingToolCall: ToolCallInfo,
     chunkInput: Record<string, unknown>,
-    toolId: string,
   ): void {
     const newInput = chunkInput || {};
     if (Object.keys(newInput).length === 0) return;
 
     existingToolCall.input = { ...existingToolCall.input, ...newInput };
-
     // Re-run side effects on input updates (streaming may complete the input)
     this.applyToolInputSideEffects(existingToolCall.name, existingToolCall.input);
-
-    const toolEl = this.deps.state.toolCallElements.get(toolId);
-    if (toolEl) {
-      updateRenderedToolCallHeader(
-        this.deps.plugin.app,
-        toolEl,
-        existingToolCall.name,
-        existingToolCall.input,
-      );
-    }
   }
 
   /**
@@ -487,18 +466,12 @@ export class StreamController {
     return typeof settings.model === 'string' ? settings.model : undefined;
   }
 
-  private shouldDeferMathRendering(): boolean {
-    return this.deps.plugin.settings.deferMathRenderingDuringStreaming !== false;
-  }
-
   private shouldCollapseStreamingResponse(): boolean {
     return this.deps.plugin.settings.collapseStreamingResponse !== false;
   }
 
-  private getStreamingRenderOptions(content: string): RenderContentOptions | undefined {
-    return this.shouldDeferMathRendering() && hasStreamingMathDelimiters(content)
-      ? { deferMath: true }
-      : undefined;
+  private shouldDeferMathRendering(): boolean {
+    return this.deps.plugin.settings.deferMathRenderingDuringStreaming !== false;
   }
 
   private capturePlanFilePath(input: Record<string, unknown>): void {
@@ -512,61 +485,25 @@ export class StreamController {
   }
 
   /**
-   * Flushes all pending tool calls by rendering them.
-   * Called when a different content type arrives or stream ends.
+   * No-op in data-only mode: tools render reactively from `msg.toolCalls`, so
+   * there is no render buffer to flush. Kept because block-transition decisions
+   * and the subagent coordinators still call it as an ordering hook.
    */
   private flushPendingTools(): void {
-    const { state } = this.deps;
-
-    if (state.pendingTools.size === 0) {
-      return;
-    }
-
-    // Render pending tools in order (Map preserves insertion order)
-    for (const toolId of state.pendingTools.keys()) {
-      this.renderPendingTool(toolId);
-    }
-
-    state.pendingTools.clear();
-  }
-
-  /**
-   * Renders a single pending tool call and moves it from pending to rendered state.
-   */
-  private renderPendingTool(toolId: string): void {
-    const { state } = this.deps;
-    const pending = state.pendingTools.get(toolId);
-    if (!pending) return;
-
-    const { toolCall, parentEl } = pending;
-    if (!parentEl) return;
-    if (isWriteEditTool(toolCall.name)) {
-      const writeEditState = createWriteEditBlock(this.deps.plugin.app, parentEl, toolCall, { initiallyExpanded: this.deps.plugin.settings.expandFileEditsByDefault === true });
-      state.writeEditStates.set(toolId, writeEditState);
-      state.toolCallElements.set(toolId, writeEditState.wrapperEl);
-    } else {
-      renderToolCall(this.deps.plugin.app, parentEl, toolCall, state.toolCallElements);
-    }
-    state.pendingTools.delete(toolId);
+    // Intentionally empty — see method doc.
   }
 
   private handleToolOutput(
     chunk: { type: 'tool_output'; id: string; content: string },
     msg: ChatMessage,
   ): void {
-    const { state } = this.deps;
-
-    if (state.pendingTools.has(chunk.id)) {
-      this.renderPendingTool(chunk.id);
-    }
-
     const existingToolCall = this.findToolCall(msg, chunk.id);
     if (!existingToolCall) {
       return;
     }
 
+    // Grow the reactive result; the Vue tool block re-renders on the next emit.
     existingToolCall.result = (existingToolCall.result ?? '') + chunk.content;
-    this.scheduleToolOutputRender(chunk.id, existingToolCall);
     this.showThinkingIndicator();
   }
 
@@ -574,7 +511,6 @@ export class StreamController {
     chunk: { type: 'tool_result'; id: string; content: string; isError?: boolean; toolUseResult?: SDKToolUseResult },
     msg: ChatMessage
   ): Promise<void> {
-    const { state } = this.deps;
     const normalizedContent = this.normalizeToolResultContent(chunk.content);
 
     if (await this.subagents.handleToolResult(chunk, msg)) {
@@ -584,11 +520,6 @@ export class StreamController {
     if (this.lifecycleSubagents.handleProviderSubagentResult(chunk, msg)) {
       this.showThinkingIndicator();
       return;
-    }
-
-    // Check if tool is still pending (buffered) - render it now before applying result
-    if (state.pendingTools.has(chunk.id)) {
-      this.renderPendingTool(chunk.id);
     }
 
     const existingToolCall = this.findToolCall(msg, chunk.id);
@@ -663,93 +594,43 @@ export class StreamController {
     }
   }
 
-  /** Finalizes the write/edit diff block or refreshes the generic tool block for a result. */
+  /**
+   * Attaches the write/edit diff to the reactive tool call so the Vue
+   * `WriteEditView` renders it. The status/result are already set by the caller;
+   * a non-write tool needs nothing further here (its Vue block re-renders from
+   * the updated `toolCall`).
+   */
   private renderToolResultBlock(
     chunk: { id: string; isError?: boolean; toolUseResult?: SDKToolUseResult },
     existingToolCall: ToolCallInfo,
     isBlocked: boolean,
   ): void {
-    const { state } = this.deps;
-    const writeEditState = state.writeEditStates.get(chunk.id);
-    if (writeEditState && isWriteEditTool(existingToolCall.name)) {
-      if (!chunk.isError && !isBlocked) {
-        const diffData = extractDiffData(chunk.toolUseResult, existingToolCall);
-        if (diffData) {
-          existingToolCall.diffData = diffData;
-          updateWriteEditWithDiff(writeEditState, diffData);
-        }
+    if (isWriteEditTool(existingToolCall.name) && !chunk.isError && !isBlocked) {
+      const diffData = extractDiffData(chunk.toolUseResult, existingToolCall);
+      if (diffData) {
+        existingToolCall.diffData = diffData;
       }
-      finalizeWriteEditBlock(writeEditState, chunk.isError || isBlocked);
-      return;
     }
-
-    this.cancelPendingToolOutputRender(chunk.id);
-    updateToolCallResult(
-      this.deps.plugin.app,
-      chunk.id,
-      existingToolCall,
-      state.toolCallElements,
-    );
   }
 
   // ============================================
   // Text Block Management
   // ============================================
 
-  appendText(text: string): Promise<void> {
-    return this.textRender.append(text);
+  appendText(text: string, msg?: ChatMessage): Promise<void> {
+    return this.textRender.append(text, msg);
   }
 
   finalizeCurrentTextBlock(msg?: ChatMessage): Promise<void> {
     return this.textRender.finalize(msg);
   }
 
-  private scheduleToolOutputRender(toolId: string, toolCall: ToolCallInfo): void {
-    if (this.pendingToolOutputFrames.has(toolId)) return;
-
-    // Large tool output (e.g. long Bash logs) re-renders the whole growing result every
-    // frame. The structured tool renderers (line clamping, expand/collapse) make a safe
-    // delta-append impractical, so we apply the same size-aware backoff used for text to
-    // cap the re-render rate; the final result is rendered exactly on tool_result.
-    const render = () => {
-      this.pendingToolOutputFrames.delete(toolId);
-      updateToolCallResult(
-        this.deps.plugin.app,
-        toolId,
-        toolCall,
-        this.deps.state.toolCallElements,
-      );
-      this.scrollToBottom();
-    };
-    const frame = scheduleStreamContinuation(
-      toolCall.result ?? '',
-      this.getMessagesWindow(),
-      render,
-    );
-    this.pendingToolOutputFrames.set(toolId, frame);
-  }
-
-  private cancelPendingToolOutputRender(toolId: string): void {
-    const frame = this.pendingToolOutputFrames.get(toolId);
-    if (!frame) return;
-
-    cancelScheduledAnimationFrame(frame);
-    this.pendingToolOutputFrames.delete(toolId);
-  }
-
-  private cancelPendingToolOutputRenders(): void {
-    for (const frame of this.pendingToolOutputFrames.values()) {
-      cancelScheduledAnimationFrame(frame);
-    }
-    this.pendingToolOutputFrames.clear();
-  }
-
   // ============================================
   // Thinking Block Management
   // ============================================
 
-  appendThinking(content: string): Promise<void> {
-    return this.thinkingRender.append(content);
+  appendThinking(content: string, msg?: ChatMessage): Promise<void> {
+    return this.thinkingRender.append(content, msg);
   }
 
   finalizeCurrentThinkingBlock(msg?: ChatMessage): Promise<void> {
@@ -777,60 +658,6 @@ export class StreamController {
   /** Hides the thinking indicator and cancels any pending show timeout. */
   hideThinkingIndicator(): void {
     this.indicator.hide();
-  }
-
-  // ============================================
-  // Compact Boundary
-  // ============================================
-
-  // ============================================
-  // Runtime Error Card (UX-F/UX-J)
-  // ============================================
-
-  /**
-   * Classifies a runtime `error` chunk and renders an actionable recovery card.
-   * Open-settings and retry callbacks are wired only when the underlying surface
-   * is available, so the card never offers an action it can't perform.
-   */
-  private renderRuntimeError(content: string): void {
-    const { state, plugin } = this.deps;
-    if (!state.currentContentEl) return;
-
-    this.hideThinkingIndicator();
-
-    const kind = classifyRuntimeError(content);
-    const providerId = this.getActiveProviderId();
-
-    const onOpenSettings =
-      kind === 'cli-not-found' || kind === 'unauthenticated'
-        ? () => {
-            openSpecoratorProviderSettings(plugin.app, plugin.manifest.id, providerId);
-          }
-        : undefined;
-
-    // Retry re-dispatches the *user's* last turn, so it must not appear on errors
-    // from an auto-triggered background turn — there is no user prompt behind it,
-    // and retrying would resend an unrelated chat turn (duplicating work).
-    const onRetry =
-      !this.renderingAutoTurn && this.deps.onRetryLastTurn
-        ? () => this.deps.onRetryLastTurn?.()
-        : undefined;
-
-    renderInlineRuntimeError(state.currentContentEl, {
-      kind,
-      content,
-      providerId,
-      onOpenSettings,
-      onRetry,
-    });
-  }
-
-  private renderCompactBoundary(): void {
-    const { state } = this.deps;
-    if (!state.currentContentEl) return;
-    this.hideThinkingIndicator();
-    const el = state.currentContentEl.createDiv({ cls: 'specorator-compact-boundary' });
-    el.createSpan({ cls: 'specorator-compact-boundary-label', text: 'Conversation compacted' });
   }
 
   // ============================================
@@ -873,15 +700,15 @@ export class StreamController {
     const { state } = this.deps;
     this.textRender.cancel();
     this.thinkingRender.cancel();
-    this.cancelPendingToolOutputRenders();
     this.cancelPendingScroll();
     this.hideThinkingIndicator();
     state.currentContentEl = null;
     state.currentTextEl = null;
     state.currentTextContent = '';
     state.currentThinkingState = null;
+    state.activeMessageId = null;
+    state.activeBlockIndex = -1;
     this.deps.subagentManager.resetStreamingState();
-    state.pendingTools.clear();
     // Reset response timer (duration already captured at this point)
     state.responseStartTime = null;
     void this.deps.plugin.gitStatusWatcher?.refresh();

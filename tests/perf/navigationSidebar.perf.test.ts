@@ -11,8 +11,8 @@
  * Timing is reported, never asserted (DOM layout isn't modeled in node tests); the
  * assertions are structural — the scan visits O(mounted), bounded by the window.
  */
-import { RENDER_WINDOW_SIZE } from '@/features/chat/rendering/windowedRenderSetup';
 import { NavigationSidebar } from '@/features/chat/ui/NavigationSidebar';
+import { RENDER_WINDOW_SIZE } from '@/features/chat/ui/vue/transcript/windowedRenderSetup';
 
 import { reportMetrics, timeMs } from './perfReport';
 

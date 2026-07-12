@@ -12,7 +12,6 @@ import type { InputController } from '../controllers/InputController';
 import type { NavigationController } from '../controllers/NavigationController';
 import type { SelectionController } from '../controllers/SelectionController';
 import type { StreamController } from '../controllers/StreamController';
-import type { MessageRenderer } from '../rendering/MessageRenderer';
 import type { SubagentManager } from '../services/SubagentManager';
 import type { ChatState } from '../state/ChatState';
 import type { BangBashModeManager } from '../ui/BangBashModeManager';
@@ -33,6 +32,8 @@ import type {
 import type { InstructionModeManager } from '../ui/InstructionModeManager';
 import type { NavigationSidebar } from '../ui/NavigationSidebar';
 import type { StatusPanel } from '../ui/StatusPanel';
+import type { MountedTranscript } from '../ui/vue/transcript/mountTranscript';
+import type { TabTranscriptProjection } from './tabTranscript';
 
 /**
  * Default number of chat tabs allowed.
@@ -171,7 +172,6 @@ export interface TabUIComponents {
 export interface TabDOMElements {
   contentEl: HTMLElement;
   messagesEl: HTMLElement;
-  welcomeEl: HTMLElement | null;
 
   /** Container for status panel (fixed between messages and input). */
   statusPanelContainerEl: HTMLElement;
@@ -307,8 +307,11 @@ export interface TabData {
   /** Per-tab DOM elements. */
   dom: TabDOMElements;
 
-  /** Per-tab renderer. */
-  renderer: MessageRenderer | null;
+  /** Per-tab Vue transcript projection source (engine → store snapshot fan-out). */
+  transcript: TabTranscriptProjection | null;
+
+  /** Handle to the mounted Vue transcript island (unmounted on tab destroy). */
+  mountedTranscript: MountedTranscript | null;
 }
 
 export type TabProviderContext = Pick<TabData, 'conversationId' | 'service' | 'providerId' | 'lifecycleState' | 'draftModel'>;

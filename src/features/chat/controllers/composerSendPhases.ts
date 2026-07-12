@@ -3,13 +3,12 @@ import type { App } from 'obsidian';
 import type { ChatRuntime } from '../../../core/runtime/ChatRuntime';
 import type { ChatTurnMetadata, ChatTurnRequest } from '../../../core/runtime/types';
 import { TOOL_EXIT_PLAN_MODE } from '../../../core/tools/toolNames';
-import type { ChatMessage } from '../../../core/types';
+import type { ChatMessage, PlanApprovalDecision } from '../../../core/types';
 import type { BrowserSelectionContext } from '../../../utils/browser';
 import type { CanvasSelectionContext } from '../../../utils/canvas';
 import { formatDurationMmSs } from '../../../utils/date';
 import type { EditorSelectionContext } from '../../../utils/editor';
 import { COMPLETION_FLAVOR_WORDS } from '../constants';
-import type { PlanApprovalDecision } from '../rendering/InlinePlanApproval';
 import { updateToolCallResult } from '../rendering/ToolCallRenderer';
 import type { ChatState } from '../state/ChatState';
 import type { FileContextManager } from '../ui/FileContext';
@@ -133,7 +132,6 @@ export function beginStreamingTurnState(
   ui: {
     plugin: { settings: { enableAutoScroll?: boolean } };
     getSubagentManager: () => { resetSpawnedCount: () => void };
-    getWelcomeEl: () => HTMLElement | null;
   },
 ): number {
   state.isStreaming = true;
@@ -142,12 +140,6 @@ export function beginStreamingTurnState(
   ui.getSubagentManager().resetSpawnedCount();
   state.autoScrollEnabled = ui.plugin.settings.enableAutoScroll ?? true; // Reset auto-scroll based on setting
   const streamGeneration = state.bumpStreamGeneration();
-
-  // Hide welcome message when sending first message
-  const welcomeEl = ui.getWelcomeEl();
-  if (welcomeEl) {
-    welcomeEl.addClass('specorator-hidden');
-  }
 
   send.fileContextManager?.startSession();
   return streamGeneration;

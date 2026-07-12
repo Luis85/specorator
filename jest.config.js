@@ -68,7 +68,18 @@ module.exports = {
     // collection, but their plugin-wiring closures in main.ts (view registration,
     // openView, getSpecoratorToolServer) are untested glue that nudged the function
     // ratio to 74.97. Statements/branches/lines remain comfortably above floor.
-    global: { statements: 79, branches: 68, functions: 74, lines: 80 },
+    //
+    // global stmt/func/lines lowered 79/74/80 -> 78/73/79 (2026-07-12): the
+    // transcript Vue migration (34b0fb6) deleted the imperative MessageRenderer +
+    // its well-covered rendering DOM tests, and this follow-up relocated the
+    // remaining Vue-only pure helpers (windowedRenderSetup / visibleContentHelpers
+    // / askUserQuestionOptions / inlineChoiceCard) under ui/vue/** — that render
+    // surface is now tested and coverage-gated in the Vitest lane
+    // (vitest.config.mts, statements 88 / branches 75 / functions 90 / lines 93),
+    // not here. Removing that above-average-covered code from the Jest global
+    // bucket dropped its ratio ~1pt; these floors sit just under the post-migration
+    // actuals (78.50 / 73.60 / 79.58). Branches (68) was unaffected and holds.
+    global: { statements: 78, branches: 68, functions: 73, lines: 79 },
     'src/utils/': { statements: 88, branches: 80, functions: 92, lines: 90 },
     'src/core/security/': { statements: 96, branches: 95, functions: 98, lines: 97 },
     'src/core/logging/': { statements: 93, branches: 94, functions: 91, lines: 95 },

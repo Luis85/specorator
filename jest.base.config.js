@@ -16,6 +16,10 @@ module.exports = {
   setupFilesAfterEnv: ['<rootDir>/tests/setupWindow.ts'],
   moduleNameMapper: {
     '\\.vue$': '<rootDir>/tests/__mocks__/vueComponentStub.ts',
+    // The Jest lane never renders Vue; stub the per-tab transcript mount so
+    // tab-construction tests don't drive `createApp(...).mount()` on a mock
+    // element (the Vitest lane owns the real mount — mountTranscript.test.ts).
+    'transcript/mountTranscript$': '<rootDir>/tests/__mocks__/mountTranscript.ts',
     '^@/(.*)$': '<rootDir>/src/$1',
     '^@test/(.*)$': '<rootDir>/tests/$1',
     '^@anthropic-ai/claude-agent-sdk$': '<rootDir>/tests/__mocks__/claude-agent-sdk.ts',

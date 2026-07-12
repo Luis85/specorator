@@ -52,12 +52,10 @@ describe('ChatState', () => {
       expect(state.currentTextEl).toBeNull();
       expect(state.currentTextContent).toBe('');
       expect(state.currentThinkingState).toBeNull();
-      expect(state.thinkingEl).toBeNull();
+      expect(state.streamingIndicatorMode).toBeNull();
       expect(state.queueIndicatorEl).toBeNull();
       expect(state.thinkingIndicatorTimeout).toBeNull();
       expect(state.toolCallElements).toBeInstanceOf(Map);
-      expect(state.writeEditStates).toBeInstanceOf(Map);
-      expect(state.pendingTools).toBeInstanceOf(Map);
       expect(state.usage).toBeNull();
       expect(state.ignoreUsageUpdates).toBe(false);
       expect(state.currentTodos).toBeNull();
@@ -212,13 +210,6 @@ describe('ChatState', () => {
       expect(chatState.currentThinkingState).toBe(state);
     });
 
-    it('stores thinkingEl', () => {
-      const chatState = new ChatState();
-      const el = {} as HTMLElement;
-      chatState.thinkingEl = el;
-      expect(chatState.thinkingEl).toBe(el);
-    });
-
     it('stores queueIndicatorEl', () => {
       const chatState = new ChatState();
       const el = {} as HTMLElement;
@@ -233,6 +224,78 @@ describe('ChatState', () => {
       expect(chatState.thinkingIndicatorTimeout).toBe(timeout);
       window.clearTimeout(timeout);
     });
+
+    it('stores activeMessageId and activeBlockIndex (defaulting to null / -1)', () => {
+      const chatState = new ChatState();
+      expect(chatState.activeMessageId).toBeNull();
+      expect(chatState.activeBlockIndex).toBe(-1);
+      chatState.activeMessageId = 'assistant-1';
+      chatState.activeBlockIndex = 2;
+      expect(chatState.activeMessageId).toBe('assistant-1');
+      expect(chatState.activeBlockIndex).toBe(2);
+    });
+  });
+
+  describe('getActiveStreamSnapshot', () => {
+    it('returns null when no message is streaming', () => {
+      const chatState = new ChatState();
+      expect(chatState.getActiveStreamSnapshot()).toBeNull();
+    });
+
+    it('maps writing indicator mode + elapsed time when a message is streaming', () => {
+      const chatState = new ChatState();
+      chatState.activeMessageId = 'assistant-1';
+      chatState.activeBlockIndex = 1;
+      chatState.streamingIndicatorMode = 'writing';
+      chatState.responseStartTime = performance.now() - 3200;
+
+      const snap = chatState.getActiveStreamSnapshot();
+      expect(snap).not.toBeNull();
+      expect(snap!.messageId).toBe('assistant-1');
+      expect(snap!.blockIndex).toBe(1);
+      expect(snap!.isWriting).toBe(true);
+      expect(snap!.isThinking).toBe(false);
+      expect(snap!.elapsedSeconds).toBeGreaterThanOrEqual(3);
+    });
+
+    it("reports isThinking when the indicator mode is 'thinking', elapsedSeconds 0 when the timer is unset", () => {
+      const chatState = new ChatState();
+      chatState.activeMessageId = 'assistant-1';
+      chatState.streamingIndicatorMode = 'thinking';
+
+      const snap = chatState.getActiveStreamSnapshot();
+      expect(snap!.isThinking).toBe(true);
+      expect(snap!.isWriting).toBe(false);
+      expect(snap!.elapsedSeconds).toBe(0);
+    });
+
+    it('reports neither thinking nor writing when the indicator is hidden mid-turn', () => {
+      const chatState = new ChatState();
+      chatState.activeMessageId = 'assistant-1';
+      // A reasoning/text block can be open while the indicator itself is hidden;
+      // the snapshot mirrors the indicator, not the block.
+      chatState.currentTextEl = {} as HTMLElement;
+      chatState.currentThinkingState = { content: 'x' } as any;
+      chatState.streamingIndicatorMode = null;
+
+      const snap = chatState.getActiveStreamSnapshot();
+      expect(snap!.isThinking).toBe(false);
+      expect(snap!.isWriting).toBe(false);
+    });
+
+    it('resetStreamingState clears the active-stream pointers and indicator mode', () => {
+      const chatState = new ChatState();
+      chatState.activeMessageId = 'assistant-1';
+      chatState.activeBlockIndex = 3;
+      chatState.streamingIndicatorMode = 'thinking';
+
+      chatState.resetStreamingState();
+
+      expect(chatState.activeMessageId).toBeNull();
+      expect(chatState.activeBlockIndex).toBe(-1);
+      expect(chatState.streamingIndicatorMode).toBeNull();
+      expect(chatState.getActiveStreamSnapshot()).toBeNull();
+    });
   });
 
   describe('tool tracking maps', () => {
@@ -243,19 +306,6 @@ describe('ChatState', () => {
       expect(chatState.toolCallElements.get('tool-1')).toBe(el);
     });
 
-    it('returns mutable writeEditStates map', () => {
-      const chatState = new ChatState();
-      const state = {} as any;
-      chatState.writeEditStates.set('we-1', state);
-      expect(chatState.writeEditStates.get('we-1')).toBe(state);
-    });
-
-    it('returns mutable pendingTools map', () => {
-      const chatState = new ChatState();
-      const pt = { toolCall: {} as any, parentEl: null };
-      chatState.pendingTools.set('pt-1', pt);
-      expect(chatState.pendingTools.get('pt-1')).toBe(pt);
-    });
   });
 
   describe('usage', () => {
@@ -508,14 +558,10 @@ describe('ChatState', () => {
     it('clears all tracking maps', () => {
       const chatState = new ChatState();
       chatState.toolCallElements.set('a', {} as HTMLElement);
-      chatState.writeEditStates.set('b', {} as any);
-      chatState.pendingTools.set('c', { toolCall: {} as any, parentEl: null });
 
       chatState.clearMaps();
 
       expect(chatState.toolCallElements.size).toBe(0);
-      expect(chatState.writeEditStates.size).toBe(0);
-      expect(chatState.pendingTools.size).toBe(0);
     });
   });
 
@@ -554,8 +600,6 @@ describe('ChatState', () => {
       expect(chatState.cancelRequested).toBe(false);
       expect(chatState.currentContentEl).toBeNull();
       expect(chatState.toolCallElements.size).toBe(0);
-      expect(chatState.writeEditStates.size).toBe(0);
-      expect(chatState.pendingTools.size).toBe(0);
       expect(chatState.queuedMessage).toBeNull();
       expect(chatState.usage).toBeNull();
       expect(chatState.currentTodos).toBeNull();
