@@ -105,6 +105,38 @@ describe('CursorChatRuntime (ACP)', () => {
 
     expect(runtime.consumeTurnMetadata().planCompleted).toBeUndefined();
   });
+
+  it('drops a Stop pressed during the prior-prompt wait, before session/prompt fires', async () => {
+    // The turn is blocked in awaitPriorTurnSettled with no activeTurn/abort controller
+    // yet, so cancel() there is only caught by startupCancelRequested — not turnSignal.
+    stubProviderSnapshot();
+    const runtime = makeRuntime();
+    let releasePrior!: () => void;
+    const priorSettled = new Promise<void>((resolve) => { releasePrior = resolve; });
+    const prompt = jest.fn(async () => ({ stopReason: 'end_turn' }));
+    const bag = primeRuntime(runtime, {
+      cancel: jest.fn(),
+      setMode: jest.fn(async () => ({})),
+      prompt,
+    });
+    bag.sessionId = 's1';
+    bag.loadedSessionId = 's1';
+    bag.pendingPromptSettled = priorSettled;
+
+    const turn = { persistedContent: 'x', prompt: 'x', request: { images: [] } };
+    const gen = runtime.query(turn as never, undefined, undefined);
+    const firstStep = gen.next(); // advances into awaitPriorTurnSettled
+
+    runtime.cancel();   // Stop pressed while blocked on the prior prompt
+    releasePrior();     // let the wait complete
+
+    let step = await firstStep;
+    while (!step.done) {
+      step = await gen.next();
+    }
+
+    expect(prompt).not.toHaveBeenCalled();
+  });
 });
 
 describe('CursorChatRuntime.ensureReady force restart', () => {

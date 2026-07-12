@@ -105,6 +105,9 @@ export class CursorChatRuntime implements ChatRuntime {
   // Aborts a pending blocking cursor/ask_question await so cancel()/cleanup can
   // answer the still-open RPC instead of leaving the agent stuck on it.
   private askQuestionAbortController: AbortController | null = null;
+  // Set by cancel(), cleared at turn entry: catches a Stop during awaitPriorTurnSettled,
+  // where no turn abort controller exists yet so the aborted-signal check would miss it.
+  private startupCancelRequested = false;
   private autoApprovePermissions = false;
   // Diagnostics-only, default-off sink for ACP wire frames/stderr/lifecycle
   // events (see docs/superpowers/specs/2026-07-11-cursor-acp-capture-design.md).
@@ -215,11 +218,25 @@ export class CursorChatRuntime implements ChatRuntime {
     }
   }
 
+  // Fresh per-turn abort scope for the blocking ask_question / create_plan RPCs. A
+  // Stop during awaitPriorTurnSettled (startupCancelRequested) pre-aborts it, since
+  // turnSignal didn't exist then for the startup-cancel bail to catch it.
+  private beginTurnAbortScope(): AbortSignal {
+    this.askQuestionAbortController?.abort();
+    const controller = new AbortController();
+    if (this.startupCancelRequested) {
+      controller.abort();
+    }
+    this.askQuestionAbortController = controller;
+    return controller.signal;
+  }
+
   async *query(
     turn: PreparedChatTurn,
     conversationHistory?: ChatMessage[],
     queryOptions?: ChatRuntimeQueryOptions,
   ): AsyncGenerator<StreamChunk> {
+    this.startupCancelRequested = false;
     const cli = this.plugin.getResolvedProviderCliPath('cursor');
     if (!cli) {
       yield { type: 'error', content: 'Cursor Agent CLI not found. Configure it in Cursor settings.' };
@@ -227,21 +244,15 @@ export class CursorChatRuntime implements ChatRuntime {
       return;
     }
 
-    // Serialize turns behind a still-unsettled prior prompt: stop A + immediately
-    // send B share one session id, so A's late sessionId-less blocking request could
-    // see B's rotated signal and open A's plan into B. Waiting for A to settle BEFORE
-    // rotating the abort controller keeps A's aborted signal current so A's late
-    // requests resolve cancelled instead.
+    // Serialize behind a still-unsettled prior prompt: stop A + immediately send B
+    // share one session id, so A's late sessionId-less blocking request could see B's
+    // rotated signal and open A's plan into B. Waiting for A to settle BEFORE rotating
+    // the controller keeps A's aborted signal current so A's late requests cancel.
     await this.awaitPriorTurnSettled();
     // Reset AFTER the wait: a cancelled prior turn's finalize runs during it and would else leave stale planCompleted.
     this.turnMetadata = {};
 
-    // Fresh per-turn abort scope for the blocking ask_question / create_plan RPCs
-    // and for the startup-cancel check below; aborting a controller left over from
-    // a prior turn is a no-op for this turn's await.
-    this.askQuestionAbortController?.abort();
-    this.askQuestionAbortController = new AbortController();
-    const turnSignal = this.askQuestionAbortController.signal;
+    const turnSignal = this.beginTurnAbortScope();
 
     yield { type: 'user_message_start', content: turn.persistedContent };
     yield { type: 'assistant_message_start' };
@@ -262,10 +273,9 @@ export class CursorChatRuntime implements ChatRuntime {
     }
 
     const cwd = getVaultPath(this.plugin.app) ?? process.cwd();
-    // Capture the session id BEFORE ensureSession, which may mint a fresh one.
-    // A turn that starts without a session id (fork, provider switch, resume of a
-    // conversation whose native session never loaded) still carries history that
-    // has to be re-injected into the prompt, or the agent loses all prior context.
+    // Capture the session id BEFORE ensureSession (which may mint a fresh one): a
+    // turn starting without one (fork, provider switch, resume whose native session
+    // never loaded) still carries history that must be re-injected into the prompt.
     const sessionIdAtTurnStart = this.sessionId;
     const sessionId = await this.ensureSession(cwd);
     if (!sessionId) {
@@ -285,18 +295,14 @@ export class CursorChatRuntime implements ChatRuntime {
       this.applyMode(sessionId, mode.modeId),
       this.applySelectedModel(sessionId, queryOptions),
     ]);
-    // Arm the plan flag only once plan mode is actually in effect. applyMode
-    // records currentModeId on a successful set_mode (or leaves it 'plan' when
-    // plan was already applied earlier in the session) and swallows rejections —
-    // so a requested plan turn whose set_mode failed runs as non-plan and its
-    // ordinary assistant text won't spuriously open the post-plan approval card.
-    // The cursor/create_plan side-channel still sets planCompleted if the agent
-    // genuinely plans.
+    // Arm the plan flag only once plan mode is actually in effect: a requested plan
+    // turn whose set_mode failed (applyMode swallows rejections) runs as non-plan so
+    // its ordinary assistant text won't spuriously open the post-plan approval card.
+    // The cursor/create_plan side-channel still sets planCompleted if the agent plans.
     this.currentTurnIsPlan = mode.modeId === 'plan' && this.currentModeId === 'plan';
 
-    // Stop pressed during startup (ensureReady / ensureSession / mode+model
-    // setup) aborts the per-turn signal but has no activeTurn for cancel() to
-    // interrupt; bail before creating the turn so session/prompt never fires.
+    // Stop during startup aborts turnSignal; beginTurnAbortScope also pre-aborts it
+    // for a Stop during awaitPriorTurnSettled. Bail before session/prompt fires.
     if (turnSignal.aborted) {
       yield { type: 'done' };
       return;
@@ -373,6 +379,7 @@ export class CursorChatRuntime implements ChatRuntime {
   }
 
   cancel(): void {
+    this.startupCancelRequested = true;
     const turn = this.activeTurn;
     if (this.connection && this.sessionId) {
       this.connection.cancel({ sessionId: this.sessionId });
@@ -868,11 +875,9 @@ export class CursorChatRuntime implements ChatRuntime {
     });
     this.applyActiveTurnEffectState(effect);
     for (const chunk of effect.chunks) {
-      // query() already yields a single synthetic user_message_start /
-      // assistant_message_start pair per turn, so those are the sole message
-      // boundaries. The shared normalizer ALSO emits these from the first
-      // message chunk of each role; forwarding them here would double the
-      // boundaries and split the transcript into duplicate message frames.
+      // query() already yields one synthetic user/assistant_message_start pair per
+      // turn (the sole boundaries). The shared normalizer ALSO emits these from each
+      // role's first chunk; forwarding them here would duplicate the message frames.
       if (chunk.type === 'user_message_start' || chunk.type === 'assistant_message_start') {
         continue;
       }
@@ -915,11 +920,9 @@ export class CursorChatRuntime implements ChatRuntime {
     request: AcpRequestPermissionRequest,
   ): Promise<AcpRequestPermissionResponse> {
     const signal = this.askQuestionAbortController?.signal;
-    // A cancelled turn beats yolo auto-approval. An agent that ignored
-    // session/cancel can fire a late session/request_permission before the 5s
-    // escalation restarts it; auto-approving that would run the tool
-    // post-cancel. Resolve cancelled first — ahead of the yolo branch and the
-    // manual card path (which also races this same signal below).
+    // A cancelled turn beats yolo auto-approval: an agent that ignored
+    // session/cancel can fire a late request_permission before the 5s escalation,
+    // and auto-approving it would run the tool post-cancel. Resolve cancelled first.
     if (signal?.aborted) {
       return { outcome: { outcome: 'cancelled' } };
     }
@@ -935,12 +938,10 @@ export class CursorChatRuntime implements ChatRuntime {
     }
 
     const input = normalizeApprovalInput(request.toolCall.rawInput);
-    // Race the approval card against the per-turn cancel signal. cancel()/
-    // handleTransportClosed abort it and call host.dismissApproval(), which
-    // destroys the card WITHOUT resolving host.approval() — so without this race
-    // the still-open session/request_permission RPC would hang until the 5s
-    // cancel escalation restarts the process. On cancel, answer the RPC with the
-    // documented ACP `cancelled` outcome so the turn ends promptly and cleanly.
+    // Race the approval card against the per-turn cancel signal: cancel()/
+    // handleTransportClosed dismiss the card WITHOUT resolving host.approval(), so
+    // without this race the open request_permission RPC would hang until the 5s
+    // escalation. On cancel, answer the RPC with the documented `cancelled` outcome.
     const decision = await raceApprovalAgainstCancel(
       this.host.approval(
         request.toolCall.title ?? 'tool',
