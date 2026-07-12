@@ -824,6 +824,16 @@ export class CursorChatRuntime implements ChatRuntime {
   private async handlePermissionRequest(
     request: AcpRequestPermissionRequest,
   ): Promise<AcpRequestPermissionResponse> {
+    const signal = this.askQuestionAbortController?.signal;
+    // A cancelled turn beats yolo auto-approval. An agent that ignored
+    // session/cancel can fire a late session/request_permission before the 5s
+    // escalation restarts it; auto-approving that would run the tool
+    // post-cancel. Resolve cancelled first — ahead of the yolo branch and the
+    // manual card path (which also races this same signal below).
+    if (signal?.aborted) {
+      return { outcome: { outcome: 'cancelled' } };
+    }
+
     if (this.autoApprovePermissions) {
       // Prefer the one-turn grant: a yolo turn should not silently persist an
       // allow_always rule, so allow_always is used only when it's the sole
@@ -841,7 +851,6 @@ export class CursorChatRuntime implements ChatRuntime {
     // the still-open session/request_permission RPC would hang until the 5s
     // cancel escalation restarts the process. On cancel, answer the RPC with the
     // documented ACP `cancelled` outcome so the turn ends promptly and cleanly.
-    const signal = this.askQuestionAbortController?.signal;
     const decision = await raceApprovalAgainstCancel(
       this.host.approval(
         request.toolCall.title ?? 'tool',

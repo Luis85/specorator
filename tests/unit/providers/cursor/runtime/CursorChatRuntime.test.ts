@@ -314,6 +314,25 @@ describe('CursorChatRuntime.handlePermissionRequest', () => {
     expect(response.outcome).toEqual({ outcome: 'cancelled' });
   });
 
+  it('resolves cancelled under yolo mode when the turn signal is already aborted, without auto-approving', async () => {
+    // A cancelled turn must beat yolo auto-approval: a late request_permission
+    // arriving after cancel must NOT auto-select an allow option (which would
+    // run the tool post-cancel) — the aborted signal wins first.
+    const runtime = makeRuntime();
+    const bag = runtime as unknown as Record<string, unknown>;
+    bag.autoApprovePermissions = true;
+    const controller = new AbortController();
+    controller.abort();
+    bag.askQuestionAbortController = controller;
+    const request = makeRequest([{ kind: 'allow_once', optionId: 'ok', name: 'Allow' }]);
+
+    const response = await (bag.handlePermissionRequest as (r: unknown) => Promise<{ outcome: Record<string, unknown> }>)
+      .call(runtime, request);
+
+    expect(response.outcome).toEqual({ outcome: 'cancelled' });
+    expect(response.outcome.optionId).toBeUndefined();
+  });
+
   it('resolves cancelled immediately when the turn signal is already aborted', async () => {
     const approval = jest.fn(() => new Promise<never>(() => {}));
     const host = { ...createHeadlessRuntimeHost(), approval };
