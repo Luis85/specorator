@@ -1,5 +1,6 @@
 import type { WorkspaceLeaf } from 'obsidian';
-import { ItemView, Notice, Scope, setIcon } from 'obsidian';
+import { ItemView, Notice, Scope } from 'obsidian';
+import { type App as VueApp, createApp, markRaw } from 'vue';
 
 import type { ChatTabReservation } from '../../core/chatTabReservations';
 import { GIT_COMMIT_PROMPT } from '../../core/prompt/gitCommit';
@@ -8,16 +9,11 @@ import { ProviderRegistry } from '../../core/providers/ProviderRegistry';
 import { ProviderSettingsCoordinator } from '../../core/providers/ProviderSettingsCoordinator';
 import { DEFAULT_CHAT_PROVIDER_ID, type ProviderId } from '../../core/providers/types';
 import { asSettingsBag, VIEW_TYPE_SPECORATOR } from '../../core/types';
+import type { TabBarPosition } from '../../core/types/settings';
 import { t } from '../../i18n/i18n';
 import type SpecoratorPlugin from '../../main';
 import { createProviderIconSvg } from '../../shared/icons';
-import {
-  cancelScheduledAnimationFrame,
-  scheduleAnimationFrame,
-  type ScheduledAnimationFrame,
-} from '../../utils/animationFrame';
 import { openPluginSettingsTab } from '../../utils/obsidianPrivateApi';
-import { renderAgentAvatar } from '../agents/agentAvatar';
 import { rosterAgentToPersona } from '../agents/personaRegistry';
 import { openQuickActionsModal } from '../quickActions/openQuickActionsModal';
 import { dispatchQuickActionToTab } from '../quickActions/runQuickActionForFile';
@@ -35,11 +31,15 @@ import {
   sendTabInputMessageFromExplicitEnterShortcut,
   updatePlanModeUI,
 } from './tabs/Tab';
-import { TabBar } from './tabs/TabBar';
 import { TabManager } from './tabs/TabManager';
 import { refreshBoundAgentDisplayModels } from './tabs/tabShared';
 import type { TabData, TabId, TaskRunTabHandle } from './tabs/types';
 import { GitActionButton } from './ui/GitActionButton';
+import type { ChatShellCallbacks, ChatShellSnapshot } from './ui/vue/chatShellCallbacks';
+import { CALLBACKS_KEY, CONTENT_HOST_KEY, PLUGIN_KEY } from './ui/vue/chatShellKeys';
+import ChatShellRoot from './ui/vue/ChatShellRoot.vue';
+import { createChatShellPinia } from './ui/vue/globalPinia';
+import type { ChatBoundAgent, ChatShellHeader } from './ui/vue/stores/chatShellStore';
 import { WorkOrderActivityDropdown } from './ui/WorkOrderActivityDropdown';
 import { deriveEditedFilesFromMessages } from './utils/editedFiles';
 import { recalculateUsageForModel } from './utils/usageInfo';
@@ -59,38 +59,38 @@ export class SpecoratorView extends ItemView {
   // before the async restore runs, so the Agent Board queue must not count the
   // live tab count during that window or it can overbook the cap / drop tabs.
   private tabsRestored = false;
-  private tabBar: TabBar | null = null;
-  private tabBarContainerEl: HTMLElement | null = null;
+  // The Vue-owned tab-content host, captured via CONTENT_HOST_KEY on mount. The
+  // TabManager renders each tab's DOM into this element.
   private tabContentEl: HTMLElement | null = null;
-  private navRowContent: HTMLElement | null = null;
-  private emptyStateEl: HTMLElement | null = null;
   /** History hydration failures awaiting a bound tab to render their banner. */
   private pendingHydrationErrors = new Map<string, { code: string; message: string }>();
 
   // DOM Elements
   private viewContainerEl: HTMLElement | null = null;
-  private headerEl: HTMLElement | null = null;
-  private titleSlotEl: HTMLElement | null = null;
-  private logoEl: HTMLElement | null = null;
-  private titleTextEl: HTMLElement | null = null;
-  private headerActionsEl: HTMLElement | null = null;
-  private headerActionsContent: HTMLElement | null = null;
+  // Imperative widgets hosted into the Vue header via the mount* callbacks; they
+  // stay imperative and persist across the empty<->content transition.
   private workOrderActivitySlotEl: HTMLElement | null = null;
   private workOrderActivityDropdown: WorkOrderActivityDropdown | null = null;
   private disposeWorkOrderActivitySubscription: (() => void) | null = null;
-  private newTabButtonEl: HTMLElement | null = null;
   private gitActionButton: GitActionButton | null = null;
 
-  // Header elements
+  // History dropdown host (the `.specorator-history-menu` element) + its trigger
+  // button, both supplied by the Vue HeaderActions via mountHistoryHost.
   private historyDropdown: HTMLElement | null = null;
   private historyBtn: HTMLElement | null = null;
-  private headerMetaRowEl: HTMLElement | null = null;
-  private boundAgentChipSlotEl: HTMLElement | null = null;
-  // Monotonic token so concurrent syncBoundAgentChip calls don't double-render.
+  // Monotonic token so concurrent refreshBoundAgentChip calls don't race a stale
+  // async agent resolution into the projection.
   private boundAgentChipGen = 0;
 
-  // Debouncing for tab bar updates
-  private pendingTabBarUpdate: ScheduledAnimationFrame | null = null;
+  // The Vue chat-shell island (one app per leaf; unmounted in onClose).
+  private vueApp: VueApp | null = null;
+  // View-owned snapshot observers: the shell's `subscribe` seam registers here
+  // and each receives a fully-projected ChatShellSnapshot on every change.
+  private chatShellObservers = new Set<(snapshot: ChatShellSnapshot) => void>();
+  // Cached bound-agent chip (agent resolution is async): projected synchronously,
+  // refreshed by refreshBoundAgentChip, and guarded against a stale conversation.
+  private cachedBoundAgent: ChatBoundAgent | null = null;
+  private cachedBoundAgentConversationId: string | null = null;
 
   // Debouncing for tab state persistence
   private pendingPersist: number | null = null;
@@ -234,40 +234,63 @@ export class SpecoratorView extends ItemView {
     }
 
     this.viewContainerEl = container;
-    this.viewContainerEl.empty();
-    this.viewContainerEl.addClass('specorator-container');
-
-    const header = this.viewContainerEl.createDiv({ cls: 'specorator-header' });
-    this.buildHeader(header);
 
     // View-lifecycle event handlers + keyboard scope. These null-guard the tab
     // manager, so they are safe to register once per open whether or not a
     // provider is enabled (and survive empty<->content transitions).
     this.wireEventHandlers();
 
-    // No enabled provider means there is nothing to chat with. Render a
-    // configure-first placeholder and skip tab manager creation entirely.
+    // Mount the Vue shell first: TabContentHost fires CONTENT_HOST_KEY
+    // synchronously during app.mount(), capturing `tabContentEl` before the
+    // engine needs it. The empty-state placeholder is a projection of
+    // `tabs.length === 0`, so no imperative empty-state render is needed here.
+    this.mountChatShell();
+
+    // No enabled provider means there is nothing to chat with; leave the shell
+    // showing its empty-state projection and skip tab-manager creation entirely.
     const enabledProviders = ProviderRegistry.getEnabledProviderIds(
       asSettingsBag(this.plugin.settings),
     );
     if (enabledProviders.length === 0) {
-      this.renderEmptyState(this.viewContainerEl);
       return;
     }
 
-    await this.initTabContent();
+    await this.initTabContentEngine();
   }
 
-  /** Builds the tab UI + manager. The header must already be rendered. */
-  private async initTabContent(): Promise<void> {
-    if (!this.viewContainerEl) {
+  /**
+   * Mounts the Vue chat-shell island. Mirrors AgentBoardView.mountVue: unmount
+   * any prior app, empty the container, add the Vue baseline classes, then
+   * createApp + provide the plugin, callbacks, and the content-host capture fn.
+   * TabContentHost invokes CONTENT_HOST_KEY on its onMounted (synchronously
+   * during mount), so `tabContentEl` is set by the time this returns.
+   */
+  private mountChatShell(): void {
+    if (!this.viewContainerEl) return;
+    this.vueApp?.unmount();
+    this.viewContainerEl.empty();
+    // Two calls, not one: Obsidian's addClass is variadic but the shared
+    // test-lane polyfill is single-arg.
+    this.viewContainerEl.addClass('specorator-vue');
+    this.viewContainerEl.addClass('specorator-chat-vue-root');
+    const app = createApp(ChatShellRoot);
+    app.use(createChatShellPinia()); // fresh per-view Pinia — see createChatShellPinia
+    // markRaw: Obsidian objects are large and cyclic; never deep-proxy them.
+    app.provide(PLUGIN_KEY, markRaw(this.plugin));
+    app.provide(CALLBACKS_KEY, markRaw(this.buildChatShellCallbacks()));
+    app.provide(CONTENT_HOST_KEY, (hostEl: HTMLElement) => {
+      this.tabContentEl = hostEl;
+    });
+    app.mount(this.viewContainerEl);
+    this.vueApp = app;
+  }
+
+  /** Builds the tab manager into the Vue-provided content host. The shell must
+   *  already be mounted (so `tabContentEl` is captured). */
+  private async initTabContentEngine(): Promise<void> {
+    if (!this.tabContentEl) {
       return;
     }
-    this.emptyStateEl?.remove();
-    this.emptyStateEl = null;
-
-    this.navRowContent = this.buildNavRowContent();
-    this.tabContentEl = this.viewContainerEl.createDiv({ cls: 'specorator-tab-content-container' });
 
     this.tabManager = new TabManager(
       this.plugin,
@@ -275,45 +298,38 @@ export class SpecoratorView extends ItemView {
       this,
       {
         onTabCreated: () => {
-          this.updateTabBar();
-          this.updateNavRowLocation();
+          this.emitChatShellChange();
           this.gitActionButton?.updateDisplay();
           this.persistTabState();
-          this.syncProviderBrandColor();
         },
         onTabSwitched: () => {
-          this.updateTabBar();
-          this.syncHeaderTitle();
+          this.emitChatShellChange();
           this.updateHistoryDropdown();
-          this.updateNavRowLocation();
           this.gitActionButton?.updateDisplay();
           this.persistTabState();
-          this.syncProviderBrandColor();
-          void this.syncBoundAgentChip();
+          void this.refreshBoundAgentChip();
         },
         onTabClosed: () => {
-          this.updateTabBar();
-          this.syncHeaderTitle();
+          // The just-closed tab is already deleted from the manager's map, so
+          // the projection's activeTabId (derived from getActiveTab()?.id)
+          // resolves to null here rather than the detached tab; the follow-up
+          // switchToTab/createTab in closeTab emits again with the surviving
+          // active tab, keeping resolveNavRowEl off any detached navRowEl.
+          this.emitChatShellChange();
           this.persistTabState();
         },
-        onTabStreamingChanged: () => this.updateTabBar(),
-        onTabTitleChanged: () => {
-          this.updateTabBar();
-          this.syncHeaderTitle();
-        },
-        onTabAttentionChanged: () => this.updateTabBar(),
+        onTabStreamingChanged: () => this.emitChatShellChange(),
+        onTabTitleChanged: () => this.emitChatShellChange(),
+        onTabAttentionChanged: () => this.emitChatShellChange(),
         onTabConversationChanged: () => {
-          this.updateTabBar();
-          this.syncHeaderTitle();
+          this.emitChatShellChange();
           this.gitActionButton?.updateDisplay();
           this.persistTabState();
-          this.syncProviderBrandColor();
-          void this.syncBoundAgentChip();
+          void this.refreshBoundAgentChip();
         },
         onTabProviderChanged: () => {
-          this.updateTabBar();
+          this.emitChatShellChange();
           this.gitActionButton?.updateDisplay();
-          this.syncProviderBrandColor();
         },
       }
     );
@@ -331,52 +347,26 @@ export class SpecoratorView extends ItemView {
       chatCount: this.tabManager?.countTabsByKind('chat') ?? 0,
       workOrderCount: this.tabManager?.countTabsByKind('work-order') ?? 0,
     });
-    this.syncProviderBrandColor();
-    this.syncHeaderTitle();
-    void this.syncBoundAgentChip();
-    this.updateLayoutForPosition();
+    this.emitChatShellChange();
+    this.gitActionButton?.updateDisplay();
+    void this.refreshBoundAgentChip();
     this.tabManager?.primeProviderRuntime();
   }
 
-  /** Flushes pending tab-bar work, persists tab state, and destroys the tab
-   * manager + tab bar. Shared by the in-place teardown and view close paths. */
+  /** Persists tab state and destroys the tab manager. Shared by the in-place
+   * teardown and view close paths. */
   private async destroyTabRuntime(): Promise<void> {
-    if (this.pendingTabBarUpdate !== null) {
-      cancelScheduledAnimationFrame(this.pendingTabBarUpdate);
-      this.pendingTabBarUpdate = null;
-    }
     await this.persistTabStateImmediate();
     await this.tabManager?.destroy();
     this.tabManager = null;
-    this.tabBar?.destroy();
-    this.tabBar = null;
-  }
-
-  /** Tears down the tab UI (manager + tab bar + DOM) without touching the
-   * view-lifecycle event handlers/scope, so the empty state can take over. */
-  private async teardownTabContent(): Promise<void> {
-    await this.destroyTabRuntime();
-    this.tabBarContainerEl?.remove();
-    this.tabBarContainerEl = null;
-    this.tabContentEl?.remove();
-    this.tabContentEl = null;
-    this.navRowContent?.remove();
-    this.navRowContent = null;
-    this.disposeWorkOrderActivityDropdown();
-    this.headerActionsContent?.remove();
-    this.headerActionsContent = null;
-    this.newTabButtonEl = null;
-    this.historyDropdown = null;
-    this.boundAgentChipSlotEl?.empty();
-    this.gitActionButton?.dispose();
-    this.gitActionButton = null;
   }
 
   /**
    * Re-evaluates provider availability. When the panel is showing the
    * configure-first empty state and a provider has since been enabled (e.g. from
    * settings), it promotes the panel to the full tab UI without requiring a
-   * close/reopen.
+   * close/reopen. The Vue shell stays mounted across the transition; the empty
+   * state is a projection of the (now empty or repopulated) tab set.
    */
   async refreshProviderAvailability(): Promise<void> {
     if (!this.viewContainerEl) {
@@ -387,16 +377,15 @@ export class SpecoratorView extends ItemView {
     ).length > 0;
 
     if (hasProviders && !this.tabManager) {
-      // A provider was enabled while the empty state was showing.
-      await this.initTabContent();
+      // A provider was enabled while the empty state was showing. The content
+      // host from the mounted shell is still captured, so rebuild the engine
+      // into it.
+      await this.initTabContentEngine();
     } else if (!hasProviders && this.tabManager) {
-      // The last provider was disabled; drop back to the empty state in place.
-      await this.teardownTabContent();
-      if (this.headerEl) {
-        this.headerEl.empty();
-        this.buildHeader(this.headerEl);
-      }
-      this.renderEmptyState(this.viewContainerEl);
+      // The last provider was disabled; drop the engine and let the shell's
+      // empty-state projection (tabs.length === 0) take over.
+      await this.destroyTabRuntime();
+      this.emitChatShellChange();
     }
   }
 
@@ -407,217 +396,205 @@ export class SpecoratorView extends ItemView {
     this.disposeWorkOrderActivityDropdown();
     this.gitActionButton?.dispose();
     this.gitActionButton = null;
+    // unmount() runs the shell's onUnmounted hooks (routing disposers); clearing
+    // the observers drops the view-side subscription set.
+    this.vueApp?.unmount();
+    this.vueApp = null;
+    this.chatShellObservers.clear();
+    this.viewContainerEl?.removeClass('specorator-vue');
+    this.viewContainerEl?.removeClass('specorator-chat-vue-root');
     this.scope = null;
   }
 
   // ============================================
-  // UI Building
+  // Chat Shell Projection + Callbacks
   // ============================================
 
-  /** Renders a configure-first placeholder when no chat provider is enabled. */
-  private renderEmptyState(container: HTMLElement): void {
-    const emptyState = (this.emptyStateEl = container.createDiv({ cls: 'specorator-empty-state' }));
-    emptyState.createEl('h3', {
-      cls: 'specorator-empty-state-title',
-      text: 'Welcome to Specorator',
-    });
-    emptyState.createEl('p', {
-      cls: 'specorator-empty-state-message',
-      text: 'Specorator runs a coding-agent CLI inside Obsidian — your vault is its workspace. Set up one provider to get started:',
-    });
+  /** Builds the ONE callbacks object the Vue shell holds for the life of the
+   *  mount (provided markRaw'd). Every member delegates to a live view/TabManager
+   *  method, so a single stable instance stays correct across projections. */
+  private buildChatShellCallbacks(): ChatShellCallbacks {
+    return {
+      subscribe: (onChange) => {
+        this.chatShellObservers.add(onChange);
+        onChange(this.projectChatShell());
+        return () => {
+          this.chatShellObservers.delete(onChange);
+        };
+      },
+      onTabClick: (id) => this.handleTabClick(id),
+      onTabClose: (id) => {
+        void this.handleTabClose(id);
+      },
+      onNewTab: () => {
+        void this.createNewTab().catch(() => new Notice(t('chat.tab.createFailed')));
+      },
+      onNewConversation: () => {
+        void this.newConversationInActiveTab().catch(() =>
+          new Notice(t('chat.tab.createConversationFailed')),
+        );
+      },
+      onOpenHistory: () => this.toggleHistoryDropdown(),
+      // No dedicated trigger in the Vue header: the WorkOrderActivityDropdown
+      // (mounted via mountWorkOrderHost) owns its own toggle. Kept to satisfy
+      // the callbacks contract.
+      onOpenWorkOrders: () => {},
+      onQuickActions: () => this.openQuickActionsForActiveTab(),
+      // Pre-warm the Skills-tab cache on hover so the Quick Actions modal opens
+      // against a hot cache (old buildNavRowContent mouseenter). Idempotent:
+      // VaultSkillAggregator dedupes concurrent fetches per provider.
+      onQuickActionsHover: () => {
+        void this.plugin.vaultSkillAggregator?.listAllStreaming(() => {});
+      },
+      onRename: (title) => this.renameActiveConversation(title),
+      onOpenSettings: () => this.openPluginSettings(),
+      mountHistoryHost: (el) => {
+        this.historyDropdown = el;
+        // The trigger button is the history menu's previous sibling inside
+        // `.specorator-history-container` (see HeaderActions.vue); capture it so
+        // toggleHistoryDropdown can sync aria-expanded.
+        this.historyBtn = el.previousElementSibling as HTMLElement | null;
+      },
+      mountWorkOrderHost: (el) => {
+        this.workOrderActivitySlotEl = el;
+        this.mountWorkOrderActivityDropdown();
+      },
+      mountGitActionHost: (el) => {
+        if (!this.plugin.gitStatusWatcher) return;
+        this.gitActionButton?.dispose();
+        this.gitActionButton = new GitActionButton(el, {
+          subscribeGitStatus: (cb) => this.plugin.gitStatusWatcher!.subscribe(cb),
+          isGitActionsEnabled: () => this.isActiveTabGitActionEnabled(),
+          onGitCommit: () => this.sendGitCommitPromptToActiveTab(),
+        });
+      },
+      resolveNavRowEl: (tabId) =>
+        (tabId ? this.tabManager?.getTab(tabId)?.dom.navRowEl ?? null : null),
+      renderProviderLogo: (el, providerId) => {
+        // Append-only: ChatLogo clears the host before each render (mirrors the
+        // old syncHeaderLogo, minus the clear).
+        const icon = ProviderRegistry.getChatUIConfig(providerId).getProviderIcon?.();
+        if (!icon) return;
+        el.appendChild(createProviderIconSvg(icon, {
+          dataProvider: providerId,
+          height: 18,
+          ownerDocument: el.ownerDocument,
+          width: 18,
+        }));
+      },
+    };
+  }
 
-    const steps = emptyState.createEl('ol', { cls: 'specorator-empty-state-steps' });
-    steps.createEl('li', {
-      text: 'Open settings → Specorator → general and enable a provider (Claude Code, Cursor, Codex, or OpenCode).',
-    });
-    steps.createEl('li', {
-      text: "In that provider's settings tab, set the path to its CLI (install the CLI first if you haven't).",
-    });
-    steps.createEl('li', {
-      text: 'Come back here and start chatting.',
-    });
+  /** Fully-projected shell snapshot pushed to every observer. */
+  private projectChatShell(): ChatShellSnapshot {
+    const activeTab = this.tabManager?.getActiveTab() ?? null;
+    return {
+      tabs: this.tabManager?.getTabBarItems() ?? [],
+      activeTabId: activeTab?.id ?? null,
+      header: this.projectChatShellHeader(),
+    };
+  }
 
-    const button = emptyState.createEl('button', {
-      cls: 'specorator-empty-state-button mod-cta',
-      text: 'Open settings',
+  /** Computes the full header chrome from the live TabManager + active tab. */
+  private projectChatShellHeader(): ChatShellHeader {
+    const tm = this.tabManager;
+    const activeTab = tm?.getActiveTab() ?? null;
+    const tabBarPosition: TabBarPosition =
+      this.plugin.settings.tabBarPosition === 'header' ? 'header' : 'input';
+    const activeProviderId = activeTab
+      ? getTabProviderId(activeTab, this.plugin)
+      : DEFAULT_CHAT_PROVIDER_ID;
+
+    // tabBarVisible mirrors updateTabBarVisibility: show with 2+ chat tabs, or
+    // when a (badge-less) work-order tab is active with a chat tab to return to.
+    const chatCount = tm?.countTabsByKind('chat') ?? 0;
+    const activeIsWorkOrder = activeTab?.kind === 'work-order';
+    const tabBarVisible = chatCount >= 2 || (activeIsWorkOrder && chatCount >= 1);
+
+    // logoVisible/titleVisible mirror the hideBranding rule: both the logo AND
+    // the title text yield to the badges when the strip is visible in header
+    // mode (old updateTabBarVisibility hid both on the same condition).
+    const brandingVisible = !(tabBarVisible && tabBarPosition === 'header');
+    const logoVisible = brandingVisible;
+    const titleVisible = brandingVisible;
+
+    // Bound-agent chip is resolved async; project the cache only when it still
+    // matches the active conversation (else null until refreshBoundAgentChip
+    // lands), so a stale chip never shows after a tab/conversation switch.
+    const activeConversationId = activeTab?.conversationId ?? null;
+    const boundAgent =
+      this.cachedBoundAgentConversationId === activeConversationId
+        ? this.cachedBoundAgent
+        : null;
+
+    // metaRowVisible mirrors updateHeaderMetaRow + updateNavRowLocation: header
+    // mode shows the action cluster in the meta row once there are tabs; input
+    // mode shows it only for a bound-agent chip or the git button. Gate the git
+    // button on a live runtime so the empty state hides all tab-less controls.
+    const hasTabs = (tm?.getTabCount() ?? 0) > 0;
+    const hasGitAction = this.gitActionButton != null && tm != null;
+    const metaRowVisible =
+      (tabBarPosition === 'header' && hasTabs) || boundAgent != null || hasGitAction;
+
+    return {
+      title: activeTab ? getTabTitle(activeTab, this.plugin) : 'Specorator',
+      boundAgent,
+      activeProviderId,
+      tabBarVisible,
+      metaRowVisible,
+      tabBarPosition,
+      logoProviderId: activeProviderId,
+      logoVisible,
+      titleVisible,
+      // Gates the new-tab (+) button at the tab cap (old updateNewTabButtonVisibility).
+      canCreateTab: tm?.canCreateTab() ?? true,
+    };
+  }
+
+  /** Builds a snapshot and pushes it to every registered shell observer. */
+  private emitChatShellChange(): void {
+    if (this.chatShellObservers.size === 0) return;
+    const snapshot = this.projectChatShell();
+    for (const observer of this.chatShellObservers) {
+      observer(snapshot);
+    }
+  }
+
+  /** Opens the QuickActionsModal scoped to the active tab (former nav-row Quick
+   *  Actions button handler). */
+  private openQuickActionsForActiveTab(): void {
+    const activeTab = this.tabManager?.getActiveTab();
+    if (!activeTab) return;
+    openQuickActionsModal(this.plugin, {
+      onRun: (action) => {
+        // Resolve the active tab at run time — the user may have switched tabs
+        // while the modal was open.
+        const targetTab = this.tabManager?.getActiveTab();
+        if (!targetTab) return;
+        void dispatchQuickActionToTab(this.plugin, targetTab, action);
+      },
     });
-    button.addEventListener('click', () => this.openPluginSettings());
+  }
+
+  /** Starts a fresh conversation in the active tab (former square-pen handler). */
+  private async newConversationInActiveTab(): Promise<void> {
+    await this.tabManager?.createNewConversation();
+    this.updateHistoryDropdown();
+  }
+
+  /** Renames the active tab's conversation (header rename affordance). */
+  private renameActiveConversation(title: string): void {
+    const conversationId = this.tabManager?.getActiveTab()?.conversationId;
+    if (!conversationId) return;
+    void this.plugin.renameConversation(conversationId, title).catch(() => {
+      // Best-effort: a rename failure surfaces through the store's own retry UI.
+    });
   }
 
   /** Opens the Obsidian settings dialog focused on the Specorator plugin tab. */
   private openPluginSettings(): void {
     openPluginSettingsTab(this.app, this.plugin.manifest.id);
   }
-
-  private buildHeader(header: HTMLElement) {
-    this.headerEl = header;
-
-    // Row 1: title (logo + title text; tab badges mount here in header mode).
-    const titleRow = header.createDiv({ cls: 'specorator-header-title-row' });
-    this.titleSlotEl = titleRow.createDiv({ cls: 'specorator-title-slot' });
-
-    // Logo (hidden when 2+ tabs) — populated by syncHeaderLogo()
-    this.logoEl = this.titleSlotEl.createSpan({ cls: 'specorator-logo' });
-    this.syncHeaderLogo(DEFAULT_CHAT_PROVIDER_ID);
-
-    // Title text (hidden in header mode when 2+ tabs)
-    this.titleTextEl = this.titleSlotEl.createEl('h4', { text: 'Specorator', cls: 'specorator-title-text' });
-
-    // Row 2: bound-agent chip (left) + header actions (Git, and the action
-    // cluster in header mode — right). Collapsed by updateHeaderMetaRow() when it
-    // has neither a chip nor visible actions, so an unbound conversation with
-    // nothing to commit shows only the title row.
-    this.headerMetaRowEl = header.createDiv({ cls: 'specorator-header-meta-row specorator-hidden' });
-    this.boundAgentChipSlotEl = this.headerMetaRowEl.createDiv({ cls: 'specorator-bound-agent-chip-slot' });
-    this.headerActionsEl = this.headerMetaRowEl.createDiv({ cls: 'specorator-header-actions specorator-header-actions-slot specorator-hidden' });
-
-    if (this.plugin.gitStatusWatcher) {
-      this.gitActionButton = new GitActionButton(this.headerActionsEl, {
-        subscribeGitStatus: (cb) => this.plugin.gitStatusWatcher!.subscribe(cb),
-        isGitActionsEnabled: () => this.isActiveTabGitActionEnabled(),
-        onGitCommit: () => this.sendGitCommitPromptToActiveTab(),
-      });
-      this.headerActionsEl.removeClass('specorator-hidden');
-    }
-
-    this.updateHeaderMetaRow();
-  }
-
-  /**
-   * Shows the second header row only when it carries content — a bound-agent
-   * chip and/or a visible actions slot (Git / the header-mode cluster) — so the
-   * row collapses cleanly for an unbound conversation with nothing to commit.
-   */
-  private updateHeaderMetaRow(): void {
-    if (!this.headerMetaRowEl) return;
-    const hasChip = (this.boundAgentChipSlotEl?.childElementCount ?? 0) > 0;
-    const hasActions = this.headerActionsEl != null && !this.headerActionsEl.hasClass('specorator-hidden');
-    this.headerMetaRowEl.toggleClass('specorator-hidden', !hasChip && !hasActions);
-  }
-
-  /**
-   * Makes a clickable header `<div>` keyboard-operable: routes both click and
-   * Enter/Space through one activation callback so the control is reachable by
-   * keyboard without duplicating behavior.
-   */
-  private wireHeaderButton(el: HTMLElement, onActivate: () => void): void {
-    el.setAttribute('role', 'button');
-    el.setAttribute('tabindex', '0');
-    el.addEventListener('click', () => onActivate());
-    el.addEventListener('keydown', (e: KeyboardEvent) => {
-      if (e.key === 'Enter' || e.key === ' ') {
-        e.preventDefault();
-        onActivate();
-      }
-    });
-  }
-
-  /**
-   * Builds the nav row content (tab badges + header actions).
-   * This is called once and the content is moved between locations.
-   */
-  private buildNavRowContent(): HTMLElement {
-    const activeDocument = this.containerEl.ownerDocument;
-
-    // Create a fragment to hold nav row content
-    const fragment = activeDocument.createDocumentFragment();
-
-    // Tab badges (left side in nav row, or in title slot for header mode)
-    this.tabBarContainerEl = activeDocument.createElement('div');
-    this.tabBarContainerEl.className = 'specorator-tab-bar-container';
-    this.tabBar = new TabBar(this.tabBarContainerEl, {
-      onTabClick: (tabId) => this.handleTabClick(tabId),
-      onTabClose: (tabId) => {
-        void this.handleTabClose(tabId);
-      },
-      onNewTab: () => {
-        void this.createNewTab().catch(() => new Notice(t('chat.tab.createFailed')));
-      },
-    });
-    fragment.appendChild(this.tabBarContainerEl);
-
-    // Header actions (right side)
-    this.headerActionsContent = activeDocument.createElement('div');
-    this.headerActionsContent.className = 'specorator-header-actions';
-
-    // Work-order activity slot (first) — mounts the WO dropdown when any
-    // running / needs-input / finished work-order tab exists. Placed before
-    // Quick Actions so the persistent button order stays stable; the dropdown
-    // toggles `specorator-hidden` when empty so flex gap collapses.
-    this.workOrderActivitySlotEl = this.headerActionsContent.createDiv({ cls: 'specorator-work-order-activity-slot' });
-    this.mountWorkOrderActivityDropdown();
-
-    // Quick actions button — opens the QuickActionsModal scoped to the active tab.
-    // Lives above the textarea in nav row mode and at the top of the header in header mode.
-    const quickActionsBtn = this.headerActionsContent.createDiv({ cls: 'specorator-header-btn' });
-    setIcon(quickActionsBtn, 'zap');
-    quickActionsBtn.setAttribute('aria-label', t('quickActions.toolbar.ariaLabel'));
-    quickActionsBtn.setAttribute('title', t('quickActions.toolbar.title'));
-    // Pre-warm the Skills tab cache on hover so the modal opens against a hot cache.
-    // Idempotent: VaultSkillAggregator deduplicates concurrent fetches per provider.
-    quickActionsBtn.addEventListener('mouseenter', () => {
-      void this.plugin.vaultSkillAggregator?.listAllStreaming(() => {});
-    });
-    this.wireHeaderButton(quickActionsBtn, () => {
-      const activeTab = this.tabManager?.getActiveTab();
-      if (!activeTab) return;
-      openQuickActionsModal(this.plugin, {
-        onRun: (action) => {
-          // Resolve the active tab at run time — user may have switched tabs while the modal was open.
-          const targetTab = this.tabManager?.getActiveTab();
-          if (!targetTab) return;
-          // Route through the shared dispatcher so this entry point emits
-          // usage.recorded on success, same as the context-menu + favorites
-          // paths. Bypassing the helper here previously caused the leaderboard
-          // to undercount header-launched runs.
-          void dispatchQuickActionToTab(this.plugin, targetTab, action);
-        },
-      });
-    });
-
-    // New tab button (plus icon)
-    this.newTabButtonEl = this.headerActionsContent.createDiv({ cls: 'specorator-header-btn specorator-new-tab-btn' });
-    setIcon(this.newTabButtonEl, 'square-plus');
-    this.newTabButtonEl.setAttribute('aria-label', 'New tab');
-    this.wireHeaderButton(this.newTabButtonEl, () => {
-      void this.createNewTab().catch(() => new Notice(t('chat.tab.createFailed')));
-    });
-
-    // New conversation button (square-pen icon - new conversation in current tab)
-    const newBtn = this.headerActionsContent.createDiv({ cls: 'specorator-header-btn' });
-    setIcon(newBtn, 'square-pen');
-    newBtn.setAttribute('aria-label', 'New conversation');
-    this.wireHeaderButton(newBtn, () => {
-      void (async () => {
-        await this.tabManager?.createNewConversation();
-        this.updateHistoryDropdown();
-      })().catch(() => new Notice(t('chat.tab.createConversationFailed')));
-    });
-
-    // History dropdown
-    const historyContainer = this.headerActionsContent.createDiv({ cls: 'specorator-history-container' });
-    const historyBtn = historyContainer.createDiv({ cls: 'specorator-header-btn' });
-    setIcon(historyBtn, 'history');
-    historyBtn.setAttribute('aria-label', 'Chat history');
-    historyBtn.setAttribute('aria-haspopup', 'true');
-    historyBtn.setAttribute('aria-expanded', 'false');
-    this.historyBtn = historyBtn;
-
-    this.historyDropdown = historyContainer.createDiv({ cls: 'specorator-history-menu' });
-
-    // Stop the click from reaching the document-level outside-click closer.
-    historyBtn.addEventListener('click', (e) => e.stopPropagation());
-    this.wireHeaderButton(historyBtn, () => this.toggleHistoryDropdown());
-
-    fragment.appendChild(this.headerActionsContent);
-
-    // Create a wrapper div to hold the fragment (for input mode nav row)
-    const wrapper = activeDocument.createElement('div');
-    wrapper.className = 'specorator-input-nav-content';
-    wrapper.appendChild(fragment);
-    return wrapper;
-  }
-
 
   private mountWorkOrderActivityDropdown(): void {
     if (!this.workOrderActivitySlotEl || !this.plugin.workOrderActivity) return;
@@ -642,66 +619,18 @@ export class SpecoratorView extends ItemView {
   }
 
   /**
-   * Moves nav row content based on tabBarPosition setting.
-   * - 'input' mode: Both tab badges and actions go to active tab's navRowEl
-   * - 'header' mode: Tab badges go to title slot (after logo), actions go to header right side
-   */
-  private updateNavRowLocation(): void {
-    if (!this.tabBarContainerEl || !this.headerActionsContent) return;
-
-    const isHeaderMode = this.plugin.settings.tabBarPosition === 'header';
-
-    if (isHeaderMode) {
-      // Header mode: Tab badges go to title slot, actions go to header right side
-      if (this.titleSlotEl) {
-        this.titleSlotEl.appendChild(this.tabBarContainerEl);
-      }
-      if (this.headerActionsEl) {
-        this.headerActionsEl.appendChild(this.headerActionsContent);
-        this.headerActionsEl.removeClass('specorator-hidden');
-      }
-    } else {
-      // Input mode: Both go to active tab's navRowEl via the wrapper
-      const activeTab = this.tabManager?.getActiveTab();
-      if (activeTab && this.navRowContent) {
-        // Re-assemble the nav row content wrapper
-        this.navRowContent.appendChild(this.tabBarContainerEl);
-        this.navRowContent.appendChild(this.headerActionsContent);
-        activeTab.dom.navRowEl.appendChild(this.navRowContent);
-      }
-      // Hide header actions slot when in input mode
-      if (this.headerActionsEl) {
-        this.headerActionsEl.toggleClass('specorator-hidden', !this.gitActionButton);
-      }
-    }
-
-    // The actions-slot visibility just changed; recompute the meta row so it
-    // collapses or shows alongside the chip.
-    this.updateHeaderMetaRow();
-  }
-
-  /**
-   * Updates layout when tabBarPosition setting changes.
-   * Called from settings when user changes the tab bar position.
+   * Re-projects the shell after a tabBarPosition change. Called from settings
+   * when the user switches the tab-bar position; the Vue header re-teleports the
+   * badges/actions and toggles the container `--header-mode` class off the
+   * projected `tabBarPosition`.
    */
   updateLayoutForPosition(): void {
-    if (!this.viewContainerEl) return;
-
-    const isHeaderMode = this.plugin.settings.tabBarPosition === 'header';
-
-    // Update container class for CSS styling
-    this.viewContainerEl.toggleClass('specorator-container--header-mode', isHeaderMode);
-
-    // Move nav content to appropriate location
-    this.updateNavRowLocation();
-
-    // Update tab bar and title visibility
-    this.updateTabBarVisibility();
+    this.emitChatShellChange();
   }
 
-  /** Refreshes tab controls after settings that affect tab availability change. */
+  /** Re-projects the shell after a setting that affects tab-bar visibility. */
   refreshTabControls(): void {
-    this.updateTabBarVisibility();
+    this.emitChatShellChange();
   }
 
   // ============================================
@@ -796,8 +725,9 @@ export class SpecoratorView extends ItemView {
       const tab = this.tabManager?.getTab(tabId);
       // If streaming, treat close like user interrupt (force close cancels the stream)
       const force = tab?.state.isStreaming ?? false;
+      // closeTab fires onTabClosed + the follow-up switchToTab/createTab, which
+      // re-project the shell; no explicit visibility poke is needed.
       await this.tabManager?.closeTab(tabId, force);
-      this.updateTabBarVisibility();
     } catch {
       new Notice(t('chat.tab.closeFailed'));
     }
@@ -808,117 +738,21 @@ export class SpecoratorView extends ItemView {
     if (!tab) {
       const maxTabs = this.plugin.settings.maxChatTabs ?? 3;
       new Notice(t('chat.tabs.maxChatReached', { count: String(maxTabs) }));
-      this.updateTabBarVisibility();
       return;
     }
-    this.updateTabBarVisibility();
-  }
-
-  private updateTabBar(): void {
-    if (!this.tabManager || !this.tabBar) return;
-
-    // Debounce tab bar updates using requestAnimationFrame
-    if (this.pendingTabBarUpdate !== null) {
-      cancelScheduledAnimationFrame(this.pendingTabBarUpdate);
-    }
-
-    this.pendingTabBarUpdate = scheduleAnimationFrame(() => {
-      this.pendingTabBarUpdate = null;
-      if (!this.tabManager || !this.tabBar) return;
-
-      const items = this.tabManager.getTabBarItems();
-      this.tabBar.update(items);
-      this.updateTabBarVisibility();
-    }, this.containerEl.ownerDocument.defaultView ?? null);
-  }
-
-  private updateTabBarVisibility(): void {
-    if (!this.tabBarContainerEl || !this.tabManager) return;
-
-    const tabCount = this.tabManager.countTabsByKind('chat');
-    // Normally the bar hides with a single chat tab. But a hidden work-order
-    // tab can be the active tab (opened from the Work Orders dropdown), and
-    // work-order badges are omitted from getTabBarItems(); once that work order
-    // is terminal it also drops out of the dropdown. Without surfacing the bar
-    // here the user is stranded on the work-order tab with no visible control
-    // to switch back. Show it whenever a work-order tab is active and at least
-    // one chat tab exists to return to.
-    const activeIsWorkOrder = this.tabManager.getActiveTab()?.kind === 'work-order';
-    const showTabBar = tabCount >= 2 || (activeIsWorkOrder && tabCount >= 1);
-    const isHeaderMode = this.plugin.settings.tabBarPosition === 'header';
-
-    // Hide tab badges when only 1 tab, show when 2+
-    this.tabBarContainerEl.toggleClass('specorator-hidden', !showTabBar);
-
-    // In header mode, badges replace logo/title in the same location
-    // In input mode, keep logo/title visible (badges are in nav row)
-    const hideBranding = showTabBar && isHeaderMode;
-    if (this.logoEl) {
-      this.logoEl.toggleClass('specorator-hidden', hideBranding);
-    }
-    if (this.titleTextEl) {
-      this.titleTextEl.toggleClass('specorator-hidden', hideBranding);
-    }
-
-    this.updateNewTabButtonVisibility();
-  }
-
-  private updateNewTabButtonVisibility(): void {
-    if (!this.newTabButtonEl || !this.tabManager) return;
-
-    const canCreateTab = this.tabManager.canCreateTab();
-    this.newTabButtonEl.toggleClass('specorator-hidden', !canCreateTab);
-    if (canCreateTab) {
-      this.newTabButtonEl.removeAttribute('aria-disabled');
-      this.newTabButtonEl.removeAttribute('aria-hidden');
-      return;
-    }
-
-    this.newTabButtonEl.setAttribute('aria-disabled', 'true');
-    this.newTabButtonEl.setAttribute('aria-hidden', 'true');
-  }
-
-  /** Sets `data-provider` on the root container so CSS brand color follows the active provider. */
-  private syncProviderBrandColor(): void {
-    if (!this.viewContainerEl) return;
-    const activeTab = this.tabManager?.getActiveTab();
-    const providerId = activeTab ? getTabProviderId(activeTab, this.plugin) : DEFAULT_CHAT_PROVIDER_ID;
-    this.viewContainerEl.dataset.provider = providerId;
-    this.syncHeaderLogo(providerId);
+    // A successful createTab fires onTabCreated → emitChatShellChange, which
+    // re-projects the strip; nothing else to poke here.
   }
 
   /**
-   * UX-4 — surface the active session's title in the header instead of the
-   * static "Specorator" branding. The title was previously only visible by
-   * hovering the tab badge; users couldn't tell what conversation was open
-   * at a glance.
-   *
-   * Falls back to "Specorator" when no tab is active (empty state or tab
-   * teardown). Tab-bar visibility logic (`updateLayoutForPosition`) still
-   * decides whether the title element is shown at all — in header mode with
-   * 2+ tabs the title hides because the badges replace it; this method only
-   * controls the text content of the element.
+   * Resolves the active conversation's bound agent (async) into the projection
+   * cache, then re-emits. Guarded by a generation token so a stale resolution
+   * never overwrites a newer one. Mirrors the former syncBoundAgentChip, but
+   * feeds the Vue BoundAgentChip via the projection instead of touching DOM.
    */
-  private syncHeaderTitle(): void {
-    if (!this.titleTextEl) return;
-    const activeTab = this.tabManager?.getActiveTab();
-    const title = activeTab ? getTabTitle(activeTab, this.plugin) : 'Specorator';
-    this.titleTextEl.setText(title);
-    this.titleTextEl.setAttribute('aria-label', title);
-    this.titleTextEl.title = title;
-  }
-
-  /** Renders or clears the bound-agent chip below the header. */
-  private async syncBoundAgentChip(): Promise<void> {
-    const slot = this.boundAgentChipSlotEl;
-    if (!slot) return;
-
-    // Resolve everything BEFORE touching the DOM, guarded by a generation token.
-    // Two near-simultaneous calls (e.g. active-tab change + refresh on chat open)
-    // would otherwise each `empty()` then `await`, rendering two chips. Only the
-    // latest invocation past the awaits mutates the slot.
+  private async refreshBoundAgentChip(): Promise<void> {
     const gen = ++this.boundAgentChipGen;
-    const conversationId = this.tabManager?.getActiveTab()?.conversationId;
+    const conversationId = this.tabManager?.getActiveTab()?.conversationId ?? null;
     const conversation = conversationId
       ? await this.plugin.getConversationById(conversationId)
       : null;
@@ -927,23 +761,12 @@ export class SpecoratorView extends ItemView {
       : null;
     if (gen !== this.boundAgentChipGen) return;
 
-    slot.empty();
-    if (conversationId && agent) {
-      const chip = slot.createDiv({ cls: 'specorator-bound-agent-chip' });
-      const chattingWith = t('agentRoster.chattingWith', { name: agent.name });
-      chip.setAttribute('title', `${chattingWith} — ${t('agentRoster.bindingHint')}`);
-      // title is unreliable on non-interactive elements; mirror the core message
-      // into aria-label so screen readers surface the binding consistently.
-      chip.setAttribute('aria-label', chattingWith);
-
-      const avatarEl = chip.createDiv({ cls: 'specorator-bound-agent-chip-avatar' });
-      // Avatar is decorative here; its own aria-label would duplicate the name.
-      avatarEl.setAttribute('aria-hidden', 'true');
-      renderAgentAvatar(avatarEl, rosterAgentToPersona(agent), 18);
-
-      chip.createSpan({ cls: 'specorator-bound-agent-chip-label', text: agent.name });
-    }
-    this.updateHeaderMetaRow();
+    this.cachedBoundAgentConversationId = conversationId;
+    this.cachedBoundAgent =
+      conversationId && agent
+        ? { name: agent.name, persona: rosterAgentToPersona(agent) }
+        : null;
+    this.emitChatShellChange();
   }
 
   /**
@@ -974,23 +797,6 @@ export class SpecoratorView extends ItemView {
     const pending = this.pendingHydrationErrors.get(conversationId) ?? null;
     this.pendingHydrationErrors.delete(conversationId);
     return pending;
-  }
-
-  /** Rebuilds the header logo SVG to match the given provider. */
-  private syncHeaderLogo(providerId: ProviderId): void {
-    if (!this.logoEl) return;
-    const icon = ProviderRegistry.getChatUIConfig(providerId).getProviderIcon?.();
-    if (!icon) return;
-    const existing = this.logoEl.querySelector('svg');
-    if (existing?.getAttribute('data-provider') === providerId) return;
-    this.logoEl.empty();
-    const svg = createProviderIconSvg(icon, {
-      dataProvider: providerId,
-      height: 18,
-      ownerDocument: this.logoEl.ownerDocument,
-      width: 18,
-    });
-    this.logoEl.appendChild(svg);
   }
 
   // ============================================
@@ -1146,12 +952,10 @@ export class SpecoratorView extends ItemView {
 
     // UX-4: refresh header title + tab bar when the active tab's conversation
     // is renamed (manual rename or auto-title generation).
-    this.register(this.plugin.events.on('conversation:renamed', (payload) => {
-      const activeTab = this.tabManager?.getActiveTab();
-      if (activeTab?.conversationId === payload.conversationId) {
-        this.syncHeaderTitle();
-      }
-      this.updateTabBar();
+    this.register(this.plugin.events.on('conversation:renamed', () => {
+      // The projection recomputes the header title + badge titles from the live
+      // TabManager, so one emit covers both the active-tab title and the strip.
+      this.emitChatShellChange();
     }));
 
     // A roster edit can change a bound agent's saved model while its tab stays

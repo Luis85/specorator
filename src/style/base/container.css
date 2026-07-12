@@ -7,6 +7,14 @@
   font-family: var(--font-text);
 }
 
+/* Chat Vue island host: contentEl carries `.specorator-vue` +
+   `.specorator-chat-vue-root`; the shell renders `.specorator-container` one
+   level in, so give the host a definite height for the container's `height:100%`
+   to resolve against (parity with the leaf-filling frame it replaced). */
+.specorator-chat-vue-root {
+  height: 100%;
+}
+
 /* Visibility utilities. Toggled at runtime via add/removeClass, so each must
    beat whatever `display` a component sets on the same element. Each selector is
    tripled (`.x.x.x`) to reach 0-3-0 specificity — above the two-class component
