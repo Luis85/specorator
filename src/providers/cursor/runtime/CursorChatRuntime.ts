@@ -15,6 +15,7 @@ import type {
   PreparedChatTurn,
   SessionUpdateResult,
 } from '../../../core/runtime/types';
+import { TOOL_TODO_WRITE } from '../../../core/tools/toolNames';
 import type { ChatMessage, Conversation, SlashCommand, StreamChunk } from '../../../core/types';
 import type { PluginContext } from '../../../core/types/PluginContext';
 import { asSettingsBag } from '../../../core/types/settings';
@@ -24,6 +25,7 @@ import {
   AcpClientConnection,
   type AcpLoadSessionResponse,
   type AcpNewSessionResponse,
+  type AcpPlan,
   type AcpRequestPermissionRequest,
   type AcpRequestPermissionResponse,
   type AcpSessionNotification,
@@ -55,6 +57,7 @@ import { runWithCursorAgentSpawnLock } from './cursorAgentSpawnLock';
 import { resolveCursorModelSelectionForCli } from './cursorCliModel';
 import { cleanupStaleCursorMcpServer } from './cursorMcpCleanup';
 import { getCachedCursorModelIds } from './cursorModelCatalog';
+import { mapCursorToolInput } from './cursorToolInputMapping';
 import { MAX_CURSOR_TOOL_RESULT_CHARS } from './cursorToolNormalization';
 import { extractCursorUsage } from './cursorUsageMapping';
 
@@ -117,6 +120,12 @@ export class CursorChatRuntime implements ChatRuntime {
   // (host.exitPlanMode); suppresses the post-turn planCompleted card so the plan
   // isn't prompted a second time.
   private currentTurnPlanDecidedInline = false;
+  // The TodoWrite tool-call id synthesized for THIS turn's ACP `plan`
+  // session/updates (see emitPlanTodoUpdate). Stays stable for the whole turn so
+  // successive plan frames replace the same tool call (mergeExistingToolCallInput
+  // in StreamController) instead of stacking a new TodoWrite block per update.
+  private currentTurnPlanToolCallId: string | null = null;
+  private planTurnCounter = 0;
   private lastStartupErrorMessage: string | null = null;
   private loadedSessionId: string | null = null;
   private process: AcpSubprocess | null = null;
@@ -307,6 +316,7 @@ export class CursorChatRuntime implements ChatRuntime {
     this.activeTurn = activeTurn;
     this.currentTurnSawAssistantContent = false;
     this.currentTurnPlanDecidedInline = false;
+    this.currentTurnPlanToolCallId = null;
     this.contextUsage = null;
     this.sessionUpdateNormalizer.reset();
     this.toolStreamAdapter.reset();
@@ -833,6 +843,10 @@ export class CursorChatRuntime implements ChatRuntime {
       return;
     }
     const normalized = this.sessionUpdateNormalizer.normalize(notification.update);
+    if (normalized.type === 'plan') {
+      this.emitPlanTodoUpdate(activeTurn, normalized.plan);
+      return;
+    }
     if (
       normalized.type !== 'message_chunk'
       && normalized.type !== 'tool_call'
@@ -860,6 +874,26 @@ export class CursorChatRuntime implements ChatRuntime {
       }
       activeTurn.queue.push(chunk);
     }
+  }
+
+  // ACP `plan` session/updates report the agent's live plan/todo status outside
+  // the ordinary tool-call channel, so the normalizer's allow-list above drops
+  // them by default. Cursor's own dialect extension (cursor/update_todos, see
+  // cursorAcpExtensions.ts) surfaces the same kind of information as a TodoWrite
+  // tool call — reuse that same coercion (mapCursorToolInput) so plan entries
+  // land on the shared todo panel through the path it already renders.
+  // update_todos mints a FRESH id per call (stacking a new TodoWrite block per
+  // update); plan reporting instead keeps ONE id for the whole turn so repeat
+  // frames REPLACE the same tool call (mergeExistingToolCallInput in
+  // StreamController merges input by id) rather than stacking a block per frame.
+  private emitPlanTodoUpdate(activeTurn: ActiveTurn, plan: AcpPlan): void {
+    if (!this.currentTurnPlanToolCallId) {
+      this.currentTurnPlanToolCallId = `cursor-plan-${++this.planTurnCounter}`;
+    }
+    const id = this.currentTurnPlanToolCallId;
+    const input = mapCursorToolInput('updateTodosToolCall', { todos: plan.entries }, undefined);
+    activeTurn.queue.push({ type: 'tool_use', id, name: TOOL_TODO_WRITE, input });
+    activeTurn.queue.push({ type: 'tool_result', id, content: 'Plan updated', isError: false });
   }
 
   // Turn-scoped state writes fanned out from the shared ActiveTurnEffect; keeping

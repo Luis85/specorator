@@ -5,13 +5,16 @@ import { Readable, Writable } from 'node:stream';
 
 import { ProviderSettingsCoordinator } from '@/core/providers/ProviderSettingsCoordinator';
 import { createHeadlessRuntimeHost, type RuntimeHost } from '@/core/runtime/RuntimeHost';
-import { TOOL_EDIT } from '@/core/tools/toolNames';
+import { parseTodoInput } from '@/core/tools/todo';
+import { TOOL_EDIT, TOOL_TODO_WRITE } from '@/core/tools/toolNames';
 import type { StreamChunk } from '@/core/types';
 import { AcpJsonRpcTransport, type AcpPromptResponse, type AcpSessionUpdate,AcpStreamChunkQueue } from '@/providers/acp';
 import type { CursorAcpExtensionHost } from '@/providers/cursor/runtime/cursorAcpExtensions';
 import * as cursorAcpExtensions from '@/providers/cursor/runtime/cursorAcpExtensions';
 import * as cursorAcpLaunch from '@/providers/cursor/runtime/cursorAcpLaunch';
 import { CursorChatRuntime } from '@/providers/cursor/runtime/CursorChatRuntime';
+
+import { CURSOR_PLAN_SESSION_UPDATE } from '../../../../fixtures/providers/cursor/realAcpCaptures';
 
 // Drive the real AcpJsonRpcTransport (the shared core/transport JSON-RPC client)
 // over in-memory duplex streams against a scripted fake ACP agent — the
@@ -310,6 +313,59 @@ describe('CursorChatRuntime ACP stream (scripted fake server over in-memory stre
     expect(finalUsage.model).toBe('gpt-5');
     expect(finalUsage.contextWindow).toBe(222_000);
     expect(finalUsage.contextWindowIsAuthoritative).toBe(true);
+  });
+
+  it('surfaces a real ACP `plan` session/update as a TodoWrite tool call the panel can consume', async () => {
+    const chunks = await runScenario(({ emit }) => {
+      emit({ sessionUpdate: 'plan', ...CURSOR_PLAN_SESSION_UPDATE });
+      return { stopReason: 'end_turn' };
+    });
+
+    const toolUses = chunks.filter(
+      (c): c is Extract<StreamChunk, { type: 'tool_use' }> => c.type === 'tool_use',
+    );
+    expect(toolUses).toHaveLength(1);
+    expect(toolUses[0].name).toBe(TOOL_TODO_WRITE);
+
+    const todos = parseTodoInput(toolUses[0].input);
+    expect(todos).not.toBeNull();
+    expect(todos).toHaveLength(CURSOR_PLAN_SESSION_UPDATE.entries.length);
+    expect(todos?.map((t) => t.content)).toEqual(CURSOR_PLAN_SESSION_UPDATE.entries.map((e) => e.content));
+    expect(todos?.map((t) => t.status)).toEqual(CURSOR_PLAN_SESSION_UPDATE.entries.map((e) => e.status));
+
+    const toolResults = chunks.filter(
+      (c): c is Extract<StreamChunk, { type: 'tool_result' }> => c.type === 'tool_result' && c.id === toolUses[0].id,
+    );
+    expect(toolResults).toHaveLength(1);
+    expect(toolResults[0].isError).toBeFalsy();
+  });
+
+  it('reuses the same tool-call id across successive plan updates within a turn (replace, not stack)', async () => {
+    const secondPlan = {
+      entries: [
+        { content: 'Add src/utils/readingTime.ts with strip/count/estimate + unit tests', priority: 'medium' as const, status: 'completed' as const },
+        { content: 'Extend LoopDefinition + QuickAction with readingMinutes; compute in parse paths', priority: 'medium' as const, status: 'in_progress' as const },
+        { content: 'Add readingMinutes prop + meta line to LibraryCard; wire Loops + Quick Actions panels', priority: 'medium' as const, status: 'pending' as const },
+      ],
+    };
+
+    const chunks = await runScenario(({ emit }) => {
+      emit({ sessionUpdate: 'plan', ...CURSOR_PLAN_SESSION_UPDATE });
+      emit({ sessionUpdate: 'plan', ...secondPlan });
+      return { stopReason: 'end_turn' };
+    });
+
+    const toolUses = chunks.filter(
+      (c): c is Extract<StreamChunk, { type: 'tool_use' }> => c.type === 'tool_use',
+    );
+    // Same id across both plan frames: the second is a merge/replace of the
+    // same TodoWrite tool call, matching how repeated TodoWrite calls behave,
+    // not a second stacked block in the transcript.
+    expect(toolUses).toHaveLength(2);
+    expect(toolUses[0].id).toBe(toolUses[1].id);
+
+    const secondTodos = parseTodoInput(toolUses[1].input);
+    expect(secondTodos?.map((t) => t.status)).toEqual(secondPlan.entries.map((e) => e.status));
   });
 
   it('ignores a session/update notification addressed to a different session', async () => {
