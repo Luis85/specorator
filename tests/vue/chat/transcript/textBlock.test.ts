@@ -1,15 +1,38 @@
 import { render } from '@testing-library/vue';
 import { flushPromises } from '@vue/test-utils';
 import { App, Component, MarkdownRenderer } from 'obsidian';
-import { beforeEach, describe, expect, it, type Mock } from 'vitest';
+import { beforeEach, describe, expect, it, type Mock, vi } from 'vitest';
 
 import TextBlock from '@/features/chat/ui/vue/transcript/blocks/TextBlock.vue';
-import { APP_KEY, COMPONENT_KEY, PLUGIN_KEY } from '@/features/chat/ui/vue/transcript/transcriptKeys';
+import type { TranscriptCallbacks } from '@/features/chat/ui/vue/transcript/transcriptCallbacks';
+import { APP_KEY, CALLBACKS_KEY, COMPONENT_KEY, PLUGIN_KEY } from '@/features/chat/ui/vue/transcript/transcriptKeys';
 import type SpecoratorPlugin from '@/main';
 
 const renderMock = MarkdownRenderer.renderMarkdown as unknown as Mock;
 
-function mountBlock(props: { content: string; role: 'user' | 'assistant' }) {
+function makeCallbacks(overrides: Partial<TranscriptCallbacks> = {}): TranscriptCallbacks {
+  return {
+    subscribe: vi.fn(),
+    onRewind: vi.fn(),
+    onFork: vi.fn(),
+    isRewindEligible: vi.fn(() => false),
+    openProviderSettings: vi.fn(),
+    onRetryLastTurn: null,
+    getMessageActions: vi.fn(() => []),
+    copyText: vi.fn(),
+    openFile: vi.fn(),
+    resolveImageSrc: vi.fn(() => ''),
+    showFullImage: vi.fn(),
+    getProviderId: vi.fn(() => 'claude'),
+    getWorkOrderPath: vi.fn(() => null),
+    ...overrides,
+  };
+}
+
+function mountBlock(
+  props: { content: string; role: 'user' | 'assistant' },
+  callbacks?: TranscriptCallbacks,
+) {
   const plugin = { settings: { mediaFolder: '' } } as unknown as SpecoratorPlugin;
   return render(TextBlock, {
     props,
@@ -18,6 +41,7 @@ function mountBlock(props: { content: string; role: 'user' | 'assistant' }) {
         [APP_KEY as symbol]: new App(),
         [COMPONENT_KEY as symbol]: new Component(),
         [PLUGIN_KEY as symbol]: plugin,
+        ...(callbacks ? { [CALLBACKS_KEY as symbol]: callbacks } : {}),
       },
     },
   });
@@ -77,5 +101,71 @@ describe('TextBlock', () => {
 
     expect(container.querySelector('.specorator-work-order-prompt')).toBeNull();
     expect(container.querySelector('.specorator-text-block .specorator-text-copy-btn')).not.toBeNull();
+  });
+});
+
+describe('TextBlock work-order protocol segment split', () => {
+  it('renders a plain block + copy button when no callbacks are provided (no work-order path reachable)', async () => {
+    const { container } = mountBlock({ content: 'hello world', role: 'assistant' });
+    await flushPromises();
+
+    expect(container.querySelectorAll('.specorator-text-block')).toHaveLength(1);
+    expect(container.querySelector('.specorator-text-block .specorator-text-copy-btn')).not.toBeNull();
+    expect(container.querySelector('.specorator-work-order-progress-card')).toBeNull();
+  });
+
+  it('renders a plain block + copy button when callbacks are provided but getWorkOrderPath is falsy', async () => {
+    const callbacks = makeCallbacks({ getWorkOrderPath: vi.fn(() => null) });
+    const { container } = mountBlock({ content: 'hello world', role: 'assistant' }, callbacks);
+    await flushPromises();
+
+    expect(container.querySelectorAll('.specorator-text-block')).toHaveLength(1);
+    expect(container.querySelector('.rendered-md')?.textContent).toBe('hello world');
+  });
+
+  it('renders a work-order progress card for a <specorator_progress> block when a work-order path is active', async () => {
+    const callbacks = makeCallbacks({ getWorkOrderPath: vi.fn(() => 'Agent Board/wo-1.md') });
+    const content = '<specorator_progress>\nstep: Scanning files\ndone: 2/5\n</specorator_progress>';
+    const { container } = mountBlock({ content, role: 'assistant' }, callbacks);
+    await flushPromises();
+
+    const card = container.querySelector('.specorator-work-order-progress-card');
+    expect(card).not.toBeNull();
+    expect(card?.querySelector('.specorator-work-order-progress-card-step')?.textContent).toBe(
+      'Scanning files',
+    );
+    expect(card?.querySelector('.specorator-work-order-progress-card-counter')?.textContent).toBe('2 / 5');
+    // No plain text block/copy button for the protocol block itself.
+    expect(container.querySelector('.specorator-text-block')).toBeNull();
+  });
+
+  it('renders surrounding markdown segments (with copy buttons) alongside a protocol card', async () => {
+    const callbacks = makeCallbacks({ getWorkOrderPath: vi.fn(() => 'Agent Board/wo-1.md') });
+    const content =
+      'Before the block.\n\n<specorator_needs_approval>\naction: Delete branch\n</specorator_needs_approval>\n\nAfter the block.';
+    const { container } = mountBlock({ content, role: 'assistant' }, callbacks);
+    await flushPromises();
+
+    const textBlocks = container.querySelectorAll('.specorator-text-block');
+    expect(textBlocks).toHaveLength(2);
+    expect(textBlocks[0].querySelector('.rendered-md')?.textContent).toBe('Before the block.');
+    expect(textBlocks[0].querySelector('.specorator-text-copy-btn')).not.toBeNull();
+    expect(textBlocks[1].querySelector('.rendered-md')?.textContent).toBe('After the block.');
+
+    const card = container.querySelector('.specorator-work-order-needs-approval-card');
+    expect(card?.querySelector('.specorator-work-order-needs-approval-card-action')?.textContent).toBe(
+      'Delete branch',
+    );
+  });
+
+  it('does not split user text even when a work-order path is active', async () => {
+    const callbacks = makeCallbacks({ getWorkOrderPath: vi.fn(() => 'Agent Board/wo-1.md') });
+    const content = '<specorator_progress>\nstep: x\n</specorator_progress>';
+    const { container } = mountBlock({ content, role: 'user' }, callbacks);
+    await flushPromises();
+
+    expect(container.querySelector('.specorator-work-order-progress-card')).toBeNull();
+    const block = container.querySelector('.specorator-text-block');
+    expect(block?.querySelector('.rendered-md')?.textContent).toBe(content);
   });
 });
