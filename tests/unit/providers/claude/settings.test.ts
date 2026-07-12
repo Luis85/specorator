@@ -1,7 +1,4 @@
-import { EventBus } from '@/core/events/EventBus';
-import type { PluginContext } from '@/core/types/PluginContext';
 import {
-  applyClaudeLoadUserSettings,
   DEFAULT_CLAUDE_PROVIDER_SETTINGS,
   getClaudeProviderSettings,
   resolveClaudeSettingSources,
@@ -65,44 +62,6 @@ describe('Claude provider enabled flag', () => {
 
     updateClaudeProviderSettings(settings, { enabled: true });
     expect(getClaudeProviderSettings(settings).enabled).toBe(true);
-  });
-});
-
-describe('applyClaudeLoadUserSettings', () => {
-  function mockPlugin(initial: boolean) {
-    const settings: Record<string, unknown> = {
-      providerConfigs: { claude: { loadUserSettings: initial } },
-    };
-    const events = new EventBus<{ 'vaultSkill.changed': { providerId: 'claude' } }>();
-    const saveSettings = jest.fn(async () => {});
-    const plugin = { settings, saveSettings, events } as unknown as PluginContext;
-    return { plugin, settings, events, saveSettings };
-  }
-
-  it('persists the flag, saves, and invalidates cached Claude skills when disabled', async () => {
-    const { plugin, settings, events, saveSettings } = mockPlugin(true);
-    const invalidations: Array<{ providerId: string }> = [];
-    events.on('vaultSkill.changed', (p) => invalidations.push(p));
-
-    await applyClaudeLoadUserSettings(plugin, false);
-
-    expect(getClaudeProviderSettings(settings).loadUserSettings).toBe(false);
-    expect(saveSettings).toHaveBeenCalledTimes(1);
-    // Without this invalidation, cached ~/.claude/skills entries stay runnable
-    // until the aggregator TTL — and their /name fails once the runtime drops
-    // the `user` setting source.
-    expect(invalidations).toEqual([{ providerId: 'claude' }]);
-  });
-
-  it('also invalidates when re-enabling so user skills reappear without waiting for TTL', async () => {
-    const { plugin, settings, events } = mockPlugin(false);
-    const invalidations: Array<{ providerId: string }> = [];
-    events.on('vaultSkill.changed', (p) => invalidations.push(p));
-
-    await applyClaudeLoadUserSettings(plugin, true);
-
-    expect(getClaudeProviderSettings(settings).loadUserSettings).toBe(true);
-    expect(invalidations).toEqual([{ providerId: 'claude' }]);
   });
 });
 

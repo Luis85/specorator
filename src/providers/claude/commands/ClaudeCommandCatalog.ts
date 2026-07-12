@@ -81,10 +81,6 @@ export class ClaudeCommandCatalog implements ProviderCommandCatalog {
     private skillStorage: SkillStorage,
     private probe?: CommandProbe,
     private eventBus?: EventBus<SpecoratorEventMap>,
-    // Gates read-only `~/.claude/skills/` discovery. Wired to the
-    // `loadUserSettings` toggle so home skills surface exactly when the SDK also
-    // loads user scope and can resolve their `/name` invocation. Defaults on.
-    private shouldLoadUserSkills: () => boolean = () => true,
   ) {}
 
   setRuntimeCommands(commands: SlashCommand[]): void {
@@ -132,14 +128,14 @@ export class ClaudeCommandCatalog implements ProviderCommandCatalog {
    * tab and the cold-start dropdown fallback read, not a vault-only listing.
    * Home skills carry a host-absolute `sourceFilePath`, so the downstream
    * `isCloneableSkillPath` gate keeps them view/run only; save/delete never
-   * reach them.
+   * reach them. User skills are always listed here — the chat dropdown's warm
+   * path is SDK-owned and reflects the runtime's own user-scope loading, so
+   * this listing does not second-guess it.
    */
   async listVaultEntries(): Promise<ProviderCommandEntry[]> {
     const commands = await this.commandStorage.loadAll();
     const skills = await this.skillStorage.loadAll();
-    const userSkills = this.shouldLoadUserSkills()
-      ? await this.skillStorage.loadUserAll()
-      : [];
+    const userSkills = await this.skillStorage.loadUserAll();
     // Project scope shadows user scope (Claude's own precedence): drop a home
     // skill whose name a vault skill already claims so the same skill can't
     // appear twice.

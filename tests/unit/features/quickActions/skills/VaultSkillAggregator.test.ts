@@ -584,39 +584,4 @@ describe('VaultSkillAggregator', () => {
     expect(JSON.parse(body).buckets.claude[0].name).toBe('a');
     jest.useRealTimers();
   });
-
-  it('rewrites the persisted index when vaultSkill.changed drops a bucket', async () => {
-    jest.useFakeTimers();
-    const bus = new EventBus<{ 'vaultSkill.changed': { providerId: 'claude' | 'codex' } }>();
-    const adapter = {
-      exists: jest.fn().mockResolvedValue(false),
-      read: jest.fn(),
-      write: jest.fn().mockResolvedValue(undefined),
-    };
-    const records = [makeRecord({ providerId: 'claude', entries: [makeSkillEntry({ id: 'a', name: 'a' })] })];
-    const agg = new VaultSkillAggregator(() => records, {
-      ttlMs: 60_000,
-      eventBus: bus as never,
-      cacheAdapter: adapter as never,
-      cachePath: '.specorator/cache/skill-index.json',
-    });
-
-    await agg.listAll();
-    jest.advanceTimersByTime(1100);
-    await Promise.resolve();
-    await Promise.resolve();
-    expect(adapter.write).toHaveBeenCalledTimes(1);
-    expect(JSON.parse(adapter.write.mock.calls[0][1]).buckets.claude).toBeDefined();
-
-    // A gated toggle emits vaultSkill.changed with NO follow-up fetch; the
-    // persisted index must drop the stale bucket so a reload before the next
-    // fetch can't resurrect it (the persist-only-in-memory gap from review).
-    bus.emit('vaultSkill.changed', { providerId: 'claude' });
-    jest.advanceTimersByTime(1100);
-    await Promise.resolve();
-    await Promise.resolve();
-    expect(adapter.write).toHaveBeenCalledTimes(2);
-    expect(JSON.parse(adapter.write.mock.calls[1][1]).buckets.claude).toBeUndefined();
-    jest.useRealTimers();
-  });
 });

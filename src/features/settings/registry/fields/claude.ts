@@ -79,19 +79,13 @@ function registerSetupAndSafetyFields(r: Registry): void {
     keywords: ['safe', 'mode', 'permission', 'approval'],
   });
 
-  // Side-effecting toggle (persist + invalidate cached user skills), so it
-  // mounts the shared widget rather than a native `toggle` — a native toggle
-  // would save the flag without clearing cached ~/.claude/skills entries.
   r.registerField({
     id: 'providerConfigs.claude.loadUserSettings',
     tabId: 'claude',
     sectionId: 'safety',
     label: t('settings.loadUserSettings.name'),
     description: t('settings.loadUserSettings.desc'),
-    type: {
-      kind: 'custom',
-      render: (ctx, host) => renderProviderSettingsWidget(ctx, host, 'claude', 'loadUserSettings'),
-    },
+    type: { kind: 'toggle' },
     default: true,
     keywords: ['user settings', 'permissions', 'claude code', 'settings.json'],
   });

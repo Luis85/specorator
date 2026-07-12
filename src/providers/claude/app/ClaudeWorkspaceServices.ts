@@ -25,7 +25,6 @@ import {
   setClaudeVaultTrusted,
   vaultProjectSettingsRisky,
 } from '../runtime/claudeProjectTrust';
-import { getClaudeProviderSettings } from '../settings';
 import { StorageService } from '../storage/StorageService';
 import { claudeSettingsTabRenderer } from '../ui/ClaudeSettingsTab';
 
@@ -112,9 +111,6 @@ export async function createClaudeWorkspaceServices(
     claudeStorage.skills,
     () => probeRuntimeCommands(plugin),
     plugin.events,
-    // Discover read-only `~/.claude/skills/` only when user settings load —
-    // the same toggle that lets the SDK load user scope and resolve `/name`.
-    () => getClaudeProviderSettings(plugin.settings).loadUserSettings,
   );
 
   return {

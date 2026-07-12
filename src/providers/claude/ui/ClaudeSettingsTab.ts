@@ -19,7 +19,6 @@ import {
   mountClaudeCliPathSetting,
   mountClaudeEnvironmentSection,
   mountClaudeHiddenCommandsSetting,
-  mountClaudeLoadUserSettingsToggle,
   mountClaudeMcpSection,
   mountClaudeOpus1MToggle,
   mountClaudePluginsSection,
@@ -82,7 +81,17 @@ export const claudeSettingsTabRenderer: ProviderSettingsTabRenderer = {
           });
       });
 
-    mountClaudeLoadUserSettingsToggle(container, widgetCtx);
+    new Setting(container)
+      .setName(t('settings.loadUserSettings.name'))
+      .setDesc(t('settings.loadUserSettings.desc'))
+      .addToggle((toggle) =>
+        toggle
+          .setValue(claudeSettings.loadUserSettings)
+          .onChange(async (value) => {
+            updateClaudeProviderSettings(settingsBag, { loadUserSettings: value });
+            await context.plugin.saveSettings();
+          })
+      );
 
     mountClaudeTrustVaultSetting(container, widgetCtx);
 

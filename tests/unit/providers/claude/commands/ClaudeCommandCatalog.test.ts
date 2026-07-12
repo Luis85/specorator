@@ -347,26 +347,6 @@ Home`,
       expect(shared[0].scope).toBe('vault');
       expect(shared[0].isEditable).toBe(true);
     });
-
-    it('omits user skills when the loadUserSettings gate is off', async () => {
-      const adapter = createMockAdapter({});
-      const home = createMockHomeAdapter({
-        '.claude/skills/global/SKILL.md': `---
-description: Global
----
-Prompt`,
-      });
-      const catalog = new ClaudeCommandCatalog(
-        new SlashCommandStorage(adapter),
-        new SkillStorage(adapter, home),
-        undefined,
-        undefined,
-        () => false,
-      );
-
-      const entries = await catalog.listVaultEntries();
-      expect(entries.find((e) => e.name === 'global')).toBeUndefined();
-    });
   });
 
   describe('saveVaultEntry', () => {

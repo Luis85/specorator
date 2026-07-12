@@ -22,7 +22,7 @@ import {
   setClaudeVaultTrusted,
   vaultProjectSettingsRisky,
 } from '../runtime/claudeProjectTrust';
-import { applyClaudeLoadUserSettings, getClaudeProviderSettings, updateClaudeProviderSettings } from '../settings';
+import { getClaudeProviderSettings, updateClaudeProviderSettings } from '../settings';
 import { AgentSettings } from './AgentSettings';
 import { PluginSettingsManager } from './PluginSettingsManager';
 import { SlashCommandSettings } from './SlashCommandSettings';
@@ -272,28 +272,9 @@ export const mountClaudeHiddenCommandsSetting: ProviderSettingsWidgetMount = (ho
 };
 
 /** Registry-mountable widget table exposed via `claudeSettingsTabRenderer.widgets`. */
-// A side-effecting toggle (persist + skill-cache invalidation), so it mounts
-// as a shared widget instead of a native registry `toggle` — otherwise the
-// registry renderer would save the flag without invalidating cached user
-// skills. See applyClaudeLoadUserSettings.
-export const mountClaudeLoadUserSettingsToggle: ProviderSettingsWidgetMount = (host, context) => {
-  const claudeSettings = getClaudeProviderSettings(asSettingsBag(context.plugin.settings));
-  new Setting(host)
-    .setName(t('settings.loadUserSettings.name'))
-    .setDesc(t('settings.loadUserSettings.desc'))
-    .addToggle((toggle) =>
-      toggle
-        .setValue(claudeSettings.loadUserSettings)
-        .onChange(async (value) => {
-          await applyClaudeLoadUserSettings(context.plugin, value);
-        }),
-    );
-};
-
 export const claudeSettingsWidgets: Readonly<Record<string, ProviderSettingsWidgetMount>> = {
   cliPathsByHost: mountClaudeCliPathSetting,
   trustVault: mountClaudeTrustVaultSetting,
-  loadUserSettings: mountClaudeLoadUserSettingsToggle,
   enableOpus1M: mountClaudeOpus1MToggle,
   enableSonnet1M: mountClaudeSonnet1MToggle,
   slashCommands: mountClaudeSlashCommandsSection,

@@ -37,6 +37,22 @@ describe('skillIndexPersistence', () => {
     expect(parsed.buckets.claude[0].content).toBe('');
   });
 
+  it('redacts host-absolute sourceFilePath for user-scope (home) skills', () => {
+    const buckets = new Map<ProviderId, ProviderCommandEntry[]>([
+      ['claude', [
+        entry({ id: 'skill-vault', scope: 'vault', sourceFilePath: '.claude/skills/vault/SKILL.md' }),
+        entry({ id: 'skill-user', scope: 'user', sourceFilePath: '/Users/alice/.claude/skills/global/SKILL.md' }),
+      ]],
+    ]);
+    const parsed = JSON.parse(serializePersistedSkillIndex(buckets, 1));
+    const [vault, user] = parsed.buckets.claude;
+    // Vault paths are vault-relative and safe to keep.
+    expect(vault.sourceFilePath).toBe('.claude/skills/vault/SKILL.md');
+    // The home path must never land in the vault-synced index.
+    expect(user.sourceFilePath).toBeUndefined();
+    expect(JSON.stringify(parsed)).not.toContain('/Users/alice');
+  });
+
   it('round-trips via parse', () => {
     const original = new Map<ProviderId, ProviderCommandEntry[]>([
       ['codex', [entry({ providerId: 'codex', insertPrefix: '$' })]],

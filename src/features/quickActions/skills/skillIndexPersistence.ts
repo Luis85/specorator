@@ -14,6 +14,12 @@ interface PersistedShape {
  * `.specorator/cache/skill-index.json`. Skill bodies (`content`) are stripped
  * before write — they are large and the Skills tab only renders metadata.
  * `runVaultSkill` re-reads the actual `SKILL.md` at execution time anyway.
+ *
+ * User-scope entries (e.g. `~/.claude/skills/`) carry a host-absolute
+ * `sourceFilePath` such as `/Users/alice/.claude/...`. This index can sync or
+ * back up with the vault, so that home path is redacted before write; the entry
+ * is re-discovered with its real path in memory on the next fetch, and being
+ * read-only it never needs the path persisted.
  */
 export function serializePersistedSkillIndex(
   buckets: Map<ProviderId, ProviderCommandEntry[]>,
@@ -25,7 +31,11 @@ export function serializePersistedSkillIndex(
     buckets: {},
   };
   for (const [providerId, entries] of buckets) {
-    out.buckets[providerId] = entries.map((e) => ({ ...e, content: '' }));
+    out.buckets[providerId] = entries.map((e) =>
+      e.scope === 'user'
+        ? { ...e, content: '', sourceFilePath: undefined }
+        : { ...e, content: '' },
+    );
   }
   return JSON.stringify(out);
 }
