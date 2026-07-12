@@ -102,6 +102,10 @@ describe('CodexSkillCatalog', () => {
       expect(homeEntry!.isEditable).toBe(false);
       expect(homeEntry!.isDeletable).toBe(false);
       expect(homeEntry!.persistenceKey).toBeUndefined();
+      // Read-only skill ids key off scope + name, never the host-absolute path —
+      // the id is persisted into the vault-synced cache and must not leak `~`.
+      expect(homeEntry!.id).toBe('codex-skill-user-home-skill');
+      expect(homeEntry!.id).not.toContain('/Users/test');
     });
 
     it('sets sourceFilePath on dropdown entries', async () => {
@@ -211,8 +215,42 @@ Prompt`,
       expect(home.isDeletable).toBe(false);
       // Host-absolute wire path — the read-only gates key off this shape.
       expect(home.sourceFilePath).toBe('/Users/test/.codex/skills/home-skill/SKILL.md');
+      // ...but the id (which IS persisted) stays path-free.
+      expect(home.id).toBe('codex-skill-user-home-skill');
 
       expect(entries.find(e => e.name === 'other-repo-skill')).toBeUndefined();
+    });
+
+    it('retains disabled repo skills (editable) so they stay manageable in settings', async () => {
+      const vaultAdapter = createMockAdapter({
+        '.codex/skills/disabled-vault-skill/SKILL.md': `---
+description: Disabled but editable
+---
+Prompt`,
+      });
+      const storage = new CodexSkillStorage(vaultAdapter, createMockAdapter({}));
+      const listProvider = createMockSkillListProvider([
+        {
+          name: 'disabled-vault-skill',
+          description: 'Disabled but editable',
+          path: '/test/vault/.codex/skills/disabled-vault-skill/SKILL.md',
+          scope: 'repo',
+          enabled: false,
+        },
+      ]);
+      const catalog = new CodexSkillCatalog(storage, listProvider, '/test/vault');
+
+      // The dropdown/run surface hides it (not invocable while disabled)...
+      const dropdown = await catalog.listDropdownEntries({ includeBuiltIns: false });
+      expect(dropdown.find(e => e.name === 'disabled-vault-skill')).toBeUndefined();
+
+      // ...but the management listing keeps it editable so the user can still
+      // edit/delete it in Codex settings without touching files by hand.
+      const vaultEntries = await catalog.listVaultEntries();
+      const disabled = vaultEntries.find(e => e.name === 'disabled-vault-skill')!;
+      expect(disabled).toBeDefined();
+      expect(disabled.isEditable).toBe(true);
+      expect(disabled.isDeletable).toBe(true);
     });
 
     it('surfaces vault-relative sourceFilePath for both managed roots', async () => {

@@ -28,6 +28,8 @@ JSONL remains the provider-owned replay source for history hydration and session
 
 `skills/list` reports `repo` / `user` / `system` / `admin` scopes. `CodexSkillCatalog.listVaultEntries` surfaces **all** of them: `repo` skills under a managed vault root are editable (loaded from storage), and `user`/`system`/`admin` skills are **read-only** (mapped via `listedSkillToProviderEntry` with `scope: 'user'`, `isEditable/isDeletable: false`, host-absolute `sourceFilePath`). This mirrors Claude's `~/.claude/skills` handling so global Codex skills appear in the Library. `CodexSkillSettings` filters to `isEditable` entries — the manager edits vault skills only; read-only globals live in the Library. Codex resolves `$name` unconditionally (no `loadUserSettings`-style gate), so no run-guard is needed.
 
+The `enabled` flag gates **only** the dropdown/run listing (`listDropdownEntries`), never the management listing (`listVaultEntries`) — a disabled vault skill must stay editable/deletable in settings rather than vanishing from the only in-app surface that can remove it. Read-only skill ids are keyed by `scope` + `name` (`buildSkillId`), never the host-absolute `path`: that id is persisted into the vault-synced `skill-index.json`, so a path there would leak the user's home dir despite the `sourceFilePath` redaction.
+
 ### Environment Hash Invalidation
 
 `codexSettingsReconciler` watches `OPENAI_MODEL`, `OPENAI_BASE_URL`, `OPENAI_API_KEY`. Any hash change invalidates all existing Codex sessions (clears `sessionId` and `providerState`), preventing the UI from trying to resume sessions against a different API endpoint.

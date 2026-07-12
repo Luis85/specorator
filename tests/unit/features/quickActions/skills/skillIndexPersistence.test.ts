@@ -53,6 +53,30 @@ describe('skillIndexPersistence', () => {
     expect(JSON.stringify(parsed)).not.toContain('/Users/alice');
   });
 
+  it('keeps a Codex user skill host path out of the index (id + sourceFilePath)', () => {
+    // Regression: the read-only Codex user-skill id must be path-free. When it
+    // embedded encodeURIComponent(skill.path), the host home path leaked into
+    // the vault-synced index via the `id` even though `sourceFilePath` was
+    // redacted here. Guard the whole serialized blob, not just one field.
+    const hostPath = '/Users/alice/.codex/skills/foo/SKILL.md';
+    const buckets = new Map<ProviderId, ProviderCommandEntry[]>([
+      ['codex', [entry({
+        providerId: 'codex',
+        displayPrefix: '$',
+        insertPrefix: '$',
+        scope: 'user',
+        isEditable: false,
+        isDeletable: false,
+        id: 'codex-skill-user-foo',
+        name: 'foo',
+        sourceFilePath: hostPath,
+      })]],
+    ]);
+    const json = serializePersistedSkillIndex(buckets, 1);
+    expect(json).not.toContain(hostPath);
+    expect(json).not.toContain('/Users/alice');
+  });
+
   it('round-trips via parse', () => {
     const original = new Map<ProviderId, ProviderCommandEntry[]>([
       ['codex', [entry({ providerId: 'codex', insertPrefix: '$' })]],

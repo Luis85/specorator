@@ -38,15 +38,19 @@ const CODEX_COMPACT_COMMAND: ProviderCommandEntry = {
 };
 
 function buildSkillId(
-  skill: Pick<SkillMetadata, 'name' | 'path' | 'scope'>,
+  skill: Pick<SkillMetadata, 'name' | 'scope'>,
   location?: { rootId: string; name: string } | null,
 ): string {
   if (location) {
     return `${CODEX_SKILL_ID_PREFIX}${location.rootId}-${location.name}`;
   }
 
-  const encodedPath = encodeURIComponent(skill.path);
-  return `${CODEX_SKILL_ID_PREFIX}${skill.scope}-${encodedPath}`;
+  // Non-vault (user/system/admin) skills are read-only. Key by scope + name, not
+  // `path`: the host-absolute path embeds the user's home dir, and this id is
+  // persisted into the vault-synced skill-index cache, so a path here would leak
+  // the home path despite the sourceFilePath redaction. Names are unique per
+  // scope for any skill addressable as `$name`.
+  return `${CODEX_SKILL_ID_PREFIX}${skill.scope}-${encodeURIComponent(skill.name)}`;
 }
 
 function listedSkillToProviderEntry(
@@ -93,20 +97,22 @@ export class CodexSkillCatalog implements ProviderCommandCatalog {
     // Codex dropdown entries come from app-server metadata; runtime commands are ignored.
   }
 
-  private async listEnabledSkillsByPriority(): Promise<SkillMetadata[]> {
-    return (await this.listProvider.listSkills())
-      .filter(skill => skill.enabled)
-      .sort(compareCodexSkillPriority);
+  private async listSkillsByPriority(): Promise<SkillMetadata[]> {
+    return [...(await this.listProvider.listSkills())].sort(compareCodexSkillPriority);
   }
 
   async listDropdownEntries(context: { includeBuiltIns: boolean }): Promise<ProviderCommandEntry[]> {
-    const skills = await this.listEnabledSkillsByPriority();
+    // Dropdown/run surface: only enabled skills are invocable.
+    const skills = (await this.listSkillsByPriority()).filter(skill => skill.enabled);
     const entries = skills.map(skill => listedSkillToProviderEntry(skill, this.vaultPath));
     return context.includeBuiltIns ? [CODEX_COMPACT_COMMAND, ...entries] : entries;
   }
 
   async listVaultEntries(): Promise<ProviderCommandEntry[]> {
-    const listedSkills = await this.listEnabledSkillsByPriority();
+    // Management/browse listing — NOT filtered by `enabled`. A disabled vault
+    // skill must stay editable/deletable in Codex settings; the enabled filter
+    // is a dropdown/run concern only.
+    const listedSkills = await this.listSkillsByPriority();
     const entries: ProviderCommandEntry[] = [];
 
     for (const listedSkill of listedSkills) {
