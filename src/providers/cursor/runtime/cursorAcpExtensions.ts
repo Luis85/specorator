@@ -8,36 +8,27 @@ import { stringValue } from './cursorToolValueCoercion';
 export interface CursorAcpExtensionHost {
   askUser: AskUserQuestionCallback;
   // Plan-mode exit decision prompt. cursor/create_plan is a BLOCKING plan-
-  // approval request (cursor.com/docs/cli/acp), so its handler blocks on this
-  // the same way ask_question blocks on askUser — the user's accept/reject/
-  // feedback decision resolves the RPC in-turn.
+  // approval request (cursor.com/docs/cli/acp) that blocks on this the same
+  // way ask_question blocks on askUser.
   exitPlanMode: ExitPlanModeCallback;
-  // Per-turn abort signal, shared by the blocking ask_question and create_plan
-  // awaits. When the turn is canceled the runtime aborts it, so an otherwise-
-  // unbounded await unblocks and the RPC gets answered (cancelled) instead of
-  // hanging.
+  // Per-turn abort signal shared by the blocking ask_question and create_plan
+  // awaits, so a turn cancel unblocks them (cancelled) instead of hanging.
   getAskSignal?: () => AbortSignal | undefined;
   // `sessionId` is the requesting session when the emitting extension carries
-  // one (cursor/create_plan, cursor/update_todos). The runtime drops a chunk
-  // whose session id is present but no longer matches the active turn, so a
-  // blocking extension request racing a turn boundary can't misroute into the
-  // next turn's queue. An absent id keeps the prior unconditional behavior.
+  // one. The runtime drops a chunk whose session id no longer matches the
+  // active turn, so a blocking request racing a turn boundary can't misroute.
   emitChunk: (chunk: StreamChunk, sessionId?: string) => void;
-  // Signals the runtime that cursor/create_plan already settled the plan decision
-  // in-turn (via exitPlanMode), so the post-turn planCompleted card is suppressed
-  // (otherwise one plan is prompted twice). Session-guarded like emitChunk: a
-  // stale create_plan naming a superseded turn's session is dropped; absent id
-  // keeps the unconditional path.
+  // Signals that cursor/create_plan already settled the plan decision in-turn,
+  // suppressing the post-turn planCompleted card. Session-guarded like emitChunk.
   markPlanDecidedInline: (sessionId?: string) => void;
   // True when `sessionId` still names the active turn. Guards the BLOCKING
-  // create_plan handler so a stale request can't open the plan card (and be
-  // answered against the wrong conversation). Absent id / unwired host → active.
+  // create_plan and ask_question handlers so a stale request can't open a card
+  // (and be answered against the wrong conversation). Absent id / unwired host
+  // → active.
   isActiveSession?: (sessionId: string | undefined) => boolean;
   // Proactively stops the running turn. The `approve-new-session` plan decision
-  // abandons the current session for a fresh one, but the RuntimeHost only sets
-  // cancelRequested — that breaks the local consumer loop and never reaches the
-  // agent, so without this hook the agent keeps implementing in the discarded
-  // session. Wired to the runtime's own `cancel()` (session/cancel + escalation).
+  // abandons this session for a fresh one; RuntimeHost's cancelRequested alone
+  // never reaches the agent, so this hooks the runtime's own cancel().
   requestTurnCancel?: () => void;
 }
 
@@ -133,12 +124,10 @@ function mapPlanDecisionToOutcome(
 }
 
 /**
- * Maps the settled plan decision to its outcome and applies the one side effect
- * `approve-new-session` needs: rejecting the plan (above) tells the agent not to
- * implement, but on its own that reads like feedback and the agent may keep
- * planning in this session. The user is starting fresh, so actively cancel the
- * running turn (session/cancel via the runtime) — the RuntimeHost's
- * cancelRequested only unwinds the local consumer loop, never the agent.
+ * Maps the settled plan decision to its outcome and applies the one side
+ * effect `approve-new-session` needs: rejecting the plan alone reads like
+ * feedback, so the user starting a fresh session also actively cancels the
+ * running turn — RuntimeHost's cancelRequested alone never reaches the agent.
  */
 function settlePlanDecision(
   host: CursorAcpExtensionHost,
@@ -153,10 +142,9 @@ function settlePlanDecision(
 
 /**
  * Blocks on the user's plan decision for a non-empty cursor/create_plan and
- * returns the documented outcome. Emits the plan text (session-guarded), then
- * awaits the exit-plan-mode prompt, racing the per-turn cancel signal so a turn
- * cancel resolves `cancelled` instead of hanging. `markPlanDecidedInline` fires
- * in every path (finally) so the settled decision suppresses the post-turn card.
+ * returns the documented outcome, racing the per-turn cancel signal so a turn
+ * cancel resolves `cancelled` instead of hanging. `markPlanDecidedInline`
+ * fires in every path (finally) to suppress the post-turn planCompleted card.
  */
 async function resolveCreatePlanOutcome(
   host: CursorAcpExtensionHost,
@@ -188,6 +176,12 @@ function isAbortError(error: unknown, signal?: AbortSignal): boolean {
   return error instanceof Error && error.name === 'AbortError';
 }
 
+// A turn already stopped, or the naming session is no longer active — mirrors
+// create_plan's pre-checks (57b1746). ask_question must not open its card.
+function isStaleAskRequest(host: CursorAcpExtensionHost, sessionId: string | undefined, signal: AbortSignal | undefined): boolean {
+  return Boolean(signal?.aborted) || Boolean(host.isActiveSession && !host.isActiveSession(sessionId));
+}
+
 type NormalizedTodo = Record<string, unknown>;
 
 function todoIdentity(todo: NormalizedTodo): { id: string; content: string } {
@@ -198,12 +192,11 @@ function todoIdentity(todo: NormalizedTodo): { id: string; content: string } {
 }
 
 /**
- * Merges an incremental `cursor/update_todos` batch (`merge: true`) over the last
- * emitted list. The shared StreamController REPLACES its todo panel from each
- * TodoWrite chunk, so emitting only the changed items would erase the rest — the
- * merge reconstructs the full list here. Incoming items match an existing entry
- * by `id`, falling back to content-match only when the incoming id is absent;
- * matches update in place (preserving position) and unmatched items append.
+ * Merges an incremental `cursor/update_todos` batch (`merge: true`) over the
+ * last emitted list. The shared StreamController REPLACES its todo panel from
+ * each TodoWrite chunk, so emitting only the changed items would erase the
+ * rest — items match by `id` (falling back to content), matches update in
+ * place, and unmatched items append.
  */
 function mergeCursorTodos(previous: NormalizedTodo[], incoming: NormalizedTodo[]): NormalizedTodo[] {
   const result = previous.map((todo) => ({ ...todo }));
@@ -255,12 +248,9 @@ function patchTodoFromRaw(cached: NormalizedTodo, raw: Record<string, unknown>):
 /**
  * Merges a RAW `cursor/update_todos` batch (`merge: true`) over the cached
  * normalized list. Runs BEFORE the content-requiring normalizer so a status-only
- * transition (`{id, status}` with no `content`) isn't silently dropped: any raw
- * entry whose id matches a cached item patches that item's status in place, no
- * content required. Only the unmatched entries fall through to the normalizer
- * (which needs content) and then the id/content append merge — so an unmatched
- * status-only entry with no cached id normalizes to nothing and is dropped
- * harmlessly, exactly as before.
+ * transition (`{id, status}`, no `content`) isn't silently dropped: any raw
+ * entry whose id matches a cached item patches that item's status in place.
+ * Only unmatched entries fall through to the normalizer/append merge below.
  */
 function mergeCursorTodosFromRaw(cached: NormalizedTodo[], rawIncoming: unknown[]): NormalizedTodo[] {
   const result = cached.map((todo) => ({ ...todo }));
@@ -327,14 +317,11 @@ function parseCursorOptions(raw: unknown): ParsedCursorOption[] {
 }
 
 /**
- * Parses a `cursor/ask_question` payload into the normalized question list the
- * rest of the handler works from. Reads the documented fields
- * (`questions[].prompt`, `options[].id`/`.label`, `allowMultiple`) while
- * tolerating the legacy shapes (`question`/`options` at the top level,
- * `q.question`, `q.multiSelect`, bare-string options) and malformed inputs
- * (non-array `questions`/`options`, null/non-object entries) — a throw here
- * would otherwise escape as a JSON-RPC -32603 error to the agent instead of the
- * intended tolerant outcome union.
+ * Parses a `cursor/ask_question` payload into the normalized question list.
+ * Reads the documented fields while tolerating legacy shapes (`question`,
+ * `q.multiSelect`, bare-string options) and malformed inputs (non-array
+ * `questions`/`options`, null entries) — a throw here would otherwise escape
+ * as a JSON-RPC -32603 error instead of the intended tolerant outcome union.
  */
 function parseCursorQuestions(params: CursorAskQuestionParams): ParsedCursorQuestion[] {
   const rawEntries: unknown[] = Array.isArray(params.questions) && params.questions.length > 0
@@ -384,13 +371,10 @@ function buildAskUserInput(questions: ParsedCursorQuestion[]): Record<string, un
 }
 
 /**
- * Maps the inline widget's answer record (`Record<questionKey, label | label[]>`,
- * where values are the selected option LABELS) back to the documented
+ * Maps the inline widget's answer record (LABELS) back to the documented
  * `cursor/ask_question` answered outcome (`{ questionId, selectedOptionIds }[]`).
- * Each answered label is resolved to its option's documented `id`; a label with
- * no matching option id — a free-form "Other" answer, or an option Cursor sent
- * without an id — falls back to the label string itself as the id, since that is
- * the only stable identifier available to echo back.
+ * A label with no matching option id — free-form "Other", or an id-less option
+ * — falls back to the label string itself as the only stable id available.
  */
 function buildAnsweredOutcome(
   questions: ParsedCursorQuestion[],
@@ -412,15 +396,56 @@ function buildAnsweredOutcome(
   return out;
 }
 
+type CursorAskQuestionOutcome =
+  | { outcome: 'answered'; answers: Array<{ questionId: string; selectedOptionIds: string[] }> }
+  | { outcome: 'skipped'; reason?: string }
+  | { outcome: 'cancelled' };
+
 /**
- * Registers Cursor's ACP dialect extensions on top of the shared JSON-RPC
- * transport. `cursor/ask_question` and `cursor/create_plan` are BLOCKING
- * agent→client requests — the agent waits on the RPC response — which
- * replaces the retired stream-json auto-reject + resumed-follow-up-turn
- * delivery (ADR-0002) with an in-turn answer now that Cursor runs over ACP.
- * Both are answered with the documented outcome unions from
- * cursor.com/docs/cli/acp. `cursor/update_todos` and `cursor/task` are one-way
- * notifications.
+ * Resolves a non-stale cursor/ask_question to its documented outcome: blocks
+ * on `host.askUser`, mapping a cancel/abort or empty answer set to
+ * `cancelled` and an askUser failure to `skipped` (with reason). Pulled out
+ * of the request handler (mirrors resolveCreatePlanOutcome) to keep it small.
+ */
+async function resolveAskQuestionOutcome(
+  host: CursorAcpExtensionHost,
+  parsed: CursorAskQuestionParams,
+  signal: AbortSignal | undefined,
+): Promise<CursorAskQuestionOutcome> {
+  const questions = parseCursorQuestions(parsed);
+  const askInput = buildAskUserInput(questions);
+
+  let answers: Record<string, string | string[]> | null;
+  try {
+    answers = await host.askUser(askInput, signal);
+  } catch (error) {
+    // A cancel aborts the await: the user chose nothing, so answer with the
+    // documented `cancelled` outcome rather than surfacing the AbortError.
+    if (isAbortError(error, signal)) {
+      return { outcome: 'cancelled' };
+    }
+    // askUser itself failed — the question could not be presented/collected,
+    // which the documented `skipped` outcome (with reason) describes.
+    return { outcome: 'skipped', reason: `Failed to get user answers: ${errorMessage(error)}` };
+  }
+
+  if (!answers || Object.keys(answers).length === 0) {
+    return { outcome: 'cancelled' };
+  }
+  const mapped = buildAnsweredOutcome(questions, answers);
+  if (mapped.length === 0) {
+    return { outcome: 'cancelled' };
+  }
+  return { outcome: 'answered', answers: mapped };
+}
+
+/**
+ * Registers Cursor's ACP dialect extensions on the shared JSON-RPC transport.
+ * `cursor/ask_question` and `cursor/create_plan` are BLOCKING agent→client
+ * requests, answered in-turn with the documented outcome unions from
+ * cursor.com/docs/cli/acp (replacing the retired stream-json auto-reject +
+ * resumed-follow-up-turn delivery, ADR-0002). `cursor/update_todos` and
+ * `cursor/task` are one-way notifications.
  */
 export function registerCursorAcpExtensions(
   transport: AcpJsonRpcTransport,
@@ -435,40 +460,18 @@ export function registerCursorAcpExtensions(
   const lastTodosBySession = new Map<string, NormalizedTodo[]>();
 
   unsubscribes.push(transport.onRequest('cursor/ask_question', async (params) => {
+    const parsed = (params ?? {}) as CursorAskQuestionParams;
+    const signal = host.getAskSignal?.();
+    // Checked before building the ask input or calling askUser.
+    if (isStaleAskRequest(host, parsed.sessionId, signal)) {
+      return { outcome: { outcome: 'cancelled' } };
+    }
     try {
-      const questions = parseCursorQuestions(params ?? {});
-      const askInput = buildAskUserInput(questions);
-      const signal = host.getAskSignal?.();
-
-      let answers: Record<string, string | string[]> | null;
-      try {
-        answers = await host.askUser(askInput, signal);
-      } catch (error) {
-        // A cancel aborts the await: the user chose nothing, so answer with the
-        // documented `cancelled` outcome rather than surfacing the AbortError as
-        // a turn failure, so the agent unblocks.
-        if (isAbortError(error, signal)) {
-          return { outcome: { outcome: 'cancelled' } };
-        }
-        // askUser itself failed — the question could not be presented/collected,
-        // which the documented `skipped` outcome (with reason) describes.
-        return {
-          outcome: { outcome: 'skipped', reason: `Failed to get user answers: ${errorMessage(error)}` },
-        };
-      }
-
-      if (!answers || Object.keys(answers).length === 0) {
-        return { outcome: { outcome: 'cancelled' } };
-      }
-      const mapped = buildAnsweredOutcome(questions, answers);
-      if (mapped.length === 0) {
-        return { outcome: { outcome: 'cancelled' } };
-      }
-      return { outcome: { outcome: 'answered', answers: mapped } };
+      return { outcome: await resolveAskQuestionOutcome(host, parsed, signal) };
     } catch (error) {
-      // Defensive backstop: parsing is written to tolerate malformed payloads,
-      // but any residual synchronous throw must still resolve to a valid outcome
-      // union rather than reject the RPC (-32603).
+      // Defensive backstop: parsing/resolution tolerates malformed payloads,
+      // but any residual synchronous throw must still resolve to a valid
+      // outcome union rather than reject the RPC (-32603).
       return {
         outcome: { outcome: 'skipped', reason: `Failed to get user answers: ${errorMessage(error)}` },
       };

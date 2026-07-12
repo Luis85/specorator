@@ -208,6 +208,72 @@ describe('registerCursorAcpExtensions', () => {
     expect(response.outcome).toEqual({ outcome: 'cancelled' });
   });
 
+  it('short-circuits to cancelled when the ask signal is already aborted, without calling askUser', async () => {
+    const { transport, requests } = makeFakeTransport();
+    const controller = new AbortController();
+    controller.abort();
+    const askUser = jest.fn().mockResolvedValue({ q1: 'A' });
+    registerCursorAcpExtensions(transport as never, {
+      askUser,
+      getAskSignal: () => controller.signal,
+      emitChunk: () => {},
+      exitPlanMode: async () => null,
+      markPlanDecidedInline: () => {},
+    });
+
+    const response = await requests.get('cursor/ask_question')!({ question: 'Q', options: [] }) as AskResponse;
+
+    expect(response.outcome).toEqual({ outcome: 'cancelled' });
+    expect(askUser).not.toHaveBeenCalled();
+  });
+
+  it('short-circuits to cancelled for a stale session, without calling askUser', async () => {
+    const { transport, requests } = makeFakeTransport();
+    const askUser = jest.fn().mockResolvedValue({ q1: 'A' });
+    // The turn has rolled over: S-old is no longer the active session.
+    const isActiveSession = jest.fn((sessionId?: string) => sessionId === undefined || sessionId === 'S-current');
+    registerCursorAcpExtensions(transport as never, {
+      askUser,
+      emitChunk: () => {},
+      exitPlanMode: async () => null,
+      markPlanDecidedInline: () => {},
+      isActiveSession: isActiveSession as never,
+    });
+
+    const response = await requests.get('cursor/ask_question')!({
+      sessionId: 'S-old',
+      question: 'Q',
+      options: [],
+    }) as AskResponse;
+
+    expect(response.outcome).toEqual({ outcome: 'cancelled' });
+    expect(askUser).not.toHaveBeenCalled();
+  });
+
+  it('still blocks on askUser for the active session even when isActiveSession is wired', async () => {
+    const { transport, requests } = makeFakeTransport();
+    const askUser = jest.fn().mockResolvedValue({ q1: 'A' });
+    const isActiveSession = jest.fn((sessionId?: string) => sessionId === undefined || sessionId === 'S-current');
+    registerCursorAcpExtensions(transport as never, {
+      askUser,
+      emitChunk: () => {},
+      exitPlanMode: async () => null,
+      markPlanDecidedInline: () => {},
+      isActiveSession: isActiveSession as never,
+    });
+
+    const response = await requests.get('cursor/ask_question')!({
+      sessionId: 'S-current',
+      questions: [{ id: 'q1', prompt: 'Pick', options: [{ id: 'opt-a', label: 'A' }] }],
+    }) as AskResponse;
+
+    expect(askUser).toHaveBeenCalled();
+    expect(response.outcome).toEqual({
+      outcome: 'answered',
+      answers: [{ questionId: 'q1', selectedOptionIds: ['opt-a'] }],
+    });
+  });
+
   it('answers the RPC as cancelled when the ask signal aborts mid-await', async () => {
     const { transport, requests } = makeFakeTransport();
     const controller = new AbortController();
