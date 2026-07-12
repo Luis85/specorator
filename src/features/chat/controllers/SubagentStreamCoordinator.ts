@@ -30,6 +30,14 @@ export interface SubagentStreamCoordinatorDeps {
   scrollToBottom: () => void;
   /** Surfaces + vault-refreshes a completed sub-agent tool's file edits (chip strip). */
   recordEditedFiles: (toolCall: ToolCallInfo) => void;
+  /**
+   * Re-projects the transcript for a message whose subagent fields were mutated
+   * in place. Needed for async/background completions, which mutate an
+   * already-completed (non-active) message OUTSIDE `handleStreamChunk`, so
+   * neither the per-chunk emit nor the active-message identity refresh covers
+   * them.
+   */
+  refreshTranscriptMessage?: (messageId: string) => void;
 }
 
 export class SubagentStreamCoordinator {
@@ -456,6 +464,10 @@ export class SubagentStreamCoordinator {
       const msg = state.messages[i];
       if (msg.role !== 'assistant') continue;
       if (this.linkTaskToolCallToSubagent(msg, subagent)) {
+        // The mutation above is in place; refresh THIS message's transcript
+        // identity so an async/background completion surfaces live (this path
+        // commonly runs after the turn ended, on a non-active message).
+        this.deps.refreshTranscriptMessage?.(msg.id);
         return;
       }
     }

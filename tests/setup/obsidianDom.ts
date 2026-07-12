@@ -27,6 +27,12 @@ function applyCreateOpts(el: HTMLElement, opts?: CreateOpts | string): void {
   if (opts.text !== undefined) el.textContent = opts.text;
   // Obsidian's DomElementInfo sets `type` as an attribute (inputs, buttons).
   if (typeof opts.type === 'string') el.setAttribute('type', opts.type);
+  // Real Obsidian's DomElementInfo also documents these as direct pass-through
+  // attributes (obsidian.d.ts): value/placeholder/href/title.
+  if (typeof opts.value === 'string') el.setAttribute('value', opts.value);
+  if (typeof opts.placeholder === 'string') el.setAttribute('placeholder', opts.placeholder);
+  if (typeof opts.href === 'string') el.setAttribute('href', opts.href);
+  if (typeof opts.title === 'string') el.setAttribute('title', opts.title);
   if (opts.attr) {
     for (const [name, value] of Object.entries(opts.attr)) {
       if (value === null || value === undefined) continue;
@@ -85,6 +91,12 @@ export function installObsidianDom(): void {
   if (typeof protoRecord.removeClass !== 'function') {
     protoRecord.removeClass = function removeClass(this: HTMLElement, cls: string): void {
       this.classList.remove(cls);
+    };
+  }
+
+  if (typeof protoRecord.hasClass !== 'function') {
+    protoRecord.hasClass = function hasClass(this: HTMLElement, cls: string): boolean {
+      return this.classList.contains(cls);
     };
   }
 

@@ -8,6 +8,7 @@ import {
   initializeTabUI,
   maybeWarnYoloMode,
 } from '@/features/chat/tabs/Tab';
+import { mountTranscript } from '@/features/chat/ui/vue/transcript/mountTranscript';
 
 import {
   createMockBrowserSelectionController,
@@ -80,14 +81,6 @@ jest.mock('@/features/chat/ui/InputToolbar', () => ({
 
 jest.mock('@/shared/components/SlashCommandDropdown', () => ({
   SlashCommandDropdown: jest.fn().mockImplementation(() => createMockSlashCommandDropdown()),
-}));
-
-// Mock rendering
-jest.mock('@/features/chat/rendering/MessageRenderer', () => ({
-  MessageRenderer: jest.fn().mockImplementation(() => ({
-    scrollToBottomIfNeeded: jest.fn(),
-    setAsyncSubagentClickCallback: jest.fn(),
-  })),
 }));
 
 jest.mock('@/features/chat/rendering/ThinkingBlockRenderer', () => ({
@@ -166,10 +159,12 @@ describe('Tab - handleForkRequest', () => {
     initializeTabUI(tab, options.plugin);
     initializeTabControllers(tab, options.plugin, mockComponent, forkRequestCallback);
 
-    // Extract the fork callback from the MessageRenderer constructor
-    const { MessageRenderer } = jest.requireMock('@/features/chat/rendering/MessageRenderer') as { MessageRenderer: jest.Mock };
-    const lastCall = MessageRenderer.mock.calls[MessageRenderer.mock.calls.length - 1];
-    const forkCallback = lastCall[3].forkCallback;
+    // The per-message fork affordance now flows through the Vue transcript
+    // island's `onFork` callback (buildTranscriptCallbacks), passed as the 4th
+    // arg to mountTranscript, rather than a MessageRenderer forkCallback.
+    const mountTranscriptMock = mountTranscript as unknown as jest.Mock;
+    const lastCall = mountTranscriptMock.mock.calls[mountTranscriptMock.mock.calls.length - 1];
+    const forkCallback = lastCall[3].onFork;
 
     return { tab, forkCallback, forkRequestCallback, plugin: options.plugin };
   }
@@ -426,7 +421,7 @@ describe('Tab - handleForkRequest', () => {
     }));
   });
 
-  it('should not set forkCallback on renderer when no forkRequestCallback provided', () => {
+  it('leaves per-message fork a no-op when no forkRequestCallback provided', async () => {
     const options = createMockOptions();
     const tab = createTab(options);
     const mockComponent = {} as any;
@@ -434,11 +429,17 @@ describe('Tab - handleForkRequest', () => {
     initializeTabUI(tab, options.plugin);
     initializeTabControllers(tab, options.plugin, mockComponent);
 
-    const { MessageRenderer } = jest.requireMock('@/features/chat/rendering/MessageRenderer') as { MessageRenderer: jest.Mock };
-    const lastCall = MessageRenderer.mock.calls[MessageRenderer.mock.calls.length - 1];
-    const forkCallback = lastCall[3].forkCallback;
+    const mountTranscriptMock = mountTranscript as unknown as jest.Mock;
+    const lastCall = mountTranscriptMock.mock.calls[mountTranscriptMock.mock.calls.length - 1];
+    const onFork = lastCall[3].onFork;
 
-    expect(forkCallback).toBeUndefined();
+    // onFork always exists on the transcript callbacks, but with no
+    // forkRequestCallback it short-circuits: invoking it never reaches
+    // handleForkRequest, which would otherwise surface a "message not found"
+    // Notice for an unknown id.
+    await onFork('nonexistent');
+
+    expect(mockNotice).not.toHaveBeenCalled();
   });
 });
 

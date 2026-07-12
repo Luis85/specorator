@@ -121,6 +121,11 @@ export class App {
     adapter: {
       basePath: '/mock/vault/path',
     },
+    // Real Obsidian always exposes this; default to "not found" so vault-path
+    // resolution (e.g. `resolveOpenableVaultPath`) doesn't crash on fixtures
+    // that never intended to exercise vault-file lookups. Tests that DO care
+    // about resolution override it per-instance (see e.g. domContract.test.ts).
+    getAbstractFileByPath: jest.fn().mockReturnValue(null),
     on: jest.fn().mockReturnValue({ id: 'mock-event-ref' }),
     offref: jest.fn(),
   };

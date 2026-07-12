@@ -1,8 +1,8 @@
 ---
-title: Migrate the chat shell (header + tab strip + content host) to a Vue 3 + Pinia island over the untouched engine
-date: 2026-07-11
+title: Migrate the chat shell (header + tab strip + content host) then the transcript rendering to Vue 3 + Pinia islands over the untouched engine
+date: 2026-07-12
 status: accepted
-scope: src/features/chat/SpecoratorView.ts, src/features/chat/ui/vue, src/features/chat/tabs
+scope: src/features/chat/SpecoratorView.ts, src/features/chat/ui/vue, src/features/chat/ui/vue/transcript, src/features/chat/tabs, src/features/chat/controllers, src/features/chat/state
 supersedes: none
 relates-to: docs/superpowers/specs/2026-07-11-chat-shell-vue-migration-design.md, docs/superpowers/plans/2026-07-11-chat-shell-vue-migration.md, docs/adr/0004-agent-board-vue-migration.md, docs/adr/0003-retire-legacy-library-views.md, docs/superpowers/specs/2026-07-03-vue-style-baseline-design.md
 method: accrete-then-swap (unwired Vue behind characterization/parity tests, one live cutover), engine seam held green throughout, post-cutover manual QA in Obsidian
@@ -12,8 +12,10 @@ method: accrete-then-swap (unwired Vue behind characterization/parity tests, one
 
 ## Status
 
-**Accepted and implemented** (2026-07-11, across commits `2f98016`..`b506de1`
-plus this Task 7 sweep).
+**Accepted and implemented.** Sub-project 1 (chat shell) landed 2026-07-11
+across commits `2f98016`..`b506de1` plus the Task 7 sweep. Sub-project 2
+(transcript rendering) landed 2026-07-12 — see "Sub-project 2 — Transcript
+rendering" below.
 
 ## Context
 
@@ -143,11 +145,99 @@ runtime lifecycle, tab switching) is stable and must not be touched.
   entry — re-locked down from 1112 in this Task 7 sweep, since the LOC guard
   is shrink-only and does not auto-tighten a grandfathered ceiling).
 
+## Sub-project 2 — Transcript rendering (2026-07-12)
+
+The ADR 0004/0005 island seam pushed one level deeper, into the per-tab
+`messagesEl`. The imperative `MessageRenderer`, every `rendering/*` block
+renderer, and the DOM-patching streaming write-side were deleted and replaced
+by a single Vue 3 + Pinia island (`ui/vue/transcript/`) that renders both stored
+and live turns through one reactive path. `TabManager`, tab lifecycle, provider
+runtimes, and `StreamController`'s chunk-routing + block-transition projection
+logic stay intact — only the stream **output** changed from raw DOM mutation to
+reactive-data mutation.
+
+1. **Streaming becomes data, not DOM.** The in-flight assistant turn is an
+   ordinary `ChatMessage` whose `contentBlocks`/`toolCalls` are appended/updated
+   as data during the turn; Vue renders it through the same components as any
+   stored message — there is NO separate live path and NO feature flag. The
+   coordinators (`TextRenderCoordinator`/`ThinkingRenderCoordinator`/
+   `toolCallAppend`) grow the message data; `ChatState` exposes
+   `activeMessageId`/`activeBlockIndex` + `getActiveStreamSnapshot()`. The cut
+   removed `ChatState`'s DOM-pointer fields (`currentContentEl`, `currentTextEl`,
+   `toolCallElements`, `writeEditStates`, …) and `StreamController` shrank
+   774→617 LOC.
+2. **Accrete-then-swap, one cutover.** Same discipline as sub-project 1: Tasks
+   1–17 were additive and unwired (new `ui/vue/transcript/` files, green
+   characterization/parity tests, imperative transcript still live); the hard
+   cut (Task 18) deleted the renderers, flipped the mount to `mountTranscript`,
+   and removed the DOM-pointer fields in one commit.
+3. **The message-identity-refresh reactivity contract (the C1/C2 fix).** The
+   engine mutates the SAME `ChatMessage` object IN PLACE
+   (`msg.content += chunk`, `contentBlocks.push`, `toolCall.result = …`), so the
+   object identity never changes — but `MessageBubble` is a keyed `v-for` child,
+   so an unchanged identity makes Vue skip the patch and the live turn renders
+   blank (C1). Symmetrically, an async/background subagent completing AFTER the
+   turn ends mutates a non-active message that the active-message refresh won't
+   catch (C2). `tabs/tabTranscript.ts`'s `TabTranscriptProjection` therefore
+   gives, on each snapshot, a **fresh identity** to the actively-streaming
+   message (`activeMessageId`) AND any off-stream-dirtied message
+   (`refreshMessage(id)`) — including fresh tool-call and nested `subagent`
+   references, since those reach `ToolCall`/`SubagentBlock` by object reference.
+   The clone is snapshot-only: it never touches `ChatState.messages`, so the
+   engine's live `msg` keeps growing the original object.
+   `tests/vue/chat/transcript/liveMutation.regression.test.ts` locks both C1
+   and C2 against the real `mountTranscript` path.
+4. **The `.specorator-*` DOM contract (what the remaining sub-projects depend
+   on).** Vue took over the transcript DOM, but four still-imperative consumers
+   read it by class/attribute and are OUT of scope here:
+   `NavigationController`/`NavigationSidebar` (scan `.specorator-message-user` +
+   `offsetTop`), the three selection controllers, `ChatDropController` (overlay),
+   and `StreamController` auto-scroll (`.specorator-messages` scroll container).
+   The Vue components therefore emit the exact legacy `.specorator-*`
+   classes/attributes alongside the `.specorator-vue` baseline.
+   `tests/vue/chat/transcript/domContract.test.ts` mounts the real
+   `TranscriptRoot` over a fixture exercising every block type + user/assistant +
+   streaming + chrome and asserts every consumer-queried class/attribute — the
+   regression backstop that keeps the composer + side-panel sub-projects
+   unblocked while those consumers stay imperative.
+5. **Novel seams.** `MarkdownHost.vue` quarantines the one Vue-hostile surface
+   (async Obsidian markdown): it owns one element, treats children as opaque,
+   re-renders on text change, and drops stale renders with a monotonic
+   generation token (render into a detached element, swap only after the token
+   check). Inline blocking cards (`inline/`) are mounted via the
+   `mountInlineCard` seam while `InlinePromptController` keeps owning the promise
+   the runtime awaits + the ref-counted composer-hide + `needsAttention` badge;
+   abort/dismiss resolves the promise with `null` (never rejects). `TranscriptRoot`
+   hands its `.specorator-messages` scroll element up through `SCROLL_HOST_KEY`
+   (mirror of the shell's `CONTENT_HOST_KEY`).
+6. **Guardrail accounting.** `messageRenderer.perf` moved to the Vue lane as
+   `tests/vue/chat/transcript/transcriptScaling.test.ts` (the Jest perf lane
+   stubs `.vue`/`mountTranscript`); `navigationSidebar.perf` +
+   `multiTabStreaming.perf` stay in the Jest perf lane. `InputController` was
+   re-locked 1199→1194: the cutover moved assistant-message activation/discard
+   bookkeeping into it, then extracted it back out to
+   `controllers/streamingMessageLifecycle.ts` to keep the LOC ceiling shrinking
+   rather than grow. `scripts/quality-baseline.json`'s duplication counters rose
+   deliberately (cloneGroups 32→36, duplicatedLines 787→1048) — a few pure
+   `rendering/*` helpers were re-implemented as Vue viewmodels and the two inline
+   plan cards share ~64 lines; extracting those clone groups is a tracked
+   follow-up (complexFunctions and maintainability improved in the same pass).
+
+### Deferred follow-ups (sub-project 2)
+
+- Helper-extraction: fold the re-implemented `rendering/*` pure helpers (e.g.
+  `webSearchViewModel` ↔ `webSearchRenderer`) and the shared inline-plan-card
+  clone groups into shared modules, unwinding the duplication-baseline bump.
+- Auto-turn retry-suppression consistency and a custom streaming-indicator text
+  hook are tracked parity gaps (not visible functional loss).
+- Provider-lifecycle spawn tools render as a plain `ToolCall`; the consolidated
+  spawn+wait+close card is unbuilt.
+
 ## Deferred / known items
 
-- Sub-projects 2–4 (transcript rendering, composer/input toolbar, side
-  panels) are unscheduled follow-ups; each gets its own spec/plan/PR under the
-  same island-over-untouched-engine pattern.
+- Sub-projects 3–4 (composer/input toolbar, side panels) are unscheduled
+  follow-ups; each gets its own spec/plan/PR under the same
+  island-over-untouched-engine pattern.
 - `InlineAskUserQuestion.renderTabBar`'s consistency with the Vue `TabStrip`
   projection is unaudited (see above); tracked for a later sub-project rather
   than blocking this one.
@@ -157,8 +247,10 @@ runtime lifecycle, tab switching) is stable and must not be touched.
 
 ## References
 
-- Spec: `docs/superpowers/specs/2026-07-11-chat-shell-vue-migration-design.md`
-- Plan: `docs/superpowers/plans/2026-07-11-chat-shell-vue-migration.md`
+- Spec (sub-project 1): `docs/superpowers/specs/2026-07-11-chat-shell-vue-migration-design.md`
+- Plan (sub-project 1): `docs/superpowers/plans/2026-07-11-chat-shell-vue-migration.md`
+- Spec (sub-project 2): `docs/superpowers/specs/2026-07-12-transcript-rendering-vue-migration-design.md`
+- Plan (sub-project 2): `docs/superpowers/plans/2026-07-12-transcript-rendering-vue-migration.md`
 - Prior reactive-cutover precedent: `docs/adr/0004-agent-board-vue-migration.md`,
   `docs/adr/0003-retire-legacy-library-views.md`
 - Style baseline: `docs/superpowers/specs/2026-07-03-vue-style-baseline-design.md`

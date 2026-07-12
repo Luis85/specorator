@@ -33,7 +33,6 @@ import type { CanvasSelectionContext } from '../../../utils/canvas';
 import type { EditorSelectionContext } from '../../../utils/editor';
 import { appendMarkdownSnippet } from '../../../utils/markdown';
 import type { BoundAgentProjection } from '../../agents/roster/boundAgentPersona';
-import type { MessageRenderer } from '../rendering/MessageRenderer';
 import { persistPastedImages } from '../services/persistPastedImages';
 import type { SubagentManager } from '../services/SubagentManager';
 import type { ChatState } from '../state/ChatState';
@@ -64,23 +63,29 @@ import {
   restoreResumeCheckpointIfNeeded,
 } from './composerSendPhases';
 import type { ConversationController } from './ConversationController';
+import type { InlineCardMounter } from './inlineCardMount';
 import { InlinePromptController } from './InlinePromptController';
 import { QueuedMessageController } from './QueuedMessageController';
 import { ResumeSessionDropdownCoordinator } from './ResumeSessionDropdownCoordinator';
 import type { SelectionController } from './SelectionController';
 import type { StreamController } from './StreamController';
+import { activateStreamingAssistantMessage, discardStreamingAssistantMessage } from './streamingMessageLifecycle';
 
 export interface InputControllerDeps {
   plugin: SpecoratorPlugin;
   state: ChatState;
-  renderer: MessageRenderer;
+  /** Mounts the inline-prompt Vue cards (approval / ask / exit-plan / post-plan). */
+  mountInlineCard: InlineCardMounter;
+  /** Re-projects the transcript snapshot into the Vue store (per-tab). */
+  emitTranscript?: () => void;
+  /** Re-projects a single message (fresh identity) — see `completeFinishedTurn`. */
+  refreshTranscriptMessage?: (messageId: string) => void;
   streamController: StreamController;
   selectionController: SelectionController;
   browserSelectionController?: BrowserSelectionController;
   canvasSelectionController: CanvasSelectionController;
   conversationController: ConversationController;
   getInputEl: () => HTMLTextAreaElement;
-  getWelcomeEl: () => HTMLElement | null;
   getMessagesEl: () => HTMLElement;
   getFileContextManager: () => FileContextManager | null;
   getImageContextManager: () => ImageContextManager | null;
@@ -189,10 +194,15 @@ export class InputController {
     this.inlinePrompts = new InlinePromptController({
       state: deps.state,
       getInputContainerEl: () => this.deps.getInputContainerEl(),
-      renderContent: (el, markdown) => this.deps.renderer.renderContent(el, markdown),
+      mountInlineCard: deps.mountInlineCard,
       hideThinkingIndicator: () => this.deps.streamController.hideThinkingIndicator(),
       getPlanPathPrefix: () => this.getActiveCapabilities().planPathPrefix,
     });
+  }
+
+  /** Re-projects the transcript snapshot (per-tab). No-op when unwired (tests). */
+  private emit(): void {
+    this.deps.emitTranscript?.();
   }
 
   private getAgentService(): ChatRuntime | null {
@@ -389,7 +399,10 @@ export class InputController {
       wasInvalidated = streamOutcome.wasInvalidated;
     } catch (error) {
       const errorMsg = error instanceof Error ? error.message : 'Unknown error';
-      await this.deps.streamController.appendText(`\n\n**Error:** ${errorMsg}`);
+      await this.deps.streamController.appendText(
+        `\n\n**Error:** ${errorMsg}`,
+        this.activeStreamingAssistantMessage ?? ctx.assistantMsg,
+      );
     } finally {
       programmaticResult = await this.finalizeTurn(ctx, { wasInterrupted, wasInvalidated });
     }
@@ -457,20 +470,20 @@ export class InputController {
     assistantMsg: ChatMessage;
     deferredAiTitleGeneration: (() => void) | null;
   }> {
-    const { state, renderer, streamController } = this.deps;
+    const { state, streamController } = this.deps;
     const { displayContent, imagesForMessage, isCompact } = outgoing;
 
     const userMsg = createOutgoingUserMessage(this.deps.generateId(), displayContent, imagesForMessage);
+    // Pure data: `addMessage` fires onMessagesChanged → the transcript projects.
     state.addMessage(userMsg);
     state.hasPendingConversationSave = true;
-    renderer.addMessage(userMsg);
 
     const deferredAiTitleGeneration = await this.triggerTitleGeneration();
 
     const assistantMsg = createAssistantPlaceholderMessage(this.deps.generateId());
     state.addMessage(assistantMsg);
     this.activeStreamingAssistantMessage = assistantMsg;
-    this.activateStreamingAssistantMessage(assistantMsg);
+    activateStreamingAssistantMessage(state, this.deps.getMessagesEl(), assistantMsg);
     this.pendingProviderUserMessages = [{
       displayContent,
       images: imagesForMessage,
@@ -483,6 +496,9 @@ export class InputController {
       isCompact ? 'specorator-thinking--compact' : undefined,
     );
     state.responseStartTime = performance.now();
+    // Project the freshly-activated stream (messageId + start time) so the Vue
+    // indicator appears before the first chunk lands.
+    this.emit();
 
     return { userMsg, assistantMsg, deferredAiTitleGeneration };
   }
@@ -519,7 +535,7 @@ export class InputController {
   private async streamPreparedTurn(
     ctx: DispatchedTurnContext,
   ): Promise<{ wasInterrupted: boolean; wasInvalidated: boolean }> {
-    const { state, renderer, streamController } = this.deps;
+    const { state, streamController } = this.deps;
     let wasInterrupted = false;
     let wasInvalidated = false;
 
@@ -528,8 +544,9 @@ export class InputController {
     ctx.userMsg.currentNote = preparedTurn.isCompact
       ? undefined
       : preparedTurn.request.currentNotePath;
-    // Re-render now that content carries folded @mentions, so the context card appears immediately.
-    renderer.updateLiveUserMessage(ctx.userMsg);
+    // Content now carries folded @mentions; re-project so the context card
+    // appears immediately (in-place mutation doesn't fire onMessagesChanged).
+    this.emit();
 
     // Pass history WITHOUT current turn (userMsg + assistantMsg we just added)
     // This prevents duplication when rebuilding context for new sessions
@@ -660,7 +677,10 @@ export class InputController {
     const { finalAssistantMsg } = turn;
     const didCancelThisTurn = turn.wasInterrupted || state.cancelRequested;
     if (didCancelThisTurn && !state.pendingNewSessionPlan) {
-      await streamController.appendText('\n\n<span class="specorator-interrupted">Interrupted</span> <span class="specorator-interrupted-hint">· What should Specorator do instead?</span>');
+      await streamController.appendText(
+        '\n\n<span class="specorator-interrupted">Interrupted</span> <span class="specorator-interrupted-hint">· What should Specorator do instead?</span>',
+        finalAssistantMsg,
+      );
     }
     streamController.hideThinkingIndicator();
     state.isStreaming = false;
@@ -671,9 +691,19 @@ export class InputController {
     bakeResponseDurationFooter(state, finalAssistantMsg, didCancelThisTurn);
 
     state.currentContentEl = null;
+    // The turn is over; drop the reactive-stream message pointer so the snapshot
+    // reads null. `activeBlockIndex` is left for the finalize calls below to
+    // close their open block, then reset.
+    state.activeMessageId = null;
 
     await streamController.finalizeCurrentThinkingBlock(finalAssistantMsg);
     await streamController.finalizeCurrentTextBlock(finalAssistantMsg);
+    // The finalize calls above mutate `finalAssistantMsg` in place (interrupted
+    // marker / `**Error:**` / a collapsed response's withheld body) AFTER
+    // `activeMessageId` was cleared, so the active-message identity refresh no
+    // longer covers it; mark it dirty or a keyed MessageBubble reuses the same
+    // object and hides the finalized text until reload.
+    this.deps.refreshTranscriptMessage?.(finalAssistantMsg.id);
     this.deps.getSubagentManager().resetStreamingState();
 
     let programmaticResult: ProgrammaticSendResult | undefined;
@@ -714,7 +744,7 @@ export class InputController {
     turn: FinishedTurn,
     didCancelThisTurn: boolean,
   ): Promise<void> {
-    const { state, renderer, conversationController } = this.deps;
+    const { state, conversationController } = this.deps;
 
     // Provider-agnostic post-plan approval: show UI and await decision before auto-send
     const approval = await this.resolvePlanApprovalOutcome(ctx, turn, didCancelThisTurn);
@@ -725,10 +755,9 @@ export class InputController {
     // call sendMessage which saves itself) or just update the input UI (revise /
     // cancel) — neither needs an extra save here.
 
-    const userMsgIndex = state.messages.indexOf(ctx.userMsg);
-    renderer.refreshActionButtons(ctx.userMsg, state.messages, userMsgIndex >= 0 ? userMsgIndex : undefined);
-    // Surface the per-message work-order action on the just-completed agent response.
-    renderer.refreshMessageActions(turn.finalAssistantMsg);
+    // Per-message actions (rewind/fork/work-order) are Vue-side now, resolved
+    // live through `TranscriptCallbacks.getMessageActions`; no imperative refresh.
+    this.emit();
 
     // Auto-implement takes precedence over both approve-new-session and queued input
     if (approval.autoSendContent) {
@@ -800,6 +829,18 @@ export class InputController {
   /** Whether a previously-dispatched turn is available to retry. */
   hasRetryableTurn(): boolean {
     return this.lastTurnSubmission !== null;
+  }
+
+  /**
+   * Drops the retained last-turn submission so a runtime-error card rendered
+   * after a conversation load/switch has nothing to retry. Without this the
+   * retained turn survives a conversation switch (the InputController is per-tab,
+   * not per-conversation), so a reloaded/persisted `runtime_error` card would
+   * either no-op (nothing dispatched yet this session) or silently re-dispatch
+   * the previous conversation's turn.
+   */
+  clearRetryableTurn(): void {
+    this.lastTurnSubmission = null;
   }
 
   /**
@@ -912,25 +953,6 @@ export class InputController {
     };
   }
 
-  private activateStreamingAssistantMessage(message: ChatMessage): void {
-    const { state, renderer } = this.deps;
-    const msgEl = renderer.addMessage(message);
-    const contentEl = msgEl.querySelector<HTMLElement>('.specorator-message-content');
-
-    if (!contentEl) {
-      return;
-    }
-
-    if (!state.currentContentEl) {
-      state.toolCallElements.clear();
-    }
-
-    state.currentContentEl = contentEl;
-    state.currentTextEl = null;
-    state.currentTextContent = '';
-    state.currentThinkingState = null;
-  }
-
   private resetProviderMessageBoundaryState(): void {
     this.pendingProviderUserMessages = [];
     this.sawInitialProviderUserMessage = false;
@@ -966,7 +988,7 @@ export class InputController {
     const shouldDiscardPlaceholder = this.shouldDiscardPendingAssistantPlaceholder(previousAssistant);
     if (previousAssistant) {
       if (shouldDiscardPlaceholder) {
-        this.discardStreamingAssistantMessage(previousAssistant.id);
+        discardStreamingAssistantMessage(this.deps.state, previousAssistant.id);
       } else {
         await this.deps.streamController.finalizeCurrentThinkingBlock(previousAssistant);
         await this.deps.streamController.finalizeCurrentTextBlock(previousAssistant);
@@ -988,16 +1010,16 @@ export class InputController {
         images,
       };
       this.deps.state.addMessage(userMessage);
-      this.deps.renderer.addMessage(userMessage);
     }
 
     const assistantMessage = createAssistantPlaceholderMessage(this.deps.generateId());
     this.deps.state.addMessage(assistantMessage);
     this.activeStreamingAssistantMessage = assistantMessage;
-    this.activateStreamingAssistantMessage(assistantMessage);
+    activateStreamingAssistantMessage(this.deps.state, this.deps.getMessagesEl(), assistantMessage);
     this.deps.streamController.showThinkingIndicator();
     this.deps.state.responseStartTime = performance.now();
     this.awaitingProviderAssistantStart = true;
+    this.emit();
   }
 
   private async handleProviderAssistantMessageStart(): Promise<void> {
@@ -1015,8 +1037,9 @@ export class InputController {
     const assistantMessage = createAssistantPlaceholderMessage(this.deps.generateId());
     this.deps.state.addMessage(assistantMessage);
     this.activeStreamingAssistantMessage = assistantMessage;
-    this.activateStreamingAssistantMessage(assistantMessage);
+    activateStreamingAssistantMessage(this.deps.state, this.deps.getMessagesEl(), assistantMessage);
     this.deps.streamController.showThinkingIndicator();
+    this.emit();
   }
 
   private shouldDiscardPendingAssistantPlaceholder(message: ChatMessage | null): boolean {
@@ -1025,16 +1048,6 @@ export class InputController {
       && !message.content.trim()
       && (message.toolCalls?.length ?? 0) === 0
       && (message.contentBlocks?.length ?? 0) === 0;
-  }
-
-  private discardStreamingAssistantMessage(messageId: string): void {
-    const { state, renderer } = this.deps;
-    state.messages = state.messages.filter((message) => message.id !== messageId);
-    renderer.removeMessage(messageId);
-    state.currentContentEl = null;
-    state.currentTextEl = null;
-    state.currentTextContent = '';
-    state.currentThinkingState = null;
   }
 
   // ============================================

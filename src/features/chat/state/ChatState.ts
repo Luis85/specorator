@@ -1,14 +1,13 @@
 import type { UsageInfo } from '../../../core/types';
 import { type EditedFileEntry, mergeEditedFileEntry } from '../utils/editedFiles';
 import type {
+  ActiveStreamState,
   ChatMessage,
   ChatStateCallbacks,
   ChatStateData,
-  PendingToolCall,
   QueuedMessage,
   ThinkingBlockState,
   TodoItem,
-  WriteEditState,
 } from './types';
 
 function createInitialState(): ChatStateData {
@@ -27,12 +26,13 @@ function createInitialState(): ChatStateData {
     currentTextEl: null,
     currentTextContent: '',
     currentThinkingState: null,
-    thinkingEl: null,
+    activeMessageId: null,
+    activeBlockIndex: -1,
+    streamingIndicatorMode: null,
+    streamingIndicatorLabel: null,
     queueIndicatorEl: null,
     thinkingIndicatorTimeout: null,
     toolCallElements: new Map(),
-    writeEditStates: new Map(),
-    pendingTools: new Map(),
     usage: null,
     ignoreUsageUpdates: false,
     currentTodos: null,
@@ -221,12 +221,58 @@ export class ChatState {
     this.state.currentThinkingState = value;
   }
 
-  get thinkingEl(): HTMLElement | null {
-    return this.state.thinkingEl;
+  get activeMessageId(): string | null {
+    return this.state.activeMessageId;
   }
 
-  set thinkingEl(value: HTMLElement | null) {
-    this.state.thinkingEl = value;
+  set activeMessageId(value: string | null) {
+    this.state.activeMessageId = value;
+  }
+
+  get activeBlockIndex(): number {
+    return this.state.activeBlockIndex;
+  }
+
+  set activeBlockIndex(value: number) {
+    this.state.activeBlockIndex = value;
+  }
+
+  get streamingIndicatorMode(): 'thinking' | 'writing' | null {
+    return this.state.streamingIndicatorMode;
+  }
+
+  set streamingIndicatorMode(value: 'thinking' | 'writing' | null) {
+    this.state.streamingIndicatorMode = value;
+  }
+
+  get streamingIndicatorLabel(): string | null {
+    return this.state.streamingIndicatorLabel;
+  }
+
+  set streamingIndicatorLabel(value: string | null) {
+    this.state.streamingIndicatorLabel = value;
+  }
+
+  /**
+   * Snapshot of the in-flight turn for the Vue transcript, or null when no turn
+   * is streaming. `isThinking`/`isWriting` mirror the imperative streaming
+   * indicator's on-screen form (`streamingIndicatorMode`): `'thinking'` ⇔ the
+   * debounced flavor indicator, `'writing'` ⇔ the `Writing response…`
+   * placeholder — the same element the Vue `StreamingIndicator` reproduces. This
+   * tracks the indicator's show/showWriting/hide state, not the reasoning/text
+   * block state. `elapsedSeconds` derives from `responseStartTime`.
+   */
+  getActiveStreamSnapshot(): ActiveStreamState | null {
+    if (this.state.activeMessageId === null) return null;
+    const start = this.state.responseStartTime;
+    return {
+      messageId: this.state.activeMessageId,
+      blockIndex: this.state.activeBlockIndex,
+      isThinking: this.state.streamingIndicatorMode === 'thinking',
+      isWriting: this.state.streamingIndicatorMode === 'writing',
+      elapsedSeconds: start === null ? 0 : Math.floor((performance.now() - start) / 1000),
+      label: this.state.streamingIndicatorLabel ?? undefined,
+    };
   }
 
   get queueIndicatorEl(): HTMLElement | null {
@@ -252,14 +298,6 @@ export class ChatState {
 
   get toolCallElements(): Map<string, HTMLElement> {
     return this.state.toolCallElements;
-  }
-
-  get writeEditStates(): Map<string, WriteEditState> {
-    return this.state.writeEditStates;
-  }
-
-  get pendingTools(): Map<string, PendingToolCall> {
-    return this.state.pendingTools;
   }
 
   // ============================================
@@ -444,6 +482,10 @@ export class ChatState {
     this.state.currentTextEl = null;
     this.state.currentTextContent = '';
     this.state.currentThinkingState = null;
+    this.state.activeMessageId = null;
+    this.state.activeBlockIndex = -1;
+    this.state.streamingIndicatorMode = null;
+    this.state.streamingIndicatorLabel = null;
     this.state.isStreaming = false;
     this.state.cancelRequested = false;
     // Clear thinking indicator timeout
@@ -455,8 +497,6 @@ export class ChatState {
 
   clearMaps(): void {
     this.state.toolCallElements.clear();
-    this.state.writeEditStates.clear();
-    this.state.pendingTools.clear();
   }
 
   resetForNewConversation(): void {

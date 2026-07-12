@@ -43,6 +43,24 @@ export class NavigationSidebar {
     return btn;
   }
 
+  /**
+   * Repoints the sidebar's scroll target from the element captured at
+   * construction to `el` — used when the Vue transcript island mounts and hands
+   * back its real `.specorator-messages` scroll container, which replaces the
+   * placeholder wrapper the tab was built against. Moves the scroll listener,
+   * and re-uses `el` for every subsequent scan / scrollTo / visibility read.
+   * No-op if `el` is the current target or not an element node (cross-window
+   * safe: `nodeType === 1`, never `instanceof HTMLElement`).
+   */
+  rebindScrollEl(el: HTMLElement): void {
+    if (el === this.messagesEl || el.nodeType !== 1) return;
+    this.messagesEl.removeEventListener('scroll', this.scrollHandler);
+    this.messagesEl = el;
+    this.messagesEl.addEventListener('scroll', this.scrollHandler, { passive: true });
+    this.isVisible = null; // force a fresh visibility decision against the new element
+    this.updateVisibility();
+  }
+
   private setupEventListeners(): void {
     // Scroll handling to toggle visibility
     this.scrollHandler = () => this.updateVisibility();

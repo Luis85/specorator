@@ -51,6 +51,7 @@ class MockClassList {
 
 class MockElement {
   tagName: string;
+  nodeType = 1;
   classList = new MockClassList();
   style: Record<string, string> = {};
   ownerDocument: { defaultView: Window | null };
@@ -550,6 +551,73 @@ describe('NavigationSidebar', () => {
 
       const lastCall = messagesEl.scrollToCalls[messagesEl.scrollToCalls.length - 1];
       expect(lastCall.top).toBe(0);
+    });
+  });
+
+  describe('rebindScrollEl', () => {
+    it('repoints scan + scrollTo to the new scroll element', () => {
+      messagesEl.scrollHeight = 2000;
+      messagesEl.clientHeight = 500;
+
+      sidebar = new NavigationSidebar(
+        parentEl as unknown as HTMLElement,
+        messagesEl as unknown as HTMLElement
+      );
+
+      // The Vue transcript mounts its own scroll container with the messages.
+      const newEl = new MockElement('div');
+      newEl.scrollHeight = 3000;
+      newEl.clientHeight = 500;
+      const msg = newEl.createDiv({ cls: 'specorator-message specorator-message-user' });
+      msg.offsetTop = 400;
+      newEl.scrollTop = 0;
+
+      sidebar.rebindScrollEl(newEl as unknown as HTMLElement);
+
+      const container = parentEl.querySelector('.specorator-nav-sidebar')!;
+      container.children[2].click(); // next
+
+      const lastCall = newEl.scrollToCalls[newEl.scrollToCalls.length - 1];
+      expect(lastCall.top).toBe(390); // offsetTop(400) - 10, scanned in the NEW element
+      // The old (placeholder wrapper) element is no longer touched.
+      expect(messagesEl.scrollToCalls.length).toBe(0);
+    });
+
+    it('disconnects the old scroll listener and observes the new element', () => {
+      messagesEl.scrollHeight = 500;
+      messagesEl.clientHeight = 500;
+
+      sidebar = new NavigationSidebar(
+        parentEl as unknown as HTMLElement,
+        messagesEl as unknown as HTMLElement
+      );
+
+      const newEl = new MockElement('div');
+      newEl.scrollHeight = 2000;
+      newEl.clientHeight = 500;
+
+      sidebar.rebindScrollEl(newEl as unknown as HTMLElement);
+      jest.advanceTimersByTime(16);
+
+      // Visibility now reflects the NEW (scrollable) element.
+      const container = parentEl.querySelector('.specorator-nav-sidebar')!;
+      expect(container.classList.contains('visible')).toBe(true);
+
+      // Scroll listener moved off the old element onto the new one.
+      expect((messagesEl as unknown as { listeners: Record<string, unknown[]> }).listeners.scroll ?? []).toHaveLength(0);
+      expect((newEl as unknown as { listeners: Record<string, unknown[]> }).listeners.scroll ?? []).toHaveLength(1);
+    });
+
+    it('is a no-op when rebinding to the same element', () => {
+      sidebar = new NavigationSidebar(
+        parentEl as unknown as HTMLElement,
+        messagesEl as unknown as HTMLElement
+      );
+
+      const before = (messagesEl as unknown as { listeners: Record<string, unknown[]> }).listeners.scroll.length;
+      sidebar.rebindScrollEl(messagesEl as unknown as HTMLElement);
+
+      expect((messagesEl as unknown as { listeners: Record<string, unknown[]> }).listeners.scroll.length).toBe(before);
     });
   });
 

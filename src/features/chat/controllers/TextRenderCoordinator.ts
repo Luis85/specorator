@@ -1,60 +1,51 @@
 import type { ChatMessage } from '../../../core/types';
-import { hasStreamingMathDelimiters } from '../../../utils/markdownMath';
-import type { MessageRenderer, RenderContentOptions } from '../rendering/MessageRenderer';
 import type { ChatState } from '../state/ChatState';
-import { StreamRenderLoop, type StreamRenderTarget } from './streamRenderLoop';
 
 export interface TextRenderDeps {
   state: ChatState;
-  renderer: MessageRenderer;
   showWriting: () => void;
   hideThinkingIndicator: () => void;
-  scrollToBottom: () => void;
-  getStreamingRenderOptions: (content: string) => RenderContentOptions | undefined;
-  shouldDeferMathRendering: () => boolean;
   shouldCollapseStreamingResponse: () => boolean;
-  getMessagesWindow: () => Window | null;
+  /** Whether streaming math delimiters should be escaped (deferred) until finalize. */
+  shouldDeferMathRendering: () => boolean;
 }
 
 /**
- * Owns the streaming assistant-text render lifecycle lifted out of
- * `StreamController`: the collapse-mode snapshot, the finalize-time card swap /
- * copy button, and the append/finalize transitions. The throttled render loop is
- * the shared `StreamRenderLoop`; the text block element + content live on the
- * shared `ChatState`.
+ * Owns the streaming assistant-text lifecycle as pure reactive data. In the
+ * default NON-collapse mode it grows the open `text` content block on
+ * `msg.contentBlocks` on every chunk (the Vue `TextBlock` renders the live
+ * growth) and drives the streaming indicator's writing/thinking mode. In
+ * COLLAPSE mode (`collapseStreamingResponse`, the default) it WITHHOLDS the
+ * partial text from the reactive block for the whole turn — the Vue transcript
+ * shows only the "Writing response…" placeholder — and writes the full
+ * accumulated text into the block once at `finalize`, so the response renders
+ * in one shot on completion rather than streaming live. No DOM: the imperative
+ * render loop and finalize-time card swap were removed with the Vue cutover
+ * (the Vue transcript splits the work-order handoff card off the text segment
+ * itself).
+ *
+ * `state.currentTextEl` stays as a NON-DOM sentinel (a detached element) so
+ * `StreamController.blockState()` (`hasOpenTextBlock`) still reads "a text block
+ * is open"; nothing is ever appended to it.
  */
 export class TextRenderCoordinator {
-  private readonly loop: StreamRenderLoop;
-  // Collapse setting snapshotted once when the current text block starts. Read
-  // (not re-evaluated) through the block's append/render/finalize lifecycle so a
-  // mid-block toggle can't race those steps; the toggle takes effect next block.
+  // Collapse setting snapshotted once when the current text block starts, so a
+  // mid-block toggle applies to the next block (parity with the legacy render).
   private currentBlockCollapsed = false;
 
-  constructor(private readonly deps: TextRenderDeps) {
-    this.loop = new StreamRenderLoop({
-      renderer: deps.renderer,
-      getStreamingRenderOptions: deps.getStreamingRenderOptions,
-      scrollToBottom: deps.scrollToBottom,
-      currentContent: () => deps.state.currentTextContent,
-      currentTarget: (): StreamRenderTarget | null => {
-        const el = deps.state.currentTextEl;
-        return el ? { el, token: el } : null;
-      },
-      getWindow: () => this.getWindow(),
-    });
-  }
+  constructor(private readonly deps: TextRenderDeps) {}
 
-  async append(text: string): Promise<void> {
+  async append(text: string, msg?: ChatMessage): Promise<void> {
     const { state } = this.deps;
     if (!state.currentContentEl) return;
 
-    // Snapshot the collapse setting once, when the block starts. Reading it again
-    // mid-block would let a toggle race the append/render/finalize steps; instead
-    // a block keeps the mode it started in and a toggle applies to the next block.
     if (!state.currentTextEl) {
-      state.currentTextEl = state.currentContentEl.createDiv({ cls: 'specorator-text-block' });
+      // Detached sentinel — marks "a text block is open" for blockState(); never
+      // rendered into.
+      state.currentTextEl = state.currentContentEl.ownerDocument.createElement('div');
       state.currentTextContent = '';
       this.currentBlockCollapsed = this.deps.shouldCollapseStreamingResponse();
+      this.openReactiveTextBlock(msg);
     }
 
     if (!this.currentBlockCollapsed) {
@@ -64,93 +55,92 @@ export class TextRenderCoordinator {
     state.currentTextContent += text;
 
     if (this.currentBlockCollapsed) {
-      // Hide the half-formed render: keep an immediate placeholder up and render
-      // the whole block in one pass when it finalizes.
+      // Collapse mode withholds the partial text from the reactive block for the
+      // whole block (the visible content stays empty, so the Vue transcript shows
+      // only the "Writing response…" placeholder the writing mode reproduces).
+      // The accumulated text is flushed into the block once at `finalize`.
       this.deps.showWriting();
-      return;
+    } else {
+      // Live (non-collapse) growth: defer math so incomplete `$…$`/LaTeX
+      // fragments are escaped every chunk instead of hitting Obsidian's renderer
+      // mid-delimiter. The flag is cleared on finalize (the final render escapes
+      // nothing → math renders).
+      this.growReactiveTextBlock(msg, this.deps.shouldDeferMathRendering());
     }
-
-    void this.loop.schedule();
   }
 
   async finalize(msg?: ChatMessage): Promise<void> {
-    const { state, renderer } = this.deps;
-    await this.loop.flush();
+    const { state } = this.deps;
 
-    // A block keeps the collapse mode it started in (snapshotted in append),
-    // so finalize follows that snapshot, not the live setting.
-    const collapsed = this.currentBlockCollapsed;
-    // A collapsed block kept its "Writing response..." placeholder up for the
-    // whole block; drop it before the one-pass render below.
-    if (collapsed) {
+    // A collapsed block withheld its content and held a writing placeholder for
+    // the whole block; flush the full accumulated text into the reactive block
+    // one-shot so it renders on completion, then drop the placeholder. This must
+    // run BEFORE `closeReactiveTextBlock` so the now-filled block survives the
+    // empty-block-drop guard (a block that never received any text stays empty
+    // and is still dropped).
+    if (this.currentBlockCollapsed) {
+      this.growReactiveTextBlock(msg);
       this.deps.hideThinkingIndicator();
     }
 
-    if (msg && state.currentTextContent) {
-      await this.renderFinalizedTextBlock(state.currentTextEl, state.currentTextContent, collapsed);
-      msg.contentBlocks = msg.contentBlocks || [];
-      msg.contentBlocks.push({ type: 'text', content: state.currentTextContent });
-      // Work-order tabs swap a completed handoff block for the compact card on
-      // finalize; everything else keeps the raw text block plus copy button.
-      // Derive the content element from the text element's parent because
-      // `InputController` nulls `state.currentContentEl` right before this
-      // call — guarding on `state.currentContentEl` here would mean the live
-      // swap never fires on a normal completed turn (only after a reload).
-      const liveContentEl =
-        (state.currentTextEl?.parentElement)
-          ?? state.currentContentEl;
-      const replacedWithCard =
-        liveContentEl && state.currentTextEl
-          ? renderer.finalizeStreamedAssistantText?.(
-              liveContentEl,
-              state.currentTextEl,
-              state.currentTextContent,
-            ) ?? false
-          : false;
-      // Copy button added here (not during streaming) to match history-loaded messages
-      if (state.currentTextEl && !replacedWithCard) {
-        renderer.addTextCopyButton(state.currentTextEl, state.currentTextContent);
-      }
-      // The card swap removed the text block that registered actions anchor to;
-      // re-anchor them onto the card so a freshly completed run keeps actions
-      // (e.g. Create work order) without waiting for a reload.
-      if (replacedWithCard && msg) {
-        renderer.refreshMessageActions?.(msg);
-      }
-    }
+    this.closeReactiveTextBlock(msg);
     state.currentTextEl = null;
     state.currentTextContent = '';
     this.currentBlockCollapsed = false;
   }
 
   cancel(): void {
-    this.loop.cancel();
+    // No render loop to cancel in data-only mode.
+  }
+
+  /** Pushes the empty reactive text block that `append` grows and `finalize` closes. */
+  private openReactiveTextBlock(msg?: ChatMessage): void {
+    if (!msg) return;
+    msg.contentBlocks = msg.contentBlocks || [];
+    msg.contentBlocks.push({ type: 'text', content: '' });
+    this.deps.state.activeBlockIndex = msg.contentBlocks.length - 1;
   }
 
   /**
-   * Renders the finalized text into its element. A collapsed block was never
-   * live-rendered, so render it once now; a non-collapsed block already holds the
-   * streamed render and only needs a re-render to bake deferred math.
+   * Mirrors the accumulated streamed text into the open reactive block.
+   * `deferMath` stamps the transient escape-math flag while the live block grows;
+   * finalize's flush passes it `false` (default) so the completed block persists
+   * without the flag.
    */
-  private async renderFinalizedTextBlock(
-    textEl: HTMLElement | null,
-    content: string,
-    collapsed: boolean,
-  ): Promise<void> {
-    if (!textEl) return;
-    if (collapsed) {
-      await this.deps.renderer.renderContent(textEl, content);
-      return;
-    }
-    if (this.deps.shouldDeferMathRendering() && hasStreamingMathDelimiters(content)) {
-      await this.deps.renderer.renderContent(textEl, content);
+  private growReactiveTextBlock(msg: ChatMessage | undefined, deferMath = false): void {
+    if (!msg) return;
+    const { state } = this.deps;
+    const block = msg.contentBlocks?.[state.activeBlockIndex];
+    if (block?.type === 'text') {
+      block.content = state.currentTextContent;
+      if (deferMath) {
+        block.deferMath = true;
+      } else {
+        delete block.deferMath;
+      }
     }
   }
 
-  private getWindow(): Window | null {
+  /**
+   * Closes the open reactive text block. A block that never received content is
+   * dropped so a bare `finalize` leaves no stray empty block.
+   */
+  private closeReactiveTextBlock(msg?: ChatMessage): void {
     const { state } = this.deps;
-    return state.currentTextEl?.ownerDocument?.defaultView
-      ?? state.currentContentEl?.ownerDocument?.defaultView
-      ?? this.deps.getMessagesWindow();
+    const blocks = msg?.contentBlocks;
+    if (!blocks || state.activeBlockIndex < 0) return;
+    const block = blocks[state.activeBlockIndex];
+    // Only close a block we actually own (finalize can run while a thinking block
+    // is the open one).
+    if (block?.type !== 'text') return;
+    if (block.content === '' && state.activeBlockIndex === blocks.length - 1) {
+      blocks.pop();
+    } else {
+      // Drop the transient streaming defer-math flag so the finalized/persisted
+      // block renders math normally (non-collapse mode never re-grows at
+      // finalize, so this is the clear point for that path).
+      delete block.deferMath;
+    }
+    state.activeBlockIndex = -1;
   }
 }

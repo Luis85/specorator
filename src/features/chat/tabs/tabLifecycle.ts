@@ -205,6 +205,12 @@ export async function destroyTab(tab: TabData): Promise<void> {
   }
   tab.dom.eventCleanups.length = 0;
 
+  // Unmount the Vue transcript island (runs its onUnmounted routing disposer)
+  // before the host DOM is removed.
+  tab.mountedTranscript?.unmount();
+  tab.mountedTranscript = null;
+  tab.transcript = null;
+
   // Clean up runtime before removing DOM. Await so the provider subprocess is
   // actually killed before teardown completes (prevents orphaned CLI processes).
   await tab.service?.cleanup();

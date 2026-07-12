@@ -7,7 +7,6 @@ import type { ChatMessage, Conversation } from '../../../core/types';
 import { t } from '../../../i18n/i18n';
 import type SpecoratorPlugin from '../../../main';
 import { confirm } from '../../../shared/modals/ConfirmModal';
-import type { MessageRenderer } from '../rendering/MessageRenderer';
 import { cleanupThinkingBlock } from '../rendering/ThinkingBlockRenderer';
 import type { SubagentManager } from '../services/SubagentManager';
 import type { ChatState } from '../state/ChatState';
@@ -42,11 +41,14 @@ export interface ConversationCallbacks {
 export interface ConversationControllerDeps {
   plugin: SpecoratorPlugin;
   state: ChatState;
-  renderer: MessageRenderer;
   subagentManager: SubagentManager;
+  /** Pushes the welcome greeting into the Vue transcript store (empty hides it). */
+  setTranscriptGreeting: (greeting: string) => void;
+  /** Sets/clears the hydration spinner text in the Vue transcript store. */
+  setTranscriptLoading: (loadingText: string | null) => void;
+  /** Sets/clears the history-hydration failure banner in the Vue transcript store. */
+  setTranscriptHydrationError: (error: { code: string; message: string } | null) => void;
   getHistoryDropdown: () => HTMLElement | null;
-  getWelcomeEl: () => HTMLElement | null;
-  setWelcomeEl: (el: HTMLElement | null) => void;
   getMessagesEl: () => HTMLElement;
   getInputEl: () => HTMLTextAreaElement;
   getFileContextManager: () => FileContextManager | null;
@@ -54,6 +56,8 @@ export interface ConversationControllerDeps {
   getMcpServerSelector: () => McpServerSelector | null;
   getExternalContextSelector: () => ExternalContextSelector | null;
   clearQueuedMessage: () => void;
+  /** Drops the retained retryable turn when (re)binding/switching conversations. */
+  clearRetryableTurn: () => void;
   getTitleGenerationService: () => TitleGenerationService | null;
   getStatusPanel: () => StatusPanel | null;
   getAgentService?: () => ChatRuntime | null;
@@ -194,19 +198,15 @@ export class ConversationController {
       state.currentTextContent = '';
       state.currentThinkingState = null;
       state.toolCallElements.clear();
-      state.writeEditStates.clear();
       state.isStreaming = false;
 
       // Reset to entry point state - no conversation created yet
       this.resetToEntryPointState();
 
-      const messagesEl = this.deps.getMessagesEl();
-      messagesEl.empty();
-
-      // Recreate welcome element first (before StatusPanel for consistent ordering)
-      const welcomeEl = messagesEl.createDiv({ cls: 'specorator-welcome' });
-      welcomeEl.createDiv({ cls: 'specorator-welcome-greeting', text: this.getGreeting() });
-      this.deps.setWelcomeEl(welcomeEl);
+      // The Vue transcript owns the message list + welcome banner; clearing
+      // `state.messages` (above) re-projects an empty transcript, and this shows
+      // the welcome greeting again. Never `.empty()` the Vue-owned scroll host.
+      this.deps.setTranscriptGreeting(this.getGreeting());
 
       // Remount StatusPanel to restore state for new conversation
       this.deps.getStatusPanel()?.remount();
@@ -224,6 +224,7 @@ export class ConversationController {
         plugin.settings.persistentExternalContextPaths || []
       );
       this.deps.clearQueuedMessage();
+      this.deps.clearRetryableTurn();
 
       this.callbacks.onNewConversation?.();
     } finally {
@@ -238,12 +239,15 @@ export class ConversationController {
    * creating a conversation. Conversation is created lazily on first message.
    */
   async loadActive(): Promise<void> {
-    const { plugin, state, renderer } = this.deps;
+    const { plugin, state } = this.deps;
 
     const conversationId = state.currentConversationId;
+    // A (re)loaded transcript has no genuinely retryable turn: any persisted
+    // runtime-error card it renders must not retry a stale/previous-session turn.
+    this.deps.clearRetryableTurn();
     // Clear any stale failure banner/pending failure before hydrating; a fresh
     // failure re-arms it via the hydrate below and renders in restoreConversation.
-    renderer.clearHydrationBanner();
+    this.deps.setTranscriptHydrationError(null);
     if (conversationId) this.deps.consumePendingHydrationError?.(conversationId);
     const conversation = conversationId ? await plugin.getConversationById(conversationId) : null;
 
@@ -262,12 +266,9 @@ export class ConversationController {
 
       this.deps.getMcpServerSelector()?.clearEnabled();
 
-      const welcomeEl = renderer.renderMessages(
-        [],
-        () => this.getGreeting()
-      );
-      this.deps.setWelcomeEl(welcomeEl);
-      this.updateWelcomeVisibility();
+      // Entry point: empty transcript + welcome greeting (Vue-owned).
+      this.deps.setTranscriptLoading(null);
+      this.deps.setTranscriptGreeting(this.getGreeting());
 
       this.callbacks.onConversationLoaded?.();
       return;
@@ -282,7 +283,7 @@ export class ConversationController {
 
   /** Switches to a different conversation. */
   async switchTo(id: string): Promise<void> {
-    const { state, subagentManager, renderer } = this.deps;
+    const { state, subagentManager } = this.deps;
 
     if (id === state.currentConversationId) return;
     if (state.isStreaming) return;
@@ -301,7 +302,7 @@ export class ConversationController {
       // Drop any prior failure banner (and stale pending failure) before
       // hydrating the target conversation; a fresh failure re-arms it via the
       // hydrate below and is rendered in restoreConversation.
-      renderer.clearHydrationBanner();
+      this.deps.setTranscriptHydrationError(null);
       this.deps.consumePendingHydrationError?.(id);
       await this.save();
 
@@ -322,14 +323,10 @@ export class ConversationController {
       state.hasPendingConversationSave = false;
       this.deps.getInputEl().value = '';
       this.deps.clearQueuedMessage();
+      this.deps.clearRetryableTurn();
       this.deps.getHistoryDropdown()?.removeClass('visible');
-      // Method-existence guard: unit tests stub `MessageRenderer` with a
-      // partial shape that predates `renderLoading`. The spinner is purely
-      // visual feedback — its absence is harmless in test environments.
-      if (typeof renderer.renderLoading === 'function') {
-        renderer.renderLoading(t('chat.history.loading'));
-      }
-      this.updateWelcomeVisibility();
+      // Show the hydration spinner in the Vue transcript while Phase B loads.
+      this.deps.setTranscriptLoading(t('chat.history.loading'));
     } finally {
       state.isSwitchingConversation = false;
     }
@@ -475,7 +472,7 @@ export class ConversationController {
     prevAssistantUuid: string,
     mode: ChatRewindMode,
   ): Promise<void> {
-    const { state, renderer } = this.deps;
+    const { state } = this.deps;
     state.truncateAt(userMessageId);
     // Rewind drops later turns; re-derive so the edited-files list isn't stale.
     this.rebuildEditedFiles();
@@ -484,9 +481,8 @@ export class ConversationController {
     inputEl.value = userMsg.content;
     inputEl.focus();
 
-    const welcomeEl = renderer.renderMessages(state.messages, () => this.getGreeting());
-    this.deps.setWelcomeEl(welcomeEl);
-    this.updateWelcomeVisibility();
+    // `truncateAt` re-projects the trimmed transcript; refresh the greeting seed.
+    this.deps.setTranscriptGreeting(this.getGreeting());
 
     const filesChanged = result.filesChanged?.length ?? 0;
     let saveError: string | null = null;
@@ -555,7 +551,7 @@ export class ConversationController {
     conversation: Conversation,
     options?: { autoAttachFile?: boolean }
   ): void {
-    const { plugin, state, renderer } = this.deps;
+    const { plugin, state } = this.deps;
 
     state.currentConversationId = conversation.id;
     state.messages = [...conversation.messages];
@@ -598,24 +594,18 @@ export class ConversationController {
       mcpServerSelector?.clearEnabled();
     }
 
-    // Chunked render: the welcome element is mounted synchronously so the
-    // welcome-visibility check + setWelcomeEl can run immediately, but the
-    // stored-message loop yields to the event loop every few entries so the
-    // tab-switch UI (spinner from Phase A, sidebar, toolbar) stays responsive
-    // instead of blocking on a multi-hundred-ms DOM rebuild. Method-existence
-    // guard: unit tests stub `MessageRenderer` with a partial shape that
-    // predates `renderMessagesChunked`; falling back to the sync renderer
-    // keeps test expectations on mounted-message counts intact.
-    const welcomeEl = typeof renderer.renderMessagesChunked === 'function'
-      ? renderer.renderMessagesChunked(state.messages, () => this.getGreeting()).welcomeEl
-      : renderer.renderMessages(state.messages, () => this.getGreeting());
-    this.deps.setWelcomeEl(welcomeEl);
+    // The `state.messages` assignment above already re-projected the transcript
+    // (the Vue MessageList windows to the trailing 80 itself — no imperative
+    // cooperative-yield chunking). Clear the Phase-A spinner and seed the
+    // greeting for the (possibly empty) transcript.
+    this.deps.setTranscriptLoading(null);
+    this.deps.setTranscriptGreeting(this.getGreeting());
 
     // The tab is now bound to this conversation, so a hydration failure recorded
-    // while it was opening can finally render its inline banner (the lookup at
+    // while it was opening can finally surface its inline banner (the lookup at
     // emit time missed because the tab wasn't bound yet).
     const hydrationError = this.deps.consumePendingHydrationError?.(conversation.id);
-    if (hydrationError) renderer.setHydrationError(hydrationError);
+    if (hydrationError) this.deps.setTranscriptHydrationError(hydrationError);
   }
 
   /**
@@ -716,16 +706,14 @@ export class ConversationController {
     return allGreetings[Math.floor(Math.random() * allGreetings.length)];
   }
 
-  /** Updates welcome element visibility based on message count. */
+  /**
+   * Welcome visibility is now a projection of message count: the
+   * `TabTranscriptProjection` suppresses the greeting once messages exist, and
+   * the Vue `WelcomeBanner` renders it. Retained as a no-op so existing call
+   * sites (post-load / post-hydrate) stay valid without imperative DOM.
+   */
   updateWelcomeVisibility(): void {
-    const welcomeEl = this.deps.getWelcomeEl();
-    if (!welcomeEl) return;
-
-    if (this.deps.state.messages.length === 0) {
-      welcomeEl.removeClass('specorator-hidden');
-    } else {
-      welcomeEl.addClass('specorator-hidden');
-    }
+    // Intentionally empty — see method doc.
   }
 
   /**
@@ -733,20 +721,13 @@ export class ConversationController {
    * Called when a new tab is activated and has no conversation loaded.
    */
   initializeWelcome(): void {
-    const welcomeEl = this.deps.getWelcomeEl();
-    if (!welcomeEl) return;
-
     // Initialize file context to auto-attach the currently focused note
     const fileCtx = this.deps.getFileContextManager();
     fileCtx?.resetForNewConversation();
     fileCtx?.autoAttachActiveFile();
 
-    // Only add greeting if not already present
-    if (!welcomeEl.querySelector('.specorator-welcome-greeting')) {
-      welcomeEl.createDiv({ cls: 'specorator-welcome-greeting', text: this.getGreeting() });
-    }
-
-    this.updateWelcomeVisibility();
+    // Seed the greeting for the Vue welcome banner (suppressed once messages exist).
+    this.deps.setTranscriptGreeting(this.getGreeting());
   }
 
   // ============================================

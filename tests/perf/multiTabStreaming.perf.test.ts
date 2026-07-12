@@ -93,12 +93,12 @@ function makeTab(id: number): Tab {
   const deps: StreamControllerDeps = {
     plugin: { settings: { enableAutoScroll: true, collapseStreamingResponse: false }, app: { vault: {} } } as never,
     state,
-    renderer: {
-      renderContent: async () => {
-        renderCalls += 1;
-      },
-      addTextCopyButton: () => {},
-    } as never,
+    // Data-only: the imperative render loop is gone. Per-chunk transcript
+    // re-projection (`emitTranscript`) is now the per-tab streaming work; count
+    // it to prove one tab's cost is independent of the others.
+    emitTranscript: () => {
+      renderCalls += 1;
+    },
     subagentManager: {
       resetStreamingState: () => {},
       subagentsSpawnedThisStream: 0,
@@ -217,28 +217,28 @@ describe('Multi-tab concurrent streaming', () => {
 
     const baseline = results[0];
     for (const r of results) {
-      // Tab 0 re-renders exactly once per flushed frame — adding 31 concurrent
-      // tabs must not change its render count.
+      // Tab 0's re-projection count depends only on tab 0's own chunks — adding
+      // 31 concurrent streaming tabs must not change it.
       expect(r.tab0Renders).toBe(baseline.tab0Renders);
       // Scheduler pressure is O(active tabs): each tab holds the same constant
-      // number of pending callbacks per frame as a lone tab does.
+      // number of pending scroll callbacks per frame as a lone tab does.
       expect(r.steadyPending).toBe(baseline.steadyPending * r.nTabs);
     }
   });
 
-  it('renders once per flush regardless of chunks accumulated in between', async () => {
+  it('coalesces scroll work per flush regardless of chunks accumulated in between', async () => {
     const rounds = 4;
     const sparse = await streamScenario(1, rounds, 2);
     const dense = await streamScenario(1, rounds, 100);
 
-    reportMetrics('Streaming — renders per flush vs chunk density (1 tab)', [
-      { n: 2, values: { renders: sparse.tabs[0].renderCalls(), rounds } },
-      { n: 100, values: { renders: dense.tabs[0].renderCalls(), rounds } },
+    reportMetrics('Streaming — pending scroll frames per flush vs chunk density (1 tab)', [
+      { n: 2, values: { pendingPerFlush: sparse.pendingPerRound[0], rounds } },
+      { n: 100, values: { pendingPerFlush: dense.pendingPerRound[0], rounds } },
     ]);
 
-    // The markdown re-parse count tracks frames, not chunk arrival rate: a 50x
-    // denser stream costs the same number of renders per flush.
-    expect(dense.tabs[0].renderCalls()).toBe(sparse.tabs[0].renderCalls());
-    expect(dense.tabs[0].renderCalls()).toBe(rounds);
+    // Auto-scroll is coalesced to one pending frame per flush: a 50x denser
+    // stream holds the same constant number of pending callbacks as a sparse one.
+    expect(dense.pendingPerRound[0]).toBe(sparse.pendingPerRound[0]);
+    expect(dense.pendingPerRound[0]).toBeLessThanOrEqual(1);
   });
 });

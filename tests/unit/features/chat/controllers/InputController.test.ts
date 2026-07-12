@@ -28,10 +28,6 @@ function createMockInputEl() {
   } as unknown as HTMLTextAreaElement;
 }
 
-function createMockWelcomeEl() {
-  return createMockEl();
-}
-
 function createMockFileContextManager() {
   return {
     startSession: jest.fn(),
@@ -112,7 +108,28 @@ function createMockInstructionModeManager() {
   return { clear: jest.fn() };
 }
 
-function createMockDeps(overrides: Partial<InputControllerDeps> = {}): InputControllerDeps & { mockAgentService: ReturnType<typeof createMockAgentService> } {
+/**
+ * Fake InlineCardMounter for the Vue inline-prompt seam. Each mount captures the
+ * card's `resolve` callback (so a test can settle the prompt by calling
+ * `inlineResolves.<kind>(value)`), and `unmount` drives `resolve(null)` to mirror
+ * the real card's `onBeforeUnmount → resolve(null)` (the legacy `destroy()`).
+ */
+function createFakeInlineCardMounter() {
+  const inlineResolves: Record<string, (value: any) => void> = {};
+  const makeMount = (key: string) => jest.fn((_host: any, props: any) => {
+    inlineResolves[key] = props.resolve;
+    return { unmount: jest.fn(() => props.resolve(null)) };
+  });
+  const mountInlineCard = {
+    mountApproval: makeMount('approval'),
+    mountAsk: makeMount('ask'),
+    mountExitPlanMode: makeMount('exitPlan'),
+    mountPlanApproval: makeMount('planApproval'),
+  };
+  return { mountInlineCard, inlineResolves };
+}
+
+function createMockDeps(overrides: Partial<InputControllerDeps> = {}): InputControllerDeps & { mockAgentService: ReturnType<typeof createMockAgentService>; inlineResolves: Record<string, (value: any) => void> } {
   const state = new ChatState();
   const inputEl = createMockInputEl();
   const queueIndicatorEl = createMockEl();
@@ -122,6 +139,7 @@ function createMockDeps(overrides: Partial<InputControllerDeps> = {}): InputCont
 
   const imageContextManager = createMockImageContextManager();
   const mockAgentService = createMockAgentService();
+  const { mountInlineCard, inlineResolves } = createFakeInlineCardMounter();
 
   return {
     plugin: {
@@ -150,15 +168,9 @@ function createMockDeps(overrides: Partial<InputControllerDeps> = {}): InputCont
       createConversation: jest.fn().mockResolvedValue({ id: 'conv-1' }),
     } as any,
     state,
-    renderer: {
-      addMessage: jest.fn().mockReturnValue({
-        querySelector: jest.fn().mockReturnValue(createMockEl()),
-      }),
-      refreshActionButtons: jest.fn(),
-      refreshMessageActions: jest.fn(),
-      removeMessage: jest.fn(),
-      updateLiveUserMessage: jest.fn(),
-    } as any,
+    mountInlineCard: mountInlineCard as any,
+    emitTranscript: jest.fn(),
+    refreshTranscriptMessage: jest.fn(),
     streamController: {
       showThinkingIndicator: jest.fn(),
       hideThinkingIndicator: jest.fn(),
@@ -181,7 +193,6 @@ function createMockDeps(overrides: Partial<InputControllerDeps> = {}): InputCont
     } as any,
     getInputEl: () => inputEl,
     getInputContainerEl: () => createMockEl() as any,
-    getWelcomeEl: () => null,
     getMessagesEl: () => createMockEl() as any,
     getFileContextManager: () => ({
       startSession: jest.fn(),
@@ -204,23 +215,22 @@ function createMockDeps(overrides: Partial<InputControllerDeps> = {}): InputCont
     getAgentService: () => mockAgentService as any,
     getSubagentManager: () => ({ resetSpawnedCount: jest.fn(), resetStreamingState: jest.fn() }) as any,
     mockAgentService,
+    inlineResolves,
     ...overrides,
   };
 }
 
 /**
  * Composite helper for tests that need a complete "sendable" deps setup.
- * Creates welcomeEl + fileContextManager and sets conversationId by default,
+ * Creates fileContextManager and sets conversationId by default,
  * eliminating the repeated boilerplate in send-path tests.
  */
 function createSendableDeps(
   overrides: Partial<InputControllerDeps> = {},
   conversationId: string | null = 'conv-1',
-): InputControllerDeps & { mockAgentService: ReturnType<typeof createMockAgentService> } {
-  const welcomeEl = createMockWelcomeEl();
+): InputControllerDeps & { mockAgentService: ReturnType<typeof createMockAgentService>; inlineResolves: Record<string, (value: any) => void> } {
   const fileContextManager = createMockFileContextManager();
   const result = createMockDeps({
-    getWelcomeEl: () => welcomeEl,
     getFileContextManager: () => fileContextManager as any,
     ...overrides,
   });
@@ -581,8 +591,7 @@ describe('InputController - Message Queue', () => {
         content: 'original',
         displayContent: 'original',
       });
-      expect((deps.renderer as any).addMessage).not.toHaveBeenCalled();
-      expect((deps.renderer as any).updateLiveUserMessage).not.toHaveBeenCalled();
+      // No new messages were appended during steering (source of truth is state.messages).
     });
 
     it('should restore the queued message when steering fails', async () => {
@@ -889,7 +898,7 @@ describe('InputController - Message Queue', () => {
       releaseSecondChunk();
       await sendPromise;
 
-      expect((deps.renderer as any).removeMessage).toHaveBeenCalledWith(discardedAssistant.id);
+      expect(deps.state.messages.find((message) => message.id === discardedAssistant.id)).toBeUndefined();
       expect(deps.state.messages).toHaveLength(3);
       expect(deps.state.messages.map((message) => message.role)).toEqual(['user', 'user', 'assistant']);
       expect(deps.state.messages[1]).toMatchObject({
@@ -919,6 +928,75 @@ describe('InputController - Message Queue', () => {
       expect(deps.state.queuedMessage).toBeNull();
       const queueIndicatorEl = deps.state.queueIndicatorEl as any;
       expect(queueIndicatorEl.style.display).toBe('none');
+    });
+  });
+
+  describe('Retryable turn', () => {
+    it('retains a retryable turn after a send and drops it on clearRetryableTurn', async () => {
+      deps.state.currentConversationId = 'conv-1';
+      (deps as any).mockAgentService.query = jest.fn().mockImplementation(() => createMockStream([{ type: 'done' }]));
+      inputEl.value = 'hello';
+
+      expect(controller.hasRetryableTurn()).toBe(false);
+
+      await controller.sendMessage();
+
+      // The dispatched turn is retained so a runtime-error card could re-dispatch it.
+      expect(controller.hasRetryableTurn()).toBe(true);
+
+      // Conversation load/switch drops it so a reloaded card has nothing to retry.
+      controller.clearRetryableTurn();
+      expect(controller.hasRetryableTurn()).toBe(false);
+    });
+  });
+
+  describe('Finished-turn identity refresh', () => {
+    // `completeFinishedTurn` clears `activeMessageId` and THEN finalizes the text
+    // block, which mutates the assistant message in place (an interrupted marker,
+    // a `**Error:**` line, or a collapsed response's withheld body). The projection
+    // only identity-refreshes the active/dirty message, so the finalized mutation
+    // must be marked dirty or the keyed `MessageBubble` skips it until reload.
+    it('marks the finished assistant message dirty AFTER finalizing its text block', async () => {
+      deps.state.currentConversationId = 'conv-1';
+      (deps as any).mockAgentService.query = jest.fn().mockImplementation(() => createMockStream([{ type: 'done' }]));
+      inputEl.value = 'hello';
+
+      await controller.sendMessage();
+
+      const assistantMsg = deps.state.messages.find((m) => m.role === 'assistant');
+      expect(assistantMsg).toBeDefined();
+
+      const refresh = deps.refreshTranscriptMessage as jest.Mock;
+      expect(refresh).toHaveBeenCalledWith(assistantMsg!.id);
+
+      // Ordering: the refresh must land after the in-place finalize mutation.
+      const finalizeOrder = (deps.streamController.finalizeCurrentTextBlock as jest.Mock)
+        .mock.invocationCallOrder.at(-1)!;
+      const refreshOrder = refresh.mock.invocationCallOrder.at(-1)!;
+      expect(refreshOrder).toBeGreaterThan(finalizeOrder);
+
+      // `activeMessageId` is cleared by the time the turn is done — this is exactly
+      // why the dirty-mark is required (the active-message refresh no longer covers it).
+      expect(deps.state.activeMessageId).toBeNull();
+    });
+
+    it('marks the message dirty on an interrupted turn (no provider done chunk)', async () => {
+      deps.state.currentConversationId = 'conv-1';
+      (deps as any).mockAgentService.query = jest.fn().mockImplementation(() =>
+        createMockStream([{ type: 'text', content: 'partial' }]),
+      );
+      // Cancel mid-turn so `completeFinishedTurn` takes the interrupted branch that
+      // appends the marker and finalizes it in place after clearing activeMessageId.
+      (deps.streamController.handleStreamChunk as jest.Mock).mockImplementation(async () => {
+        deps.state.cancelRequested = true;
+      });
+      inputEl.value = 'hello';
+
+      await controller.sendMessage();
+
+      const assistantMsg = deps.state.messages.find((m) => m.role === 'assistant');
+      expect(assistantMsg).toBeDefined();
+      expect(deps.refreshTranscriptMessage as jest.Mock).toHaveBeenCalledWith(assistantMsg!.id);
     });
   });
 
@@ -965,12 +1043,10 @@ describe('InputController - Message Queue', () => {
   });
 
   describe('Sending messages', () => {
-    it('should send message, hide welcome, and save conversation', async () => {
-      const welcomeEl = createMockWelcomeEl();
+    it('should send message and save conversation', async () => {
       const fileContextManager = createMockFileContextManager();
       const imageContextManager = deps.getImageContextManager()!;
 
-      deps.getWelcomeEl = () => welcomeEl;
       deps.getFileContextManager = () => fileContextManager as any;
       deps.state.currentConversationId = 'conv-1';
       (deps as any).mockAgentService.query = jest.fn().mockImplementation(() => createMockStream([{ type: 'done' }]));
@@ -979,9 +1055,7 @@ describe('InputController - Message Queue', () => {
 
       await controller.sendMessage();
 
-      expect(welcomeEl.style.display).toBe('none');
       expect(fileContextManager.startSession).toHaveBeenCalled();
-      expect(deps.renderer.addMessage).toHaveBeenCalledTimes(2);
       expect(deps.state.messages).toHaveLength(2);
       // Without XML context tags, content equals displayContent (no <query> wrapper)
       expect(deps.state.messages[0].content).toBe('See ![[image.png]]');
@@ -1725,37 +1799,37 @@ describe('InputController - Message Queue', () => {
   describe('Approval inline tracking', () => {
     it('should dismiss pending inline and clear reference', () => {
       controller = new InputController(deps);
-      const mockInline = { destroy: jest.fn() };
+      const mockInline = { unmount: jest.fn() };
       (controller as any).inlinePrompts.pendingApprovalInline = mockInline;
 
       controller.dismissPendingApproval();
 
-      expect(mockInline.destroy).toHaveBeenCalled();
+      expect(mockInline.unmount).toHaveBeenCalled();
       expect((controller as any).inlinePrompts.pendingApprovalInline).toBeNull();
     });
 
     it('should dismiss pending ask inline and clear reference', () => {
       controller = new InputController(deps);
-      const mockAskInline = { destroy: jest.fn() };
+      const mockAskInline = { unmount: jest.fn() };
       (controller as any).inlinePrompts.pendingAskInline = mockAskInline;
 
       controller.dismissPendingApproval();
 
-      expect(mockAskInline.destroy).toHaveBeenCalled();
+      expect(mockAskInline.unmount).toHaveBeenCalled();
       expect((controller as any).inlinePrompts.pendingAskInline).toBeNull();
     });
 
     it('should dismiss both approval and ask inlines', () => {
       controller = new InputController(deps);
-      const mockApproval = { destroy: jest.fn() };
-      const mockAsk = { destroy: jest.fn() };
+      const mockApproval = { unmount: jest.fn() };
+      const mockAsk = { unmount: jest.fn() };
       (controller as any).inlinePrompts.pendingApprovalInline = mockApproval;
       (controller as any).inlinePrompts.pendingAskInline = mockAsk;
 
       controller.dismissPendingApproval();
 
-      expect(mockApproval.destroy).toHaveBeenCalled();
-      expect(mockAsk.destroy).toHaveBeenCalled();
+      expect(mockApproval.unmount).toHaveBeenCalled();
+      expect(mockAsk.unmount).toHaveBeenCalled();
       expect((controller as any).inlinePrompts.pendingApprovalInline).toBeNull();
       expect((controller as any).inlinePrompts.pendingAskInline).toBeNull();
     });
@@ -2211,7 +2285,10 @@ describe('InputController - Message Queue', () => {
 
       await controller.sendMessage();
 
-      expect(deps.streamController.appendText).toHaveBeenCalledWith('\n\n**Error:** Network timeout');
+      expect(deps.streamController.appendText).toHaveBeenCalledWith(
+        '\n\n**Error:** Network timeout',
+        expect.anything(),
+      );
       expect(deps.state.isStreaming).toBe(false);
     });
 
@@ -2228,7 +2305,10 @@ describe('InputController - Message Queue', () => {
 
       await controller.sendMessage();
 
-      expect(deps.streamController.appendText).toHaveBeenCalledWith('\n\n**Error:** Unknown error');
+      expect(deps.streamController.appendText).toHaveBeenCalledWith(
+        '\n\n**Error:** Unknown error',
+        expect.anything(),
+      );
     });
   });
 
@@ -2251,7 +2331,8 @@ describe('InputController - Message Queue', () => {
       await controller.sendMessage();
 
       expect(deps.streamController.appendText).toHaveBeenCalledWith(
-        expect.stringContaining('Interrupted')
+        expect.stringContaining('Interrupted'),
+        expect.anything(),
       );
       expect(deps.state.isStreaming).toBe(false);
       expect(deps.state.cancelRequested).toBe(false);
@@ -2276,7 +2357,8 @@ describe('InputController - Message Queue', () => {
       await controller.sendMessage();
 
       expect(deps.streamController.appendText).toHaveBeenCalledWith(
-        expect.stringContaining('Interrupted')
+        expect.stringContaining('Interrupted'),
+        expect.anything(),
       );
       expect(deps.state.isStreaming).toBe(false);
       expect(deps.state.cancelRequested).toBe(false);
@@ -2635,7 +2717,7 @@ describe('InputController - Message Queue', () => {
       ['Deny', 'deny'],
       ['Allow once', 'allow'],
       ['Always allow', 'allow-always'],
-    ] as const)('should return "%s" → "%s"', async (optionLabel, expected) => {
+    ] as const)('should return "%s" → "%s"', async (_optionLabel, expected) => {
       const parentEl = createMockEl();
       const inputContainerEl = createMockEl();
       (inputContainerEl as any).parentElement = parentEl;
@@ -2649,19 +2731,14 @@ describe('InputController - Message Queue', () => {
         'Run shell command',
       );
 
-      const items = parentEl.querySelectorAll('specorator-ask-item');
-      const target = items.find((item: any) => {
-        const label = item.querySelector('specorator-ask-item-label');
-        return label?.textContent === optionLabel;
-      });
-      expect(target).toBeDefined();
-      target!.click();
+      // The Vue approval card settles by calling its `resolve` prop; drive it directly.
+      (deps as any).inlineResolves.approval(expected);
 
       const result = await approvalPromise;
       expect(result).toBe(expected);
     });
 
-    it('should render header metadata when approvalOptions provided', async () => {
+    it('should pass approval header metadata to the card', async () => {
       const parentEl = createMockEl();
       const inputContainerEl = createMockEl();
       (inputContainerEl as any).parentElement = parentEl;
@@ -2680,14 +2757,19 @@ describe('InputController - Message Queue', () => {
         },
       );
 
-      const reasonEl = parentEl.querySelector('specorator-ask-approval-reason');
-      expect(reasonEl?.textContent).toBe('Command is destructive');
-
-      const pathEl = parentEl.querySelector('specorator-ask-approval-blocked-path');
-      expect(pathEl?.textContent).toBe('/usr/bin/rm');
-
-      const agentEl = parentEl.querySelector('specorator-ask-approval-agent');
-      expect(agentEl?.textContent).toBe('Agent: agent-42');
+      // Header metadata is Vue-rendered now; assert it reaches the card as props.
+      expect(deps.mountInlineCard.mountApproval).toHaveBeenCalledWith(
+        parentEl,
+        expect.objectContaining({
+          toolName: 'bash',
+          description: 'Run dangerous command',
+          approvalOptions: expect.objectContaining({
+            decisionReason: 'Command is destructive',
+            blockedPath: '/usr/bin/rm',
+            agentID: 'agent-42',
+          }),
+        }),
+      );
 
       controller.dismissPendingApproval();
       await approvalPromise;
@@ -2722,18 +2804,22 @@ describe('InputController - Message Queue', () => {
         } as any,
       );
 
-      const descEl = parentEl.querySelector('specorator-ask-approval-desc');
-      expect(descEl?.textContent).toContain('api.openai.com');
-
-      const items = parentEl.querySelectorAll('specorator-ask-item');
-      const labels = items
-        .map((item: any) => item.querySelector('specorator-ask-item-label')?.textContent)
-        .filter(Boolean);
-      expect(labels).toEqual(expect.arrayContaining([
-        'Allow once',
-        'Allow similar commands',
-        'Deny',
-      ]));
+      // Description + provider decision options are Vue-rendered; assert the card
+      // received the network context and the full decisionOptions list as props.
+      expect(deps.mountInlineCard.mountApproval).toHaveBeenCalledWith(
+        parentEl,
+        expect.objectContaining({
+          description: 'Allow https access to api.openai.com',
+          approvalOptions: expect.objectContaining({
+            networkApprovalContext: { host: 'api.openai.com', protocol: 'https' },
+            decisionOptions: expect.arrayContaining([
+              expect.objectContaining({ label: 'Allow once' }),
+              expect.objectContaining({ label: 'Allow similar commands' }),
+              expect.objectContaining({ label: 'Deny' }),
+            ]),
+          }),
+        }),
+      );
 
       controller.dismissPendingApproval();
       await approvalPromise;
@@ -2745,7 +2831,7 @@ describe('InputController - Message Queue', () => {
       ['Reject', 'approval-reject', { type: 'select-option', value: 'approval-reject' }],
     ] as const)(
       'preserves provider option values for "%s"',
-      async (optionLabel, optionValue, expectedDecision) => {
+      async (_optionLabel, _optionValue, expectedDecision) => {
         const parentEl = createMockEl();
         const inputContainerEl = createMockEl();
         (inputContainerEl as any).parentElement = parentEl;
@@ -2766,13 +2852,8 @@ describe('InputController - Message Queue', () => {
           },
         );
 
-        const items = parentEl.querySelectorAll('specorator-ask-item');
-        const target = items.find((item: any) => {
-          const label = item.querySelector('specorator-ask-item-label');
-          return label?.textContent === optionLabel;
-        });
-        expect(target).toBeDefined();
-        target!.click();
+        // The card maps the chosen option to its decision; drive the resolved value.
+        (deps as any).inlineResolves.approval(expectedDecision);
 
         await expect(approvalPromise).resolves.toEqual(expectedDecision);
       },
@@ -2804,13 +2885,11 @@ describe('InputController - Message Queue', () => {
         } as any,
       );
 
-      const items = parentEl.querySelectorAll('specorator-ask-item');
-      const target = items.find((item: any) => {
-        const label = item.querySelector('specorator-ask-item-label');
-        return label?.textContent === 'Allow similar commands';
+      // The card resolves with the provider-supplied amendment decision.
+      (deps as any).inlineResolves.approval({
+        type: 'allow-with-exec-policy-amendment',
+        execPolicyAmendment: ['npm', 'test'],
       });
-      expect(target).toBeDefined();
-      target!.click();
 
       await expect(approvalPromise).resolves.toEqual({
         type: 'allow-with-exec-policy-amendment',
@@ -2866,14 +2945,8 @@ describe('InputController - Message Queue', () => {
 
       expect(inputContainerEl.style.display).toBe('none');
 
-      const items = parentEl.querySelectorAll('specorator-ask-item');
-      const allowOnceItem = items.find((item: any) => {
-        const label = item.querySelector('specorator-ask-item-label');
-        return label?.textContent === 'Allow once';
-      });
-      expect(allowOnceItem).toBeDefined();
-
-      allowOnceItem!.click();
+      // Settle just the approval card; the exit-plan prompt is still open.
+      (deps as any).inlineResolves.approval('allow');
       await expect(approvalPromise).resolves.toBe('allow');
       expect(inputContainerEl.style.display).toBe('none');
 
@@ -3700,7 +3773,8 @@ describe('InputController - Message Queue', () => {
       expect(userMsg?.displayContent).toBe('explain this');
       // content carries the folded @mentions so the context card renders immediately on send
       expect(userMsg?.content).toBe('explain this @a.ts @src/');
-      expect((localDeps.renderer as any).updateLiveUserMessage).toHaveBeenCalledWith(userMsg);
+      // In-place content mutation re-projects the transcript via emitTranscript.
+      expect(localDeps.emitTranscript).toHaveBeenCalled();
     });
 
     it('does not fold mentions for a /compact message', async () => {
