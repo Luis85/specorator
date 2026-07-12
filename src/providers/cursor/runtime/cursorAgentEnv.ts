@@ -1,7 +1,10 @@
 import * as fs from 'fs';
 import * as path from 'path';
 
-import { buildFullSubprocessEnvironment } from '../../../core/providers/subprocessEnvironmentAllowlist';
+import {
+  buildFullSubprocessEnvironment,
+  pickEnvValueCaseInsensitive,
+} from '../../../core/providers/subprocessEnvironmentAllowlist';
 import type { PluginContext } from '../../../core/types/PluginContext';
 import { getEnhancedPath } from '../../../utils/env';
 
@@ -143,7 +146,7 @@ export function buildCursorAgentEnvironment(
     // Passing the CLI path (parity with Claude/Opencode) lets getEnhancedPath
     // add the install dir when it carries a bundled node, so the agent's own
     // child tools can resolve node and sibling binaries.
-    pathOverride: getEnhancedPath(customEnv.PATH, cliPath),
+    pathOverride: getEnhancedPath(pickEnvValueCaseInsensitive(customEnv, 'PATH'), cliPath),
   });
 
   if (process.platform === 'win32') {

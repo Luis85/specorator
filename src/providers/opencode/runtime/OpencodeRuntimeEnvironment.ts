@@ -1,4 +1,7 @@
-import { buildFullSubprocessEnvironment } from '../../../core/providers/subprocessEnvironmentAllowlist';
+import {
+  buildFullSubprocessEnvironment,
+  pickEnvValueCaseInsensitive,
+} from '../../../core/providers/subprocessEnvironmentAllowlist';
 import { getEnhancedPath } from '../../../utils/env';
 
 /**
@@ -19,6 +22,6 @@ export function buildOpencodeRuntimeEnv(
   return buildFullSubprocessEnvironment({
     processEnv: process.env,
     customEnv: { ...resolvedEnv, ...opencodeExtras },
-    pathOverride: getEnhancedPath(resolvedEnv.PATH, cliPath || undefined),
+    pathOverride: getEnhancedPath(pickEnvValueCaseInsensitive(resolvedEnv, 'PATH'), cliPath || undefined),
   });
 }

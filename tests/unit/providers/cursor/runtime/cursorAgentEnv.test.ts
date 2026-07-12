@@ -63,6 +63,14 @@ describe('buildCursorAgentEnvironment', () => {
     expect(env.SECRET_TOKEN).toBe('dummy-leak-me');
   });
 
+  it('folds a lowercase custom `Path` entry into the enhanced PATH (case-insensitive)', () => {
+    // A provider Environment entered as `Path=` (common on Windows) must still
+    // feed the override, or the collapse would delete it and drop the tool dirs.
+    const env = buildCursorAgentEnvironment(makePlugin('Path=/custom/tools'));
+    expect(env.PATH).toBe('/custom/tools');
+    expect(env.Path).toBeUndefined();
+  });
+
   it('refuses NODE_TLS_REJECT_UNAUTHORIZED even when the host sets it', () => {
     const env = buildCursorAgentEnvironment(makePlugin('NODE_TLS_REJECT_UNAUTHORIZED=0'));
     expect(env.NODE_TLS_REJECT_UNAUTHORIZED).toBeUndefined();

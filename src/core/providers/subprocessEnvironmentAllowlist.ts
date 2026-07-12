@@ -32,6 +32,26 @@ function isDeniedKey(key: string): boolean {
   return SUBPROCESS_ENV_DENYLIST_UPPER.has(key.toUpperCase());
 }
 
+/**
+ * Case-insensitive env-value lookup. A provider Environment entered as `Path=`
+ * or `path=` (common on Windows) must still feed the enhanced-PATH override, or
+ * the collapse below would delete the user's variant and drop their tool dirs.
+ * Returns the last-declared matching value (later entries win).
+ */
+export function pickEnvValueCaseInsensitive(
+  env: Record<string, string | undefined>,
+  name: string,
+): string | undefined {
+  const upper = name.toUpperCase();
+  let found: string | undefined;
+  for (const [key, value] of Object.entries(env)) {
+    if (key.toUpperCase() === upper && value !== undefined) {
+      found = value;
+    }
+  }
+  return found;
+}
+
 export interface BuildSubprocessEnvironmentOptions {
   processEnv: Record<string, string | undefined>;
   customEnv: Record<string, string>;

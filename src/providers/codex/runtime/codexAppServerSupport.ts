@@ -1,4 +1,7 @@
-import { buildFullSubprocessEnvironment } from '../../../core/providers/subprocessEnvironmentAllowlist';
+import {
+  buildFullSubprocessEnvironment,
+  pickEnvValueCaseInsensitive,
+} from '../../../core/providers/subprocessEnvironmentAllowlist';
 import type { ProviderId } from '../../../core/providers/types';
 import type { PluginContext } from '../../../core/types/PluginContext';
 import { getEnhancedPath } from '../../../utils/env';
@@ -27,7 +30,7 @@ export function buildCodexAppServerEnvironment(
   return buildFullSubprocessEnvironment({
     processEnv: process.env,
     customEnv,
-    pathOverride: getEnhancedPath(customEnv.PATH),
+    pathOverride: getEnhancedPath(pickEnvValueCaseInsensitive(customEnv, 'PATH')),
   });
 }
 

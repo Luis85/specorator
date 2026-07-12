@@ -1,5 +1,6 @@
 import {
   buildFullSubprocessEnvironment,
+  pickEnvValueCaseInsensitive,
   SUBPROCESS_ENV_DENYLIST,
 } from '@/core/providers/subprocessEnvironmentAllowlist';
 
@@ -108,5 +109,21 @@ describe('buildFullSubprocessEnvironment', () => {
     });
     expect(result.Path).toBe('C:\\Windows\\System32');
     expect(result.PATH).toBeUndefined();
+  });
+});
+
+describe('pickEnvValueCaseInsensitive', () => {
+  it('finds a value under any letter case', () => {
+    expect(pickEnvValueCaseInsensitive({ Path: '/a' }, 'PATH')).toBe('/a');
+    expect(pickEnvValueCaseInsensitive({ path: '/b' }, 'PATH')).toBe('/b');
+    expect(pickEnvValueCaseInsensitive({ PATH: '/c' }, 'PATH')).toBe('/c');
+  });
+
+  it('returns undefined when no case-variant is present', () => {
+    expect(pickEnvValueCaseInsensitive({ HOME: '/h' }, 'PATH')).toBeUndefined();
+  });
+
+  it('returns the last-declared match when several variants coexist', () => {
+    expect(pickEnvValueCaseInsensitive({ Path: '/a', PATH: '/b' }, 'PATH')).toBe('/b');
   });
 });
