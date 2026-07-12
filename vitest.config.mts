@@ -28,6 +28,10 @@ export default defineConfig({
         // board/editor SFCs) — tested in this lane (~400 vue specs) and excluded
         // from Jest collection; gate its coverage here where it is exercised.
         'src/features/tasks/ui/vue/**/*.{ts,vue}',
+        // Chat shell Vue island (store, useChatShellEventRouting, header/tab
+        // strip/content-host SFCs) — tested in this lane and excluded from
+        // Jest collection; gate its coverage here where it is exercised.
+        'src/features/chat/ui/vue/**/*.{ts,vue}',
         // Shared accessor/action modules whose meaningful exercise lives in
         // this lane: the loop accessors feed LoopsPanel, and the roster pair
         // is only function-covered by AgentsPanel tests (the legacy

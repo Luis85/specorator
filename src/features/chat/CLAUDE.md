@@ -1,6 +1,6 @@
 # Chat Feature
 
-Main sidebar chat interface. `SpecoratorView` assembles tabs, controllers, renderers, and provider-backed services around the shared `ChatRuntime` boundary.
+Main sidebar chat interface. `SpecoratorView` assembles tabs, controllers, renderers, and provider-backed services around the shared `ChatRuntime` boundary. The outer frame — header, tab-badge strip, and tab-content host — is a Vue 3 + Pinia island (`ui/vue/`, ADR 0005) mounted over the untouched imperative engine (`TabManager`, controllers, `ChatState`, per-tab DOM). See "Chat Shell Vue Island" below.
 
 ## Provider Boundary Status
 
@@ -54,7 +54,6 @@ SpecoratorView (lifecycle + assembly)
 ├── Tabs
 │   ├── TabManager
 │   ├── TabProviderCommandCoordinator
-│   ├── TabBar
 │   └── Tab
 └── UI Components
     ├── InputToolbar
@@ -66,6 +65,70 @@ SpecoratorView (lifecycle + assembly)
     ├── InstructionModeManager
     └── BangBashModeManager
 ```
+
+## Chat Shell Vue Island
+
+The outer frame — header, tab-badge strip, and tab-content host — is a Vue 3 +
+Pinia island under `ui/vue/` (ADR 0005, mirroring the Agent Board's ADR 0004
+seam). `SpecoratorView.mountChatShell()` mounts `ChatShellRoot.vue` into
+`viewContainerEl` via a per-leaf `createApp` (Pinia singleton from
+`ui/vue/globalPinia.ts`); the engine — `TabManager`, controllers, `ChatState`,
+and each tab's imperative DOM — is untouched and mounted afterward into the
+Vue-provided content host.
+
+- **Store**: `ui/vue/stores/chatShellStore.ts` (`useChatShellStore`) is a
+  reactive read-model over `TabManager` — `tabs: TabBarItem[]`, `header`
+  chrome (title, boundAgent, activeProviderId, tabBarPosition, visibility
+  flags), and `activeTabId`. Setters replace whole values/arrays (`shallowRef`)
+  so a change fires the watch without deep-proxy overhead; I/O and truth stay
+  in `TabManager`.
+- **Event routing**: `ui/vue/useChatShellEventRouting.ts` subscribes once on
+  mount and pushes a fully-projected `ChatShellSnapshot` (`tabs`, `header`,
+  `activeTabId`) into the store's setters, disposing on unmount. It never
+  invents new events — `SpecoratorView` still owns the real `TabManager`
+  callbacks (`onTabCreated` / `onTabSwitched` / `onTabClosed` /
+  `onTabStreamingChanged` / `onTabTitleChanged` / `onTabAttentionChanged` /
+  `onTabConversationChanged` / `onTabProviderChanged`) and re-projects on each
+  one via `emitChatShellChange()`, which fans out through the
+  `ChatShellSubscribe` seam (`ui/vue/chatShellCallbacks.ts`) that
+  `useChatShellEventRouting` subscribes to.
+- **Callbacks contract**: `ChatShellCallbacks` (`ui/vue/chatShellCallbacks.ts`,
+  provided via `CALLBACKS_KEY`) is the Vue→engine seam — thin delegators
+  (`onTabClick`, `onTabClose`, `onNewTab`, `onOpenHistory`,
+  `onOpenWorkOrders`, `onQuickActions`, `onRename`, `mountHistoryHost`,
+  `mountWorkOrderHost`, `mountGitActionHost`, `resolveNavRowEl`,
+  `renderProviderLogo`, …) to existing `SpecoratorView` / `TabManager`
+  methods. Vue never reaches into the engine directly.
+- **Content-host seam**: `TabContentHost.vue` renders the
+  `specorator-tab-content-container` element once and hands it to the engine
+  via `CONTENT_HOST_KEY` on mount (captured synchronously before
+  `initTabContentEngine()` runs). Vue owns the element but treats its children
+  as opaque — no `v-for`, never re-rendered — so the imperative `tabFactory`
+  can keep `createDiv`-ing each tab's `specorator-tab-content` subtree into it
+  and toggling `specorator-hidden` on switch, with every tab's live streaming
+  DOM and scroll position surviving shell re-renders. Same "leave-me-alone
+  host" contract as the Agent Board's lane-editor mount.
+- **Dual-mode header + nav-row Teleport**: `store.header.tabBarPosition`
+  (`'header'` | `'input'`, projected from `plugin.settings.tabBarPosition`)
+  drives `ChatHeader.vue`'s layout. In `'header'` mode the tab strip and
+  header actions render in place in the header chrome. In `'input'` mode they
+  `<Teleport>` into the active tab's `navRowEl` (resolved via
+  `cb.resolveNavRowEl(activeTabId)`), re-targeting reactively when the active
+  tab changes; a null target (no active tab yet) disables the Teleport and
+  falls back to in-place rendering rather than erroring on a missing target.
+- **Still imperative**: the conversation-history and work-order-activity
+  dropdowns (`ConversationHistoryView`, the work-order dropdown) and the
+  `GitActionButton` are unchanged imperative widgets — `HeaderActions.vue`
+  exposes container refs and the callbacks (`mountHistoryHost`,
+  `mountWorkOrderHost`, `mountGitActionHost`) host them into the Vue tree
+  ("island hosts imperative widget"). They migrate to Vue with a later
+  sub-project (side panels).
+- **Out of scope for this island**: transcript rendering (`MessageRenderer` +
+  block renderers), the composer + input toolbar, and the remaining side
+  panels (status panel, navigation sidebar, file/image context) stay fully
+  imperative — each is its own future sub-project of the larger chat Vue
+  migration (see ADR 0005 and
+  `docs/superpowers/specs/2026-07-11-chat-shell-vue-migration-design.md`).
 
 ## State Flow
 

@@ -32,6 +32,11 @@ module.exports = {
     // pure helpers (laneEditorOccurrences.ts, workOrderTemplateEditorForm.ts,
     // cardActions.ts) stay Jest-collected.
     '!src/features/tasks/ui/vue/**',
+    // src/features/chat/ui/vue/** (the chat shell Vue island: header, tab
+    // strip, content host, store, useChatShellEventRouting) is likewise
+    // tested and coverage-gated in the Vitest lane; counting it here at 0%
+    // would sink the Jest global floors.
+    '!src/features/chat/ui/vue/**',
   ],
   coverageDirectory: 'coverage',
   // Guardrail (Q-3): regression floors, not aspirations. Each floor sits a few
