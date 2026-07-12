@@ -1,5 +1,7 @@
 import { matchAdvertisedModelValue } from '@/providers/cursor/runtime/cursorAdvertisedModels';
 
+import { CURSOR_ADVERTISED_MODEL_VALUES } from '../../../../fixtures/providers/cursor/realAcpCaptures';
+
 describe('matchAdvertisedModelValue', () => {
   it('returns null when nothing is advertised', () => {
     expect(matchAdvertisedModelValue(null, 'gpt-5.4-medium')).toBeNull();
@@ -93,5 +95,20 @@ describe('matchAdvertisedModelValue', () => {
 
   it('skips (returns null) when a compound selection has no satisfying advertised value', () => {
     expect(matchAdvertisedModelValue(['gpt-5.4[reasoning=high,fast=true]'], 'gpt-5.4-medium-fast')).toBeNull();
+  });
+
+  describe('against real advertised wire values (captured 2026-07-12)', () => {
+    it('round-trips every advertised value as an exact match, incl. default[] and empty-bracket variants', () => {
+      // Real Cursor advertises model ids carrying bracket variants (multi-axis,
+      // and the empty `[]` on `default`/`gemini-3.1-pro`). An exact selection must
+      // return the value untouched — none of the wire ids trips the axis matcher.
+      for (const value of CURSOR_ADVERTISED_MODEL_VALUES) {
+        expect(matchAdvertisedModelValue(CURSOR_ADVERTISED_MODEL_VALUES, value)).toBe(value);
+      }
+    });
+
+    it('returns null for a family absent from the captured catalog', () => {
+      expect(matchAdvertisedModelValue(CURSOR_ADVERTISED_MODEL_VALUES, 'llama-4-70b')).toBeNull();
+    });
   });
 });

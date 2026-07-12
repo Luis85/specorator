@@ -444,8 +444,8 @@ async function resolveAskQuestionOutcome(
  * `cursor/ask_question` and `cursor/create_plan` are BLOCKING agent→client
  * requests, answered in-turn with the documented outcome unions from
  * cursor.com/docs/cli/acp (replacing the retired stream-json auto-reject +
- * resumed-follow-up-turn delivery, ADR-0002). `cursor/update_todos` and
- * `cursor/task` are one-way notifications.
+ * resumed-follow-up-turn delivery, ADR-0002). `cursor/update_todos` is a one-way
+ * notification; `cursor/task` a blocking request acked with a benign empty `{}`.
  */
 export function registerCursorAcpExtensions(
   transport: AcpJsonRpcTransport,
@@ -529,9 +529,9 @@ export function registerCursorAcpExtensions(
     host.emitChunk({ type: 'tool_result', id, content: 'Todos updated', isError: false }, parsed.sessionId);
   }));
 
-  // cursor/task carries live subagent lifecycle updates — deferred until the
-  // ACP subagent lifecycle spec lands (see the Cursor native ACP migration spike).
-  unsubscribes.push(transport.onNotification('cursor/task', () => {}));
+  // cursor/task is a BLOCKING request, not a notification (real captures 2026-07-12);
+  // unanswered it rejects -32601. Subagent lifecycle deferred — benign empty ack.
+  unsubscribes.push(transport.onRequest('cursor/task', async () => ({})));
 
   return () => {
     lastTodosBySession.clear();

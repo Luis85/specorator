@@ -3,6 +3,11 @@ import { TOOL_TODO_WRITE } from '@/core/tools/toolNames';
 import type { StreamChunk } from '@/core/types';
 import { registerCursorAcpExtensions } from '@/providers/cursor/runtime/cursorAcpExtensions';
 
+import {
+  CURSOR_CREATE_PLAN_PARAMS,
+  CURSOR_TASK_REQUEST_PARAMS,
+} from '../../../../fixtures/providers/cursor/realAcpCaptures';
+
 type Handler = (params: unknown) => Promise<unknown>;
 
 // Mirrors the documented cursor/ask_question outcome union
@@ -314,9 +319,11 @@ describe('registerCursorAcpExtensions', () => {
       markPlanDecidedInline,
     });
 
-    const response = await requests.get('cursor/create_plan')!({ plan: '# The plan\n1. do it' });
+    // Real captured cursor/create_plan envelope (extra fields — name, overview,
+    // todos, isProject, phases — are tolerated; only `plan` drives the card).
+    const response = await requests.get('cursor/create_plan')!(CURSOR_CREATE_PLAN_PARAMS);
 
-    expect(chunks.some((c) => c.type === 'text' && c.content.includes('The plan'))).toBe(true);
+    expect(chunks.some((c) => c.type === 'text' && c.content.includes('Reading Time Indicator'))).toBe(true);
     // The plan approval blocks in-turn (not on the post-turn card), so the RPC
     // resolves accepted only after the user approves, and the runtime is told to
     // suppress the post-turn planCompleted card.
@@ -897,6 +904,23 @@ describe('registerCursorAcpExtensions', () => {
       outcome: 'answered',
       answers: [{ questionId: 'Legacy?', selectedOptionIds: ['Yes'] }],
     });
+  });
+
+  it('answers the blocking cursor/task request with a benign empty ack (never rejects)', async () => {
+    const { transport, requests } = makeFakeTransport();
+    registerCursorAcpExtensions(transport as never, {
+      askUser: jest.fn(),
+      emitChunk: () => {},
+      exitPlanMode: async () => null,
+      markPlanDecidedInline: () => {},
+    });
+
+    // Real captured shape: cursor/task arrives as a REQUEST, not a notification.
+    // Registered as a request handler it must resolve `{}` so the transport does
+    // not answer -32601 (which would stall the agent). Subagent lifecycle deferred.
+    const handler = requests.get('cursor/task');
+    expect(handler).toBeDefined();
+    await expect(handler!(CURSOR_TASK_REQUEST_PARAMS)).resolves.toEqual({});
   });
 
   it('returns an unsubscribe that removes every handler', () => {

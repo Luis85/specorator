@@ -8,6 +8,11 @@ import {
   resolveCursorAcpRawToolName,
 } from '@/providers/cursor/runtime/cursorAcpToolNames';
 
+import {
+  CURSOR_EDIT_TOOL_CALL,
+  CURSOR_EDIT_TOOL_CALL_UPDATE,
+} from '../../../../fixtures/providers/cursor/realAcpCaptures';
+
 describe('cursorAcpToolNames', () => {
   it('normalizes cursor native tool identifiers to canonical names', () => {
     const adapter = createCursorAcpToolStreamAdapter();
@@ -148,6 +153,29 @@ describe('cursorAcpToolNames', () => {
       expect(result.toolUseResult?.filePath).toBe('notes/todo.md');
       expect(result.toolUseResult?.unifiedDiff).toContain('-foo');
       expect(result.toolUseResult?.unifiedDiff).toContain('+bar');
+    });
+
+    it('surfaces the diff from the real captured edit tool_call -> tool_call_update sequence', () => {
+      // Real wire sequence (captured 2026-07-12): an edit `tool_call` with empty
+      // rawInput/pending status, then a `tool_call_update` carrying the diff on a
+      // completed status. The adapter must retain the edit identity and lift the
+      // captured diff path + body into the tool_result.
+      const adapter = createCursorAcpToolStreamAdapter();
+      const startChunks = adapter.normalizeToolCall(
+        CURSOR_EDIT_TOOL_CALL,
+        [{ id: CURSOR_EDIT_TOOL_CALL.toolCallId, input: {}, name: 'unused', type: 'tool_use' }],
+      );
+      const startUse = startChunks.find((c) => c.type === 'tool_use') as { name: string } | undefined;
+      expect(startUse?.name).toBe(TOOL_EDIT);
+      const chunks = adapter.normalizeToolCallUpdate(
+        CURSOR_EDIT_TOOL_CALL_UPDATE,
+        [{ id: CURSOR_EDIT_TOOL_CALL_UPDATE.toolCallId, content: 'done', type: 'tool_result' }],
+      );
+      const result = chunks.find((c) => c.type === 'tool_result') as {
+        toolUseResult?: { filePath?: string; unifiedDiff?: string };
+      };
+      expect(result.toolUseResult?.filePath).toBe('C:\\Projects\\specorator\\acp-test\\notes.md');
+      expect(result.toolUseResult?.unifiedDiff).toContain('ACP Wire Test Notes');
     });
 
     it('leaves the tool_result untouched for a non-file tool carrying no diff', () => {

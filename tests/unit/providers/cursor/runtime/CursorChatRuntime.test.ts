@@ -4,6 +4,8 @@ import { AcpStreamChunkQueue } from '@/providers/acp';
 import * as acpBuild from '@/providers/acp/buildAcpUsageInfo';
 import { CursorChatRuntime } from '@/providers/cursor/runtime/CursorChatRuntime';
 
+import { CURSOR_LOAD_SESSION_RESULT } from '../../../../fixtures/providers/cursor/realAcpCaptures';
+
 function makeRuntime(
   overrides: Record<string, unknown> = {},
   host: RuntimeHost = createHeadlessRuntimeHost(),
@@ -103,9 +105,12 @@ describe('CursorChatRuntime.ensureReady force restart', () => {
 });
 
 describe('CursorChatRuntime.ensureSession', () => {
-  it('adopts the loaded id when session/load succeeds', async () => {
+  it('reuses the requested id when session/load returns no sessionId (real capture shape)', async () => {
     const runtime = makeRuntime();
-    const loadSession = jest.fn().mockResolvedValue({ sessionId: 'S1' });
+    // Real Cursor session/load responses carry NO sessionId (see the captured
+    // fixture) — the loaded session keeps the id we asked to load. Adopting the
+    // response's absent id would abort the resumed turn and discard the session.
+    const loadSession = jest.fn().mockResolvedValue(CURSOR_LOAD_SESSION_RESULT);
     const bag = primeRuntime(runtime, { loadSession });
     bag.sessionId = 'S1';
     bag.loadedSessionId = null;
@@ -115,6 +120,7 @@ describe('CursorChatRuntime.ensureSession', () => {
     expect(result).toBe('S1');
     expect(loadSession).toHaveBeenCalled();
     expect(bag.loadedSessionId).toBe('S1');
+    expect(bag.sessionId).toBe('S1');
     expect(bag.sessionInvalidated).toBe(false);
   });
 
@@ -470,7 +476,7 @@ describe('CursorChatRuntime.query history bootstrap', () => {
   it('mints a fresh unaborted signal for the next query after a cancel', async () => {
     const runtime = makeRuntime();
     const prompt = jest.fn().mockResolvedValue({ usage: null });
-    const loadSession = jest.fn().mockResolvedValue({ sessionId: 'S1' });
+    const loadSession = jest.fn().mockResolvedValue(CURSOR_LOAD_SESSION_RESULT);
     const setMode = jest.fn().mockResolvedValue({});
     const bag = primeRuntime(runtime, { prompt, loadSession, setMode, cancel: jest.fn() });
     bag.sessionId = 'S1';
@@ -494,7 +500,9 @@ describe('CursorChatRuntime.query history bootstrap', () => {
   it('does not re-inject history when an existing session loads cleanly', async () => {
     const runtime = makeRuntime();
     const prompt = jest.fn().mockResolvedValue({ usage: null });
-    const loadSession = jest.fn().mockResolvedValue({ sessionId: 'S1' });
+    // Capture-shaped session/load (no sessionId): the loaded session is reused,
+    // so the turn prompts on it without re-injecting prior history.
+    const loadSession = jest.fn().mockResolvedValue(CURSOR_LOAD_SESSION_RESULT);
     const setMode = jest.fn().mockResolvedValue({});
     const bag = primeRuntime(runtime, { prompt, loadSession, setMode });
     bag.sessionId = 'S1';

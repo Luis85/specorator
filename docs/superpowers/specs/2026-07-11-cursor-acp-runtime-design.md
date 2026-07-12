@@ -1,7 +1,7 @@
 ---
 title: Cursor ACP runtime — hard-cutover migration design
 date: 2026-07-11
-status: implemented (2026-07-11) — first-run validation pending
+status: implemented + capture-validated (2026-07-12)
 scope: src/providers/cursor, src/providers/acp, src/core/transport, docs
 relates-to: docs/adr/0002-cursor-askuserquestion-transport.md, docs/adr/0001-transport-agnostic-provider-seam.md, docs/superpowers/specs/2026-07-11-cursor-native-acp-migration-spike.md (superseded)
 ---
@@ -89,7 +89,7 @@ New / rewritten in `src/providers/cursor/runtime/`:
 | Module | Role |
 |---|---|
 | `CursorChatRuntime` (rewrite) | ACP session lifecycle: lazy connect → authenticate-if-needed → `session/new`/`load` → `session/prompt` → stream → cooperative `session/cancel` (process-kill fallback) |
-| `cursorAcpExtensions.ts` (new) | Cursor dialect: `authenticate` (`cursor_login`); blocking `cursor/ask_question` → `RuntimeHost.askUser`; `cursor/create_plan` → plan approval card; `cursor/update_todos` / `cursor/task` notification handlers |
+| `cursorAcpExtensions.ts` (new) | Cursor dialect: `authenticate` (`cursor_login`); blocking `cursor/ask_question` → `RuntimeHost.askUser`; `cursor/create_plan` → plan approval card; `cursor/update_todos` notification handler; blocking `cursor/task` request answered with a benign empty ack (subagent lifecycle deferred) |
 | `cursorAcpSession.ts` (new, small) | Session-config assembly: mode mapping, model selection, workspace dir, resume-vs-new + fallback |
 | `cursorAcpToolNames.ts` (slimmed from `cursorToolNormalization`) | Canonical tool-name mapping applied to ACP `tool_call` events; NDJSON envelope/reshaping plumbing is deleted |
 
@@ -188,6 +188,29 @@ already exercises), replacing the CLI temp-file convention.
 9. Old-CLI error path: with an outdated cursor-agent, the update notice
    appears (no hang).
 10. Cancel mid-turn: turn ends promptly; process survives for the next send.
+
+## Capture validation (2026-07-12)
+
+Real `agent acp` wire captures replaced the synthetic-from-docs fixtures for the
+session-config, plan, tool-diff, permission, `cursor/task`, and `cursor/create_plan`
+shapes (`tests/fixtures/providers/cursor/realAcpCaptures.ts`). Three findings
+corrected the docs-derived assumptions:
+
+- **`session/load` returns no `sessionId`.** The response carries only session
+  config (`modes`/`models`/`configOptions`); the loaded session keeps the id the
+  caller requested. The runtime now coalesces `response.sessionId ?? requestedId`
+  — previously it adopted the absent id and aborted the first resumed turn.
+- **`cursor/task` is a blocking request, not a notification** (`{id, params:{toolCallId,
+  description, prompt, subagentType}}`). Registered as a notification it went
+  unanswered and the transport rejected it `-32601`. It is now answered with a
+  benign empty ack; live subagent lifecycle stays deferred.
+- **No `usage_update` was observed.** Token/cost telemetry falls back to the
+  model-window display; the streamed turns carried no usage frame.
+
+`cursor/ask_question` also did **not** fire for the default (Auto) model even under
+an explicit multi-choice instruction — the model asked inline and consumed the
+answer as the next prompt. The blocking handler stays wired (it fires when the
+model emits the request), and the inline-ask path also works; both are supported.
 
 ## Docs updated in the same change
 

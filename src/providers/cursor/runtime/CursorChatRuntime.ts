@@ -584,17 +584,23 @@ export class CursorChatRuntime implements ChatRuntime {
     }
 
     if (this.sessionId) {
+      const requestedId = this.sessionId;
       try {
         const response = await this.connection.loadSession({
           cwd,
           mcpServers: [],
-          sessionId: this.sessionId,
+          sessionId: requestedId,
         });
-        this.loadedSessionId = response.sessionId;
-        this.sessionId = response.sessionId;
+        // Real Cursor session/load responses carry no sessionId (verified against
+        // ACP wire captures 2026-07-12); the loaded session keeps the id we asked
+        // to load. Adopting the response's absent id here would abort the resumed
+        // turn ("Failed to open a Cursor session") and silently discard the load.
+        const loadedId = response.sessionId ?? requestedId;
+        this.loadedSessionId = loadedId;
+        this.sessionId = loadedId;
         this.captureAdvertisedModelValues(response);
-        this.captureEvent('session_load', { sessionId: response.sessionId });
-        return response.sessionId;
+        this.captureEvent('session_load', { sessionId: loadedId });
+        return loadedId;
       } catch (error) {
         // Load-bearing no-spike fallback: an id-mapping mismatch degrades to a
         // fresh session with history re-injected on the next prompt.

@@ -1070,10 +1070,14 @@ export class OpencodeChatRuntime implements ChatRuntime {
         mcpServers: [],
         sessionId,
       });
+      // Opencode's server echoes the loaded sessionId, but the shared ACP type
+      // now allows an absent one (Cursor omits it); coalesce with the requested
+      // id so behavior is unchanged here.
+      const loadedId = response.sessionId ?? sessionId;
       this.sessionInvalidated = false;
-      this.loadedSessionId = response.sessionId;
-      this.sessionId = response.sessionId;
-      this.sessionCwds.set(response.sessionId, cwd);
+      this.loadedSessionId = loadedId;
+      this.sessionId = loadedId;
+      this.sessionCwds.set(loadedId, cwd);
       await syncOpencodeSessionState(
         response,
         params => this.syncSessionModelState(params),

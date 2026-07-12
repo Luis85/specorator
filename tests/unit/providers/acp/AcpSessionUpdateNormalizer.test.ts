@@ -2,6 +2,7 @@ import {
   AcpSessionUpdateNormalizer,
   renderAcpContentBlock,
 } from '../../../../src/providers/acp';
+import { CURSOR_PLAN_SESSION_UPDATE } from '../../../fixtures/providers/cursor/realAcpCaptures';
 
 describe('AcpSessionUpdateNormalizer', () => {
   it('emits assistant message boundaries once per message id', () => {
@@ -88,6 +89,29 @@ describe('AcpSessionUpdateNormalizer', () => {
         type: 'tool_result',
       }],
       type: 'tool_call_update',
+    });
+  });
+
+  it('passes a real captured plan session/update through as a plan-typed result', () => {
+    const normalizer = new AcpSessionUpdateNormalizer();
+
+    // Real Cursor `plan` session/update (captured 2026-07-12): entries carry
+    // content + priority + status. The normalizer forwards it verbatim behind the
+    // plan discriminant for the runtime's plan panel.
+    const result = normalizer.normalize({
+      sessionUpdate: 'plan',
+      ...CURSOR_PLAN_SESSION_UPDATE,
+    });
+
+    expect(result).toEqual({
+      type: 'plan',
+      plan: { sessionUpdate: 'plan', entries: CURSOR_PLAN_SESSION_UPDATE.entries },
+    });
+    const plan = (result as { plan: { entries: Array<{ content: string; priority: string; status: string }> } }).plan;
+    expect(plan.entries[0]).toEqual({
+      content: 'Add src/utils/readingTime.ts with strip/count/estimate + unit tests',
+      priority: 'medium',
+      status: 'pending',
     });
   });
 
