@@ -80,6 +80,7 @@ function makeEntry(overrides: Partial<SkillTabEntry> = {}): SkillTabEntry {
     description: 'TDD skill',
     insertPrefix: '/',
     sourceFilePath: '.claude/skills/tdd/SKILL.md',
+    scope: 'vault',
     providerEnabled: true,
     ...overrides,
   };

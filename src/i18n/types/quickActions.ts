@@ -64,6 +64,7 @@ export type QuickActionsTranslationKey =
   | 'quickActions.skills.emptyAll'
   | 'quickActions.skills.emptyHint'
   | 'quickActions.skills.providerDisabled'
+  | 'quickActions.skills.userSettingsRequired'
   | 'quickActions.skills.editInSettings'
   | 'quickActions.skills.disabledBadge'
   | 'quickActions.skills.searchPlaceholder'

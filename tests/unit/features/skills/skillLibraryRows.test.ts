@@ -5,7 +5,7 @@ function entry(over: Partial<SkillTabEntry> = {}): SkillTabEntry {
   return {
     id: 'claude:skill-a', providerId: 'claude', providerDisplayName: 'Claude', name: 'a',
     description: 'desc', insertPrefix: '$', sourceFilePath: '.claude/skills/a/SKILL.md',
-    providerEnabled: true, ...over,
+    scope: 'vault', providerEnabled: true, ...over,
   };
 }
 

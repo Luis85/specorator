@@ -47,6 +47,12 @@ function reload(): Promise<void> {
   return store.load();
 }
 
+// Force a re-scan (drop cache + reload). ~/.claude and other provider skill
+// dirs have no file watcher, so external edits need a manual refresh.
+function onRefresh(): void {
+  void withErrorNotice(() => store.refresh(), t('skillLibrary.actionFailed'), fail);
+}
+
 function openEditor(row: SkillLibraryRow): void {
   if (!plugin) return;
   new SkillEditorModal(plugin.app, plugin, row, () => void reload()).open();
@@ -132,6 +138,14 @@ function onCreateSkill(): void {
   <div class="specorator-vue-panel-header">
     <h2>{{ t('skillLibrary.title') }}</h2>
     <div class="specorator-vue-panel-actions">
+      <button
+        type="button"
+        :aria-label="t('quickActions.skills.refreshTooltip')"
+        :title="t('quickActions.skills.refreshTooltip')"
+        @click="onRefresh"
+      >
+        {{ t('common.refresh') }}
+      </button>
       <button
         type="button"
         class="mod-cta"

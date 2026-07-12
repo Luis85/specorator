@@ -155,6 +155,7 @@ function makeSkill(overrides: Partial<SkillTabEntry> = {}): SkillTabEntry {
     description: 'red-green-refactor',
     insertPrefix: '/',
     sourceFilePath: '.claude/skills/tdd/SKILL.md',
+    scope: 'vault',
     providerEnabled: true,
     ...overrides,
   };

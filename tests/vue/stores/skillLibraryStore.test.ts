@@ -18,7 +18,7 @@ const entry = {
 function makePlugin(entries: unknown[]) {
   return {
     app: { vault: { adapter: { basePath: '/vault' } } },
-    vaultSkillAggregator: { listAll: vi.fn().mockResolvedValue(entries) },
+    vaultSkillAggregator: { listAll: vi.fn().mockResolvedValue(entries), invalidate: vi.fn() },
     vaultFileAdapter: {
       read: vi.fn().mockResolvedValue('---\ntags: [t1]\n---\nbody'),
       stat: vi.fn().mockResolvedValue({ mtime: 42 }),
@@ -280,5 +280,20 @@ describe('useSkillLibraryStore', () => {
     store.init(makePlugin([redacted]));
     await store.load();
     expect(store.rows.map((r) => r.id)).toContain('claude:user-skill-redacted');
+  });
+
+  it('refresh() invalidates the aggregator cache then reloads (manual re-scan)', async () => {
+    const store = useSkillLibraryStore();
+    const plugin = makePlugin([entry]);
+    store.init(plugin);
+    await store.load();
+    const p = plugin as {
+      vaultSkillAggregator: { invalidate: ReturnType<typeof vi.fn>; listAll: ReturnType<typeof vi.fn> };
+    };
+    const loadsBefore = p.vaultSkillAggregator.listAll.mock.calls.length;
+    await store.refresh();
+    expect(p.vaultSkillAggregator.invalidate).toHaveBeenCalled();
+    // A fresh listAll must follow the invalidation so external edits surface.
+    expect(p.vaultSkillAggregator.listAll.mock.calls.length).toBeGreaterThan(loadsBefore);
   });
 });
