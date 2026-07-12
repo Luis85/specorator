@@ -426,6 +426,18 @@ describe('CursorChatRuntime create_plan in-turn decision session guard', () => {
     expect(decidedInline()).toBe(true);
     await cleanup();
   });
+
+  it('wires isActiveSession to the active turn: stale id false, matching + absent id true', async () => {
+    const { host, cleanup } = await captureHostAgainstTurn('S-current');
+    expect(host.isActiveSession).toBeDefined();
+    // A superseded turn's session id is no longer active — the blocking plan card
+    // must not open for it.
+    expect(host.isActiveSession!('S-old')).toBe(false);
+    // The active turn's id, and the legacy no-session-id path, stay active.
+    expect(host.isActiveSession!('S-current')).toBe(true);
+    expect(host.isActiveSession!(undefined)).toBe(true);
+    await cleanup();
+  });
 });
 
 describe('CursorChatRuntime ACP diagnostics capture (2026-07-11-cursor-acp-capture)', () => {

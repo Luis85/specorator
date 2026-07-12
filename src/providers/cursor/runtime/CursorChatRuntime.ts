@@ -487,6 +487,10 @@ export class CursorChatRuntime implements ChatRuntime {
         }
         this.currentTurnPlanDecidedInline = true;
       },
+      // Guards the blocking create_plan card the same way: an absent session id
+      // stays active (legacy unconditional path); a present one must match the
+      // active turn, or the stale create_plan is cancelled without opening UI.
+      isActiveSession: (sessionId) => sessionId === undefined || sessionId === this.activeTurn?.sessionId,
       // approve-new-session abandons this turn for a fresh session; the host only
       // sets cancelRequested (unwinds the consumer loop, never reaches the agent),
       // so fire session/cancel here or the agent keeps implementing the plan.

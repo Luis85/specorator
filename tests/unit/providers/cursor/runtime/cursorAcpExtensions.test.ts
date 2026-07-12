@@ -383,6 +383,50 @@ describe('registerCursorAcpExtensions', () => {
     expect(emptyPlan).toEqual({ outcome: { outcome: 'accepted' } });
   });
 
+  it('cancels a create_plan naming a stale session without opening the plan card', async () => {
+    const { transport, requests } = makeFakeTransport();
+    const chunks: StreamChunk[] = [];
+    const exitPlanMode = jest.fn();
+    const markPlanDecidedInline = jest.fn();
+    // The turn has rolled over: S-old is no longer the active session.
+    const isActiveSession = jest.fn((sessionId?: string) => sessionId === undefined || sessionId === 'S-current');
+    registerCursorAcpExtensions(transport as never, {
+      askUser: jest.fn(),
+      exitPlanMode: exitPlanMode as never,
+      emitChunk: (c) => chunks.push(c),
+      markPlanDecidedInline,
+      isActiveSession: isActiveSession as never,
+    });
+
+    const response = await requests.get('cursor/create_plan')!({ sessionId: 'S-old', plan: '# Plan\n1. go' });
+
+    // Short-circuited BEFORE any emit or block: no UI, no chunk, no metadata.
+    expect(response).toEqual({ outcome: { outcome: 'cancelled' } });
+    expect(exitPlanMode).not.toHaveBeenCalled();
+    expect(markPlanDecidedInline).not.toHaveBeenCalled();
+    expect(chunks).toHaveLength(0);
+  });
+
+  it('blocks a create_plan naming the active session even when isActiveSession is wired', async () => {
+    const { transport, requests } = makeFakeTransport();
+    const chunks: StreamChunk[] = [];
+    const exitPlanMode = jest.fn().mockResolvedValue({ type: 'approve' });
+    const isActiveSession = jest.fn((sessionId?: string) => sessionId === undefined || sessionId === 'S-current');
+    registerCursorAcpExtensions(transport as never, {
+      askUser: jest.fn(),
+      exitPlanMode: exitPlanMode as never,
+      emitChunk: (c) => chunks.push(c),
+      markPlanDecidedInline: () => {},
+      isActiveSession: isActiveSession as never,
+    });
+
+    const response = await requests.get('cursor/create_plan')!({ sessionId: 'S-current', plan: '# Plan\n1. go' });
+
+    expect(exitPlanMode).toHaveBeenCalled();
+    expect(chunks.some((c) => c.type === 'text' && c.content.includes('Plan'))).toBe(true);
+    expect(response).toEqual({ outcome: { outcome: 'accepted' } });
+  });
+
   it('forwards the create_plan sessionId to emitChunk for the runtime session guard', async () => {
     const { transport, requests } = makeFakeTransport();
     const emitted: Array<{ chunk: StreamChunk; sessionId?: string }> = [];

@@ -194,7 +194,7 @@ export function resolveCursorVendor(familyId: string): string {
   return 'Other';
 }
 
-interface DecomposedMode {
+export interface DecomposedMode {
   effort: string;
   thinking: boolean;
   fast: boolean;
@@ -203,7 +203,7 @@ interface DecomposedMode {
 // Decomposes a compound mode value (e.g. `thinking-low-fast`) into the three
 // orthogonal axes the picker actually cares about. `effort` defaults to
 // `standard` when no effort token is present.
-function decomposeMode(mode: string): DecomposedMode {
+export function decomposeMode(mode: string): DecomposedMode {
   if (mode === CURSOR_STANDARD_MODE) {
     return { effort: 'standard', thinking: false, fast: false };
   }

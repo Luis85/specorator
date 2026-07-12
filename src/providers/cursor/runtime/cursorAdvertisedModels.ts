@@ -1,5 +1,10 @@
 import { getCachedCursorModelIds } from './cursorModelCatalog';
-import { extractCursorModeValue, resolveCursorFamilyId } from './cursorModelFamily';
+import {
+  CURSOR_STANDARD_MODE,
+  decomposeMode,
+  extractCursorModeValue,
+  resolveCursorFamilyId,
+} from './cursorModelFamily';
 
 /**
  * Resolves the CLI-picked id to a session-advertised wire id: an exact value
@@ -35,19 +40,71 @@ export function matchAdvertisedModelValue(
   return familyMatches.find((value) => advertisedVariantMatches(value, resolvedMode)) ?? null;
 }
 
-// Advertised wire ids encode the variant in brackets (`gpt-5.4[reasoning=high]`,
-// `claude-4.6-opus[thinking]`); a value matches when any bracket segment's
-// (possibly `key=`-prefixed) value equals the resolved mode token.
-function advertisedVariantMatches(wireValue: string, mode: string): boolean {
+interface BracketFields {
+  // The value part of every bracket segment (`reasoning=medium` → `medium`,
+  // bare `thinking` → `thinking`). Effort matches against these.
+  values: Set<string>;
+  // key → value for `key=value` segments (`fast=true` → `fast`↦`true`).
+  keyed: Map<string, string>;
+}
+
+// Parses a wire value's bracket suffix into its per-axis fields. Advertised
+// values encode each axis as a separate bracket segment
+// (`gpt-5.4[reasoning=medium,fast=true]`, bare-token `claude-4.6-opus[thinking]`),
+// which is why a single-segment equality check never matched a compound CLI
+// suffix like `medium-fast`. Returns null when there is no bracket at all.
+function parseBracketFields(wireValue: string): BracketFields | null {
   const start = wireValue.indexOf('[');
   if (start === -1) {
-    return false;
+    return null;
   }
   const end = wireValue.lastIndexOf(']');
   const inner = wireValue.slice(start + 1, end > start ? end : undefined);
-  return inner.split(',').some((segment) => {
+  const values = new Set<string>();
+  const keyed = new Map<string, string>();
+  for (const rawSegment of inner.split(',')) {
+    const segment = rawSegment.trim();
+    if (!segment) {
+      continue;
+    }
     const eq = segment.indexOf('=');
-    const value = eq === -1 ? segment : segment.slice(eq + 1);
-    return value.trim() === mode;
-  });
+    if (eq === -1) {
+      values.add(segment);
+    } else {
+      const key = segment.slice(0, eq).trim();
+      const value = segment.slice(eq + 1).trim();
+      values.add(value);
+      keyed.set(key, value);
+    }
+  }
+  return { values, keyed };
+}
+
+// True when the advertised value carries the given flag axis, whether encoded as
+// a bare bracket token (`[thinking]`) or a keyed flag (`[fast=true]`).
+function bracketHasFlag(fields: BracketFields, axis: string): boolean {
+  return fields.values.has(axis) || fields.keyed.get(axis) === 'true';
+}
+
+// An advertised value matches the resolved compound suffix when EVERY axis the
+// selection specifies is satisfied by a corresponding bracket field: effort
+// against `reasoning=<level>` (or a bare effort token), and the thinking/fast
+// flags against `thinking`/`fast=true`. Axes the selection doesn't specify are
+// unconstrained, so a bare `medium` still matches `[reasoning=medium,...]`.
+function advertisedVariantMatches(wireValue: string, mode: string): boolean {
+  const fields = parseBracketFields(wireValue);
+  if (!fields) {
+    return false;
+  }
+  const { effort, thinking, fast } = decomposeMode(mode);
+  if (effort !== CURSOR_STANDARD_MODE && !fields.values.has(effort)) {
+    return false;
+  }
+  if (thinking && !bracketHasFlag(fields, 'thinking')) {
+    return false;
+  }
+  if (fast && !bracketHasFlag(fields, 'fast')) {
+    return false;
+  }
+  return true;
 }

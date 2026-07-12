@@ -23,13 +23,16 @@ export interface CursorAcpExtensionHost {
   // blocking extension request racing a turn boundary can't misroute into the
   // next turn's queue. An absent id keeps the prior unconditional behavior.
   emitChunk: (chunk: StreamChunk, sessionId?: string) => void;
-  // Signals the runtime that cursor/create_plan already settled the user's plan
-  // decision in-turn (via exitPlanMode), so the post-turn planCompleted approval
-  // card must be suppressed — otherwise one plan is prompted twice. Session-
-  // guarded like emitChunk: a stale create_plan resolving against a superseded
-  // turn names its old session and is dropped. An absent id keeps the
-  // unconditional path.
+  // Signals the runtime that cursor/create_plan already settled the plan decision
+  // in-turn (via exitPlanMode), so the post-turn planCompleted card is suppressed
+  // (otherwise one plan is prompted twice). Session-guarded like emitChunk: a
+  // stale create_plan naming a superseded turn's session is dropped; absent id
+  // keeps the unconditional path.
   markPlanDecidedInline: (sessionId?: string) => void;
+  // True when `sessionId` still names the active turn. Guards the BLOCKING
+  // create_plan handler so a stale request can't open the plan card (and be
+  // answered against the wrong conversation). Absent id / unwired host → active.
+  isActiveSession?: (sessionId: string | undefined) => boolean;
   // Proactively stops the running turn. The `approve-new-session` plan decision
   // abandons the current session for a fresh one, but the RuntimeHost only sets
   // cancelRequested — that breaks the local consumer loop and never reaches the
@@ -474,6 +477,12 @@ export function registerCursorAcpExtensions(
 
   unsubscribes.push(transport.onRequest('cursor/create_plan', async (params) => {
     const parsed = (params ?? {}) as { plan?: string; content?: string; text?: string; sessionId?: string };
+    // A create_plan whose session is no longer the active turn must not open the
+    // blocking plan card or emit anything — cancel BEFORE any emit/block. Absent
+    // sessionId / unwired host → active, so existing unconditional paths hold.
+    if (host.isActiveSession && !host.isActiveSession(parsed.sessionId)) {
+      return { outcome: { outcome: 'cancelled' } };
+    }
     const planText = parsed.plan ?? parsed.content ?? parsed.text ?? '';
     // An empty or unrecognized-key payload carries no plan to approve: emit
     // nothing and accept so the turn completes, matching the streamed empty-plan
@@ -483,14 +492,11 @@ export function registerCursorAcpExtensions(
     }
 
     // cursor/create_plan is a BLOCKING plan-APPROVAL request (cursor.com/docs/cli/acp):
-    // the agent waits on this response before it may implement. The OLD path
-    // patched planCompleted and returned `accepted` unconditionally, letting the
-    // agent proceed as approved while the real decision waited on the post-turn
-    // card — a reject there came too late. Now resolveCreatePlanOutcome blocks on
-    // the exit-plan-mode prompt and settles the decision in-turn (and calls
-    // markPlanDecidedInline so the post-turn card doesn't double-prompt). Plan
-    // turns that plan via plain assistant text WITHOUT calling create_plan still
-    // fall through to finalizePlanTurnMetadata's gated finalize.
+    // the agent waits on this response before it may implement. resolveCreatePlanOutcome
+    // blocks on the exit-plan-mode prompt and settles the decision in-turn (calling
+    // markPlanDecidedInline so the post-turn card doesn't double-prompt). Plan turns
+    // that plan via plain assistant text without create_plan fall through to
+    // finalizePlanTurnMetadata's gated finalize.
     return { outcome: await resolveCreatePlanOutcome(host, planText, parsed.sessionId) };
   }));
 

@@ -36,4 +36,33 @@ describe('matchAdvertisedModelValue', () => {
   it('returns null when no advertised family lines up at all', () => {
     expect(matchAdvertisedModelValue(['claude-4.6-opus[thinking]'], 'gpt-5.4-medium')).toBeNull();
   });
+
+  it('matches a compound fast variant against separate reasoning + fast bracket fields', () => {
+    // Advertised values split the axes into distinct fields, so the whole
+    // `medium-fast` suffix never equals a single segment — decompose and match
+    // each axis. The reasoning-only sibling must NOT match (no fast field).
+    const advertised = ['gpt-5.4[reasoning=medium]', 'gpt-5.4[reasoning=medium,fast=true]'];
+    expect(matchAdvertisedModelValue(advertised, 'gpt-5.4-medium-fast'))
+      .toBe('gpt-5.4[reasoning=medium,fast=true]');
+    expect(matchAdvertisedModelValue(['gpt-5.4[reasoning=medium]'], 'gpt-5.4-medium-fast')).toBeNull();
+  });
+
+  it('matches a thinking+effort+fast compound against its bracket encoding', () => {
+    const advertised = [
+      'claude-opus-4-7[reasoning=low]',
+      'claude-opus-4-7[reasoning=low,thinking,fast=true]',
+    ];
+    expect(matchAdvertisedModelValue(advertised, 'claude-opus-4-7-thinking-low-fast'))
+      .toBe('claude-opus-4-7[reasoning=low,thinking,fast=true]');
+  });
+
+  it('still matches a simple effort selection when the advertised value carries extra axes', () => {
+    // Only the effort axis is specified, so the unconstrained fast field is fine.
+    expect(matchAdvertisedModelValue(['gpt-5.4[reasoning=medium,fast=true]'], 'gpt-5.4-medium'))
+      .toBe('gpt-5.4[reasoning=medium,fast=true]');
+  });
+
+  it('skips (returns null) when a compound selection has no satisfying advertised value', () => {
+    expect(matchAdvertisedModelValue(['gpt-5.4[reasoning=high,fast=true]'], 'gpt-5.4-medium-fast')).toBeNull();
+  });
 });
