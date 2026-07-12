@@ -7,7 +7,6 @@ import { t } from '../../../i18n/i18n';
 import { mountCustomModelsSetting } from '../../../shared/settings/customModelsSetting';
 import { resolveClaudeModelSelection } from '../modelOptions';
 import {
-  applyClaudeLoadUserSettings,
   CLAUDE_SAFE_MODES,
   type ClaudeSafeMode,
   getClaudeProviderSettings,
@@ -20,6 +19,7 @@ import {
   mountClaudeCliPathSetting,
   mountClaudeEnvironmentSection,
   mountClaudeHiddenCommandsSetting,
+  mountClaudeLoadUserSettingsToggle,
   mountClaudeMcpSection,
   mountClaudeOpus1MToggle,
   mountClaudePluginsSection,
@@ -82,16 +82,7 @@ export const claudeSettingsTabRenderer: ProviderSettingsTabRenderer = {
           });
       });
 
-    new Setting(container)
-      .setName(t('settings.loadUserSettings.name'))
-      .setDesc(t('settings.loadUserSettings.desc'))
-      .addToggle((toggle) =>
-        toggle
-          .setValue(claudeSettings.loadUserSettings)
-          .onChange(async (value) => {
-            await applyClaudeLoadUserSettings(context.plugin, value);
-          })
-      );
+    mountClaudeLoadUserSettingsToggle(container, widgetCtx);
 
     mountClaudeTrustVaultSetting(container, widgetCtx);
 

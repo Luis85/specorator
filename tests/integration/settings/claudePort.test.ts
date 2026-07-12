@@ -230,10 +230,13 @@ describe('claude tab registry port', () => {
     expect(bangRow?.querySelector('.specorator-bang-bash-validation')).not.toBeNull();
   });
 
-  it('round-trips a native toggle through SettingsCtx onto the persisted path', async () => {
+  it('round-trips the Load-user-settings widget and invalidates cached user skills', async () => {
     mounted = mountClaude();
     const { host, plugin } = mounted;
 
+    // Now a shared widget (not a native toggle): the registry renderer must
+    // route through the invalidation path, else toggling it in the real UI
+    // leaves cached ~/.claude/skills entries runnable until the aggregator TTL.
     const toggle = componentFor(host, 'providerConfigs.claude.loadUserSettings', 'toggle');
     expect(toggle).toBeDefined();
     expect(toggle?.props.value).toBe(true);
@@ -243,6 +246,7 @@ describe('claude tab registry port', () => {
     const claudeConfig = (plugin.settings.providerConfigs as Record<string, Record<string, unknown>>).claude;
     expect(claudeConfig.loadUserSettings).toBe(false);
     expect(plugin.saveSettings).toHaveBeenCalled();
+    expect(plugin.events.emit).toHaveBeenCalledWith('vaultSkill.changed', { providerId: 'claude' });
   });
 
   it('round-trips the Opus 1M widget with the legacy side effects', async () => {

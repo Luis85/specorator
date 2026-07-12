@@ -62,7 +62,15 @@ export class VaultSkillAggregator implements VaultSkillSource {
     if (options.eventBus) {
       this.eventBusUnsubscribe = options.eventBus.on(
         'vaultSkill.changed',
-        ({ providerId }) => this.invalidate(providerId),
+        ({ providerId }) => {
+          this.invalidate(providerId);
+          // Rewrite the persisted index from the now-reduced cache so a reload
+          // before the next fetch can't resurrect the dropped bucket — e.g. a
+          // gated provider's user-scope skills after its discovery toggle flips
+          // off with no intervening Skills-tab refresh. No-ops without a
+          // cacheAdapter; debounced, so rapid edits collapse to one write.
+          this.schedulePersist();
+        },
       );
     }
     this.cacheAdapter = options.cacheAdapter;
