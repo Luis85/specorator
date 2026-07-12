@@ -290,21 +290,80 @@ describe('BlockList', () => {
     expect(container.querySelector('.specorator-tool-call')).toBeNull();
   });
 
-  it('provider-lifecycle SPAWN tool (Codex spawn_agent) falls through to a plain ToolCall, not a consolidated subagent card', async () => {
+  it('provider-lifecycle SPAWN tool (Codex spawn_agent) consolidates into a subagent card, not a plain ToolCall', async () => {
     const msg: ChatMessage = {
       id: 'a1',
       role: 'assistant',
       content: '',
       timestamp: 1,
       toolCalls: [
-        { id: 'spawn-1', name: 'spawn_agent', input: { message: 'go' }, status: 'completed', result: '{}' },
+        {
+          id: 'spawn-1',
+          name: 'spawn_agent',
+          input: { message: 'Investigate the flaky test', model: 'gpt-5.3-codex' },
+          status: 'completed',
+          result: JSON.stringify({ agent_id: 'agent-1', nickname: 'scout' }),
+        },
+        {
+          id: 'wait-1',
+          name: 'wait_agent',
+          input: { targets: ['agent-1'] },
+          status: 'completed',
+          result: JSON.stringify({ status: { 'agent-1': { completed: 'Found the race condition' } } }),
+        },
       ],
     } as ChatMessage;
 
     const { container } = mountBlockList(msg, makeCallbacks({ getProviderId: vi.fn(() => 'codex') }));
     await flushPromises();
 
-    expect(container.querySelector('.specorator-tool-call')).not.toBeNull();
-    expect(container.querySelector('.specorator-subagent-list')).toBeNull();
+    const card = container.querySelector('.specorator-subagent-list') as HTMLElement | null;
+    expect(card).not.toBeNull();
+    // The spawn's own id anchors the consolidated card (sync mode).
+    expect(card?.dataset.subagentId).toBe('spawn-1');
+    expect(card?.classList.contains('done')).toBe(true);
+    expect(card?.querySelector('.specorator-subagent-label')?.textContent).toBe('scout (gpt-5.3-codex)');
+    expect(card?.querySelector('.specorator-subagent-prompt-text')?.textContent).toBe('Investigate the flaky test');
+    expect(card?.querySelector('.specorator-subagent-result-output')?.textContent).toBe('Found the race condition');
+    // The wait sibling is consolidated, NOT rendered as a separate plain tool.
+    expect(container.querySelector('.specorator-tool-call')).toBeNull();
+    expect(container.querySelectorAll('.specorator-subagent-list')).toHaveLength(1);
+  });
+
+  it('consolidates a spawn card referenced by content blocks and does not re-render its wait sibling', async () => {
+    const msg: ChatMessage = {
+      id: 'a1',
+      role: 'assistant',
+      content: '',
+      timestamp: 1,
+      toolCalls: [
+        {
+          id: 'spawn-1',
+          name: 'spawn_agent',
+          input: { message: 'go', model: 'gpt-5.3-codex' },
+          status: 'completed',
+          result: JSON.stringify({ agent_id: 'agent-1', nickname: 'scout' }),
+        },
+        {
+          id: 'wait-1',
+          name: 'wait_agent',
+          input: { targets: ['agent-1'] },
+          status: 'completed',
+          result: JSON.stringify({ status: { 'agent-1': { completed: 'done' } } }),
+        },
+      ],
+      contentBlocks: [
+        { type: 'text', content: 'Spawning a scout' },
+        { type: 'tool_use', toolId: 'spawn-1' },
+        { type: 'tool_use', toolId: 'wait-1' },
+      ],
+    } as ChatMessage;
+
+    const { container } = mountBlockList(msg, makeCallbacks({ getProviderId: vi.fn(() => 'codex') }));
+    await flushPromises();
+
+    expect(container.querySelectorAll('.specorator-subagent-list')).toHaveLength(1);
+    expect(container.querySelector('.specorator-tool-call')).toBeNull();
+    expect(container.querySelector('.specorator-text-block')).not.toBeNull();
   });
 });

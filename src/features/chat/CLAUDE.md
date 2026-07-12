@@ -230,8 +230,14 @@ untouched.
   `rendering/*` pure helpers (e.g. `webSearchViewModel` ↔ `webSearchRenderer`)
   and the two shared inline-plan-card clone groups into shared modules (the
   `scripts/quality-baseline.json` duplication bump this cutover locked in).
-  Provider-lifecycle spawn tools still render as a plain `ToolCall` (the
-  consolidated spawn+wait+close card is unbuilt).
+  Provider-lifecycle spawn tools (CLI providers' spawn+wait/close tool sets)
+  consolidate into a single subagent card: `blockListViewModel` classifies a
+  spawn tool as a `subagent` item carrying a `SubagentInfo` pre-built via
+  `subagentViewModel.projectProviderLifecycleSubagent` (delegating to the
+  provider's `subagentLifecycleAdapter.buildSubagentInfo`), marks the
+  wait/close/hidden siblings consumed, and `SubagentBlock` renders the
+  pre-built info (mirrors the legacy
+  `MessageSubagentRenderer.renderProviderLifecycleSubagent`).
 
 ## Key Patterns
 

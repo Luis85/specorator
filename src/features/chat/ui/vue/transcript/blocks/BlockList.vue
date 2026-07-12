@@ -63,6 +63,7 @@ const durationText = computed(() => formatDurationMmSs(props.msg.durationSeconds
       :tool-call="item.toolCall"
       :mode="item.mode"
       :provider-id="providerId"
+      :subagent-info="item.subagentInfo"
     />
     <WriteEditView
       v-else-if="item.kind === 'tool_write_edit'"

@@ -1,11 +1,13 @@
+import type { ProviderSubagentLifecycleAdapter } from '../../../../../../core/providers/types';
 import {
   isSubagentToolName,
   isWriteEditTool,
   TOOL_AGENT_OUTPUT,
   TOOL_WRITE_STDIN,
 } from '../../../../../../core/tools/toolNames';
-import type { ChatMessage, ContentBlock, ToolCallInfo } from '../../../../../../core/types';
+import type { ChatMessage, ContentBlock, SubagentInfo, ToolCallInfo } from '../../../../../../core/types';
 import { resolveSubagentLifecycleAdapter } from '../../../../controllers/subagentLifecycleResolution';
+import { projectProviderLifecycleSubagent } from './subagentViewModel';
 
 /**
  * Pure dispatch resolution for `BlockList.vue`, mirroring
@@ -15,11 +17,12 @@ import { resolveSubagentLifecycleAdapter } from '../../../../controllers/subagen
  * dispatch gate. Kept pure/testable so `BlockList.vue` stays a thin
  * template that just maps items to components.
  *
- * Provider-lifecycle SPAWN tools (e.g. Codex's `spawn_agent`) intentionally
- * classify as `tool_plain` here — the consolidated spawn+wait+close card
- * (`MessageSubagentRenderer.renderProviderLifecycleSubagent` in the legacy
- * renderer) is a tracked follow-up, not built in this pass, so the tool
- * still renders as a plain `ToolCall` rather than disappearing.
+ * Provider-lifecycle SPAWN tools (e.g. Codex's `spawn_agent`) classify as a
+ * `subagent` item carrying a pre-built `subagentInfo` that consolidates the
+ * spawn + wait/close lifecycle tool calls (mirroring
+ * `MessageSubagentRenderer.renderProviderLifecycleSubagent` in the legacy
+ * renderer). The consumed wait/close/hidden lifecycle tool ids are marked so
+ * they are not ALSO rendered as separate plain tools.
  */
 
 export type BlockListItem =
@@ -27,7 +30,13 @@ export type BlockListItem =
   | { key: string; kind: 'text'; content: string }
   | { key: string; kind: 'context_compacted' }
   | { key: string; kind: 'runtime_error'; content: string; suppressRetry?: boolean }
-  | { key: string; kind: 'subagent'; toolCall: ToolCallInfo; mode?: 'sync' | 'async' }
+  | {
+      key: string;
+      kind: 'subagent';
+      toolCall?: ToolCallInfo;
+      mode?: 'sync' | 'async';
+      subagentInfo?: SubagentInfo;
+    }
   | { key: string; kind: 'tool_write_edit'; toolCall: ToolCallInfo }
   | { key: string; kind: 'tool_plain'; toolCall: ToolCallInfo };
 
@@ -46,14 +55,47 @@ export function shouldRenderToolCall(toolCall: ToolCallInfo, providerId: string)
   return true;
 }
 
+/**
+ * Marks the spawn's wait/close/hidden lifecycle siblings as consumed so the
+ * content-block loop and leftover pass skip them — the consolidated spawn card
+ * already represents them (mirrors the legacy renderer, which relied on the
+ * spawn owning the block plus `shouldRenderToolCall` hiding `isHiddenTool`).
+ */
+function consumeLifecycleSiblings(
+  msg: ChatMessage,
+  adapter: ProviderSubagentLifecycleAdapter,
+  consumedToolIds: Set<string>,
+): void {
+  for (const tc of msg.toolCalls ?? []) {
+    if (adapter.isSpawnTool(tc.name)) continue;
+    if (adapter.isWaitTool(tc.name) || adapter.isCloseTool(tc.name) || adapter.isHiddenTool(tc.name)) {
+      consumedToolIds.add(tc.id);
+    }
+  }
+}
+
 /** Reproduces `MessageRenderer.ts`'s private `renderToolCall` dispatch (post-gate). */
-function toolItem(toolCall: ToolCallInfo, providerId: string): BlockListItem | null {
+function toolItem(
+  toolCall: ToolCallInfo,
+  providerId: string,
+  msg: ChatMessage,
+  consumedToolIds: Set<string>,
+): BlockListItem | null {
   if (!shouldRenderToolCall(toolCall, providerId)) return null;
   if (isWriteEditTool(toolCall.name)) {
     return { key: toolCall.id, kind: 'tool_write_edit', toolCall };
   }
   if (isSubagentToolName(toolCall.name)) {
     return { key: toolCall.id, kind: 'subagent', toolCall };
+  }
+  const lifecycleAdapter = resolveSubagentLifecycleAdapter(providerId, toolCall.name);
+  if (lifecycleAdapter?.isSpawnTool(toolCall.name)) {
+    consumeLifecycleSiblings(msg, lifecycleAdapter, consumedToolIds);
+    return {
+      key: toolCall.id,
+      kind: 'subagent',
+      subagentInfo: projectProviderLifecycleSubagent(toolCall, msg, lifecycleAdapter),
+    };
   }
   return { key: toolCall.id, kind: 'tool_plain', toolCall };
 }
@@ -89,8 +131,10 @@ function resolveContentBlockItem(
     case 'tool_use': {
       const toolCall = findToolCall(msg, block.toolId);
       if (!toolCall) return null;
+      // Already consolidated into a preceding spawn card (its wait/close sibling).
+      if (renderedToolIds.has(toolCall.id)) return null;
       renderedToolIds.add(toolCall.id);
-      return toolItem(toolCall, providerId);
+      return toolItem(toolCall, providerId, msg, renderedToolIds);
     }
     case 'context_compacted':
       return { key: `context_compacted:${index}`, kind: 'context_compacted' };
@@ -125,7 +169,7 @@ function appendLeftoverItems(
   for (const toolCall of msg.toolCalls) {
     if (renderedToolIds.has(toolCall.id)) continue;
     renderedToolIds.add(toolCall.id);
-    const item = toolItem(toolCall, providerId);
+    const item = toolItem(toolCall, providerId, msg, renderedToolIds);
     if (item) items.push(item);
   }
 }
@@ -137,8 +181,11 @@ function resolveLegacyItems(msg: ChatMessage, providerId: string): BlockListItem
     items.push({ key: 'text:0', kind: 'text', content: msg.content });
   }
   if (msg.toolCalls) {
+    const renderedToolIds = new Set<string>();
     for (const toolCall of msg.toolCalls) {
-      const item = toolItem(toolCall, providerId);
+      if (renderedToolIds.has(toolCall.id)) continue;
+      renderedToolIds.add(toolCall.id);
+      const item = toolItem(toolCall, providerId, msg, renderedToolIds);
       if (item) items.push(item);
     }
   }

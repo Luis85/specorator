@@ -3,7 +3,7 @@ import { computed } from 'vue';
 
 import { getToolIcon } from '../../../../../../core/tools/toolIcons';
 import { TOOL_TASK } from '../../../../../../core/tools/toolNames';
-import type { ToolCallInfo } from '../../../../../../core/types';
+import type { SubagentInfo, ToolCallInfo } from '../../../../../../core/types';
 import { useCollapsible } from '../collapsible';
 import { useIconDiv } from './subagentIconDiv';
 import SubagentToolItem from './SubagentToolItem.vue';
@@ -22,30 +22,37 @@ import {
 } from './subagentViewModel';
 
 /**
- * Renders a STORED Task-tool subagent block — sync (nested tools, inline
- * result) and async (background lifecycle: pending/running/completed/
- * error/orphaned) — reproducing `SubagentRenderer.ts`'s
- * `renderStoredSubagent`/`renderStoredAsyncSubagent` DOM contract behind
- * the `MessageSubagentRenderer.renderTaskSubagent` projection
- * (`subagentViewModel.resolveTaskSubagent`).
+ * Renders a STORED subagent block — sync (nested tools, inline result) and
+ * async (background lifecycle: pending/running/completed/error/orphaned) —
+ * reproducing `SubagentRenderer.ts`'s `renderStoredSubagent`/
+ * `renderStoredAsyncSubagent` DOM contract.
  *
- * `providerId` is accepted for API parity with the future provider-lifecycle
- * consolidation path (spawn+wait/close tool sets, `renderProviderLifecycleSubagent`
- * in the legacy renderer) that a block-list orchestrator will resolve via
- * `resolveSubagentLifecycleAdapter(providerId, toolName)` once it has access
- * to a message's full `toolCalls` array — out of this component's scope,
- * since a single `toolCall` prop can't reproduce that consolidation. The
- * Task-tool projection itself is provider-agnostic (mirrors
- * `resolveTaskSubagent`, which never reads capabilities), so `providerId`
- * is intentionally unused by the logic below.
+ * Two projection paths, matching the legacy renderer's two entry points:
+ *  - Task path (`{ toolCall }`): projects the incoming `ToolCallInfo` through
+ *    `subagentViewModel.resolveTaskSubagent` (mirrors
+ *    `MessageSubagentRenderer.renderTaskSubagent`). Provider-agnostic — the
+ *    Task projection never reads capabilities.
+ *  - Provider-lifecycle path (`{ subagentInfo }`): renders a pre-built
+ *    `SubagentInfo` the block-list orchestrator already consolidated from a
+ *    CLI provider's spawn+wait/close tool set (mirrors
+ *    `MessageSubagentRenderer.renderProviderLifecycleSubagent`). That
+ *    consolidation needs the message's full `toolCalls`, so it happens in
+ *    `blockListViewModel` (which has the message) and is handed in here.
+ *
+ * `providerId` is accepted for API parity; the projection logic below never
+ * reads it (the Task projection is provider-agnostic, and the lifecycle
+ * `SubagentInfo` is already resolved upstream).
  */
 const props = defineProps<{
-  toolCall: ToolCallInfo;
+  toolCall?: ToolCallInfo;
   mode?: 'sync' | 'async';
   providerId: string;
+  subagentInfo?: SubagentInfo;
 }>();
 
-const subagent = computed(() => resolveTaskSubagent(props.toolCall, props.mode));
+const subagent = computed(() =>
+  props.subagentInfo ?? resolveTaskSubagent(props.toolCall as ToolCallInfo, props.mode)
+);
 const isAsync = computed(() => subagent.value.mode === 'async');
 
 const truncatedDescription = computed(() => truncateDescription(subagent.value.description));

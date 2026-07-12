@@ -40,6 +40,10 @@ function mountBlock(toolCall: ToolCallInfo, mode?: 'sync' | 'async') {
   return render(SubagentBlock, { props: { toolCall, mode, providerId: 'claude' } });
 }
 
+function mountPrebuilt(subagentInfo: SubagentInfo) {
+  return render(SubagentBlock, { props: { subagentInfo, providerId: 'codex' } });
+}
+
 beforeEach(() => {
   vi.clearAllMocks();
 });
@@ -210,6 +214,31 @@ describe('SubagentBlock (sync)', () => {
     const { container } = mountBlock(toolCall);
     await flushPromises();
     expect(container.querySelector('.specorator-subagent-label')?.textContent).toBe('A'.repeat(40) + '...');
+  });
+});
+
+describe('SubagentBlock (pre-built provider-lifecycle info)', () => {
+  it('renders a pre-built SubagentInfo directly (no toolCall prop) with the sync DOM contract', async () => {
+    const subagentInfo: SubagentInfo = {
+      id: 'spawn-1',
+      description: 'scout (gpt-5.3-codex)',
+      prompt: 'Investigate the flaky test',
+      status: 'completed',
+      result: 'Found the race condition',
+      mode: 'sync',
+      isExpanded: false,
+      toolCalls: [],
+      agentId: 'agent-1',
+    };
+    const { container } = mountPrebuilt(subagentInfo);
+    await flushPromises();
+
+    const root = container.querySelector('.specorator-subagent-list') as HTMLElement;
+    expect(root.dataset.subagentId).toBe('spawn-1');
+    expect(root.classList.contains('done')).toBe(true);
+    expect(root.querySelector('.specorator-subagent-label')?.textContent).toBe('scout (gpt-5.3-codex)');
+    expect(root.querySelector('.specorator-subagent-prompt-text')?.textContent).toBe('Investigate the flaky test');
+    expect(root.querySelector('.specorator-subagent-result-output')?.textContent).toBe('Found the race condition');
   });
 });
 

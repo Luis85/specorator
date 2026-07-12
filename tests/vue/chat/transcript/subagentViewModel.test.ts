@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import type { SubagentInfo, ToolCallInfo } from '@/core/types';
+import type { ChatMessage, SubagentInfo, ToolCallInfo } from '@/core/types';
 import {
   buildAsyncHeaderAriaLabel,
   buildAsyncRootClasses,
@@ -13,11 +13,13 @@ import {
   getAsyncStatusText,
   inferAsyncStatusFromTaskTool,
   mapToolStatusToSubagentStatus,
+  projectProviderLifecycleSubagent,
   resolveSubagentResultText,
   resolveTaskSubagent,
   shouldShowRunningPlaceholder,
   truncateDescription,
 } from '@/features/chat/ui/vue/transcript/blocks/subagentViewModel';
+import { codexSubagentLifecycleAdapter } from '@/providers/codex/normalization/codexSubagentNormalization';
 
 /**
  * Reproduces `MessageSubagentRenderer`'s private projection methods
@@ -290,5 +292,77 @@ describe('display helpers', () => {
     expect(shouldShowRunningPlaceholder(createToolCall({ status: 'running', result: '' }))).toBe(true);
     expect(shouldShowRunningPlaceholder(createToolCall({ status: 'running', result: 'partial' }))).toBe(false);
     expect(shouldShowRunningPlaceholder(createToolCall({ status: 'completed', result: undefined }))).toBe(false);
+  });
+});
+
+describe('projectProviderLifecycleSubagent (Codex spawn+wait/close consolidation)', () => {
+  function makeMessage(toolCalls: ToolCallInfo[]): ChatMessage {
+    return { id: 'a1', role: 'assistant', content: '', timestamp: 1, toolCalls } as ChatMessage;
+  }
+
+  it('consolidates a completed spawn + wait into one sync SubagentInfo', () => {
+    const spawn: ToolCallInfo = {
+      id: 'spawn-1',
+      name: 'spawn_agent',
+      input: { message: 'Investigate the flaky test', model: 'gpt-5.3-codex' },
+      status: 'completed',
+      result: JSON.stringify({ agent_id: 'agent-1', nickname: 'scout' }),
+    };
+    const wait: ToolCallInfo = {
+      id: 'wait-1',
+      name: 'wait_agent',
+      input: { targets: ['agent-1'] },
+      status: 'completed',
+      result: JSON.stringify({ status: { 'agent-1': { completed: 'Found the race condition' } } }),
+    };
+    const msg = makeMessage([spawn, wait]);
+
+    const info = projectProviderLifecycleSubagent(spawn, msg, codexSubagentLifecycleAdapter);
+
+    expect(info.id).toBe('spawn-1');
+    expect(info.mode).toBe('sync');
+    expect(info.description).toBe('scout (gpt-5.3-codex)');
+    expect(info.prompt).toBe('Investigate the flaky test');
+    expect(info.status).toBe('completed');
+    expect(info.result).toBe('Found the race condition');
+    expect(info.agentId).toBe('agent-1');
+    expect(info.toolCalls).toEqual([]);
+  });
+
+  it('derives an error status/result from a failed wait entry', () => {
+    const spawn: ToolCallInfo = {
+      id: 'spawn-1',
+      name: 'spawn_agent',
+      input: { message: 'go' },
+      status: 'completed',
+      result: JSON.stringify({ agent_id: 'agent-1' }),
+    };
+    const wait: ToolCallInfo = {
+      id: 'wait-1',
+      name: 'wait_agent',
+      input: { targets: ['agent-1'] },
+      status: 'completed',
+      result: JSON.stringify({ status: { 'agent-1': { error: 'boom' } } }),
+    };
+
+    const info = projectProviderLifecycleSubagent(spawn, makeMessage([spawn, wait]), codexSubagentLifecycleAdapter);
+
+    expect(info.status).toBe('error');
+    expect(info.result).toBe('boom');
+  });
+
+  it('reports a still-running status when no wait completion is present yet', () => {
+    const spawn: ToolCallInfo = {
+      id: 'spawn-1',
+      name: 'spawn_agent',
+      input: { message: 'go' },
+      status: 'completed',
+      result: JSON.stringify({ agent_id: 'agent-1' }),
+    };
+
+    const info = projectProviderLifecycleSubagent(spawn, makeMessage([spawn]), codexSubagentLifecycleAdapter);
+
+    expect(info.status).toBe('running');
+    expect(info.result).toBeUndefined();
   });
 });

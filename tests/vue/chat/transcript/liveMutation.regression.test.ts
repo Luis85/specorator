@@ -31,7 +31,7 @@ function makePlugin(): SpecoratorPlugin {
   return { app: new App(), settings: { mediaFolder: '' } } as unknown as SpecoratorPlugin;
 }
 
-function makeCallbacks(projection: TabTranscriptProjection): TranscriptCallbacks {
+function makeCallbacks(projection: TabTranscriptProjection, providerId = 'claude'): TranscriptCallbacks {
   return {
     subscribe: projection.subscribe,
     onRewind: vi.fn(),
@@ -44,7 +44,7 @@ function makeCallbacks(projection: TabTranscriptProjection): TranscriptCallbacks
     openFile: vi.fn(),
     resolveImageSrc: vi.fn(() => ''),
     showFullImage: vi.fn(),
-    getProviderId: vi.fn(() => 'claude'),
+    getProviderId: vi.fn(() => providerId),
     getWorkOrderPath: vi.fn(() => null),
     getCapabilities: vi.fn(() => ({
       providerId: 'claude',
@@ -62,10 +62,10 @@ function makeCallbacks(projection: TabTranscriptProjection): TranscriptCallbacks
   };
 }
 
-function mount(state: ChatState, projection: TabTranscriptProjection) {
+function mount(state: ChatState, projection: TabTranscriptProjection, providerId = 'claude') {
   const container = document.createElement('div');
   document.body.appendChild(container);
-  const mounted = mountTranscript(container, makePlugin(), new Component(), makeCallbacks(projection));
+  const mounted = mountTranscript(container, makePlugin(), new Component(), makeCallbacks(projection, providerId));
   return { container, mounted, dispose: () => { mounted.unmount(); container.remove(); } };
 }
 
@@ -243,6 +243,58 @@ describe('transcript live in-place mutation', () => {
 
     expect(container.querySelector('.specorator-subagent-tool-status.status-completed')).not.toBeNull();
     expect(container.querySelector('.specorator-subagent-tool-status.status-running')).toBeNull();
+
+    dispose();
+  });
+
+  it('C4: flips a live provider-lifecycle (Codex spawn+wait) card when the wait tool result mutates in place', async () => {
+    const state = new ChatState();
+    const spawnTool: ToolCallInfo = {
+      id: 'spawn-1',
+      name: 'spawn_agent',
+      input: { message: 'go', model: 'gpt-5.3-codex' },
+      status: 'completed',
+      isExpanded: false,
+      result: JSON.stringify({ agent_id: 'agent-1', nickname: 'scout' }),
+    };
+    // Wait tool not yet resolved — the consolidated card should read "running".
+    const waitTool: ToolCallInfo = {
+      id: 'wait-1',
+      name: 'wait_agent',
+      input: { targets: ['agent-1'] },
+      status: 'running',
+      isExpanded: false,
+    };
+    const msg: ChatMessage = {
+      id: 'a1',
+      role: 'assistant',
+      content: '',
+      timestamp: 0,
+      contentBlocks: [{ type: 'tool_use', toolId: 'spawn-1' }, { type: 'tool_use', toolId: 'wait-1' }],
+      toolCalls: [spawnTool, waitTool],
+    };
+    state.addMessage(msg);
+    state.activeMessageId = 'a1'; // live streaming turn
+
+    const projection = new TabTranscriptProjection(state);
+    const { container, dispose } = mount(state, projection, 'codex');
+    await flushPromises();
+
+    // Exactly one consolidated card, running; the wait tool is not rendered separately.
+    expect(container.querySelectorAll('.specorator-subagent-list')).toHaveLength(1);
+    expect(container.querySelector('.specorator-tool-call')).toBeNull();
+    expect(container.querySelector('.specorator-subagent-status.status-running')).not.toBeNull();
+    expect(container.querySelector('.specorator-subagent-status.status-completed')).toBeNull();
+
+    // Resolve the wait in place, exactly like the Codex live stream would.
+    waitTool.status = 'completed';
+    waitTool.result = JSON.stringify({ status: { 'agent-1': { completed: 'Found the race condition' } } });
+    projection.emit();
+    await flushPromises();
+
+    expect(container.querySelector('.specorator-subagent-status.status-completed')).not.toBeNull();
+    expect(container.querySelector('.specorator-subagent-status.status-running')).toBeNull();
+    expect(container.querySelector('.specorator-subagent-result-output')?.textContent).toBe('Found the race condition');
 
     dispose();
   });

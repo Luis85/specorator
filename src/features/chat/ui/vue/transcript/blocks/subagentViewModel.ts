@@ -1,5 +1,6 @@
+import type { ProviderSubagentLifecycleAdapter } from '../../../../../../core/providers/types';
 import { extractToolResultContent } from '../../../../../../core/tools/toolResultContent';
-import type { AsyncSubagentStatus, SubagentInfo, ToolCallInfo } from '../../../../../../core/types';
+import type { AsyncSubagentStatus, ChatMessage, SubagentInfo, ToolCallInfo } from '../../../../../../core/types';
 
 /**
  * Pure `ToolCallInfo → SubagentInfo` projection plus the small display-only
@@ -99,6 +100,24 @@ export function resolveTaskSubagent(toolCall: ToolCallInfo, modeHint?: 'sync' | 
     isExpanded: false,
     result: toolCall.result,
   };
+}
+
+/**
+ * Reproduces `MessageSubagentRenderer.renderProviderLifecycleSubagent`'s
+ * consolidation for CLI providers (Codex/Opencode/Cursor): a "subagent" is a
+ * LIFECYCLE of separate tool calls (spawn + wait/close) rather than a single
+ * Task tool. Delegates the provider-specific status/result/description/nested
+ * derivation to the resolved adapter's `buildSubagentInfo`, handing it the
+ * message's full `toolCalls` so it can gather the spawn's wait/close siblings.
+ * Pure — re-derives off `msg.toolCalls` each call, so a mutation to a
+ * wait/close tool (with a refreshed message identity) re-projects the card.
+ */
+export function projectProviderLifecycleSubagent(
+  spawnToolCall: ToolCallInfo,
+  msg: ChatMessage,
+  adapter: ProviderSubagentLifecycleAdapter,
+): SubagentInfo {
+  return adapter.buildSubagentInfo(spawnToolCall, msg.toolCalls ?? []);
 }
 
 export function truncateDescription(description: string, maxLength = 40): string {
