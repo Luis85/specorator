@@ -48,6 +48,51 @@ describe('StreamingIndicator', () => {
     expect(hint.textContent).toBe(' (esc to interrupt · 0s)');
   });
 
+  it('thinking mode prefers a custom label over the deterministic flavor', () => {
+    const store = useTranscriptStore();
+    store.setActiveStream({
+      messageId: 'm1',
+      blockIndex: 0,
+      isThinking: true,
+      isWriting: false,
+      elapsedSeconds: 0,
+      label: 'Compacting...',
+    });
+
+    const { container } = render(StreamingIndicator);
+
+    const flavor = container.querySelector('.specorator-thinking-flavor') as HTMLElement;
+    expect(flavor.textContent).toBe('Compacting...');
+    expect(FLAVOR_TEXTS).not.toContain('Compacting...');
+  });
+
+  it('thinking mode falls back to the deterministic flavor when label is null/undefined', () => {
+    const store = useTranscriptStore();
+    store.setActiveStream({ messageId: 'm1', blockIndex: 0, isThinking: true, isWriting: false, elapsedSeconds: 0 });
+
+    const { container } = render(StreamingIndicator);
+
+    const flavor = container.querySelector('.specorator-thinking-flavor') as HTMLElement;
+    expect(FLAVOR_TEXTS).toContain(flavor.textContent);
+  });
+
+  it('writing mode ignores a custom label (STREAMING_RESPONSE_LABEL wins)', () => {
+    const store = useTranscriptStore();
+    store.setActiveStream({
+      messageId: 'm1',
+      blockIndex: 0,
+      isThinking: false,
+      isWriting: true,
+      elapsedSeconds: 0,
+      label: 'Compacting...',
+    });
+
+    const { container } = render(StreamingIndicator);
+
+    const flavor = container.querySelector('.specorator-thinking-flavor') as HTMLElement;
+    expect(flavor.textContent).toBe(STREAMING_RESPONSE_LABEL);
+  });
+
   it('writing mode renders STREAMING_RESPONSE_LABEL as the flavor label', () => {
     const store = useTranscriptStore();
     store.setActiveStream({ messageId: 'm1', blockIndex: 0, isThinking: false, isWriting: true, elapsedSeconds: 0 });

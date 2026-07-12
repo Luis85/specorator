@@ -45,6 +45,12 @@ export interface ActiveStreamState {
   isThinking: boolean;
   isWriting: boolean;
   elapsedSeconds: number;
+  /**
+   * Custom indicator label for the thinking flavor slot (e.g. `Compacting...`
+   * for `/compact`). When present, the Vue `StreamingIndicator` prefers it over
+   * the deterministic flavor phrase. Undefined ⇒ default flavor.
+   */
+  label?: string;
 }
 
 /** Stored selection state from editor polling. */
@@ -107,6 +113,12 @@ export interface ChatStateData {
    * reasoning/text block state. Written alongside the imperative DOM (dual-write).
    */
   streamingIndicatorMode: 'thinking' | 'writing' | null;
+  /**
+   * Custom label for the thinking-mode indicator (e.g. `Compacting...`), set by
+   * `StreamingIndicator.show(overrideText)` and surfaced through
+   * `getActiveStreamSnapshot().label`. Null ⇒ the default deterministic flavor.
+   */
+  streamingIndicatorLabel: string | null;
   queueIndicatorEl: HTMLElement | null;
   /** Debounce timeout for showing thinking indicator after inactivity. */
   thinkingIndicatorTimeout: number | null;

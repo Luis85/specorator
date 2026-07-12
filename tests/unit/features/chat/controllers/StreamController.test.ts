@@ -713,8 +713,9 @@ describe('StreamController - Text Content', () => {
       autoDeps.state.currentContentEl = createMockEl();
       const msg = createTestMessage();
 
-      // An auto-turn has no user prompt to retry; the Vue RuntimeErrorCard decides
-      // whether to offer Retry — the recorded block is identical either way.
+      // An auto-turn has no user prompt to retry; the recorded block carries
+      // `suppressRetry: true` so the Vue RuntimeErrorCard hides Retry (retrying
+      // would re-send the user's last *normal* prompt, not this background turn).
       autoController.setRenderingAutoTurn(true);
       await autoController.handleStreamChunk(
         { type: 'error', content: 'Background task failed' },
@@ -724,7 +725,21 @@ describe('StreamController - Text Content', () => {
       expect(msg.contentBlocks).toContainEqual({
         type: 'runtime_error',
         content: 'Background task failed',
+        suppressRetry: true,
       });
+    });
+
+    it('does not set suppressRetry on a normal (non-auto) turn error', async () => {
+      const msg = createTestMessage();
+
+      await controller.handleStreamChunk(
+        { type: 'error', content: 'Something went wrong' },
+        msg
+      );
+
+      const block = (msg.contentBlocks ?? []).find((b) => b.type === 'runtime_error');
+      expect(block).toEqual({ type: 'runtime_error', content: 'Something went wrong' });
+      expect((block as { suppressRetry?: boolean }).suppressRetry).toBeUndefined();
     });
 
     it('should append warning notice on notice chunk', async () => {

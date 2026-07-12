@@ -56,6 +56,7 @@ const durationText = computed(() => formatDurationMmSs(props.msg.durationSeconds
       v-else-if="item.kind === 'runtime_error'"
       :kind="classifyRuntimeError(item.content)"
       :content="item.content"
+      :suppress-retry="item.suppressRetry"
     />
     <SubagentBlock
       v-else-if="item.kind === 'subagent'"

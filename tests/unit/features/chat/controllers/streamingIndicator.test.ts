@@ -99,4 +99,47 @@ describe('StreamingIndicator reactive mode (data-only)', () => {
 
     expect(state.streamingIndicatorMode).toBeNull();
   });
+
+  it('show(overrideText) stores the custom label once thinking mode is entered', () => {
+    indicator.show('Compacting...');
+
+    // Label lands only after the debounce enters thinking mode.
+    expect(state.streamingIndicatorLabel).toBeNull();
+
+    jest.advanceTimersByTime(400);
+
+    expect(state.streamingIndicatorMode).toBe('thinking');
+    expect(state.streamingIndicatorLabel).toBe('Compacting...');
+    expect(state.getActiveStreamSnapshot()!.label).toBe('Compacting...');
+  });
+
+  it('show() without an override leaves the label null (default flavor)', () => {
+    indicator.show();
+    jest.advanceTimersByTime(400);
+
+    expect(state.streamingIndicatorMode).toBe('thinking');
+    expect(state.streamingIndicatorLabel).toBeNull();
+    expect(state.getActiveStreamSnapshot()!.label).toBeUndefined();
+  });
+
+  it('hide() clears the custom label', () => {
+    indicator.show('Compacting...');
+    jest.advanceTimersByTime(400);
+    expect(state.streamingIndicatorLabel).toBe('Compacting...');
+
+    indicator.hide();
+
+    expect(state.streamingIndicatorLabel).toBeNull();
+    expect(state.getActiveStreamSnapshot()!.label).toBeUndefined();
+  });
+
+  it('resetStreamingState() clears the custom label', () => {
+    indicator.show('Compacting...');
+    jest.advanceTimersByTime(400);
+    expect(state.streamingIndicatorLabel).toBe('Compacting...');
+
+    state.resetStreamingState();
+
+    expect(state.streamingIndicatorLabel).toBeNull();
+  });
 });

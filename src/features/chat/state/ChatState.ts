@@ -29,6 +29,7 @@ function createInitialState(): ChatStateData {
     activeMessageId: null,
     activeBlockIndex: -1,
     streamingIndicatorMode: null,
+    streamingIndicatorLabel: null,
     queueIndicatorEl: null,
     thinkingIndicatorTimeout: null,
     toolCallElements: new Map(),
@@ -244,6 +245,14 @@ export class ChatState {
     this.state.streamingIndicatorMode = value;
   }
 
+  get streamingIndicatorLabel(): string | null {
+    return this.state.streamingIndicatorLabel;
+  }
+
+  set streamingIndicatorLabel(value: string | null) {
+    this.state.streamingIndicatorLabel = value;
+  }
+
   /**
    * Snapshot of the in-flight turn for the Vue transcript, or null when no turn
    * is streaming. `isThinking`/`isWriting` mirror the imperative streaming
@@ -262,6 +271,7 @@ export class ChatState {
       isThinking: this.state.streamingIndicatorMode === 'thinking',
       isWriting: this.state.streamingIndicatorMode === 'writing',
       elapsedSeconds: start === null ? 0 : Math.floor((performance.now() - start) / 1000),
+      label: this.state.streamingIndicatorLabel ?? undefined,
     };
   }
 
@@ -475,6 +485,7 @@ export class ChatState {
     this.state.activeMessageId = null;
     this.state.activeBlockIndex = -1;
     this.state.streamingIndicatorMode = null;
+    this.state.streamingIndicatorLabel = null;
     this.state.isStreaming = false;
     this.state.cancelRequested = false;
     // Clear thinking indicator timeout

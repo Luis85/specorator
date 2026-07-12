@@ -375,8 +375,14 @@ export class StreamController {
     await this.finalizeCurrentTextBlock(msg);
     msg.contentBlocks = msg.contentBlocks || [];
     // The Vue RuntimeErrorCard renders this reactive block and wires its
-    // open-settings / retry affordances through TranscriptCallbacks.
-    msg.contentBlocks.push({ type: 'runtime_error', content: chunk.content });
+    // open-settings / retry affordances through TranscriptCallbacks. An
+    // auto-triggered (background) turn suppresses Retry: retrying would
+    // re-send the user's last *normal* prompt, not this background turn.
+    msg.contentBlocks.push({
+      type: 'runtime_error',
+      content: chunk.content,
+      ...(this.renderingAutoTurn ? { suppressRetry: true } : {}),
+    });
     this.hideThinkingIndicator();
   }
 

@@ -39,7 +39,7 @@ export type ContentBlock =
   | { type: 'thinking'; content: string; durationSeconds?: number }
   | { type: 'subagent'; subagentId: string; mode?: SubagentMode }
   | { type: 'context_compacted' }
-  | { type: 'runtime_error'; content: string };
+  | { type: 'runtime_error'; content: string; suppressRetry?: boolean };
 
 /** Chat message with content, tool calls, and attachments. */
 export interface ChatMessage {

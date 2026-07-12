@@ -155,6 +155,43 @@ describe('RuntimeErrorCard', () => {
     expect(container.querySelectorAll('.specorator-runtime-error-button')).toHaveLength(0);
   });
 
+  it('suppressRetry hides Retry even when callbacks + onRetryLastTurn are present', () => {
+    const callbacks = makeCallbacks();
+    const { container } = render(RuntimeErrorCard, {
+      props: { kind: 'generic', content: 'Background task failed', suppressRetry: true },
+      global: { provide: { [CALLBACKS_KEY as symbol]: callbacks } },
+    });
+
+    // Retry is the only actionable button for a generic error; suppressRetry removes it.
+    expect(container.querySelectorAll('.specorator-runtime-error-button')).toHaveLength(0);
+  });
+
+  it('suppressRetry hides Retry but keeps the settings action (cli-not-found)', () => {
+    const callbacks = makeCallbacks();
+    const { container } = render(RuntimeErrorCard, {
+      props: { kind: 'cli-not-found', content: 'ENOENT', suppressRetry: true },
+      global: { provide: { [CALLBACKS_KEY as symbol]: callbacks } },
+    });
+
+    const buttons = container.querySelectorAll('.specorator-runtime-error-button');
+    expect(buttons).toHaveLength(1);
+    expect(buttons[0].classList.contains('specorator-runtime-error-button-primary')).toBe(false);
+    (buttons[0] as HTMLElement).click();
+    expect(callbacks.openProviderSettings).toHaveBeenCalledWith('claude');
+  });
+
+  it('suppressRetry false/undefined keeps Retry (existing behavior)', () => {
+    const callbacks = makeCallbacks();
+    const { container } = render(RuntimeErrorCard, {
+      props: { kind: 'generic', content: 'Network failed', suppressRetry: false },
+      global: { provide: { [CALLBACKS_KEY as symbol]: callbacks } },
+    });
+
+    const buttons = container.querySelectorAll('.specorator-runtime-error-button');
+    expect(buttons).toHaveLength(1);
+    expect(buttons[0].classList.contains('specorator-runtime-error-button-primary')).toBe(true);
+  });
+
   it('omits the retry button (settings-only) when onRetryLastTurn is null', () => {
     const callbacks = makeCallbacks({ onRetryLastTurn: null });
     const { container } = render(RuntimeErrorCard, {

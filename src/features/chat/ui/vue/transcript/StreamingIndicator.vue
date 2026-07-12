@@ -40,6 +40,9 @@ const label = computed(() => {
   if (!s) return '';
   // Writing takes precedence over thinking, matching legacy `showWriting`'s relabel.
   if (s.isWriting) return STREAMING_RESPONSE_LABEL;
+  // A custom thinking-mode label (e.g. `Compacting...` for `/compact`) overrides
+  // the deterministic flavor phrase.
+  if (s.label) return s.label;
   return FLAVOR_TEXTS[flavorIndexFor(s.messageId)];
 });
 

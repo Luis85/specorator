@@ -26,10 +26,13 @@ export class StreamingIndicator {
    * Schedules the debounced "thinking" mode after {@link DELAY}. If content
    * arrives first, the caller's `hide`/`showWriting` supersedes it. Thinking
    * block state takes priority — the flavor mode never shows while a reasoning
-   * block is open. `overrideText`/`overrideCls` are accepted for call-site
-   * compatibility but no longer rendered (the Vue indicator owns its label).
+   * block is open. `overrideText` (e.g. `Compacting...` for `/compact`) is stored
+   * on `ChatState.streamingIndicatorLabel` when the debounce enters thinking
+   * mode, so the Vue indicator prefers it over the default flavor phrase;
+   * `overrideCls` is accepted for call-site compatibility but no longer
+   * rendered (the Vue indicator owns its styling).
    */
-  show(_overrideText?: string, _overrideCls?: string): void {
+  show(overrideText?: string, _overrideCls?: string): void {
     const { state } = this.deps;
     if (!state.currentContentEl) return;
 
@@ -54,6 +57,7 @@ export class StreamingIndicator {
           return;
         }
         state.streamingIndicatorMode = 'thinking';
+        state.streamingIndicatorLabel = overrideText ?? null;
         this.startTicker();
         this.deps.emit();
       }, StreamingIndicator.DELAY),
@@ -89,6 +93,7 @@ export class StreamingIndicator {
     // Clear the ticker (but preserve responseStartTime for duration capture).
     state.clearFlavorTimerInterval();
     state.streamingIndicatorMode = null;
+    state.streamingIndicatorLabel = null;
     this.deps.emit();
   }
 

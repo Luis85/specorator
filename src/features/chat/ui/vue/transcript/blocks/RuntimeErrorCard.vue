@@ -19,9 +19,12 @@ import { CALLBACKS_KEY } from '../transcriptKeys';
  * callbacks are reachable and the kind is actionable; the retry button
  * additionally requires `onRetryLastTurn` to be non-null (the seam already
  * encodes "no turn available to retry" as `null`, matching the legacy
- * `onRetry: undefined` omission).
+ * `onRetry: undefined` omission) AND `suppressRetry` to be falsy — an
+ * auto-triggered (background) turn sets `suppressRetry`, since retrying would
+ * re-send the user's last normal prompt rather than the failed background turn
+ * (matching the legacy `StreamController.renderingAutoTurn` omission).
  */
-const props = defineProps<{ kind: RuntimeErrorKind; content: string }>();
+const props = defineProps<{ kind: RuntimeErrorKind; content: string; suppressRetry?: boolean }>();
 
 const callbacks = inject(CALLBACKS_KEY, undefined);
 
@@ -83,7 +86,7 @@ const settingsLabelKey = computed<TranslationKey>(() =>
     ? 'chat.runtimeError.cliNotFound.openSettings'
     : 'chat.runtimeError.unauthenticated.openSettings'
 );
-const canRetry = computed(() => !!callbacks?.onRetryLastTurn);
+const canRetry = computed(() => !!callbacks?.onRetryLastTurn && !props.suppressRetry);
 
 function onOpenSettings(): void {
   if (!callbacks) return;

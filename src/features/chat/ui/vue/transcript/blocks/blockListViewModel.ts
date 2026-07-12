@@ -26,7 +26,7 @@ export type BlockListItem =
   | { key: string; kind: 'thinking'; content: string; durationSeconds?: number }
   | { key: string; kind: 'text'; content: string }
   | { key: string; kind: 'context_compacted' }
-  | { key: string; kind: 'runtime_error'; content: string }
+  | { key: string; kind: 'runtime_error'; content: string; suppressRetry?: boolean }
   | { key: string; kind: 'subagent'; toolCall: ToolCallInfo; mode?: 'sync' | 'async' }
   | { key: string; kind: 'tool_write_edit'; toolCall: ToolCallInfo }
   | { key: string; kind: 'tool_plain'; toolCall: ToolCallInfo };
@@ -95,7 +95,12 @@ function resolveContentBlockItem(
     case 'context_compacted':
       return { key: `context_compacted:${index}`, kind: 'context_compacted' };
     case 'runtime_error':
-      return { key: `runtime_error:${index}`, kind: 'runtime_error', content: block.content };
+      return {
+        key: `runtime_error:${index}`,
+        kind: 'runtime_error',
+        content: block.content,
+        suppressRetry: block.suppressRetry,
+      };
     case 'subagent': {
       const toolCall = msg.toolCalls?.find(
         (tc) => tc.id === block.subagentId && isSubagentToolName(tc.name)
