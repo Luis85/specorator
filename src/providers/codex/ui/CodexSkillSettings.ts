@@ -174,8 +174,8 @@ export class CodexSkillSettings extends CodexVaultListSettings<ProviderCommandEn
     return 'No Codex skills in vault. Click + to create one.';
   }
 
-  protected loadItems(): Promise<ProviderCommandEntry[]> {
-    return this.catalog.listVaultEntries();
+  protected async loadItems(): Promise<ProviderCommandEntry[]> {
+    return (await this.catalog.listVaultEntries()).filter(entry => entry.isEditable);
   }
 
   protected onRefresh(): void {

@@ -26,6 +26,8 @@ JSONL remains the provider-owned replay source for history hydration and session
 
 `CodexSkillListingService` spawns a **separate short-lived app-server process** for each `skills/list` RPC call (TTL-cached for 5 seconds). This avoids coupling skill discovery to the chat runtime lifecycle — skills can be listed even when no chat is active, and skill discovery errors can't crash the main runtime.
 
+`skills/list` reports `repo` / `user` / `system` / `admin` scopes. `CodexSkillCatalog.listVaultEntries` surfaces **all** of them: `repo` skills under a managed vault root are editable (loaded from storage), and `user`/`system`/`admin` skills are **read-only** (mapped via `listedSkillToProviderEntry` with `scope: 'user'`, `isEditable/isDeletable: false`, host-absolute `sourceFilePath`). This mirrors Claude's `~/.claude/skills` handling so global Codex skills appear in the Library. `CodexSkillSettings` filters to `isEditable` entries — the manager edits vault skills only; read-only globals live in the Library. Codex resolves `$name` unconditionally (no `loadUserSettings`-style gate), so no run-guard is needed.
+
 ### Environment Hash Invalidation
 
 `codexSettingsReconciler` watches `OPENAI_MODEL`, `OPENAI_BASE_URL`, `OPENAI_API_KEY`. Any hash change invalidates all existing Codex sessions (clears `sessionId` and `providerState`), preventing the UI from trying to resume sessions against a different API endpoint.

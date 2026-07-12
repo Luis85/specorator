@@ -158,7 +158,7 @@ describe('CodexSkillCatalog', () => {
   });
 
   describe('listVaultEntries', () => {
-    it('returns only managed repo-level skills and loads stored content', async () => {
+    it('returns editable repo skills plus read-only user/global skills', async () => {
       const vaultAdapter = createMockAdapter({
         '.codex/skills/vault-skill/SKILL.md': `---
 description: Vault
@@ -193,13 +193,26 @@ Prompt`,
 
       const entries = await catalog.listVaultEntries();
 
-      expect(entries).toHaveLength(1);
-      expect(entries[0].name).toBe('vault-skill');
-      expect(entries[0].scope).toBe('vault');
-      expect(entries[0].content).toBe('Prompt');
+      // Editable vault skill (loaded from storage) + read-only home skill. A repo
+      // skill outside a managed root stays excluded (can't edit, not user-scope).
+      expect(entries).toHaveLength(2);
+
+      const vault = entries.find(e => e.name === 'vault-skill')!;
+      expect(vault.scope).toBe('vault');
+      expect(vault.isEditable).toBe(true);
+      expect(vault.content).toBe('Prompt');
       // Vault-relative, NOT the host-absolute wire path: the Skills tab's
       // clone/delete gate and the vault adapter both act on this value.
-      expect(entries[0].sourceFilePath).toBe('.codex/skills/vault-skill/SKILL.md');
+      expect(vault.sourceFilePath).toBe('.codex/skills/vault-skill/SKILL.md');
+
+      const home = entries.find(e => e.name === 'home-skill')!;
+      expect(home.scope).toBe('user');
+      expect(home.isEditable).toBe(false);
+      expect(home.isDeletable).toBe(false);
+      // Host-absolute wire path — the read-only gates key off this shape.
+      expect(home.sourceFilePath).toBe('/Users/test/.codex/skills/home-skill/SKILL.md');
+
+      expect(entries.find(e => e.name === 'other-repo-skill')).toBeUndefined();
     });
 
     it('surfaces vault-relative sourceFilePath for both managed roots', async () => {

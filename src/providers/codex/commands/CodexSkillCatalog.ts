@@ -93,26 +93,38 @@ export class CodexSkillCatalog implements ProviderCommandCatalog {
     // Codex dropdown entries come from app-server metadata; runtime commands are ignored.
   }
 
-  async listDropdownEntries(context: { includeBuiltIns: boolean }): Promise<ProviderCommandEntry[]> {
-    const skills = (await this.listProvider.listSkills())
+  private async listEnabledSkillsByPriority(): Promise<SkillMetadata[]> {
+    return (await this.listProvider.listSkills())
       .filter(skill => skill.enabled)
       .sort(compareCodexSkillPriority);
+  }
+
+  async listDropdownEntries(context: { includeBuiltIns: boolean }): Promise<ProviderCommandEntry[]> {
+    const skills = await this.listEnabledSkillsByPriority();
     const entries = skills.map(skill => listedSkillToProviderEntry(skill, this.vaultPath));
     return context.includeBuiltIns ? [CODEX_COMPACT_COMMAND, ...entries] : entries;
   }
 
   async listVaultEntries(): Promise<ProviderCommandEntry[]> {
-    if (!this.vaultPath) {
-      return [];
-    }
-
-    const listedSkills = (await this.listProvider.listSkills())
-      .filter(skill => skill.scope === 'repo')
-      .sort(compareCodexSkillPriority);
+    const listedSkills = await this.listEnabledSkillsByPriority();
     const entries: ProviderCommandEntry[] = [];
 
     for (const listedSkill of listedSkills) {
-      const location = resolveCodexSkillLocationFromPath(listedSkill.path, this.vaultPath);
+      if (listedSkill.scope !== 'repo') {
+        // User / system / admin skills are read-only: surface them so global
+        // Codex skills appear in the Library like Claude's `~/.claude` skills.
+        // Host-absolute path + isEditable false keep the Library's edit/clone/
+        // delete gates off; the Codex settings manager filters them out (it
+        // manages editable vault skills only).
+        entries.push(listedSkillToProviderEntry(listedSkill, this.vaultPath));
+        continue;
+      }
+
+      // Editable vault (repo) skill — load full content from storage for the
+      // editor; skip when it isn't vault-reachable/loadable.
+      const location = this.vaultPath
+        ? resolveCodexSkillLocationFromPath(listedSkill.path, this.vaultPath)
+        : null;
       if (!location) {
         continue;
       }

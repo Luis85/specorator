@@ -129,6 +129,7 @@ Current coverage, by user-visible path:
 | quick-actions folder (default `Quick Actions/*.md`, `quickActionsFolder` setting) | Quick action notes; managed via the Library's Quick Actions tab and the chat modal |
 | `.codex/skills/*/SKILL.md` | Codex vault skills |
 | `.agents/skills/*/SKILL.md` | Alternate Codex vault skill root |
+| `~/.codex/skills/*/SKILL.md` (+ system/admin scopes) | Codex user (global) skills — app-server-discovered via `skills/list`, surfaced read-only (view/run only) |
 | `.codex/agents/*.toml` | Codex vault subagent definitions |
 | `.cursor/agents/*.md` | Cursor vault subagent definitions (markdown frontmatter) |
 | `~/.claude/projects/{vault}/*.jsonl` | Claude-native transcripts |
