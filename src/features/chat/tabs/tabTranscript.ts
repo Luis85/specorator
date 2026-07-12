@@ -1,3 +1,4 @@
+import type { ChatMessage } from '../../../core/types';
 import type { ChatState } from '../state/ChatState';
 import type { TranscriptHydrationError } from '../ui/vue/transcript/stores/transcriptStore';
 import type { TranscriptSnapshot, TranscriptSubscribe } from '../ui/vue/transcript/transcriptCallbacks';
@@ -20,6 +21,13 @@ export class TabTranscriptProjection {
   private greeting = '';
   private loadingText: string | null = null;
   private hydrationError: TranscriptHydrationError | null = null;
+  /**
+   * Messages whose in-place mutation happened OUTSIDE the active stream and so
+   * won't be caught by the active-message identity refresh — chiefly async /
+   * background subagent completions (`SubagentStreamCoordinator`). Consumed and
+   * cleared by the next `snapshot()`.
+   */
+  private readonly dirtyMessageIds = new Set<string>();
 
   constructor(private readonly state: ChatState) {}
 
@@ -64,16 +72,71 @@ export class TabTranscriptProjection {
     this.emit();
   }
 
+  /**
+   * Flags a message whose fields were mutated in place off the stream path
+   * (async/background subagent completion) and re-projects. The next snapshot
+   * gives it a fresh identity so the keyed `MessageBubble` re-patches and its
+   * `BlockList`/`ToolCall`/`SubagentBlock` recompute from the mutated values.
+   */
+  refreshMessage(messageId: string): void {
+    this.dirtyMessageIds.add(messageId);
+    this.emit();
+  }
+
   private snapshot(): TranscriptSnapshot {
+    const messages = this.state.messages; // a fresh array copy from ChatState
+    const activeId = this.state.activeMessageId;
+
+    // The engine mutates message objects IN PLACE (msg.content += chunk,
+    // contentBlocks.push, toolCall.result = …), so the `msg` identity never
+    // changes — but `MessageBubble` is a keyed `v-for` child, so an unchanged
+    // identity makes Vue skip the patch and the live turn renders blank. Give
+    // the actively-streaming message (and any off-stream dirtied message) a
+    // fresh identity — including fresh tool-call identities, since those are
+    // passed to `ToolCall`/`SubagentBlock` by reference — so the child
+    // re-renders. Snapshot-ONLY: the clone never touches `ChatState.messages`,
+    // so the engine's live `msg` reference keeps growing the original object.
+    if (activeId !== null || this.dirtyMessageIds.size > 0) {
+      for (let i = 0; i < messages.length; i++) {
+        const message = messages[i];
+        if (message.id === activeId || this.dirtyMessageIds.has(message.id)) {
+          messages[i] = refreshMessageIdentity(message);
+        }
+      }
+    }
+    this.dirtyMessageIds.clear();
+
     return {
-      messages: this.state.messages,
+      messages,
       activeStream: this.state.getActiveStreamSnapshot(),
       // The greeting is a welcome-screen affordance: suppress it once the
       // transcript has messages (mirrors the legacy `updateWelcomeVisibility`
       // that added `.specorator-hidden` to the welcome block).
-      greeting: this.state.messages.length === 0 ? this.greeting : '',
+      greeting: messages.length === 0 ? this.greeting : '',
       loadingText: this.loadingText,
       hydrationError: this.hydrationError,
     };
   }
+}
+
+/**
+ * Shallow clone giving `message`, each of its tool calls, AND each tool call's
+ * nested `subagent` a fresh identity. Content blocks are NOT cloned: `BlockList`
+ * re-derives text/thinking item strings from the (mutated) blocks once
+ * `props.msg` identity changes. But tool calls are passed to `ToolCall` /
+ * `SubagentBlock` by object reference, and `SubagentBlock` further reads
+ * `toolCall.subagent` through a computed whose downstream `statusPill`/result
+ * computeds only recompute when the `subagent` REFERENCE changes — so both need
+ * a fresh reference. O(tool calls on this one message).
+ */
+function refreshMessageIdentity(message: ChatMessage): ChatMessage {
+  return {
+    ...message,
+    toolCalls: message.toolCalls
+      ? message.toolCalls.map((toolCall) => ({
+          ...toolCall,
+          subagent: toolCall.subagent ? { ...toolCall.subagent } : toolCall.subagent,
+        }))
+      : message.toolCalls,
+  };
 }

@@ -61,6 +61,9 @@ export interface StreamControllerDeps {
   updateQueueIndicator: () => void;
   /** Re-projects the transcript snapshot into the Vue store (per-tab). */
   emitTranscript?: () => void;
+  /** Re-projects a single message (fresh identity) — used for off-stream
+   *  async/background subagent completions. */
+  refreshTranscriptMessage?: (messageId: string) => void;
   /** Get the agent service from the tab. */
   getAgentService?: () => ChatRuntime | null;
   /**
@@ -115,6 +118,7 @@ export class StreamController {
         notifyVaultForToolResult(this.deps.plugin.app, toolCall);
         this.recordEditedFiles(toolCall);
       },
+      refreshTranscriptMessage: (messageId) => this.deps.refreshTranscriptMessage?.(messageId),
     });
     this.lifecycleSubagents = new ProviderLifecycleSubagentCoordinator({
       plugin: deps.plugin,

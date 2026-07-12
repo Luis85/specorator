@@ -95,6 +95,7 @@ export function buildTabStreamController(tab: TabData, plugin: SpecoratorPlugin)
     getFileContextManager: () => ui.fileContextManager,
     updateQueueIndicator: () => tab.controllers.inputController?.updateQueueIndicator(),
     emitTranscript: () => tab.transcript?.emit(),
+    refreshTranscriptMessage: (messageId) => tab.transcript?.refreshMessage(messageId),
     getAgentService: () => tab.service,
     onRetryLastTurn: () => tab.controllers.inputController?.retryLastTurn(),
   });
