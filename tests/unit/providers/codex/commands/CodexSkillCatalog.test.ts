@@ -253,6 +253,32 @@ Prompt`,
       expect(disabled.isDeletable).toBe(true);
     });
 
+    it('excludes disabled read-only globals (neither editable nor runnable)', async () => {
+      const storage = new CodexSkillStorage(createMockAdapter({}), createMockAdapter({}));
+      const listProvider = createMockSkillListProvider([
+        {
+          name: 'enabled-global',
+          description: 'Enabled global',
+          path: '/Users/test/.codex/skills/enabled-global/SKILL.md',
+          scope: 'user',
+          enabled: true,
+        },
+        {
+          name: 'disabled-global',
+          description: 'Disabled global',
+          path: '/Users/test/.codex/skills/disabled-global/SKILL.md',
+          scope: 'user',
+          enabled: false,
+        },
+      ]);
+      const catalog = new CodexSkillCatalog(storage, listProvider, '/test/vault');
+
+      // A disabled global can't be edited (read-only) and the provider won't
+      // resolve its `$name`, so it must not appear as a dead runnable row.
+      const entries = await catalog.listVaultEntries();
+      expect(entries.map(e => e.name)).toEqual(['enabled-global']);
+    });
+
     it('surfaces vault-relative sourceFilePath for both managed roots', async () => {
       const vaultAdapter = createMockAdapter({
         '.codex/skills/codex-skill/SKILL.md': '---\ndescription: A\n---\nPrompt',

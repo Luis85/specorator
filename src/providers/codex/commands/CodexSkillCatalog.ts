@@ -122,6 +122,15 @@ export class CodexSkillCatalog implements ProviderCommandCatalog {
         // Host-absolute path + isEditable false keep the Library's edit/clone/
         // delete gates off; the Codex settings manager filters them out (it
         // manages editable vault skills only).
+        //
+        // Only while enabled, though: a read-only global can't be edited here,
+        // and the provider won't resolve a disabled skill's `$name`, so a
+        // disabled global would be a dead, unrunnable Library row. (Repo skills
+        // below stay regardless of `enabled` — those remain editable/deletable
+        // in Codex settings even when disabled.)
+        if (!listedSkill.enabled) {
+          continue;
+        }
         entries.push(listedSkillToProviderEntry(listedSkill, this.vaultPath));
         continue;
       }
