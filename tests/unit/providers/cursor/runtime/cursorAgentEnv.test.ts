@@ -1,5 +1,16 @@
+import * as fs from 'fs';
+
 import type { PluginContext } from '@/core/types/PluginContext';
 import { buildCursorAgentEnvironment } from '@/providers/cursor/runtime/cursorAgentEnv';
+
+jest.mock('fs', () => ({
+  ...jest.requireActual('fs'),
+  // Default: Git Bash absent (statSync throws) so shell-selection tests without an
+  // explicit override exercise the PowerShell fallback path.
+  statSync: jest.fn(() => {
+    throw new Error('ENOENT');
+  }),
+}));
 
 jest.mock('@/utils/env', () => ({
   parseEnvironmentVariables: jest.fn((text: string) => {
@@ -123,6 +134,38 @@ describe('buildCursorAgentEnvironment', () => {
       expect(env.MSYSTEM).toBe('MINGW64');
       expect(env.EXEPATH).toBe('C:\\Program Files\\Git\\bin');
       expect(env.SHELL).toBe('C:\\Program Files\\Git\\bin\\bash.exe');
+    });
+  });
+
+  describe('on Windows without host Git Bash signals', () => {
+    beforeEach(() => {
+      setPlatform('win32');
+      process.env = {
+        SystemRoot: 'C:\\Windows',
+        ProgramFiles: 'C:\\Program Files',
+        PATH: 'C:\\Users\\test\\AppData\\Local\\cursor-agent',
+      };
+      (fs.statSync as jest.Mock).mockReset();
+    });
+
+    it('points SHELL at Git Bash when Git for Windows is installed (avoids the broken console-less PowerShell executor)', () => {
+      (fs.statSync as jest.Mock).mockImplementation((p: fs.PathLike) => {
+        if (String(p).endsWith('bash.exe')) return { isFile: () => true } as fs.Stats;
+        throw new Error('ENOENT');
+      });
+      const env = buildCursorAgentEnvironment(makePlugin(''));
+      expect(env.SHELL).toBe('C:\\Program Files\\Git\\bin\\bash.exe');
+      expect(env.MSYSTEM).toBe('MINGW64');
+      expect(env.EXEPATH).toBe('C:\\Program Files\\Git');
+    });
+
+    it('falls back to PowerShell when Git Bash is not installed', () => {
+      (fs.statSync as jest.Mock).mockImplementation(() => {
+        throw new Error('ENOENT');
+      });
+      const env = buildCursorAgentEnvironment(makePlugin(''));
+      expect(env.SHELL).toBe('C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe');
+      expect(env.MSYSTEM).toBeUndefined();
     });
   });
 });
