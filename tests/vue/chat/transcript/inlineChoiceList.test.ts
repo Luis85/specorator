@@ -174,6 +174,38 @@ describe('InlineChoiceList', () => {
     expect(wrapper.emitted().cancel).toHaveLength(1);
   });
 
+  it('blurs the input using its ownerDocument.activeElement (popout-safe), not the main-window document', async () => {
+    const { specs } = makeSpecs();
+    const wrapper = mountList(specs);
+    const input = wrapper.element.querySelector('.specorator-ask-custom-text') as HTMLInputElement;
+
+    // Navigate to and auto-focus the input row (leaves focusedIndex on the
+    // input row, index 2).
+    await keydown(wrapper, 'ArrowDown');
+    await keydown(wrapper, 'ArrowDown');
+    expect(document.activeElement).toBe(input);
+
+    const blurSpy = vi.spyOn(input, 'blur');
+    // Drop the main-window focus so the legacy `document.activeElement === input`
+    // guard is FALSE, then clear the spy for the assertion below.
+    input.blur();
+    expect(document.activeElement).not.toBe(input);
+    blurSpy.mockClear();
+
+    // Simulate a popout leaf: the input lives in a DIFFERENT document whose
+    // `activeElement` still points at the input, even though the main-window
+    // `document.activeElement` does not. updateFocus() must consult the input's
+    // OWN ownerDocument, so navigating off the input row still blurs it.
+    Object.defineProperty(input, 'ownerDocument', {
+      configurable: true,
+      value: { activeElement: input },
+    });
+
+    await keydown(wrapper, 'ArrowUp'); // focusedIndex 2 -> 1, re-runs updateFocus
+
+    expect(blurSpy).toHaveBeenCalled();
+  });
+
   it('preventDefault on every handled key; unhandled keys are a no-op', async () => {
     const { specs } = makeSpecs();
     const wrapper = mountList(specs);

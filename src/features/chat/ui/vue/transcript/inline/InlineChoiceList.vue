@@ -43,7 +43,7 @@ function updateFocus(): void {
       if (spec.kind === 'input') {
         inputEl.value?.focus();
       }
-    } else if (spec.kind === 'input' && inputEl.value && document.activeElement === inputEl.value) {
+    } else if (spec.kind === 'input' && inputEl.value && inputEl.value.ownerDocument.activeElement === inputEl.value) {
       inputEl.value.blur();
     }
   });

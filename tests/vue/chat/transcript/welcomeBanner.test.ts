@@ -21,6 +21,34 @@ describe('WelcomeBanner', () => {
     expect(container.querySelector('.specorator-hydration-error')).toBeNull();
   });
 
+  it('renders no welcome block when the greeting is empty (transcript already has messages)', () => {
+    const { container } = render(WelcomeBanner, {
+      props: { greeting: '', hydrationError: null },
+    });
+
+    // An empty greeting must not leave the ~200px `.specorator-welcome` spacer
+    // above the first message — the whole welcome block is omitted.
+    expect(container.querySelector('.specorator-welcome')).toBeNull();
+    expect(container.querySelector('.specorator-welcome-greeting')).toBeNull();
+  });
+
+  it('renders the hydration-error banner even when the greeting is empty', () => {
+    const { container } = render(WelcomeBanner, {
+      props: {
+        greeting: '',
+        hydrationError: { code: 'store-unreadable', message: 'History unavailable' },
+      },
+    });
+
+    // The banner is independent of the greeting: no welcome block, but the
+    // hydration-error banner still renders on its own.
+    expect(container.querySelector('.specorator-welcome')).toBeNull();
+    const banner = container.querySelector('.specorator-hydration-error') as HTMLElement;
+    expect(banner).not.toBeNull();
+    expect(banner.dataset.errorCode).toBe('store-unreadable');
+    expect(banner.textContent?.trim()).toBe('History unavailable');
+  });
+
   it('renders the hydration-error banner with its error code + message as a sibling of the welcome block', () => {
     const { container } = render(WelcomeBanner, {
       props: {

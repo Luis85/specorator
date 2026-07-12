@@ -178,7 +178,17 @@ export class InlinePromptController {
         if (toUnmount) queueMicrotask(() => toUnmount.unmount());
       };
       handle = mount((value) => finish(value));
-      setPending(handle);
+      if (settled) {
+        // Card resolved synchronously during mount (e.g. an ask card with zero
+        // questions resolves null in onMounted): finish() ran while `handle` was
+        // still null and could not queue the unmount. Drop it here and don't
+        // store the already-settled handle as pending.
+        const toUnmount = handle;
+        handle = null;
+        queueMicrotask(() => toUnmount?.unmount());
+      } else {
+        setPending(handle);
+      }
     });
   }
 

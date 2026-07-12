@@ -131,6 +131,38 @@ describe('InlinePromptController', () => {
     });
   });
 
+  describe('cards that resolve synchronously during mount', () => {
+    it('unmounts the leftover handle and leaves the pending pointer null', async () => {
+      const { el } = attachedInputContainer();
+      const handle = { unmount: jest.fn() };
+      // Reproduce InlineAskUserQuestion's zero-question path: the card resolves
+      // null SYNCHRONOUSLY inside onMounted, i.e. before mountAsk returns its
+      // handle — Vue runs mounted hooks synchronously during app.mount().
+      const mountAsk = jest.fn((_host: HTMLElement, props: { resolve: (d: unknown) => void }) => {
+        props.resolve(null);
+        return handle;
+      });
+      const { controller, state } = setup({
+        getInputContainerEl: () => el as never,
+        mountInlineCard: makeMounter({ mountAsk: mountAsk as never }),
+      });
+
+      // (a) The promise resolves to the fallback (null).
+      await expect(controller.handleAskUserQuestion({})).resolves.toBeNull();
+
+      // (b) The leftover handle is unmounted (deferred via queueMicrotask).
+      await new Promise<void>((resolve) => setTimeout(resolve, 0));
+      expect(handle.unmount).toHaveBeenCalledTimes(1);
+
+      // (c) The already-settled handle was never stored as pending, so a later
+      // dismiss does not target the stale card / double-unmount.
+      expect((controller as never as { pendingAskInline: unknown }).pendingAskInline).toBeNull();
+      controller.dismissPendingApproval();
+      expect(handle.unmount).toHaveBeenCalledTimes(1);
+      expect(state.needsAttention).toBe(false);
+    });
+  });
+
   describe('showPlanApproval', () => {
     it('resolves to no decision when the input container is detached', async () => {
       const detached = createMockEl();
