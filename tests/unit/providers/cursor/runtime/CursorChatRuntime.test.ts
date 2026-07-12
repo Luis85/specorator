@@ -1040,6 +1040,47 @@ describe('CursorChatRuntime.applySelectedModel (advertised wire ids)', () => {
     expect(setConfigOption.mock.calls[0][0].value).toBe('auto');
   });
 
+  it('maps an Auto selection to the advertised default[] sentinel against the real catalog', async () => {
+    const runtime = makeRuntime();
+    const setConfigOption = jest.fn().mockResolvedValue({ configOptions: [] });
+    // Real Cursor never advertises the literal `auto` id (see
+    // CURSOR_ADVERTISED_MODEL_VALUES) — only `default[]`, named "Auto".
+    const bag = primeModel(runtime, setConfigOption, 'auto', CURSOR_ADVERTISED_MODEL_VALUES);
+    bag.currentSessionModelId = 'gpt-5.4[context=272k,reasoning=medium,fast=false]';
+
+    await applyModel(bag, runtime);
+
+    expect(setConfigOption).toHaveBeenCalledWith({
+      configId: 'model',
+      sessionId: 'S1',
+      type: 'select',
+      value: 'default[]',
+    });
+    expect(bag.currentSessionModelId).toBe('default[]');
+  });
+
+  it('skips re-sending when Auto is selected twice in a row', async () => {
+    const runtime = makeRuntime();
+    const setConfigOption = jest.fn().mockResolvedValue({ configOptions: [] });
+    const bag = primeModel(runtime, setConfigOption, 'auto', CURSOR_ADVERTISED_MODEL_VALUES);
+    bag.currentSessionModelId = 'default[]';
+
+    await applyModel(bag, runtime);
+
+    expect(setConfigOption).not.toHaveBeenCalled();
+  });
+
+  it('skips Auto entirely when the catalog advertises no default entry', async () => {
+    const runtime = makeRuntime();
+    const setConfigOption = jest.fn().mockResolvedValue({ configOptions: [] });
+    const bag = primeModel(runtime, setConfigOption, 'auto', ['gpt-5.4[reasoning=medium]']);
+
+    await applyModel(bag, runtime);
+
+    expect(setConfigOption).not.toHaveBeenCalled();
+    expect(bag.currentSessionModelId).toBeNull();
+  });
+
   it('skips setConfigOption entirely when no advertised value matches the family', async () => {
     const runtime = makeRuntime();
     const setConfigOption = jest.fn().mockResolvedValue({ configOptions: [] });

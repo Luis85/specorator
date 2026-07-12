@@ -6,14 +6,23 @@ import {
   resolveCursorFamilyId,
 } from './cursorModelFamily';
 
+// Auto sentinel family: real Cursor sessions advertise Auto as `default[]`
+// (tests/fixtures/providers/cursor/realAcpCaptures.ts:35-37), never as the
+// literal string `auto` that `resolveCursorModelSelectionForCli` passes
+// through for an Auto selection. ACP clients must special-case `default` as
+// the Auto sentinel (forum-confirmed) rather than treating it as an unknown
+// family that falls through exact/family matching to null.
+const CURSOR_AUTO_ADVERTISED_FAMILY = 'default';
+
 /**
  * Resolves the CLI-picked id to a session-advertised wire id: an exact value
- * match, or the advertised value whose family prefix (everything before `[`)
- * matches the CLI-resolved family AND whose bracket variant matches the
- * resolved mode (e.g. `gpt-5.4-medium` → `gpt-5.4[reasoning=medium]`, never the
- * first family sibling, which would silently pin a different effort). Returns
- * null when nothing lines up — the caller then skips the update rather than
- * sending a value Cursor would accept-then-reject on the next prompt.
+ * match, the Auto sentinel, or the advertised value whose family prefix
+ * (everything before `[`) matches the CLI-resolved family AND whose bracket
+ * variant matches the resolved mode (e.g. `gpt-5.4-medium` →
+ * `gpt-5.4[reasoning=medium]`, never the first family sibling, which would
+ * silently pin a different effort). Returns null when nothing lines up — the
+ * caller then skips the update rather than sending a value Cursor would
+ * accept-then-reject on the next prompt.
  */
 export function matchAdvertisedModelValue(
   advertised: string[] | null,
@@ -24,6 +33,9 @@ export function matchAdvertisedModelValue(
   }
   if (advertised.includes(resolvedId)) {
     return resolvedId;
+  }
+  if (resolvedId.trim().toLowerCase() === 'auto') {
+    return advertised.find((value) => value.split('[', 1)[0] === CURSOR_AUTO_ADVERTISED_FAMILY) ?? null;
   }
   const knownIds = getCachedCursorModelIds();
   const resolvedFamily = resolveCursorFamilyId(resolvedId, knownIds);

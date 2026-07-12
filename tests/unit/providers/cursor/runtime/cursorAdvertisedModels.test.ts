@@ -110,5 +110,23 @@ describe('matchAdvertisedModelValue', () => {
     it('returns null for a family absent from the captured catalog', () => {
       expect(matchAdvertisedModelValue(CURSOR_ADVERTISED_MODEL_VALUES, 'llama-4-70b')).toBeNull();
     });
+
+    it('maps the Auto selection to the advertised default[] sentinel', () => {
+      // `resolveCursorModelSelectionForCli` passes an Auto selection through as
+      // the literal string `auto`, but real Cursor never advertises that id — it
+      // advertises the family `default[]` (see the fixture above). ACP clients
+      // must special-case `default` as the Auto sentinel.
+      expect(matchAdvertisedModelValue(CURSOR_ADVERTISED_MODEL_VALUES, 'auto')).toBe('default[]');
+    });
+
+    it('matches the Auto selection case-insensitively', () => {
+      expect(matchAdvertisedModelValue(CURSOR_ADVERTISED_MODEL_VALUES, 'AUTO')).toBe('default[]');
+    });
+  });
+
+  describe('Auto sentinel matching', () => {
+    it('returns null for an Auto selection when no default value is advertised', () => {
+      expect(matchAdvertisedModelValue(['gpt-5.4[reasoning=medium]'], 'auto')).toBeNull();
+    });
   });
 });
