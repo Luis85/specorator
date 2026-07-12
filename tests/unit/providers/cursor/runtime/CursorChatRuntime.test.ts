@@ -21,6 +21,7 @@ function makeRuntime(
     logger: { scope: () => ({ debug: () => {}, info: () => {}, warn: () => {}, error: () => {} }) },
     app: { vault: { adapter: { basePath: '/tmp/specorator-test-vault' } } },
     manifest: { version: '1.0.0' },
+    storage: { getAdapter: () => ({ exists: async () => false, read: async () => '', write: async () => {} }) },
     ...overrides,
   };
   return new CursorChatRuntime(plugin as never, host);

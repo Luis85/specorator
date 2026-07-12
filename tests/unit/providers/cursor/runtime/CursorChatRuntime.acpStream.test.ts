@@ -131,6 +131,12 @@ class FakeAcpServer {
 }
 
 function makeRuntime(overrides: Record<string, unknown> = {}, host: RuntimeHost = createHeadlessRuntimeHost()): CursorChatRuntime {
+  const files = new Map<string, string>();
+  const adapter = {
+    exists: async (p: string) => files.has(p),
+    read: async (p: string) => files.get(p) ?? '',
+    write: async (p: string, c: string) => { files.set(p, c); },
+  };
   const plugin = {
     getResolvedProviderCliPath: () => '/bin/cursor-agent',
     getResolvedEnvironmentVariables: () => ({}),
@@ -138,6 +144,7 @@ function makeRuntime(overrides: Record<string, unknown> = {}, host: RuntimeHost 
     logger: { scope: () => ({ debug: () => {}, info: () => {}, warn: () => {}, error: () => {} }) },
     app: { vault: { adapter: { basePath: '/tmp/specorator-test-vault' } } },
     manifest: { version: '1.0.0' },
+    storage: { getAdapter: () => adapter, __files: files },
     ...overrides,
   };
   return new CursorChatRuntime(plugin as never, host);

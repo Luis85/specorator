@@ -52,6 +52,7 @@ import { buildCursorAcpPromptBlocks } from './cursorAcpPrompt';
 import { resolveCursorAcpMode } from './cursorAcpSession';
 import { createCursorAcpToolStreamAdapter } from './cursorAcpToolNames';
 import { matchAdvertisedModelValue } from './cursorAdvertisedModels';
+import { loadCursorAdvertisedModels, saveCursorAdvertisedModels } from './cursorAdvertisedModelStore';
 import { buildCursorAgentEnvironment } from './cursorAgentEnv';
 import { runWithCursorAgentSpawnLock } from './cursorAgentSpawnLock';
 import { resolveCursorModelSelectionForCli } from './cursorCliModel';
@@ -228,15 +229,10 @@ export class CursorChatRuntime implements ChatRuntime {
       return;
     }
 
-    // Serialize turns behind a still-unsettled prior prompt. When the user stops
-    // turn A and immediately sends turn B, A's session/prompt can stay in flight
-    // until the cancel escalation fires. Both prompts share one ACP session id, so
-    // A's late sessionId-less blocking request (cursor/create_plan params carry no
-    // sessionId) can't be attributed by session — and once B rotates the abort
-    // signal, that stale request would see B's live signal and open A's plan into
-    // B. Waiting here — until the prior prompt settles (the escalation recycles the
-    // process and settles it) or a hard ceiling so query() can't hang — BEFORE
-    // rotating the abort controller keeps A's aborted signal current, so A's late
+    // Serialize turns behind a still-unsettled prior prompt: stop A + immediately
+    // send B share one session id, so A's late sessionId-less blocking request could
+    // see B's rotated signal and open A's plan into B. Waiting for A to settle BEFORE
+    // rotating the abort controller keeps A's aborted signal current so A's late
     // requests resolve cancelled instead.
     await this.awaitPriorTurnSettled();
 
@@ -392,13 +388,10 @@ export class CursorChatRuntime implements ChatRuntime {
     this.host.dismissApproval();
   }
 
-  // session/cancel is only a request: a hung agent never settles the prompt, and
-  // without escalation the drain loop awaits the queue forever. Liveness keys off
-  // turn.promptSettled, NOT this.activeTurn — a consumer breaking out of query()
-  // on cancel nulls activeTurn while the prompt is still live, and checking it
-  // here would silently no-op the escalation on a wedged agent. If unsettled
-  // after the grace period, terminate locally (terminal push no-ops on a closed
-  // queue) and recycle the process — the next send respawns.
+  // session/cancel is only a request: a hung agent never settles the prompt.
+  // Liveness keys off turn.promptSettled, NOT this.activeTurn — a consumer breaking
+  // out of query() on cancel nulls activeTurn while the prompt is still live. If
+  // unsettled after the grace period, terminate locally and recycle the process.
   private armCancelEscalation(turn: ActiveTurn): void {
     window.setTimeout(() => {
       if (turn.promptSettled) {
@@ -725,14 +718,10 @@ export class CursorChatRuntime implements ChatRuntime {
     }
   }
 
-  // Records the session's advertised model wire ids from a session/new or
-  // session/load response so applySelectedModel can send an exact-matching value
-  // (Cursor ACP rejects bare CLI ids). Config-driven `configOptions` win over the
-  // legacy `models` state, mirroring extractAcpSessionModelState's precedence.
-  // Real session/load responses carry empty configOptions/models.availableModels
-  // (realAcpCaptures.ts:84-90, CURSOR_LOAD_SESSION_RESULT) though the resumed
-  // session still only accepts wire ids from session/new — so an empty
-  // extraction only replaces a previously empty/unset catalog, never a known one.
+  // Records the session's advertised model wire ids (session/new or session/load)
+  // so applySelectedModel can send an exact-matching value (Cursor rejects bare CLI
+  // ids). Real session/load responses advertise none (realAcpCaptures.ts:84-90), so
+  // an empty extraction only replaces a previously empty/unset catalog, never a known one.
   private captureAdvertisedModelValues(
     response: AcpNewSessionResponse | AcpLoadSessionResponse,
   ): void {
@@ -745,6 +734,12 @@ export class CursorChatRuntime implements ChatRuntime {
       return;
     }
     this.advertisedModelValues = values;
+    // Persist a real catalog so a later cold resume (session/load advertises none)
+    // can still match a model change on its first turn.
+    if (values.length > 0) {
+      void saveCursorAdvertisedModels(this.plugin.storage.getAdapter(), values)
+        .catch((error) => this.plugin.logger.scope('cursor.acp').warn('persist advertised models failed', error));
+    }
   }
 
   private async applySelectedModel(
@@ -758,7 +753,16 @@ export class CursorChatRuntime implements ChatRuntime {
     if (!resolved) {
       return;
     }
-    const wireValue = matchAdvertisedModelValue(this.advertisedModelValues, resolved);
+    let advertised = this.advertisedModelValues;
+    if (!advertised || advertised.length === 0) {
+      // Cold resume: session/load advertised no models. Recover the last catalog
+      // a session/new persisted so the selection can still match this turn.
+      advertised = await loadCursorAdvertisedModels(this.plugin.storage.getAdapter()).catch(() => null);
+      if (advertised) {
+        this.advertisedModelValues = advertised;
+      }
+    }
+    const wireValue = matchAdvertisedModelValue(advertised, resolved);
     if (!wireValue) {
       // No advertised value matches: sending the bare id here would let Cursor
       // report it selected yet break the next prompt ("AI Model Not Found"), so
@@ -876,16 +880,11 @@ export class CursorChatRuntime implements ChatRuntime {
     }
   }
 
-  // ACP `plan` session/updates report the agent's live plan/todo status outside
-  // the ordinary tool-call channel, so the normalizer's allow-list above drops
-  // them by default. Cursor's own dialect extension (cursor/update_todos, see
-  // cursorAcpExtensions.ts) surfaces the same kind of information as a TodoWrite
-  // tool call — reuse that same coercion (mapCursorToolInput) so plan entries
-  // land on the shared todo panel through the path it already renders.
-  // update_todos mints a FRESH id per call (stacking a new TodoWrite block per
-  // update); plan reporting instead keeps ONE id for the whole turn so repeat
-  // frames REPLACE the same tool call (mergeExistingToolCallInput in
-  // StreamController merges input by id) rather than stacking a block per frame.
+  // ACP `plan` session/updates report live plan/todo status outside the tool-call
+  // channel; reuse cursor/update_todos' coercion (mapCursorToolInput) so they land
+  // on the shared todo panel. One id is kept for the whole turn so repeat frames
+  // REPLACE the same tool call (mergeExistingToolCallInput merges input by id)
+  // rather than stacking a block per frame.
   private emitPlanTodoUpdate(activeTurn: ActiveTurn, plan: AcpPlan): void {
     if (!this.currentTurnPlanToolCallId) {
       this.currentTurnPlanToolCallId = `cursor-plan-${++this.planTurnCounter}`;
