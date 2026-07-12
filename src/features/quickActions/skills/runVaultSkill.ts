@@ -41,13 +41,26 @@ export async function runVaultSkill(
   entry: SkillTabEntry,
   file: TAbstractFile | null,
 ): Promise<void> {
-  const enabledNow = ProviderRegistry.isEnabled(
-    entry.providerId,
-    asSettingsBag(plugin.settings),
-  );
+  const settingsBag = asSettingsBag(plugin.settings);
+  const enabledNow = ProviderRegistry.isEnabled(entry.providerId, settingsBag);
   if (!enabledNow) {
     new Notice(
       t('quickActions.skills.providerDisabled', { provider: entry.providerDisplayName }),
+    );
+    return;
+  }
+
+  // A global (`~/.claude/skills`) skill is listed regardless of the provider's
+  // user-scope setting (discovery is deliberately ungated), but `/name` only
+  // resolves when the provider loads user scope. Refuse up front rather than
+  // dispatch a `/name` that the runtime silently drops. Re-checked live here so
+  // toggling the setting takes effect without touching the cached listing.
+  if (
+    entry.scope === 'user'
+    && !ProviderRegistry.resolvesUserScopeSkills(entry.providerId, settingsBag)
+  ) {
+    new Notice(
+      t('quickActions.skills.userSettingsRequired', { provider: entry.providerDisplayName }),
     );
     return;
   }

@@ -64,6 +64,16 @@ The SDK can send messages without a registered handler (e.g., background subagen
 
 SDK session files are tree-structured — rewind + re-prompt creates branches. `sdkBranchFilter` finds the canonical branch by locating the latest leaf, walking ancestry to root, then including non-user-branch siblings (tool results belonging to ancestors). This is the most algorithmically complex part of the history layer.
 
+### User-Scope Skill Discovery
+
+`SkillStorage` scans two roots: the vault's `.claude/skills/` (editable) and, via an injected `HomeFileAdapter`, the user's global `~/.claude/skills/` (`loadUserAll`, read-only). `ClaudeCommandCatalog.listVaultEntries` always folds the home skills in with `readOnly: true` — surfaced as `scope: 'user'`, `isEditable/isDeletable: false`, and a **host-absolute `sourceFilePath`** so the Library's `isCloneableSkillPath` gate and `SkillEditorModal` keep them view/run only. Personal and project skills carry distinct ids (`user-skill-` vs `skill-`).
+
+A same-named personal + project skill is **not** deduped — both are listed. Claude resolves `/name` to the personal skill (personal overrides project — https://code.claude.com/docs/en/skills.md), but a shared name is ambiguous over the `/name` wire, so dropping either side would break a consumer: drop the project skill and the settings slash-command manager loses its only edit/delete affordance for it; drop the personal skill and the Library hides what actually runs. The manager (`SlashCommandSettings`) additionally filters `scope: 'user'` out — it only manages editable vault entries; read-only user skills live in the Library.
+
+This feeds the Library Skills tab and the cold-start dropdown fallback. The warm dropdown stays SDK-owned: the SDK discovers `~/.claude/skills/` natively when `settingSources` includes `'user'` (the `loadUserSettings` toggle), so it — not this listing — decides whether user skills are offered/resolvable in an active chat. Discovery here is deliberately **not** gated on that toggle: gating a cached listing on a runtime-mutable flag created cross-cache staleness (in-memory bucket, persisted index, SDK warm cache) with no clean single invalidation seam, so the Library simply shows what exists on disk. Specorator only sends `/name`; the provider resolves it.
+
+`~/.claude/` is outside the vault (no file watcher), so freshness relies on the aggregator TTL + manual refresh. The persisted skill index (`.specorator/cache/skill-index.json`) can sync with the vault, so `serializePersistedSkillIndex` **redacts the host-absolute `sourceFilePath` of user-scope entries** — the home path never lands in a synced file; the entry is re-discovered with its real path in memory on the next fetch.
+
 ## Storage Traps
 
 ### CC Settings Merge

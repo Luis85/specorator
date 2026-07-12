@@ -2,6 +2,7 @@ import type { SpecoratorEventMap } from '../../../app/events/specoratorEvents';
 import type { EventBus } from '../../../core/events/EventBus';
 import type { Logger } from '../../../core/logging/Logger';
 import type { ProviderCommandCatalog } from '../../../core/providers/commands/ProviderCommandCatalog';
+import type { ProviderCommandScope } from '../../../core/providers/commands/ProviderCommandEntry';
 import type { ProviderId } from '../../../core/providers/types';
 import type { VaultFileAdapter } from '../../../core/storage/VaultFileAdapter';
 
@@ -21,6 +22,12 @@ export interface SkillTabEntry {
   insertPrefix: '/' | '$';
   /** SKILL.md path when known. null for runtime-discovered (e.g. Opencode). */
   sourceFilePath: string | null;
+  /**
+   * Provider scope of the source entry. `runVaultSkill` uses `'user'` to gate
+   * global (`~/.claude/skills`) skills whose provider can't currently resolve
+   * them (e.g. Claude with `loadUserSettings` off).
+   */
+  scope: ProviderCommandScope;
   /**
    * Cached at listing time. Reflects provider-enable state when the modal
    * opened; used to dim disabled rows in the picker. `runVaultSkill`

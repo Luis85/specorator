@@ -1,7 +1,14 @@
 import type { ProviderCommandEntry } from '../../../core/providers/commands/ProviderCommandEntry';
 import type { ProviderId } from '../../../core/providers/types';
 
-export const PERSISTED_SCHEMA_VERSION = 1;
+// v2: the persisted shape now carries user-scope (`~/.claude/skills`) entries
+// and redacts their host-absolute paths. A v1 index (written before user-skill
+// discovery) holds vault skills but no user skills; hydrating it serves that
+// stale set for the TTL, so the Library — which loads once on mount, unlike the
+// refreshable quick-actions tab — could show vault skills while omitting global
+// ones until a manual reload. Rejecting v1 forces a cold, complete refetch on
+// upgrade. Bump this whenever the persisted entry shape or its redaction changes.
+export const PERSISTED_SCHEMA_VERSION = 2;
 
 interface PersistedShape {
   schemaVersion: number;
@@ -14,6 +21,12 @@ interface PersistedShape {
  * `.specorator/cache/skill-index.json`. Skill bodies (`content`) are stripped
  * before write — they are large and the Skills tab only renders metadata.
  * `runVaultSkill` re-reads the actual `SKILL.md` at execution time anyway.
+ *
+ * User-scope entries (e.g. `~/.claude/skills/`) carry a host-absolute
+ * `sourceFilePath` such as `/Users/alice/.claude/...`. This index can sync or
+ * back up with the vault, so that home path is redacted before write; the entry
+ * is re-discovered with its real path in memory on the next fetch, and being
+ * read-only it never needs the path persisted.
  */
 export function serializePersistedSkillIndex(
   buckets: Map<ProviderId, ProviderCommandEntry[]>,
@@ -25,7 +38,11 @@ export function serializePersistedSkillIndex(
     buckets: {},
   };
   for (const [providerId, entries] of buckets) {
-    out.buckets[providerId] = entries.map((e) => ({ ...e, content: '' }));
+    out.buckets[providerId] = entries.map((e) =>
+      e.scope === 'user'
+        ? { ...e, content: '', sourceFilePath: undefined }
+        : { ...e, content: '' },
+    );
   }
   return JSON.stringify(out);
 }

@@ -4,6 +4,7 @@ import { t } from '@/i18n/i18n';
 
 import type { ProviderId } from '../../../core/providers/types';
 import type { UsageRecord } from '../../../core/usage/types';
+import { isCloneableSkillPath } from '../../skills/skillCloning';
 import type { SkillTabEntry, VaultSkillSource } from '../skills/types';
 import { formatUsageBadge, loadBadgeI18n } from './formatUsageBadge';
 
@@ -210,7 +211,11 @@ export class SkillsTabRenderer {
       this.close();
     });
 
-    if (skill.sourceFilePath) {
+    // Only vault-editable skills get an "Edit in Claude settings" button. A
+    // read-only user skill (`~/.claude/skills`) has a truthy host-absolute path
+    // but isn't manageable — the settings manager filters it out — so a bare
+    // truthiness check would render a dead button. Same gate the Library uses.
+    if (isCloneableSkillPath(skill.sourceFilePath)) {
       const actions = row.createDiv({ cls: 'specorator-quick-action-actions' });
       const editBtn = actions.createEl('button', {
         cls: 'specorator-quick-actions-skill-edit',

@@ -170,6 +170,14 @@ describe('HomeFileAdapter', () => {
     });
   });
 
+  describe('getAbsolutePath', () => {
+    it('joins the relative path onto the root as a host-absolute path', () => {
+      expect(adapter.getAbsolutePath('.claude/skills/tdd/SKILL.md')).toBe(
+        path.join(root, '.claude/skills/tdd/SKILL.md'),
+      );
+    });
+  });
+
   describe('ensureFolder', () => {
     it('creates a single folder', async () => {
       await adapter.ensureFolder('alpha');

@@ -1,5 +1,4 @@
 import { CachedCliResolver } from '../../../core/providers/CachedCliResolver';
-import type { ProviderCommandCatalog } from '../../../core/providers/commands/ProviderCommandCatalog';
 import type {
   ProviderCliResolver,
   ProviderWorkspaceRegistration,
@@ -19,7 +18,9 @@ import { codexSettingsTabRenderer } from '../ui/CodexSettingsTab';
 
 export interface CodexWorkspaceServices extends ProviderWorkspaceServices {
   subagentStorage: CodexSubagentStorage;
-  commandCatalog: ProviderCommandCatalog;
+  // Concrete type (not the ProviderCommandCatalog interface): the Codex settings
+  // skill manager needs listManagedVaultSkills(), which is Codex-specific.
+  commandCatalog: CodexSkillCatalog;
   agentMentionProvider: CodexAgentMentionProvider;
   cliResolver: ProviderCliResolver;
 }

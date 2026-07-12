@@ -26,6 +26,13 @@ JSONL remains the provider-owned replay source for history hydration and session
 
 `CodexSkillListingService` spawns a **separate short-lived app-server process** for each `skills/list` RPC call (TTL-cached for 5 seconds). This avoids coupling skill discovery to the chat runtime lifecycle — skills can be listed even when no chat is active, and skill discovery errors can't crash the main runtime.
 
+`skills/list` reports `repo` / `user` / `system` / `admin` scopes. The catalog exposes them through **two deliberately separate listings**, because a skill can be manageable without being runnable:
+
+- **`listVaultEntries()` — the RUNNABLE listing** (`VaultSkillAggregator` → Library / Quick Actions Prompt). Every row must be a skill that `$name` actually resolves to, so it is (a) **enabled only** — the runtime ignores disabled skills — and (b) **de-duplicated by name keeping the highest-priority scope** (`repo` > `user` > `system` > `admin`). Without the dedup, a lower-priority same-named card (e.g. a read-only global `$foo`) would invoke the repo `$foo` instead, so the card would lie about what it runs. `repo` skills under a managed vault root map to editable entries (loaded from storage); `user`/`system`/`admin` skills map read-only (`scope: 'user'`, `isEditable/isDeletable: false`, host-absolute `sourceFilePath`), mirroring Claude's `~/.claude/skills` so global Codex skills appear in the Library.
+- **`listManagedVaultSkills()` — the MANAGEMENT listing** (`CodexSkillSettings`). Every editable vault skill **on disk, including disabled ones**, sourced from `CodexSkillStorage.scanVault()` (the filesystem) rather than `skills/list`. Disabling a skill in Codex config must not hide it from the only in-app edit/delete affordance, and a disabled skill is manageable but not runnable — mixing it into `listVaultEntries` produced dead "Prompt" rows.
+
+`listDropdownEntries` is enabled-only too (plus the built-in `/compact`). Codex resolves `$name` unconditionally (no `loadUserSettings`-style gate), so no run-guard is needed. Read-only skill ids are keyed by `scope` + `name` (`buildSkillId`), never the host-absolute `path`: that id is persisted into the vault-synced `skill-index.json`, so a path there would leak the user's home dir despite the `sourceFilePath` redaction.
+
 ### Environment Hash Invalidation
 
 `codexSettingsReconciler` watches `OPENAI_MODEL`, `OPENAI_BASE_URL`, `OPENAI_API_KEY`. Any hash change invalidates all existing Codex sessions (clears `sessionId` and `providerState`), preventing the UI from trying to resume sessions against a different API endpoint.

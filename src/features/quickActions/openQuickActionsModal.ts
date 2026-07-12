@@ -2,6 +2,8 @@ import type { TAbstractFile } from 'obsidian';
 
 import type { EventBus } from '@/core/events/EventBus';
 import type { UsageEventMap } from '@/core/usage/events';
+import { isCloneableSkillPath } from '@/features/skills/skillCloning';
+import type { SkillLibraryRow } from '@/features/skills/skillLibraryRows';
 import type SpecoratorPlugin from '@/main';
 import { openSpecoratorProviderSettings } from '@/utils/obsidianPrivateApi';
 
@@ -62,6 +64,34 @@ export function openQuickActionsModal(
       void runVaultSkill(plugin, entry, file);
     },
     onEditSkill: (entry) => {
+      // Cursor authoring is Cursor-owned: there is no in-settings skill manager,
+      // so its editable project skills open the Library's in-place editor rather
+      // than a settings tab with nothing to edit. (Globals never reach here — the
+      // edit button only shows for vault-cloneable paths.) Claude/Codex still jump
+      // to their settings skill managers.
+      if (entry.providerId === 'cursor' && isCloneableSkillPath(entry.sourceFilePath)) {
+        const row: SkillLibraryRow = {
+          id: entry.id,
+          name: entry.name,
+          description: entry.description,
+          providerId: entry.providerId,
+          providerDisplayName: entry.providerDisplayName,
+          sourceFilePath: entry.sourceFilePath,
+          editable: true,
+          tags: [],
+        };
+        // Lazy import: a static import would pull the obsidian `Modal` base
+        // (SkillEditorModal → LibraryEditorModal extends Modal) into every
+        // consumer of this module at load time, breaking unit tests that mock
+        // obsidian without `Modal`. Deferred to click time it stays out of the
+        // module graph. esbuild inlines it into the single cjs bundle.
+        void import('@/features/skills/view/SkillEditorModal').then(({ SkillEditorModal }) => {
+          new SkillEditorModal(plugin.app, plugin, row, () => {
+            plugin.vaultSkillAggregator?.invalidate(entry.providerId);
+          }).open();
+        });
+        return;
+      }
       openSpecoratorProviderSettings(
         plugin.app,
         plugin.manifest.id,

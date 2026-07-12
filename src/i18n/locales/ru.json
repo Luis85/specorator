@@ -591,6 +591,7 @@
       "emptyAll": "No vault skills found.",
       "emptyHint": "Skills live in .claude/skills/, .codex/skills/, and .agents/skills/.",
       "providerDisabled": "Provider '{provider}' is disabled. Enable it in settings.",
+      "userSettingsRequired": "This is a global (~/.claude) skill. Turn on \"Load user settings\" in {provider} settings to run it.",
       "editInSettings": "Edit in {provider} settings",
       "disabledBadge": "disabled",
       "searchPlaceholder": "Search skills by name or description…",

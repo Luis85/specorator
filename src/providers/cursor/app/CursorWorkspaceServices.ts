@@ -1,4 +1,5 @@
 import { CachedCliResolver } from '../../../core/providers/CachedCliResolver';
+import type { ProviderCommandCatalog } from '../../../core/providers/commands/ProviderCommandCatalog';
 import type {
   ProviderCliResolver,
   ProviderWorkspaceRegistration,
@@ -10,16 +11,19 @@ import type { PluginContext } from '../../../core/types/PluginContext';
 import { asSettingsBag } from '../../../core/types/settings';
 import { getVaultPath } from '../../../utils/path';
 import { CursorAgentMentionProvider } from '../agents/CursorAgentMentionProvider';
+import { CursorSkillCatalog } from '../commands/CursorSkillCatalog';
 import { buildCursorAgentEnvironment } from '../runtime/cursorAgentEnv';
 import { cursorCliSpec } from '../runtime/CursorCliResolver';
 import { refreshCursorModelCatalog } from '../runtime/cursorModelCatalog';
 import { getCursorProviderSettings } from '../settings';
 import { CursorAgentStorage } from '../storage/CursorAgentStorage';
+import { CursorSkillStorage } from '../storage/CursorSkillStorage';
 import { cursorSettingsTabRenderer } from '../ui/CursorSettingsTab';
 
 export interface CursorWorkspaceServices extends ProviderWorkspaceServices {
   agentStorage: CursorAgentStorage;
   agentMentionProvider: CursorAgentMentionProvider;
+  commandCatalog: ProviderCommandCatalog;
 }
 
 function createCursorCliResolver(): ProviderCliResolver {
@@ -59,11 +63,16 @@ export async function createCursorWorkspaceServices(
   const agentMentionProvider = new CursorAgentMentionProvider(agentStorage);
   await agentMentionProvider.loadAgents();
 
+  const commandCatalog = new CursorSkillCatalog(
+    new CursorSkillStorage(vaultAdapter, homeAdapter),
+  );
+
   return {
     cliResolver,
     settingsTabRenderer: cursorSettingsTabRenderer,
     agentStorage,
     agentMentionProvider,
+    commandCatalog,
     refreshAgentMentions: async () => {
       await agentMentionProvider.loadAgents();
     },

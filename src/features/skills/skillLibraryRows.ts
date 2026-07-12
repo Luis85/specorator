@@ -1,6 +1,7 @@
 import type { ProviderId } from '../../core/providers/types';
 import type { LibraryItemAccessors } from '../../shared/libraryToolbar';
 import type { SkillTabEntry } from '../quickActions/skills/types';
+import { isCloneableSkillPath } from './skillCloning';
 
 export interface SkillLibraryRow {
   id: string;
@@ -51,7 +52,10 @@ export function toSkillLibraryRows(
       providerId: e.providerId,
       providerDisplayName: e.providerDisplayName,
       sourceFilePath: e.sourceFilePath,
-      editable: e.sourceFilePath !== null,
+      // Editable == the vault adapter can write it. Host-absolute (home-scope)
+      // skills carry a sourceFilePath but aren't vault-reachable, so the clone
+      // gate rejects them and the card shows the read-only chip.
+      editable: isCloneableSkillPath(e.sourceFilePath),
       tags: tagsById?.get(e.id) ?? [],
     }))
     .sort((a, b) => a.name.localeCompare(b.name));

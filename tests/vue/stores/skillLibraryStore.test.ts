@@ -17,8 +17,8 @@ const entry = {
 
 function makePlugin(entries: unknown[]) {
   return {
-    app: {},
-    vaultSkillAggregator: { listAll: vi.fn().mockResolvedValue(entries) },
+    app: { vault: { adapter: { basePath: '/vault' } } },
+    vaultSkillAggregator: { listAll: vi.fn().mockResolvedValue(entries), invalidate: vi.fn() },
     vaultFileAdapter: {
       read: vi.fn().mockResolvedValue('---\ntags: [t1]\n---\nbody'),
       stat: vi.fn().mockResolvedValue({ mtime: 42 }),
@@ -256,8 +256,44 @@ describe('useSkillLibraryStore', () => {
     expect(store.rows[1].description).toBe('changed');
   });
 
-  it('load() rejects when the store is used before init()', async () => {
+  it('load() surfaces read-only user skills (host-absolute path) as rows', async () => {
+    const userEntry = {
+      id: 'claude:user-skill-global', providerId: 'claude', providerDisplayName: 'Vault',
+      name: 'global', description: 'g', insertPrefix: '$' as const,
+      sourceFilePath: '/home/user/.claude/skills/global/SKILL.md', providerEnabled: true,
+    };
     const store = useSkillLibraryStore();
-    await expect(store.load()).rejects.toThrow('used before init()');
+    store.init(makePlugin([entry, userEntry]));
+    await store.load();
+    expect(store.rows.map((r) => r.id)).toContain('claude:user-skill-global');
+    const row = store.rows.find((r) => r.id === 'claude:user-skill-global')!;
+    expect(row.editable).toBe(false);
+  });
+
+  it('load() surfaces user skills whose sourceFilePath was redacted (null) by the persisted cache', async () => {
+    const redacted = {
+      id: 'claude:user-skill-redacted', providerId: 'claude', providerDisplayName: 'Vault',
+      name: 'redacted', description: 'r', insertPrefix: '$' as const,
+      sourceFilePath: null, providerEnabled: true,
+    };
+    const store = useSkillLibraryStore();
+    store.init(makePlugin([redacted]));
+    await store.load();
+    expect(store.rows.map((r) => r.id)).toContain('claude:user-skill-redacted');
+  });
+
+  it('refresh() invalidates the aggregator cache then reloads (manual re-scan)', async () => {
+    const store = useSkillLibraryStore();
+    const plugin = makePlugin([entry]);
+    store.init(plugin);
+    await store.load();
+    const p = plugin as {
+      vaultSkillAggregator: { invalidate: ReturnType<typeof vi.fn>; listAll: ReturnType<typeof vi.fn> };
+    };
+    const loadsBefore = p.vaultSkillAggregator.listAll.mock.calls.length;
+    await store.refresh();
+    expect(p.vaultSkillAggregator.invalidate).toHaveBeenCalled();
+    // A fresh listAll must follow the invalidation so external edits surface.
+    expect(p.vaultSkillAggregator.listAll.mock.calls.length).toBeGreaterThan(loadsBefore);
   });
 });

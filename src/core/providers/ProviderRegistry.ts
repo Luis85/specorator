@@ -183,6 +183,15 @@ export class ProviderRegistry {
     return this.getProviderRegistration(providerId).isEnabled(settings);
   }
 
+  /**
+   * Whether the provider currently resolves user-scope (global) skills. Defaults
+   * to `true` when the registration omits the hook. Used by the skill run path
+   * to refuse a global skill whose `/name` the runtime can't resolve right now.
+   */
+  static resolvesUserScopeSkills(providerId: ProviderId, settings: Record<string, unknown>): boolean {
+    return this.getProviderRegistration(providerId).resolvesUserScopeSkills?.(settings) ?? true;
+  }
+
   static resolveSettingsProviderId(settings: Record<string, unknown>): ProviderId {
     const current = settings.settingsProvider;
     if (typeof current === 'string') {
