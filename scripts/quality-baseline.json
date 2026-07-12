@@ -7,7 +7,7 @@
     "reExportCycles": 0,
     "boundaryViolations": 0,
     "cloneGroups": 35,
-    "duplicatedLines": 906,
+    "duplicatedLines": 888,
     "complexFunctions": 230,
     "criticalComplexity": 1,
     "averageMaintainability": 90.1

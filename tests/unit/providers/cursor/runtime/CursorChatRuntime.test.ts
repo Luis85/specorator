@@ -562,6 +562,157 @@ describe('CursorChatRuntime.query cancel during startup', () => {
   });
 });
 
+describe('CursorChatRuntime.query turn serialization', () => {
+  beforeEach(stubProviderSnapshot);
+  afterEach(() => {
+    jest.useRealTimers();
+    jest.restoreAllMocks();
+  });
+
+  const turn = { persistedContent: 'hi', prompt: 'ask now', request: { images: [] } };
+  // Mirrors the runtime's private CURSOR_TURN_SERIALIZE_CEILING_MS (escalation 5s
+  // + 1s hard ceiling); advancing past it releases a turn whose predecessor never
+  // settled.
+  const CURSOR_SERIALIZE_CEILING_MS = 6_000;
+
+  function deferred<T>(): { promise: Promise<T>; resolve: (value: T) => void } {
+    let resolve!: (value: T) => void;
+    const promise = new Promise<T>((res) => { resolve = res; });
+    return { promise, resolve };
+  }
+
+  // Flush queued microtasks (promise continuations) without touching fake timers,
+  // so an in-flight query() runs up to its next real suspension point.
+  async function flush(): Promise<void> {
+    for (let i = 0; i < 30; i += 1) {
+      await Promise.resolve();
+    }
+  }
+
+  async function drain(gen: AsyncGenerator<unknown>): Promise<void> {
+    const iterator = gen[Symbol.asyncIterator]();
+    while (!(await iterator.next()).done) { /* consume every chunk */ }
+  }
+
+  // Turn A resolves its session cleanly (loaded id already cached) and its prompt
+  // is a controllable deferred left in flight — the shape a cancelled-but-unsettled
+  // turn A has when turn B arrives.
+  function primeSerializedTurns(runtime: CursorChatRuntime): {
+    bag: Record<string, unknown>;
+    aPrompt: ReturnType<typeof deferred<{ usage: null }>>;
+    prompt: jest.Mock;
+    order: string[];
+  } {
+    const order: string[] = [];
+    const aPrompt = deferred<{ usage: null }>();
+    const prompt = jest.fn()
+      .mockImplementationOnce(() => { order.push('A'); return aPrompt.promise; })
+      .mockImplementationOnce(() => { order.push('B'); return Promise.resolve({ usage: null }); });
+    const setMode = jest.fn().mockResolvedValue({});
+    const bag = primeRuntime(runtime, { prompt, setMode, cancel: jest.fn() });
+    bag.sessionId = 'S1';
+    bag.loadedSessionId = 'S1';
+    return { bag, aPrompt, prompt, order };
+  }
+
+  it("holds turn B's prompt until turn A's cancelled prompt settles, preserving order", async () => {
+    jest.useFakeTimers();
+    const runtime = makeRuntime();
+    const { aPrompt, prompt, order } = primeSerializedTurns(runtime);
+
+    // Turn A: drive it until its prompt is in flight, then cancel and abandon it.
+    void drain(runtime.query(turn as never));
+    await flush();
+    expect(order).toEqual(['A']);
+    runtime.cancel();
+
+    // Turn B serializes behind A's still-unsettled prompt: its prompt is withheld.
+    const bDone = drain(runtime.query(turn as never));
+    await flush();
+    expect(order).toEqual(['A']);
+    expect(prompt).toHaveBeenCalledTimes(1);
+
+    // Settle A → B is released and sends its prompt, strictly after A's.
+    aPrompt.resolve({ usage: null });
+    await flush();
+    await bDone;
+    expect(order).toEqual(['A', 'B']);
+  });
+
+  it('lets turn B proceed after the bounded ceiling when turn A never settles', async () => {
+    jest.useFakeTimers();
+    const runtime = makeRuntime();
+    const { bag, aPrompt, prompt } = primeSerializedTurns(runtime);
+    // The escalation would recycle the process; stub it so the never-settling
+    // prompt is the only thing gating B, leaving the ceiling as the sole release.
+    const shutdownProcess = jest.fn().mockResolvedValue(undefined);
+    bag.shutdownProcess = shutdownProcess;
+
+    void drain(runtime.query(turn as never));
+    await flush();
+    runtime.cancel();
+
+    const bDone = drain(runtime.query(turn as never));
+    await flush();
+    expect(prompt).toHaveBeenCalledTimes(1); // B parked on the ceiling
+
+    jest.advanceTimersByTime(CURSOR_SERIALIZE_CEILING_MS);
+    await flush();
+    await bDone;
+    expect(prompt).toHaveBeenCalledTimes(2); // ceiling released B
+
+    aPrompt.resolve({ usage: null }); // unwind turn A's abandoned generator
+    await flush();
+  });
+
+  it("keeps turn A's aborted signal current during turn B's wait, then rotates once released", async () => {
+    jest.useFakeTimers();
+    const runtime = makeRuntime();
+    const { bag, aPrompt } = primeSerializedTurns(runtime);
+
+    void drain(runtime.query(turn as never));
+    await flush();
+    runtime.cancel();
+    // cancel() aborts the per-turn signal in place. A late create_plan reads this
+    // same controller's (aborted) signal via getAskSignal → resolveCreatePlanOutcome
+    // returns cancelled instead of opening A's plan into B.
+    const cancelledController = bag.askQuestionAbortController as AbortController;
+    expect(cancelledController.signal.aborted).toBe(true);
+
+    const bDone = drain(runtime.query(turn as never));
+    await flush();
+    // Parked at the serialize wait: B has NOT rotated the abort controller yet, so
+    // A's aborted signal is still the current one a late request would observe.
+    expect(bag.askQuestionAbortController).toBe(cancelledController);
+    expect((bag.askQuestionAbortController as AbortController).signal.aborted).toBe(true);
+
+    aPrompt.resolve({ usage: null });
+    await flush();
+    await bDone;
+    // Released: B minted a fresh, unaborted signal for its own turn.
+    expect(bag.askQuestionAbortController).not.toBe(cancelledController);
+    expect((bag.askQuestionAbortController as AbortController).signal.aborted).toBe(false);
+  });
+
+  it('adds no wait for normal back-to-back turns once the prior prompt settled', async () => {
+    // No timer advance happens in this test: if turn B parked on the ceiling under
+    // fake timers it would hang and time the test out, so completion proves the
+    // settled prior prompt short-circuits the wait.
+    jest.useFakeTimers();
+    const runtime = makeRuntime();
+    const prompt = jest.fn().mockResolvedValue({ usage: null });
+    const setMode = jest.fn().mockResolvedValue({});
+    const bag = primeRuntime(runtime, { prompt, setMode });
+    bag.sessionId = 'S1';
+    bag.loadedSessionId = 'S1';
+
+    await drain(runtime.query(turn as never));
+    await drain(runtime.query(turn as never));
+
+    expect(prompt).toHaveBeenCalledTimes(2);
+  });
+});
+
 describe('CursorChatRuntime.query plan arming', () => {
   beforeEach(stubProviderSnapshot);
   afterEach(() => jest.restoreAllMocks());

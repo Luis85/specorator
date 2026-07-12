@@ -76,6 +76,10 @@ const CURSOR_ACP_INIT_TIMEOUT_MS = 20_000;
 // session/cancel is cooperative and the prompt RPC has no timeout; if the agent
 // ignores it, the turn is terminated locally after this grace period.
 const CURSOR_CANCEL_ESCALATION_MS = 5_000;
+// A new turn serializes behind a still-unsettled prior prompt; the ceiling sits
+// just above the cancel escalation (which recycles the process and settles the
+// prompt) so query() can never hang past it.
+const CURSOR_TURN_SERIALIZE_CEILING_MS = CURSOR_CANCEL_ESCALATION_MS + 1_000;
 const CURSOR_OLD_CLI_MESSAGE =
   'Cursor CLI does not support ACP (`agent acp`). Update cursor-agent (`cursor-agent update` or reinstall from cursor.com/cli), then retry.';
 const CURSOR_LOGIN_MESSAGE =
@@ -85,6 +89,10 @@ export class CursorChatRuntime implements ChatRuntime {
   readonly providerId: ProviderId = 'cursor';
 
   private activeTurn: ActiveTurn | null = null;
+  // The prior turn's prompt-settle chain (see ActiveTurn.promptSettled). query()
+  // awaits it — bounded by the cancel-escalation window — so turns serialize and a
+  // cancelled turn's late blocking requests can't leak into the next turn.
+  private pendingPromptSettled: Promise<void> | null = null;
   // Wire ids from the session's advertised model `configOptions`/`models`. Cursor
   // ACP rejects a bare CLI id (`gpt-5.4-medium`) that is not one of these exact
   // values — it can report the model as selected yet fail the next prompt with
@@ -203,12 +211,6 @@ export class CursorChatRuntime implements ChatRuntime {
     queryOptions?: ChatRuntimeQueryOptions,
   ): AsyncGenerator<StreamChunk> {
     this.turnMetadata = {};
-    // Fresh per-turn abort scope for the blocking ask_question / create_plan RPCs
-    // and for the startup-cancel check below; aborting a controller left over from
-    // a prior turn is a no-op for this turn's await.
-    this.askQuestionAbortController?.abort();
-    this.askQuestionAbortController = new AbortController();
-    const turnSignal = this.askQuestionAbortController.signal;
 
     const cli = this.plugin.getResolvedProviderCliPath('cursor');
     if (!cli) {
@@ -216,6 +218,25 @@ export class CursorChatRuntime implements ChatRuntime {
       yield { type: 'done' };
       return;
     }
+
+    // Serialize turns behind a still-unsettled prior prompt. When the user stops
+    // turn A and immediately sends turn B, A's session/prompt can stay in flight
+    // until the cancel escalation fires. Both prompts share one ACP session id, so
+    // A's late sessionId-less blocking request (cursor/create_plan params carry no
+    // sessionId) can't be attributed by session — and once B rotates the abort
+    // signal, that stale request would see B's live signal and open A's plan into
+    // B. Waiting here — until the prior prompt settles (the escalation recycles the
+    // process and settles it) or a hard ceiling so query() can't hang — BEFORE
+    // rotating the abort controller keeps A's aborted signal current, so A's late
+    // requests resolve cancelled instead.
+    await this.awaitPriorTurnSettled();
+
+    // Fresh per-turn abort scope for the blocking ask_question / create_plan RPCs
+    // and for the startup-cancel check below; aborting a controller left over from
+    // a prior turn is a no-op for this turn's await.
+    this.askQuestionAbortController?.abort();
+    this.askQuestionAbortController = new AbortController();
+    const turnSignal = this.askQuestionAbortController.signal;
 
     yield { type: 'user_message_start', content: turn.persistedContent };
     yield { type: 'assistant_message_start' };
@@ -312,6 +333,9 @@ export class CursorChatRuntime implements ChatRuntime {
     });
 
     try {
+      // Retained so the NEXT query() serializes behind this prompt's settlement
+      // (resolved, rejected, or recycled by the cancel escalation) before it starts.
+      this.pendingPromptSettled = promptPromise;
       while (true) {
         const chunk = await activeTurn.queue.next();
         if (!chunk) {
@@ -325,6 +349,21 @@ export class CursorChatRuntime implements ChatRuntime {
         this.activeTurn = null;
       }
     }
+  }
+
+  // Bounded serialize wait for a prior turn's prompt (see the call site in query()
+  // for the attribution gap this closes). No-op on the first turn or once the prior
+  // prompt has settled. withTimeout clears its ceiling timer on the settle path; on
+  // the ceiling it rejects, which we swallow so query() proceeds past the bound.
+  private async awaitPriorTurnSettled(): Promise<void> {
+    if (!this.pendingPromptSettled) {
+      return;
+    }
+    await withTimeout(
+      this.pendingPromptSettled,
+      CURSOR_TURN_SERIALIZE_CEILING_MS,
+      new Error('cursor turn serialize ceiling'),
+    ).catch(() => {});
   }
 
   cancel(): void {
