@@ -394,6 +394,10 @@
       "name": "Safe mode",
       "desc": "Sandbox mode used when the Safe toggle is active."
     },
+    "captureAcpTraffic": {
+      "name": "ACPトラフィックをキャプチャ",
+      "desc": "診断専用 — キャプチャにはプロンプトのテキストが含まれる場合があります。現在のセッションの Cursor ACP のワイヤーフレーム、stderr、ライフサイクルイベントを .specorator/captures/cursor に記録します。"
+    },
     "environment": "環境",
     "customVariables": {
       "name": "カスタム変数",
@@ -783,6 +787,10 @@
         "nameWhitespace": "Name cannot start or end with whitespace.",
         "nameDotSegment": "Name cannot be a dot segment.",
         "nameReservedChars": "Name cannot contain path separators or reserved characters."
+      },
+      "capture": {
+        "folderUnavailable": "Cursor ACP capture folder unavailable: vault path not found.",
+        "openFailed": "Failed to open the Cursor ACP capture folder: {error}"
       }
     }
   },
@@ -1217,6 +1225,7 @@
     "openSkillLibrary": "Open Skill Library",
     "openLoopLibrary": "Open loop library",
     "openLibrary": "Open Library",
-    "openQuickActions": "Open Quick Actions"
+    "openQuickActions": "Open Quick Actions",
+    "cursorOpenAcpCaptures": "Cursor: open ACP capture folder"
   }
 }

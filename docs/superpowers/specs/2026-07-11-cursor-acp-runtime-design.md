@@ -166,6 +166,13 @@ already exercises), replacing the CLI temp-file convention.
 
 ## First-run validation checklist (replaces the spike; run on a real vault)
 
+0. (Optional) Enable **Capture ACP traffic** on the Cursor settings tab before
+   the run — diagnostics only, captures may contain prompt text. Verifies
+   `.specorator/captures/cursor/<session>/wire.jsonl`, `lifecycle.jsonl`
+   (`spawn`/`initialize`/`session_new`/`exit` entries at minimum), and
+   `meta.json` are written for the session below, and that the "Cursor: open
+   ACP capture folder" command reveals the folder. See
+   `docs/superpowers/specs/2026-07-11-cursor-acp-capture-design.md`.
 1. New chat: send, stream, tool calls render, turn completes with usage.
 2. Interactive approval appears in `normal` mode; `yolo` auto-approves;
    dismiss rejects without wedging the turn.

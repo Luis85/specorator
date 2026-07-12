@@ -125,6 +125,32 @@ WSL installs update by re-running the `curl ... | bash` line inside the distro.
 
 ---
 
+## Collecting diagnostics
+
+If a Cursor session misbehaves and you need to hand a developer the raw ACP
+traffic, turn on **Capture ACP traffic** under **Settings → Specorator →
+Cursor → Diagnostics**. It is off by default.
+
+- **Diagnostics only — captures may contain prompt text.** Secrets are
+  redacted best-effort (API keys, bearer tokens, `user:pass@host` URLs), but
+  the capture is not a substitute for reviewing what you send before sharing
+  it.
+- Enabling the toggle takes effect on the *next* `agent acp` spawn — it does
+  not retroactively capture an already-running session.
+- Each session writes to its own timestamped folder under
+  `<vault>/.specorator/captures/cursor/`: `wire.jsonl` (every ACP request/
+  response/notification), `stderr.log`, `lifecycle.jsonl` (spawn, initialize,
+  session new/load, mode/model changes, cancel, exit), and `meta.json`
+  (CLI path, plugin version, platform, start time). Only the newest 20
+  session folders are kept.
+- Run the **Cursor: open ACP capture folder** command (Command Palette) to
+  reveal the folder in your OS file manager. The folder is created on demand
+  if no capture has run yet.
+- Turn the toggle back off when you are done — it stays off across restarts
+  until you enable it again.
+
+---
+
 ## Troubleshooting
 
 | Symptom | Fix |

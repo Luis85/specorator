@@ -2,6 +2,7 @@ import type { Command, Editor } from 'obsidian';
 import { MarkdownView, Notice } from 'obsidian';
 
 import { registerCommandHotkey } from '@/core/commands/commandHotkeyRegistry';
+import { ProviderWorkspaceRegistry } from '@/core/providers/ProviderWorkspaceRegistry';
 import { type InlineEditContext, InlineEditModal } from '@/features/inline-edit/ui/InlineEditModal';
 import { activateLibrary } from '@/features/library/activateLibrary';
 import type { LibraryTab } from '@/features/library/viewType';
@@ -161,6 +162,14 @@ function registerDiagnosticCommands(plugin: SpecoratorPlugin, register: Register
     callback: () => {
       plugin.logger.clear();
       new Notice(t('diagnostics.logsCleared'));
+    },
+  });
+
+  register({
+    id: 'cursor-open-acp-captures',
+    name: t('commands.cursorOpenAcpCaptures'),
+    callback: () => {
+      void ProviderWorkspaceRegistry.openDiagnosticsCaptureFolder('cursor');
     },
   });
 }

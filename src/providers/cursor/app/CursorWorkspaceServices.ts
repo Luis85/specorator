@@ -10,6 +10,7 @@ import type { PluginContext } from '../../../core/types/PluginContext';
 import { asSettingsBag } from '../../../core/types/settings';
 import { getVaultPath } from '../../../utils/path';
 import { CursorAgentMentionProvider } from '../agents/CursorAgentMentionProvider';
+import { openCursorAcpCaptureFolder } from '../diagnostics/openCursorAcpCaptureFolder';
 import { buildCursorAgentEnvironment } from '../runtime/cursorAgentEnv';
 import { cursorCliSpec } from '../runtime/CursorCliResolver';
 import { refreshCursorModelCatalog } from '../runtime/cursorModelCatalog';
@@ -67,6 +68,7 @@ export async function createCursorWorkspaceServices(
     refreshAgentMentions: async () => {
       await agentMentionProvider.loadAgents();
     },
+    openDiagnosticsCaptureFolder: () => openCursorAcpCaptureFolder(plugin),
   };
 }
 

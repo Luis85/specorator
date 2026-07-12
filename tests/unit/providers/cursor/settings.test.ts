@@ -94,6 +94,17 @@ describe('cursor settings — curated models', () => {
       expect(getCursorProviderSettings({}).enabledModelsByHost).toEqual({});
     });
 
+    it('defaults captureAcpTraffic to false', () => {
+      expect(DEFAULT_CURSOR_PROVIDER_SETTINGS.captureAcpTraffic).toBe(false);
+      expect(getCursorProviderSettings({}).captureAcpTraffic).toBe(false);
+    });
+
+    it('persists captureAcpTraffic through the update writer', () => {
+      const bag: Record<string, unknown> = {};
+      updateCursorProviderSettings(bag, { captureAcpTraffic: true });
+      expect(getCursorProviderSettings(bag).captureAcpTraffic).toBe(true);
+    });
+
     it('normalizes persisted junk on read', () => {
       const settings = getCursorProviderSettings({
         providerConfigs: {

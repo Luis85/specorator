@@ -394,6 +394,10 @@
       "name": "Safe mode",
       "desc": "Sandbox mode used when the Safe toggle is active."
     },
+    "captureAcpTraffic": {
+      "name": "Capturar tráfico ACP",
+      "desc": "Solo diagnóstico — las capturas pueden contener texto del prompt. Registra los frames ACP de Cursor, stderr y eventos de ciclo de vida de la sesión actual en .specorator/captures/cursor."
+    },
     "environment": "Entorno",
     "customVariables": {
       "name": "Variables personalizadas",
@@ -783,6 +787,10 @@
         "nameWhitespace": "Name cannot start or end with whitespace.",
         "nameDotSegment": "Name cannot be a dot segment.",
         "nameReservedChars": "Name cannot contain path separators or reserved characters."
+      },
+      "capture": {
+        "folderUnavailable": "Cursor ACP capture folder unavailable: vault path not found.",
+        "openFailed": "Failed to open the Cursor ACP capture folder: {error}"
       }
     }
   },
@@ -1217,6 +1225,7 @@
     "openSkillLibrary": "Open Skill Library",
     "openLoopLibrary": "Open loop library",
     "openLibrary": "Open Library",
-    "openQuickActions": "Open Quick Actions"
+    "openQuickActions": "Open Quick Actions",
+    "cursorOpenAcpCaptures": "Cursor: open ACP capture folder"
   }
 }

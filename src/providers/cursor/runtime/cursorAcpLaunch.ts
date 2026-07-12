@@ -23,21 +23,39 @@ export function buildCursorAcpLaunchSpec(
 }
 
 /**
+ * Optional diagnostics taps threaded through to the subprocess and transport
+ * when ACP capture is enabled (`CursorChatRuntime.buildCaptureWriter`). Both
+ * hooks are no-op-safe on the receiving end — see
+ * `JsonRpcStdioClient.onWireFrame` and `AcpSubprocessLaunchSpec.onStderrData`.
+ */
+export interface CursorAcpProcessTaps {
+  onStderrData?: (chunk: string) => void;
+  onWireFrame?: (direction: 'client' | 'agent', rawLine: string) => void;
+}
+
+/**
  * Spawns the `cursor-agent acp` subprocess and wires the JSON-RPC transport
  * over its stdio, mirroring `startOpencodeAcpProcess`'s wiring shape.
  */
-export function startCursorAcpProcess(spec: AcpSubprocessLaunchSpec): {
+export function startCursorAcpProcess(
+  spec: AcpSubprocessLaunchSpec,
+  taps?: CursorAcpProcessTaps,
+): {
   process: AcpSubprocess;
   transport: AcpJsonRpcTransport;
 } {
-  const process = new AcpSubprocess(spec);
+  const process = new AcpSubprocess({ ...spec, onStderrData: taps?.onStderrData });
   process.start();
 
-  const transport = new AcpJsonRpcTransport({
-    input: process.stdout,
-    onClose: (listener) => process.onClose(listener),
-    output: process.stdin,
-  });
+  const transport = new AcpJsonRpcTransport(
+    {
+      input: process.stdout,
+      onClose: (listener) => process.onClose(listener),
+      output: process.stdin,
+    },
+    undefined,
+    { onWireFrame: taps?.onWireFrame },
+  );
 
   return { process, transport };
 }

@@ -498,6 +498,8 @@ export interface ProviderWorkspaceServices {
   mcpServerManager?: McpServerManager | null;
   settingsTabRenderer?: ProviderSettingsTabRenderer | null;
   refreshAgentMentions?(): Promise<void>;
+  /** Reveals this provider's diagnostics capture folder in the OS file manager (Cursor: ACP capture). Absent when the provider has no such surface. */
+  openDiagnosticsCaptureFolder?(): Promise<void>;
 }
 
 export interface ProviderWorkspaceInitContext {

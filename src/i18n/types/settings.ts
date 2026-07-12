@@ -178,6 +178,8 @@ export type SettingsTranslationKey =
   | 'settings.claudeSafeMode.desc'
   | 'settings.codexSafeMode.name'
   | 'settings.codexSafeMode.desc'
+  | 'settings.captureAcpTraffic.name'
+  | 'settings.captureAcpTraffic.desc'
 
   // Settings - Environment
   | 'settings.environment'

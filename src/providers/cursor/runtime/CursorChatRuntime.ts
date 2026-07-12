@@ -1,3 +1,6 @@
+import * as path from 'node:path';
+
+import { SPECORATOR_STORAGE_PATH } from '../../../core/bootstrap/StoragePaths';
 import { ProviderSettingsCoordinator } from '../../../core/providers/ProviderSettingsCoordinator';
 import type { ProviderCapabilities, ProviderId } from '../../../core/providers/types';
 import { buildUsageInfo } from '../../../core/providers/usage';
@@ -37,8 +40,9 @@ import {
   selectPermissionOption,
 } from '../../acp';
 import { CURSOR_PROVIDER_CAPABILITIES } from '../capabilities';
+import { CursorAcpCaptureWriter } from '../diagnostics/CursorAcpCaptureWriter';
 import { encodeCursorTurn } from '../prompt/encodeCursorTurn';
-import { getCursorEnabledModels } from '../settings';
+import { getCursorEnabledModels, getCursorProviderSettings } from '../settings';
 import { getCursorState, resolveCursorSessionId } from '../types';
 import { registerCursorAcpExtensions } from './cursorAcpExtensions';
 import { buildCursorAcpLaunchSpec, startCursorAcpProcess } from './cursorAcpLaunch';
@@ -90,6 +94,11 @@ export class CursorChatRuntime implements ChatRuntime {
   // answer the still-open RPC instead of leaving the agent stuck on it.
   private askQuestionAbortController: AbortController | null = null;
   private autoApprovePermissions = false;
+  // Diagnostics-only, default-off sink for ACP wire frames/stderr/lifecycle
+  // events (see docs/superpowers/specs/2026-07-11-cursor-acp-capture-design.md).
+  // Built fresh per spawn in startProcess when the setting is on; flushed and
+  // dropped in shutdownProcess so a toggle change takes effect on next spawn.
+  private captureWriter: CursorAcpCaptureWriter | null = null;
   private connection: AcpClientConnection | null = null;
   private contextUsage: AcpUsageUpdate | null = null;
   private currentModeId: string | null = null;
@@ -322,6 +331,7 @@ export class CursorChatRuntime implements ChatRuntime {
     const turn = this.activeTurn;
     if (this.connection && this.sessionId) {
       this.connection.cancel({ sessionId: this.sessionId });
+      this.captureEvent('cancel', { sessionId: this.sessionId });
       if (turn) {
         this.armCancelEscalation(turn);
       }
@@ -345,6 +355,7 @@ export class CursorChatRuntime implements ChatRuntime {
       if (turn.promptSettled) {
         return;
       }
+      this.captureEvent('cancel_escalation');
       this.pushTurnTermination(turn, [
         { type: 'error', content: 'Cursor agent did not stop after cancel; restarting the agent process.' },
         { type: 'done' },
@@ -428,14 +439,22 @@ export class CursorChatRuntime implements ChatRuntime {
     const env = buildCursorAgentEnvironment(this.plugin, cliPath);
     const spec = buildCursorAcpLaunchSpec(cliPath, cwd, env);
 
+    this.captureWriter = this.buildCaptureWriter(cliPath);
+    const captureWriter = this.captureWriter;
+
     // The spawn lock guards ~/.cursor/cli-config.json contention (Windows
     // EPERM under concurrent spawns) — now once per session, not per turn.
     const { process: proc, transport } = await runWithCursorAgentSpawnLock(
-      async () => startCursorAcpProcess(spec),
+      async () => startCursorAcpProcess(spec, captureWriter ? {
+        onStderrData: (chunk) => captureWriter.stderr(chunk),
+        onWireFrame: (direction, rawLine) => captureWriter.wireFrame(direction, rawLine),
+      } : undefined),
     );
     this.process = proc;
     this.transport = transport;
     this.unregisterTransportClose = transport.onClose(() => this.handleTransportClosed(transport));
+    // envKeys only — env VALUES must never reach the capture sink.
+    this.captureEvent('spawn', { cliPath, args: spec.args, envKeys: Object.keys(spec.env) });
 
     this.connection = new AcpClientConnection({
       clientInfo: { name: 'specorator', version: this.plugin.manifest?.version ?? '0.0.0' },
@@ -476,11 +495,15 @@ export class CursorChatRuntime implements ChatRuntime {
 
     transport.start();
     try {
-      await withTimeout(
+      const initResult = await withTimeout(
         this.connection.initialize(),
         CURSOR_ACP_INIT_TIMEOUT_MS,
         new Error('ACP initialize timed out'),
       );
+      this.captureEvent('initialize', {
+        agentInfo: initResult.agentInfo ?? null,
+        capabilities: initResult.agentCapabilities ?? null,
+      });
     } catch (error) {
       this.lastStartupErrorMessage = this.describeStartupFailure(error);
       await this.shutdownProcess();
@@ -489,10 +512,44 @@ export class CursorChatRuntime implements ChatRuntime {
     this.setReady(true);
   }
 
+  // Diagnostics only — default off. Returns null when the setting is off or the
+  // vault path is unavailable (headless/test contexts). Never throws: writer
+  // construction failures self-disable via onDisabled, per CursorAcpCaptureWriter.
+  private buildCaptureWriter(cliPath: string): CursorAcpCaptureWriter | null {
+    const { captureAcpTraffic } = getCursorProviderSettings(asSettingsBag(this.plugin.settings));
+    if (!captureAcpTraffic) {
+      return null;
+    }
+    const vaultPath = getVaultPath(this.plugin.app);
+    if (!vaultPath) {
+      return null;
+    }
+    const baseDir = path.join(vaultPath, SPECORATOR_STORAGE_PATH, 'captures', 'cursor');
+    return new CursorAcpCaptureWriter({
+      baseDir,
+      meta: {
+        // No cheap `cursor-agent --version` probe exists at spawn time; the
+        // CLI path is the fallback identity signal for the session.
+        cliVersion: cliPath,
+        pluginVersion: this.plugin.manifest?.version ?? '0.0.0',
+        platform: process.platform,
+        startedAt: new Date().toISOString(),
+      },
+      onDisabled: (error) => {
+        this.plugin.logger.scope('cursor.capture').warn('ACP capture disabled after a write failure', error);
+      },
+    });
+  }
+
+  private captureEvent(kind: string, data: Record<string, unknown> = {}): void {
+    this.captureWriter?.event(kind, data);
+  }
+
   private handleTransportClosed(transport: AcpJsonRpcTransport): void {
     if (this.transport !== transport) {
       return;
     }
+    this.captureEvent('transport_close');
     this.setReady(false);
     // The agent behind any pending blocking ask/approval is gone: abort the
     // in-flight cursor/ask_question (which unmounts its card and restores the
@@ -532,11 +589,13 @@ export class CursorChatRuntime implements ChatRuntime {
         this.loadedSessionId = response.sessionId;
         this.sessionId = response.sessionId;
         this.captureAdvertisedModelValues(response);
+        this.captureEvent('session_load', { sessionId: response.sessionId });
         return response.sessionId;
       } catch (error) {
         // Load-bearing no-spike fallback: an id-mapping mismatch degrades to a
         // fresh session with history re-injected on the next prompt.
         this.plugin.logger.scope('cursor.acp').warn('session/load failed; falling back to new session', error);
+        this.captureEvent('session_load_fallback');
         this.sessionInvalidated = true;
         this.sessionId = null;
         this.loadedSessionId = null;
@@ -575,6 +634,7 @@ export class CursorChatRuntime implements ChatRuntime {
     this.currentModeId = null;
     this.currentSessionModelId = null;
     this.captureAdvertisedModelValues(response);
+    this.captureEvent('session_new', { sessionId: response.sessionId });
     return response.sessionId;
   }
 
@@ -597,10 +657,12 @@ export class CursorChatRuntime implements ChatRuntime {
     try {
       await this.connection.setMode({ modeId, sessionId });
       this.currentModeId = modeId;
+      this.captureEvent('mode_apply', { modeId, ok: true });
     } catch (error) {
       // Mode setting is best-effort: an agent that rejects setMode still runs
       // the turn in its default mode; approvals remain client-enforced.
       this.plugin.logger.scope('cursor.acp').warn('setMode failed', error);
+      this.captureEvent('mode_apply', { modeId, ok: false });
     }
   }
 
@@ -649,11 +711,13 @@ export class CursorChatRuntime implements ChatRuntime {
         value: wireValue,
       });
       this.currentSessionModelId = wireValue;
+      this.captureEvent('model_apply', { value: wireValue, ok: true });
     } catch (error) {
       // Best-effort: whether Cursor's ACP dialect implements
       // session/set_config_option is doc-unknown, so a rejection just leaves the
       // turn on the agent's default model rather than failing the turn.
       this.plugin.logger.scope('cursor.acp').warn('setConfigOption(model) failed', error);
+      this.captureEvent('model_apply', { value: wireValue, ok: false });
     }
   }
 
@@ -875,6 +939,7 @@ export class CursorChatRuntime implements ChatRuntime {
     this.transport?.dispose();
     this.transport = null;
     if (this.process) {
+      this.captureEvent('exit');
       await this.process.shutdown().catch(() => {}); // best-effort
       this.process = null;
     }
@@ -882,6 +947,10 @@ export class CursorChatRuntime implements ChatRuntime {
     this.currentModeId = null;
     this.currentSessionModelId = null;
     this.advertisedModelValues = null;
+    if (this.captureWriter) {
+      await this.captureWriter.flush();
+      this.captureWriter = null;
+    }
   }
 }
 

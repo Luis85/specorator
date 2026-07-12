@@ -1,3 +1,6 @@
+import * as fs from 'node:fs/promises';
+import * as os from 'node:os';
+import * as path from 'node:path';
 import { Readable, Writable } from 'node:stream';
 
 import { ProviderSettingsCoordinator } from '@/core/providers/ProviderSettingsCoordinator';
@@ -140,23 +143,37 @@ function makeRuntime(overrides: Record<string, unknown> = {}, host: RuntimeHost 
 interface RunOptions {
   permissionMode?: string;
   queryOptions?: Record<string, unknown>;
+  // Full override of the fake plugin object (e.g. app.vault.adapter.basePath,
+  // settings.providerConfigs.cursor.captureAcpTraffic) for the capture-writer
+  // wiring tests below. Wins over the permissionMode-derived settings default.
+  pluginOverrides?: Record<string, unknown>;
 }
 
 function setupRuntime(promptScript: PromptScript, options: RunOptions = {}): CursorChatRuntime {
   const server = new FakeAcpServer(promptScript);
-  const transport = new AcpJsonRpcTransport({
-    input: server.toClient,
-    output: server.toAgent,
-    onClose: () => () => {},
+  // mockImplementation (not mockReturnValue) so the capture-writer tests can
+  // inspect the `taps` CursorChatRuntime.startProcess passes through — the real
+  // AcpJsonRpcTransport only emits wire frames when constructed with them.
+  (cursorAcpLaunch.startCursorAcpProcess as jest.Mock).mockImplementation(
+    (_spec: unknown, taps?: { onWireFrame?: (direction: 'client' | 'agent', rawLine: string) => void }) => {
+      const transport = new AcpJsonRpcTransport(
+        { input: server.toClient, output: server.toAgent, onClose: () => () => {} },
+        undefined,
+        { onWireFrame: taps?.onWireFrame },
+      );
+      const process = {
+        isAlive: () => true,
+        getStderrSnapshot: () => '',
+        shutdown: () => Promise.resolve(),
+        onClose: () => () => {},
+      };
+      return { process, transport };
+    },
+  );
+  return makeRuntime({
+    settings: { permissionMode: options.permissionMode ?? 'normal' },
+    ...options.pluginOverrides,
   });
-  const process = {
-    isAlive: () => true,
-    getStderrSnapshot: () => '',
-    shutdown: () => Promise.resolve(),
-    onClose: () => () => {},
-  };
-  (cursorAcpLaunch.startCursorAcpProcess as jest.Mock).mockReturnValue({ process, transport });
-  return makeRuntime({ settings: { permissionMode: options.permissionMode ?? 'normal' } });
 }
 
 async function drive(runtime: CursorChatRuntime, options: RunOptions = {}): Promise<StreamChunk[]> {
@@ -408,5 +425,78 @@ describe('CursorChatRuntime create_plan in-turn decision session guard', () => {
     host.markPlanDecidedInline();
     expect(decidedInline()).toBe(true);
     await cleanup();
+  });
+});
+
+describe('CursorChatRuntime ACP diagnostics capture (2026-07-11-cursor-acp-capture)', () => {
+  let tmpVaultDir: string;
+
+  beforeEach(async () => {
+    tmpVaultDir = await fs.mkdtemp(path.join(os.tmpdir(), 'specorator-cursor-runtime-capture-'));
+  });
+
+  afterEach(async () => {
+    await fs.rm(tmpVaultDir, { recursive: true, force: true });
+  });
+
+  function captureBaseDir(): string {
+    return path.join(tmpVaultDir, '.specorator', 'captures', 'cursor');
+  }
+
+  async function readOnlySessionFile(file: string): Promise<string> {
+    const baseDir = captureBaseDir();
+    const entries = await fs.readdir(baseDir);
+    expect(entries).toHaveLength(1);
+    return fs.readFile(path.join(baseDir, entries[0], file), 'utf8');
+  }
+
+  it('captures ordered wire frames and spawn/exit lifecycle events when the setting is on', async () => {
+    const runtime = setupRuntime(({ emit }) => {
+      emit({ sessionUpdate: 'agent_message_chunk', messageId: 'a1', content: { type: 'text', text: 'hi' } });
+      return { stopReason: 'end_turn' };
+    }, {
+      pluginOverrides: {
+        app: { vault: { adapter: { basePath: tmpVaultDir } } },
+        settings: {
+          permissionMode: 'normal',
+          providerConfigs: { cursor: { captureAcpTraffic: true } },
+        },
+      },
+    });
+
+    await drive(runtime);
+    await runtime.cleanup();
+
+    const wireLines = (await readOnlySessionFile('wire.jsonl')).trim().split('\n');
+    expect(wireLines.length).toBeGreaterThan(0);
+    for (const line of wireLines) {
+      const parsed = JSON.parse(line) as { dir: string; frame: string };
+      expect(['client', 'agent']).toContain(parsed.dir);
+      // Every captured frame is the raw NDJSON line — must round-trip as JSON.
+      expect(() => JSON.parse(parsed.frame)).not.toThrow();
+    }
+
+    const lifecycleLines = (await readOnlySessionFile('lifecycle.jsonl')).trim().split('\n');
+    const kinds = lifecycleLines.map((line) => (JSON.parse(line) as { kind: string }).kind);
+    expect(kinds[0]).toBe('spawn');
+    expect(kinds).toContain('exit');
+
+    const meta = JSON.parse(await readOnlySessionFile('meta.json')) as Record<string, unknown>;
+    expect(meta.pluginVersion).toBe('1.0.0');
+    expect(meta.platform).toBe(process.platform);
+  });
+
+  it('does not construct a capture writer when captureAcpTraffic is off', async () => {
+    const runtime = setupRuntime(() => ({ stopReason: 'end_turn' }), {
+      pluginOverrides: {
+        app: { vault: { adapter: { basePath: tmpVaultDir } } },
+        settings: { permissionMode: 'normal' },
+      },
+    });
+
+    await drive(runtime);
+    await runtime.cleanup();
+
+    await expect(fs.access(captureBaseDir())).rejects.toThrow();
   });
 });

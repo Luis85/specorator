@@ -71,4 +71,6 @@ export type ProviderTranslationKey =
   | 'provider.cursor.subagent.nameRequired'
   | 'provider.cursor.subagent.nameWhitespace'
   | 'provider.cursor.subagent.nameDotSegment'
-  | 'provider.cursor.subagent.nameReservedChars';
+  | 'provider.cursor.subagent.nameReservedChars'
+  | 'provider.cursor.capture.folderUnavailable'
+  | 'provider.cursor.capture.openFailed';

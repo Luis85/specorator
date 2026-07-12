@@ -124,4 +124,8 @@ export class ProviderWorkspaceRegistry {
   static getSettingsTabRenderer(providerId: ProviderId): ProviderSettingsTabRenderer | null {
     return this.getServices(providerId)?.settingsTabRenderer ?? null;
   }
+
+  static async openDiagnosticsCaptureFolder(providerId: ProviderId): Promise<void> {
+    await this.getServices(providerId)?.openDiagnosticsCaptureFolder?.();
+  }
 }
