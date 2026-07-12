@@ -1,3 +1,4 @@
+import type { ProviderCapabilities } from '../../../../../core/providers/types';
 import type { ChatRewindMode } from '../../../../../core/runtime/types';
 import type { ChatMessage, ImageAttachment } from '../../../../../core/types';
 import type { ActiveStreamState } from './stores/transcriptStore';
@@ -36,6 +37,8 @@ export interface TranscriptCallbacks {
   showFullImage: (image: ImageAttachment) => void;
   /** Provider id of the active tab (capability gating, subagent adapter). */
   getProviderId: () => string;
+  /** Active tab's provider capabilities (mirrors legacy `MessageRendererHooks.getCapabilities`; gates rewind/fork). */
+  getCapabilities: () => ProviderCapabilities;
   /** Work-order note path for this tab, or null (drives protocol card splitting). */
   getWorkOrderPath: () => string | null;
 }

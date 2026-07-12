@@ -5,12 +5,19 @@ import { mountIcon } from '../mountIcon';
 
 /**
  * Shared copy atom reproducing `rendering/messageActionButtons.ts`'s
- * `wireCopyButton` DOM contract exactly: a single `.specorator-text-copy-btn`
- * element whose own content toggles between the "copy" icon and a "Copied!"
- * label (no nested icon span), copying via `navigator.clipboard` directly
- * (matching the legacy implementation) rather than a callback.
+ * `wireCopyButton` DOM contract exactly: a single element (default class
+ * `.specorator-text-copy-btn`) whose own content toggles between the "copy"
+ * icon and a "Copied!" label (no nested icon span), copying via
+ * `navigator.clipboard` directly (matching the legacy implementation) rather
+ * than a callback. `cssClass`/`ariaLabel` are optional so callers with a
+ * different button class/aria-label (e.g. `MessageActionBar`'s
+ * `.specorator-user-msg-copy-btn`, aria-label "Copy message") can reuse the
+ * same copy/icon-toggle behavior without forking it.
  */
-const props = defineProps<{ text: string }>();
+const props = withDefaults(
+  defineProps<{ text: string; cssClass?: string; ariaLabel?: string }>(),
+  { cssClass: 'specorator-text-copy-btn', ariaLabel: undefined },
+);
 
 const copied = ref(false);
 const btnEl = ref<HTMLElement | null>(null);
@@ -52,8 +59,8 @@ onBeforeUnmount(() => {
 <template>
   <span
     ref="btnEl"
-    class="specorator-text-copy-btn"
-    :class="{ copied }"
+    :class="[cssClass, { copied }]"
+    :aria-label="ariaLabel"
     @click="onClick"
   />
 </template>

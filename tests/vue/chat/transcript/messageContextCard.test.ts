@@ -25,6 +25,19 @@ function makeCallbacks(overrides: Partial<TranscriptCallbacks> = {}): Transcript
     showFullImage: vi.fn(),
     getProviderId: vi.fn(() => 'claude'),
     getWorkOrderPath: vi.fn(() => null),
+    getCapabilities: vi.fn(() => ({
+      providerId: 'claude',
+      supportsPersistentRuntime: true,
+      supportsNativeHistory: true,
+      supportsPlanMode: true,
+      supportsRewind: true,
+      supportsFork: true,
+      supportsProviderCommands: true,
+      supportsImageAttachments: true,
+      supportsInstructionMode: true,
+      supportsMcpTools: true,
+      reasoningControl: 'effort' as const,
+    })),
     ...overrides,
   };
 }
