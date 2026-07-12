@@ -25,6 +25,12 @@ export class NavigationController {
   private initialized = false;
   private disposed = false;
 
+  // The element that currently carries the tabindex + focus class + keydown
+  // listener. Tracked explicitly because `deps.getMessagesEl()` reads live and
+  // is repointed at the Vue scroll host after mount, so it can't be used to find
+  // the element these bindings actually landed on.
+  private boundMessagesEl: HTMLElement | null = null;
+
   // Bound handlers for cleanup
   private boundMessagesKeydown: (e: KeyboardEvent) => void;
   private boundKeyup: (e: KeyboardEvent) => void;
@@ -46,12 +52,10 @@ export class NavigationController {
     // Guard against missing DOM elements
     if (!messagesEl || !inputEl) return;
 
-    // Make messages panel focusable (focus style handled in CSS)
-    messagesEl.setAttribute('tabindex', '0');
-    messagesEl.addClass('specorator-messages-focusable');
+    // Make the messages panel focusable + keyboard-driven (tabindex, focus class,
+    // keydown listener).
+    this.bindMessagesEl(messagesEl);
 
-    // Attach event listeners
-    messagesEl.addEventListener('keydown', this.boundMessagesKeydown);
     this.keyboardDocument = messagesEl.ownerDocument;
     this.keyboardDocument.addEventListener('keyup', this.boundKeyup);
 
@@ -59,6 +63,41 @@ export class NavigationController {
     inputEl.addEventListener('keydown', this.boundInputKeydown, { capture: true });
 
     this.initialized = true;
+  }
+
+  /**
+   * Moves the messages-panel bindings (tabindex, focus class, keydown listener)
+   * from the element `initialize` captured onto `el`. Used when the Vue
+   * transcript island mounts and repoints `dom.messagesEl` at its real
+   * `.specorator-messages` scroll host: the tab was built against the placeholder
+   * wrapper, so without this the keydown listener / focusability stay on the
+   * dead wrapper and vim scroll + Escape-to-focus stop working. Scan/scroll/focus
+   * ops read `dom.messagesEl` live through `deps.getMessagesEl`, so only the
+   * listener binding needs moving. No-op if `el` already holds the bindings or is
+   * not an element node (cross-window safe: `nodeType === 1`, never
+   * `instanceof HTMLElement`).
+   */
+  rebindMessagesEl(el: HTMLElement): void {
+    if (!this.initialized || this.disposed) return;
+    if (el === this.boundMessagesEl || el.nodeType !== 1) return;
+    this.unbindMessagesEl();
+    this.bindMessagesEl(el);
+  }
+
+  private bindMessagesEl(el: HTMLElement): void {
+    el.setAttribute('tabindex', '0');
+    el.addClass('specorator-messages-focusable');
+    el.addEventListener('keydown', this.boundMessagesKeydown);
+    this.boundMessagesEl = el;
+  }
+
+  private unbindMessagesEl(): void {
+    const el = this.boundMessagesEl;
+    if (!el) return;
+    el.removeEventListener('keydown', this.boundMessagesKeydown);
+    el.removeClass('specorator-messages-focusable');
+    el.removeAttribute('tabindex');
+    this.boundMessagesEl = null;
   }
 
   /** Cleans up event listeners and animation frames. */
@@ -72,10 +111,10 @@ export class NavigationController {
     this.keyboardDocument?.removeEventListener('keyup', this.boundKeyup);
     this.keyboardDocument = null;
 
-    // Element cleanup - may already be destroyed during view teardown
-    const messagesEl = this.deps.getMessagesEl();
-    messagesEl?.removeEventListener('keydown', this.boundMessagesKeydown);
-    messagesEl?.removeClass('specorator-messages-focusable');
+    // Element cleanup - may already be destroyed during view teardown. Clean up
+    // the element the bindings actually landed on (tracked), not the live
+    // `getMessagesEl()` which may have been repointed at the Vue scroll host.
+    this.unbindMessagesEl();
 
     const inputEl = this.deps.getInputEl();
     inputEl?.removeEventListener('keydown', this.boundInputKeydown, { capture: true });

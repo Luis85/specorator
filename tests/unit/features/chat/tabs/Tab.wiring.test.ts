@@ -83,7 +83,7 @@ let mockCanvasSelectionController: ReturnType<typeof createMockCanvasSelectionCo
 let mockStreamController: { onAsyncSubagentStateChange: jest.Mock };
 let mockConversationController: { save: jest.Mock; rewind: jest.Mock };
 let mockInputController: ReturnType<typeof createMockInputController>;
-let mockNavigationController: { initialize: jest.Mock; dispose: jest.Mock };
+let mockNavigationController: { initialize: jest.Mock; dispose: jest.Mock; rebindMessagesEl: jest.Mock };
 
 jest.mock('@/features/chat/ui/FileContext', () => ({
   FileContextManager: jest.fn().mockImplementation(() => {
@@ -202,7 +202,7 @@ jest.mock('@/features/chat/controllers/InputController', () => ({
 
 jest.mock('@/features/chat/controllers/NavigationController', () => ({
   NavigationController: jest.fn().mockImplementation(() => {
-    mockNavigationController = { initialize: jest.fn(), dispose: jest.fn() };
+    mockNavigationController = { initialize: jest.fn(), dispose: jest.fn(), rebindMessagesEl: jest.fn() };
     return mockNavigationController;
   }),
 }));
@@ -591,7 +591,7 @@ describe('Tab - Controller Initialization', () => {
       expect(tab.mountedTranscript).not.toBeNull();
     });
 
-    it('rebinds the NavigationSidebar to the Vue scroll element after mount', () => {
+    it('rebinds the NavigationSidebar and keyboard NavigationController to the Vue scroll element after mount', () => {
       const options = createMockOptions();
       const tab = createTab(options);
       const mockComponent = {} as any;
@@ -613,9 +613,11 @@ describe('Tab - Controller Initialization', () => {
 
       initializeTabControllers(tab, options.plugin, mockComponent);
 
-      // dom.messagesEl is repointed at the Vue element AND the sidebar rebound to it.
+      // dom.messagesEl is repointed at the Vue element AND both nav surfaces
+      // (sidebar scroll target + keyboard controller listener) rebound to it.
       expect(tab.dom.messagesEl).toBe(scrollEl);
       expect(rebindScrollEl).toHaveBeenCalledWith(scrollEl);
+      expect(mockNavigationController.rebindMessagesEl).toHaveBeenCalledWith(scrollEl);
     });
 
     it('should create SelectionController', () => {

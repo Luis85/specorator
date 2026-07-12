@@ -57,6 +57,7 @@ if (typeof KeyboardEvent === 'undefined') {
 /** Mock HTML element for testing. */
 class MockElement {
   public tagName: string;
+  public nodeType = 1;
   public scrollTop = 0;
   public style: Record<string, string> = {};
   public ownerDocument: Document;
@@ -71,6 +72,10 @@ class MockElement {
 
   setAttribute(name: string, value: string): void {
     this.attributes.set(name, value);
+  }
+
+  removeAttribute(name: string): void {
+    this.attributes.delete(name);
   }
 
   getAttribute(name: string): string | null {
@@ -588,6 +593,58 @@ describe('NavigationController', () => {
       inputEl.dispatchEvent(keydownEvent);
 
       expect(blurSpy).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('rebindMessagesEl', () => {
+    it('moves tabindex + focus class + keydown listener onto the new element', () => {
+      controller.initialize();
+      expect(messagesEl.getAttribute('tabindex')).toBe('0');
+      expect(messagesEl.hasClass('specorator-messages-focusable')).toBe(true);
+
+      const newEl = new MockElement('DIV');
+      controller.rebindMessagesEl(newEl as unknown as HTMLElement);
+
+      // Old element stripped of focusability + the keydown binding.
+      expect(messagesEl.getAttribute('tabindex')).toBeNull();
+      expect(messagesEl.hasClass('specorator-messages-focusable')).toBe(false);
+
+      // New element carries them.
+      expect(newEl.getAttribute('tabindex')).toBe('0');
+      expect(newEl.hasClass('specorator-messages-focusable')).toBe(true);
+
+      // The keydown listener now fires from the NEW element (focus-input key 'i'
+      // focuses the input) and no longer from the old one.
+      const focusSpy = jest.spyOn(inputEl, 'focus');
+      messagesEl.dispatchEvent(new KeyboardEvent('keydown', { key: 'i' }));
+      expect(focusSpy).not.toHaveBeenCalled();
+      newEl.dispatchEvent(new KeyboardEvent('keydown', { key: 'i' }));
+      expect(focusSpy).toHaveBeenCalled();
+    });
+
+    it('is a no-op when rebinding to the same element', () => {
+      controller.initialize();
+      const removeSpy = jest.spyOn(messagesEl, 'removeEventListener');
+      controller.rebindMessagesEl(messagesEl as unknown as HTMLElement);
+      expect(removeSpy).not.toHaveBeenCalled();
+      expect(messagesEl.getAttribute('tabindex')).toBe('0');
+    });
+
+    it('ignores a non-element node (cross-window safe: nodeType guard)', () => {
+      controller.initialize();
+      const textNode = { nodeType: 3 } as unknown as HTMLElement;
+      controller.rebindMessagesEl(textNode);
+      // Bindings stay on the original element.
+      expect(messagesEl.getAttribute('tabindex')).toBe('0');
+      const focusSpy = jest.spyOn(inputEl, 'focus');
+      messagesEl.dispatchEvent(new KeyboardEvent('keydown', { key: 'i' }));
+      expect(focusSpy).toHaveBeenCalled();
+    });
+
+    it('does nothing before initialize', () => {
+      const newEl = new MockElement('DIV');
+      controller.rebindMessagesEl(newEl as unknown as HTMLElement);
+      expect(newEl.getAttribute('tabindex')).toBeNull();
     });
   });
 

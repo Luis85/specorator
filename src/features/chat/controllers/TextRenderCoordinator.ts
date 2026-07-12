@@ -9,12 +9,18 @@ export interface TextRenderDeps {
 }
 
 /**
- * Owns the streaming assistant-text lifecycle as pure reactive data: it grows
- * the open `text` content block on `msg.contentBlocks` (the Vue `TextBlock`
- * renders the live growth) and drives the streaming indicator's writing/thinking
- * mode. No DOM: the imperative render loop, collapse-mode snapshot render, and
- * finalize-time card swap were removed with the Vue cutover (the Vue transcript
- * splits the work-order handoff card off the text segment itself).
+ * Owns the streaming assistant-text lifecycle as pure reactive data. In the
+ * default NON-collapse mode it grows the open `text` content block on
+ * `msg.contentBlocks` on every chunk (the Vue `TextBlock` renders the live
+ * growth) and drives the streaming indicator's writing/thinking mode. In
+ * COLLAPSE mode (`collapseStreamingResponse`, the default) it WITHHOLDS the
+ * partial text from the reactive block for the whole turn — the Vue transcript
+ * shows only the "Writing response…" placeholder — and writes the full
+ * accumulated text into the block once at `finalize`, so the response renders
+ * in one shot on completion rather than streaming live. No DOM: the imperative
+ * render loop and finalize-time card swap were removed with the Vue cutover
+ * (the Vue transcript splits the work-order handoff card off the text segment
+ * itself).
  *
  * `state.currentTextEl` stays as a NON-DOM sentinel (a detached element) so
  * `StreamController.blockState()` (`hasOpenTextBlock`) still reads "a text block
@@ -45,21 +51,29 @@ export class TextRenderCoordinator {
     }
 
     state.currentTextContent += text;
-    this.growReactiveTextBlock(msg);
 
     if (this.currentBlockCollapsed) {
-      // Collapse mode kept a "Writing response…" placeholder up for the whole
-      // block; the Vue indicator reproduces it from the writing mode.
+      // Collapse mode withholds the partial text from the reactive block for the
+      // whole block (the visible content stays empty, so the Vue transcript shows
+      // only the "Writing response…" placeholder the writing mode reproduces).
+      // The accumulated text is flushed into the block once at `finalize`.
       this.deps.showWriting();
+    } else {
+      this.growReactiveTextBlock(msg);
     }
   }
 
   async finalize(msg?: ChatMessage): Promise<void> {
     const { state } = this.deps;
 
-    // A collapsed block held its writing placeholder for the whole block; drop
-    // it as the block closes.
+    // A collapsed block withheld its content and held a writing placeholder for
+    // the whole block; flush the full accumulated text into the reactive block
+    // one-shot so it renders on completion, then drop the placeholder. This must
+    // run BEFORE `closeReactiveTextBlock` so the now-filled block survives the
+    // empty-block-drop guard (a block that never received any text stays empty
+    // and is still dropped).
     if (this.currentBlockCollapsed) {
+      this.growReactiveTextBlock(msg);
       this.deps.hideThinkingIndicator();
     }
 
