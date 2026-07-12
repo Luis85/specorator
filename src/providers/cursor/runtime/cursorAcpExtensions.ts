@@ -97,12 +97,10 @@ type CursorCreatePlanOutcome =
 
 /**
  * Maps the exit-plan-mode decision (or a turn-cancel abort) onto the documented
- * cursor/create_plan outcome union (cursor.com/docs/cli/acp): approve (current
- * session) -> accepted, approve-new-session -> rejected (the plan is NOT approved
- * for THIS session — the user is abandoning it, so the agent must not implement
- * here; resolveCreatePlanOutcome also fires requestTurnCancel to actually stop
- * the turn), feedback -> rejected + the feedback reason, a deliberate dismissal
- * (null with no abort) -> rejected, and a turn cancel -> cancelled.
+ * cursor/create_plan outcome union: approve -> accepted, approve-new-session ->
+ * rejected (NOT approved for THIS session; settlePlanDecision also cancels the
+ * turn), feedback -> rejected + reason, a dismissal (null, no abort) -> rejected,
+ * and a turn cancel -> cancelled.
  */
 function mapPlanDecisionToOutcome(
   decision: ExitPlanModeDecision | null,
@@ -124,10 +122,9 @@ function mapPlanDecisionToOutcome(
 }
 
 /**
- * Maps the settled plan decision to its outcome and applies the one side
- * effect `approve-new-session` needs: rejecting the plan alone reads like
- * feedback, so the user starting a fresh session also actively cancels the
- * running turn — RuntimeHost's cancelRequested alone never reaches the agent.
+ * Maps the settled plan decision to its outcome and applies the one side effect
+ * `approve-new-session` needs: it also actively cancels the running turn, since
+ * RuntimeHost's cancelRequested alone never reaches the agent.
  */
 function settlePlanDecision(
   host: CursorAcpExtensionHost,
@@ -141,9 +138,8 @@ function settlePlanDecision(
 }
 
 /**
- * Blocks on the user's plan decision for a non-empty cursor/create_plan and
- * returns the documented outcome, racing the per-turn cancel signal so a turn
- * cancel resolves `cancelled` instead of hanging. `markPlanDecidedInline`
+ * Blocks on the user's plan decision for a non-empty cursor/create_plan, racing
+ * the per-turn cancel signal so a cancel resolves `cancelled`. `markPlanDecidedInline`
  * fires in every path (finally) to suppress the post-turn planCompleted card.
  */
 async function resolveCreatePlanOutcome(
@@ -192,11 +188,10 @@ function todoIdentity(todo: NormalizedTodo): { id: string; content: string } {
 }
 
 /**
- * Merges an incremental `cursor/update_todos` batch (`merge: true`) over the
- * last emitted list. The shared StreamController REPLACES its todo panel from
- * each TodoWrite chunk, so emitting only the changed items would erase the
- * rest — items match by `id` (falling back to content), matches update in
- * place, and unmatched items append.
+ * Merges an incremental `cursor/update_todos` batch (`merge: true`) over the last
+ * emitted list — the shared StreamController REPLACES its panel from each
+ * TodoWrite chunk, so a bare changed-items list would erase the rest. Matches
+ * by `id` (falling back to content); unmatched items append.
  */
 function mergeCursorTodos(previous: NormalizedTodo[], incoming: NormalizedTodo[]): NormalizedTodo[] {
   const result = previous.map((todo) => ({ ...todo }));
@@ -247,10 +242,9 @@ function patchTodoFromRaw(cached: NormalizedTodo, raw: Record<string, unknown>):
 
 /**
  * Merges a RAW `cursor/update_todos` batch (`merge: true`) over the cached
- * normalized list. Runs BEFORE the content-requiring normalizer so a status-only
- * transition (`{id, status}`, no `content`) isn't silently dropped: any raw
- * entry whose id matches a cached item patches that item's status in place.
- * Only unmatched entries fall through to the normalizer/append merge below.
+ * normalized list, BEFORE the content-requiring normalizer, so a status-only
+ * transition (`{id, status}`, no `content`) isn't silently dropped. Only
+ * unmatched entries fall through to the normalizer/append merge below.
  */
 function mergeCursorTodosFromRaw(cached: NormalizedTodo[], rawIncoming: unknown[]): NormalizedTodo[] {
   const result = cached.map((todo) => ({ ...todo }));
@@ -318,10 +312,9 @@ function parseCursorOptions(raw: unknown): ParsedCursorOption[] {
 
 /**
  * Parses a `cursor/ask_question` payload into the normalized question list.
- * Reads the documented fields while tolerating legacy shapes (`question`,
- * `q.multiSelect`, bare-string options) and malformed inputs (non-array
- * `questions`/`options`, null entries) — a throw here would otherwise escape
- * as a JSON-RPC -32603 error instead of the intended tolerant outcome union.
+ * Reads the documented fields while tolerating legacy shapes and malformed
+ * inputs (non-array `questions`/`options`, null entries) — a throw here would
+ * escape as a JSON-RPC -32603 instead of the intended tolerant outcome union.
  */
 function parseCursorQuestions(params: CursorAskQuestionParams): ParsedCursorQuestion[] {
   const rawEntries: unknown[] = Array.isArray(params.questions) && params.questions.length > 0
@@ -350,10 +343,9 @@ function parseCursorQuestions(params: CursorAskQuestionParams): ParsedCursorQues
 
 /**
  * Projects the parsed questions into the `AskUserQuestionCallback` input shape
- * the inline widget (`InlineAskUserQuestion`) consumes
- * (`{ questions: [{ id?, question, header, options, multiSelect }] }`) — the
- * same shape the stream-json `AskUserQuestion` tool_use carried, so the widget
- * and its answer keying (`q.id ?? q.question`) work unchanged on the ACP path.
+ * the inline widget (`InlineAskUserQuestion`) consumes — the same shape the
+ * stream-json `AskUserQuestion` tool_use carried, so the widget and its answer
+ * keying (`q.id ?? q.question`) work unchanged on the ACP path.
  */
 function buildAskUserInput(questions: ParsedCursorQuestion[]): Record<string, unknown> {
   return {
@@ -372,9 +364,8 @@ function buildAskUserInput(questions: ParsedCursorQuestion[]): Record<string, un
 
 /**
  * Maps the inline widget's answer record (LABELS) back to the documented
- * `cursor/ask_question` answered outcome (`{ questionId, selectedOptionIds }[]`).
- * A label with no matching option id — free-form "Other", or an id-less option
- * — falls back to the label string itself as the only stable id available.
+ * `cursor/ask_question` answered outcome. A label with no matching option id —
+ * free-form "Other", or an id-less option — falls back to the label itself.
  */
 function buildAnsweredOutcome(
   questions: ParsedCursorQuestion[],
@@ -445,7 +436,9 @@ async function resolveAskQuestionOutcome(
  * requests, answered in-turn with the documented outcome unions from
  * cursor.com/docs/cli/acp (replacing the retired stream-json auto-reject +
  * resumed-follow-up-turn delivery, ADR-0002). `cursor/update_todos` is a one-way
- * notification; `cursor/task` a blocking request acked with a benign empty `{}`.
+ * notification; `cursor/task` and `cursor/generate_image` are blocking requests
+ * acked with their documented outcome unions (subagent lifecycle and in-chat
+ * image generation are both unsupported, so both ack a benign non-`{}` outcome).
  */
 export function registerCursorAcpExtensions(
   transport: AcpJsonRpcTransport,
@@ -529,9 +522,17 @@ export function registerCursorAcpExtensions(
     host.emitChunk({ type: 'tool_result', id, content: 'Todos updated', isError: false }, parsed.sessionId);
   }));
 
-  // cursor/task is a BLOCKING request, not a notification (real captures 2026-07-12);
-  // unanswered it rejects -32601. Subagent lifecycle deferred — benign empty ack.
-  unsubscribes.push(transport.onRequest('cursor/task', async () => ({})));
+  // cursor/task is a BLOCKING request (real captures 2026-07-12); ack with the
+  // documented CursorTaskResponse union, not a bare `{}` (undocumented leniency).
+  // Subagent lifecycle stays deferred, so every task just acks 'completed'.
+  unsubscribes.push(transport.onRequest('cursor/task', async () => ({ outcome: { outcome: 'completed' } })));
+
+  // cursor/generate_image: labeled a notification but also documents a response
+  // schema — the same contradiction cursor/task had — and is unregistered, so a
+  // request-shaped arrival would -32601-stall the agent. Reject defensively.
+  unsubscribes.push(transport.onRequest('cursor/generate_image', async () => ({
+    outcome: { outcome: 'rejected', reason: 'Image generation is not supported by this client' },
+  })));
 
   return () => {
     lastTodosBySession.clear();

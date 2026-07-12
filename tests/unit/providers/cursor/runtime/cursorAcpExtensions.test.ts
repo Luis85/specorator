@@ -906,7 +906,7 @@ describe('registerCursorAcpExtensions', () => {
     });
   });
 
-  it('answers the blocking cursor/task request with a benign empty ack (never rejects)', async () => {
+  it('answers the blocking cursor/task request with the documented completed outcome (never rejects)', async () => {
     const { transport, requests } = makeFakeTransport();
     registerCursorAcpExtensions(transport as never, {
       askUser: jest.fn(),
@@ -916,11 +916,37 @@ describe('registerCursorAcpExtensions', () => {
     });
 
     // Real captured shape: cursor/task arrives as a REQUEST, not a notification.
-    // Registered as a request handler it must resolve `{}` so the transport does
-    // not answer -32601 (which would stall the agent). Subagent lifecycle deferred.
+    // Ack with the documented CursorTaskResponse outcome union (cursor.com/docs/cli/acp)
+    // rather than a bare `{}`, which relied on undocumented parser leniency. Subagent
+    // lifecycle stays deferred, so every task just acks 'completed'.
     const handler = requests.get('cursor/task');
     expect(handler).toBeDefined();
-    await expect(handler!(CURSOR_TASK_REQUEST_PARAMS)).resolves.toEqual({});
+    await expect(handler!(CURSOR_TASK_REQUEST_PARAMS)).resolves.toEqual({
+      outcome: { outcome: 'completed' },
+    });
+  });
+
+  it('answers the cursor/generate_image request with a rejected outcome (never rejects the RPC)', async () => {
+    const { transport, requests } = makeFakeTransport();
+    registerCursorAcpExtensions(transport as never, {
+      askUser: jest.fn(),
+      emitChunk: () => {},
+      exitPlanMode: async () => null,
+      markPlanDecidedInline: () => {},
+    });
+
+    // Documented as a notification, but the doc also carries a response schema —
+    // the same label/schema contradiction cursor/task had. Registered defensively
+    // as a request handler so a request-shaped arrival resolves instead of
+    // -32601-stalling the agent.
+    const handler = requests.get('cursor/generate_image');
+    expect(handler).toBeDefined();
+    await expect(handler!({ toolCallId: 'tool_gen_1', prompt: 'a cat' })).resolves.toEqual({
+      outcome: {
+        outcome: 'rejected',
+        reason: 'Image generation is not supported by this client',
+      },
+    });
   });
 
   it('returns an unsubscribe that removes every handler', () => {
