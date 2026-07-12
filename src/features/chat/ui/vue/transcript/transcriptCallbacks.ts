@@ -1,13 +1,21 @@
 import type { ProviderCapabilities } from '../../../../../core/providers/types';
 import type { ChatRewindMode } from '../../../../../core/runtime/types';
 import type { ChatMessage, ImageAttachment } from '../../../../../core/types';
-import type { ActiveStreamState } from './stores/transcriptStore';
+import type { ActiveStreamState, TranscriptHydrationError } from './stores/transcriptStore';
 
 /** One projected snapshot the view pushes on every ChatState.onMessagesChanged
- *  + streaming transition. */
+ *  + streaming transition. Carries the full read-model (messages + active stream
+ *  + the welcome/loading/hydration chrome) so every store field flows through the
+ *  single `subscribe` channel — the engine has no direct handle to the store. */
 export interface TranscriptSnapshot {
   messages: ChatMessage[];
   activeStream: ActiveStreamState | null;
+  /** Welcome greeting text; empty string hides it (e.g. once messages exist). */
+  greeting: string;
+  /** Non-null while a conversation/tab-switch hydration spinner is in flight. */
+  loadingText: string | null;
+  /** Recorded history-hydration failure banner, or null. */
+  hydrationError: TranscriptHydrationError | null;
 }
 
 export type TranscriptSubscribe = (onChange: (s: TranscriptSnapshot) => void) => () => void;

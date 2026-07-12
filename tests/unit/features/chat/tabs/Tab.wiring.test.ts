@@ -5,6 +5,7 @@ import { Platform } from 'obsidian';
 
 import { ProviderRegistry } from '@/core/providers/ProviderRegistry';
 import { ProviderWorkspaceRegistry } from '@/core/providers/ProviderWorkspaceRegistry';
+import { scrollMessagesToBottom } from '@/features/chat/rendering/scrollToBottom';
 import {
   createTab,
   initializeTabControllers,
@@ -13,6 +14,7 @@ import {
   wireTabInputEvents,
 } from '@/features/chat/tabs/Tab';
 import { createTabRuntimeHost } from '@/features/chat/tabs/tabRuntimeHost';
+import { mountTranscript } from '@/features/chat/ui/vue/transcript/mountTranscript';
 import {
   DEFAULT_CODEX_PRIMARY_MODEL,
 } from '@/providers/codex/types/models';
@@ -75,7 +77,6 @@ let mockExternalContextSelector: ReturnType<typeof createMockExternalContextSele
 let mockMcpServerSelector: ReturnType<typeof createMockMcpServerSelector>;
 let mockPermissionToggle: ReturnType<typeof createMockPermissionToggle>;
 let mockServiceTierToggle: ReturnType<typeof createMockServiceTierToggle>;
-let mockMessageRenderer: { scrollToBottomIfNeeded: jest.Mock; setAsyncSubagentClickCallback: jest.Mock };
 let mockSelectionController: ReturnType<typeof createMockSelectionController>;
 let mockBrowserSelectionController: ReturnType<typeof createMockBrowserSelectionController>;
 let mockCanvasSelectionController: ReturnType<typeof createMockCanvasSelectionController>;
@@ -143,15 +144,17 @@ jest.mock('@/shared/components/SlashCommandDropdown', () => ({
   }),
 }));
 
-// Mock rendering
+// Mock rendering. The per-tab MessageRenderer was replaced by the Vue
+// transcript island; nothing constructs it now, so the module is mocked only to
+// keep the real (Vue-heavy) module from loading during these tests.
 jest.mock('@/features/chat/rendering/MessageRenderer', () => ({
-  MessageRenderer: jest.fn().mockImplementation(() => {
-    mockMessageRenderer = {
-      scrollToBottomIfNeeded: jest.fn(),
-      setAsyncSubagentClickCallback: jest.fn(),
-    };
-    return mockMessageRenderer;
-  }),
+  MessageRenderer: jest.fn(),
+}));
+
+// The auto-turn path scrolls via scrollMessagesToBottom(dom.messagesEl) rather
+// than a renderer handle; mock it so the scroll can be asserted.
+jest.mock('@/features/chat/rendering/scrollToBottom', () => ({
+  scrollMessagesToBottom: jest.fn(),
 }));
 
 jest.mock('@/features/chat/rendering/ThinkingBlockRenderer', () => ({
@@ -333,7 +336,8 @@ describe('Tab - Runtime Host', () => {
     }
 
     it('renders tool-only auto-triggered turns with a placeholder assistant message', async () => {
-      const { addMessageSpy, addMessage, handleStreamChunk, scrollToBottom, autoTurnCallback } = setupAutoTurnTest();
+      (scrollMessagesToBottom as jest.Mock).mockClear();
+      const { addMessageSpy, handleStreamChunk, autoTurnCallback } = setupAutoTurnTest();
 
       await autoTurnCallback({
         chunks: [
@@ -342,18 +346,20 @@ describe('Tab - Runtime Host', () => {
         metadata: {},
       });
 
+      // The Vue transcript renders from reactive ChatState — the placeholder is
+      // added to state (not through a renderer handle) and the scroll now goes
+      // through scrollMessagesToBottom(dom.messagesEl).
       expect(addMessageSpy).toHaveBeenCalledWith(
         expect.objectContaining({
           role: 'assistant',
           content: '(background task completed)',
         })
       );
-      expect(addMessage).toHaveBeenCalled();
       expect(handleStreamChunk).toHaveBeenCalledWith(
         { type: 'tool_result', id: 'task-1', content: 'done' },
         expect.objectContaining({ role: 'assistant' })
       );
-      expect(scrollToBottom).toHaveBeenCalled();
+      expect(scrollMessagesToBottom).toHaveBeenCalled();
     });
 
     it('routes hidden async subagent auto-turn chunks without adding a placeholder message', async () => {
@@ -584,7 +590,7 @@ describe('Tab - Controller Initialization', () => {
   });
 
   describe('initializeTabControllers', () => {
-    it('should create MessageRenderer', () => {
+    it('wires the Vue transcript island (renderer is retired)', () => {
       const options = createMockOptions();
       const tab = createTab(options);
       const mockComponent = {} as any;
@@ -592,7 +598,11 @@ describe('Tab - Controller Initialization', () => {
       initializeTabUI(tab, options.plugin);
       initializeTabControllers(tab, options.plugin, mockComponent);
 
-      expect(tab.renderer).toBeDefined();
+      // The per-tab MessageRenderer was replaced by a Vue transcript island:
+      // tab.renderer stays null, and the projection + mounted handle are wired.
+      expect(tab.renderer).toBeNull();
+      expect(tab.transcript).not.toBeNull();
+      expect(tab.mountedTranscript).not.toBeNull();
     });
 
     it('should create SelectionController', () => {
@@ -628,7 +638,7 @@ describe('Tab - Controller Initialization', () => {
       expect(tab.controllers.conversationController).toBeDefined();
     });
 
-    it('should forward rewind mode from renderer to ConversationController', async () => {
+    it('should forward rewind mode from the transcript callbacks to ConversationController', async () => {
       const options = createMockOptions();
       const tab = createTab(options);
       const mockComponent = {} as any;
@@ -636,11 +646,14 @@ describe('Tab - Controller Initialization', () => {
       initializeTabUI(tab, options.plugin);
       initializeTabControllers(tab, options.plugin, mockComponent);
 
-      const { MessageRenderer } = jest.requireMock('@/features/chat/rendering/MessageRenderer') as { MessageRenderer: jest.Mock };
-      const lastCall = MessageRenderer.mock.calls[MessageRenderer.mock.calls.length - 1];
-      const rewindCallback = lastCall[3].rewindCallback;
+      // Rewind is now wired through the transcript island's callbacks
+      // (buildTranscriptCallbacks.onRewind), passed as the 4th arg to
+      // mountTranscript, rather than a MessageRenderer rewindCallback.
+      const mountTranscriptMock = mountTranscript as unknown as jest.Mock;
+      const lastCall = mountTranscriptMock.mock.calls[mountTranscriptMock.mock.calls.length - 1];
+      const callbacks = lastCall[3];
 
-      await rewindCallback('message-1', 'conversation');
+      await callbacks.onRewind('message-1', 'conversation');
 
       expect(mockConversationController.rewind).toHaveBeenCalledWith('message-1', 'conversation');
     });
@@ -1220,8 +1233,12 @@ describe('Tab - UI Callback Wiring', () => {
       // Initialize UI to wire callbacks
       initializeTabUI(tab, options.plugin);
 
-      // Set up renderer
-      tab.renderer = mockMessageRenderer as any;
+      // The chip/image scroll callbacks still fan out through the optional
+      // tab.renderer handle (tab.renderer?.scrollToBottomIfNeeded()); the
+      // MessageRenderer that used to populate it is retired, so provide a
+      // minimal stand-in to assert the wiring.
+      const renderer = { scrollToBottomIfNeeded: jest.fn() };
+      tab.renderer = renderer as any;
 
       // Get the FileContextManager constructor call arguments
       const { FileContextManager } = jest.requireMock('@/features/chat/ui/FileContext');
@@ -1231,7 +1248,7 @@ describe('Tab - UI Callback Wiring', () => {
       // Trigger onChipsChanged callback
       callbacks.onChipsChanged();
 
-      expect(mockMessageRenderer.scrollToBottomIfNeeded).toHaveBeenCalled();
+      expect(renderer.scrollToBottomIfNeeded).toHaveBeenCalled();
     });
 
     it('should wire onImagesChanged to scroll to bottom', () => {
@@ -1240,7 +1257,8 @@ describe('Tab - UI Callback Wiring', () => {
 
       initializeTabUI(tab, options.plugin);
 
-      tab.renderer = mockMessageRenderer as any;
+      const renderer = { scrollToBottomIfNeeded: jest.fn() };
+      tab.renderer = renderer as any;
 
       // Get the ImageContextManager constructor call
       const { ImageContextManager } = jest.requireMock('@/features/chat/ui/ImageContext');
@@ -1249,7 +1267,7 @@ describe('Tab - UI Callback Wiring', () => {
 
       callbacks.onImagesChanged();
 
-      expect(mockMessageRenderer.scrollToBottomIfNeeded).toHaveBeenCalled();
+      expect(renderer.scrollToBottomIfNeeded).toHaveBeenCalled();
     });
 
     it('should wire getExcludedTags to return plugin settings', () => {

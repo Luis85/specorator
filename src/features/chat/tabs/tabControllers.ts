@@ -6,17 +6,22 @@ import type { ProviderId } from '../../../core/providers/types';
 import type { ChatMessage } from '../../../core/types';
 import { t } from '../../../i18n/i18n';
 import type SpecoratorPlugin from '../../../main';
+import { openSpecoratorProviderSettings } from '../../../utils/obsidianPrivateApi';
+import { eligibleMessageActions } from '../rendering/messageActions';
 import { findRewindContext } from '../rewind';
+import { mountTranscript } from '../ui/vue/transcript/mountTranscript';
+import type { TranscriptCallbacks } from '../ui/vue/transcript/transcriptCallbacks';
+import { resolveImageAttachmentSrc, showFullImageAttachment } from '../utils/imageAttachment';
 import { getTabProviderId } from './providerResolution';
 import {
   buildTabConversationController,
   buildTabInputController,
-  buildTabMessageRenderer,
   buildTabNavigationController,
   buildTabSelectionControllers,
   buildTabStreamController,
 } from './tabControllerSetup';
 import { getTabCapabilities, type ProviderCatalogInfo } from './tabShared';
+import { TabTranscriptProjection } from './tabTranscript';
 import type { TabData } from './types';
 
 export interface ForkContext {
@@ -215,13 +220,86 @@ export function initializeTabControllers(
     ? () => handleForkAll(tab, plugin, forkRequestCallback)
     : undefined;
 
-  // Fixed construction order: later builders read controllers (and the renderer)
-  // constructed by earlier ones, so these calls are not independently reorderable.
-  buildTabMessageRenderer(tab, plugin, component, forkMessageCallback);
+  // Per-tab transcript projection source, created first so the controllers'
+  // `emitTranscript` closures resolve it. Wire it into `onMessagesChanged`
+  // (preserving the existing streaming/attention/conversation callbacks) so
+  // add/remove/set message mutations re-project; in-place block/tool growth is
+  // re-projected explicitly by StreamController/InputController.
+  tab.transcript = new TabTranscriptProjection(tab.state);
+  tab.state.callbacks = {
+    ...tab.state.callbacks,
+    onMessagesChanged: () => tab.transcript?.emit(),
+  };
+
+  // Fixed construction order: later builders read controllers constructed by
+  // earlier ones, so these calls are not independently reorderable.
   buildTabSelectionControllers(tab, plugin);
   buildTabStreamController(tab, plugin);
   buildTabConversationController(tab, plugin, component, getProviderCatalogConfig);
-  buildTabInputController(tab, plugin, openConversation, forkAllCallback);
+  buildTabInputController(tab, plugin, component, openConversation, forkAllCallback);
   buildTabNavigationController(tab, plugin);
+
+  // Mount the Vue transcript island into the messages wrapper (the placeholder
+  // `dom.messagesEl`). `TranscriptRoot` renders the real `.specorator-messages`
+  // scroll container and hands it back through SCROLL_HOST_KEY; repoint
+  // `dom.messagesEl` at it so every `getMessagesEl` closure targets the live
+  // scrollable element.
+  const wrapperEl = tab.dom.messagesEl;
+  tab.mountedTranscript = mountTranscript(
+    wrapperEl,
+    plugin,
+    component,
+    buildTranscriptCallbacks(tab, plugin, forkMessageCallback),
+  );
+  tab.dom.messagesEl = tab.mountedTranscript.getScrollEl() ?? wrapperEl;
+}
+
+/**
+ * Builds the Vue→engine `TranscriptCallbacks` for one tab: thin delegators to
+ * the tab's controllers + plugin (mirrors `SpecoratorView.buildChatShellCallbacks`).
+ */
+function buildTranscriptCallbacks(
+  tab: TabData,
+  plugin: SpecoratorPlugin,
+  forkMessageCallback?: (userMessageId: string) => Promise<void>,
+): TranscriptCallbacks {
+  return {
+    subscribe: tab.transcript!.subscribe,
+    onRewind: (id, mode) => tab.controllers.conversationController?.rewind(id, mode) ?? Promise.resolve(),
+    onFork: (id) => forkMessageCallback?.(id) ?? Promise.resolve(),
+    isRewindEligible: (messageId) => {
+      const msgs = tab.state.messages;
+      const idx = msgs.findIndex((m) => m.id === messageId);
+      if (idx === -1) return false;
+      const ctx = findRewindContext(msgs, idx);
+      return ctx.hasResponse && !!ctx.prevAssistantUuid;
+    },
+    openProviderSettings: (providerId) =>
+      openSpecoratorProviderSettings(plugin.app, plugin.manifest.id, providerId),
+    onRetryLastTurn: () => tab.controllers.inputController?.retryLastTurn(),
+    getMessageActions: (msg) =>
+      eligibleMessageActions(plugin.chatMessageActions, msg).map((action) => ({
+        id: action.id,
+        label: action.label,
+        icon: action.icon,
+        run: () => action.run(msg, plugin.getActiveConversationSnapshot()?.id ?? tab.conversationId ?? null),
+      })),
+    copyText: (text) => {
+      void navigator.clipboard?.writeText(text);
+    },
+    openFile: (path) => {
+      void plugin.app.workspace.openLinkText(path, '', 'tab');
+    },
+    resolveImageSrc: (image) => resolveImageAttachmentSrc(plugin.app, image) ?? '',
+    showFullImage: (image) =>
+      showFullImageAttachment(plugin.app, tab.dom.messagesEl.ownerDocument, image),
+    getProviderId: () => getTabProviderId(tab, plugin),
+    getCapabilities: () => getTabCapabilities(tab, plugin),
+    getWorkOrderPath: () =>
+      tab.workOrderPath
+      ?? (tab.conversationId
+        ? plugin.getConversationSync(tab.conversationId)?.workOrderPath ?? null
+        : null),
+  };
 }
 

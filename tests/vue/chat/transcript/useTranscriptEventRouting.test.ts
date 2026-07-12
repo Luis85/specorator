@@ -18,8 +18,15 @@ describe('useTranscriptEventRouting', () => {
     const store = useTranscriptStore();
     const Comp = defineComponent({ setup() { useTranscriptEventRouting(subscribe); return () => h('div'); } });
     const wrapper = mount(Comp);
-    push({ messages: [{ id: '1', role: 'assistant', content: '', timestamp: 0 }], activeStream: null });
+    push({
+      messages: [{ id: '1', role: 'assistant', content: '', timestamp: 0 }],
+      activeStream: null,
+      greeting: 'Good morning',
+      loadingText: null,
+      hydrationError: null,
+    });
     expect(store.messages).toHaveLength(1);
+    expect(store.greeting).toBe('Good morning');
     wrapper.unmount();
     expect(dispose).toHaveBeenCalledOnce();
   });

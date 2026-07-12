@@ -33,7 +33,6 @@ import type { CanvasSelectionContext } from '../../../utils/canvas';
 import type { EditorSelectionContext } from '../../../utils/editor';
 import { appendMarkdownSnippet } from '../../../utils/markdown';
 import type { BoundAgentProjection } from '../../agents/roster/boundAgentPersona';
-import type { MessageRenderer } from '../rendering/MessageRenderer';
 import { persistPastedImages } from '../services/persistPastedImages';
 import type { SubagentManager } from '../services/SubagentManager';
 import type { ChatState } from '../state/ChatState';
@@ -64,6 +63,7 @@ import {
   restoreResumeCheckpointIfNeeded,
 } from './composerSendPhases';
 import type { ConversationController } from './ConversationController';
+import type { InlineCardMounter } from './inlineCardMount';
 import { InlinePromptController } from './InlinePromptController';
 import { QueuedMessageController } from './QueuedMessageController';
 import { ResumeSessionDropdownCoordinator } from './ResumeSessionDropdownCoordinator';
@@ -73,7 +73,10 @@ import type { StreamController } from './StreamController';
 export interface InputControllerDeps {
   plugin: SpecoratorPlugin;
   state: ChatState;
-  renderer: MessageRenderer;
+  /** Mounts the inline-prompt Vue cards (approval / ask / exit-plan / post-plan). */
+  mountInlineCard: InlineCardMounter;
+  /** Re-projects the transcript snapshot into the Vue store (per-tab). */
+  emitTranscript?: () => void;
   streamController: StreamController;
   selectionController: SelectionController;
   browserSelectionController?: BrowserSelectionController;
@@ -189,10 +192,15 @@ export class InputController {
     this.inlinePrompts = new InlinePromptController({
       state: deps.state,
       getInputContainerEl: () => this.deps.getInputContainerEl(),
-      renderContent: (el, markdown) => this.deps.renderer.renderContent(el, markdown),
+      mountInlineCard: deps.mountInlineCard,
       hideThinkingIndicator: () => this.deps.streamController.hideThinkingIndicator(),
       getPlanPathPrefix: () => this.getActiveCapabilities().planPathPrefix,
     });
+  }
+
+  /** Re-projects the transcript snapshot (per-tab). No-op when unwired (tests). */
+  private emit(): void {
+    this.deps.emitTranscript?.();
   }
 
   private getAgentService(): ChatRuntime | null {
@@ -460,13 +468,13 @@ export class InputController {
     assistantMsg: ChatMessage;
     deferredAiTitleGeneration: (() => void) | null;
   }> {
-    const { state, renderer, streamController } = this.deps;
+    const { state, streamController } = this.deps;
     const { displayContent, imagesForMessage, isCompact } = outgoing;
 
     const userMsg = createOutgoingUserMessage(this.deps.generateId(), displayContent, imagesForMessage);
+    // Pure data: `addMessage` fires onMessagesChanged → the transcript projects.
     state.addMessage(userMsg);
     state.hasPendingConversationSave = true;
-    renderer.addMessage(userMsg);
 
     const deferredAiTitleGeneration = await this.triggerTitleGeneration();
 
@@ -486,6 +494,9 @@ export class InputController {
       isCompact ? 'specorator-thinking--compact' : undefined,
     );
     state.responseStartTime = performance.now();
+    // Project the freshly-activated stream (messageId + start time) so the Vue
+    // indicator appears before the first chunk lands.
+    this.emit();
 
     return { userMsg, assistantMsg, deferredAiTitleGeneration };
   }
@@ -522,7 +533,7 @@ export class InputController {
   private async streamPreparedTurn(
     ctx: DispatchedTurnContext,
   ): Promise<{ wasInterrupted: boolean; wasInvalidated: boolean }> {
-    const { state, renderer, streamController } = this.deps;
+    const { state, streamController } = this.deps;
     let wasInterrupted = false;
     let wasInvalidated = false;
 
@@ -531,8 +542,9 @@ export class InputController {
     ctx.userMsg.currentNote = preparedTurn.isCompact
       ? undefined
       : preparedTurn.request.currentNotePath;
-    // Re-render now that content carries folded @mentions, so the context card appears immediately.
-    renderer.updateLiveUserMessage(ctx.userMsg);
+    // Content now carries folded @mentions; re-project so the context card
+    // appears immediately (in-place mutation doesn't fire onMessagesChanged).
+    this.emit();
 
     // Pass history WITHOUT current turn (userMsg + assistantMsg we just added)
     // This prevents duplication when rebuilding context for new sessions
@@ -724,7 +736,7 @@ export class InputController {
     turn: FinishedTurn,
     didCancelThisTurn: boolean,
   ): Promise<void> {
-    const { state, renderer, conversationController } = this.deps;
+    const { state, conversationController } = this.deps;
 
     // Provider-agnostic post-plan approval: show UI and await decision before auto-send
     const approval = await this.resolvePlanApprovalOutcome(ctx, turn, didCancelThisTurn);
@@ -735,10 +747,9 @@ export class InputController {
     // call sendMessage which saves itself) or just update the input UI (revise /
     // cancel) — neither needs an extra save here.
 
-    const userMsgIndex = state.messages.indexOf(ctx.userMsg);
-    renderer.refreshActionButtons(ctx.userMsg, state.messages, userMsgIndex >= 0 ? userMsgIndex : undefined);
-    // Surface the per-message work-order action on the just-completed agent response.
-    renderer.refreshMessageActions(turn.finalAssistantMsg);
+    // Per-message actions (rewind/fork/work-order) are Vue-side now, resolved
+    // live through `TranscriptCallbacks.getMessageActions`; no imperative refresh.
+    this.emit();
 
     // Auto-implement takes precedence over both approve-new-session and queued input
     if (approval.autoSendContent) {
@@ -923,19 +934,17 @@ export class InputController {
   }
 
   private activateStreamingAssistantMessage(message: ChatMessage): void {
-    const { state, renderer } = this.deps;
-    const msgEl = renderer.addMessage(message);
-    const contentEl = msgEl.querySelector<HTMLElement>('.specorator-message-content');
-
-    if (!contentEl) {
-      return;
-    }
+    const { state } = this.deps;
 
     if (!state.currentContentEl) {
       state.toolCallElements.clear();
     }
 
-    state.currentContentEl = contentEl;
+    // Non-DOM sentinel: `currentContentEl` still marks "an assistant message is
+    // active" for the stream pipeline's guards and supplies an ownerDocument for
+    // timers, but it's a DETACHED element — subagent/legacy DOM writes vanish
+    // into it while the Vue transcript renders `message` from reactive data.
+    state.currentContentEl = this.deps.getMessagesEl().ownerDocument.createElement('div');
     state.currentTextEl = null;
     state.currentTextContent = '';
     state.currentThinkingState = null;
@@ -1003,7 +1012,6 @@ export class InputController {
         images,
       };
       this.deps.state.addMessage(userMessage);
-      this.deps.renderer.addMessage(userMessage);
     }
 
     const assistantMessage = createAssistantPlaceholderMessage(this.deps.generateId());
@@ -1013,6 +1021,7 @@ export class InputController {
     this.deps.streamController.showThinkingIndicator();
     this.deps.state.responseStartTime = performance.now();
     this.awaitingProviderAssistantStart = true;
+    this.emit();
   }
 
   private async handleProviderAssistantMessageStart(): Promise<void> {
@@ -1032,6 +1041,7 @@ export class InputController {
     this.activeStreamingAssistantMessage = assistantMessage;
     this.activateStreamingAssistantMessage(assistantMessage);
     this.deps.streamController.showThinkingIndicator();
+    this.emit();
   }
 
   private shouldDiscardPendingAssistantPlaceholder(message: ChatMessage | null): boolean {
@@ -1043,9 +1053,9 @@ export class InputController {
   }
 
   private discardStreamingAssistantMessage(messageId: string): void {
-    const { state, renderer } = this.deps;
+    const { state } = this.deps;
+    // The messages setter fires onMessagesChanged → the transcript re-projects.
     state.messages = state.messages.filter((message) => message.id !== messageId);
-    renderer.removeMessage(messageId);
     state.currentContentEl = null;
     state.currentTextEl = null;
     state.currentTextContent = '';

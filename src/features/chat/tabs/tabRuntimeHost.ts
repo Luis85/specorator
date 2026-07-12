@@ -3,6 +3,7 @@ import type { AutoTurnResult } from '../../../core/runtime/types';
 import { TOOL_AGENT_OUTPUT } from '../../../core/tools/toolNames';
 import type { ChatMessage, StreamChunk } from '../../../core/types';
 import type SpecoratorPlugin from '../../../main';
+import { scrollMessagesToBottom } from '../rendering/scrollToBottom';
 import {
   generateMessageId,
   getTabPermissionMode,
@@ -137,19 +138,18 @@ async function renderAutoTriggeredTurn(tab: TabData, result: AutoTurnResult): Pr
 
   if (hasVisibleContent) {
     tab.state.addMessage(assistantMsg);
-    const msgEl = tab.renderer?.addMessage?.(assistantMsg);
-    const contentEl = msgEl?.querySelector<HTMLElement>('.specorator-message-content');
-    if (contentEl) {
-      if (!previousContentEl) {
-        tab.state.toolCallElements.clear();
-      }
-      tab.state.currentContentEl = contentEl;
-      tab.state.currentTextEl = null;
-      tab.state.currentTextContent = '';
-      tab.state.currentThinkingState = null;
-      tab.state.activeMessageId = assistantMsg.id;
-      tab.state.activeBlockIndex = -1;
+    if (!previousContentEl) {
+      tab.state.toolCallElements.clear();
     }
+    // Detached sentinel (see InputController.activateStreamingAssistantMessage):
+    // marks an active assistant message for the stream pipeline; the Vue
+    // transcript renders `assistantMsg` from reactive data.
+    tab.state.currentContentEl = tab.dom.messagesEl.ownerDocument.createElement('div');
+    tab.state.currentTextEl = null;
+    tab.state.currentTextContent = '';
+    tab.state.currentThinkingState = null;
+    tab.state.activeMessageId = assistantMsg.id;
+    tab.state.activeBlockIndex = -1;
   }
 
   // Suppress the runtime-error card's Retry for this background turn: it has no
@@ -181,7 +181,8 @@ async function renderAutoTriggeredTurn(tab: TabData, result: AutoTurnResult): Pr
       tab.state.currentThinkingState = previousThinkingState;
       tab.state.activeMessageId = previousActiveMessageId;
       tab.state.activeBlockIndex = previousActiveBlockIndex;
-      tab.renderer?.scrollToBottom();
+      tab.transcript?.emit();
+      scrollMessagesToBottom(tab.dom.messagesEl);
     }
   }
 }

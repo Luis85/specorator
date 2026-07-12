@@ -68,11 +68,9 @@ function createMockDeps(overrides: Partial<ConversationControllerDeps> = {}): Co
       },
     } as any,
     state,
-    renderer: {
-      renderMessages: jest.fn().mockReturnValue(createMockEl()),
-      clearHydrationBanner: jest.fn(),
-      setHydrationError: jest.fn(),
-    } as any,
+    setTranscriptGreeting: jest.fn(),
+    setTranscriptLoading: jest.fn(),
+    setTranscriptHydrationError: jest.fn(),
     subagentManager: {
       orphanAllActive: jest.fn(),
       clear: jest.fn(),
@@ -303,26 +301,21 @@ describe('ConversationController', () => {
     });
 
     describe('Welcome visibility', () => {
-      it('should hide welcome when messages exist', () => {
+      // Welcome visibility is now a projection of message count in the Vue
+      // transcript; `updateWelcomeVisibility` is a no-op that must not touch DOM.
+      it('is a no-op that does not throw when messages exist', () => {
         deps.state.messages = [{ id: '1', role: 'user', content: 'test', timestamp: Date.now() }];
-        const welcomeEl = deps.getWelcomeEl()!;
 
-        controller.updateWelcomeVisibility();
-
-        expect(welcomeEl.style.display).toBe('none');
+        expect(() => controller.updateWelcomeVisibility()).not.toThrow();
       });
 
-      it('should show welcome when no messages exist', () => {
+      it('is a no-op that does not throw when no messages exist', () => {
         deps.state.messages = [];
-        const welcomeEl = deps.getWelcomeEl()!;
 
-        controller.updateWelcomeVisibility();
-
-        // When no messages, welcome should not be 'none' (either 'block' or empty string)
-        expect(welcomeEl.style.display).not.toBe('none');
+        expect(() => controller.updateWelcomeVisibility()).not.toThrow();
       });
 
-      it('should update welcome visibility after switching to conversation with messages', async () => {
+      it('restores the transcript after switching to a conversation with messages', async () => {
         deps.state.currentConversationId = 'old-conv';
         deps.state.messages = [];
         (deps.plugin.switchConversation as jest.Mock).mockResolvedValue({
@@ -336,8 +329,9 @@ describe('ConversationController', () => {
         await controller.whenHydrated();
 
         expect(deps.state.messages.length).toBe(1);
-        const welcomeEl = deps.getWelcomeEl()!;
-        expect(welcomeEl.style.display).toBe('none');
+        // Post-hydrate the transcript spinner clears and the greeting is seeded.
+        expect(deps.setTranscriptLoading).toHaveBeenCalledWith(null);
+        expect(deps.setTranscriptGreeting).toHaveBeenCalled();
       });
     });
   });
@@ -361,20 +355,12 @@ describe('ConversationController', () => {
       expect(() => controllerWithNullWelcome.initializeWelcome()).not.toThrow();
     });
 
-    it('should only add greeting if not already present', () => {
-      const welcomeEl = deps.getWelcomeEl()!;
-      const createDivSpy = jest.spyOn(welcomeEl, 'createDiv');
-
-      // First call should add greeting
+    it('seeds the transcript greeting for the Vue welcome banner', () => {
       controller.initializeWelcome();
-      expect(createDivSpy).toHaveBeenCalledTimes(1);
 
-      // Mock querySelector to return an element (greeting already exists)
-      welcomeEl.querySelector = jest.fn().mockReturnValue(createMockEl());
-
-      // Second call should not add another greeting
-      controller.initializeWelcome();
-      expect(createDivSpy).toHaveBeenCalledTimes(1); // Still 1, not 2
+      expect(deps.setTranscriptGreeting).toHaveBeenCalledTimes(1);
+      const greeting = (deps.setTranscriptGreeting as jest.Mock).mock.calls[0][0];
+      expect(greeting.length).toBeGreaterThan(0);
     });
   });
 
@@ -615,7 +601,7 @@ describe('ConversationController', () => {
       expect(fileContextManager.setCurrentNote).not.toHaveBeenCalled();
     });
 
-    it('should call renderer.renderMessages with greeting callback', async () => {
+    it('projects the transcript and seeds the greeting on load', async () => {
       deps.state.currentConversationId = 'conv-1';
       (deps.plugin.getConversationById as jest.Mock).mockResolvedValue({
         id: 'conv-1',
@@ -625,13 +611,14 @@ describe('ConversationController', () => {
 
       await controller.loadActive();
 
-      expect(deps.renderer.renderMessages).toHaveBeenCalledWith(
-        expect.any(Array),
-        expect.any(Function)
-      );
+      // Messages land on state (which re-projects the Vue transcript), the
+      // spinner clears, and the greeting is seeded.
+      expect(deps.state.messages.length).toBe(1);
+      expect(deps.setTranscriptLoading).toHaveBeenCalledWith(null);
+      expect(deps.setTranscriptGreeting).toHaveBeenCalled();
 
-      const greetingFn = (deps.renderer.renderMessages as jest.Mock).mock.calls[0][1];
-      expect(greetingFn().length).toBeGreaterThan(0);
+      const greeting = (deps.setTranscriptGreeting as jest.Mock).mock.calls[0][0];
+      expect(greeting.length).toBeGreaterThan(0);
     });
   });
 
@@ -672,7 +659,7 @@ describe('ConversationController', () => {
       expect(fileContextManager.setCurrentNote).not.toHaveBeenCalled();
     });
 
-    it('should call renderer.renderMessages with greeting callback on switch', async () => {
+    it('projects the transcript and seeds the greeting on switch', async () => {
       deps.state.currentConversationId = 'old-conv';
 
       (deps.plugin.switchConversation as jest.Mock).mockResolvedValue({
@@ -685,13 +672,12 @@ describe('ConversationController', () => {
 
       await controller.whenHydrated();
 
-      expect(deps.renderer.renderMessages).toHaveBeenCalledWith(
-        expect.any(Array),
-        expect.any(Function)
-      );
+      // Phase A shows the spinner; post-hydrate it clears and the greeting seeds.
+      expect(deps.setTranscriptLoading).toHaveBeenCalledWith(null);
+      expect(deps.setTranscriptGreeting).toHaveBeenCalled();
 
-      const greetingFn = (deps.renderer.renderMessages as jest.Mock).mock.calls[0][1];
-      expect(greetingFn().length).toBeGreaterThan(0);
+      const greeting = (deps.setTranscriptGreeting as jest.Mock).mock.calls.at(-1)![0];
+      expect(greeting.length).toBeGreaterThan(0);
     });
   });
 
@@ -714,7 +700,7 @@ describe('ConversationController', () => {
       await controller.whenHydrated();
 
       expect(deps.consumePendingHydrationError).toHaveBeenCalledWith('new-conv');
-      expect(deps.renderer.setHydrationError).toHaveBeenCalledWith({
+      expect(deps.setTranscriptHydrationError).toHaveBeenCalledWith({
         code: 'store-unreadable',
         message: 'History unavailable',
       });
@@ -732,10 +718,13 @@ describe('ConversationController', () => {
 
       await controller.whenHydrated();
 
-      expect(deps.renderer.clearHydrationBanner).toHaveBeenCalled();
+      // Switch start clears the banner (setter called with null)...
+      expect(deps.setTranscriptHydrationError).toHaveBeenCalledWith(null);
       expect(deps.consumePendingHydrationError).toHaveBeenCalledWith('new-conv');
-      // No pending failure → no banner rendered.
-      expect(deps.renderer.setHydrationError).not.toHaveBeenCalled();
+      // ...and no pending failure means it is never armed with an error object.
+      expect(deps.setTranscriptHydrationError).not.toHaveBeenCalledWith(
+        expect.objectContaining({ code: expect.anything() }),
+      );
     });
   });
 
@@ -2668,7 +2657,7 @@ describe('ConversationController - Rewind', () => {
     expect(msg).toContain('No checkpoints');
   });
 
-  it('should truncateAt, save with resumeAtMessageId, and renderMessages on success', async () => {
+  it('should truncateAt, save with resumeAtMessageId, and reseed the greeting on success', async () => {
     deps.state.currentConversationId = 'conv-1';
     deps.state.messages = [
       { id: 'm1', role: 'assistant', content: '', timestamp: 1, assistantMessageId: 'prev-a' },
@@ -2682,10 +2671,7 @@ describe('ConversationController - Rewind', () => {
 
     expect(mockAgentService.rewind).toHaveBeenCalledWith('user-uuid', 'prev-a', 'code-and-conversation');
     expect(truncateSpy).toHaveBeenCalledWith('m2');
-    expect(deps.renderer.renderMessages).toHaveBeenCalledWith(
-      expect.any(Array),
-      expect.any(Function)
-    );
+    expect(deps.setTranscriptGreeting).toHaveBeenCalled();
     expect(deps.plugin.updateConversation).toHaveBeenCalledWith(
       'conv-1',
       expect.objectContaining({ resumeAtMessageId: 'prev-a' })

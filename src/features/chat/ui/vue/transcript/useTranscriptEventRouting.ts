@@ -18,6 +18,9 @@ export function useTranscriptEventRouting(subscribe: TranscriptSubscribe): void 
     dispose = subscribe((snapshot) => {
       store.setMessages(snapshot.messages);
       store.setActiveStream(snapshot.activeStream);
+      store.setGreeting(snapshot.greeting);
+      store.setLoadingText(snapshot.loadingText);
+      store.setHydrationError(snapshot.hydrationError);
     });
   });
 

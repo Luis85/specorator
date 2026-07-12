@@ -1,36 +1,18 @@
-import { Notice } from 'obsidian';
+import * as fs from 'fs';
+import * as nodePath from 'path';
 
-import type { ApprovalCallbackOptions, ApprovalDecisionOption } from '../../../core/runtime/types';
+import type { ApprovalCallbackOptions } from '../../../core/runtime/types';
 import type { ApprovalDecision, ExitPlanModeDecision } from '../../../core/types';
-import { t } from '../../../i18n/i18n';
-import { buildPlanArtifactFromChatState } from '../../../utils/planArtifact';
-import { type InlineAskQuestionConfig, InlineAskUserQuestion } from '../rendering/InlineAskUserQuestion';
-import { InlineExitPlanMode } from '../rendering/InlineExitPlanMode';
-import { InlinePlanApproval, type PlanApprovalDecision } from '../rendering/InlinePlanApproval';
-import { setToolIcon } from '../rendering/ToolCallRenderer';
+import { buildPlanArtifactFromChatState, readPlanMarkdownFromArtifact } from '../../../utils/planArtifact';
+import type { PlanApprovalDecision } from '../rendering/InlinePlanApproval';
 import type { ChatState } from '../state/ChatState';
-
-const APPROVAL_OPTION_MAP: Record<string, ApprovalDecision> = {
-  'Deny': 'deny',
-  'Allow once': 'allow',
-  'Always allow': 'allow-always',
-};
-
-const DEFAULT_APPROVAL_DECISION_OPTIONS: ApprovalDecisionOption[] =
-  Object.entries(APPROVAL_OPTION_MAP).map(([label, decision]) => ({
-    label,
-    value: label,
-    decision,
-  }));
-
-function toError(error: unknown): Error {
-  return error instanceof Error ? error : new Error(String(error));
-}
+import type { InlineCardHandle, InlineCardMounter } from './inlineCardMount';
 
 export interface InlinePromptControllerDeps {
   state: ChatState;
   getInputContainerEl: () => HTMLElement;
-  renderContent: (el: HTMLElement, markdown: string) => Promise<void>;
+  /** Mounts the inline-prompt Vue cards (injected for Jest fakeability). */
+  mountInlineCard: InlineCardMounter;
   hideThinkingIndicator: () => void;
   getPlanPathPrefix: () => string | undefined;
 }
@@ -39,16 +21,17 @@ export interface InlinePromptControllerDeps {
  * Owns the inline prompts that block a turn on user input — tool-approval
  * cards, ask-user-question, exit-plan-mode, and the post-plan approval card —
  * plus the input-container hide/restore and the "needs attention" tab badge
- * that accompany them. Extracted from `InputController`; the runtime reaches
- * these through `InputController`'s RuntimeHost-wired delegators, and the
- * post-plan flow calls `showPlanApproval` directly.
+ * that accompany them. Each prompt mounts a Vue card via the injected
+ * {@link InlineCardMounter}; the card resolves through its `resolve` prop, and
+ * `unmount` (which drives the card's `onBeforeUnmount → resolve(null)`) is the
+ * idiomatic replacement for the legacy card's `destroy()`.
  */
 export class InlinePromptController {
   private deps: InlinePromptControllerDeps;
-  private pendingApprovalInline: InlineAskUserQuestion | null = null;
-  private pendingAskInline: InlineAskUserQuestion | null = null;
-  private pendingExitPlanModeInline: InlineExitPlanMode | null = null;
-  private pendingPlanApproval: InlinePlanApproval | null = null;
+  private pendingApprovalInline: InlineCardHandle | null = null;
+  private pendingAskInline: InlineCardHandle | null = null;
+  private pendingExitPlanModeInline: InlineCardHandle | null = null;
+  private pendingPlanApproval: InlineCardHandle | null = null;
   private pendingPlanApprovalInvalidated = false;
   private inputContainerHideDepth = 0;
 
@@ -62,141 +45,31 @@ export class InlinePromptController {
     description: string,
     approvalOptions?: ApprovalCallbackOptions,
   ): Promise<ApprovalDecision> {
-    const inputContainerEl = this.deps.getInputContainerEl();
-    const parentEl = inputContainerEl.parentElement;
-    if (!parentEl) {
-      throw new Error('Input container is detached from DOM');
-    }
+    const parentEl = this.requireParentEl();
 
-    // Build header element, then detach — InlineAskUserQuestion will re-attach it
-    const headerEl = parentEl.createDiv({ cls: 'specorator-ask-approval-info' });
-    headerEl.remove();
-
-    const toolEl = headerEl.createDiv({ cls: 'specorator-ask-approval-tool' });
-    const iconEl = toolEl.createSpan({ cls: 'specorator-ask-approval-icon' });
-    iconEl.setAttribute('aria-hidden', 'true');
-    setToolIcon(iconEl, toolName);
-    toolEl.createSpan({ text: toolName, cls: 'specorator-ask-approval-tool-name' });
-
-    if (approvalOptions?.decisionReason) {
-      headerEl.createDiv({ text: approvalOptions.decisionReason, cls: 'specorator-ask-approval-reason' });
-    }
-    if (approvalOptions?.blockedPath) {
-      headerEl.createDiv({ text: approvalOptions.blockedPath, cls: 'specorator-ask-approval-blocked-path' });
-    }
-    if (approvalOptions?.agentID) {
-      headerEl.createDiv({ text: `Agent: ${approvalOptions.agentID}`, cls: 'specorator-ask-approval-agent' });
-    }
-
-    headerEl.createDiv({ text: description, cls: 'specorator-ask-approval-desc' });
-
-    const decisionOptions = approvalOptions?.decisionOptions ?? DEFAULT_APPROVAL_DECISION_OPTIONS;
-    const optionDecisionMap = new Map<string, ApprovalDecision>();
-    const questionOptions = decisionOptions.map((option, index) => {
-      const value = option.value || `approval-option-${index}`;
-      if (option.decision) {
-        optionDecisionMap.set(value, option.decision);
-      }
-      return {
-        label: option.label,
-        description: option.description ?? '',
-        value,
-      };
-    });
-    const input = {
-      questions: [{
-        question: 'Allow this action?',
-        options: questionOptions,
-        isOther: false,
-        isSecret: false,
-      }],
-    };
-
-    const result = await this.showInlineQuestion(
-      parentEl,
-      inputContainerEl,
-      input,
-      (inline) => { this.pendingApprovalInline = inline; },
-      undefined,
-      { title: 'Permission required', headerEl, showCustomInput: false, immediateSelect: true },
+    return this.runBlockingPrompt<ApprovalDecision>(
+      (resolve) => this.deps.mountInlineCard.mountApproval(parentEl, {
+        resolve,
+        toolName,
+        description,
+        approvalOptions,
+      }),
+      (handle) => { this.pendingApprovalInline = handle; },
+      'cancel',
     );
-
-    if (!result) return 'cancel';
-    const selected = Object.values(result)[0];
-    const selectedValue = Array.isArray(selected) ? selected[0] : selected;
-    if (typeof selectedValue !== 'string') {
-      new Notice(t('chat.input.unexpectedApprovalSelection', { value: String(selectedValue) }));
-      return 'cancel';
-    }
-
-    const decision = optionDecisionMap.get(selectedValue);
-    if (decision) {
-      return decision;
-    }
-
-    return {
-      type: 'select-option',
-      value: selectedValue,
-    };
   }
 
   async handleAskUserQuestion(
     input: Record<string, unknown>,
     signal?: AbortSignal,
   ): Promise<Record<string, string | string[]> | null> {
-    const inputContainerEl = this.deps.getInputContainerEl();
-    const parentEl = inputContainerEl.parentElement;
-    if (!parentEl) {
-      throw new Error('Input container is detached from DOM');
-    }
+    const parentEl = this.requireParentEl();
 
-    return this.showInlineQuestion(
-      parentEl,
-      inputContainerEl,
-      input,
-      (inline) => { this.pendingAskInline = inline; },
-      signal,
+    return this.runBlockingPrompt<Record<string, string | string[]> | null>(
+      (resolve) => this.deps.mountInlineCard.mountAsk(parentEl, { resolve, input, signal }),
+      (handle) => { this.pendingAskInline = handle; },
+      null,
     );
-  }
-
-  private showInlineQuestion(
-    parentEl: HTMLElement,
-    inputContainerEl: HTMLElement,
-    input: Record<string, unknown>,
-    setPending: (inline: InlineAskUserQuestion | null) => void,
-    signal?: AbortSignal,
-    config?: InlineAskQuestionConfig,
-  ): Promise<Record<string, string | string[]> | null> {
-    this.deps.hideThinkingIndicator();
-    this.hideInputContainer(inputContainerEl);
-    // UX-2: every inline question (approval, ask-user, post-plan approval)
-    // surfaces a tab-bar "needs attention" badge so background tabs that
-    // are blocked on the user become visible without switching to them.
-    this.deps.state.needsAttention = true;
-
-    return new Promise<Record<string, string | string[]> | null>((resolve, reject) => {
-      const inline = new InlineAskUserQuestion(
-        parentEl,
-        input,
-        (result: Record<string, string | string[]> | null) => {
-          setPending(null);
-          this.deps.state.needsAttention = false;
-          this.restoreInputContainer(inputContainerEl);
-          resolve(result);
-        },
-        signal,
-        config,
-      );
-      setPending(inline);
-      try {
-        inline.render();
-      } catch (err) {
-        setPending(null);
-        this.deps.state.needsAttention = false;
-        this.restoreInputContainer(inputContainerEl);
-        reject(toError(err));
-      }
-    });
   }
 
   async handleExitPlanMode(
@@ -204,74 +77,26 @@ export class InlinePromptController {
     signal?: AbortSignal,
   ): Promise<ExitPlanModeDecision | null> {
     const { state } = this.deps;
-    const inputContainerEl = this.deps.getInputContainerEl();
-    const parentEl = inputContainerEl.parentElement;
-    if (!parentEl) {
-      throw new Error('Input container is detached from DOM');
-    }
+    const parentEl = this.requireParentEl();
 
-    this.deps.hideThinkingIndicator();
-    this.hideInputContainer(inputContainerEl);
-    // UX-2: surface "needs attention" while the exit-plan-mode prompt blocks.
-    state.needsAttention = true;
+    const planFilePath = state.planFilePath;
+    const { content, error } = this.readPlanContent(planFilePath);
+    const allowedPrompts = Array.isArray(input.allowedPrompts)
+      ? (input.allowedPrompts as Array<{ tool: string; prompt: string }>)
+      : undefined;
 
-    const enrichedInput = state.planFilePath
-      ? { ...input, planFilePath: state.planFilePath }
-      : input;
-
-    const renderContent = (el: HTMLElement, markdown: string) =>
-      this.deps.renderContent(el, markdown);
-
-    const planPathPrefix = this.deps.getPlanPathPrefix();
-
-    return new Promise<ExitPlanModeDecision | null>((resolve, reject) => {
-      const inline = new InlineExitPlanMode(
-        parentEl,
-        enrichedInput,
-        (decision: ExitPlanModeDecision | null) => {
-          this.pendingExitPlanModeInline = null;
-          state.needsAttention = false;
-          this.restoreInputContainer(inputContainerEl);
-          resolve(decision);
-        },
+    return this.runBlockingPrompt<ExitPlanModeDecision | null>(
+      (resolve) => this.deps.mountInlineCard.mountExitPlanMode(parentEl, {
+        resolve,
         signal,
-        renderContent,
-        planPathPrefix,
-      );
-      this.pendingExitPlanModeInline = inline;
-      try {
-        inline.render();
-      } catch (err) {
-        this.pendingExitPlanModeInline = null;
-        state.needsAttention = false;
-        this.restoreInputContainer(inputContainerEl);
-        reject(toError(err));
-      }
-    });
-  }
-
-  dismissPendingApprovalPrompt(): void {
-    if (this.pendingApprovalInline) {
-      this.pendingApprovalInline.destroy();
-      this.pendingApprovalInline = null;
-    }
-  }
-
-  dismissPendingApproval(): void {
-    this.dismissPendingApprovalPrompt();
-    if (this.pendingAskInline) {
-      this.pendingAskInline.destroy();
-      this.pendingAskInline = null;
-    }
-    if (this.pendingExitPlanModeInline) {
-      this.pendingExitPlanModeInline.destroy();
-      this.pendingExitPlanModeInline = null;
-    }
-    this.dismissPendingPlanApproval(true);
-    // UX-2: dismissing flushes every pending prompt above; clear the
-    // attention flag so the tab badge returns to its idle state.
-    this.deps.state.needsAttention = false;
-    this.resetInputContainerVisibility();
+        planPreview: content,
+        planReadError: error,
+        allowedPrompts,
+        resolvePlanContent: () => content,
+      }),
+      (handle) => { this.pendingExitPlanModeInline = handle; },
+      null,
+    );
   }
 
   showPlanApproval(): Promise<{ decision: PlanApprovalDecision | null; invalidated: boolean }> {
@@ -281,53 +106,117 @@ export class InlinePromptController {
       return Promise.resolve({ decision: null, invalidated: false });
     }
 
-    this.hideInputContainer(inputContainerEl);
     this.pendingPlanApprovalInvalidated = false;
-    // UX-2: post-plan approval prompt is another tab-blocking input.
+    const artifact = buildPlanArtifactFromChatState({ planFilePath: this.deps.state.planFilePath });
+    const { content, error } = readPlanMarkdownFromArtifact(artifact, this.deps.getPlanPathPrefix());
+
+    return this.runBlockingPrompt<PlanApprovalDecision | null>(
+      (resolve) => this.deps.mountInlineCard.mountPlanApproval(parentEl, {
+        resolve,
+        planPreview: content,
+        planReadError: error,
+      }),
+      (handle) => { this.pendingPlanApproval = handle; },
+      null,
+    ).then((decision) => {
+      const invalidated = this.pendingPlanApprovalInvalidated;
+      this.pendingPlanApprovalInvalidated = false;
+      return { decision, invalidated };
+    });
+  }
+
+  dismissPendingApprovalPrompt(): void {
+    this.pendingApprovalInline?.unmount();
+    this.pendingApprovalInline = null;
+  }
+
+  dismissPendingApproval(): void {
+    this.dismissPendingApprovalPrompt();
+    this.pendingAskInline?.unmount();
+    this.pendingAskInline = null;
+    this.pendingExitPlanModeInline?.unmount();
+    this.pendingExitPlanModeInline = null;
+    this.dismissPendingPlanApproval(true);
+    // UX-2: dismissing flushes every pending prompt above; clear the attention
+    // flag so the tab badge returns to its idle state.
+    this.deps.state.needsAttention = false;
+    this.resetInputContainerVisibility();
+  }
+
+  /**
+   * Shared blocking-prompt lifecycle: hides the thinking indicator + input
+   * container, raises the "needs attention" badge, mounts the card, and resolves
+   * when the card calls `resolve` (or `fallback` on unmount). Restores the input
+   * container + clears attention exactly once on settlement. The card is
+   * unmounted after a live resolve; an external dismiss unmounts it directly.
+   */
+  private runBlockingPrompt<T>(
+    mount: (resolve: (value: T) => void) => InlineCardHandle,
+    setPending: (handle: InlineCardHandle | null) => void,
+    fallback: T,
+  ): Promise<T> {
+    const inputContainerEl = this.deps.getInputContainerEl();
+    this.deps.hideThinkingIndicator();
+    this.hideInputContainer(inputContainerEl);
+    // UX-2: every inline prompt surfaces a tab-bar "needs attention" badge so
+    // background tabs blocked on the user become visible without switching.
     this.deps.state.needsAttention = true;
 
-    const planPathPrefix = this.deps.getPlanPathPrefix();
-    const artifact = buildPlanArtifactFromChatState({
-      planFilePath: this.deps.state.planFilePath,
-    });
-    const renderContent = (el: HTMLElement, markdown: string) =>
-      this.deps.renderContent(el, markdown);
-
-    return new Promise<{ decision: PlanApprovalDecision | null; invalidated: boolean }>((resolve, reject) => {
-      const inline = new InlinePlanApproval(
-        parentEl,
-        (decision: PlanApprovalDecision | null) => {
-          const invalidated = this.pendingPlanApprovalInvalidated;
-          this.pendingPlanApprovalInvalidated = false;
-          this.pendingPlanApproval = null;
-          this.deps.state.needsAttention = false;
-          this.restoreInputContainer(inputContainerEl);
-          resolve({ decision, invalidated });
-        },
-        { artifact, planPathPrefix, renderContent },
-      );
-      this.pendingPlanApproval = inline;
-      try {
-        inline.render();
-      } catch (err) {
-        this.pendingPlanApproval = null;
-        this.pendingPlanApprovalInvalidated = false;
+    return new Promise<T>((resolve) => {
+      let settled = false;
+      let handle: InlineCardHandle | null = null;
+      const finish = (value: T | null): void => {
+        if (settled) return;
+        settled = true;
+        setPending(null);
         this.deps.state.needsAttention = false;
         this.restoreInputContainer(inputContainerEl);
-        reject(toError(err));
-      }
+        resolve(value === null ? fallback : value);
+        // Defer the unmount out of a possible onBeforeUnmount reentry (when the
+        // resolve came FROM an unmount). The handle is idempotent.
+        const toUnmount = handle;
+        handle = null;
+        if (toUnmount) queueMicrotask(() => toUnmount.unmount());
+      };
+      handle = mount((value) => finish(value));
+      setPending(handle);
     });
+  }
+
+  private requireParentEl(): HTMLElement {
+    const parentEl = this.deps.getInputContainerEl().parentElement;
+    if (!parentEl) {
+      throw new Error('Input container is detached from DOM');
+    }
+    return parentEl;
+  }
+
+  /** Reads the plan file for the exit-plan-mode card, gated to the plan dir. */
+  private readPlanContent(planFilePath: string | null): { content: string | null; error: string | null } {
+    if (!planFilePath) return { content: null, error: null };
+
+    const planPathPrefix = this.deps.getPlanPathPrefix();
+    const resolved = nodePath.resolve(planFilePath).replace(/\\/g, '/');
+    if (!planPathPrefix || !resolved.includes(planPathPrefix)) {
+      return { content: null, error: 'path outside allowed plan directory' };
+    }
+
+    try {
+      const content = fs.readFileSync(planFilePath, 'utf-8');
+      return { content: content.trim() || null, error: null };
+    } catch (err) {
+      return { content: null, error: err instanceof Error ? err.message : 'unknown error' };
+    }
   }
 
   private dismissPendingPlanApproval(invalidated: boolean): void {
     if (!this.pendingPlanApproval) {
       return;
     }
-
     if (invalidated) {
       this.pendingPlanApprovalInvalidated = true;
     }
-    this.pendingPlanApproval.destroy();
+    this.pendingPlanApproval.unmount();
     this.pendingPlanApproval = null;
   }
 

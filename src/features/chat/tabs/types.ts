@@ -33,6 +33,8 @@ import type {
 import type { InstructionModeManager } from '../ui/InstructionModeManager';
 import type { NavigationSidebar } from '../ui/NavigationSidebar';
 import type { StatusPanel } from '../ui/StatusPanel';
+import type { MountedTranscript } from '../ui/vue/transcript/mountTranscript';
+import type { TabTranscriptProjection } from './tabTranscript';
 
 /**
  * Default number of chat tabs allowed.
@@ -307,8 +309,18 @@ export interface TabData {
   /** Per-tab DOM elements. */
   dom: TabDOMElements;
 
-  /** Per-tab renderer. */
+  /**
+   * Per-tab imperative renderer. Left null since the Vue transcript island
+   * replaced it (Task 18a); the field + `MessageRenderer` type stay until the
+   * imperative renderer files are deleted in Task 18b.
+   */
   renderer: MessageRenderer | null;
+
+  /** Per-tab Vue transcript projection source (engine → store snapshot fan-out). */
+  transcript: TabTranscriptProjection | null;
+
+  /** Handle to the mounted Vue transcript island (unmounted on tab destroy). */
+  mountedTranscript: MountedTranscript | null;
 }
 
 export type TabProviderContext = Pick<TabData, 'conversationId' | 'service' | 'providerId' | 'lifecycleState' | 'draftModel'>;
