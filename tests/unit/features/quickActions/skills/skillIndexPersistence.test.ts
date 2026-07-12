@@ -37,6 +37,46 @@ describe('skillIndexPersistence', () => {
     expect(parsed.buckets.claude[0].content).toBe('');
   });
 
+  it('redacts host-absolute sourceFilePath for user-scope (home) skills', () => {
+    const buckets = new Map<ProviderId, ProviderCommandEntry[]>([
+      ['claude', [
+        entry({ id: 'skill-vault', scope: 'vault', sourceFilePath: '.claude/skills/vault/SKILL.md' }),
+        entry({ id: 'skill-user', scope: 'user', sourceFilePath: '/Users/alice/.claude/skills/global/SKILL.md' }),
+      ]],
+    ]);
+    const parsed = JSON.parse(serializePersistedSkillIndex(buckets, 1));
+    const [vault, user] = parsed.buckets.claude;
+    // Vault paths are vault-relative and safe to keep.
+    expect(vault.sourceFilePath).toBe('.claude/skills/vault/SKILL.md');
+    // The home path must never land in the vault-synced index.
+    expect(user.sourceFilePath).toBeUndefined();
+    expect(JSON.stringify(parsed)).not.toContain('/Users/alice');
+  });
+
+  it('keeps a Codex user skill host path out of the index (id + sourceFilePath)', () => {
+    // Regression: the read-only Codex user-skill id must be path-free. When it
+    // embedded encodeURIComponent(skill.path), the host home path leaked into
+    // the vault-synced index via the `id` even though `sourceFilePath` was
+    // redacted here. Guard the whole serialized blob, not just one field.
+    const hostPath = '/Users/alice/.codex/skills/foo/SKILL.md';
+    const buckets = new Map<ProviderId, ProviderCommandEntry[]>([
+      ['codex', [entry({
+        providerId: 'codex',
+        displayPrefix: '$',
+        insertPrefix: '$',
+        scope: 'user',
+        isEditable: false,
+        isDeletable: false,
+        id: 'codex-skill-user-foo',
+        name: 'foo',
+        sourceFilePath: hostPath,
+      })]],
+    ]);
+    const json = serializePersistedSkillIndex(buckets, 1);
+    expect(json).not.toContain(hostPath);
+    expect(json).not.toContain('/Users/alice');
+  });
+
   it('round-trips via parse', () => {
     const original = new Map<ProviderId, ProviderCommandEntry[]>([
       ['codex', [entry({ providerId: 'codex', insertPrefix: '$' })]],
@@ -58,6 +98,14 @@ describe('skillIndexPersistence', () => {
       buckets: { claude: [] },
     });
     expect(parsePersistedSkillIndex(json)).toBeNull();
+  });
+
+  it('discards a v1 index on upgrade so the refetch includes user skills', () => {
+    // A pre-user-skill v1 cache holds vault skills but no ~/.claude ones. It must
+    // be rejected (→ cold refetch) rather than served stale, which otherwise left
+    // the Library showing vault skills while omitting global ones until a reload.
+    const v1 = JSON.stringify({ schemaVersion: 1, writtenAt: 0, buckets: { claude: [entry()] } });
+    expect(parsePersistedSkillIndex(v1)).toBeNull();
   });
 
   it('returns null on missing buckets field', () => {

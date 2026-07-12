@@ -12,9 +12,14 @@ import type { SlashCommandStorage } from '../storage/SlashCommandStorage';
 
 function slashCommandToEntry(
   cmd: SlashCommand,
-  options: { sourceFilePath?: string } = {},
+  options: { sourceFilePath?: string; readOnly?: boolean } = {},
 ): ProviderCommandEntry {
   const skill = isSkill(cmd);
+  // Home-scope (`~/.claude/skills/`) skills are view/run only: the vault adapter
+  // can't write outside the vault, so surface them as user-scope and gate the
+  // Library's edit/delete affordances off.
+  const readOnly = options.readOnly ?? false;
+  const editable = !readOnly && cmd.source !== 'sdk';
   return {
     id: cmd.id,
     providerId: 'claude',
@@ -30,10 +35,10 @@ function slashCommandToEntry(
     context: cmd.context,
     agent: cmd.agent,
     hooks: cmd.hooks,
-    scope: cmd.source === 'sdk' ? 'runtime' : 'vault',
+    scope: readOnly ? 'user' : cmd.source === 'sdk' ? 'runtime' : 'vault',
     source: cmd.source ?? 'user',
-    isEditable: cmd.source !== 'sdk',
-    isDeletable: cmd.source !== 'sdk',
+    isEditable: editable,
+    isDeletable: editable,
     displayPrefix: '/',
     insertPrefix: '/',
     ...(options.sourceFilePath ? { sourceFilePath: options.sourceFilePath } : {}),
@@ -117,12 +122,33 @@ export class ClaudeCommandCatalog implements ProviderCommandCatalog {
     await this.probePromise;
   }
 
+  /**
+   * Vault commands + skills, plus read-only user-scope (`~/.claude/skills/`)
+   * skills. The name predates home discovery — it feeds the Library Skills tab,
+   * the cold-start dropdown fallback, AND the settings slash-command manager.
+   *
+   * Same-named personal + project skills are BOTH listed, not deduped: dropping
+   * either breaks a real consumer — dropping the project skill removes the only
+   * in-app edit/delete affordance (the manager reads this list); dropping the
+   * personal skill hides the one `/name` actually resolves to (personal
+   * overrides project — https://code.claude.com/docs/en/skills.md). A shared
+   * name is inherently ambiguous over the `/name` wire, so the listing surfaces
+   * both and lets the runtime resolve. They carry distinct ids (`user-skill-`
+   * vs `skill-`) so both survive the aggregator's id-keyed maps. Home skills
+   * carry a host-absolute `sourceFilePath`, so downstream `isCloneableSkillPath`
+   * keeps them view/run only; the manager additionally filters user scope out
+   * (it only manages editable vault entries).
+   */
   async listVaultEntries(): Promise<ProviderCommandEntry[]> {
     const commands = await this.commandStorage.loadAll();
     const skills = await this.skillStorage.loadAll();
+    const userSkills = await this.skillStorage.loadUserAll();
     return [
       ...commands.map((cmd) => slashCommandToEntry(cmd)),
       ...skills.map((entry) => slashCommandToEntry(entry.skill, { sourceFilePath: entry.filePath })),
+      ...userSkills.map((entry) =>
+        slashCommandToEntry(entry.skill, { sourceFilePath: entry.filePath, readOnly: true }),
+      ),
     ];
   }
 

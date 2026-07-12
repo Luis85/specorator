@@ -86,12 +86,12 @@ export interface ProviderRegistration {
   cliCommand: string;
   blankTabOrder: number;
   isEnabled: (settings: Record<string, unknown>) => boolean;
-  /**
-   * The provider's default settings bag, contributed at registration time so
-   * the app shell can assemble `providerConfigs` defaults without statically
-   * importing each provider's settings module (ARCH-2: breaks the
-   * `core -> app -> all-providers -> core` cycle class).
-   */
+  /** Whether the provider resolves user-scope (global, e.g. `~/.claude/skills`) skills
+   * given live settings; default `true`. Claude ties it to `loadUserSettings`, so the
+   * run path can refuse a `/name` that won't resolve rather than dispatch a silent no-op. */
+  resolvesUserScopeSkills?: (settings: Record<string, unknown>) => boolean;
+  /** Default settings bag; lets the app shell assemble `providerConfigs` defaults
+   * without importing each provider's settings module (ARCH-2 cycle break). */
   defaultConfig: Record<string, unknown>;
   capabilities: ProviderCapabilities;
   /**

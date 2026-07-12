@@ -51,6 +51,7 @@ function makeSkill(name: string, providerId: 'claude' | 'codex'): SkillTabEntry 
     description: '',
     insertPrefix: '$',
     sourceFilePath: null,
+    scope: 'user',
     providerEnabled: true,
   };
 }

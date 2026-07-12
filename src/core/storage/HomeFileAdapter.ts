@@ -22,6 +22,16 @@ export class HomeFileAdapter implements Pick<VaultFileAdapter,
     return path.join(this.root, relativePath);
   }
 
+  /**
+   * Host-absolute path for a home-relative path. Mirrors
+   * `VaultFileAdapter.getAbsolutePath` so callers can surface a real filesystem
+   * path (e.g. a skill's `sourceFilePath`) that the vault adapter will correctly
+   * recognize as out-of-vault and treat read-only.
+   */
+  getAbsolutePath(relativePath: string): string {
+    return this.resolve(relativePath);
+  }
+
   async exists(p: string): Promise<boolean> {
     try {
       await fs.promises.access(this.resolve(p));

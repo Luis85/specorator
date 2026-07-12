@@ -7,12 +7,14 @@ export const SKILLS_DIR = '.claude/skills';
 
 /**
  * Every root a vault skill folder may live under. Deliberately duplicated from
- * the provider storage modules (`CodexSkillStorage` etc.) rather than imported
- * — features must not depend on providers (boundary rule) — and safe to
- * duplicate because these roots are stable storage contracts catalogued in the
- * root CLAUDE.md storage table.
+ * the provider storage modules (`CodexSkillStorage`, `CursorSkillStorage`, …)
+ * rather than imported. Cursor's project root `.cursor/skills` is included so the
+ * Library editor can edit/clone/delete it; Cursor's global roots stay host-absolute
+ * and out of this list (read-only). Kept in sync manually because features must
+ * not depend on providers (boundary rule), and safe to duplicate because these
+ * roots are stable storage contracts catalogued in the root CLAUDE.md storage table.
  */
-export const VAULT_SKILL_ROOTS: readonly string[] = [SKILLS_DIR, '.codex/skills', '.agents/skills'];
+export const VAULT_SKILL_ROOTS: readonly string[] = [SKILLS_DIR, '.codex/skills', '.agents/skills', '.cursor/skills'];
 
 /**
  * The one folder clone/delete may act on for a skill source path, or null when

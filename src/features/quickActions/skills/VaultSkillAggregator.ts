@@ -244,6 +244,7 @@ export class VaultSkillAggregator implements VaultSkillSource {
       description: entry.description ?? '',
       insertPrefix: prefix,
       sourceFilePath: entry.sourceFilePath ?? null,
+      scope: entry.scope,
       providerEnabled: record.isEnabled,
     };
   }

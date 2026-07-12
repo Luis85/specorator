@@ -19,6 +19,9 @@ export const claudeProviderRegistration: ProviderRegistration = {
   cliCommand: 'claude',
   blankTabOrder: 20,
   isEnabled: (settings) => getClaudeProviderSettings(settings).enabled,
+  // The SDK loads `~/.claude/skills` only when the `user` setting source is on,
+  // so a global skill's `/name` can't resolve while `loadUserSettings` is off.
+  resolvesUserScopeSkills: (settings) => getClaudeProviderSettings(settings).loadUserSettings,
   defaultConfig: { ...DEFAULT_CLAUDE_PROVIDER_SETTINGS },
   capabilities: CLAUDE_PROVIDER_CAPABILITIES,
   canonicalToolNames: CLAUDE_CANONICAL_TOOL_NAMES,

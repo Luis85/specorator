@@ -13,6 +13,7 @@ import {
   getCodexSkillDescription,
 } from '../skills/CodexSkillListingService';
 import {
+  type CodexSkillRootId,
   type CodexSkillStorage,
   codexSkillVaultRelativePath,
   createCodexSkillPersistenceKey,
@@ -38,15 +39,19 @@ const CODEX_COMPACT_COMMAND: ProviderCommandEntry = {
 };
 
 function buildSkillId(
-  skill: Pick<SkillMetadata, 'name' | 'path' | 'scope'>,
+  skill: Pick<SkillMetadata, 'name' | 'scope'>,
   location?: { rootId: string; name: string } | null,
 ): string {
   if (location) {
     return `${CODEX_SKILL_ID_PREFIX}${location.rootId}-${location.name}`;
   }
 
-  const encodedPath = encodeURIComponent(skill.path);
-  return `${CODEX_SKILL_ID_PREFIX}${skill.scope}-${encodedPath}`;
+  // Non-vault (user/system/admin) skills are read-only. Key by scope + name, not
+  // `path`: the host-absolute path embeds the user's home dir, and this id is
+  // persisted into the vault-synced skill-index cache, so a path here would leak
+  // the home path despite the sourceFilePath redaction. Names are unique per
+  // scope for any skill addressable as `$name`.
+  return `${CODEX_SKILL_ID_PREFIX}${skill.scope}-${encodeURIComponent(skill.name)}`;
 }
 
 function listedSkillToProviderEntry(
@@ -93,61 +98,123 @@ export class CodexSkillCatalog implements ProviderCommandCatalog {
     // Codex dropdown entries come from app-server metadata; runtime commands are ignored.
   }
 
+  private async listSkillsByPriority(): Promise<SkillMetadata[]> {
+    return [...(await this.listProvider.listSkills())].sort(compareCodexSkillPriority);
+  }
+
   async listDropdownEntries(context: { includeBuiltIns: boolean }): Promise<ProviderCommandEntry[]> {
-    const skills = (await this.listProvider.listSkills())
-      .filter(skill => skill.enabled)
-      .sort(compareCodexSkillPriority);
+    // Dropdown/run surface: only enabled skills are invocable.
+    const skills = (await this.listSkillsByPriority()).filter(skill => skill.enabled);
     const entries = skills.map(skill => listedSkillToProviderEntry(skill, this.vaultPath));
     return context.includeBuiltIns ? [CODEX_COMPACT_COMMAND, ...entries] : entries;
   }
 
+  /**
+   * RUNNABLE listing consumed by `VaultSkillAggregator` for the Library /
+   * Quick Actions Prompt buttons — every row here must be a skill that
+   * `$name` actually resolves to. So: enabled only (the runtime ignores
+   * disabled skills), and de-duplicated by name keeping the highest-priority
+   * scope (`repo` > `user` > `system` > `admin`). Without the dedup, clicking a
+   * lower-priority same-named card (e.g. a read-only global `$foo`) would invoke
+   * the higher-priority `$foo` (the repo one) instead — the card would lie about
+   * what it runs. Disabled and editable-vault skills for the settings manager
+   * come from `listManagedVaultSkills()`, NOT this method.
+   */
   async listVaultEntries(): Promise<ProviderCommandEntry[]> {
-    if (!this.vaultPath) {
-      return [];
+    const preferred = new Map<string, SkillMetadata>();
+    for (const skill of (await this.listSkillsByPriority()).filter(s => s.enabled)) {
+      // listSkillsByPriority sorts highest-priority-first, so the first skill
+      // seen for a name is the one `$name` resolves to; later same-name skills
+      // (lower scope) are the ones that would mis-invoke, so drop them.
+      const key = skill.name.toLowerCase();
+      if (!preferred.has(key)) {
+        preferred.set(key, skill);
+      }
     }
 
-    const listedSkills = (await this.listProvider.listSkills())
-      .filter(skill => skill.scope === 'repo')
-      .sort(compareCodexSkillPriority);
     const entries: ProviderCommandEntry[] = [];
-
-    for (const listedSkill of listedSkills) {
-      const location = resolveCodexSkillLocationFromPath(listedSkill.path, this.vaultPath);
-      if (!location) {
+    for (const listedSkill of preferred.values()) {
+      if (listedSkill.scope !== 'repo') {
+        // User / system / admin skills are read-only: surface them so global
+        // Codex skills appear in the Library like Claude's `~/.claude` skills.
+        // Host-absolute path + isEditable false keep the Library's edit/clone/
+        // delete gates off.
+        entries.push(listedSkillToProviderEntry(listedSkill, this.vaultPath));
         continue;
       }
 
+      // Editable vault (repo) skill — load full content from storage for the
+      // editor; skip when it isn't vault-reachable/loadable (a repo skill
+      // outside a managed root has no clean editable path).
+      const location = this.vaultPath
+        ? resolveCodexSkillLocationFromPath(listedSkill.path, this.vaultPath)
+        : null;
+      if (!location) {
+        continue;
+      }
       const storedSkill = await this.storage.load(location);
       if (!storedSkill) {
         continue;
       }
-
-      entries.push({
-        id: `${CODEX_SKILL_ID_PREFIX}${location.rootId}-${storedSkill.name}`,
-        providerId: 'codex',
-        kind: 'skill',
-        name: storedSkill.name,
+      entries.push(this.buildEditableVaultEntry({
+        rootId: location.rootId,
+        name: location.name,
         description: storedSkill.description ?? getCodexSkillDescription(listedSkill),
         content: storedSkill.content,
-        scope: 'vault',
-        source: 'user',
-        isEditable: true,
-        isDeletable: true,
-        displayPrefix: '$',
-        insertPrefix: '$',
-        // Vault entries surface the vault-relative path, not the host-absolute
-        // wire path: the Skills tab's clone/delete gate and the vault adapter
-        // act on it directly. Dropdown entries and the raw listing keep host
-        // paths for runtime consumers.
-        sourceFilePath: codexSkillVaultRelativePath(location),
-        persistenceKey: createCodexSkillPersistenceKey({
-          rootId: location.rootId,
-          currentName: location.name,
-        }),
-      });
+      }));
     }
 
     return entries;
+  }
+
+  /**
+   * MANAGEMENT listing for the Codex settings skill manager: every editable
+   * vault skill on disk, INCLUDING disabled ones. Sourced from the filesystem
+   * scan rather than `skills/list`, so disabling a skill in Codex config never
+   * hides it from the only in-app edit/delete affordance. Kept separate from
+   * `listVaultEntries()` precisely because a disabled skill is manageable but
+   * not runnable — mixing the two produced dead "Prompt" rows in the Library.
+   */
+  async listManagedVaultSkills(): Promise<ProviderCommandEntry[]> {
+    const vaultSkills = await this.storage.scanVault();
+    return vaultSkills.map(skill => this.buildEditableVaultEntry({
+      rootId: skill.rootId,
+      name: skill.name,
+      description: skill.description,
+      content: skill.content,
+    }));
+  }
+
+  private buildEditableVaultEntry(input: {
+    rootId: CodexSkillRootId;
+    name: string;
+    description?: string;
+    content: string;
+  }): ProviderCommandEntry {
+    const location = { rootId: input.rootId, name: input.name };
+    return {
+      id: `${CODEX_SKILL_ID_PREFIX}${input.rootId}-${input.name}`,
+      providerId: 'codex',
+      kind: 'skill',
+      name: input.name,
+      description: input.description,
+      content: input.content,
+      scope: 'vault',
+      source: 'user',
+      isEditable: true,
+      isDeletable: true,
+      displayPrefix: '$',
+      insertPrefix: '$',
+      // Vault entries surface the vault-relative path, not the host-absolute
+      // wire path: the Skills tab's clone/delete gate and the vault adapter
+      // act on it directly. Dropdown entries and the raw listing keep host
+      // paths for runtime consumers.
+      sourceFilePath: codexSkillVaultRelativePath(location),
+      persistenceKey: createCodexSkillPersistenceKey({
+        rootId: input.rootId,
+        currentName: input.name,
+      }),
+    };
   }
 
   async saveVaultEntry(entry: ProviderCommandEntry): Promise<void> {

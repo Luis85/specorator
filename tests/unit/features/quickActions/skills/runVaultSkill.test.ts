@@ -24,6 +24,7 @@ jest.mock('@/features/chat/tabs/providerResolution', () => ({
 jest.mock('@/core/providers/ProviderRegistry', () => ({
   ProviderRegistry: {
     isEnabled: jest.fn(() => true),
+    resolvesUserScopeSkills: jest.fn(() => true),
   },
 }));
 
@@ -40,6 +41,7 @@ function makeEntry(overrides: Partial<SkillTabEntry> = {}): SkillTabEntry {
     description: 'red-green-refactor',
     insertPrefix: '/',
     sourceFilePath: '.claude/skills/tdd/SKILL.md',
+    scope: 'vault',
     providerEnabled: true,
     ...overrides,
   };
@@ -106,6 +108,7 @@ function makePlugin(opts: {
 beforeEach(() => {
   jest.clearAllMocks();
   (ProviderRegistry.isEnabled as jest.Mock).mockReturnValue(true);
+  (ProviderRegistry.resolvesUserScopeSkills as jest.Mock).mockReturnValue(true);
 });
 
 describe('runVaultSkill', () => {
@@ -123,6 +126,30 @@ describe('runVaultSkill', () => {
     const activeTab = makeTab({ providerId: 'claude', lifecycleState: 'blank' });
     const { plugin } = makePlugin({ activeTab });
     await runVaultSkill(plugin as any, makeEntry({ providerEnabled: false }), null);
+    expect(activeTab.controllers.inputController.sendMessage).toHaveBeenCalled();
+  });
+
+  it('refuses a user-scope skill when the provider cannot resolve user scope', async () => {
+    (ProviderRegistry.resolvesUserScopeSkills as jest.Mock).mockReturnValue(false);
+    const activeTab = makeTab({ providerId: 'claude', lifecycleState: 'blank' });
+    const { plugin } = makePlugin({ activeTab });
+    await runVaultSkill(
+      plugin as any,
+      makeEntry({ scope: 'user', sourceFilePath: '/home/u/.claude/skills/g/SKILL.md' }),
+      null,
+    );
+    expect(Notice).toHaveBeenCalledWith(
+      expect.stringContaining('quickActions.skills.userSettingsRequired'),
+    );
+    // Aborts before dispatching the unresolvable /name.
+    expect(activeTab.controllers.inputController.sendMessage).not.toHaveBeenCalled();
+  });
+
+  it('runs a user-scope skill when the provider resolves user scope', async () => {
+    (ProviderRegistry.resolvesUserScopeSkills as jest.Mock).mockReturnValue(true);
+    const activeTab = makeTab({ providerId: 'claude', lifecycleState: 'blank' });
+    const { plugin } = makePlugin({ activeTab });
+    await runVaultSkill(plugin as any, makeEntry({ scope: 'user' }), null);
     expect(activeTab.controllers.inputController.sendMessage).toHaveBeenCalled();
   });
 

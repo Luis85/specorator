@@ -1,5 +1,5 @@
-import type { ProviderCommandCatalog } from '@/core/providers/commands/ProviderCommandCatalog';
 import type { ProviderCommandEntry } from '@/core/providers/commands/ProviderCommandEntry';
+import type { CodexSkillCatalog } from '@/providers/codex/commands/CodexSkillCatalog';
 import {
   type CodexSkillRootId,
   createCodexSkillPersistenceKey,
@@ -25,10 +25,13 @@ function makeEntry(name: string, scope: 'vault' | 'user' = 'vault'): ProviderCom
 
 function createMockCatalog(
   vaultEntries: ProviderCommandEntry[] = [],
-): ProviderCommandCatalog {
+): CodexSkillCatalog {
   return {
     listDropdownEntries: jest.fn().mockResolvedValue(vaultEntries),
     listVaultEntries: jest.fn().mockResolvedValue(vaultEntries),
+    // The settings manager loads through the management path, not the runnable
+    // listing — mock it with the same editable fixtures.
+    listManagedVaultSkills: jest.fn().mockResolvedValue(vaultEntries),
     saveVaultEntry: jest.fn().mockResolvedValue(undefined),
     deleteVaultEntry: jest.fn().mockResolvedValue(undefined),
     setRuntimeCommands: jest.fn(),
@@ -39,7 +42,7 @@ function createMockCatalog(
       commandPrefix: '/',
     }),
     refresh: jest.fn().mockResolvedValue(undefined),
-  };
+  } as unknown as CodexSkillCatalog;
 }
 
 // Minimal mock for the Obsidian containerEl
@@ -219,7 +222,7 @@ describe('CodexSkillSettings', () => {
   });
 
   describe('render', () => {
-    it('calls listVaultEntries on render', async () => {
+    it('loads the management listing on render', async () => {
       const container = createMockContainer();
       const catalog = createMockCatalog([makeEntry('test-skill')]);
 
@@ -228,7 +231,10 @@ describe('CodexSkillSettings', () => {
       // The render is async; wait for it
       await new Promise(resolve => setTimeout(resolve, 10));
 
-      expect(catalog.listVaultEntries).toHaveBeenCalled();
+      // The manager uses listManagedVaultSkills (all editable vault skills,
+      // including disabled), NOT the runnable listVaultEntries listing.
+      expect(catalog.listManagedVaultSkills).toHaveBeenCalled();
+      expect(catalog.listVaultEntries).not.toHaveBeenCalled();
     });
 
     it('shows empty state when no vault skills', async () => {
@@ -250,8 +256,8 @@ describe('CodexSkillSettings', () => {
       new CodexSkillSettings(container, catalog);
       await new Promise(resolve => setTimeout(resolve, 10));
 
-      // Only vault entries should be listed
-      expect(catalog.listVaultEntries).toHaveBeenCalled();
+      // Only editable vault entries should be listed via the management path
+      expect(catalog.listManagedVaultSkills).toHaveBeenCalled();
       // NOT listDropdownEntries (which would include home entries)
       expect(catalog.listDropdownEntries).not.toHaveBeenCalled();
     });
@@ -281,13 +287,13 @@ describe('CodexSkillSettings', () => {
       await new Promise(resolve => setTimeout(resolve, 10));
 
       (catalog.refresh as jest.Mock).mockClear();
-      (catalog.listVaultEntries as jest.Mock).mockClear();
+      (catalog.listManagedVaultSkills as jest.Mock).mockClear();
       (catalog.listDropdownEntries as jest.Mock).mockClear();
 
       await settings.refresh();
 
       expect(catalog.refresh).toHaveBeenCalledTimes(1);
-      expect(catalog.listVaultEntries).toHaveBeenCalledTimes(1);
+      expect(catalog.listManagedVaultSkills).toHaveBeenCalledTimes(1);
       expect(catalog.listDropdownEntries).not.toHaveBeenCalled();
     });
   });

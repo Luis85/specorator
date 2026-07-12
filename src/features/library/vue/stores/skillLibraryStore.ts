@@ -125,5 +125,18 @@ export const useSkillLibraryStore = defineStore('library-skills', () => {
     return true;
   }
 
-  return { rows, loading, init, load, clone, remove, entryFor, mtimeFor };
+  /**
+   * Force a fresh scan: drop the aggregator's cached buckets, then reload.
+   * `~/.claude/skills` (and the other provider skill dirs) sit outside the vault
+   * with no file watcher, so an external CLI edit needs a manual re-scan rather
+   * than waiting out the aggregator TTL or reloading Obsidian.
+   */
+  async function refresh(): Promise<void> {
+    const p = plugin;
+    if (!p) throw new Error('skillLibraryStore used before init()');
+    p.vaultSkillAggregator?.invalidate();
+    await load();
+  }
+
+  return { rows, loading, init, load, refresh, clone, remove, entryFor, mtimeFor };
 });
