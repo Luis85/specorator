@@ -591,6 +591,33 @@ describe('Tab - Controller Initialization', () => {
       expect(tab.mountedTranscript).not.toBeNull();
     });
 
+    it('rebinds the NavigationSidebar to the Vue scroll element after mount', () => {
+      const options = createMockOptions();
+      const tab = createTab(options);
+      const mockComponent = {} as any;
+
+      initializeTabUI(tab, options.plugin);
+
+      // The mount hands back a real Vue scroll container; the wrapper the sidebar
+      // was built against is replaced by it (getScrollEl is null in the default
+      // stub, so override it for this case).
+      const scrollEl = createMockEl();
+      (mountTranscript as unknown as jest.Mock).mockReturnValueOnce({
+        app: { unmount: jest.fn() },
+        getScrollEl: () => scrollEl,
+        unmount: jest.fn(),
+      });
+
+      const rebindScrollEl = jest.fn();
+      tab.ui.navigationSidebar = { rebindScrollEl, destroy: jest.fn() } as any;
+
+      initializeTabControllers(tab, options.plugin, mockComponent);
+
+      // dom.messagesEl is repointed at the Vue element AND the sidebar rebound to it.
+      expect(tab.dom.messagesEl).toBe(scrollEl);
+      expect(rebindScrollEl).toHaveBeenCalledWith(scrollEl);
+    });
+
     it('should create SelectionController', () => {
       const options = createMockOptions();
       const tab = createTab(options);

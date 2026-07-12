@@ -42,16 +42,33 @@ onMounted(() => {
   }
 });
 
-// Trailing render window, mirroring `renderMessages` resetting `renderWindowStart`
-// on every load. Watching `store.messages` (a shallowRef) fires only when the
-// engine pushes a NEW array reference — i.e. a conversation switch/reload —
-// not on in-place mutation, so `loadEarlier` growing the window locally is
-// never clobbered by an unrelated re-render.
+// Trailing render window, mirroring `renderMessages`. The projection pushes a
+// FRESH `store.messages` array on EVERY emit (`ChatState.messages` is a copying
+// getter), so this watch fires on every streaming chunk / indicator tick — not
+// only on conversation switch. Resetting to the trailing window on each of
+// those would snap a "Load earlier" window the user grew mid-stream back down,
+// hiding the older messages they just loaded. So reset ONLY on a genuine
+// conversation-identity change — a load / switch / truncate / rewind — detected
+// by the first message's id changing, the list shrinking, or the first load
+// into an empty transcript. On a plain append (streaming growth or a newly sent
+// message) the window `[start, end]` already includes the new tail, so keep
+// `renderWindowStart` put; only clamp defensively.
 const renderWindowStart = ref(windowStartIndex(store.messages.length));
+let prevFirstId: string | null = store.messages[0]?.id ?? null;
+let prevLength = store.messages.length;
 watch(
   () => store.messages,
   (next) => {
-    renderWindowStart.value = windowStartIndex(next.length);
+    const nextFirstId = next[0]?.id ?? null;
+    const isConversationReset =
+      prevLength === 0 // first load into an empty transcript
+      || next.length < prevLength // truncate / rewind
+      || nextFirstId !== prevFirstId; // switch / reload (identity changed)
+    renderWindowStart.value = isConversationReset
+      ? windowStartIndex(next.length)
+      : Math.min(Math.max(renderWindowStart.value, 0), next.length);
+    prevFirstId = nextFirstId;
+    prevLength = next.length;
   }
 );
 

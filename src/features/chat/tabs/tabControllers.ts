@@ -251,7 +251,18 @@ export function initializeTabControllers(
     component,
     buildTranscriptCallbacks(tab, plugin, forkMessageCallback),
   );
-  tab.dom.messagesEl = tab.mountedTranscript.getScrollEl() ?? wrapperEl;
+  const scrollEl = tab.mountedTranscript.getScrollEl();
+  tab.dom.messagesEl = scrollEl ?? wrapperEl;
+
+  // `initializeTabUI` built the NavigationSidebar (scroll listener + scan +
+  // scrollTo target) against the placeholder `wrapperEl` BEFORE this mount
+  // repointed `dom.messagesEl`. Rebind it to the live Vue scroll element so
+  // prev/next/top/bottom navigation and visibility toggling target the real
+  // scroll container, not the wrapper. Controllers reach `dom.messagesEl`
+  // through live getters, so only the sidebar's captured element needs moving.
+  if (scrollEl && scrollEl !== wrapperEl) {
+    tab.ui.navigationSidebar?.rebindScrollEl(scrollEl);
+  }
 }
 
 /**
