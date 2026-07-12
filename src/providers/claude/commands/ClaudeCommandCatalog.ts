@@ -124,30 +124,28 @@ export class ClaudeCommandCatalog implements ProviderCommandCatalog {
 
   /**
    * Vault commands + skills, plus read-only user-scope (`~/.claude/skills/`)
-   * skills. The name predates home discovery — it is the seam the Library Skills
-   * tab and the cold-start dropdown fallback read, not a vault-only listing.
-   * Home skills carry a host-absolute `sourceFilePath`, so the downstream
-   * `isCloneableSkillPath` gate keeps them view/run only; save/delete never
-   * reach them. User skills are always listed here — the chat dropdown's warm
-   * path is SDK-owned and reflects the runtime's own user-scope loading, so
-   * this listing does not second-guess it.
+   * skills. The name predates home discovery — it feeds the Library Skills tab,
+   * the cold-start dropdown fallback, AND the settings slash-command manager.
+   *
+   * Same-named personal + project skills are BOTH listed, not deduped: dropping
+   * either breaks a real consumer — dropping the project skill removes the only
+   * in-app edit/delete affordance (the manager reads this list); dropping the
+   * personal skill hides the one `/name` actually resolves to (personal
+   * overrides project — https://code.claude.com/docs/en/skills.md). A shared
+   * name is inherently ambiguous over the `/name` wire, so the listing surfaces
+   * both and lets the runtime resolve. They carry distinct ids (`user-skill-`
+   * vs `skill-`) so both survive the aggregator's id-keyed maps. Home skills
+   * carry a host-absolute `sourceFilePath`, so downstream `isCloneableSkillPath`
+   * keeps them view/run only; the manager additionally filters user scope out
+   * (it only manages editable vault entries).
    */
   async listVaultEntries(): Promise<ProviderCommandEntry[]> {
     const commands = await this.commandStorage.loadAll();
     const skills = await this.skillStorage.loadAll();
     const userSkills = await this.skillStorage.loadUserAll();
-    // Personal scope shadows project scope (Claude Code precedence: "personal
-    // overrides project"), so a same-named user skill is the one `/name`
-    // actually runs. Drop the vault skill it shadows — otherwise the Library
-    // would show/edit an inactive project copy while a different personal skill
-    // executes. https://code.claude.com/docs/en/skills.md
-    const userSkillNames = new Set(userSkills.map((entry) => entry.skill.name.toLowerCase()));
-    const unshadowedVaultSkills = skills.filter(
-      (entry) => !userSkillNames.has(entry.skill.name.toLowerCase()),
-    );
     return [
       ...commands.map((cmd) => slashCommandToEntry(cmd)),
-      ...unshadowedVaultSkills.map((entry) => slashCommandToEntry(entry.skill, { sourceFilePath: entry.filePath })),
+      ...skills.map((entry) => slashCommandToEntry(entry.skill, { sourceFilePath: entry.filePath })),
       ...userSkills.map((entry) =>
         slashCommandToEntry(entry.skill, { sourceFilePath: entry.filePath, readOnly: true }),
       ),

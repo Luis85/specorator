@@ -285,7 +285,9 @@ export class SlashCommandSettings {
       return;
     }
 
-    this.commands = await this.catalog.listVaultEntries();
+    // The manager edits/deletes vault-authored entries; read-only user-scope
+    // skills (`~/.claude/skills`) are surfaced in the Library, not here.
+    this.commands = (await this.catalog.listVaultEntries()).filter((e) => e.scope !== 'user');
     this.render();
   }
 
@@ -477,7 +479,8 @@ export class SlashCommandSettings {
       return;
     }
 
-    this.commands = await this.catalog.listVaultEntries();
+    // Vault-authored entries only — read-only user-scope skills live in the Library.
+    this.commands = (await this.catalog.listVaultEntries()).filter((e) => e.scope !== 'user');
   }
 
   public refresh(): void {

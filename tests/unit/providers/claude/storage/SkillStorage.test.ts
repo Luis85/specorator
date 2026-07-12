@@ -254,6 +254,8 @@ Prompt`,
       expect(loaded[0].skill.description).toBe('Global TDD');
       expect(loaded[0].readOnly).toBe(true);
       expect(loaded[0].filePath).toBe('/home/user/.claude/skills/global-tdd/SKILL.md');
+      // Distinct id from a same-named vault skill so both survive id-keyed maps.
+      expect(loaded[0].skill.id).toBe('user-skill-global-tdd');
     });
 
     it('skips home folders without SKILL.md', async () => {

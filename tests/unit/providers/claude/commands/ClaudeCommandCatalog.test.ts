@@ -324,7 +324,7 @@ Review`,
       expect(vault!.isEditable).toBe(true);
     });
 
-    it('a personal skill shadows a same-named vault skill (Claude precedence: personal > project)', async () => {
+    it('lists both a personal and a same-named vault skill (distinct ids, no dedup)', async () => {
       const adapter = createMockAdapter({
         '.claude/skills/shared/SKILL.md': `---
 description: Vault shared
@@ -342,13 +342,20 @@ Home`,
         new SkillStorage(adapter, home),
       );
 
-      // Personal scope wins, matching what `/shared` actually runs — the Library
-      // must not show/edit the shadowed (inactive) project copy instead.
+      // A shared name is ambiguous over `/name`, so the listing surfaces both
+      // rather than drop either: the editable project skill stays manageable
+      // (settings manager) and the personal skill — what `/shared` actually
+      // runs — stays visible (Library). Distinct ids keep them from colliding
+      // in the aggregator's id-keyed maps.
       const shared = (await catalog.listVaultEntries()).filter((e) => e.name === 'shared');
-      expect(shared).toHaveLength(1);
-      expect(shared[0].scope).toBe('user');
-      expect(shared[0].isEditable).toBe(false);
-      expect(shared[0].sourceFilePath).toBe('/home/user/.claude/skills/shared/SKILL.md');
+      expect(shared).toHaveLength(2);
+      const vault = shared.find((e) => e.scope === 'vault');
+      const user = shared.find((e) => e.scope === 'user');
+      expect(vault?.isEditable).toBe(true);
+      expect(vault?.id).toBe('skill-shared');
+      expect(user?.isEditable).toBe(false);
+      expect(user?.id).toBe('user-skill-shared');
+      expect(user?.sourceFilePath).toBe('/home/user/.claude/skills/shared/SKILL.md');
     });
   });
 

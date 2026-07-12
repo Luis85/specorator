@@ -74,7 +74,10 @@ export class SkillStorage {
       return {
         skill: {
           ...parsedToSlashCommand(parsed, {
-            id: `skill-${skillName}`,
+            // Distinct id per scope so a same-named personal + project skill
+            // (which Claude allows — personal shadows project at `/name`) both
+            // survive the aggregator's id-keyed maps instead of colliding.
+            id: readOnly ? `user-skill-${skillName}` : `skill-${skillName}`,
             name: skillName,
             source: 'user',
           }),
