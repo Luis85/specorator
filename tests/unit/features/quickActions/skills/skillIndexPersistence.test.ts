@@ -76,6 +76,14 @@ describe('skillIndexPersistence', () => {
     expect(parsePersistedSkillIndex(json)).toBeNull();
   });
 
+  it('discards a v1 index on upgrade so the refetch includes user skills', () => {
+    // A pre-user-skill v1 cache holds vault skills but no ~/.claude ones. It must
+    // be rejected (→ cold refetch) rather than served stale, which otherwise left
+    // the Library showing vault skills while omitting global ones until a reload.
+    const v1 = JSON.stringify({ schemaVersion: 1, writtenAt: 0, buckets: { claude: [entry()] } });
+    expect(parsePersistedSkillIndex(v1)).toBeNull();
+  });
+
   it('returns null on missing buckets field', () => {
     const json = JSON.stringify({
       schemaVersion: PERSISTED_SCHEMA_VERSION,

@@ -1,5 +1,6 @@
 import { EventBus } from '@/core/events/EventBus';
 import type { ProviderCommandEntry } from '@/core/providers/commands/ProviderCommandEntry';
+import { PERSISTED_SCHEMA_VERSION } from '@/features/quickActions/skills/skillIndexPersistence';
 import type { ProviderRecord, SkillTabEntry } from '@/features/quickActions/skills/types';
 import { VaultSkillAggregator } from '@/features/quickActions/skills/VaultSkillAggregator';
 
@@ -491,7 +492,7 @@ describe('VaultSkillAggregator', () => {
 
   it('hydrate() populates cache from a stubbed adapter so listCachedNow returns entries before any fetch', async () => {
     const stored = JSON.stringify({
-      schemaVersion: 1,
+      schemaVersion: PERSISTED_SCHEMA_VERSION,
       writtenAt: 1,
       buckets: {
         claude: [

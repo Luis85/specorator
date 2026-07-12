@@ -1,7 +1,14 @@
 import type { ProviderCommandEntry } from '../../../core/providers/commands/ProviderCommandEntry';
 import type { ProviderId } from '../../../core/providers/types';
 
-export const PERSISTED_SCHEMA_VERSION = 1;
+// v2: the persisted shape now carries user-scope (`~/.claude/skills`) entries
+// and redacts their host-absolute paths. A v1 index (written before user-skill
+// discovery) holds vault skills but no user skills; hydrating it serves that
+// stale set for the TTL, so the Library — which loads once on mount, unlike the
+// refreshable quick-actions tab — could show vault skills while omitting global
+// ones until a manual reload. Rejecting v1 forces a cold, complete refetch on
+// upgrade. Bump this whenever the persisted entry shape or its redaction changes.
+export const PERSISTED_SCHEMA_VERSION = 2;
 
 interface PersistedShape {
   schemaVersion: number;
