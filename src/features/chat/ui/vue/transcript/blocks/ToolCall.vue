@@ -53,7 +53,7 @@ import WebSearchView from './WebSearchView.vue';
  */
 const props = defineProps<{ toolCall: ToolCallInfo }>();
 
-const { resolve: resolveLink, open: openLink } = useFileLink();
+const { resolve: resolveLink } = useFileLink();
 
 const STATUS_ICONS: Record<string, string> = { completed: 'check', error: 'x', blocked: 'shield-off' };
 
@@ -75,10 +75,6 @@ const summaryLinkPath = computed<string | null>(() => {
   }
   return null;
 });
-
-function onSummaryClick(): void {
-  openLink(summaryLinkPath.value);
-}
 
 function getTodos(): TodoItem[] | undefined {
   const todos = props.toolCall.input.todos;
@@ -150,7 +146,6 @@ const { expanded, toggle, onKeydown, ariaLabel } = useCollapsible({
         :class="{ 'specorator-file-link': !!summaryLinkPath }"
         :role="summaryLinkPath ? 'link' : undefined"
         :data-href="summaryLinkPath || null"
-        @click="onSummaryClick"
       >{{ toolSummary }}</span>
       <span
         v-if="isTodoWrite"

@@ -137,6 +137,7 @@ export class StreamController {
       showWriting: () => this.indicator.showWriting(),
       hideThinkingIndicator: () => this.hideThinkingIndicator(),
       shouldCollapseStreamingResponse: () => this.shouldCollapseStreamingResponse(),
+      shouldDeferMathRendering: () => this.shouldDeferMathRendering(),
     });
   }
 
@@ -467,6 +468,10 @@ export class StreamController {
 
   private shouldCollapseStreamingResponse(): boolean {
     return this.deps.plugin.settings.collapseStreamingResponse !== false;
+  }
+
+  private shouldDeferMathRendering(): boolean {
+    return this.deps.plugin.settings.deferMathRenderingDuringStreaming !== false;
   }
 
   private capturePlanFilePath(input: Record<string, unknown>): void {

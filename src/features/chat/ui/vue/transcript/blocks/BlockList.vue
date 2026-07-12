@@ -50,6 +50,7 @@ const durationText = computed(() => formatDurationMmSs(props.msg.durationSeconds
       v-else-if="item.kind === 'text'"
       role="assistant"
       :content="item.content"
+      :defer-math="item.deferMath"
     />
     <ContextCompactedMarker v-else-if="item.kind === 'context_compacted'" />
     <RuntimeErrorCard

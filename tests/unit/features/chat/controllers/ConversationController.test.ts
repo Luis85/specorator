@@ -92,6 +92,7 @@ function createMockDeps(overrides: Partial<ConversationControllerDeps> = {}): Co
       clearExternalContexts: jest.fn(),
     }) as any,
     clearQueuedMessage: jest.fn(),
+    clearRetryableTurn: jest.fn(),
     getTitleGenerationService: () => null,
     getStatusPanel: () => ({
       remount: jest.fn(),
@@ -163,6 +164,14 @@ describe('ConversationController', () => {
         await controller.createNew();
 
         expect(deps.clearQueuedMessage).toHaveBeenCalled();
+      });
+
+      it('drops the retained retryable turn on new conversation', async () => {
+        deps.state.isStreaming = false;
+
+        await controller.createNew();
+
+        expect(deps.clearRetryableTurn).toHaveBeenCalled();
       });
 
       it('should not create new conversation while streaming', async () => {
@@ -238,6 +247,19 @@ describe('ConversationController', () => {
         await controller.whenHydrated();
 
         expect(deps.clearQueuedMessage).toHaveBeenCalled();
+      });
+
+      it('drops the retained retryable turn on conversation switch', async () => {
+        // The InputController is per-tab, not per-conversation, so a stale
+        // last-turn submission must be cleared on switch — otherwise a
+        // reloaded/persisted runtime-error card could retry the previous
+        // conversation's turn.
+        deps.state.currentConversationId = 'old-conv';
+
+        await controller.switchTo('new-conv');
+        await controller.whenHydrated();
+
+        expect(deps.clearRetryableTurn).toHaveBeenCalled();
       });
 
       it('should not switch while streaming', async () => {

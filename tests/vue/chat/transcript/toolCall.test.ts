@@ -46,6 +46,7 @@ function makeCallbacks(overrides: Partial<TranscriptCallbacks> = {}): Transcript
     isRewindEligible: vi.fn(() => false),
     openProviderSettings: vi.fn(),
     onRetryLastTurn: null,
+    canRetryLastTurn: vi.fn(() => false),
     getMessageActions: vi.fn(() => []),
     copyText: vi.fn(),
     openFile: vi.fn(),
@@ -326,7 +327,7 @@ describe('ToolCall', () => {
   });
 
   describe('summary vault-file-link decoration', () => {
-    it('Read: a resolvable file_path makes the summary clickable and wires openFile', async () => {
+    it('Read: a resolvable file_path stamps the delegation contract (class + role + data-href), no direct openFile', async () => {
       resolveMock.mockImplementation((_app, rawPath) => (rawPath === '/vault/notes/a.md' ? 'notes/a.md' : null));
       const callbacks = makeCallbacks();
       const toolCall = createToolCall({ name: 'Read', input: { file_path: '/vault/notes/a.md' } });
@@ -342,12 +343,15 @@ describe('ToolCall', () => {
       // The displayed text stays the filename-only summary, not the resolved path.
       expect(summaryEl.textContent).toBe('a.md');
 
+      // No direct click handler: the resolved element is opened once by the
+      // delegated `registerFileLinkHandler` on the scroll host. A direct handler
+      // here would double-open (direct + delegated).
       summaryEl.click();
       await flushPromises();
-      expect(callbacks.openFile).toHaveBeenCalledWith('notes/a.md');
+      expect(callbacks.openFile).not.toHaveBeenCalled();
     });
 
-    it('Write: a resolvable file_path makes the summary clickable', async () => {
+    it('Write: a resolvable file_path stamps the delegation contract, no direct openFile', async () => {
       resolveMock.mockReturnValue('notes/new.md');
       const callbacks = makeCallbacks();
       const toolCall = createToolCall({ name: 'Write', input: { file_path: '/vault/notes/new.md' } });
@@ -356,8 +360,9 @@ describe('ToolCall', () => {
 
       const summaryEl = container.querySelector('.specorator-tool-summary') as HTMLElement;
       expect(summaryEl.classList.contains('specorator-file-link')).toBe(true);
+      expect(summaryEl.getAttribute('data-href')).toBe('notes/new.md');
       summaryEl.click();
-      expect(callbacks.openFile).toHaveBeenCalledWith('notes/new.md');
+      expect(callbacks.openFile).not.toHaveBeenCalled();
     });
 
     it('Edit: a non-vault file_path leaves the summary as plain text', async () => {

@@ -33,6 +33,13 @@ export interface TranscriptCallbacks {
   openProviderSettings: (providerId: string) => void;
   /** Re-dispatch the user's last turn (runtime-error retry); null when unavailable. */
   onRetryLastTurn: (() => void) | null;
+  /**
+   * Whether a genuinely retryable turn exists right now (`hasRetryableTurn`).
+   * Evaluated at render time so a runtime-error card rendered after a reload /
+   * conversation switch — where no turn was dispatched this session — hides
+   * Retry rather than silently no-opping or retrying an unrelated later turn.
+   */
+  canRetryLastTurn: () => boolean;
   /** Registered per-message actions (e.g. Create work order). */
   getMessageActions: (msg: ChatMessage) => Array<{ id: string; label: string; icon: string; run: () => void }>;
   /** Copy helper (writes to clipboard + transient "copied" feedback owned by caller). */

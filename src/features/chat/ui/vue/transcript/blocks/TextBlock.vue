@@ -29,7 +29,14 @@ import { CALLBACKS_KEY } from '../transcriptKeys';
  *    plain-markdown path, matching the legacy `!this.getWorkOrderPath()`
  *    short-circuit.
  */
-const props = defineProps<{ content: string; role: 'user' | 'assistant' }>();
+// `deferMath` is a transient streaming-only flag (see `TextRenderCoordinator`):
+// while the live non-collapse block grows it escapes incomplete `$…$`/LaTeX so
+// mid-delimiter fragments don't hit Obsidian's math renderer every chunk. It is
+// forwarded to every `MarkdownHost` here; a persisted/reloaded block omits it
+// (renders normally). Only the plain markdown paths matter for math — work-order
+// protocol cards are non-math structural segments — but forwarding uniformly
+// keeps the seam simple.
+const props = defineProps<{ content: string; role: 'user' | 'assistant'; deferMath?: boolean }>();
 
 const callbacks = inject(CALLBACKS_KEY, undefined);
 
@@ -59,7 +66,10 @@ const segments = computed<WorkOrderProtocolSegment[]>(() => {
   >
     <summary class="specorator-work-order-prompt-summary">Work order prompt</summary>
     <div class="specorator-text-block">
-      <MarkdownHost :markdown="content" />
+      <MarkdownHost
+        :markdown="content"
+        :defer-math="deferMath"
+      />
     </div>
   </details>
   <!-- eslint-enable vue/singleline-html-element-content-newline -->
@@ -72,7 +82,10 @@ const segments = computed<WorkOrderProtocolSegment[]>(() => {
         v-if="segment.type === 'markdown'"
         class="specorator-text-block"
       >
-        <MarkdownHost :markdown="segment.content" />
+        <MarkdownHost
+          :markdown="segment.content"
+          :defer-math="deferMath"
+        />
         <CopyButton :text="segment.content" />
       </div>
       <WorkOrderProgressCard
@@ -98,6 +111,9 @@ const segments = computed<WorkOrderProtocolSegment[]>(() => {
     v-else
     class="specorator-text-block"
   >
-    <MarkdownHost :markdown="content" />
+    <MarkdownHost
+      :markdown="content"
+      :defer-math="deferMath"
+    />
   </div>
 </template>

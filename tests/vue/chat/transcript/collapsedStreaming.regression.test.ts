@@ -36,6 +36,7 @@ function makeCallbacks(projection: TabTranscriptProjection): TranscriptCallbacks
     isRewindEligible: vi.fn(() => false),
     openProviderSettings: vi.fn(),
     onRetryLastTurn: null,
+    canRetryLastTurn: vi.fn(() => false),
     getMessageActions: vi.fn(() => []),
     copyText: vi.fn(),
     openFile: vi.fn(),
@@ -71,12 +72,13 @@ function mount(projection: TabTranscriptProjection) {
  * wired exactly like `StreamController` does — `showWriting` flips the streaming
  * indicator into `'writing'` mode (the placeholder the Vue transcript renders).
  */
-function makeCoordinator(state: ChatState, collapse: boolean): TextRenderCoordinator {
+function makeCoordinator(state: ChatState, collapse: boolean, deferMath = false): TextRenderCoordinator {
   return new TextRenderCoordinator({
     state,
     showWriting: () => { state.streamingIndicatorMode = 'writing'; },
     hideThinkingIndicator: () => { state.streamingIndicatorMode = null; },
     shouldCollapseStreamingResponse: () => collapse,
+    shouldDeferMathRendering: () => deferMath,
   });
 }
 
@@ -188,6 +190,76 @@ describe('collapsed streaming response', () => {
     await flushPromises();
 
     expect(msg.contentBlocks).toContainEqual({ type: 'text', content: 'Hello world' });
+
+    dispose();
+  });
+});
+
+/**
+ * Regression coverage for the streaming-math-deferral cutover follow-on: with
+ * `collapseStreamingResponse` OFF and `deferMathRenderingDuringStreaming` ON,
+ * the live-growing (non-collapse) block must be marked so `MarkdownHost` escapes
+ * incomplete `$…$`/LaTeX per chunk (the legacy behavior). The transient flag is
+ * cleared on finalize so the persisted/final render is un-escaped. Defer OFF
+ * never marks it.
+ */
+describe('streaming math deferral (non-collapse)', () => {
+  it('defer ON: marks deferMath + escapes math live, then clears + renders raw on finalize', async () => {
+    const { state, msg } = startStreamingTurn();
+    const projection = new TabTranscriptProjection(state);
+    const { container, dispose } = mount(projection);
+    await flushPromises();
+
+    const coordinator = makeCoordinator(state, false, true);
+
+    await coordinator.append('cost $x', msg);
+    projection.emit();
+    await flushPromises();
+
+    const block = msg.contentBlocks![state.activeBlockIndex] as {
+      type: string;
+      content: string;
+      deferMath?: boolean;
+    };
+    expect(block.deferMath).toBe(true);
+    // MarkdownHost rendered the ESCAPED delimiters during streaming.
+    expect(renderMock.mock.calls.some(([md]) => md === 'cost \\$x')).toBe(true);
+    expect(container.textContent).toContain('cost \\$x');
+
+    renderMock.mockClear();
+    await coordinator.finalize(msg);
+    state.activeMessageId = null;
+    projection.emit();
+    await flushPromises();
+
+    // Flag cleared before persist; the block carries no transient defer flag, and
+    // the final render escapes nothing (math renders).
+    expect(block.deferMath).toBeUndefined();
+    expect(msg.contentBlocks).toContainEqual({ type: 'text', content: 'cost $x' });
+    expect(renderMock.mock.calls.some(([md]) => md === 'cost $x')).toBe(true);
+
+    dispose();
+  });
+
+  it('defer OFF: never marks deferMath and renders raw delimiters live', async () => {
+    const { state, msg } = startStreamingTurn();
+    const projection = new TabTranscriptProjection(state);
+    const { dispose } = mount(projection);
+    await flushPromises();
+
+    const coordinator = makeCoordinator(state, false, false);
+
+    await coordinator.append('cost $x', msg);
+    projection.emit();
+    await flushPromises();
+
+    const block = msg.contentBlocks![state.activeBlockIndex] as {
+      type: string;
+      content: string;
+      deferMath?: boolean;
+    };
+    expect(block.deferMath).toBeUndefined();
+    expect(renderMock.mock.calls.some(([md]) => md === 'cost $x')).toBe(true);
 
     dispose();
   });

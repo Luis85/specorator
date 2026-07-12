@@ -48,7 +48,7 @@ import DiffView from './DiffView.vue';
  */
 const props = defineProps<{ name: string; input: Record<string, unknown>; result?: string }>();
 
-const { resolve: resolveLink, open: openLink } = useFileLink();
+const { resolve: resolveLink } = useFileLink();
 
 const command = computed(() => (typeof props.input.command === 'string' ? props.input.command : ''));
 // `ToolLinesExpanded` requires a non-optional `result: string`; every branch
@@ -81,10 +81,6 @@ const fileSearchLines = computed<FileSearchLine[]>(() => {
     return { text: stripped || ' ', hoverable, linkPath };
   });
 });
-
-function onFileSearchLineClick(linkPath: string | null): void {
-  openLink(linkPath);
-}
 
 const WEB_FETCH_MAX_CHARS = 500;
 const webFetchText = computed(() => (props.result ?? '').slice(0, WEB_FETCH_MAX_CHARS));
@@ -194,7 +190,6 @@ const applyPatchFileDiffs = computed<ApplyPatchFileDiff[]>(() => {
         :class="{ hoverable: line.hoverable, 'specorator-file-link': !!line.linkPath }"
         :role="line.linkPath ? 'link' : undefined"
         :data-href="line.linkPath || null"
-        @click="onFileSearchLineClick(line.linkPath)"
       >{{ line.text }}</div>
     </div>
   </template>

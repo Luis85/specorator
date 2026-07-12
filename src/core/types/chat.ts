@@ -34,7 +34,11 @@ export interface ImageAttachment {
 
 /** Content block for preserving streaming order in messages. */
 export type ContentBlock =
-  | { type: 'text'; content: string }
+  // `deferMath` is a TRANSIENT streaming-only flag: set while the active
+  // (non-collapse) streaming text block grows so incomplete `$…$`/LaTeX
+  // fragments are escaped per chunk, and cleared on finalize before persist.
+  // A persisted/reloaded block never carries it.
+  | { type: 'text'; content: string; deferMath?: boolean }
   | { type: 'tool_use'; toolId: string }
   | { type: 'thinking'; content: string; durationSeconds?: number }
   | { type: 'subagent'; subagentId: string; mode?: SubagentMode }

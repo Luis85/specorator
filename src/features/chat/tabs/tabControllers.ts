@@ -291,6 +291,7 @@ function buildTranscriptCallbacks(
     openProviderSettings: (providerId) =>
       openSpecoratorProviderSettings(plugin.app, plugin.manifest.id, providerId),
     onRetryLastTurn: () => tab.controllers.inputController?.retryLastTurn(),
+    canRetryLastTurn: () => tab.controllers.inputController?.hasRetryableTurn() ?? false,
     getMessageActions: (msg) =>
       eligibleMessageActions(plugin.chatMessageActions, msg).map((action) => ({
         id: action.id,

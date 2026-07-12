@@ -824,6 +824,18 @@ export class InputController {
   }
 
   /**
+   * Drops the retained last-turn submission so a runtime-error card rendered
+   * after a conversation load/switch has nothing to retry. Without this the
+   * retained turn survives a conversation switch (the InputController is per-tab,
+   * not per-conversation), so a reloaded/persisted `runtime_error` card would
+   * either no-op (nothing dispatched yet this session) or silently re-dispatch
+   * the previous conversation's turn.
+   */
+  clearRetryableTurn(): void {
+    this.lastTurnSubmission = null;
+  }
+
+  /**
    * Re-dispatches the last turn after a runtime error (UX-F/UX-J). Reuses the
    * normal {@link sendMessage} path via `turnRequestOverride`, so the retry runs
    * through the same prepare/query/stream plumbing — not a fabricated send path.

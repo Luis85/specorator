@@ -80,6 +80,7 @@ function makeCallbacks(
     isRewindEligible: vi.fn(() => true),
     openProviderSettings: vi.fn(),
     onRetryLastTurn: vi.fn(),
+    canRetryLastTurn: vi.fn(() => true),
     getMessageActions: vi.fn(() => [{ id: 'wo', label: 'Create work order', icon: 'briefcase', run: vi.fn() }]),
     copyText: vi.fn(),
     openFile: vi.fn(),

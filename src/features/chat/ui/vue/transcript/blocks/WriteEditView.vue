@@ -26,7 +26,7 @@ import DiffView from './DiffView.vue';
 const props = defineProps<{ toolCall: ToolCallInfo }>();
 
 const plugin = inject(PLUGIN_KEY, undefined);
-const { resolve: resolveLink, open: openLink } = useFileLink();
+const { resolve: resolveLink } = useFileLink();
 
 /** Ported verbatim from `WriteEditRenderer.ts`'s local (unexported) `shortenPath`. */
 function shortenPath(filePath: string, maxLength = 40): string {
@@ -62,10 +62,6 @@ const summaryLinkPath = computed<string | null>(() =>
   resolveLink(getInputText(props.toolCall.input, 'file_path'))
 );
 
-function onSummaryClick(): void {
-  openLink(summaryLinkPath.value);
-}
-
 const { expanded, toggle, onKeydown, ariaLabel } = useCollapsible({
   initiallyExpanded: plugin?.settings.expandFileEditsByDefault === true,
   baseAriaLabel: `${toolName.value}: ${shortenPath(filePath.value)}`,
@@ -99,7 +95,6 @@ const { expanded, toggle, onKeydown, ariaLabel } = useCollapsible({
         :class="{ 'specorator-file-link': !!summaryLinkPath }"
         :role="summaryLinkPath ? 'link' : undefined"
         :data-href="summaryLinkPath || null"
-        @click="onSummaryClick"
       >{{ summaryText }}</div>
       <div class="specorator-write-edit-stats">
         <DiffView

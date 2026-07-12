@@ -56,6 +56,8 @@ export interface ConversationControllerDeps {
   getMcpServerSelector: () => McpServerSelector | null;
   getExternalContextSelector: () => ExternalContextSelector | null;
   clearQueuedMessage: () => void;
+  /** Drops the retained retryable turn when (re)binding/switching conversations. */
+  clearRetryableTurn: () => void;
   getTitleGenerationService: () => TitleGenerationService | null;
   getStatusPanel: () => StatusPanel | null;
   getAgentService?: () => ChatRuntime | null;
@@ -222,6 +224,7 @@ export class ConversationController {
         plugin.settings.persistentExternalContextPaths || []
       );
       this.deps.clearQueuedMessage();
+      this.deps.clearRetryableTurn();
 
       this.callbacks.onNewConversation?.();
     } finally {
@@ -239,6 +242,9 @@ export class ConversationController {
     const { plugin, state } = this.deps;
 
     const conversationId = state.currentConversationId;
+    // A (re)loaded transcript has no genuinely retryable turn: any persisted
+    // runtime-error card it renders must not retry a stale/previous-session turn.
+    this.deps.clearRetryableTurn();
     // Clear any stale failure banner/pending failure before hydrating; a fresh
     // failure re-arms it via the hydrate below and renders in restoreConversation.
     this.deps.setTranscriptHydrationError(null);
@@ -317,6 +323,7 @@ export class ConversationController {
       state.hasPendingConversationSave = false;
       this.deps.getInputEl().value = '';
       this.deps.clearQueuedMessage();
+      this.deps.clearRetryableTurn();
       this.deps.getHistoryDropdown()?.removeClass('visible');
       // Show the hydration spinner in the Vue transcript while Phase B loads.
       this.deps.setTranscriptLoading(t('chat.history.loading'));

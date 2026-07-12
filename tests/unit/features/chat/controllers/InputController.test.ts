@@ -930,6 +930,25 @@ describe('InputController - Message Queue', () => {
     });
   });
 
+  describe('Retryable turn', () => {
+    it('retains a retryable turn after a send and drops it on clearRetryableTurn', async () => {
+      deps.state.currentConversationId = 'conv-1';
+      (deps as any).mockAgentService.query = jest.fn().mockImplementation(() => createMockStream([{ type: 'done' }]));
+      inputEl.value = 'hello';
+
+      expect(controller.hasRetryableTurn()).toBe(false);
+
+      await controller.sendMessage();
+
+      // The dispatched turn is retained so a runtime-error card could re-dispatch it.
+      expect(controller.hasRetryableTurn()).toBe(true);
+
+      // Conversation load/switch drops it so a reloaded card has nothing to retry.
+      controller.clearRetryableTurn();
+      expect(controller.hasRetryableTurn()).toBe(false);
+    });
+  });
+
   describe('Cancel streaming', () => {
     it('should clear queue on cancel', () => {
       deps.state.queuedMessage = { content: 'test', images: undefined, editorContext: null, canvasContext: null };

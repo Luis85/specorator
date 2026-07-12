@@ -358,7 +358,8 @@ describe('StreamController - Text Content', () => {
       await controller.appendText('Hello ', msg);
       jest.advanceTimersByTime(16);
       await Promise.resolve();
-      expect(msg.contentBlocks).toContainEqual({ type: 'text', content: 'Hello ' });
+      // Live non-collapse block carries the transient `deferMath` flag until finalize.
+      expect(msg.contentBlocks).toContainEqual({ type: 'text', content: 'Hello ', deferMath: true });
 
       // Toggle on mid-stream — the in-flight block keeps its non-collapsed snapshot.
       (deps.plugin.settings as any).collapseStreamingResponse = true;
@@ -366,7 +367,7 @@ describe('StreamController - Text Content', () => {
       jest.advanceTimersByTime(16);
       await Promise.resolve();
 
-      expect(msg.contentBlocks).toContainEqual({ type: 'text', content: 'Hello World' });
+      expect(msg.contentBlocks).toContainEqual({ type: 'text', content: 'Hello World', deferMath: true });
       // Non-collapsed block shows no writing placeholder.
       expect(deps.state.streamingIndicatorMode).toBeNull();
 
@@ -495,16 +496,19 @@ describe('StreamController - Text Content', () => {
       const msg = createTestMessage();
 
       await controller.appendText('Hello ', msg);
-      // Block exists and is open on the FIRST chunk (not only at finalize).
-      expect(msg.contentBlocks).toEqual([{ type: 'text', content: 'Hello ' }]);
+      // Block exists and is open on the FIRST chunk (not only at finalize). The
+      // live non-collapse block carries the transient `deferMath` flag so
+      // MarkdownHost escapes incomplete math until finalize.
+      expect(msg.contentBlocks).toEqual([{ type: 'text', content: 'Hello ', deferMath: true }]);
       expect(deps.state.activeBlockIndex).toBe(0);
 
       await controller.appendText('World', msg);
       // Subsequent chunks grow the SAME block.
-      expect(msg.contentBlocks).toEqual([{ type: 'text', content: 'Hello World' }]);
+      expect(msg.contentBlocks).toEqual([{ type: 'text', content: 'Hello World', deferMath: true }]);
 
       await controller.finalizeCurrentTextBlock(msg);
-      // Finalize closes the block; it must NOT push a duplicate.
+      // Finalize closes the block; it must NOT push a duplicate, and it clears
+      // the transient `deferMath` flag so the persisted block renders math.
       expect(msg.contentBlocks).toEqual([{ type: 'text', content: 'Hello World' }]);
       expect(deps.state.activeBlockIndex).toBe(-1);
     });
@@ -523,7 +527,8 @@ describe('StreamController - Text Content', () => {
       const msg = createTestMessage();
 
       await controller.appendText('', msg);
-      expect(msg.contentBlocks).toEqual([{ type: 'text', content: '' }]);
+      // Live non-collapse block carries the transient `deferMath` flag while open.
+      expect(msg.contentBlocks).toEqual([{ type: 'text', content: '', deferMath: true }]);
 
       await controller.finalizeCurrentTextBlock(msg);
       expect(msg.contentBlocks).toEqual([]);

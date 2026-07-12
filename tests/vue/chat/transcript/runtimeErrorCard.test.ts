@@ -34,6 +34,7 @@ function makeCallbacks(overrides: Partial<TranscriptCallbacks> = {}): Transcript
     isRewindEligible: vi.fn(() => false),
     openProviderSettings: vi.fn(),
     onRetryLastTurn: vi.fn(),
+    canRetryLastTurn: vi.fn(() => true),
     getMessageActions: vi.fn(() => []),
     copyText: vi.fn(),
     openFile: vi.fn(),
@@ -201,5 +202,39 @@ describe('RuntimeErrorCard', () => {
     const buttons = container.querySelectorAll('.specorator-runtime-error-button');
     expect(buttons).toHaveLength(1);
     expect(buttons[0].classList.contains('specorator-runtime-error-button-primary')).toBe(false);
+  });
+
+  it('hides Retry when no genuinely retryable turn exists, even with onRetryLastTurn present', () => {
+    // A persisted/reloaded runtime-error card: `onRetryLastTurn` is wired but
+    // `canRetryLastTurn()` reports no turn dispatched this session. Retry hides
+    // rather than silently no-opping or re-dispatching an unrelated later turn.
+    const callbacks = makeCallbacks({
+      onRetryLastTurn: vi.fn(),
+      canRetryLastTurn: vi.fn(() => false),
+    });
+    const { container } = render(RuntimeErrorCard, {
+      props: { kind: 'generic', content: 'Network failed' },
+      global: { provide: { [CALLBACKS_KEY as symbol]: callbacks } },
+    });
+    // Generic errors have no settings action, so Retry is the only possible
+    // button — and it's gated off here.
+    expect(container.querySelectorAll('.specorator-runtime-error-button')).toHaveLength(0);
+    expect(callbacks.canRetryLastTurn).toHaveBeenCalled();
+  });
+
+  it('shows Retry when a retryable turn exists (canRetryLastTurn true, not suppressed)', () => {
+    const callbacks = makeCallbacks({
+      onRetryLastTurn: vi.fn(),
+      canRetryLastTurn: vi.fn(() => true),
+    });
+    const { container } = render(RuntimeErrorCard, {
+      props: { kind: 'generic', content: 'Network failed', suppressRetry: false },
+      global: { provide: { [CALLBACKS_KEY as symbol]: callbacks } },
+    });
+    const buttons = container.querySelectorAll('.specorator-runtime-error-button');
+    expect(buttons).toHaveLength(1);
+    expect(buttons[0].classList.contains('specorator-runtime-error-button-primary')).toBe(true);
+    (buttons[0] as HTMLElement).click();
+    expect(callbacks.onRetryLastTurn).toHaveBeenCalledTimes(1);
   });
 });

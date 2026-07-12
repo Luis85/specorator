@@ -34,7 +34,11 @@ async function render(): Promise<void> {
 }
 
 onMounted(render);
-watch(() => props.markdown, render);
+// Re-render on `deferMath` too, not just `markdown`: the finalize of a live
+// (non-collapse) streaming block clears `deferMath` WITHOUT changing the text,
+// and the render output (escaped vs raw `$…$` math) depends on it — watching
+// only `markdown` would leave the escaped streaming render on screen.
+watch([() => props.markdown, () => props.deferMath], render);
 </script>
 
 <template>

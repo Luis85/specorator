@@ -54,6 +54,7 @@ function makeCallbacks(overrides: Partial<TranscriptCallbacks> = {}): Transcript
     isRewindEligible: vi.fn(() => false),
     openProviderSettings: vi.fn(),
     onRetryLastTurn: null,
+    canRetryLastTurn: vi.fn(() => false),
     getMessageActions: vi.fn(() => []),
     copyText: vi.fn(),
     openFile: vi.fn(),
@@ -275,7 +276,7 @@ describe('WriteEditView', () => {
   });
 
   describe('summary vault-file-link decoration', () => {
-    it('a resolvable file_path makes the summary clickable and wires openFile', async () => {
+    it('a resolvable file_path stamps the delegation contract (class + role + data-href), no direct openFile', async () => {
       resolveMock.mockImplementation((_app, rawPath) => (rawPath === '/vault/notes/new.md' ? 'notes/new.md' : null));
       const callbacks = makeCallbacks();
       const toolCall = createToolCall({ name: 'Write', input: { file_path: '/vault/notes/new.md' } });
@@ -293,8 +294,11 @@ describe('WriteEditView', () => {
       expect(summaryEl.getAttribute('data-href')).toBe('notes/new.md');
       expect(summaryEl.textContent).toBe('new.md');
 
+      // No direct click handler: the delegated `registerFileLinkHandler` on the
+      // scroll host opens the resolved element once (a direct handler would
+      // double-open).
       summaryEl.click();
-      expect(callbacks.openFile).toHaveBeenCalledWith('notes/new.md');
+      expect(callbacks.openFile).not.toHaveBeenCalled();
     });
 
     it('a non-vault file_path leaves the summary as plain text', async () => {

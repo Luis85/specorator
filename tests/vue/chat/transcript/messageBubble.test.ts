@@ -26,6 +26,7 @@ function makeCallbacks(overrides: Partial<TranscriptCallbacks> = {}): Transcript
     isRewindEligible: vi.fn(() => false),
     openProviderSettings: vi.fn(),
     onRetryLastTurn: null,
+    canRetryLastTurn: vi.fn(() => false),
     getMessageActions: vi.fn(() => []),
     copyText: vi.fn(),
     openFile: vi.fn(),

@@ -27,7 +27,7 @@ import { projectProviderLifecycleSubagent } from './subagentViewModel';
 
 export type BlockListItem =
   | { key: string; kind: 'thinking'; content: string; durationSeconds?: number }
-  | { key: string; kind: 'text'; content: string }
+  | { key: string; kind: 'text'; content: string; deferMath?: boolean }
   | { key: string; kind: 'context_compacted' }
   | { key: string; kind: 'runtime_error'; content: string; suppressRetry?: boolean }
   | {
@@ -127,7 +127,7 @@ function resolveContentBlockItem(
       };
     case 'text':
       if (!block.content || !block.content.trim()) return null;
-      return { key: `text:${index}`, kind: 'text', content: block.content };
+      return { key: `text:${index}`, kind: 'text', content: block.content, deferMath: block.deferMath };
     case 'tool_use': {
       const toolCall = findToolCall(msg, block.toolId);
       if (!toolCall) return null;

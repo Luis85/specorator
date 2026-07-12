@@ -59,6 +59,7 @@ function makeProjectingCallbacks(initial: TranscriptSnapshot): {
     isRewindEligible: vi.fn(() => false),
     openProviderSettings: vi.fn(),
     onRetryLastTurn: null,
+    canRetryLastTurn: vi.fn(() => false),
     getMessageActions: vi.fn(() => []),
     copyText: vi.fn(),
     openFile: vi.fn(),
@@ -187,6 +188,52 @@ describe('mountTranscript', () => {
     scrollEl.appendChild(link);
     clickCall![2]({ target: link, preventDefault: vi.fn() } as unknown as MouseEvent);
     expect(openLinkText).toHaveBeenCalledWith('Note.md', '', 'tab');
+
+    mounted.unmount();
+    container.remove();
+  });
+
+  it('opens a NON-anchor tool file-link (span) exactly once via delegation (no double-open)', async () => {
+    const container = document.createElement('div');
+    document.body.appendChild(container);
+    const { callbacks } = makeProjectingCallbacks({
+      messages: userMessages(1),
+      activeStream: null,
+      greeting: '',
+      loadingText: null,
+      hydrationError: null,
+    });
+
+    const plugin = makePlugin();
+    const component = new Component();
+    const mounted = mountTranscript(container, plugin, component, callbacks);
+    await flushPromises();
+
+    const scrollEl = container.querySelector('.specorator-messages') as HTMLElement;
+    const domCalls = (component.registerDomEvent as unknown as Mock).mock.calls;
+    const clickCall = domCalls.find(([el, ev]) => el === scrollEl && ev === 'click');
+    expect(clickCall).toBeDefined();
+
+    const openLinkText = vi.fn();
+    plugin.app.workspace.openLinkText = openLinkText;
+
+    // A tool summary/result file-link is a <span>/<div> (not an <a>) carrying the
+    // `.specorator-file-link` + `data-href` contract — exactly what ToolCall /
+    // WriteEditView / ToolContentLines render now that the direct @click was
+    // removed. The delegated matcher's `[data-href].specorator-file-link` branch
+    // matches it, opening the file ONCE (the double-open regression was the
+    // direct handler firing in addition to this).
+    const span = document.createElement('span');
+    span.className = 'specorator-tool-summary specorator-file-link';
+    span.setAttribute('data-href', 'notes/a.md');
+    span.setAttribute('role', 'link');
+    scrollEl.appendChild(span);
+
+    clickCall![2]({ target: span, preventDefault: vi.fn(), stopPropagation: vi.fn() } as unknown as MouseEvent);
+    expect(openLinkText).toHaveBeenCalledTimes(1);
+    expect(openLinkText).toHaveBeenCalledWith('notes/a.md', '', 'tab');
+    // The component wires no direct open path, so nothing else opened the file.
+    expect(callbacks.openFile).not.toHaveBeenCalled();
 
     mounted.unmount();
     container.remove();

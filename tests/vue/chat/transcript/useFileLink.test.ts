@@ -7,17 +7,12 @@ vi.mock('@/utils/fileLink', () => ({
   resolveOpenableVaultPath: vi.fn(),
 }));
 
-import type { TranscriptCallbacks } from '@/features/chat/ui/vue/transcript/transcriptCallbacks';
-import { APP_KEY, CALLBACKS_KEY } from '@/features/chat/ui/vue/transcript/transcriptKeys';
+import { APP_KEY } from '@/features/chat/ui/vue/transcript/transcriptKeys';
 import { useFileLink } from '@/features/chat/ui/vue/transcript/useFileLink';
 import { resolveOpenableVaultPath } from '@/utils/fileLink';
 
 const resolveMock = vi.mocked(resolveOpenableVaultPath);
 const mockApp = {} as App;
-
-function makeCallbacks(): TranscriptCallbacks {
-  return { openFile: vi.fn() } as unknown as TranscriptCallbacks;
-}
 
 /** Mounts a host component so `useFileLink`'s `inject()` calls resolve against real provides. */
 function mountUseFileLink(provide: Record<symbol, unknown> = {}) {
@@ -62,29 +57,6 @@ describe('useFileLink', () => {
       expect(get().resolve('/vault/a.md')).toBe('a.md');
       expect(resolveMock).toHaveBeenCalledWith(mockApp, '/vault/a.md');
       expect(get().resolve('/outside/b.md')).toBeNull();
-    });
-  });
-
-  describe('open', () => {
-    it('calls callbacks.openFile with a non-null link path', () => {
-      const callbacks = makeCallbacks();
-      const { get } = mountUseFileLink({ [CALLBACKS_KEY as symbol]: callbacks });
-
-      get().open('notes/a.md');
-      expect(callbacks.openFile).toHaveBeenCalledWith('notes/a.md');
-    });
-
-    it('does nothing for a null link path', () => {
-      const callbacks = makeCallbacks();
-      const { get } = mountUseFileLink({ [CALLBACKS_KEY as symbol]: callbacks });
-
-      get().open(null);
-      expect(callbacks.openFile).not.toHaveBeenCalled();
-    });
-
-    it('does nothing when no callbacks are injected', () => {
-      const { get } = mountUseFileLink();
-      expect(() => get().open('notes/a.md')).not.toThrow();
     });
   });
 });

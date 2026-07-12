@@ -22,7 +22,11 @@ import { CALLBACKS_KEY } from '../transcriptKeys';
  * `onRetry: undefined` omission) AND `suppressRetry` to be falsy — an
  * auto-triggered (background) turn sets `suppressRetry`, since retrying would
  * re-send the user's last normal prompt rather than the failed background turn
- * (matching the legacy `StreamController.renderingAutoTurn` omission).
+ * (matching the legacy `StreamController.renderingAutoTurn` omission) AND
+ * `canRetryLastTurn()` to be true at render time — a persisted/reloaded card
+ * (no turn dispatched this session, `hasRetryableTurn()` false) hides Retry
+ * rather than showing a button that silently no-ops or retries an unrelated
+ * later turn.
  */
 const props = defineProps<{ kind: RuntimeErrorKind; content: string; suppressRetry?: boolean }>();
 
@@ -86,7 +90,15 @@ const settingsLabelKey = computed<TranslationKey>(() =>
     ? 'chat.runtimeError.cliNotFound.openSettings'
     : 'chat.runtimeError.unauthenticated.openSettings'
 );
-const canRetry = computed(() => !!callbacks?.onRetryLastTurn && !props.suppressRetry);
+const canRetry = computed(
+  () =>
+    !!callbacks?.onRetryLastTurn
+    && !props.suppressRetry
+    // Render-time gate: a persisted/reloaded card (or one shown before this tab
+    // dispatched any turn) has no genuinely retryable turn, so Retry hides rather
+    // than no-opping or re-dispatching an unrelated later turn.
+    && callbacks?.canRetryLastTurn?.() === true
+);
 
 function onOpenSettings(): void {
   if (!callbacks) return;

@@ -6,6 +6,8 @@ export interface TextRenderDeps {
   showWriting: () => void;
   hideThinkingIndicator: () => void;
   shouldCollapseStreamingResponse: () => boolean;
+  /** Whether streaming math delimiters should be escaped (deferred) until finalize. */
+  shouldDeferMathRendering: () => boolean;
 }
 
 /**
@@ -59,7 +61,11 @@ export class TextRenderCoordinator {
       // The accumulated text is flushed into the block once at `finalize`.
       this.deps.showWriting();
     } else {
-      this.growReactiveTextBlock(msg);
+      // Live (non-collapse) growth: defer math so incomplete `$…$`/LaTeX
+      // fragments are escaped every chunk instead of hitting Obsidian's renderer
+      // mid-delimiter. The flag is cleared on finalize (the final render escapes
+      // nothing → math renders).
+      this.growReactiveTextBlock(msg, this.deps.shouldDeferMathRendering());
     }
   }
 
@@ -95,13 +101,23 @@ export class TextRenderCoordinator {
     this.deps.state.activeBlockIndex = msg.contentBlocks.length - 1;
   }
 
-  /** Mirrors the accumulated streamed text into the open reactive block. */
-  private growReactiveTextBlock(msg?: ChatMessage): void {
+  /**
+   * Mirrors the accumulated streamed text into the open reactive block.
+   * `deferMath` stamps the transient escape-math flag while the live block grows;
+   * finalize's flush passes it `false` (default) so the completed block persists
+   * without the flag.
+   */
+  private growReactiveTextBlock(msg: ChatMessage | undefined, deferMath = false): void {
     if (!msg) return;
     const { state } = this.deps;
     const block = msg.contentBlocks?.[state.activeBlockIndex];
     if (block?.type === 'text') {
       block.content = state.currentTextContent;
+      if (deferMath) {
+        block.deferMath = true;
+      } else {
+        delete block.deferMath;
+      }
     }
   }
 
@@ -119,6 +135,11 @@ export class TextRenderCoordinator {
     if (block?.type !== 'text') return;
     if (block.content === '' && state.activeBlockIndex === blocks.length - 1) {
       blocks.pop();
+    } else {
+      // Drop the transient streaming defer-math flag so the finalized/persisted
+      // block renders math normally (non-collapse mode never re-grows at
+      // finalize, so this is the clear point for that path).
+      delete block.deferMath;
     }
     state.activeBlockIndex = -1;
   }

@@ -31,6 +31,7 @@ function makeCallbacks(overrides: Partial<TranscriptCallbacks> = {}): Transcript
     isRewindEligible: vi.fn(() => false),
     openProviderSettings: vi.fn(),
     onRetryLastTurn: null,
+    canRetryLastTurn: vi.fn(() => false),
     getMessageActions: vi.fn(() => []),
     copyText: vi.fn(),
     openFile: vi.fn(),
@@ -60,7 +61,7 @@ beforeEach(() => {
 });
 
 describe('ToolContentLines file-search result-line links', () => {
-  it('Glob: a resolvable path line becomes clickable and wires openFile', () => {
+  it('Glob: a resolvable path line carries the delegation contract (class + data-href), no direct openFile', () => {
     resolveMock.mockImplementation((_app, rawPath) => (rawPath === 'notes/found.md' ? 'notes/found.md' : null));
     const callbacks = makeCallbacks();
 
@@ -91,8 +92,11 @@ describe('ToolContentLines file-search result-line links', () => {
     expect(fileLine.getAttribute('role')).toBe('link');
     expect(fileLine.getAttribute('data-href')).toBe('notes/found.md');
 
+    // No direct click handler: the resolved element relies on the delegated
+    // `registerFileLinkHandler` (bound on the scroll host by `mountTranscript`)
+    // to open it exactly once — a direct handler here would double-open.
     fileLine.click();
-    expect(callbacks.openFile).toHaveBeenCalledWith('notes/found.md');
+    expect(callbacks.openFile).not.toHaveBeenCalled();
   });
 
   it('Grep: a non-vault result line stays plain text (no link, no data-href)', () => {
@@ -119,7 +123,7 @@ describe('ToolContentLines file-search result-line links', () => {
     expect(callbacks.openFile).not.toHaveBeenCalled();
   });
 
-  it('LS: resolves lines when app is injected, wiring click to openFile', () => {
+  it('LS: resolves lines when app is injected, stamping data-href for the delegated handler', () => {
     resolveMock.mockImplementation((_app, rawPath) => rawPath);
     const callbacks = makeCallbacks();
 
@@ -140,8 +144,9 @@ describe('ToolContentLines file-search result-line links', () => {
       expect(line.getAttribute('data-href')).toBe(i === 0 ? 'notes/a.md' : 'notes/b.md');
     });
 
+    // Delegation contract only: no direct openFile on click.
     lines[1].click();
-    expect(callbacks.openFile).toHaveBeenCalledWith('notes/b.md');
+    expect(callbacks.openFile).not.toHaveBeenCalled();
   });
 
   it('does not decorate lines when no App is injected (resolver never called)', () => {
