@@ -26,6 +26,15 @@ describe('toSkillLibraryRows', () => {
     expect(rows.find((r) => r.id === 'claude:home')?.editable).toBe(false);
   });
 
+  it('marks Cursor project skills (.cursor/skills) editable, globals read-only', () => {
+    const rows = toSkillLibraryRows([
+      entry({ id: 'cursor:proj', providerId: 'cursor', sourceFilePath: '.cursor/skills/proj/SKILL.md' }),
+      entry({ id: 'cursor:global', providerId: 'cursor', sourceFilePath: '/home/user/.cursor/skills/g/SKILL.md' }),
+    ]);
+    expect(rows.find((r) => r.id === 'cursor:proj')?.editable).toBe(true);
+    expect(rows.find((r) => r.id === 'cursor:global')?.editable).toBe(false);
+  });
+
   it('sorts by name', () => {
     const rows = toSkillLibraryRows([
       entry({ id: 'b', name: 'beta' }),

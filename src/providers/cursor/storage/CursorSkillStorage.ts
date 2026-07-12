@@ -29,9 +29,11 @@ type CursorSkillReadAdapter = Pick<VaultFileAdapter, 'exists' | 'read' | 'listFo
 
 /**
  * Discovers Cursor Agent Skills (the `SKILL.md` open standard) from Cursor's
- * own roots and surfaces them read-only, mirroring how Claude's `~/.claude`
- * and Codex's global skills appear in the Library. Cursor has no in-app skill
- * editor, so nothing here is writable.
+ * own roots, mirroring how Claude's `~/.claude` and Codex's global skills appear
+ * in the Library. This class only reads: project (`.cursor/skills`) skills are
+ * made editable in the Library through the shared `VAULT_SKILL_ROOTS` gate and
+ * the generic `SkillEditorModal` (which writes via the vault adapter), not here;
+ * the global roots stay read-only (host-absolute, outside the vault).
  *
  * Skills are de-duplicated by name with project (vault) shadowing global,
  * matching Cursor's own precedence, so each `/name` card reflects the skill

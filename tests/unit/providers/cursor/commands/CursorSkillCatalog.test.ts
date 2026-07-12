@@ -22,7 +22,7 @@ const GLOBAL_SKILL: CursorSkillEntry = {
 };
 
 describe('CursorSkillCatalog', () => {
-  it('maps project skills to read-only vault entries with the `/` prefix', async () => {
+  it('maps project skills to editable vault entries with the `/` prefix', async () => {
     const catalog = new CursorSkillCatalog(fakeStorage([PROJECT_SKILL]));
 
     const [entry] = await catalog.listVaultEntries();
@@ -33,8 +33,10 @@ describe('CursorSkillCatalog', () => {
       kind: 'skill',
       name: 'refactor',
       scope: 'vault',
-      isEditable: false,
-      isDeletable: false,
+      // Project skills are editable via the Library's in-place editor
+      // (`.cursor/skills` is in the shared VAULT_SKILL_ROOTS); globals stay read-only.
+      isEditable: true,
+      isDeletable: true,
       displayPrefix: '/',
       insertPrefix: '/',
       sourceFilePath: '.cursor/skills/refactor/SKILL.md',
@@ -72,11 +74,11 @@ describe('CursorSkillCatalog', () => {
     expect(config.skillPrefix).toBe('/');
   });
 
-  it('rejects writes — Cursor skills are read-only in Specorator', async () => {
+  it('rejects catalog writes — Cursor editing flows through the Library editor', async () => {
     const catalog = new CursorSkillCatalog(fakeStorage([PROJECT_SKILL]));
 
-    await expect(catalog.saveVaultEntry(undefined as never)).rejects.toThrow(/read-only/);
-    await expect(catalog.deleteVaultEntry(undefined as never)).rejects.toThrow(/read-only/);
+    await expect(catalog.saveVaultEntry(undefined as never)).rejects.toThrow(/Library editor/);
+    await expect(catalog.deleteVaultEntry(undefined as never)).rejects.toThrow(/Library editor/);
   });
 
   it('refreshes without throwing (filesystem is re-scanned per call)', async () => {

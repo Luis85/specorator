@@ -19,6 +19,7 @@ describe('isCloneableSkillPath', () => {
     ['.claude/skills/a/SKILL.md'],
     ['.codex/skills/b/SKILL.md'],
     ['.agents/skills/c/SKILL.md'],
+    ['.cursor/skills/d/SKILL.md'],
     [`${SKILLS_DIR}/my-skill-copy/SKILL.md`],
   ])('accepts the <root>/<name>/SKILL.md shape %s', (path) => {
     expect(isCloneableSkillPath(path)).toBe(true);
@@ -54,6 +55,7 @@ describe('vaultSkillFolderOf', () => {
     ['.claude/skills/a/SKILL.md', '.claude/skills/a'],
     ['.codex/skills/b/SKILL.md', '.codex/skills/b'],
     ['.agents/skills/c/SKILL.md', '.agents/skills/c'],
+    ['.cursor/skills/d/SKILL.md', '.cursor/skills/d'],
   ])('returns the skill folder for %s', (path, folder) => {
     expect(vaultSkillFolderOf(path)).toBe(folder);
   });

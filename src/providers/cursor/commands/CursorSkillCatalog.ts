@@ -7,6 +7,11 @@ import type { SlashCommand } from '../../../core/types';
 import type { CursorSkillEntry, CursorSkillStorage } from '../storage/CursorSkillStorage';
 
 function skillToEntry(skill: CursorSkillEntry): ProviderCommandEntry {
+  // Project (vault) skills under `.cursor/skills` are editable/clonable/deletable
+  // through the Library's in-place editor, which writes SKILL.md via the vault
+  // adapter — enabled by `.cursor/skills` now being in the shared VAULT_SKILL_ROOTS.
+  // Global skills live outside the vault (host-absolute path) and stay read-only.
+  const editable = skill.provenance === 'vault';
   return {
     // Keyed by name (skills are de-duplicated by name in storage), never the
     // host-absolute path — the id is persisted into the vault-synced skill-index
@@ -17,15 +22,12 @@ function skillToEntry(skill: CursorSkillEntry): ProviderCommandEntry {
     name: skill.name,
     description: skill.description,
     content: skill.content,
-    // Read-only everywhere: Cursor has no in-app skill editor and its globals
-    // live outside the vault. `isEditable/isDeletable: false` plus the absence
-    // of `.cursor/skills` from the shared VAULT_SKILL_ROOTS keep the Library's
-    // edit / clone / delete affordances off. `scope: 'user'` for globals drives
-    // the persisted-index host-path redaction; project skills stay `vault`.
-    scope: skill.provenance === 'vault' ? 'vault' : 'user',
+    // `scope: 'user'` for globals drives the persisted-index host-path redaction;
+    // project skills stay `vault`.
+    scope: editable ? 'vault' : 'user',
     source: 'user',
-    isEditable: false,
-    isDeletable: false,
+    isEditable: editable,
+    isDeletable: editable,
     // Cursor invokes skills as `/skill-name` (its slash-command menu), unlike
     // the `$` skill prefix Claude/Codex use.
     displayPrefix: '/',
@@ -35,11 +37,13 @@ function skillToEntry(skill: CursorSkillEntry): ProviderCommandEntry {
 }
 
 /**
- * Read-only command catalog surfacing Cursor Agent Skills in the Library /
- * Quick Actions (and the chat `/` dropdown). Cursor owns skill authoring, so
- * the write seams intentionally reject — nothing in Specorator should call
- * them (every entry is `isEditable: false`, and the shared skill-path gates
- * keep the edit/clone/delete UI off).
+ * Command catalog surfacing Cursor Agent Skills in the Library / Quick Actions
+ * (and the chat `/` dropdown). Project skills under `.cursor/skills` are
+ * editable/clonable/deletable through the Library's in-place editor (which
+ * writes SKILL.md via the vault adapter); global skills are read-only. Cursor
+ * owns skill *authoring*, so there is no in-settings skill manager — the catalog
+ * write seams below stay unused (editing flows through the Library editor, not
+ * the catalog) and reject to make an accidental call obvious.
  */
 export class CursorSkillCatalog implements ProviderCommandCatalog {
   constructor(private readonly storage: CursorSkillStorage) {}
@@ -53,11 +57,11 @@ export class CursorSkillCatalog implements ProviderCommandCatalog {
   }
 
   async saveVaultEntry(_entry: ProviderCommandEntry): Promise<void> {
-    throw new Error('Cursor skills are read-only in Specorator; edit them in Cursor.');
+    throw new Error('Cursor skills are edited via the Library editor, not the catalog seam.');
   }
 
   async deleteVaultEntry(_entry: ProviderCommandEntry): Promise<void> {
-    throw new Error('Cursor skills are read-only in Specorator; delete them in Cursor.');
+    throw new Error('Cursor skills are deleted via the Library editor, not the catalog seam.');
   }
 
   setRuntimeCommands(_commands: SlashCommand[]): void {
