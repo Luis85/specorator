@@ -1,14 +1,25 @@
 <script setup lang="ts">
-import { computed } from 'vue';
+import { computed, inject } from 'vue';
 
 import type { TodoItem } from '../../../../../../core/tools/todo';
 import { getToolIcon } from '../../../../../../core/tools/toolIcons';
-import { TOOL_ASK_USER_QUESTION, TOOL_BASH, TOOL_TODO_WRITE, TOOL_WEB_SEARCH } from '../../../../../../core/tools/toolNames';
+import {
+  TOOL_ASK_USER_QUESTION,
+  TOOL_BASH,
+  TOOL_EDIT,
+  TOOL_LS,
+  TOOL_READ,
+  TOOL_TODO_WRITE,
+  TOOL_WEB_SEARCH,
+  TOOL_WRITE,
+} from '../../../../../../core/tools/toolNames';
 import type { ToolCallInfo } from '../../../../../../core/types';
+import { resolveOpenableVaultPath } from '../../../../../../utils/fileLink';
 import { getToolName, getToolSummary } from '../../../../rendering/ToolCallRenderer';
-import { getToolLabel } from '../../../../rendering/toolLabel';
+import { getInputText, getToolLabel } from '../../../../rendering/toolLabel';
 import { useCollapsible } from '../collapsible';
 import IconSpan from '../IconSpan.vue';
+import { APP_KEY, CALLBACKS_KEY } from '../transcriptKeys';
 import AskQuestionResult from './AskQuestionResult.vue';
 import TodoListView from './TodoListView.vue';
 import ToolContentLines from './ToolContentLines.vue';
@@ -32,8 +43,18 @@ import WebSearchView from './WebSearchView.vue';
  * `toolCallElements`) — a deliberate forward-looking addition for the
  * future block-list orchestration (Task 10) to key off of, not part of the
  * characterized legacy contract.
+ *
+ * The `.specorator-tool-summary` link decoration reproduces
+ * `decorateToolSummaryPath`: only Read/Write/Edit (`input.file_path`) and LS
+ * (`input.path`, when not `.`) resolve against the injected `App` via the
+ * shared `resolveOpenableVaultPath` helper (same resolver `decorateVaultFileLink`
+ * uses) — the raw tool-input path is resolved, not the displayed
+ * filename-only summary text.
  */
 const props = defineProps<{ toolCall: ToolCallInfo }>();
+
+const app = inject(APP_KEY, undefined);
+const callbacks = inject(CALLBACKS_KEY, undefined);
 
 const STATUS_ICONS: Record<string, string> = { completed: 'check', error: 'x', blocked: 'shield-off' };
 
@@ -44,6 +65,26 @@ const isWebSearch = computed(() => props.toolCall.name === TOOL_WEB_SEARCH);
 
 const toolName = computed(() => getToolName(props.toolCall.name, props.toolCall.input));
 const toolSummary = computed(() => getToolSummary(props.toolCall.name, props.toolCall.input));
+
+const summaryLinkPath = computed<string | null>(() => {
+  if (!app) return null;
+  const { name, input } = props.toolCall;
+  if (name === TOOL_READ || name === TOOL_WRITE || name === TOOL_EDIT) {
+    const filePath = getInputText(input, 'file_path');
+    return filePath ? resolveOpenableVaultPath(app, filePath) : null;
+  }
+  if (name === TOOL_LS) {
+    const path = getInputText(input, 'path', '.');
+    return path && path !== '.' ? resolveOpenableVaultPath(app, path) : null;
+  }
+  return null;
+});
+
+function onSummaryClick(): void {
+  if (summaryLinkPath.value) {
+    callbacks?.openFile(summaryLinkPath.value);
+  }
+}
 
 function getTodos(): TodoItem[] | undefined {
   const todos = props.toolCall.input.todos;
@@ -110,7 +151,13 @@ const { expanded, toggle, onKeydown, ariaLabel } = useCollapsible({
         :aria-hidden="true"
       />
       <span class="specorator-tool-name">{{ toolName }}</span>
-      <span class="specorator-tool-summary">{{ toolSummary }}</span>
+      <span
+        class="specorator-tool-summary"
+        :class="{ 'specorator-file-link': !!summaryLinkPath }"
+        :role="summaryLinkPath ? 'link' : undefined"
+        :data-href="summaryLinkPath || null"
+        @click="onSummaryClick"
+      >{{ toolSummary }}</span>
       <span
         v-if="isTodoWrite"
         class="specorator-tool-current"

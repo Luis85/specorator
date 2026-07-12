@@ -3,10 +3,18 @@ import { flushPromises } from '@vue/test-utils';
 import { setIcon } from 'obsidian';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+vi.mock('@/utils/fileLink', () => ({
+  resolveOpenableVaultPath: vi.fn(),
+}));
+
+import type { App } from 'obsidian';
+
 import type { ToolCallInfo } from '@/core/types';
 import WriteEditView from '@/features/chat/ui/vue/transcript/blocks/WriteEditView.vue';
-import { PLUGIN_KEY } from '@/features/chat/ui/vue/transcript/transcriptKeys';
+import type { TranscriptCallbacks } from '@/features/chat/ui/vue/transcript/transcriptCallbacks';
+import { APP_KEY, CALLBACKS_KEY, PLUGIN_KEY } from '@/features/chat/ui/vue/transcript/transcriptKeys';
 import type SpecoratorPlugin from '@/main';
+import { resolveOpenableVaultPath } from '@/utils/fileLink';
 
 /**
  * Parity twin of `writeEdit.characterization.test.ts`: reproduces the same
@@ -23,16 +31,56 @@ function createToolCall(overrides: Partial<ToolCallInfo> = {}): ToolCallInfo {
   };
 }
 
-function mountWriteEdit(toolCall: ToolCallInfo, expandFileEditsByDefault = false) {
+function mountWriteEdit(
+  toolCall: ToolCallInfo,
+  expandFileEditsByDefault = false,
+  extraProvide: Record<symbol, unknown> = {},
+) {
   const plugin = { settings: { expandFileEditsByDefault } } as unknown as SpecoratorPlugin;
   return render(WriteEditView, {
     props: { toolCall },
-    global: { provide: { [PLUGIN_KEY as symbol]: plugin } },
+    global: { provide: { [PLUGIN_KEY as symbol]: plugin, ...extraProvide } },
   });
+}
+
+const resolveMock = vi.mocked(resolveOpenableVaultPath);
+const mockApp = {} as App;
+
+function makeCallbacks(overrides: Partial<TranscriptCallbacks> = {}): TranscriptCallbacks {
+  return {
+    subscribe: vi.fn(),
+    onRewind: vi.fn(),
+    onFork: vi.fn(),
+    isRewindEligible: vi.fn(() => false),
+    openProviderSettings: vi.fn(),
+    onRetryLastTurn: null,
+    getMessageActions: vi.fn(() => []),
+    copyText: vi.fn(),
+    openFile: vi.fn(),
+    resolveImageSrc: vi.fn(() => ''),
+    showFullImage: vi.fn(),
+    getProviderId: vi.fn(() => 'claude'),
+    getWorkOrderPath: vi.fn(() => null),
+    getCapabilities: vi.fn(() => ({
+      providerId: 'claude',
+      supportsPersistentRuntime: true,
+      supportsNativeHistory: true,
+      supportsPlanMode: true,
+      supportsRewind: true,
+      supportsFork: true,
+      supportsProviderCommands: true,
+      supportsImageAttachments: true,
+      supportsInstructionMode: true,
+      supportsMcpTools: true,
+      reasoningControl: 'effort' as const,
+    })),
+    ...overrides,
+  };
 }
 
 beforeEach(() => {
   vi.clearAllMocks();
+  resolveMock.mockReset();
 });
 
 describe('WriteEditView', () => {
@@ -224,5 +272,74 @@ describe('WriteEditView', () => {
     expect(wrapperEl.classList.contains('expanded')).toBe(true);
     expect(header.getAttribute('aria-expanded')).toBe('true');
     expect(header.getAttribute('aria-label')).toBe('Write: /vault/x.md - click to collapse');
+  });
+
+  describe('summary vault-file-link decoration', () => {
+    it('a resolvable file_path makes the summary clickable and wires openFile', async () => {
+      resolveMock.mockImplementation((_app, rawPath) => (rawPath === '/vault/notes/new.md' ? 'notes/new.md' : null));
+      const callbacks = makeCallbacks();
+      const toolCall = createToolCall({ name: 'Write', input: { file_path: '/vault/notes/new.md' } });
+      const { container } = mountWriteEdit(toolCall, false, {
+        [APP_KEY as symbol]: mockApp,
+        [CALLBACKS_KEY as symbol]: callbacks,
+      });
+      await flushPromises();
+
+      expect(resolveMock).toHaveBeenCalledWith(mockApp, '/vault/notes/new.md');
+
+      const summaryEl = container.querySelector('.specorator-write-edit-summary') as HTMLElement;
+      expect(summaryEl.classList.contains('specorator-file-link')).toBe(true);
+      expect(summaryEl.getAttribute('role')).toBe('link');
+      expect(summaryEl.getAttribute('data-href')).toBe('notes/new.md');
+      expect(summaryEl.textContent).toBe('new.md');
+
+      summaryEl.click();
+      expect(callbacks.openFile).toHaveBeenCalledWith('notes/new.md');
+    });
+
+    it('a non-vault file_path leaves the summary as plain text', async () => {
+      resolveMock.mockReturnValue(null);
+      const callbacks = makeCallbacks();
+      const toolCall = createToolCall({ name: 'Edit', input: { file_path: '/outside/x.md' } });
+      const { container } = mountWriteEdit(toolCall, false, {
+        [APP_KEY as symbol]: mockApp,
+        [CALLBACKS_KEY as symbol]: callbacks,
+      });
+      await flushPromises();
+
+      const summaryEl = container.querySelector('.specorator-write-edit-summary') as HTMLElement;
+      expect(summaryEl.classList.contains('specorator-file-link')).toBe(false);
+      expect(summaryEl.hasAttribute('role')).toBe(false);
+      expect(summaryEl.hasAttribute('data-href')).toBe(false);
+
+      summaryEl.click();
+      expect(callbacks.openFile).not.toHaveBeenCalled();
+    });
+
+    it('does not decorate the summary when no App is injected (resolver never called)', async () => {
+      resolveMock.mockImplementation(() => 'unexpected');
+      const toolCall = createToolCall({ name: 'Write', input: { file_path: '/vault/a.md' } });
+      const { container } = mountWriteEdit(toolCall);
+      await flushPromises();
+
+      expect(resolveMock).not.toHaveBeenCalled();
+      const summaryEl = container.querySelector('.specorator-write-edit-summary') as HTMLElement;
+      expect(summaryEl.classList.contains('specorator-file-link')).toBe(false);
+    });
+
+    it('a missing file_path leaves the summary as plain text (no resolver call)', async () => {
+      resolveMock.mockImplementation(() => 'unexpected');
+      const callbacks = makeCallbacks();
+      const toolCall = createToolCall({ name: 'Write', input: {} });
+      const { container } = mountWriteEdit(toolCall, false, {
+        [APP_KEY as symbol]: mockApp,
+        [CALLBACKS_KEY as symbol]: callbacks,
+      });
+      await flushPromises();
+
+      expect(resolveMock).not.toHaveBeenCalled();
+      const summaryEl = container.querySelector('.specorator-write-edit-summary') as HTMLElement;
+      expect(summaryEl.classList.contains('specorator-file-link')).toBe(false);
+    });
   });
 });

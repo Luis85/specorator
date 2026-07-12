@@ -3,9 +3,18 @@ import { flushPromises } from '@vue/test-utils';
 import { setIcon } from 'obsidian';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+vi.mock('@/utils/fileLink', () => ({
+  resolveOpenableVaultPath: vi.fn(),
+}));
+
+import type { App } from 'obsidian';
+
 import type { ToolCallInfo } from '@/core/types';
 import { getToolLabel, getToolName, getToolSummary } from '@/features/chat/rendering/ToolCallRenderer';
 import ToolCall from '@/features/chat/ui/vue/transcript/blocks/ToolCall.vue';
+import type { TranscriptCallbacks } from '@/features/chat/ui/vue/transcript/transcriptCallbacks';
+import { APP_KEY, CALLBACKS_KEY } from '@/features/chat/ui/vue/transcript/transcriptKeys';
+import { resolveOpenableVaultPath } from '@/utils/fileLink';
 
 /**
  * Parity twin of `toolCall.characterization.test.ts`: reproduces the same
@@ -26,8 +35,56 @@ function mountToolCall(toolCall: ToolCallInfo) {
   return render(ToolCall, { props: { toolCall } });
 }
 
+const resolveMock = vi.mocked(resolveOpenableVaultPath);
+const mockApp = {} as App;
+
+function makeCallbacks(overrides: Partial<TranscriptCallbacks> = {}): TranscriptCallbacks {
+  return {
+    subscribe: vi.fn(),
+    onRewind: vi.fn(),
+    onFork: vi.fn(),
+    isRewindEligible: vi.fn(() => false),
+    openProviderSettings: vi.fn(),
+    onRetryLastTurn: null,
+    getMessageActions: vi.fn(() => []),
+    copyText: vi.fn(),
+    openFile: vi.fn(),
+    resolveImageSrc: vi.fn(() => ''),
+    showFullImage: vi.fn(),
+    getProviderId: vi.fn(() => 'claude'),
+    getWorkOrderPath: vi.fn(() => null),
+    getCapabilities: vi.fn(() => ({
+      providerId: 'claude',
+      supportsPersistentRuntime: true,
+      supportsNativeHistory: true,
+      supportsPlanMode: true,
+      supportsRewind: true,
+      supportsFork: true,
+      supportsProviderCommands: true,
+      supportsImageAttachments: true,
+      supportsInstructionMode: true,
+      supportsMcpTools: true,
+      reasoningControl: 'effort' as const,
+    })),
+    ...overrides,
+  };
+}
+
+function mountToolCallWithApp(toolCall: ToolCallInfo, callbacks: TranscriptCallbacks) {
+  return render(ToolCall, {
+    props: { toolCall },
+    global: {
+      provide: {
+        [APP_KEY as symbol]: mockApp,
+        [CALLBACKS_KEY as symbol]: callbacks,
+      },
+    },
+  });
+}
+
 beforeEach(() => {
   vi.clearAllMocks();
+  resolveMock.mockReset();
 });
 
 describe('ToolCall', () => {
@@ -266,5 +323,104 @@ describe('ToolCall', () => {
 
     const statusEl = header.querySelector('.specorator-tool-status') as HTMLElement;
     expect(statusEl.classList.contains('specorator-hidden')).toBe(false);
+  });
+
+  describe('summary vault-file-link decoration', () => {
+    it('Read: a resolvable file_path makes the summary clickable and wires openFile', async () => {
+      resolveMock.mockImplementation((_app, rawPath) => (rawPath === '/vault/notes/a.md' ? 'notes/a.md' : null));
+      const callbacks = makeCallbacks();
+      const toolCall = createToolCall({ name: 'Read', input: { file_path: '/vault/notes/a.md' } });
+      const { container } = mountToolCallWithApp(toolCall, callbacks);
+      await flushPromises();
+
+      expect(resolveMock).toHaveBeenCalledWith(mockApp, '/vault/notes/a.md');
+
+      const summaryEl = container.querySelector('.specorator-tool-summary') as HTMLElement;
+      expect(summaryEl.classList.contains('specorator-file-link')).toBe(true);
+      expect(summaryEl.getAttribute('role')).toBe('link');
+      expect(summaryEl.getAttribute('data-href')).toBe('notes/a.md');
+      // The displayed text stays the filename-only summary, not the resolved path.
+      expect(summaryEl.textContent).toBe('a.md');
+
+      summaryEl.click();
+      await flushPromises();
+      expect(callbacks.openFile).toHaveBeenCalledWith('notes/a.md');
+    });
+
+    it('Write: a resolvable file_path makes the summary clickable', async () => {
+      resolveMock.mockReturnValue('notes/new.md');
+      const callbacks = makeCallbacks();
+      const toolCall = createToolCall({ name: 'Write', input: { file_path: '/vault/notes/new.md' } });
+      const { container } = mountToolCallWithApp(toolCall, callbacks);
+      await flushPromises();
+
+      const summaryEl = container.querySelector('.specorator-tool-summary') as HTMLElement;
+      expect(summaryEl.classList.contains('specorator-file-link')).toBe(true);
+      summaryEl.click();
+      expect(callbacks.openFile).toHaveBeenCalledWith('notes/new.md');
+    });
+
+    it('Edit: a non-vault file_path leaves the summary as plain text', async () => {
+      resolveMock.mockReturnValue(null);
+      const callbacks = makeCallbacks();
+      const toolCall = createToolCall({ name: 'Edit', input: { file_path: '/outside/x.md' } });
+      const { container } = mountToolCallWithApp(toolCall, callbacks);
+      await flushPromises();
+
+      const summaryEl = container.querySelector('.specorator-tool-summary') as HTMLElement;
+      expect(summaryEl.classList.contains('specorator-file-link')).toBe(false);
+      expect(summaryEl.hasAttribute('role')).toBe(false);
+      expect(summaryEl.hasAttribute('data-href')).toBe(false);
+
+      summaryEl.click();
+      expect(callbacks.openFile).not.toHaveBeenCalled();
+    });
+
+    it('LS: a real directory path resolves and is clickable', async () => {
+      resolveMock.mockImplementation((_app, rawPath) => (rawPath === 'notes' ? 'notes' : null));
+      const callbacks = makeCallbacks();
+      const toolCall = createToolCall({ name: 'LS', input: { path: 'notes' } });
+      const { container } = mountToolCallWithApp(toolCall, callbacks);
+      await flushPromises();
+
+      const summaryEl = container.querySelector('.specorator-tool-summary') as HTMLElement;
+      expect(summaryEl.classList.contains('specorator-file-link')).toBe(true);
+      expect(summaryEl.getAttribute('data-href')).toBe('notes');
+    });
+
+    it('LS: the default "." path never resolves (matches the legacy guard) and stays plain', async () => {
+      resolveMock.mockImplementation(() => 'unexpected');
+      const callbacks = makeCallbacks();
+      const toolCall = createToolCall({ name: 'LS', input: {} });
+      const { container } = mountToolCallWithApp(toolCall, callbacks);
+      await flushPromises();
+
+      expect(resolveMock).not.toHaveBeenCalled();
+      const summaryEl = container.querySelector('.specorator-tool-summary') as HTMLElement;
+      expect(summaryEl.classList.contains('specorator-file-link')).toBe(false);
+    });
+
+    it('does not decorate the summary when no App is injected (resolver never called)', async () => {
+      resolveMock.mockImplementation(() => 'unexpected');
+      const toolCall = createToolCall({ name: 'Read', input: { file_path: '/vault/a.md' } });
+      const { container } = mountToolCall(toolCall);
+      await flushPromises();
+
+      expect(resolveMock).not.toHaveBeenCalled();
+      const summaryEl = container.querySelector('.specorator-tool-summary') as HTMLElement;
+      expect(summaryEl.classList.contains('specorator-file-link')).toBe(false);
+    });
+
+    it('Bash: not a path-bearing tool, summary is never decorated', async () => {
+      resolveMock.mockImplementation(() => 'unexpected');
+      const callbacks = makeCallbacks();
+      const toolCall = createToolCall({ name: 'Bash', input: { command: 'ls -la' } });
+      const { container } = mountToolCallWithApp(toolCall, callbacks);
+      await flushPromises();
+
+      expect(resolveMock).not.toHaveBeenCalled();
+      const summaryEl = container.querySelector('.specorator-tool-summary') as HTMLElement;
+      expect(summaryEl.classList.contains('specorator-file-link')).toBe(false);
+    });
   });
 });

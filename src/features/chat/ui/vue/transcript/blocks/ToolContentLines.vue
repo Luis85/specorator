@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed } from 'vue';
+import { computed, inject } from 'vue';
 
 import { getToolIcon } from '../../../../../../core/tools/toolIcons';
 import {
@@ -14,8 +14,10 @@ import {
 } from '../../../../../../core/tools/toolNames';
 import type { ApplyPatchFileDiff } from '../../../../../../utils/diff';
 import { parseApplyPatchDiffs, parseFileUpdateChangeDiffs } from '../../../../../../utils/diff';
+import { resolveOpenableVaultPath } from '../../../../../../utils/fileLink';
 import IconSpan from '../IconSpan.vue';
 import ToolLinesExpanded from '../ToolLinesExpanded.vue';
+import { APP_KEY, CALLBACKS_KEY } from '../transcriptKeys';
 import DiffView from './DiffView.vue';
 
 /**
@@ -33,12 +35,21 @@ import DiffView from './DiffView.vue';
  * change-list / raw-patch-text / free-text-result-file-match rendering, or
  * the leading verification-failure line dump) — those remain a documented
  * gap, falling through to the plain 20-line default alongside the
- * agent-lifecycle JSON-object expansion. `Glob`/`Grep`/`LS`/`Read`
- * vault-file-link decoration (`decorateVaultFileLink`, which needs an
- * injected `App`) is not reproduced — lines render as plain (non-linked)
- * text.
+ * agent-lifecycle JSON-object expansion.
+ *
+ * `Glob`/`Grep`/`LS` file-search result lines reproduce
+ * `renderFileSearchExpanded`'s `decorateVaultFileLink` treatment: each
+ * non-header line resolves against the injected `App` via the shared
+ * `resolveOpenableVaultPath` helper and becomes clickable when it resolves.
+ * (`Read`'s content here is the file's line-numbered text, not a path list —
+ * it has no line-level link decoration in the legacy renderer either; only
+ * its `.specorator-tool-summary` gets the link treatment, reproduced in
+ * `ToolCall.vue`.)
  */
 const props = defineProps<{ name: string; input: Record<string, unknown>; result?: string }>();
+
+const app = inject(APP_KEY, undefined);
+const callbacks = inject(CALLBACKS_KEY, undefined);
 
 const command = computed(() => (typeof props.input.command === 'string' ? props.input.command : ''));
 // `ToolLinesExpanded` requires a non-optional `result: string`; every branch
@@ -59,15 +70,24 @@ function isFileSearchHeaderLine(line: string): boolean {
 interface FileSearchLine {
   text: string;
   hoverable: boolean;
+  linkPath: string | null;
 }
 
 const fileSearchLines = computed<FileSearchLine[]>(() => {
   const lines = (props.result ?? '').split(/\r?\n/).filter(line => line.trim());
   return lines.map(line => {
     const stripped = line.replace(/^\s*\d+→/, '').trim();
-    return { text: stripped || ' ', hoverable: !isFileSearchHeaderLine(stripped) };
+    const hoverable = !isFileSearchHeaderLine(stripped);
+    const linkPath = hoverable && app ? resolveOpenableVaultPath(app, stripped) : null;
+    return { text: stripped || ' ', hoverable, linkPath };
   });
 });
+
+function onFileSearchLineClick(linkPath: string | null): void {
+  if (linkPath) {
+    callbacks?.openFile(linkPath);
+  }
+}
 
 const WEB_FETCH_MAX_CHARS = 500;
 const webFetchText = computed(() => (props.result ?? '').slice(0, WEB_FETCH_MAX_CHARS));
@@ -174,7 +194,10 @@ const applyPatchFileDiffs = computed<ApplyPatchFileDiff[]>(() => {
         v-for="(line, i) in fileSearchLines"
         :key="i"
         class="specorator-tool-line"
-        :class="{ hoverable: line.hoverable }"
+        :class="{ hoverable: line.hoverable, 'specorator-file-link': !!line.linkPath }"
+        :role="line.linkPath ? 'link' : undefined"
+        :data-href="line.linkPath || null"
+        @click="onFileSearchLineClick(line.linkPath)"
       >{{ line.text }}</div>
     </div>
   </template>

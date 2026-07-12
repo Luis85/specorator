@@ -3,10 +3,11 @@ import { computed, inject } from 'vue';
 
 import { getToolIcon } from '../../../../../../core/tools/toolIcons';
 import type { ToolCallInfo } from '../../../../../../core/types';
-import { fileNameOnly } from '../../../../rendering/toolLabel';
+import { resolveOpenableVaultPath } from '../../../../../../utils/fileLink';
+import { fileNameOnly, getInputText } from '../../../../rendering/toolLabel';
 import { useCollapsible } from '../collapsible';
 import IconSpan from '../IconSpan.vue';
-import { PLUGIN_KEY } from '../transcriptKeys';
+import { APP_KEY, CALLBACKS_KEY, PLUGIN_KEY } from '../transcriptKeys';
 import DiffView from './DiffView.vue';
 
 /**
@@ -16,14 +17,17 @@ import DiffView from './DiffView.vue';
  * `updateWriteEditWithDiff` / `finalizeWriteEditBlock`) is not reproduced —
  * only the terminal stored render this task characterizes.
  *
- * Deferred (tracked follow-up, not this task's scope): the vault file-link
- * decoration on the summary path (`decorateVaultFileLink`). The summary
- * renders as plain text (`fileNameOnly`) without the clickable-link
- * affordance the legacy renderer adds via an injected Obsidian `App`.
+ * The `.specorator-write-edit-summary` link decoration reproduces
+ * `decorateToolSummaryPath`'s Write/Edit branch: the raw `input.file_path`
+ * (not the shortened `summaryText`) resolves against the injected `App` via
+ * the shared `resolveOpenableVaultPath` helper (same resolver
+ * `decorateVaultFileLink` uses).
  */
 const props = defineProps<{ toolCall: ToolCallInfo }>();
 
 const plugin = inject(PLUGIN_KEY, undefined);
+const app = inject(APP_KEY, undefined);
+const callbacks = inject(CALLBACKS_KEY, undefined);
 
 /** Ported verbatim from `WriteEditRenderer.ts`'s local (unexported) `shortenPath`. */
 function shortenPath(filePath: string, maxLength = 40): string {
@@ -55,6 +59,18 @@ const isDone = computed(() => !isError.value && props.toolCall.status === 'compl
 const diffData = computed(() => props.toolCall.diffData);
 const hasDiff = computed(() => !!diffData.value && diffData.value.diffLines.length > 0);
 
+const summaryLinkPath = computed<string | null>(() => {
+  if (!app) return null;
+  const rawFilePath = getInputText(props.toolCall.input, 'file_path');
+  return rawFilePath ? resolveOpenableVaultPath(app, rawFilePath) : null;
+});
+
+function onSummaryClick(): void {
+  if (summaryLinkPath.value) {
+    callbacks?.openFile(summaryLinkPath.value);
+  }
+}
+
 const { expanded, toggle, onKeydown, ariaLabel } = useCollapsible({
   initiallyExpanded: plugin?.settings.expandFileEditsByDefault === true,
   baseAriaLabel: `${toolName.value}: ${shortenPath(filePath.value)}`,
@@ -83,7 +99,13 @@ const { expanded, toggle, onKeydown, ariaLabel } = useCollapsible({
         :aria-hidden="true"
       />
       <div class="specorator-write-edit-name">{{ toolName }}</div>
-      <div class="specorator-write-edit-summary">{{ summaryText }}</div>
+      <div
+        class="specorator-write-edit-summary"
+        :class="{ 'specorator-file-link': !!summaryLinkPath }"
+        :role="summaryLinkPath ? 'link' : undefined"
+        :data-href="summaryLinkPath || null"
+        @click="onSummaryClick"
+      >{{ summaryText }}</div>
       <div class="specorator-write-edit-stats">
         <DiffView
           v-if="diffData"
