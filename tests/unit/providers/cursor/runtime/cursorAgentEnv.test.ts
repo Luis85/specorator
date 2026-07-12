@@ -56,9 +56,11 @@ describe('buildCursorAgentEnvironment', () => {
     setPlatform(originalPlatform);
   });
 
-  it('does not leak unrelated host env vars', () => {
+  it('passes host env vars through (full Claude-parity env)', () => {
+    // The allowlist was removed so no provider hits a missing-var/PATH problem
+    // the Claude integration doesn't; the TLS kill-switch is still filtered.
     const env = buildCursorAgentEnvironment(makePlugin(''));
-    expect(env.SECRET_TOKEN).toBeUndefined();
+    expect(env.SECRET_TOKEN).toBe('dummy-leak-me');
   });
 
   it('refuses NODE_TLS_REJECT_UNAUTHORIZED even when the host sets it', () => {

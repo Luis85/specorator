@@ -1,7 +1,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 
-import { buildAllowlistedSubprocessEnvironment } from '../../../core/providers/subprocessEnvironmentAllowlist';
+import { buildFullSubprocessEnvironment } from '../../../core/providers/subprocessEnvironmentAllowlist';
 import type { PluginContext } from '../../../core/types/PluginContext';
 import { getEnhancedPath } from '../../../utils/env';
 
@@ -137,10 +137,9 @@ export function buildCursorAgentEnvironment(
   cliPath?: string,
 ): Record<string, string> {
   const customEnv = plugin.getResolvedEnvironmentVariables('cursor');
-  const env = buildAllowlistedSubprocessEnvironment({
+  const env = buildFullSubprocessEnvironment({
     processEnv: process.env,
     customEnv,
-    providerPrefixPattern: /^CURSOR_/i,
     // Passing the CLI path (parity with Claude/Opencode) lets getEnhancedPath
     // add the install dir when it carries a bundled node, so the agent's own
     // child tools can resolve node and sibling binaries.

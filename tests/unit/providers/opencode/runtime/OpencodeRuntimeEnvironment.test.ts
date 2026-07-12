@@ -19,9 +19,11 @@ describe('buildOpencodeRuntimeEnv', () => {
     process.env = originalEnv;
   });
 
-  it('does not leak unrelated host env vars', () => {
+  it('passes host env vars through (full Claude-parity env)', () => {
+    // The allowlist was removed so the Opencode CLI and its shell tools resolve
+    // host binaries; the TLS kill-switch stays filtered (asserted below).
     const env = buildOpencodeRuntimeEnv({}, '');
-    expect(env.SECRET_TOKEN).toBeUndefined();
+    expect(env.SECRET_TOKEN).toBe('dummy-leak-me');
   });
 
   it('refuses NODE_TLS_REJECT_UNAUTHORIZED even when the resolved env sets it', () => {
