@@ -7,6 +7,7 @@ import { t } from '../../../i18n/i18n';
 import { mountCustomModelsSetting } from '../../../shared/settings/customModelsSetting';
 import { resolveClaudeModelSelection } from '../modelOptions';
 import {
+  applyClaudeLoadUserSettings,
   CLAUDE_SAFE_MODES,
   type ClaudeSafeMode,
   getClaudeProviderSettings,
@@ -88,8 +89,7 @@ export const claudeSettingsTabRenderer: ProviderSettingsTabRenderer = {
         toggle
           .setValue(claudeSettings.loadUserSettings)
           .onChange(async (value) => {
-            updateClaudeProviderSettings(settingsBag, { loadUserSettings: value });
-            await context.plugin.saveSettings();
+            await applyClaudeLoadUserSettings(context.plugin, value);
           })
       );
 

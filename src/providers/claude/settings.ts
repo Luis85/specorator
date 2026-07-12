@@ -4,8 +4,10 @@ import {
   normalizeCustomModels,
   normalizeHostnameCliPaths,
 } from '../../core/providers/providerSettingsNormalization';
+import type { PluginContext } from '../../core/types/PluginContext';
 import type { HostnameCliPaths } from '../../core/types/settings';
 import type { ProviderCustomModel } from '../../core/types/settings';
+import { asSettingsBag } from '../../core/types/settings';
 import {
   getHostnameKey,
   getLegacyHostnameKey,
@@ -142,4 +144,22 @@ export function updateClaudeProviderSettings(
   };
   setProviderConfig(settings, 'claude', next);
   return next;
+}
+
+/**
+ * Persist a `loadUserSettings` toggle, then invalidate cached Claude skills.
+ * Read-only `~/.claude/skills/` skills are gated on this flag, but the skill
+ * aggregator serves a TTL cache plus a persisted index; without an explicit
+ * invalidation a stale user skill stays runnable after the flag flips off — and
+ * its `/name` invocation fails once the runtime drops the `user` setting source.
+ * Emitting `vaultSkill.changed` (the same seam in-app skill writes use) clears
+ * the Claude bucket so the flip takes effect immediately in both directions.
+ */
+export async function applyClaudeLoadUserSettings(
+  plugin: Pick<PluginContext, 'settings' | 'saveSettings' | 'events'>,
+  value: boolean,
+): Promise<void> {
+  updateClaudeProviderSettings(asSettingsBag(plugin.settings), { loadUserSettings: value });
+  await plugin.saveSettings();
+  plugin.events.emit('vaultSkill.changed', { providerId: 'claude' });
 }
