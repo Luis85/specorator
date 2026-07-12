@@ -121,17 +121,18 @@ function mapPlanDecisionToOutcome(
   return { outcome: 'accepted' };
 }
 
-// Maps the settled plan decision to its outcome; approve-new-session also
-// cancels the running turn (RuntimeHost's cancelRequested never reaches the agent).
+// Maps the outcome BEFORE requestTurnCancel — cancel() aborts this same ask
+// signal, which would otherwise flip approve-new-session's `rejected` to `cancelled`.
 function settlePlanDecision(
   host: CursorAcpExtensionHost,
   decision: ExitPlanModeDecision | null,
   signal: AbortSignal | undefined,
 ): CursorCreatePlanOutcome {
+  const outcome = mapPlanDecisionToOutcome(decision, signal?.aborted ?? false);
   if (decision?.type === 'approve-new-session') {
     host.requestTurnCancel?.();
   }
-  return mapPlanDecisionToOutcome(decision, signal?.aborted ?? false);
+  return outcome;
 }
 
 /**

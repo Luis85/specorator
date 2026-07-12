@@ -374,6 +374,29 @@ describe('registerCursorAcpExtensions', () => {
     expect(markPlanDecidedInline).toHaveBeenCalled();
   });
 
+  it('still reports `rejected` on approve-new-session when requestTurnCancel aborts the shared ask signal', async () => {
+    // Mirrors the real runtime wiring: getAskSignal returns the per-turn
+    // askQuestionAbortController's signal, and requestTurnCancel -> cancel()
+    // aborts that SAME controller. Mapping the outcome after the abort would
+    // flip the intended `rejected` to `cancelled`.
+    const { transport, requests } = makeFakeTransport();
+    const controller = new AbortController();
+    const exitPlanMode = jest.fn().mockResolvedValue({ type: 'approve-new-session' });
+    registerCursorAcpExtensions(transport as never, {
+      askUser: jest.fn(),
+      exitPlanMode: exitPlanMode as never,
+      emitChunk: () => {},
+      markPlanDecidedInline: () => {},
+      getAskSignal: () => controller.signal,
+      requestTurnCancel: () => controller.abort(),
+    });
+
+    const response = await requests.get('cursor/create_plan')!({ plan: '# Plan\n1. go' });
+
+    expect(response).toEqual({ outcome: { outcome: 'rejected', reason: 'Plan approved for a new session' } });
+    expect(controller.signal.aborted).toBe(true);
+  });
+
   it('does not cancel the turn for an approve (current session) decision', async () => {
     const { transport, requests } = makeFakeTransport();
     const exitPlanMode = jest.fn().mockResolvedValue({ type: 'approve' });
