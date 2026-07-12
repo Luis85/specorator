@@ -5,6 +5,7 @@ import { RENDER_WINDOW_SIZE, windowStartIndex } from '../../../rendering/windowe
 import LoadEarlierControl from './LoadEarlierControl.vue';
 import MessageList from './MessageList.vue';
 import { useTranscriptStore } from './stores/transcriptStore';
+import StreamingIndicator from './StreamingIndicator.vue';
 import { CALLBACKS_KEY, SCROLL_HOST_KEY } from './transcriptKeys';
 import { useTranscriptEventRouting } from './useTranscriptEventRouting';
 import WelcomeBanner from './WelcomeBanner.vue';
@@ -18,9 +19,9 @@ import WelcomeBanner from './WelcomeBanner.vue';
  * keyboard handler (which all operate on `dom.messagesEl`) keep targeting the
  * real scrollable element once this island is wired in (Task 18).
  *
- * The streaming indicator (Task 12) is intentionally left as a marker comment
- * below `MessageList` — this task builds windowing + the stored-message
- * scaffolding only.
+ * `StreamingIndicator` (Task 12) mounts below `MessageList` as a pure
+ * read-model over `store.activeStream` — no timer/debounce logic here; that
+ * stays engine-side until Task 17 wires it.
  */
 const store = useTranscriptStore();
 const callbacks = inject(CALLBACKS_KEY, undefined);
@@ -102,7 +103,7 @@ async function onLoadEarlier(): Promise<void> {
         :messages="store.messages"
         :render-window-start="renderWindowStart"
       />
-      <!-- StreamingIndicator mounts here in Task 12 -->
+      <StreamingIndicator />
     </template>
   </div>
 </template>

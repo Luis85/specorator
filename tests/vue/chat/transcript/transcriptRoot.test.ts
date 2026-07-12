@@ -210,13 +210,30 @@ describe('TranscriptRoot', () => {
     expect(banner.dataset.errorCode).toBe('store-unreadable');
   });
 
-  it('leaves the Task 12 streaming-indicator slot as a marker comment after MessageList', async () => {
+  it('mounts StreamingIndicator after MessageList, reflecting the active stream', async () => {
+    const store = useTranscriptStore();
+    store.setMessages(userMessages(1));
+    store.setActiveStream({ messageId: 'm1', blockIndex: 0, isThinking: true, isWriting: false, elapsedSeconds: 0 });
+
+    const { container } = mountRoot(makeCallbacks());
+    await flushPromises();
+
+    const messages = container.querySelectorAll('.specorator-message');
+    const indicator = container.querySelector('.specorator-thinking');
+    expect(indicator).not.toBeNull();
+    // Confirms DOM order: the indicator follows the last mounted message.
+    expect(messages[messages.length - 1].compareDocumentPosition(indicator!)).toBe(
+      Node.DOCUMENT_POSITION_FOLLOWING
+    );
+  });
+
+  it('renders no streaming indicator when there is no active stream', async () => {
     const store = useTranscriptStore();
     store.setMessages(userMessages(1));
 
     const { container } = mountRoot(makeCallbacks());
     await flushPromises();
 
-    expect(container.innerHTML).toContain('StreamingIndicator mounts here in Task 12');
+    expect(container.querySelector('.specorator-thinking')).toBeNull();
   });
 });
