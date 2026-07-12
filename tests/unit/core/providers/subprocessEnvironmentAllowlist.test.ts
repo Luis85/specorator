@@ -151,6 +151,22 @@ describe('buildAllowlistedSubprocessEnvironment', () => {
     expect(result.Path).toBeUndefined();
   });
 
+  it('keeps the pathOverride even when host `PATH` and a customEnv `Path` differ in case', () => {
+    // Regression: overwriting `out.PATH` in place leaves its earlier insertion
+    // position, so a later customEnv `Path` would win the collapse and discard
+    // the enhanced override — child tools then fail to find node/git.
+    const result = buildAllowlistedSubprocessEnvironment({
+      processEnv: { PATH: '/host/bin' },
+      customEnv: { Path: '/custom/bin' },
+      providerPrefixPattern: /^CURSOR_/i,
+      pathOverride: '/host/bin:/enhanced/git/bin',
+    });
+    const pathKeys = Object.keys(result).filter((key) => key.toUpperCase() === 'PATH');
+    expect(pathKeys).toEqual(['PATH']);
+    expect(result.PATH).toBe('/host/bin:/enhanced/git/bin');
+    expect(result.Path).toBeUndefined();
+  });
+
   it('leaves a lone `Path` key untouched when there is no duplicate', () => {
     const result = buildAllowlistedSubprocessEnvironment({
       processEnv: { Path: 'C:\\Windows\\System32' },

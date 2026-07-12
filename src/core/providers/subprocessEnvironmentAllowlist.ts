@@ -131,10 +131,24 @@ export function buildAllowlistedSubprocessEnvironment(
     out[key] = value;
   }
   if (opts.pathOverride !== undefined) {
+    // Delete every case-variant first so the override is the sole PATH key.
+    // Overwriting `out.PATH` in place would leave its original insertion position
+    // untouched, so a later-inserted differently-cased `Path` (e.g. from customEnv)
+    // would win collapseDuplicatePathKeys and discard the enhanced override.
+    deleteCaseVariants(out, 'PATH');
     out.PATH = opts.pathOverride;
   }
   collapseDuplicatePathKeys(out);
   return out;
+}
+
+function deleteCaseVariants(env: Record<string, string>, canonical: string): void {
+  const upper = canonical.toUpperCase();
+  for (const key of Object.keys(env)) {
+    if (key.toUpperCase() === upper) {
+      delete env[key];
+    }
+  }
 }
 
 /**
@@ -153,8 +167,6 @@ function collapseDuplicatePathKeys(env: Record<string, string>): void {
     return;
   }
   const winner = env[pathKeys[pathKeys.length - 1]];
-  for (const key of pathKeys) {
-    delete env[key];
-  }
+  deleteCaseVariants(env, 'PATH');
   env.PATH = winner;
 }
