@@ -324,7 +324,7 @@ Review`,
       expect(vault!.isEditable).toBe(true);
     });
 
-    it('shadows a user skill when a vault skill claims the same name (project > user)', async () => {
+    it('a personal skill shadows a same-named vault skill (Claude precedence: personal > project)', async () => {
       const adapter = createMockAdapter({
         '.claude/skills/shared/SKILL.md': `---
 description: Vault shared
@@ -342,10 +342,13 @@ Home`,
         new SkillStorage(adapter, home),
       );
 
+      // Personal scope wins, matching what `/shared` actually runs — the Library
+      // must not show/edit the shadowed (inactive) project copy instead.
       const shared = (await catalog.listVaultEntries()).filter((e) => e.name === 'shared');
       expect(shared).toHaveLength(1);
-      expect(shared[0].scope).toBe('vault');
-      expect(shared[0].isEditable).toBe(true);
+      expect(shared[0].scope).toBe('user');
+      expect(shared[0].isEditable).toBe(false);
+      expect(shared[0].sourceFilePath).toBe('/home/user/.claude/skills/shared/SKILL.md');
     });
   });
 

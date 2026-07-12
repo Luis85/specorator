@@ -136,17 +136,19 @@ export class ClaudeCommandCatalog implements ProviderCommandCatalog {
     const commands = await this.commandStorage.loadAll();
     const skills = await this.skillStorage.loadAll();
     const userSkills = await this.skillStorage.loadUserAll();
-    // Project scope shadows user scope (Claude's own precedence): drop a home
-    // skill whose name a vault skill already claims so the same skill can't
-    // appear twice.
-    const vaultSkillNames = new Set(skills.map((entry) => entry.skill.name.toLowerCase()));
-    const readOnlyUserSkills = userSkills.filter(
-      (entry) => !vaultSkillNames.has(entry.skill.name.toLowerCase()),
+    // Personal scope shadows project scope (Claude Code precedence: "personal
+    // overrides project"), so a same-named user skill is the one `/name`
+    // actually runs. Drop the vault skill it shadows — otherwise the Library
+    // would show/edit an inactive project copy while a different personal skill
+    // executes. https://code.claude.com/docs/en/skills.md
+    const userSkillNames = new Set(userSkills.map((entry) => entry.skill.name.toLowerCase()));
+    const unshadowedVaultSkills = skills.filter(
+      (entry) => !userSkillNames.has(entry.skill.name.toLowerCase()),
     );
     return [
       ...commands.map((cmd) => slashCommandToEntry(cmd)),
-      ...skills.map((entry) => slashCommandToEntry(entry.skill, { sourceFilePath: entry.filePath })),
-      ...readOnlyUserSkills.map((entry) =>
+      ...unshadowedVaultSkills.map((entry) => slashCommandToEntry(entry.skill, { sourceFilePath: entry.filePath })),
+      ...userSkills.map((entry) =>
         slashCommandToEntry(entry.skill, { sourceFilePath: entry.filePath, readOnly: true }),
       ),
     ];
