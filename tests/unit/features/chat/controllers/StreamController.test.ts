@@ -300,7 +300,7 @@ describe('StreamController - Text Content', () => {
     it('should flush a pending text render before finalizing text', async () => {
       const msg = createTestMessage();
 
-      await controller.appendText('Hello');
+      await controller.appendText('Hello', msg);
       await controller.finalizeCurrentTextBlock(msg);
 
       expect(deps.renderer.renderContent).toHaveBeenCalledWith(
@@ -360,8 +360,8 @@ describe('StreamController - Text Content', () => {
     it('renders the full block once on finalize, persists it, and hides the placeholder', async () => {
       const msg = createTestMessage();
 
-      await controller.appendText('Hello ');
-      await controller.appendText('World');
+      await controller.appendText('Hello ', msg);
+      await controller.appendText('World', msg);
       await controller.finalizeCurrentTextBlock(msg);
 
       expect(deps.renderer.renderContent).toHaveBeenCalledTimes(1);
@@ -396,12 +396,12 @@ describe('StreamController - Text Content', () => {
       const msg = createTestMessage();
 
       // Block begins collapsed (beforeEach) — the mode is snapshotted at block start.
-      await controller.appendText('Hello ');
+      await controller.appendText('Hello ', msg);
       expect(deps.state.thinkingEl).not.toBeNull(); // placeholder shown
 
       // Toggle off mid-stream — the in-flight block keeps its collapsed snapshot.
       (deps.plugin.settings as any).collapseStreamingResponse = false;
-      await controller.appendText('World');
+      await controller.appendText('World', msg);
       jest.advanceTimersByTime(300);
       await Promise.resolve();
       expect(deps.renderer.renderContent).not.toHaveBeenCalled(); // still no live render
@@ -422,14 +422,14 @@ describe('StreamController - Text Content', () => {
 
       // Block begins with collapse OFF — the mode is snapshotted at block start.
       (deps.plugin.settings as any).collapseStreamingResponse = false;
-      await controller.appendText('Hello ');
+      await controller.appendText('Hello ', msg);
       jest.advanceTimersByTime(16);
       await Promise.resolve();
       expect(deps.renderer.renderContent).toHaveBeenCalledWith(expect.anything(), 'Hello ');
 
       // Toggle on mid-stream — the in-flight block keeps its non-collapsed snapshot.
       (deps.plugin.settings as any).collapseStreamingResponse = true;
-      await controller.appendText('World');
+      await controller.appendText('World', msg);
       jest.advanceTimersByTime(16);
       await Promise.resolve();
 
@@ -483,9 +483,9 @@ describe('StreamController - Text Content', () => {
 
     it('renders the exact final content when finalizing regardless of size', async () => {
       const msg = createTestMessage();
-      deps.state.currentTextEl = createMockEl();
 
-      await controller.appendText(BIG);
+      // No pre-set currentTextEl: the first append opens the block (and its el).
+      await controller.appendText(BIG, msg);
       await controller.finalizeCurrentTextBlock(msg);
 
       expect(deps.renderer.renderContent).toHaveBeenLastCalledWith(
@@ -499,9 +499,10 @@ describe('StreamController - Text Content', () => {
   describe('Text block finalization', () => {
     it('should add copy button when finalizing text block with content', async () => {
       const msg = createTestMessage();
-      deps.state.currentTextEl = createMockEl();
-      deps.state.currentTextContent = 'Hello World';
 
+      // Drive through append so the reactive block is opened + grown; finalize
+      // closes it (no second push).
+      await controller.appendText('Hello World', msg);
       await controller.finalizeCurrentTextBlock(msg);
 
       expect(deps.renderer.addTextCopyButton).toHaveBeenCalledWith(
@@ -516,13 +517,15 @@ describe('StreamController - Text Content', () => {
 
     it('should not add copy button when no text element exists', async () => {
       const msg = createTestMessage();
+
+      await controller.appendText('Hello World', msg);
+      // Simulate the text element going missing before finalize.
       deps.state.currentTextEl = null;
-      deps.state.currentTextContent = 'Hello World';
 
       await controller.finalizeCurrentTextBlock(msg);
 
       expect(deps.renderer.addTextCopyButton).not.toHaveBeenCalled();
-      // Content block should still be added
+      // The reactive block, opened during append, still persists.
       expect(msg.contentBlocks).toContainEqual({
         type: 'text',
         content: 'Hello World',
@@ -595,6 +598,159 @@ describe('StreamController - Text Content', () => {
 
       expect(deps.renderer.addTextCopyButton).toHaveBeenCalledWith(textEl, 'plain text');
       expect((deps.renderer as any).refreshMessageActions).not.toHaveBeenCalled();
+    });
+  });
+
+  // Task 15 write-side: the in-flight assistant message's contentBlocks grow as
+  // DATA during the turn (append opens + grows the block; finalize closes it).
+  // The #1 risk is a double-push (block created at append AND pushed at finalize).
+  describe('Reactive content blocks (streaming write-side)', () => {
+    it('grows a single reactive text block during streaming — exactly one block, no double-push', async () => {
+      const msg = createTestMessage();
+
+      await controller.appendText('Hello ', msg);
+      // Block exists and is open on the FIRST chunk (not only at finalize).
+      expect(msg.contentBlocks).toEqual([{ type: 'text', content: 'Hello ' }]);
+      expect(deps.state.activeBlockIndex).toBe(0);
+
+      await controller.appendText('World', msg);
+      // Subsequent chunks grow the SAME block.
+      expect(msg.contentBlocks).toEqual([{ type: 'text', content: 'Hello World' }]);
+
+      await controller.finalizeCurrentTextBlock(msg);
+      // Finalize closes the block; it must NOT push a duplicate.
+      expect(msg.contentBlocks).toEqual([{ type: 'text', content: 'Hello World' }]);
+      expect(deps.state.activeBlockIndex).toBe(-1);
+    });
+
+    it('produces exactly one text block across a full text turn via handleStreamChunk', async () => {
+      const msg = createTestMessage();
+
+      await controller.handleStreamChunk({ type: 'text', content: 'One ' }, msg);
+      await controller.handleStreamChunk({ type: 'text', content: 'two' }, msg);
+      await controller.handleStreamChunk({ type: 'done' }, msg);
+
+      expect(msg.contentBlocks).toEqual([{ type: 'text', content: 'One two' }]);
+    });
+
+    it('drops an empty text block on finalize — no stray empty block', async () => {
+      const msg = createTestMessage();
+
+      await controller.appendText('', msg);
+      expect(msg.contentBlocks).toEqual([{ type: 'text', content: '' }]);
+
+      await controller.finalizeCurrentTextBlock(msg);
+      expect(msg.contentBlocks).toEqual([]);
+      expect(deps.state.activeBlockIndex).toBe(-1);
+    });
+
+    it('grows a single reactive thinking block and stamps durationSeconds on finalize', async () => {
+      const { createThinkingBlock, finalizeThinkingBlock } = jest.requireMock('@/features/chat/rendering/ThinkingBlockRenderer');
+      finalizeThinkingBlock.mockReturnValueOnce(7);
+      createThinkingBlock.mockReturnValueOnce({
+        container: createMockEl(),
+        contentEl: createMockEl(),
+        content: '',
+        startTime: Date.now(),
+      });
+      const msg = createTestMessage();
+
+      await controller.appendThinking('Let ', msg);
+      expect(msg.contentBlocks).toEqual([{ type: 'thinking', content: 'Let ' }]);
+
+      await controller.appendThinking('me think', msg);
+      expect(msg.contentBlocks).toEqual([{ type: 'thinking', content: 'Let me think' }]);
+
+      await controller.finalizeCurrentThinkingBlock(msg);
+      expect(msg.contentBlocks).toEqual([
+        { type: 'thinking', content: 'Let me think', durationSeconds: 7 },
+      ]);
+      expect(deps.state.activeBlockIndex).toBe(-1);
+    });
+
+    it('keeps thinking and text blocks in stream order across a transition', async () => {
+      const { createThinkingBlock } = jest.requireMock('@/features/chat/rendering/ThinkingBlockRenderer');
+      createThinkingBlock.mockReturnValueOnce({
+        container: createMockEl(),
+        contentEl: createMockEl(),
+        content: '',
+        startTime: Date.now(),
+      });
+      const msg = createTestMessage();
+
+      await controller.handleStreamChunk({ type: 'thinking', content: 'ponder' }, msg);
+      await controller.handleStreamChunk({ type: 'text', content: 'answer' }, msg);
+      await controller.handleStreamChunk({ type: 'done' }, msg);
+
+      expect((msg.contentBlocks ?? []).map((b) => b.type)).toEqual(['thinking', 'text']);
+    });
+
+    it('finalizes a reasoning-only turn: done then InputController-style finalize keeps the thinking block', async () => {
+      const { createThinkingBlock, finalizeThinkingBlock } = jest.requireMock('@/features/chat/rendering/ThinkingBlockRenderer');
+      finalizeThinkingBlock.mockReturnValueOnce(4);
+      createThinkingBlock.mockReturnValueOnce({
+        container: createMockEl(),
+        contentEl: createMockEl(),
+        content: '',
+        startTime: Date.now(),
+      });
+      const msg = createTestMessage();
+
+      // Only a thinking block, then `done` (which finalizes text, not thinking).
+      await controller.handleStreamChunk({ type: 'thinking', content: 'reason' }, msg);
+      await controller.handleStreamChunk({ type: 'done' }, msg);
+      // `done`'s text finalize must NOT orphan the still-open thinking block's index.
+      expect(deps.state.activeBlockIndex).toBe(0);
+
+      // InputController closes the thinking block after the stream ends.
+      await controller.finalizeCurrentThinkingBlock(msg);
+
+      expect(msg.contentBlocks).toEqual([
+        { type: 'thinking', content: 'reason', durationSeconds: 4 },
+      ]);
+      expect(deps.state.activeBlockIndex).toBe(-1);
+    });
+
+    describe('getActiveStreamSnapshot', () => {
+      it('returns null when no assistant message is streaming', () => {
+        expect(deps.state.getActiveStreamSnapshot()).toBeNull();
+      });
+
+      it('reflects the open text block (isWriting)', async () => {
+        const msg = createTestMessage();
+        deps.state.activeMessageId = msg.id;
+        deps.state.responseStartTime = performance.now();
+
+        await controller.appendText('hi', msg);
+
+        expect(deps.state.getActiveStreamSnapshot()).toEqual({
+          messageId: msg.id,
+          blockIndex: 0,
+          isThinking: false,
+          isWriting: true,
+          elapsedSeconds: expect.any(Number),
+        });
+      });
+
+      it('reflects the open thinking block (isThinking)', async () => {
+        const { createThinkingBlock } = jest.requireMock('@/features/chat/rendering/ThinkingBlockRenderer');
+        createThinkingBlock.mockReturnValueOnce({
+          container: createMockEl(),
+          contentEl: createMockEl(),
+          content: '',
+          startTime: Date.now(),
+        });
+        const msg = createTestMessage();
+        deps.state.activeMessageId = msg.id;
+
+        await controller.appendThinking('mm', msg);
+
+        const snap = deps.state.getActiveStreamSnapshot();
+        expect(snap?.isThinking).toBe(true);
+        expect(snap?.isWriting).toBe(false);
+        expect(snap?.blockIndex).toBe(0);
+        expect(snap?.elapsedSeconds).toBe(0); // responseStartTime null → 0
+      });
     });
   });
 
@@ -1693,16 +1849,19 @@ describe('StreamController - Text Content', () => {
 
   describe('Thinking block finalization', () => {
     it('should finalize thinking block and add to contentBlocks', async () => {
+      const { createThinkingBlock } = jest.requireMock('@/features/chat/rendering/ThinkingBlockRenderer');
       const msg = createTestMessage();
       deps.state.currentContentEl = createMockEl();
-
-      deps.state.currentThinkingState = {
-        content: 'Let me think...',
+      createThinkingBlock.mockReturnValueOnce({
         container: createMockEl(),
         contentEl: createMockEl(),
+        content: '',
         startTime: Date.now(),
-      } as any;
+      });
 
+      // Drive through append so the reactive block is opened + grown; finalize
+      // closes it (stamping durationSeconds), not a second push.
+      await controller.appendThinking('Let me think...', msg);
       await controller.finalizeCurrentThinkingBlock(msg);
 
       expect(msg.contentBlocks).toContainEqual(
@@ -2018,17 +2177,17 @@ describe('StreamController - Text Content', () => {
 
   describe('Text ↔ Thinking transitions', () => {
     it('text arrives while thinking state is active → finalizeCurrentThinkingBlock is called', async () => {
-      const { finalizeThinkingBlock } = jest.requireMock('@/features/chat/rendering/ThinkingBlockRenderer');
+      const { createThinkingBlock, finalizeThinkingBlock } = jest.requireMock('@/features/chat/rendering/ThinkingBlockRenderer');
       const msg = createTestMessage();
       deps.state.currentContentEl = createMockEl();
-
-      deps.state.currentThinkingState = {
-        content: 'Let me think...',
+      createThinkingBlock.mockReturnValueOnce({
         container: createMockEl(),
         contentEl: createMockEl(),
+        content: '',
         startTime: Date.now(),
-      } as any;
+      });
 
+      await controller.handleStreamChunk({ type: 'thinking', content: 'Let me think...' }, msg);
       await controller.handleStreamChunk({ type: 'text', content: 'Hello' }, msg);
 
       expect(finalizeThinkingBlock).toHaveBeenCalled();
@@ -2042,9 +2201,7 @@ describe('StreamController - Text Content', () => {
       const msg = createTestMessage();
       deps.state.currentContentEl = createMockEl();
 
-      deps.state.currentTextEl = createMockEl();
-      deps.state.currentTextContent = 'Some text';
-
+      await controller.handleStreamChunk({ type: 'text', content: 'Some text' }, msg);
       await controller.handleStreamChunk({ type: 'thinking', content: 'Hmm...' }, msg);
 
       expect(deps.state.currentTextEl).toBeNull();
@@ -2058,17 +2215,17 @@ describe('StreamController - Text Content', () => {
     });
 
     it('tool_use arrives while thinking state → finalizeCurrentThinkingBlock is called', async () => {
-      const { finalizeThinkingBlock } = jest.requireMock('@/features/chat/rendering/ThinkingBlockRenderer');
+      const { createThinkingBlock, finalizeThinkingBlock } = jest.requireMock('@/features/chat/rendering/ThinkingBlockRenderer');
       const msg = createTestMessage();
       deps.state.currentContentEl = createMockEl();
-
-      deps.state.currentThinkingState = {
-        content: 'Reasoning...',
+      createThinkingBlock.mockReturnValueOnce({
         container: createMockEl(),
         contentEl: createMockEl(),
+        content: '',
         startTime: Date.now(),
-      } as any;
+      });
 
+      await controller.handleStreamChunk({ type: 'thinking', content: 'Reasoning...' }, msg);
       await controller.handleStreamChunk(
         { type: 'tool_use', id: 'read-1', name: 'Read', input: { file_path: 'test.md' } },
         msg

@@ -2,17 +2,12 @@ import { defineStore } from 'pinia';
 import { shallowRef } from 'vue';
 
 import type { ChatMessage } from '../../../../../../core/types';
+import type { ActiveStreamState } from '../../../../state/types';
 
-/** The in-flight turn's reactive state. Null when no turn is streaming. */
-export interface ActiveStreamState {
-  /** id of the assistant ChatMessage currently being appended to. */
-  messageId: string;
-  /** index into that message's contentBlocks of the block being written. */
-  blockIndex: number;
-  isThinking: boolean;
-  isWriting: boolean;
-  elapsedSeconds: number;
-}
+// `ActiveStreamState` is defined in the engine's neutral `state/types` so
+// `ChatState` can build it without importing this store; re-exported here to
+// keep the store the canonical import site for Vue consumers.
+export type { ActiveStreamState };
 
 /** Mirrors `MessageRenderer`'s recorded hydration failure (see `setHydrationError`). */
 export interface TranscriptHydrationError {

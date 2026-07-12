@@ -235,13 +235,13 @@ export class StreamController {
     switch (chunk.type) {
       case 'thinking':
         await this.applyBlockTransition(projectBlockTransition('thinking', this.blockState()), msg);
-        await this.appendThinking(chunk.content);
+        await this.appendThinking(chunk.content, msg);
         return true;
 
       case 'text':
         await this.applyBlockTransition(projectBlockTransition('text', this.blockState()), msg);
         msg.content += chunk.content;
-        await this.appendText(chunk.content);
+        await this.appendText(chunk.content, msg);
         return true;
 
       case 'tool_use':
@@ -276,7 +276,7 @@ export class StreamController {
     switch (chunk.type) {
       case 'notice':
         this.flushPendingTools();
-        await this.appendText(projectNoticeText(chunk));
+        await this.appendText(projectNoticeText(chunk), msg);
         break;
 
       case 'error':
@@ -696,8 +696,8 @@ export class StreamController {
   // Text Block Management
   // ============================================
 
-  appendText(text: string): Promise<void> {
-    return this.textRender.append(text);
+  appendText(text: string, msg?: ChatMessage): Promise<void> {
+    return this.textRender.append(text, msg);
   }
 
   finalizeCurrentTextBlock(msg?: ChatMessage): Promise<void> {
@@ -748,8 +748,8 @@ export class StreamController {
   // Thinking Block Management
   // ============================================
 
-  appendThinking(content: string): Promise<void> {
-    return this.thinkingRender.append(content);
+  appendThinking(content: string, msg?: ChatMessage): Promise<void> {
+    return this.thinkingRender.append(content, msg);
   }
 
   finalizeCurrentThinkingBlock(msg?: ChatMessage): Promise<void> {
@@ -880,6 +880,8 @@ export class StreamController {
     state.currentTextEl = null;
     state.currentTextContent = '';
     state.currentThinkingState = null;
+    state.activeMessageId = null;
+    state.activeBlockIndex = -1;
     this.deps.subagentManager.resetStreamingState();
     state.pendingTools.clear();
     // Reset response timer (duration already captured at this point)

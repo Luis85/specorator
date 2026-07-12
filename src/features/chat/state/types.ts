@@ -33,6 +33,21 @@ export interface PendingToolCall {
   parentEl: HTMLElement | null;
 }
 
+/**
+ * The in-flight turn's reactive state, consumed by the Vue transcript island.
+ * Null when no turn is streaming. Lives here (not in the store) so `ChatState`
+ * can build it without importing the Pinia store; the store re-exports this type.
+ */
+export interface ActiveStreamState {
+  /** id of the assistant ChatMessage currently being appended to. */
+  messageId: string;
+  /** index into that message's contentBlocks of the block being written (−1 when none open). */
+  blockIndex: number;
+  isThinking: boolean;
+  isWriting: boolean;
+  elapsedSeconds: number;
+}
+
 /** Stored selection state from editor polling. */
 export interface StoredSelection {
   notePath: string;
@@ -77,6 +92,14 @@ export interface ChatStateData {
   currentTextEl: HTMLElement | null;
   currentTextContent: string;
   currentThinkingState: ThinkingBlockState | null;
+
+  // Active reactive-stream pointers (the Vue transcript renders the in-flight
+  // turn from these). `activeMessageId` is the streaming assistant message id;
+  // `activeBlockIndex` indexes its `contentBlocks` at the block currently
+  // growing (−1 when no text/thinking block is open). Written alongside the
+  // imperative DOM state during Tasks 15–17 (dual-write).
+  activeMessageId: string | null;
+  activeBlockIndex: number;
   thinkingEl: HTMLElement | null;
   queueIndicatorEl: HTMLElement | null;
   /** Debounce timeout for showing thinking indicator after inactivity. */

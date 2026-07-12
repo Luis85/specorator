@@ -44,7 +44,7 @@ export class TextRenderCoordinator {
     });
   }
 
-  async append(text: string): Promise<void> {
+  async append(text: string, msg?: ChatMessage): Promise<void> {
     const { state } = this.deps;
     if (!state.currentContentEl) return;
 
@@ -55,6 +55,10 @@ export class TextRenderCoordinator {
       state.currentTextEl = state.currentContentEl.createDiv({ cls: 'specorator-text-block' });
       state.currentTextContent = '';
       this.currentBlockCollapsed = this.deps.shouldCollapseStreamingResponse();
+      // Open the reactive block on the FIRST chunk (was a finalize-time push):
+      // the Vue transcript renders live growth from contentBlocks, so the block
+      // must exist for the whole turn, not only after it closes.
+      this.openReactiveTextBlock(msg);
     }
 
     if (!this.currentBlockCollapsed) {
@@ -62,6 +66,7 @@ export class TextRenderCoordinator {
     }
 
     state.currentTextContent += text;
+    this.growReactiveTextBlock(msg);
 
     if (this.currentBlockCollapsed) {
       // Hide the half-formed render: keep an immediate placeholder up and render
@@ -88,8 +93,8 @@ export class TextRenderCoordinator {
 
     if (msg && state.currentTextContent) {
       await this.renderFinalizedTextBlock(state.currentTextEl, state.currentTextContent, collapsed);
-      msg.contentBlocks = msg.contentBlocks || [];
-      msg.contentBlocks.push({ type: 'text', content: state.currentTextContent });
+      // The reactive block was created + grown during `append`; finalize only
+      // closes it (below) — pushing here would double the block.
       // Work-order tabs swap a completed handoff block for the compact card on
       // finalize; everything else keeps the raw text block plus copy button.
       // Derive the content element from the text element's parent because
@@ -118,6 +123,7 @@ export class TextRenderCoordinator {
         renderer.refreshMessageActions?.(msg);
       }
     }
+    this.closeReactiveTextBlock(msg);
     state.currentTextEl = null;
     state.currentTextContent = '';
     this.currentBlockCollapsed = false;
@@ -125,6 +131,44 @@ export class TextRenderCoordinator {
 
   cancel(): void {
     this.loop.cancel();
+  }
+
+  /** Pushes the empty reactive text block that `append` grows and `finalize` closes. */
+  private openReactiveTextBlock(msg?: ChatMessage): void {
+    if (!msg) return;
+    msg.contentBlocks = msg.contentBlocks || [];
+    msg.contentBlocks.push({ type: 'text', content: '' });
+    this.deps.state.activeBlockIndex = msg.contentBlocks.length - 1;
+  }
+
+  /** Mirrors the accumulated streamed text into the open reactive block. */
+  private growReactiveTextBlock(msg?: ChatMessage): void {
+    if (!msg) return;
+    const { state } = this.deps;
+    const block = msg.contentBlocks?.[state.activeBlockIndex];
+    if (block?.type === 'text') {
+      block.content = state.currentTextContent;
+    }
+  }
+
+  /**
+   * Closes the open reactive text block. A block that never received content is
+   * dropped so a bare `finalize` leaves no stray empty block (matching the
+   * legacy `if (msg && currentTextContent)` push guard).
+   */
+  private closeReactiveTextBlock(msg?: ChatMessage): void {
+    const { state } = this.deps;
+    const blocks = msg?.contentBlocks;
+    if (!blocks || state.activeBlockIndex < 0) return;
+    const block = blocks[state.activeBlockIndex];
+    // Only close a block we actually own. `finalizeCurrentTextBlock` can be
+    // called (e.g. on `done`) while the open block is a thinking block; touching
+    // `activeBlockIndex` then would orphan it before its own finalize runs.
+    if (block?.type !== 'text') return;
+    if (block.content === '' && state.activeBlockIndex === blocks.length - 1) {
+      blocks.pop();
+    }
+    state.activeBlockIndex = -1;
   }
 
   /**

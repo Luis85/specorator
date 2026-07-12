@@ -132,6 +132,8 @@ async function renderAutoTriggeredTurn(tab: TabData, result: AutoTurnResult): Pr
   const previousTextEl = tab.state.currentTextEl;
   const previousTextContent = tab.state.currentTextContent;
   const previousThinkingState = tab.state.currentThinkingState;
+  const previousActiveMessageId = tab.state.activeMessageId;
+  const previousActiveBlockIndex = tab.state.activeBlockIndex;
 
   if (hasVisibleContent) {
     tab.state.addMessage(assistantMsg);
@@ -145,6 +147,8 @@ async function renderAutoTriggeredTurn(tab: TabData, result: AutoTurnResult): Pr
       tab.state.currentTextEl = null;
       tab.state.currentTextContent = '';
       tab.state.currentThinkingState = null;
+      tab.state.activeMessageId = assistantMsg.id;
+      tab.state.activeBlockIndex = -1;
     }
   }
 
@@ -159,7 +163,7 @@ async function renderAutoTriggeredTurn(tab: TabData, result: AutoTurnResult): Pr
     if (hasVisibleContent && !hasVisibleAutoTurnMessageContent(assistantMsg)) {
       const placeholder = '(background task completed)';
       assistantMsg.content = placeholder;
-      await tab.controllers.streamController?.appendText(placeholder);
+      await tab.controllers.streamController?.appendText(placeholder, assistantMsg);
     }
 
     if (hasVisibleContent) {
@@ -175,6 +179,8 @@ async function renderAutoTriggeredTurn(tab: TabData, result: AutoTurnResult): Pr
       tab.state.currentTextEl = previousTextEl;
       tab.state.currentTextContent = previousTextContent;
       tab.state.currentThinkingState = previousThinkingState;
+      tab.state.activeMessageId = previousActiveMessageId;
+      tab.state.activeBlockIndex = previousActiveBlockIndex;
       tab.renderer?.scrollToBottom();
     }
   }

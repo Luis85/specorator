@@ -389,7 +389,10 @@ export class InputController {
       wasInvalidated = streamOutcome.wasInvalidated;
     } catch (error) {
       const errorMsg = error instanceof Error ? error.message : 'Unknown error';
-      await this.deps.streamController.appendText(`\n\n**Error:** ${errorMsg}`);
+      await this.deps.streamController.appendText(
+        `\n\n**Error:** ${errorMsg}`,
+        this.activeStreamingAssistantMessage ?? ctx.assistantMsg,
+      );
     } finally {
       programmaticResult = await this.finalizeTurn(ctx, { wasInterrupted, wasInvalidated });
     }
@@ -660,7 +663,10 @@ export class InputController {
     const { finalAssistantMsg } = turn;
     const didCancelThisTurn = turn.wasInterrupted || state.cancelRequested;
     if (didCancelThisTurn && !state.pendingNewSessionPlan) {
-      await streamController.appendText('\n\n<span class="specorator-interrupted">Interrupted</span> <span class="specorator-interrupted-hint">· What should Specorator do instead?</span>');
+      await streamController.appendText(
+        '\n\n<span class="specorator-interrupted">Interrupted</span> <span class="specorator-interrupted-hint">· What should Specorator do instead?</span>',
+        finalAssistantMsg,
+      );
     }
     streamController.hideThinkingIndicator();
     state.isStreaming = false;
@@ -671,6 +677,10 @@ export class InputController {
     bakeResponseDurationFooter(state, finalAssistantMsg, didCancelThisTurn);
 
     state.currentContentEl = null;
+    // The turn is over; drop the reactive-stream message pointer so the snapshot
+    // reads null. `activeBlockIndex` is left for the finalize calls below to
+    // close their open block, then reset.
+    state.activeMessageId = null;
 
     await streamController.finalizeCurrentThinkingBlock(finalAssistantMsg);
     await streamController.finalizeCurrentTextBlock(finalAssistantMsg);
@@ -929,6 +939,11 @@ export class InputController {
     state.currentTextEl = null;
     state.currentTextContent = '';
     state.currentThinkingState = null;
+    // Reactive-stream pointers for the Vue transcript: this shell is now the
+    // in-flight message; the block index opens once the first text/thinking
+    // chunk lands (coordinators own it).
+    state.activeMessageId = message.id;
+    state.activeBlockIndex = -1;
   }
 
   private resetProviderMessageBoundaryState(): void {
@@ -1035,6 +1050,8 @@ export class InputController {
     state.currentTextEl = null;
     state.currentTextContent = '';
     state.currentThinkingState = null;
+    state.activeMessageId = null;
+    state.activeBlockIndex = -1;
   }
 
   // ============================================

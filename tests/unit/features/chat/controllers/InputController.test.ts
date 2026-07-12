@@ -2211,7 +2211,10 @@ describe('InputController - Message Queue', () => {
 
       await controller.sendMessage();
 
-      expect(deps.streamController.appendText).toHaveBeenCalledWith('\n\n**Error:** Network timeout');
+      expect(deps.streamController.appendText).toHaveBeenCalledWith(
+        '\n\n**Error:** Network timeout',
+        expect.anything(),
+      );
       expect(deps.state.isStreaming).toBe(false);
     });
 
@@ -2228,7 +2231,10 @@ describe('InputController - Message Queue', () => {
 
       await controller.sendMessage();
 
-      expect(deps.streamController.appendText).toHaveBeenCalledWith('\n\n**Error:** Unknown error');
+      expect(deps.streamController.appendText).toHaveBeenCalledWith(
+        '\n\n**Error:** Unknown error',
+        expect.anything(),
+      );
     });
   });
 
@@ -2251,7 +2257,8 @@ describe('InputController - Message Queue', () => {
       await controller.sendMessage();
 
       expect(deps.streamController.appendText).toHaveBeenCalledWith(
-        expect.stringContaining('Interrupted')
+        expect.stringContaining('Interrupted'),
+        expect.anything(),
       );
       expect(deps.state.isStreaming).toBe(false);
       expect(deps.state.cancelRequested).toBe(false);
@@ -2276,7 +2283,8 @@ describe('InputController - Message Queue', () => {
       await controller.sendMessage();
 
       expect(deps.streamController.appendText).toHaveBeenCalledWith(
-        expect.stringContaining('Interrupted')
+        expect.stringContaining('Interrupted'),
+        expect.anything(),
       );
       expect(deps.state.isStreaming).toBe(false);
       expect(deps.state.cancelRequested).toBe(false);

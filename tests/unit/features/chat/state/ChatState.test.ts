@@ -233,6 +233,62 @@ describe('ChatState', () => {
       expect(chatState.thinkingIndicatorTimeout).toBe(timeout);
       window.clearTimeout(timeout);
     });
+
+    it('stores activeMessageId and activeBlockIndex (defaulting to null / -1)', () => {
+      const chatState = new ChatState();
+      expect(chatState.activeMessageId).toBeNull();
+      expect(chatState.activeBlockIndex).toBe(-1);
+      chatState.activeMessageId = 'assistant-1';
+      chatState.activeBlockIndex = 2;
+      expect(chatState.activeMessageId).toBe('assistant-1');
+      expect(chatState.activeBlockIndex).toBe(2);
+    });
+  });
+
+  describe('getActiveStreamSnapshot', () => {
+    it('returns null when no message is streaming', () => {
+      const chatState = new ChatState();
+      expect(chatState.getActiveStreamSnapshot()).toBeNull();
+    });
+
+    it('maps the open block + elapsed time when a message is streaming', () => {
+      const chatState = new ChatState();
+      chatState.activeMessageId = 'assistant-1';
+      chatState.activeBlockIndex = 1;
+      chatState.currentTextEl = {} as HTMLElement;
+      chatState.responseStartTime = performance.now() - 3200;
+
+      const snap = chatState.getActiveStreamSnapshot();
+      expect(snap).not.toBeNull();
+      expect(snap!.messageId).toBe('assistant-1');
+      expect(snap!.blockIndex).toBe(1);
+      expect(snap!.isWriting).toBe(true);
+      expect(snap!.isThinking).toBe(false);
+      expect(snap!.elapsedSeconds).toBeGreaterThanOrEqual(3);
+    });
+
+    it('reports isThinking from currentThinkingState and elapsedSeconds 0 when the timer is unset', () => {
+      const chatState = new ChatState();
+      chatState.activeMessageId = 'assistant-1';
+      chatState.currentThinkingState = { content: 'x' } as any;
+
+      const snap = chatState.getActiveStreamSnapshot();
+      expect(snap!.isThinking).toBe(true);
+      expect(snap!.isWriting).toBe(false);
+      expect(snap!.elapsedSeconds).toBe(0);
+    });
+
+    it('resetStreamingState clears the active-stream pointers', () => {
+      const chatState = new ChatState();
+      chatState.activeMessageId = 'assistant-1';
+      chatState.activeBlockIndex = 3;
+
+      chatState.resetStreamingState();
+
+      expect(chatState.activeMessageId).toBeNull();
+      expect(chatState.activeBlockIndex).toBe(-1);
+      expect(chatState.getActiveStreamSnapshot()).toBeNull();
+    });
   });
 
   describe('tool tracking maps', () => {

@@ -1,6 +1,7 @@
 import type { UsageInfo } from '../../../core/types';
 import { type EditedFileEntry, mergeEditedFileEntry } from '../utils/editedFiles';
 import type {
+  ActiveStreamState,
   ChatMessage,
   ChatStateCallbacks,
   ChatStateData,
@@ -27,6 +28,8 @@ function createInitialState(): ChatStateData {
     currentTextEl: null,
     currentTextContent: '',
     currentThinkingState: null,
+    activeMessageId: null,
+    activeBlockIndex: -1,
     thinkingEl: null,
     queueIndicatorEl: null,
     thinkingIndicatorTimeout: null,
@@ -219,6 +222,40 @@ export class ChatState {
 
   set currentThinkingState(value: ThinkingBlockState | null) {
     this.state.currentThinkingState = value;
+  }
+
+  get activeMessageId(): string | null {
+    return this.state.activeMessageId;
+  }
+
+  set activeMessageId(value: string | null) {
+    this.state.activeMessageId = value;
+  }
+
+  get activeBlockIndex(): number {
+    return this.state.activeBlockIndex;
+  }
+
+  set activeBlockIndex(value: number) {
+    this.state.activeBlockIndex = value;
+  }
+
+  /**
+   * Snapshot of the in-flight turn for the Vue transcript, or null when no turn
+   * is streaming. `isThinking`/`isWriting` derive from the open block: a live
+   * thinking block ⇔ `currentThinkingState` is set, a live text block ⇔
+   * `currentTextEl` is set (the same signals `StreamController.blockState` reads).
+   */
+  getActiveStreamSnapshot(): ActiveStreamState | null {
+    if (this.state.activeMessageId === null) return null;
+    const start = this.state.responseStartTime;
+    return {
+      messageId: this.state.activeMessageId,
+      blockIndex: this.state.activeBlockIndex,
+      isThinking: this.state.currentThinkingState !== null,
+      isWriting: this.state.currentTextEl !== null,
+      elapsedSeconds: start === null ? 0 : Math.floor((performance.now() - start) / 1000),
+    };
   }
 
   get thinkingEl(): HTMLElement | null {
@@ -444,6 +481,8 @@ export class ChatState {
     this.state.currentTextEl = null;
     this.state.currentTextContent = '';
     this.state.currentThinkingState = null;
+    this.state.activeMessageId = null;
+    this.state.activeBlockIndex = -1;
     this.state.isStreaming = false;
     this.state.cancelRequested = false;
     // Clear thinking indicator timeout

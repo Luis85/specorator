@@ -36,7 +36,7 @@ export class ThinkingRenderCoordinator {
     });
   }
 
-  async append(content: string): Promise<void> {
+  async append(content: string, msg?: ChatMessage): Promise<void> {
     const { state, renderer } = this.deps;
     if (!state.currentContentEl) return;
 
@@ -46,9 +46,13 @@ export class ThinkingRenderCoordinator {
         state.currentContentEl,
         (el, md) => renderer.renderContent(el, md)
       );
+      // Open the reactive block on the FIRST chunk so the Vue transcript can
+      // render live thinking growth; finalize sets its `durationSeconds`.
+      this.openReactiveThinkingBlock(msg);
     }
 
     state.currentThinkingState.content += content;
+    this.growReactiveThinkingBlock(msg);
     void this.loop.schedule();
   }
 
@@ -64,20 +68,58 @@ export class ThinkingRenderCoordinator {
 
     const durationSeconds = finalizeThinkingBlock(thinkingState);
 
-    if (msg && thinkingState.content) {
-      msg.contentBlocks = msg.contentBlocks || [];
-      msg.contentBlocks.push({
-        type: 'thinking',
-        content: thinkingState.content,
-        durationSeconds,
-      });
-    }
+    // The reactive block was created + grown during `append`; finalize only
+    // closes it (stamping `durationSeconds`) — pushing here would double it.
+    this.closeReactiveThinkingBlock(msg, thinkingState.content, durationSeconds);
 
     state.currentThinkingState = null;
   }
 
   cancel(): void {
     this.loop.cancel();
+  }
+
+  /** Pushes the empty reactive thinking block that `append` grows and `finalize` closes. */
+  private openReactiveThinkingBlock(msg?: ChatMessage): void {
+    if (!msg) return;
+    msg.contentBlocks = msg.contentBlocks || [];
+    msg.contentBlocks.push({ type: 'thinking', content: '' });
+    this.deps.state.activeBlockIndex = msg.contentBlocks.length - 1;
+  }
+
+  /** Mirrors the accumulated reasoning into the open reactive block. */
+  private growReactiveThinkingBlock(msg?: ChatMessage): void {
+    if (!msg) return;
+    const { state } = this.deps;
+    const block = msg.contentBlocks?.[state.activeBlockIndex];
+    if (block?.type === 'thinking') {
+      block.content = state.currentThinkingState?.content ?? '';
+    }
+  }
+
+  /**
+   * Closes the open reactive thinking block, stamping its final content +
+   * duration. A block that never received content is dropped so a bare
+   * `finalize` leaves no stray empty block (matching the legacy push guard).
+   */
+  private closeReactiveThinkingBlock(
+    msg: ChatMessage | undefined,
+    content: string,
+    durationSeconds: number,
+  ): void {
+    const { state } = this.deps;
+    const blocks = msg?.contentBlocks;
+    if (!blocks || state.activeBlockIndex < 0) return;
+    const block = blocks[state.activeBlockIndex];
+    // Only close a block we own (see TextRenderCoordinator.closeReactiveTextBlock).
+    if (block?.type !== 'thinking') return;
+    if (content) {
+      block.content = content;
+      block.durationSeconds = durationSeconds;
+    } else if (state.activeBlockIndex === blocks.length - 1) {
+      blocks.pop();
+    }
+    state.activeBlockIndex = -1;
   }
 
   private getWindow(): Window | null {
