@@ -66,8 +66,10 @@ describe('buildCursorAgentEnvironment', () => {
   it('folds a lowercase custom `Path` entry into the enhanced PATH (case-insensitive)', () => {
     // A provider Environment entered as `Path=` (common on Windows) must still
     // feed the override, or the collapse would delete it and drop the tool dirs.
+    // Assert containment, not equality: on Windows the shell-env step appends
+    // Git dirs to PATH, so the exact value differs by platform.
     const env = buildCursorAgentEnvironment(makePlugin('Path=/custom/tools'));
-    expect(env.PATH).toBe('/custom/tools');
+    expect(env.PATH).toContain('/custom/tools');
     expect(env.Path).toBeUndefined();
   });
 
