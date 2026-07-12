@@ -170,6 +170,7 @@ function createMockDeps(overrides: Partial<InputControllerDeps> = {}): InputCont
     state,
     mountInlineCard: mountInlineCard as any,
     emitTranscript: jest.fn(),
+    refreshTranscriptMessage: jest.fn(),
     streamController: {
       showThinkingIndicator: jest.fn(),
       hideThinkingIndicator: jest.fn(),
@@ -946,6 +947,56 @@ describe('InputController - Message Queue', () => {
       // Conversation load/switch drops it so a reloaded card has nothing to retry.
       controller.clearRetryableTurn();
       expect(controller.hasRetryableTurn()).toBe(false);
+    });
+  });
+
+  describe('Finished-turn identity refresh', () => {
+    // `completeFinishedTurn` clears `activeMessageId` and THEN finalizes the text
+    // block, which mutates the assistant message in place (an interrupted marker,
+    // a `**Error:**` line, or a collapsed response's withheld body). The projection
+    // only identity-refreshes the active/dirty message, so the finalized mutation
+    // must be marked dirty or the keyed `MessageBubble` skips it until reload.
+    it('marks the finished assistant message dirty AFTER finalizing its text block', async () => {
+      deps.state.currentConversationId = 'conv-1';
+      (deps as any).mockAgentService.query = jest.fn().mockImplementation(() => createMockStream([{ type: 'done' }]));
+      inputEl.value = 'hello';
+
+      await controller.sendMessage();
+
+      const assistantMsg = deps.state.messages.find((m) => m.role === 'assistant');
+      expect(assistantMsg).toBeDefined();
+
+      const refresh = deps.refreshTranscriptMessage as jest.Mock;
+      expect(refresh).toHaveBeenCalledWith(assistantMsg!.id);
+
+      // Ordering: the refresh must land after the in-place finalize mutation.
+      const finalizeOrder = (deps.streamController.finalizeCurrentTextBlock as jest.Mock)
+        .mock.invocationCallOrder.at(-1)!;
+      const refreshOrder = refresh.mock.invocationCallOrder.at(-1)!;
+      expect(refreshOrder).toBeGreaterThan(finalizeOrder);
+
+      // `activeMessageId` is cleared by the time the turn is done — this is exactly
+      // why the dirty-mark is required (the active-message refresh no longer covers it).
+      expect(deps.state.activeMessageId).toBeNull();
+    });
+
+    it('marks the message dirty on an interrupted turn (no provider done chunk)', async () => {
+      deps.state.currentConversationId = 'conv-1';
+      (deps as any).mockAgentService.query = jest.fn().mockImplementation(() =>
+        createMockStream([{ type: 'text', content: 'partial' }]),
+      );
+      // Cancel mid-turn so `completeFinishedTurn` takes the interrupted branch that
+      // appends the marker and finalizes it in place after clearing activeMessageId.
+      (deps.streamController.handleStreamChunk as jest.Mock).mockImplementation(async () => {
+        deps.state.cancelRequested = true;
+      });
+      inputEl.value = 'hello';
+
+      await controller.sendMessage();
+
+      const assistantMsg = deps.state.messages.find((m) => m.role === 'assistant');
+      expect(assistantMsg).toBeDefined();
+      expect(deps.refreshTranscriptMessage as jest.Mock).toHaveBeenCalledWith(assistantMsg!.id);
     });
   });
 

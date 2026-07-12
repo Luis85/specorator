@@ -78,6 +78,8 @@ export interface InputControllerDeps {
   mountInlineCard: InlineCardMounter;
   /** Re-projects the transcript snapshot into the Vue store (per-tab). */
   emitTranscript?: () => void;
+  /** Re-projects a single message (fresh identity) — see `completeFinishedTurn`. */
+  refreshTranscriptMessage?: (messageId: string) => void;
   streamController: StreamController;
   selectionController: SelectionController;
   browserSelectionController?: BrowserSelectionController;
@@ -696,6 +698,12 @@ export class InputController {
 
     await streamController.finalizeCurrentThinkingBlock(finalAssistantMsg);
     await streamController.finalizeCurrentTextBlock(finalAssistantMsg);
+    // The finalize calls above mutate `finalAssistantMsg` in place (interrupted
+    // marker / `**Error:**` / a collapsed response's withheld body) AFTER
+    // `activeMessageId` was cleared, so the active-message identity refresh no
+    // longer covers it; mark it dirty or a keyed MessageBubble reuses the same
+    // object and hides the finalized text until reload.
+    this.deps.refreshTranscriptMessage?.(finalAssistantMsg.id);
     this.deps.getSubagentManager().resetStreamingState();
 
     let programmaticResult: ProgrammaticSendResult | undefined;

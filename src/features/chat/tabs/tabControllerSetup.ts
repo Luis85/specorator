@@ -253,6 +253,7 @@ export function buildTabInputController(
     state,
     mountInlineCard: createInlineCardMounter(plugin, component),
     emitTranscript: () => tab.transcript?.emit(),
+    refreshTranscriptMessage: (messageId) => tab.transcript?.refreshMessage(messageId),
     streamController: controllers.streamController!,
     selectionController: controllers.selectionController!,
     browserSelectionController: controllers.browserSelectionController!,
