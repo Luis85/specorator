@@ -1,0 +1,164 @@
+import '@/providers';
+
+import { flushPromises } from '@vue/test-utils';
+import { App, Component, MarkdownRenderer } from 'obsidian';
+import { beforeEach, describe, expect, it, type Mock, vi } from 'vitest';
+
+import type { ChatMessage } from '@/core/types';
+import { mountTranscript } from '@/features/chat/ui/vue/transcript/mountTranscript';
+import type {
+  TranscriptCallbacks,
+  TranscriptSnapshot,
+} from '@/features/chat/ui/vue/transcript/transcriptCallbacks';
+import type SpecoratorPlugin from '@/main';
+
+/**
+ * Integration proof for the Task 18a per-tab mount seam (`mountTranscript`):
+ * a projected conversation renders into `.specorator-messages`; a later
+ * projection push (the streaming-chunk emit) re-renders the reactive store;
+ * `SCROLL_HOST_KEY` hands the engine the real scroll element; and `unmount`
+ * tears the island down. Uses the real production `createApp(...).mount(...)`
+ * path (not `@testing-library/vue`'s `render`) so the mount function itself is
+ * exercised end to end.
+ */
+const renderMock = MarkdownRenderer.renderMarkdown as unknown as Mock;
+
+function userMessages(count: number): ChatMessage[] {
+  return Array.from({ length: count }, (_, i) => ({
+    id: `m${i}`,
+    role: 'user' as const,
+    content: `message ${i}`,
+    timestamp: i,
+  }));
+}
+
+/**
+ * Callbacks whose `subscribe` behaves like the engine's projection seam: it
+ * immediately pushes the initial snapshot (mirroring `mountChatShell`'s
+ * `onChange(project())`) and retains the observer so the test can drive later
+ * snapshots — the streaming-emit path.
+ */
+function makeProjectingCallbacks(initial: TranscriptSnapshot): {
+  callbacks: TranscriptCallbacks;
+  push: (snapshot: TranscriptSnapshot) => void;
+  disposed: () => boolean;
+} {
+  let observer: ((s: TranscriptSnapshot) => void) | null = null;
+  let wasDisposed = false;
+  const callbacks: TranscriptCallbacks = {
+    subscribe: (onChange) => {
+      observer = onChange;
+      onChange(initial);
+      return () => {
+        observer = null;
+        wasDisposed = true;
+      };
+    },
+    onRewind: vi.fn(),
+    onFork: vi.fn(),
+    isRewindEligible: vi.fn(() => false),
+    openProviderSettings: vi.fn(),
+    onRetryLastTurn: null,
+    getMessageActions: vi.fn(() => []),
+    copyText: vi.fn(),
+    openFile: vi.fn(),
+    resolveImageSrc: vi.fn(() => ''),
+    showFullImage: vi.fn(),
+    getProviderId: vi.fn(() => 'claude'),
+    getWorkOrderPath: vi.fn(() => null),
+    getCapabilities: vi.fn(() => ({
+      providerId: 'claude',
+      supportsPersistentRuntime: true,
+      supportsNativeHistory: true,
+      supportsPlanMode: true,
+      supportsRewind: true,
+      supportsFork: true,
+      supportsProviderCommands: true,
+      supportsImageAttachments: true,
+      supportsInstructionMode: true,
+      supportsMcpTools: true,
+      reasoningControl: 'effort' as const,
+    })),
+  };
+  return {
+    callbacks,
+    push: (snapshot) => observer?.(snapshot),
+    disposed: () => wasDisposed,
+  };
+}
+
+function makePlugin(): SpecoratorPlugin {
+  return { app: new App(), settings: { mediaFolder: '' } } as unknown as SpecoratorPlugin;
+}
+
+beforeEach(() => {
+  vi.clearAllMocks();
+  renderMock.mockReset();
+  renderMock.mockImplementation(async (md: string, el: HTMLElement) => {
+    el.createDiv({ cls: 'rendered-md', text: md });
+  });
+});
+
+describe('mountTranscript', () => {
+  it('renders a projected conversation into a Vue-owned .specorator-messages and exposes it as the scroll host', async () => {
+    const container = document.createElement('div');
+    document.body.appendChild(container);
+    const { callbacks } = makeProjectingCallbacks({
+      messages: userMessages(3),
+      activeStream: null,
+    });
+
+    const mounted = mountTranscript(container, makePlugin(), new Component(), callbacks);
+    await flushPromises();
+
+    const scrollEl = container.querySelector('.specorator-messages');
+    expect(scrollEl).not.toBeNull();
+    expect(mounted.getScrollEl()).toBe(scrollEl);
+    expect(container.querySelectorAll('.specorator-message')).toHaveLength(3);
+
+    mounted.unmount();
+    container.remove();
+  });
+
+  it('re-renders reactively when a later projection push arrives (streaming-emit path)', async () => {
+    const container = document.createElement('div');
+    document.body.appendChild(container);
+    const { callbacks, push } = makeProjectingCallbacks({
+      messages: userMessages(1),
+      activeStream: null,
+    });
+
+    const mounted = mountTranscript(container, makePlugin(), new Component(), callbacks);
+    await flushPromises();
+    expect(container.querySelector('.specorator-thinking')).toBeNull();
+
+    // A stream chunk emit re-projects with an active thinking stream.
+    push({
+      messages: userMessages(1),
+      activeStream: { messageId: 'm0', blockIndex: 0, isThinking: true, isWriting: false, elapsedSeconds: 0 },
+    });
+    await flushPromises();
+
+    expect(container.querySelector('.specorator-thinking')).not.toBeNull();
+
+    mounted.unmount();
+    container.remove();
+  });
+
+  it('disposes the projection subscription on unmount', async () => {
+    const container = document.createElement('div');
+    document.body.appendChild(container);
+    const { callbacks, disposed } = makeProjectingCallbacks({
+      messages: userMessages(1),
+      activeStream: null,
+    });
+
+    const mounted = mountTranscript(container, makePlugin(), new Component(), callbacks);
+    await flushPromises();
+    expect(disposed()).toBe(false);
+
+    mounted.unmount();
+    expect(disposed()).toBe(true);
+    container.remove();
+  });
+});
