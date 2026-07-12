@@ -50,6 +50,11 @@ export interface JsonRpcRequestOptions {
   timeoutMs?: number;
 }
 
+export interface JsonRpcStdioClientOptions {
+  /** Diagnostics tap: receives every raw NDJSON line, both directions. Must never throw upstream — calls are try/catch-wrapped. */
+  onWireFrame?: (direction: 'client' | 'agent', rawLine: string) => void;
+}
+
 export type JsonRpcNotificationHandler = (params: unknown) => void | Promise<void>;
 /** `id` is supplied for adapters that need to correlate the server request (Codex); ACP ignores it. */
 export type JsonRpcRequestHandler = (params: unknown, id: JsonRpcId) => Promise<unknown>;
@@ -102,6 +107,7 @@ export class JsonRpcStdioClient {
   constructor(
     private readonly streams: JsonRpcMessageStreams,
     private readonly defaultTimeoutMs = DEFAULT_TIMEOUT_MS,
+    private readonly options: JsonRpcStdioClientOptions = {},
   ) {}
 
   get signal(): AbortSignal {
@@ -311,6 +317,8 @@ export class JsonRpcStdioClient {
       return;
     }
 
+    this.emitWireFrame('agent', line);
+
     let message: JsonRpcMessage;
     try {
       message = JSON.parse(line) as JsonRpcMessage;
@@ -405,7 +413,9 @@ export class JsonRpcStdioClient {
     if (this.disposed) {
       throw new JsonRpcTransportClosedError();
     }
-    this.streams.output.write(`${JSON.stringify(message)}\n`);
+    const line = JSON.stringify(message);
+    this.streams.output.write(`${line}\n`);
+    this.emitWireFrame('client', line);
   }
 
   private trySendRaw(message: JsonRpcMessage): void {
@@ -414,6 +424,14 @@ export class JsonRpcStdioClient {
     } catch (error) {
       const transportError = error instanceof Error ? error : new Error(String(error));
       this.dispose(transportError);
+    }
+  }
+
+  private emitWireFrame(direction: 'client' | 'agent', rawLine: string): void {
+    try {
+      this.options.onWireFrame?.(direction, rawLine);
+    } catch {
+      // A diagnostics tap must never break the transport.
     }
   }
 }

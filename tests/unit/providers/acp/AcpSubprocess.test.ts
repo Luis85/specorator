@@ -101,3 +101,48 @@ describe('AcpSubprocess.shutdown', () => {
     expect(proc.kill).not.toHaveBeenCalled();
   });
 });
+
+describe('AcpSubprocess.onStderrData', () => {
+  let proc: ReturnType<typeof createMockProc>;
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+    proc = createMockProc();
+    mockSpawn.mockReturnValue(proc as never);
+  });
+
+  it('forwards stderr chunks to onStderrData while still buffering the snapshot', () => {
+    const chunks: string[] = [];
+    const subprocess = new AcpSubprocess({
+      ...createLaunchSpec(),
+      onStderrData: (chunk) => chunks.push(chunk),
+    });
+    subprocess.start();
+
+    proc.stderr.emit('data', Buffer.from('boom\n'));
+
+    expect(chunks.join('')).toContain('boom');
+    expect(subprocess.getStderrSnapshot()).toContain('boom');
+  });
+
+  it('does not let a throwing onStderrData break the ring buffer', () => {
+    const subprocess = new AcpSubprocess({
+      ...createLaunchSpec(),
+      onStderrData: () => {
+        throw new Error('diagnostics tap exploded');
+      },
+    });
+    subprocess.start();
+
+    expect(() => proc.stderr.emit('data', Buffer.from('boom\n'))).not.toThrow();
+    expect(subprocess.getStderrSnapshot()).toContain('boom');
+  });
+
+  it('behaves identically when onStderrData is not set', () => {
+    const subprocess = new AcpSubprocess(createLaunchSpec());
+    subprocess.start();
+
+    expect(() => proc.stderr.emit('data', Buffer.from('boom\n'))).not.toThrow();
+    expect(subprocess.getStderrSnapshot()).toContain('boom');
+  });
+});

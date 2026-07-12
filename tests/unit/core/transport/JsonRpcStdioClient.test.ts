@@ -144,4 +144,43 @@ describe('JsonRpcStdioClient', () => {
     await expect(client.request('x')).rejects.toBeInstanceOf(JsonRpcTransportClosedError);
     expect(() => client.notify('y')).not.toThrow();
   });
+
+  it('reports outbound and inbound raw lines to onWireFrame when configured', async () => {
+    const h = makeStreams();
+    const frames: Array<{ direction: string; line: string }> = [];
+    const client = new JsonRpcStdioClient(h.streams, undefined, {
+      onWireFrame: (direction, line) => frames.push({ direction, line }),
+    });
+    const p = client.request('ping', { a: 1 });
+    h.pushLine({ jsonrpc: '2.0', method: 'event', params: { n: 1 } });
+    h.pushLine({ jsonrpc: '2.0', id: 1, result: { ok: true } });
+    await p;
+
+    expect(frames.some((f) => f.direction === 'client')).toBe(true);
+    expect(frames.some((f) => f.direction === 'agent')).toBe(true);
+    for (const f of frames) {
+      expect(() => JSON.parse(f.line)).not.toThrow();
+    }
+  });
+
+  it('behaves identically when onWireFrame is not set', async () => {
+    const h = makeStreams();
+    const client = new JsonRpcStdioClient(h.streams);
+    const p = client.request('ping', { a: 1 });
+    expect(h.written()[0]).toMatchObject({ jsonrpc: '2.0', id: 1, method: 'ping', params: { a: 1 } });
+    h.pushLine({ jsonrpc: '2.0', id: 1, result: { ok: true } });
+    await expect(p).resolves.toEqual({ ok: true });
+  });
+
+  it('does not let a throwing onWireFrame break request/response delivery', async () => {
+    const h = makeStreams();
+    const client = new JsonRpcStdioClient(h.streams, undefined, {
+      onWireFrame: () => {
+        throw new Error('diagnostics tap exploded');
+      },
+    });
+    const p = client.request('ping', { a: 1 });
+    h.pushLine({ jsonrpc: '2.0', id: 1, result: { ok: true } });
+    await expect(p).resolves.toEqual({ ok: true });
+  });
 });

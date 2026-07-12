@@ -12,6 +12,11 @@ export interface AcpSubprocessLaunchSpec {
    * shim. Threaded straight through to `AgentSubprocess`.
    */
   windowsVerbatimArguments?: boolean;
+  /**
+   * Diagnostics tap: receives raw stderr chunks alongside the existing ring
+   * buffer. Never throws upstream — calls are try/catch-wrapped.
+   */
+  onStderrData?: (chunk: string) => void;
 }
 
 type CloseListener = (error?: Error) => void;
@@ -23,9 +28,11 @@ type CloseListener = (error?: Error) => void;
  */
 export class AcpSubprocess {
   private readonly proc: AgentSubprocess;
+  private readonly onStderrData?: (chunk: string) => void;
 
   constructor(launchSpec: AcpSubprocessLaunchSpec) {
     this.proc = new AgentSubprocess(launchSpec);
+    this.onStderrData = launchSpec.onStderrData;
   }
 
   get stdin(): Writable {
@@ -42,6 +49,15 @@ export class AcpSubprocess {
 
   start(): void {
     this.proc.start();
+    if (this.onStderrData) {
+      this.proc.stderr.on('data', (chunk: Buffer | string) => {
+        try {
+          this.onStderrData?.(typeof chunk === 'string' ? chunk : chunk.toString('utf8'));
+        } catch {
+          // A diagnostics tap must never break the transport.
+        }
+      });
+    }
   }
 
   isAlive(): boolean {
