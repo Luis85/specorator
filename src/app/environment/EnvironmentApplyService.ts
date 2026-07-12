@@ -123,12 +123,14 @@ export class EnvironmentApplyService {
     if (!tab.service || !tab.serviceInitialized) return true;
     try {
       this.syncTabRuntimeState(tab);
+      // Always FORCE a respawn: a persistent runtime (Claude / Cursor / Codex /
+      // Opencode ACP) keeps a live child that still holds the OLD credentials /
+      // base URL, so a non-forced ensureReady early-returns and the env change
+      // never reaches the process. `changed` additionally drops the session.
       if (changed) {
         tab.service.resetSession();
-        await tab.service.ensureReady();
-      } else {
-        await tab.service.ensureReady({ force: true });
       }
+      await tab.service.ensureReady({ force: true });
       return true;
     } catch {
       return false;

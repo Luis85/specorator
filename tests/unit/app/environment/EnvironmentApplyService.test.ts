@@ -116,6 +116,8 @@ describe('EnvironmentApplyService', () => {
 
     expect(streamingTab.controllers.inputController.cancelStreaming).toHaveBeenCalled();
     expect((streamingTab.service as { resetSession: jest.Mock }).resetSession).toHaveBeenCalled();
-    expect((streamingTab.service as { ensureReady: jest.Mock }).ensureReady).toHaveBeenCalled();
+    // FORCE the respawn: a persistent runtime otherwise keeps the stale-env child.
+    expect((streamingTab.service as { ensureReady: jest.Mock }).ensureReady)
+      .toHaveBeenCalledWith({ force: true });
   });
 });

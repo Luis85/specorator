@@ -623,7 +623,9 @@ describe('SpecoratorPlugin', () => {
         ['/live/context'],
       );
       expect(mockResetSession).toHaveBeenCalledTimes(1);
-      expect(mockEnsureReady).toHaveBeenCalledWith();
+      // Env-invalidated runtimes force a respawn so a persistent child can't keep
+      // stale credentials/base URL (a non-forced ensureReady early-returns).
+      expect(mockEnsureReady).toHaveBeenCalledWith({ force: true });
     });
   });
 
