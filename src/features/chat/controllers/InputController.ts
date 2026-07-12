@@ -69,6 +69,7 @@ import { QueuedMessageController } from './QueuedMessageController';
 import { ResumeSessionDropdownCoordinator } from './ResumeSessionDropdownCoordinator';
 import type { SelectionController } from './SelectionController';
 import type { StreamController } from './StreamController';
+import { activateStreamingAssistantMessage, discardStreamingAssistantMessage } from './streamingMessageLifecycle';
 
 export interface InputControllerDeps {
   plugin: SpecoratorPlugin;
@@ -480,7 +481,7 @@ export class InputController {
     const assistantMsg = createAssistantPlaceholderMessage(this.deps.generateId());
     state.addMessage(assistantMsg);
     this.activeStreamingAssistantMessage = assistantMsg;
-    this.activateStreamingAssistantMessage(assistantMsg);
+    activateStreamingAssistantMessage(state, this.deps.getMessagesEl(), assistantMsg);
     this.pendingProviderUserMessages = [{
       displayContent,
       images: imagesForMessage,
@@ -932,28 +933,6 @@ export class InputController {
     };
   }
 
-  private activateStreamingAssistantMessage(message: ChatMessage): void {
-    const { state } = this.deps;
-
-    if (!state.currentContentEl) {
-      state.toolCallElements.clear();
-    }
-
-    // Non-DOM sentinel: `currentContentEl` still marks "an assistant message is
-    // active" for the stream pipeline's guards and supplies an ownerDocument for
-    // timers, but it's a DETACHED element — subagent/legacy DOM writes vanish
-    // into it while the Vue transcript renders `message` from reactive data.
-    state.currentContentEl = this.deps.getMessagesEl().ownerDocument.createElement('div');
-    state.currentTextEl = null;
-    state.currentTextContent = '';
-    state.currentThinkingState = null;
-    // Reactive-stream pointers for the Vue transcript: this shell is now the
-    // in-flight message; the block index opens once the first text/thinking
-    // chunk lands (coordinators own it).
-    state.activeMessageId = message.id;
-    state.activeBlockIndex = -1;
-  }
-
   private resetProviderMessageBoundaryState(): void {
     this.pendingProviderUserMessages = [];
     this.sawInitialProviderUserMessage = false;
@@ -989,7 +968,7 @@ export class InputController {
     const shouldDiscardPlaceholder = this.shouldDiscardPendingAssistantPlaceholder(previousAssistant);
     if (previousAssistant) {
       if (shouldDiscardPlaceholder) {
-        this.discardStreamingAssistantMessage(previousAssistant.id);
+        discardStreamingAssistantMessage(this.deps.state, previousAssistant.id);
       } else {
         await this.deps.streamController.finalizeCurrentThinkingBlock(previousAssistant);
         await this.deps.streamController.finalizeCurrentTextBlock(previousAssistant);
@@ -1016,7 +995,7 @@ export class InputController {
     const assistantMessage = createAssistantPlaceholderMessage(this.deps.generateId());
     this.deps.state.addMessage(assistantMessage);
     this.activeStreamingAssistantMessage = assistantMessage;
-    this.activateStreamingAssistantMessage(assistantMessage);
+    activateStreamingAssistantMessage(this.deps.state, this.deps.getMessagesEl(), assistantMessage);
     this.deps.streamController.showThinkingIndicator();
     this.deps.state.responseStartTime = performance.now();
     this.awaitingProviderAssistantStart = true;
@@ -1038,7 +1017,7 @@ export class InputController {
     const assistantMessage = createAssistantPlaceholderMessage(this.deps.generateId());
     this.deps.state.addMessage(assistantMessage);
     this.activeStreamingAssistantMessage = assistantMessage;
-    this.activateStreamingAssistantMessage(assistantMessage);
+    activateStreamingAssistantMessage(this.deps.state, this.deps.getMessagesEl(), assistantMessage);
     this.deps.streamController.showThinkingIndicator();
     this.emit();
   }
@@ -1049,18 +1028,6 @@ export class InputController {
       && !message.content.trim()
       && (message.toolCalls?.length ?? 0) === 0
       && (message.contentBlocks?.length ?? 0) === 0;
-  }
-
-  private discardStreamingAssistantMessage(messageId: string): void {
-    const { state } = this.deps;
-    // The messages setter fires onMessagesChanged → the transcript re-projects.
-    state.messages = state.messages.filter((message) => message.id !== messageId);
-    state.currentContentEl = null;
-    state.currentTextEl = null;
-    state.currentTextContent = '';
-    state.currentThinkingState = null;
-    state.activeMessageId = null;
-    state.activeBlockIndex = -1;
   }
 
   // ============================================

@@ -1,15 +1,15 @@
 {
-  "description": "Fallow quality baseline. Counters may shrink but not grow; averageMaintainability may rise but not drop. Regenerate with `npm run check:quality -- --update` (commit the diff in the same PR that moves the metric).",
+  "description": "Fallow quality baseline. Counters may shrink but not grow; averageMaintainability may rise but not drop. Regenerate with `npm run check:quality -- --update` (commit the diff in the same PR that moves the metric). 2026-07-12 (ADR 0005 sub-project 2, transcript Vue island): cloneGroups 32->36 and duplicatedLines 787->1048 rose deliberately — the additive-then-cut migration re-implemented a few pure `rendering/*` helpers as Vue viewmodels (e.g. webSearchRenderer.ts <-> webSearchViewModel.ts) and the two inline plan cards (InlineExitPlanMode.vue <-> InlinePlanApproval.vue) share ~64 lines. Extracting the shared clone groups is the tracked helper-extraction follow-up; complexFunctions (230->226) and averageMaintainability (90.1->90.2) improved in the same pass.",
   "fallowVersion": "2.91.0",
   "metrics": {
     "deadCodeIssues": 0,
     "circularDependencies": 0,
     "reExportCycles": 0,
     "boundaryViolations": 0,
-    "cloneGroups": 32,
-    "duplicatedLines": 787,
-    "complexFunctions": 230,
+    "cloneGroups": 36,
+    "duplicatedLines": 1048,
+    "complexFunctions": 226,
     "criticalComplexity": 0,
-    "averageMaintainability": 90.1
+    "averageMaintainability": 90.2
   }
 }

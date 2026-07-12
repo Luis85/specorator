@@ -1,6 +1,6 @@
 # Chat Feature
 
-Main sidebar chat interface. `SpecoratorView` assembles tabs, controllers, renderers, and provider-backed services around the shared `ChatRuntime` boundary. The outer frame — header, tab-badge strip, and tab-content host — is a Vue 3 + Pinia island (`ui/vue/`, ADR 0005) mounted over the untouched imperative engine (`TabManager`, controllers, `ChatState`, per-tab DOM). See "Chat Shell Vue Island" below.
+Main sidebar chat interface. `SpecoratorView` assembles tabs, controllers, provider-backed services, and two Vue 3 + Pinia islands around the shared `ChatRuntime` boundary. Both the outer frame — header, tab-badge strip, and tab-content host (ADR 0005 sub-project 1) — AND the per-tab transcript rendering (`MessageRenderer` + block renderers, ADR 0005 sub-project 2) are now Vue islands under `ui/vue/`, mounted over the untouched imperative engine (`TabManager`, controllers, `ChatState`, stream-consumption state machines). See "Chat Shell Vue Island" and "Transcript Vue Island" below. Still-imperative: the composer + input toolbar and the remaining side panels (status panel, navigation sidebar, file/image context) — future sub-projects.
 
 ## Provider Boundary Status
 
@@ -36,21 +36,15 @@ SpecoratorView (lifecycle + assembly)
 ├── Services
 │   ├── SubagentManager
 │   └── BangBashService
-├── Rendering
-│   ├── MessageRenderer (orchestration; delegates to the three below)
-│   │   ├── MessageSubagentRenderer (Task / provider-lifecycle subagent projection)
-│   │   ├── MessageImageRenderer (attachment src resolution + image modal)
-│   │   └── MessageActionBar (copy / rewind / fork / registered-action toolbar)
-│   ├── ToolCallRenderer
-│   ├── ThinkingBlockRenderer
-│   ├── WriteEditRenderer
-│   ├── DiffRenderer
-│   ├── TodoListRenderer
-│   ├── SubagentRenderer
-│   ├── InlineExitPlanMode
-│   ├── InlinePlanApproval
-│   ├── InlineAskUserQuestion
-│   └── InlineRuntimeError
+├── Transcript Vue island (ui/vue/transcript/, ADR 0005 sub-project 2)
+│   ├── TranscriptRoot → MessageList (windowed) → MessageBubble → BlockList
+│   │   ├── TextBlock / ThinkingBlock / ToolCall / WriteEditView + DiffView
+│   │   ├── TodoListView / WebSearchView / AskQuestionResult / SubagentBlock
+│   │   └── ContextCompactedMarker / RuntimeErrorCard
+│   ├── cards/ (MessageActionBar, MessageContextCard, MessageImages, WorkOrder*Card)
+│   ├── StreamingIndicator (reactive isThinking/isWriting/elapsed)
+│   ├── MarkdownHost (async Obsidian markdown seam, generation token)
+│   └── inline/ (InlineApproval, InlineAskUserQuestion, InlineExitPlanMode, InlinePlanApproval)
 ├── Tabs
 │   ├── TabManager
 │   ├── TabProviderCommandCoordinator
@@ -123,11 +117,11 @@ Vue-provided content host.
   `mountWorkOrderHost`, `mountGitActionHost`) host them into the Vue tree
   ("island hosts imperative widget"). They migrate to Vue with a later
   sub-project (side panels).
-- **Out of scope for this island**: transcript rendering (`MessageRenderer` +
-  block renderers), the composer + input toolbar, and the remaining side
-  panels (status panel, navigation sidebar, file/image context) stay fully
-  imperative — each is its own future sub-project of the larger chat Vue
-  migration (see ADR 0005 and
+- **Out of scope for this island**: transcript rendering migrated separately in
+  ADR 0005 sub-project 2 (see "Transcript Vue Island" below). The composer +
+  input toolbar and the remaining side panels (status panel, navigation
+  sidebar, file/image context) stay fully imperative — each is its own future
+  sub-project of the larger chat Vue migration (see ADR 0005 and
   `docs/superpowers/specs/2026-07-11-chat-shell-vue-migration-design.md`).
 
 ## State Flow
@@ -139,10 +133,12 @@ User Input
   -> ChatRuntime.prepareTurn()
   -> ChatRuntime.query()
   -> StreamController
-  -> MessageRenderer + ChatState persistence
+  -> mutate the in-flight ChatMessage's contentBlocks/toolCalls as DATA
+  -> ChatState persistence + TabTranscriptProjection.emit()
+  -> Vue TranscriptRoot renders from the reactive store
 ```
 
-The feature layer consumes provider-neutral `StreamChunk` values. Providers own prompt encoding, history/session fallback, and task-result interpretation.
+The feature layer consumes provider-neutral `StreamChunk` values. Providers own prompt encoding, history/session fallback, and task-result interpretation. There is no separate live-render path: the streaming turn is an ordinary `ChatMessage` whose `contentBlocks`/`toolCalls` grow as data during the turn, and the Vue transcript renders it through the same components as any stored message.
 
 ## Controllers
 
@@ -160,21 +156,82 @@ The feature layer consumes provider-neutral `StreamChunk` values. Providers own 
 | `ChatDropController` | Drag-and-drop lifecycle for one chat tab — overlay, payload routing, vault/external/image dispatch |
 | `NavigationController` | Vim-style keyboard navigation |
 
-## Rendering Pipeline
+## Transcript Vue Island
 
-| Renderer | Handles |
-|----------|---------|
-| `MessageRenderer` | Main message orchestration + interrupt markers; delegates subagent projection (`MessageSubagentRenderer`), image attachments (`MessageImageRenderer`), and the copy/rewind/fork action toolbar (`MessageActionBar`) |
-| `ToolCallRenderer` | Tool blocks and tool state |
-| `ThinkingBlockRenderer` | Thinking / reasoning summaries |
-| `WriteEditRenderer` | File writes and edits with diff previews |
-| `DiffRenderer` | Inline diff rendering |
-| `InlineExitPlanMode` | Claude tool-driven exit-plan approval |
-| `InlinePlanApproval` | Shared post-plan approval flow driven by consumed turn metadata (currently Codex) |
-| `InlineAskUserQuestion` | Ask-user cards emitted by provider runtimes |
-| `InlineRuntimeError` | Actionable runtime-error cards — classified via `classifyRuntimeError` (cli-not-found / unauthenticated / context-too-large / generic) with open-settings, provider login hint, and real retry re-dispatch |
-| `TodoListRenderer` | Todo items and status icons |
-| `SubagentRenderer` | Background agent lifecycle rendering |
+The per-tab transcript — every stored and live turn — is a Vue 3 + Pinia island
+under `ui/vue/transcript/` (ADR 0005 sub-project 2, mirroring the shell island's
+sub-project 1 seam one level deeper, into each tab's `messagesEl`). The
+imperative `MessageRenderer` + every `rendering/*` block renderer + the
+DOM-patching streaming write-side were deleted; only the stream **output**
+changed (raw DOM mutation → reactive-data mutation). `TabManager`, controllers,
+`ChatState`, and `StreamController`'s chunk-routing/block-transition logic are
+untouched.
+
+- **Mount**: `mountTranscript(containerEl, plugin, component, callbacks)` (per
+  tab, mirror of `mountChatShell`) `createApp(TranscriptRoot)` + a FRESH per-leaf
+  `createTranscriptPinia()` (never a shared singleton — each tab owns its own
+  `ChatState.messages`), provides `APP_KEY`/`COMPONENT_KEY`/`PLUGIN_KEY`/
+  `CALLBACKS_KEY`, and captures the Vue-rendered `.specorator-messages` scroll
+  element through `SCROLL_HOST_KEY` so the imperative engine (StreamController
+  auto-scroll, NavigationController scan, drop overlay) keeps a direct handle.
+- **Store**: `ui/vue/transcript/stores/transcriptStore.ts` — `messages` +
+  `activeStream` + welcome/loading/hydration transients, all `shallowRef`
+  (whole-value replacement, no deep-proxy). Truth + I/O stay in `ChatState`.
+- **Projection seam + 3 emit points**: `tabs/tabTranscript.ts`'s
+  `TabTranscriptProjection` is the per-tab `TranscriptCallbacks.subscribe`
+  source (mirror of the shell's `emitChatShellChange`). It fans a fully-projected
+  `TranscriptSnapshot` (`messages`, `activeStream`, greeting, loadingText,
+  hydrationError) to every observer on three emit points: `emit()` (streaming
+  transitions + message add/remove, called from `InputController`/coordinators),
+  `setGreeting`/`setLoadingText`/`setHydrationError` (engine-pushed transients),
+  and `refreshMessage(id)` (off-stream mutations).
+- **Message-identity-refresh reactivity contract (the C1/C2 fix)**: the engine
+  mutates the SAME `ChatMessage` object IN PLACE (`msg.content += chunk`,
+  `contentBlocks.push`, `toolCall.result = …`), so the object identity never
+  changes — but `MessageBubble` is a keyed `v-for` child, so an unchanged
+  identity makes Vue skip the patch and the live turn renders blank. On each
+  snapshot the projection gives the actively-streaming message (`activeMessageId`)
+  AND any off-stream-dirtied message (`refreshMessage`, chiefly async/background
+  subagent completions) a fresh identity — including fresh tool-call and nested
+  `subagent` references, since those reach `ToolCall`/`SubagentBlock` by object
+  reference. Snapshot-only: the clone never touches `ChatState.messages`, so the
+  engine's live `msg` keeps growing the original. `tests/vue/chat/transcript/`
+  `liveMutation.regression.test.ts` locks C1 (live growth of the streaming
+  object) and C2 (async subagent completing on a non-active message).
+- **`.specorator-*` DOM contract**: Vue owns the transcript DOM but FOUR
+  still-imperative consumers read it by class/attribute and are out of scope —
+  `NavigationController`/`NavigationSidebar` (scan `.specorator-message-user` +
+  `offsetTop`), the three selection controllers, `ChatDropController` (overlay),
+  and `StreamController` auto-scroll (`.specorator-messages`). The components
+  therefore emit the exact legacy `.specorator-*` classes/attributes alongside
+  the `.specorator-vue` baseline. `domContract.test.ts` mounts the real
+  `TranscriptRoot` over a fixture exercising every block type + user/assistant +
+  streaming + chrome and asserts every consumer-queried class/attribute — the
+  regression backstop until the composer/side-panel sub-projects migrate too.
+- **`MarkdownHost` async seam**: the single Vue-hostile surface. It owns one
+  element, treats its children as opaque (no `v-for`, never diffed), re-renders
+  through Obsidian's async `MarkdownRenderer` on text change, and drops stale
+  renders with a monotonic generation token (renders into a detached element,
+  swaps only after the token check). `nodeType`/`ownerDocument` guards keep
+  popout leaves safe.
+- **Inline blocking cards** (`inline/`): `InlinePromptController` still owns the
+  promise the runtime awaits + the composer-hide (ref-counted) + `needsAttention`
+  badge; the Vue card (`InlineApproval` / `InlineAskUserQuestion` /
+  `InlineExitPlanMode` / `InlinePlanApproval`) is mounted via the
+  `mountInlineCard` seam, captures input, and calls an injected `resolve`.
+  Abort/`dismissPendingApproval` resolves the promise with `null` (never rejects).
+- **Runtime errors**: `RuntimeErrorCard.vue` renders the classified
+  runtime-error card — `classifyRuntimeError` (cli-not-found / unauthenticated /
+  context-too-large / generic) with open-settings, provider login hint, and real
+  retry re-dispatch through the callbacks seam.
+- **Tracked parity follow-ups** (not visible functional loss): (1) auto-turn
+  retry suppression consistency and (2) a custom streaming-indicator text hook
+  are deferred; (3) the helper-extraction follow-up folds the re-implemented
+  `rendering/*` pure helpers (e.g. `webSearchViewModel` ↔ `webSearchRenderer`)
+  and the two shared inline-plan-card clone groups into shared modules (the
+  `scripts/quality-baseline.json` duplication bump this cutover locked in).
+  Provider-lifecycle spawn tools still render as a plain `ToolCall` (the
+  consolidated spawn+wait+close card is unbuilt).
 
 ## Key Patterns
 

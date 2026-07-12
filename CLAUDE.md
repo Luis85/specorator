@@ -57,7 +57,7 @@ non-blocking backlog) are catalogued in
 | **providers/codex** | Codex app-server adaptor | See [`src/providers/codex/CLAUDE.md`](src/providers/codex/CLAUDE.md) |
 | **providers/opencode** | Opencode adaptor over ACP | Runtime, prompt encoding, history, settings, modes, models, commands, subagent storage, MCP, settings UI |
 | **providers/cursor** | Cursor Agent adaptor over the `cursor-agent` stream-json CLI (not ACP) | Runtime, NDJSON stream/tool mapping, prompt encoding, JSONL history hydration, settings reconciliation, plan-path conventions, settings UI |
-| **features/chat** | Main sidebar interface | The outer frame (header + tab-badge strip + tab-content host) is a Vue 3 + Pinia island (`ui/vue/`, ADR 0005) mounted over the untouched imperative engine (`TabManager`, controllers, `ChatState`, transcript/composer/side-panels — future sub-projects). See [`src/features/chat/CLAUDE.md`](src/features/chat/CLAUDE.md) |
+| **features/chat** | Main sidebar interface | Two Vue 3 + Pinia islands (`ui/vue/`, ADR 0005) over the untouched imperative engine (`TabManager`, controllers, `ChatState`, stream state machines): the outer frame (header + tab-badge strip + tab-content host, sub-project 1) AND the per-tab transcript rendering (`MessageRenderer` + block renderers, sub-project 2 — streaming mutates reactive `ChatMessage` data, not DOM; the `.specorator-*` DOM contract is locked by `tests/vue/chat/transcript/domContract.test.ts`). Composer + side panels stay imperative (future sub-projects). See [`src/features/chat/CLAUDE.md`](src/features/chat/CLAUDE.md) |
 | **features/inline-edit** | Inline edit modal and provider-backed edit services | `InlineEditModal` plus provider-owned inline edit services |
 | **features/settings** | Settings shell + registry renderer | All seven tabs render through the settings registry (`registry/`, parity tests in `tests/integration/settings/`); provider-owned widgets mount via the `widgets` map on each provider's `settingsTabRenderer`. Legacy imperative renderers remain as fallback until a dedicated deletion pass gated on manual vault verification (no version milestone — ADR 0003 retired the v4.0.0 framing) |
 | **features/library** | Unified Library view (Vue 3 island) | `LibraryView` mounts a per-leaf Vue app unconditionally — the `useVueLibrary` flag and the legacy roster/skill/loop views were deleted 2026-07-04 (hard cut, ADR 0003; a stale saved leaf shows Obsidian's empty pane once). Four tabs: Agents, Skills, Loops, and Quick Actions (full management: run/edit/duplicate/favorite/delete). One "Open Library" ribbon (`library-big`); the palette commands `open-library`, `open-agent-roster`, `open-skill-library`, `open-loop-library`, `open-quick-actions` are registrar-path tab deep-links. Pinia stores wrap `LoopNoteStore`/`VaultSkillAggregator`/`AgentRosterStore`/`QuickActionStorage`. Tab switches pass a shared tab guard (`TAB_GUARD_KEY` — a dirty detail editor can veto), and the Pinia stores are reactive projections over the existing source stores (I/O stays in the wrapped stores, never duplicated state). Tests run in the Vitest lane (`npm run test:vue`, `tests/vue/`). Vue surfaces style through the `.specorator-vue` baseline + `--sp-*` tokens (`src/style/vue/`, spec `docs/superpowers/specs/2026-07-03-vue-style-baseline-design.md`); `library.css`/`agent-roster.css` carry only the imperative remnants (editor modals, embedded detail editor). |
@@ -96,7 +96,6 @@ Current coverage, by user-visible path:
 
 | Spec | Guards | Scales with |
 |------|--------|-------------|
-| `messageRenderer.perf` | mounted DOM/listeners stay O(render window) | conversation length |
 | `toolCallIndex.perf` | streaming tool lookup stays O(1)/chunk | tools per turn |
 | `claudeHistory.perf` | `filterActiveBranch` stays ~linear | transcript length |
 | `codexHistory.perf` | `parseCodexSessionContent` stays ~linear | transcript length |
@@ -110,6 +109,15 @@ Current coverage, by user-visible path:
 > when the board became a Vue island: mounted DOM/listeners stay O(rendered
 > cards), and one heartbeat updates exactly one `LiveStrip`. The engine's own
 > scaling stays here in `taskRunCoordinator.perf`.
+>
+> The transcript render scaling guard (formerly `messageRenderer.perf`) moved
+> to the Vue component lane as `tests/vue/chat/transcript/transcriptScaling.test.ts`
+> when the transcript became a Vue island (ADR 0005 sub-project 2): mounted
+> `.specorator-message` count stays ≤ `RENDER_WINDOW_SIZE`, and one stream
+> mutation re-renders exactly one message (siblings keep node identity). The
+> Jest perf lane stubs `.vue`/`mountTranscript`, so it can no longer mount a
+> real transcript; `navigationSidebar.perf` (scans `.specorator-message-user`)
+> and `multiTabStreaming.perf` stay here in the Jest perf lane.
 
 ## Storage
 

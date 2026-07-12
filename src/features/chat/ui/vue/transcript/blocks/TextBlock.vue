@@ -52,6 +52,7 @@ const segments = computed<WorkOrderProtocolSegment[]>(() => {
 </script>
 
 <template>
+  <!-- eslint-disable vue/singleline-html-element-content-newline -- exact textContent parity with the legacy DOM contract (the summary label must be "Work order prompt", no surrounding whitespace) -->
   <details
     v-if="isWorkOrderPrompt"
     class="specorator-work-order-prompt"
@@ -61,6 +62,7 @@ const segments = computed<WorkOrderProtocolSegment[]>(() => {
       <MarkdownHost :markdown="content" />
     </div>
   </details>
+  <!-- eslint-enable vue/singleline-html-element-content-newline -->
   <template v-else-if="role === 'assistant'">
     <template
       v-for="(segment, i) in segments"
