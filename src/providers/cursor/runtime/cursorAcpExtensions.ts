@@ -137,8 +137,9 @@ function settlePlanDecision(
 
 /**
  * Blocks on the user's plan decision for a non-empty cursor/create_plan, racing
- * the per-turn cancel signal so a cancel resolves `cancelled`. `markPlanDecidedInline`
- * fires in every path (finally) to suppress the post-turn planCompleted card.
+ * the per-turn cancel signal so a cancel resolves `cancelled`. Checks the signal
+ * BEFORE emitting so a late create_plan after Stop never queues plan text.
+ * `markPlanDecidedInline` fires in every path (finally) to suppress the card.
  */
 async function resolveCreatePlanOutcome(
   host: CursorAcpExtensionHost,
@@ -147,10 +148,6 @@ async function resolveCreatePlanOutcome(
 ): Promise<CursorCreatePlanOutcome> {
   const signal = host.getAskSignal?.();
   try {
-    // A turn cancelled before this (late) create_plan arrived must not queue the
-    // plan text into the transcript: check the abort signal BEFORE emitting, or
-    // Stop would append plan content after cancellation while the RPC still
-    // answers `cancelled`.
     if (signal?.aborted) {
       return { outcome: 'cancelled' };
     }
