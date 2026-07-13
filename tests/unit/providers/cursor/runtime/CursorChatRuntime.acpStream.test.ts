@@ -574,4 +574,75 @@ describe('CursorChatRuntime ACP diagnostics capture (2026-07-11-cursor-acp-captu
 
     await expect(fs.access(captureBaseDir())).rejects.toThrow();
   });
+
+  it('starts capturing on the next turn when captureAcpTraffic is toggled on mid-session (no respawn)', async () => {
+    // Shared settings object so the toggle reaches the live runtime — the
+    // persistent process is reused, so ensureReady reconciles the writer.
+    const settings = {
+      permissionMode: 'normal',
+      providerConfigs: { cursor: { captureAcpTraffic: false } },
+    };
+    const runtime = setupRuntime(({ emit }) => {
+      emit({ sessionUpdate: 'agent_message_chunk', messageId: 'a1', content: { type: 'text', text: 'hi' } });
+      return { stopReason: 'end_turn' };
+    }, {
+      pluginOverrides: {
+        app: { vault: { adapter: { basePath: tmpVaultDir } } },
+        settings,
+      },
+    });
+
+    // Turn 1: capture off — nothing recorded.
+    await drive(runtime);
+    await expect(fs.access(captureBaseDir())).rejects.toThrow();
+
+    // Toggle on, then run a second turn on the SAME live process.
+    settings.providerConfigs.cursor.captureAcpTraffic = true;
+    await drive(runtime);
+    await runtime.cleanup();
+
+    const wireLines = (await readOnlySessionFile('wire.jsonl')).trim().split('\n');
+    expect(wireLines.length).toBeGreaterThan(0);
+  });
+
+  it('stops capturing on the next turn when captureAcpTraffic is toggled off mid-session', async () => {
+    // The writer buffers and flushes on cleanup/reconcile, so a mid-session read
+    // is unreliable — instead compare a two-turn run that toggles OFF after turn
+    // one against a control that stays ON for both. Fewer wire frames land when
+    // capture was switched off, proving turn two recorded nothing.
+    async function twoTurnWireLineCount(vaultDir: string, turnTwoOn: boolean): Promise<number> {
+      const settings = {
+        permissionMode: 'normal',
+        providerConfigs: { cursor: { captureAcpTraffic: true } },
+      };
+      const runtime = setupRuntime(({ emit }) => {
+        emit({ sessionUpdate: 'agent_message_chunk', messageId: 'a1', content: { type: 'text', text: 'hi' } });
+        return { stopReason: 'end_turn' };
+      }, {
+        pluginOverrides: {
+          app: { vault: { adapter: { basePath: vaultDir } } },
+          settings,
+        },
+      });
+      await drive(runtime);
+      settings.providerConfigs.cursor.captureAcpTraffic = turnTwoOn;
+      await drive(runtime);
+      await runtime.cleanup();
+
+      const base = path.join(vaultDir, '.specorator', 'captures', 'cursor');
+      const entries = await fs.readdir(base);
+      expect(entries).toHaveLength(1); // reused process → one session dir, no respawn
+      return (await fs.readFile(path.join(base, entries[0], 'wire.jsonl'), 'utf8')).trim().split('\n').length;
+    }
+
+    const controlDir = await fs.mkdtemp(path.join(os.tmpdir(), 'specorator-cursor-runtime-capture-ctrl-'));
+    try {
+      const toggledOff = await twoTurnWireLineCount(tmpVaultDir, false);
+      const stayedOn = await twoTurnWireLineCount(controlDir, true);
+      expect(toggledOff).toBeGreaterThan(0); // turn one was captured
+      expect(toggledOff).toBeLessThan(stayedOn); // turn two recorded nothing after the toggle
+    } finally {
+      await fs.rm(controlDir, { recursive: true, force: true });
+    }
+  });
 });

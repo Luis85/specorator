@@ -612,6 +612,34 @@ describe('registerCursorAcpExtensions', () => {
     expect(chunks.find((c) => c.type === 'tool_result')).toBeDefined();
   });
 
+  it('does not emit TodoWrite chunks for a late update_todos after the turn signal aborted', async () => {
+    const { transport, requests, notifications } = makeFakeTransport();
+    const chunks: StreamChunk[] = [];
+    const controller = new AbortController();
+    // The user stopped the turn; the agent ignored session/cancel and sent a
+    // late update_todos while the per-turn signal is already aborted.
+    controller.abort();
+    registerCursorAcpExtensions(transport as never, {
+      askUser: jest.fn(),
+      exitPlanMode: async () => null,
+      markPlanDecidedInline: () => {},
+      getAskSignal: () => controller.signal,
+      emitChunk: (c) => chunks.push(c),
+    });
+
+    const rawTodos = [{ id: '1', content: 'step 1', status: 'in_progress' }];
+    // Request path: still acks accepted (agent isn't left hanging) but emits nothing.
+    const response = await requests.get('cursor/update_todos')!({ todos: rawTodos }) as {
+      outcome: { outcome: string; todos?: unknown };
+    };
+    // Notification path: also a no-op emit.
+    await notifications.get('cursor/update_todos')!({ todos: rawTodos });
+
+    expect(response.outcome.outcome).toBe('accepted');
+    expect(response.outcome.todos).toEqual(rawTodos);
+    expect(chunks).toHaveLength(0);
+  });
+
   it('maps cursor/update_todos to a TodoWrite tool chunk', async () => {
     const { transport, notifications } = makeFakeTransport();
     const chunks: StreamChunk[] = [];

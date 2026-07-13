@@ -111,8 +111,9 @@ export class CursorChatRuntime implements ChatRuntime {
   private autoApprovePermissions = false;
   // Diagnostics-only, default-off sink for ACP wire frames/stderr/lifecycle
   // events (see docs/superpowers/specs/2026-07-11-cursor-acp-capture-design.md).
-  // Built fresh per spawn in startProcess when the setting is on; flushed and
-  // dropped in shutdownProcess so a toggle change takes effect on next spawn.
+  // Built fresh per spawn in startProcess when the setting is on, and
+  // reconciled without a respawn when captureAcpTraffic toggles mid-session
+  // (reconcileCaptureWriter); flushed and dropped in shutdownProcess.
   private captureWriter: CursorAcpCaptureWriter | null = null;
   private connection: AcpClientConnection | null = null;
   private contextUsage: AcpUsageUpdate | null = null;
@@ -205,6 +206,10 @@ export class CursorChatRuntime implements ChatRuntime {
       this.process?.isAlive() && this.transport && !this.transport.isClosed && this.connection,
     );
     if (alive && options?.force !== true) {
+      // The process is reused across turns, so a captureAcpTraffic toggle since
+      // the spawn never reached it — reconcile the writer against the current
+      // setting here (no respawn; the sink hooks read this.captureWriter live).
+      await this.reconcileCaptureWriter(cli);
       return true;
     }
 
@@ -489,15 +494,16 @@ export class CursorChatRuntime implements ChatRuntime {
     const spec = buildCursorAcpLaunchSpec(cliPath, cwd, env);
 
     this.captureWriter = this.buildCaptureWriter(cliPath);
-    const captureWriter = this.captureWriter;
 
-    // The spawn lock guards ~/.cursor/cli-config.json contention (Windows
-    // EPERM under concurrent spawns) — now once per session, not per turn.
+    // Always wire the sink hooks and read `this.captureWriter` dynamically per
+    // frame (a null-check when capture is off) so a mid-session toggle can flip
+    // capture live — `reconcileCaptureWriter` builds/drops the writer without a
+    // respawn, which the persistent process would otherwise require.
     const { process: proc, transport } = await runWithCursorAgentSpawnLock(
-      async () => startCursorAcpProcess(spec, captureWriter ? {
-        onStderrData: (chunk) => captureWriter.stderr(chunk),
-        onWireFrame: (direction, rawLine) => captureWriter.wireFrame(direction, rawLine),
-      } : undefined),
+      async () => startCursorAcpProcess(spec, {
+        onStderrData: (chunk) => this.captureWriter?.stderr(chunk),
+        onWireFrame: (direction, rawLine) => this.captureWriter?.wireFrame(direction, rawLine),
+      }),
     );
     this.process = proc;
     this.transport = transport;
@@ -592,6 +598,22 @@ export class CursorChatRuntime implements ChatRuntime {
         this.plugin.logger.scope('cursor.capture').warn('ACP capture disabled after a write failure', error);
       },
     });
+  }
+
+  // Flips ACP capture live on a mid-session captureAcpTraffic toggle without
+  // respawning the persistent process: builds the writer when newly enabled,
+  // flushes and drops it when newly disabled (so capture stops recording
+  // prompt-bearing frames immediately, not at the next unrelated restart). The
+  // sink hooks read this.captureWriter dynamically, so the swap takes effect
+  // from the next frame. No-op when the writer already matches the setting.
+  private async reconcileCaptureWriter(cliPath: string): Promise<void> {
+    const { captureAcpTraffic } = getCursorProviderSettings(asSettingsBag(this.plugin.settings));
+    if (captureAcpTraffic && !this.captureWriter) {
+      this.captureWriter = this.buildCaptureWriter(cliPath);
+    } else if (!captureAcpTraffic && this.captureWriter) {
+      await this.captureWriter.flush();
+      this.captureWriter = null;
+    }
   }
 
   private captureEvent(kind: string, data: Record<string, unknown> = {}): void {
