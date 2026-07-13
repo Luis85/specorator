@@ -5,6 +5,7 @@ import { computed, inject } from 'vue';
 import { DEFAULT_CHAT_PROVIDER_ID } from '../../../../../core/providers/types';
 import type { ChatMessage } from '../../../../../core/types';
 import { extractVaultMentions } from '../../../../../utils/vaultMentions';
+import { splitWorkOrderProtocolForDisplay } from '../../../rendering/WorkOrderProtocolDisplay';
 import BlockList from './blocks/BlockList.vue';
 import { resolveBlockListItems, shouldRenderToolCall } from './blocks/blockListViewModel';
 import TextBlock from './blocks/TextBlock.vue';
@@ -56,14 +57,30 @@ const isInterruptOnly = computed(
   () => !!props.msg.isInterrupt && (props.msg.role === 'user' || !hasVisibleContent.value)
 );
 
-// The assistant action bar normally renders inside the last text block (beside
-// its copy button — one hover row). A tool-only / error-only response with no
-// text item has no such host, so mount a message-level fallback in that case
-// (mirrors the pre-slot placement) — else eligible actions (thumbs/work-order,
-// gated on chatMessageText, which also reads `content`) would vanish.
-const hasTextBlock = computed(() =>
-  resolveBlockListItems(props.msg, providerId.value).some((item) => item.kind === 'text')
-);
+// The assistant action bar normally renders inside the last text block's
+// MARKDOWN segment (beside its copy button — one hover row). A response with no
+// such host — tool-only / error-only (no text item), OR a work-order response
+// whose last text item splits into protocol-only cards (a `text` item but NO
+// markdown segment) — has nowhere to mount the co-located slot, so a
+// message-level fallback covers it; else eligible actions (thumbs/work-order,
+// gated on chatMessageText, which also reads `content`) would vanish. The
+// condition mirrors BlockList's lastTextKey + TextBlock's markdown-segment slot
+// so exactly one of the two placements renders.
+const hasMarkdownHost = computed(() => {
+  const items = resolveBlockListItems(props.msg, providerId.value);
+  let lastText: string | null = null;
+  for (let i = items.length - 1; i >= 0; i--) {
+    const item = items[i];
+    if (item.kind === 'text') {
+      lastText = item.content;
+      break;
+    }
+  }
+  if (lastText === null) return false;
+  const workOrderPath = callbacks?.getWorkOrderPath() ?? null;
+  if (!workOrderPath) return true; // no split → the text always renders as markdown
+  return splitWorkOrderProtocolForDisplay(lastText).some((segment) => segment.type === 'markdown');
+});
 
 const textToShow = computed(() => props.msg.displayContent ?? props.msg.content);
 
@@ -138,7 +155,7 @@ const mentions = computed(() => {
           class="specorator-text-block"
         ><span class="specorator-interrupted">Interrupted</span> <span class="specorator-interrupted-hint">· What should Specorator do instead?</span></div>
         <MessageActionBar
-          v-if="!hasTextBlock"
+          v-if="!hasMarkdownHost"
           :msg="msg"
           role="assistant"
         />

@@ -209,6 +209,36 @@ describe('MessageBubble', () => {
     expect(bar!.querySelector('.specorator-text-action-btn')).not.toBeNull();
   });
 
+  it('renders the message-level fallback for a work-order response that splits into protocol-only cards', async () => {
+    // A `text` item exists (resolveBlockListItems), but the work-order split
+    // yields only a progress card — no markdown segment to host the slot — so
+    // the fallback must cover it (else the actions would vanish).
+    const msg = {
+      id: 'wo1',
+      role: 'assistant',
+      content: '',
+      timestamp: 1,
+      contentBlocks: [
+        { type: 'text', content: '<specorator_progress>\nstep: Building\ndone: 1/3\n</specorator_progress>' },
+      ],
+    } as unknown as ChatMessage;
+    const callbacks = makeCallbacks({
+      getWorkOrderPath: vi.fn(() => 'Agent Board/wo.md'),
+      getMessageActions: vi.fn(() => [
+        { id: 'wo', label: 'Create work order', icon: 'briefcase', run: vi.fn() },
+      ]),
+    });
+    const { container } = mountBubble(msg, callbacks);
+    await flushPromises();
+
+    // Protocol-only: the progress card renders, but no markdown text block does.
+    expect(container.querySelector('.specorator-work-order-progress-card')).not.toBeNull();
+    expect(container.querySelector('.specorator-text-block')).toBeNull();
+    const bar = container.querySelector('.specorator-message-content > .specorator-text-actions');
+    expect(bar).not.toBeNull();
+    expect(bar!.querySelector('.specorator-text-action-btn')).not.toBeNull();
+  });
+
   it('renders nothing for an assistant message with no visible content', async () => {
     const msg: ChatMessage = { id: 'a1', role: 'assistant', content: '', timestamp: 1 };
     const { container } = mountBubble(msg, makeCallbacks());
