@@ -183,6 +183,32 @@ describe('MessageBubble', () => {
     expect(textBlock.querySelector('.specorator-text-action-btn')).not.toBeNull();
   });
 
+  it('mounts a message-level fallback action bar when a response has no text block to host it', async () => {
+    // Tool-only contentBlocks (no text item) but eligible actions via `content`:
+    // the co-located slot has no host, so the bar falls back to message level.
+    const msg = {
+      id: 'a1',
+      role: 'assistant',
+      content: 'summary prose',
+      timestamp: 1,
+      contentBlocks: [{ type: 'tool_use', id: 't1', name: 'Bash' }],
+      toolCalls: [{ id: 't1', name: 'Bash', status: 'completed', input: {} }],
+    } as unknown as ChatMessage;
+    const callbacks = makeCallbacks({
+      getMessageActions: vi.fn(() => [
+        { id: 'wo', label: 'Create work order', icon: 'briefcase', run: vi.fn() },
+      ]),
+    });
+    const { container } = mountBubble(msg, callbacks);
+    await flushPromises();
+
+    // No text block exists, but the action bar still renders (message-level).
+    expect(container.querySelector('.specorator-text-block')).toBeNull();
+    const bar = container.querySelector('.specorator-message-content > .specorator-text-actions');
+    expect(bar).not.toBeNull();
+    expect(bar!.querySelector('.specorator-text-action-btn')).not.toBeNull();
+  });
+
   it('renders nothing for an assistant message with no visible content', async () => {
     const msg: ChatMessage = { id: 'a1', role: 'assistant', content: '', timestamp: 1 };
     const { container } = mountBubble(msg, makeCallbacks());

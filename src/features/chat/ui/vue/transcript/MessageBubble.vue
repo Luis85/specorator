@@ -6,7 +6,7 @@ import { DEFAULT_CHAT_PROVIDER_ID } from '../../../../../core/providers/types';
 import type { ChatMessage } from '../../../../../core/types';
 import { extractVaultMentions } from '../../../../../utils/vaultMentions';
 import BlockList from './blocks/BlockList.vue';
-import { shouldRenderToolCall } from './blocks/blockListViewModel';
+import { resolveBlockListItems, shouldRenderToolCall } from './blocks/blockListViewModel';
 import TextBlock from './blocks/TextBlock.vue';
 import MessageActionBar from './cards/MessageActionBar.vue';
 import MessageContextCard from './cards/MessageContextCard.vue';
@@ -54,6 +54,15 @@ const hasVisibleContent = computed(() => {
 
 const isInterruptOnly = computed(
   () => !!props.msg.isInterrupt && (props.msg.role === 'user' || !hasVisibleContent.value)
+);
+
+// The assistant action bar normally renders inside the last text block (beside
+// its copy button — one hover row). A tool-only / error-only response with no
+// text item has no such host, so mount a message-level fallback in that case
+// (mirrors the pre-slot placement) — else eligible actions (thumbs/work-order,
+// gated on chatMessageText, which also reads `content`) would vanish.
+const hasTextBlock = computed(() =>
+  resolveBlockListItems(props.msg, providerId.value).some((item) => item.kind === 'text')
 );
 
 const textToShow = computed(() => props.msg.displayContent ?? props.msg.content);
@@ -128,6 +137,11 @@ const mentions = computed(() => {
           v-if="msg.isInterrupt"
           class="specorator-text-block"
         ><span class="specorator-interrupted">Interrupted</span> <span class="specorator-interrupted-hint">· What should Specorator do instead?</span></div>
+        <MessageActionBar
+          v-if="!hasTextBlock"
+          :msg="msg"
+          role="assistant"
+        />
       </div>
     </div>
   </template>

@@ -105,6 +105,7 @@
 }
 
 .specorator-message-assistant {
+  position: relative; /* anchors the message-level fallback .specorator-text-actions */
   background: transparent;
   align-self: stretch;
   width: 100%;
@@ -179,6 +180,13 @@
    `0`), so both anchor to the same box and form one row. Reveal it on the same
    hover the copy button uses so the whole row appears together. */
 .specorator-text-block:hover .specorator-text-actions {
+  opacity: 1;
+}
+
+/* Tool-only / error-only responses have no text block to host the bar, so it
+   falls back to a direct child of message-content (see MessageBubble). Reveal
+   that one on message hover — there is no copy button to align a row with. */
+.specorator-message-assistant:hover > .specorator-message-content > .specorator-text-actions {
   opacity: 1;
 }
 
