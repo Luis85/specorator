@@ -3,7 +3,8 @@
  */
 import type { App } from 'obsidian';
 
-import { notifyApplyPatchFileChanges } from '@/features/chat/controllers/vaultFileNotifier';
+import type { ToolCallInfo } from '@/core/types';
+import { notifyApplyPatchFileChanges, notifyVaultForToolResult } from '@/features/chat/controllers/vaultFileNotifier';
 
 jest.mock('@/utils/path', () => ({
   ...jest.requireActual('@/utils/path'),
@@ -71,5 +72,41 @@ describe('notifyApplyPatchFileChanges', () => {
 
     const scannedDirs = list.mock.calls.map((call) => call[0]);
     expect(scannedDirs).toContain('notes');
+  });
+});
+
+describe('notifyVaultForToolResult (Cursor edit-path fallback)', () => {
+  beforeEach(() => jest.useFakeTimers());
+  afterEach(() => jest.useRealTimers());
+
+  it('falls back to diffData.filePath when the edit input carries no file_path (Cursor ACP shape)', () => {
+    const { app, list } = createApp();
+    const toolCall = {
+      name: 'Edit',
+      input: {}, // Cursor delivered the path only in the diff content
+      diffData: { filePath: 'notes/edited-by-cursor.md', diffLines: [], stats: { added: 1, removed: 0 } },
+    } as unknown as ToolCallInfo;
+
+    notifyVaultForToolResult(app, toolCall);
+    jest.advanceTimersByTime(300);
+
+    const scannedDirs = list.mock.calls.map((call) => call[0]);
+    expect(scannedDirs).toContain('notes');
+  });
+
+  it('prefers an explicit input.file_path over diffData.filePath', () => {
+    const { app, list } = createApp();
+    const toolCall = {
+      name: 'Edit',
+      input: { file_path: 'real/path.md' },
+      diffData: { filePath: 'wrong/diff.md', diffLines: [], stats: { added: 1, removed: 0 } },
+    } as unknown as ToolCallInfo;
+
+    notifyVaultForToolResult(app, toolCall);
+    jest.advanceTimersByTime(300);
+
+    const scannedDirs = list.mock.calls.map((call) => call[0]);
+    expect(scannedDirs).toContain('real');
+    expect(scannedDirs).not.toContain('wrong');
   });
 });

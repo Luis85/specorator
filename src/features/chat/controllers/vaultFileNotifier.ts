@@ -81,7 +81,16 @@ export function notifyApplyPatchFileChanges(app: App, input: Record<string, unkn
 export function notifyVaultForToolResult(app: App, toolCall: ToolCallInfo): void {
   // Notify Obsidian vault so the file tree refreshes after Write/Edit/NotebookEdit
   if (isEditTool(toolCall.name)) {
-    notifyVaultFileChange(app, toolCall.input);
+    // Cursor's ACP edit shape can carry the path only in the diff content (empty
+    // rawInput), so `input.file_path` is absent — fall back to the diff's
+    // `filePath` (mirrors collectEditedPathsFromToolCall) or the vault never
+    // rescans the edited file.
+    const hasInputPath = typeof toolCall.input.file_path === 'string'
+      || typeof toolCall.input.notebook_path === 'string';
+    const input = hasInputPath || !toolCall.diffData?.filePath
+      ? toolCall.input
+      : { ...toolCall.input, file_path: toolCall.diffData.filePath };
+    notifyVaultFileChange(app, input);
   }
 
   // Runtime apply_patch: refresh each changed file path

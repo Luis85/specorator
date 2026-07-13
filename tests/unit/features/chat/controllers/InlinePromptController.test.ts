@@ -1,3 +1,10 @@
+import * as fs from 'fs';
+
+jest.mock('fs', () => ({
+  ...jest.requireActual('fs'),
+  readFileSync: jest.fn(),
+}));
+
 import { createMockEl } from '@test/helpers/mockElement';
 
 import type { InlineCardMounter } from '@/features/chat/controllers/inlineCardMount';
@@ -160,6 +167,48 @@ describe('InlinePromptController', () => {
       controller.dismissPendingApproval();
       expect(handle.unmount).toHaveBeenCalledTimes(1);
       expect(state.needsAttention).toBe(false);
+    });
+  });
+
+  describe('handleExitPlanMode', () => {
+    it('prefers the inline plan (Cursor cursor/create_plan) over a stale plan file', () => {
+      // A stale plan-file path lingers from a previous plan-file flow in this tab.
+      const readFileMock = fs.readFileSync as jest.Mock;
+      readFileMock.mockReset().mockReturnValue('STALE FILE PLAN');
+      const { el } = attachedInputContainer();
+      const mountInlineCard = makeMounter();
+      const { controller, state } = setup({
+        getInputContainerEl: () => el as never,
+        getPlanPathPrefix: () => '.cursor/plans',
+        mountInlineCard,
+      });
+      state.planFilePath = '/vault/.cursor/plans/old-plan.md';
+
+      // Fire-and-forget: the mount runs synchronously inside runBlockingPrompt.
+      void controller.handleExitPlanMode({ plan: 'INLINE PLAN' });
+
+      const call = (mountInlineCard.mountExitPlanMode as jest.Mock).mock.calls[0];
+      expect(call[1].planPreview).toBe('INLINE PLAN');
+      // The stale file must not even be read when an inline plan is present.
+      expect(readFileMock).not.toHaveBeenCalled();
+    });
+
+    it('reads the plan file when there is no inline plan (Claude/Codex plan-file flow)', () => {
+      const readFileMock = fs.readFileSync as jest.Mock;
+      readFileMock.mockReset().mockReturnValue('FILE PLAN');
+      const { el } = attachedInputContainer();
+      const mountInlineCard = makeMounter();
+      const { controller, state } = setup({
+        getInputContainerEl: () => el as never,
+        getPlanPathPrefix: () => '.cursor/plans',
+        mountInlineCard,
+      });
+      state.planFilePath = '/vault/.cursor/plans/current.md';
+
+      void controller.handleExitPlanMode({});
+
+      const call = (mountInlineCard.mountExitPlanMode as jest.Mock).mock.calls[0];
+      expect(call[1].planPreview).toBe('FILE PLAN');
     });
   });
 
