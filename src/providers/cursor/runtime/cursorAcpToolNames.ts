@@ -92,6 +92,13 @@ function firstTrimmedString(...values: unknown[]): string | undefined {
   return undefined;
 }
 
+// True for a "Delete <path>" / "Delete" title (word-boundary anchored so
+// "Deleted 3 lines" from an edit doesn't match). Cursor uses this title shape
+// for deletions it reports under kind:'edit'.
+function isDeleteShapedTitle(title: string | undefined): boolean {
+  return typeof title === 'string' && /^delete\b/i.test(title.trim());
+}
+
 export function resolveCursorAcpRawToolName(
   currentRawName: string | undefined,
   update: {
@@ -106,6 +113,16 @@ export function resolveCursorAcpRawToolName(
 
   if (knownTitleName) {
     return knownTitleName;
+  }
+
+  // Cursor reports some deletions as kind:'edit' (or an unrecognized kind) with
+  // a "Delete <path>" title — the real ACP permission fixture uses that shape.
+  // Resolve those to `delete` BEFORE the pin/kind fallbacks below, or the tool
+  // normalizes to Edit, `collectRemovedPathsFromToolCall()` never runs, and the
+  // removed file lingers in the edited-files list as if it were edited. A real
+  // Edit is unaffected: its title isn't delete-shaped.
+  if (isDeleteShapedTitle(titleName)) {
+    return 'delete';
   }
 
   // A resolved known name stays pinned (no identity flapping), but a prose

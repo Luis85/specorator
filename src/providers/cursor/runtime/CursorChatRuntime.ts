@@ -988,24 +988,33 @@ export class CursorChatRuntime implements ChatRuntime {
       return; // usage contract: never emit without a model
     }
 
-    const acpUsage = buildAcpUsageInfo({ contextWindow: this.contextUsage, model, promptUsage });
+    // Cursor emits no usage_update, so this.contextUsage is usually null and the
+    // window comes from the model catalog — pass it as the fallback so a prompt
+    // response that DID carry token counts keeps the window/percentage instead of
+    // collapsing to contextWindow: 0 on exactly the turns where tokens are known.
+    const fallback = extractCursorUsage({}, model);
+    const acpUsage = buildAcpUsageInfo({
+      contextWindow: this.contextUsage,
+      model,
+      promptUsage,
+      fallbackContextWindowSize: fallback.contextWindow,
+    });
     if (acpUsage) {
       activeTurn.queue.push({ sessionId: activeTurn.sessionId, type: 'usage', usage: acpUsage });
       return;
     }
 
-    // An authoritative usage_update chunk already carried the real context window
-    // earlier this turn; the zero-window catalog fallback would overwrite it, so
-    // when we've seen one but buildAcpUsageInfo still returned null, emit nothing.
+    // Defensive: an authoritative usage_update was seen but buildAcpUsageInfo
+    // still built nothing — don't overwrite the real window with the catalog
+    // fallback. (Unreachable in practice: a present contextWindow always builds.)
     if (this.contextUsage) {
       return;
     }
 
-    // No ACP usage payload: fall back to the model-window catalog (same
-    // zero-token window shape the stream-json path emitted without usage data).
-    // Routed through buildUsageInfo so the emitted shape stays contract-clean
-    // (floors, clamps, computed percentage) rather than a hand-built object.
-    const fallback = extractCursorUsage({}, model);
+    // No ACP usage payload at all (no usage_update AND no prompt usage): emit the
+    // catalog window with zero tokens (same shape the stream-json path emitted
+    // without usage data). Routed through buildUsageInfo so the emitted shape
+    // stays contract-clean (floors, clamps, computed percentage).
     activeTurn.queue.push({
       sessionId: activeTurn.sessionId,
       type: 'usage',

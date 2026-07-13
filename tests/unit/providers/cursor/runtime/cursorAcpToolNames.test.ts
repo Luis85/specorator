@@ -263,6 +263,21 @@ describe('cursorAcpToolNames', () => {
     it('falls back to the literal tool sentinel with neither title, name, nor known kind', () => {
       expect(resolveCursorAcpRawToolName(undefined, { title: null, kind: null })).toBe('tool');
     });
+
+    it('resolves a delete reported as kind:edit with a "Delete <path>" title to delete', () => {
+      // Real ACP fixture shape: Cursor reports a deletion as kind:'edit' with a
+      // "Delete ..." title. Without detection it pins to `edit`, so the removed
+      // file would linger in the edited-files list.
+      expect(resolveCursorAcpRawToolName(undefined, { title: 'Delete notes/todo.md', kind: 'edit' })).toBe('delete');
+    });
+
+    it('corrects an already-pinned edit to delete when a delete-shaped title arrives', () => {
+      expect(resolveCursorAcpRawToolName('edit', { title: 'Delete notes/todo.md', kind: 'edit' })).toBe('delete');
+    });
+
+    it('does not mistake an edit whose title merely starts with "Deleted" for a delete', () => {
+      expect(resolveCursorAcpRawToolName('edit', { title: 'Deleted 3 lines', kind: 'edit' })).toBe('edit');
+    });
   });
 
   describe('normalizeCursorAcpToolName', () => {
