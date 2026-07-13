@@ -145,12 +145,16 @@ async function resolveCreatePlanOutcome(
   planText: string,
   sessionId: string | undefined,
 ): Promise<CursorCreatePlanOutcome> {
-  host.emitChunk({ type: 'text', content: `\n\n${planText}\n` }, sessionId);
   const signal = host.getAskSignal?.();
   try {
+    // A turn cancelled before this (late) create_plan arrived must not queue the
+    // plan text into the transcript: check the abort signal BEFORE emitting, or
+    // Stop would append plan content after cancellation while the RPC still
+    // answers `cancelled`.
     if (signal?.aborted) {
       return { outcome: 'cancelled' };
     }
+    host.emitChunk({ type: 'text', content: `\n\n${planText}\n` }, sessionId);
     const decision = await host.exitPlanMode({ plan: planText }, signal);
     return settlePlanDecision(host, decision, signal);
   } catch (error) {

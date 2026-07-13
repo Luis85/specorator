@@ -455,6 +455,33 @@ describe('registerCursorAcpExtensions', () => {
     expect(markPlanDecidedInline).toHaveBeenCalled();
   });
 
+  it('does not emit the plan text when the turn signal is already aborted before create_plan arrives', async () => {
+    const { transport, requests } = makeFakeTransport();
+    const chunks: StreamChunk[] = [];
+    const controller = new AbortController();
+    // The user stopped the turn; the agent ignored session/cancel and sent a
+    // late create_plan whose signal is already aborted.
+    controller.abort();
+    const exitPlanMode = jest.fn();
+    const markPlanDecidedInline = jest.fn();
+    registerCursorAcpExtensions(transport as never, {
+      askUser: jest.fn(),
+      exitPlanMode: exitPlanMode as never,
+      getAskSignal: () => controller.signal,
+      emitChunk: (c) => chunks.push(c),
+      markPlanDecidedInline,
+    });
+
+    const response = await requests.get('cursor/create_plan')!({ plan: '# Plan\n1. go' });
+
+    // Cancelled without queuing plan content into the transcript or blocking on
+    // the plan card; the finally still marks the decision so no post-turn card.
+    expect(response).toEqual({ outcome: { outcome: 'cancelled' } });
+    expect(chunks).toHaveLength(0);
+    expect(exitPlanMode).not.toHaveBeenCalled();
+    expect(markPlanDecidedInline).toHaveBeenCalled();
+  });
+
   it('accepts an empty cursor/create_plan without blocking on a plan decision', async () => {
     const { transport, requests } = makeFakeTransport();
     const chunks: StreamChunk[] = [];
