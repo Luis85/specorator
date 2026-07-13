@@ -27,13 +27,11 @@ import { hasVisibleBlock, hasVisibleText } from './visibleContentHelpers';
  * context message (if one ever occurred) would still show the bare marker —
  * not render nothing.
  *
- * The assistant action bar is appended as a plain sibling after `BlockList`
- * (and the interrupt indicator) rather than reproducing the legacy anchor-
- * into-the-last-`.specorator-text-block` placement — `MessageActionBar.vue`'s
- * own docs flag that anchoring as this component's concern, and this task
- * intentionally keeps the simpler flat placement (tracked parity gap, not a
- * visible functional loss: the buttons still render, just at the end of the
- * content column instead of hugging the last text block's hover area).
+ * The assistant action bar is rendered by `BlockList` into the last text
+ * block's `actions` slot (beside that block's copy button), reproducing the
+ * legacy anchor-into-the-last-`.specorator-text-block` placement so the
+ * thumbs/work-order buttons and the copy button form one hover row. The user
+ * toolbar (fork/rewind/copy/actions) stays a message-level sibling below.
  */
 const props = defineProps<{ msg: ChatMessage }>();
 
@@ -130,10 +128,6 @@ const mentions = computed(() => {
           v-if="msg.isInterrupt"
           class="specorator-text-block"
         ><span class="specorator-interrupted">Interrupted</span> <span class="specorator-interrupted-hint">· What should Specorator do instead?</span></div>
-        <MessageActionBar
-          :msg="msg"
-          role="assistant"
-        />
       </div>
     </div>
   </template>

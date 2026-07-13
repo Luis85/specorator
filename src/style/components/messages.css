@@ -105,7 +105,6 @@
 }
 
 .specorator-message-assistant {
-  position: relative; /* containing block for the absolute .specorator-text-actions bar */
   background: transparent;
   align-self: stretch;
   width: 100%;
@@ -175,11 +174,11 @@
   z-index: 2;
 }
 
-/* The assistant action bar is a plain sibling after BlockList (not inside a
-   text block), so reveal it on message hover — mirroring the user toolbar's
-   `.specorator-message-user:hover` — and anchor its absolute position to the
-   assistant message (`.specorator-message-assistant` is position: relative). */
-.specorator-message-assistant:hover .specorator-text-actions {
+/* The assistant action bar sits inside the last `.specorator-text-block`,
+   beside that block's copy button (`inset-inline-end: 22px` vs the copy button's
+   `0`), so both anchor to the same box and form one row. Reveal it on the same
+   hover the copy button uses so the whole row appears together. */
+.specorator-text-block:hover .specorator-text-actions {
   opacity: 1;
 }
 

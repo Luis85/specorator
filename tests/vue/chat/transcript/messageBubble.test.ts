@@ -159,6 +159,30 @@ describe('MessageBubble', () => {
     expect(msgEl.querySelector('.specorator-text-block')?.textContent).toContain('Hi there');
   });
 
+  it('assistant action bar co-locates inside the last text block, beside the copy button (one hover row)', async () => {
+    const msg: ChatMessage = {
+      id: 'a1',
+      role: 'assistant',
+      content: '',
+      timestamp: 1,
+      contentBlocks: [{ type: 'text', content: 'Hi there' }],
+    } as ChatMessage;
+    const callbacks = makeCallbacks({
+      getMessageActions: vi.fn(() => [
+        { id: 'wo', label: 'Create work order', icon: 'briefcase', run: vi.fn() },
+      ]),
+    });
+    const { container } = mountBubble(msg, callbacks);
+    await flushPromises();
+
+    const textBlock = container.querySelector('.specorator-text-block') as HTMLElement;
+    // Both the copy button and the action bar live in the same text block, so
+    // they anchor to the same box and render as one row.
+    expect(textBlock.querySelector('.specorator-text-copy-btn')).not.toBeNull();
+    expect(textBlock.querySelector('.specorator-text-actions')).not.toBeNull();
+    expect(textBlock.querySelector('.specorator-text-action-btn')).not.toBeNull();
+  });
+
   it('renders nothing for an assistant message with no visible content', async () => {
     const msg: ChatMessage = { id: 'a1', role: 'assistant', content: '', timestamp: 1 };
     const { container } = mountBubble(msg, makeCallbacks());
