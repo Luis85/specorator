@@ -61,6 +61,34 @@ describe('cursorAcpToolNames', () => {
     expect(toolUse?.name).toBe(TOOL_EDIT);
   });
 
+  it('seeds the delete path from a "Delete `<path>`" title when the delete-as-edit shape carries no rawInput', () => {
+    // Real fixture shape (CURSOR_REQUEST_PERMISSION_PARAMS): kind:'edit',
+    // backtick-wrapped path in the title, no rawInput. Without seeding, the
+    // deleted file lingers in the edited-files list (no path for removal).
+    const adapter = createCursorAcpToolStreamAdapter();
+    const chunks = adapter.normalizeToolCall(
+      { toolCallId: 'del1', title: 'Delete `C:\\Projects\\acp-test\\notes.md`', kind: 'edit' },
+      [{ id: 'del1', input: {}, name: 'unused', type: 'tool_use' }],
+    );
+    const toolUse = chunks.find((c) => c.type === 'tool_use') as
+      | { name: string; input: Record<string, unknown> }
+      | undefined;
+    expect(toolUse?.name).toBe('delete');
+    expect(toolUse?.input.path).toBe('C:\\Projects\\acp-test\\notes.md');
+  });
+
+  it('does not overwrite an explicit rawInput path with the title path', () => {
+    const adapter = createCursorAcpToolStreamAdapter();
+    const chunks = adapter.normalizeToolCall(
+      { toolCallId: 'del2', title: 'Delete `wrong.md`', kind: 'edit', rawInput: { path: 'right.md' } },
+      [{ id: 'del2', input: {}, name: 'unused', type: 'tool_use' }],
+    );
+    const toolUse = chunks.find((c) => c.type === 'tool_use') as
+      | { input: Record<string, unknown> }
+      | undefined;
+    expect(toolUse?.input.path).toBe('right.md');
+  });
+
   it('resolves a delete kind to the delete identity even when the title is prose', () => {
     const adapter = createCursorAcpToolStreamAdapter();
     const chunks = adapter.normalizeToolCall(

@@ -17,7 +17,14 @@ interface AcpToolStreamState {
 }
 
 export interface AcpToolStreamPresentationAdapter {
-  normalizeToolInput(rawName: string | undefined, input: Record<string, unknown>): Record<string, unknown>;
+  // `title` is the tool call's human title; a provider may parse it for data
+  // that never arrives in `input` (e.g. Cursor's delete-as-edit carries the
+  // path only in the title). Optional, so pass-through adapters can ignore it.
+  normalizeToolInput(
+    rawName: string | undefined,
+    input: Record<string, unknown>,
+    title?: string | null,
+  ): Record<string, unknown>;
   normalizeToolName(rawName: string | undefined): string;
   normalizeToolUseResult(
     rawName: string | undefined,
@@ -119,23 +126,24 @@ export class AcpToolStreamAdapter {
 
     if (update.rawInput !== undefined) {
       const rawInput = { ...current?.rawInput, ...normalizeRawToolInput(update.rawInput) };
-      return this.buildToolState(nextRawName, rawInput, current);
+      return this.buildToolState(nextRawName, rawInput, current, update.title);
     }
 
     if (nextRawName !== current?.rawName) {
-      return this.buildToolState(nextRawName, current?.rawInput ?? {}, current);
+      return this.buildToolState(nextRawName, current?.rawInput ?? {}, current, update.title);
     }
 
-    return current ?? this.buildToolState(nextRawName, {}, undefined);
+    return current ?? this.buildToolState(nextRawName, {}, undefined, update.title);
   }
 
   private buildToolState(
     rawName: string,
     rawInput: Record<string, unknown>,
     previous: AcpToolStreamState | undefined,
+    title?: string | null,
   ): AcpToolStreamState {
     const state: AcpToolStreamState = {
-      input: this.adapter.normalizeToolInput(rawName, rawInput),
+      input: this.adapter.normalizeToolInput(rawName, rawInput, title),
       rawInput,
       rawName,
     };

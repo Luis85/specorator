@@ -184,10 +184,40 @@ const CURSOR_ACP_FILE_TOOL_INPUT_KIND: Partial<Record<CursorAcpKnownToolName, st
 export function normalizeCursorAcpToolInput(
   rawName: string | undefined,
   input: Record<string, unknown>,
+  title?: string | null,
 ): Record<string, unknown> {
   const knownName = toKnownToolName(rawName);
   const inputKind = knownName ? CURSOR_ACP_FILE_TOOL_INPUT_KIND[knownName] : undefined;
-  return inputKind ? mapCursorToolInput(inputKind, input, undefined) : input;
+  // Cursor's delete-as-edit shape (kind:'edit', title "Delete <path>") carries
+  // NO rawInput, so the deleteToolCall mapper and collectRemovedPathsFromToolCall
+  // would see no path and leave the removed file in the edited-files list. Seed
+  // `path` from the title when a delete tool arrives without one.
+  const seeded = knownName === 'delete' && !hasStringField(input, 'path')
+    ? seedPath(input, parseDeleteTitlePath(title))
+    : input;
+  return inputKind ? mapCursorToolInput(inputKind, seeded, undefined) : seeded;
+}
+
+function hasStringField(input: Record<string, unknown>, field: string): boolean {
+  return typeof input[field] === 'string' && (input[field]).trim().length > 0;
+}
+
+function seedPath(input: Record<string, unknown>, path: string | undefined): Record<string, unknown> {
+  return path ? { ...input, path } : input;
+}
+
+// Extracts the path from a "Delete `<path>`" / "Delete <path>" title, stripping
+// wrapping backticks/quotes. Returns undefined when nothing follows the verb.
+function parseDeleteTitlePath(title: string | undefined | null): string | undefined {
+  if (typeof title !== 'string') {
+    return undefined;
+  }
+  const match = /^delete\s+(.+)$/i.exec(title.trim());
+  if (!match) {
+    return undefined;
+  }
+  const path = match[1].trim().replace(/^[`'"]+/, '').replace(/[`'"]+$/, '').trim();
+  return path || undefined;
 }
 
 function firstDiffContent(
