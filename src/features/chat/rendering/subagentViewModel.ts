@@ -1,26 +1,18 @@
-import type { ProviderSubagentLifecycleAdapter } from '../../../../../../core/providers/types';
-import { extractToolResultContent } from '../../../../../../core/tools/toolResultContent';
-import type { AsyncSubagentStatus, ChatMessage, SubagentInfo, ToolCallInfo } from '../../../../../../core/types';
+import type { ProviderSubagentLifecycleAdapter } from '../../../core/providers/types';
+import { extractToolResultContent } from '../../../core/tools/toolResultContent';
+import type { AsyncSubagentStatus, ChatMessage, SubagentInfo, ToolCallInfo } from '../../../core/types';
 
 /**
- * Pure `ToolCallInfo → SubagentInfo` projection plus the small display-only
- * derivations `SubagentBlock.vue` needs, ported from
- * `rendering/MessageSubagentRenderer.ts`'s private `resolveTaskSubagent` /
- * `mapToolStatusToSubagentStatus` / `inferAsyncStatusFromTaskTool`, and
- * `rendering/SubagentRenderer.ts`'s display helpers (`truncateDescription`,
- * `getAsyncDisplayStatus`, `getAsyncStatusText`, `getAsyncStatusAriaLabel`,
- * and the result-section fallback text rules baked into
- * `finalizeSubagentBlock` / `renderAsyncContentLikeSync`). Kept as plain
- * functions (no Vue/DOM deps) so the projection is unit-testable on its own,
- * independent of the SFC that consumes it.
+ * Pure `ToolCallInfo → SubagentInfo` projection plus display derivations shared
+ * by the Vue transcript (`SubagentBlock.vue`) and the imperative subagent stream
+ * renderer (`SubagentRenderer.ts`).
  */
 
-/** Display-only collapse of `SubagentInfo.status` / `.asyncStatus` down to
- *  the four states `renderAsyncContentLikeSync` actually branches on. */
+/** Display-only collapse of async status to the four branches renderers use. */
 export type SubagentDisplayStatus = 'running' | 'completed' | 'error' | 'orphaned';
 
 export function mapToolStatusToSubagentStatus(
-  status: ToolCallInfo['status']
+  status: ToolCallInfo['status'],
 ): 'completed' | 'error' | 'running' {
   switch (status) {
     case 'completed':
@@ -39,12 +31,12 @@ export function inferAsyncStatusFromTaskTool(toolCall: ToolCallInfo): 'running' 
 
   const lowerResult = extractToolResultContent(toolCall.result, { fallbackIndent: 2 }).toLowerCase();
   if (
-    lowerResult.includes('not_ready') ||
-    lowerResult.includes('not ready') ||
-    lowerResult.includes('"status":"running"') ||
-    lowerResult.includes('"status":"pending"') ||
-    lowerResult.includes('"retrieval_status":"running"') ||
-    lowerResult.includes('"retrieval_status":"not_ready"')
+    lowerResult.includes('not_ready')
+    || lowerResult.includes('not ready')
+    || lowerResult.includes('"status":"running"')
+    || lowerResult.includes('"status":"pending"')
+    || lowerResult.includes('"retrieval_status":"running"')
+    || lowerResult.includes('"retrieval_status":"not_ready"')
   ) {
     return 'running';
   }
@@ -52,15 +44,6 @@ export function inferAsyncStatusFromTaskTool(toolCall: ToolCallInfo): 'running' 
   return 'completed';
 }
 
-/**
- * Reproduces `MessageSubagentRenderer.resolveTaskSubagent`: prefers an
- * already-projected `toolCall.subagent` (re-tagging its `mode` when a
- * `modeHint` disagrees), otherwise derives a fresh `SubagentInfo` from the
- * Task tool's `input`/`status`. Provider-agnostic by design — the legacy
- * method never consults provider capabilities for this path (only the
- * separate provider-lifecycle spawn/wait consolidation does, which needs
- * the message's full `toolCalls` list and is out of this component's scope).
- */
 export function resolveTaskSubagent(toolCall: ToolCallInfo, modeHint?: 'sync' | 'async'): SubagentInfo {
   if (toolCall.subagent) {
     if (!modeHint || toolCall.subagent.mode === modeHint) {
@@ -102,16 +85,6 @@ export function resolveTaskSubagent(toolCall: ToolCallInfo, modeHint?: 'sync' | 
   };
 }
 
-/**
- * Reproduces `MessageSubagentRenderer.renderProviderLifecycleSubagent`'s
- * consolidation for CLI providers (Codex/Opencode/Cursor): a "subagent" is a
- * LIFECYCLE of separate tool calls (spawn + wait/close) rather than a single
- * Task tool. Delegates the provider-specific status/result/description/nested
- * derivation to the resolved adapter's `buildSubagentInfo`, handing it the
- * message's full `toolCalls` so it can gather the spawn's wait/close siblings.
- * Pure — re-derives off `msg.toolCalls` each call, so a mutation to a
- * wait/close tool (with a refreshed message identity) re-projects the card.
- */
 export function projectProviderLifecycleSubagent(
   spawnToolCall: ToolCallInfo,
   msg: ChatMessage,
@@ -122,7 +95,7 @@ export function projectProviderLifecycleSubagent(
 
 export function truncateDescription(description: string, maxLength = 40): string {
   if (description.length <= maxLength) return description;
-  return description.substring(0, maxLength) + '...';
+  return `${description.substring(0, maxLength)}...`;
 }
 
 export function getAsyncDisplayStatus(asyncStatus: AsyncSubagentStatus | undefined): SubagentDisplayStatus {
@@ -143,7 +116,7 @@ export function getAsyncStatusText(asyncStatus: AsyncSubagentStatus | undefined)
     case 'pending':
       return 'Initializing';
     case 'completed':
-      return ''; // Just show tick icon, no text
+      return '';
     case 'error':
       return 'Error';
     case 'orphaned':
@@ -221,12 +194,6 @@ export interface SubagentResultDisplay {
   text: string;
 }
 
-/**
- * Reproduces the result-section text rules shared by
- * `finalizeSubagentBlock` (sync) and `renderAsyncContentLikeSync` (async,
- * from the retired stored async renderer): no section while running, an
- * orphan-specific fallback, and a DONE/ERROR fallback otherwise.
- */
 export function resolveSubagentResultText(
   displayStatus: SubagentDisplayStatus,
   result: string | undefined,
@@ -239,8 +206,6 @@ export function resolveSubagentResultText(
   return { text: result?.trim() ? result : fallback };
 }
 
-/** `renderSubagentToolContent`'s extra "Running..." branch that precedes
- *  the shared `renderExpandedContent` (No result / body) fallthrough. */
 export function shouldShowRunningPlaceholder(toolCall: ToolCallInfo): boolean {
   return !toolCall.result && toolCall.status === 'running';
 }

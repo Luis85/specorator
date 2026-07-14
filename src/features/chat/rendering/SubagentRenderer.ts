@@ -5,10 +5,21 @@ import { TOOL_TASK } from '../../../core/tools/toolNames';
 import type { SubagentInfo, ToolCallInfo } from '../../../core/types';
 import { setupCollapsible } from './collapsible';
 import {
+  buildAsyncHeaderAriaLabel,
+  buildAsyncStatusPill,
+  buildSyncHeaderAriaLabel,
+  buildSyncRootClasses,
+  buildSyncStatusPill,
+  getAsyncStatusText,
+  resolveSubagentResultText,
+  shouldShowRunningPlaceholder,
+  truncateDescription,
+} from './subagentViewModel';
+import {
   renderExpandedContent,
   setToolIcon,
 } from './ToolCallRenderer';
-import { getToolName, getToolSummary } from './toolCallViewModel';
+import { getToolName, getToolSummary, TOOL_CALL_STATUS_ICONS } from './toolCallViewModel';
 import { getToolLabel } from './toolLabel';
 
 interface SubagentToolView {
@@ -40,23 +51,12 @@ export interface SubagentState {
   info: SubagentInfo;
 }
 
-const SUBAGENT_TOOL_STATUS_ICONS: Partial<Record<ToolCallInfo['status'], string>> = {
-  completed: 'check',
-  error: 'x',
-  blocked: 'shield-off',
-};
-
 function extractTaskDescription(input: Record<string, unknown>): string {
   return (input.description as string) || 'Subagent task';
 }
 
 function extractTaskPrompt(input: Record<string, unknown>): string {
   return (input.prompt as string) || '';
-}
-
-function truncateDescription(description: string, maxLength = 40): string {
-  if (description.length <= maxLength) return description;
-  return description.substring(0, maxLength) + '...';
 }
 
 function createSection(parentEl: HTMLElement, title: string, bodyClass?: string): SubagentSection {
@@ -110,17 +110,15 @@ function createSubagentHeader(
 }
 
 function updateSyncHeaderAria(state: SubagentState): void {
-  state.headerEl.setAttribute(
-    'aria-label',
-    `Subagent task: ${truncateDescription(state.info.description)} - Status: ${state.info.status} - click to expand`
-  );
-  state.statusEl.setAttribute('aria-label', `Status: ${state.info.status}`);
+  state.headerEl.setAttribute('aria-label', buildSyncHeaderAriaLabel(state.info.description, state.info.status));
+  const pill = buildSyncStatusPill(state.info.status);
+  state.statusEl.setAttribute('aria-label', pill.ariaLabel);
 }
 
 function renderSubagentToolContent(app: App, contentEl: HTMLElement, toolCall: ToolCallInfo): void {
   contentEl.empty();
 
-  if (!toolCall.result && toolCall.status === 'running') {
+  if (shouldShowRunningPlaceholder(toolCall)) {
     const emptyEl = contentEl.createDiv({ cls: 'specorator-subagent-tool-empty' });
     emptyEl.setText('Running...');
     return;
@@ -135,7 +133,7 @@ function setSubagentToolStatus(view: SubagentToolView, status: ToolCallInfo['sta
   view.statusEl.empty();
   view.statusEl.setAttribute('aria-label', `Status: ${status}`);
 
-  const statusIcon = SUBAGENT_TOOL_STATUS_ICONS[status];
+  const statusIcon = TOOL_CALL_STATUS_ICONS[status];
   if (statusIcon) {
     setIcon(view.statusEl, statusIcon);
   }
@@ -330,21 +328,22 @@ export function finalizeSubagentBlock(
 
   state.labelEl.setText(truncateDescription(state.info.description));
 
+  const pill = buildSyncStatusPill(state.info.status);
   state.statusEl.className = 'specorator-subagent-status';
-  state.statusEl.addClass(`status-${state.info.status}`);
+  state.statusEl.addClass(pill.pillClass);
   state.statusEl.empty();
-  if (state.info.status === 'completed') {
-    setIcon(state.statusEl, 'check');
-    state.wrapperEl.removeClass('error');
-    state.wrapperEl.addClass('done');
-  } else {
-    setIcon(state.statusEl, 'x');
-    state.wrapperEl.removeClass('done');
-    state.wrapperEl.addClass('error');
+  if (pill.icon) {
+    setIcon(state.statusEl, pill.icon);
+  }
+  state.wrapperEl.removeClass('done');
+  state.wrapperEl.removeClass('error');
+  for (const cls of buildSyncRootClasses(state.info.status)) {
+    state.wrapperEl.addClass(cls);
   }
 
-  const finalText = result?.trim() ? result : (isError ? 'ERROR' : 'DONE');
-  setResultText(state, finalText);
+  const displayStatus = isError ? 'error' : 'completed';
+  const resolved = resolveSubagentResultText(displayStatus, result);
+  setResultText(state, resolved?.text ?? (isError ? 'ERROR' : 'DONE'));
 
   updateSyncHeaderAria(state);
 }
@@ -367,23 +366,11 @@ function setAsyncWrapperStatus(wrapperEl: HTMLElement, status: string): void {
   wrapperEl.addClass(status);
 }
 
-function getAsyncStatusAriaLabel(asyncStatus: string | undefined): string {
-  switch (asyncStatus) {
-    case 'pending': return 'Initializing';
-    case 'completed': return 'Completed';
-    case 'error': return 'Error';
-    case 'orphaned': return 'Orphaned';
-    default: return 'Running in background';
-  }
-}
-
 function updateAsyncLabel(state: AsyncSubagentState): void {
   state.labelEl.setText(truncateDescription(state.info.description));
-
-  const statusLabel = getAsyncStatusAriaLabel(state.info.asyncStatus);
   state.headerEl.setAttribute(
     'aria-label',
-    `Background task: ${truncateDescription(state.info.description)} - ${statusLabel} - click to expand`
+    buildAsyncHeaderAriaLabel(state.info.description, state.info.asyncStatus),
   );
 }
 
@@ -416,14 +403,10 @@ function renderAsyncContentLikeSync(
   resultSection.wrapperEl.addClass('specorator-subagent-section-result');
   const resultEl = resultSection.bodyEl.createDiv({ cls: 'specorator-subagent-result-output' });
 
-  if (displayStatus === 'orphaned') {
-    resultEl.setText(subagent.result || 'Conversation ended before task completed');
-    return;
+  const resolved = resolveSubagentResultText(displayStatus, subagent.result);
+  if (resolved) {
+    resultEl.setText(resolved.text);
   }
-
-  const fallback = displayStatus === 'error' ? 'ERROR' : 'DONE';
-  const finalText = subagent.result?.trim() ? subagent.result : fallback;
-  resultEl.setText(finalText);
 }
 
 /**
@@ -461,7 +444,7 @@ export function createAsyncSubagentBlock(
   );
 
   const statusTextEl = headerEl.createDiv({ cls: 'specorator-subagent-status-text' });
-  statusTextEl.setText('Initializing');
+  statusTextEl.setText(getAsyncStatusText('pending'));
 
   const statusEl = headerEl.createDiv({ cls: 'specorator-subagent-status status-running' });
   statusEl.setAttribute('aria-label', 'Status: running');
@@ -493,7 +476,7 @@ export function updateAsyncSubagentRunning(
   setAsyncWrapperStatus(state.wrapperEl, 'running');
   updateAsyncLabel(state);
 
-  state.statusTextEl.setText('Running in background');
+  state.statusTextEl.setText(getAsyncStatusText('running'));
 
   renderAsyncContentLikeSync(state.app, state.contentEl, state.info, 'running');
 }
@@ -510,15 +493,14 @@ export function finalizeAsyncSubagent(
   setAsyncWrapperStatus(state.wrapperEl, isError ? 'error' : 'completed');
   updateAsyncLabel(state);
 
-  state.statusTextEl.setText(isError ? 'Error' : '');
+  state.statusTextEl.setText(getAsyncStatusText(isError ? 'error' : 'completed'));
 
+  const pill = buildAsyncStatusPill(isError ? 'error' : 'completed');
   state.statusEl.className = 'specorator-subagent-status';
-  state.statusEl.addClass(`status-${isError ? 'error' : 'completed'}`);
+  state.statusEl.addClass(pill.pillClass);
   state.statusEl.empty();
-  if (isError) {
-    setIcon(state.statusEl, 'x');
-  } else {
-    setIcon(state.statusEl, 'check');
+  if (pill.icon) {
+    setIcon(state.statusEl, pill.icon);
   }
 
   if (isError) {
@@ -538,11 +520,14 @@ export function markAsyncSubagentOrphaned(state: AsyncSubagentState): void {
   setAsyncWrapperStatus(state.wrapperEl, 'orphaned');
   updateAsyncLabel(state);
 
-  state.statusTextEl.setText('Orphaned');
+  state.statusTextEl.setText(getAsyncStatusText('orphaned'));
 
+  const pill = buildAsyncStatusPill('orphaned');
   state.statusEl.className = 'specorator-subagent-status status-error';
   state.statusEl.empty();
-  setIcon(state.statusEl, 'alert-circle');
+  if (pill.icon) {
+    setIcon(state.statusEl, pill.icon);
+  }
 
   state.wrapperEl.addClass('error');
   state.wrapperEl.addClass('orphaned');

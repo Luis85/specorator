@@ -18,7 +18,7 @@ import {
   resolveTaskSubagent,
   shouldShowRunningPlaceholder,
   truncateDescription,
-} from '@/features/chat/ui/vue/transcript/blocks/subagentViewModel';
+} from '@/features/chat/rendering/subagentViewModel';
 import { codexSubagentLifecycleAdapter } from '@/providers/codex/normalization/codexSubagentNormalization';
 
 /**

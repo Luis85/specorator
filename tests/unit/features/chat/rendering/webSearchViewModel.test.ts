@@ -1,4 +1,4 @@
-import { buildWebSearchSegments } from '@/features/chat/rendering/webSearchViewModel';
+import { buildWebSearchSegments, truncateWebSearchSummary } from '@/features/chat/rendering/webSearchViewModel';
 
 describe('buildWebSearchSegments', () => {
   it('projects parsed links before structured action data', () => {
@@ -35,5 +35,16 @@ describe('buildWebSearchSegments', () => {
     expect(buildWebSearchSegments({}, undefined)).toEqual([
       { type: 'empty', text: 'No result' },
     ]);
+  });
+});
+
+describe('truncateWebSearchSummary', () => {
+  it('passes through short summaries unchanged', () => {
+    expect(truncateWebSearchSummary('short')).toBe('short');
+  });
+
+  it('truncates long summaries at 800 chars with ellipsis', () => {
+    const long = 'a'.repeat(801);
+    expect(truncateWebSearchSummary(long)).toBe(`${'a'.repeat(800)}...`);
   });
 });

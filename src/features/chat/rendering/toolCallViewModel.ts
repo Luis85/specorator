@@ -88,3 +88,10 @@ export function isBlockedToolResult(content: unknown, isError?: boolean): boolea
   if (lower.includes('approval')) return true;
   return Boolean(isError && lower.includes('deny'));
 }
+
+/** Shared Obsidian icon names for tool/subagent tool-call status pills. */
+export const TOOL_CALL_STATUS_ICONS: Partial<Record<'completed' | 'error' | 'blocked' | 'running', string>> = {
+  completed: 'check',
+  error: 'x',
+  blocked: 'shield-off',
+};

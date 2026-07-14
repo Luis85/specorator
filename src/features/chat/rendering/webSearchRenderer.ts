@@ -3,6 +3,7 @@ import { setIcon } from 'obsidian';
 import { renderLinesExpanded } from './toolLinesExpanded';
 import {
   buildWebSearchSegments,
+  truncateWebSearchSummary,
   type WebSearchActionLine,
   type WebSearchSegment,
 } from './webSearchViewModel';
@@ -38,7 +39,7 @@ function renderSegment(container: HTMLElement, segment: WebSearchSegment): void 
     if (segment.summary) {
       container.createDiv({
         cls: 'specorator-tool-web-summary',
-        text: segment.summary.length > 800 ? `${segment.summary.slice(0, 800)}...` : segment.summary,
+        text: truncateWebSearchSummary(segment.summary),
       });
     }
     return;

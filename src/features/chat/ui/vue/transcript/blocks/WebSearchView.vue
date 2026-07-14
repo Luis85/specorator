@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed } from 'vue';
 
-import { buildWebSearchSegments } from '../../../../rendering/webSearchViewModel';
+import { buildWebSearchSegments, truncateWebSearchSummary } from '../../../../rendering/webSearchViewModel';
 import ToolLinesExpanded from '../ToolLinesExpanded.vue';
 import ToolLink from '../ToolLink.vue';
 
@@ -14,10 +14,6 @@ import ToolLink from '../ToolLink.vue';
 const props = defineProps<{ input: Record<string, unknown>; result?: string }>();
 
 const segments = computed(() => buildWebSearchSegments(props.input, props.result));
-
-function truncateSummary(summary: string): string {
-  return summary.length > 800 ? `${summary.slice(0, 800)}...` : summary;
-}
 </script>
 
 <template>
@@ -43,7 +39,7 @@ function truncateSummary(summary: string): string {
         <div
           v-if="segment.summary"
           class="specorator-tool-web-summary"
-        >{{ truncateSummary(segment.summary) }}</div>
+        >{{ truncateWebSearchSummary(segment.summary) }}</div>
       </template>
       <div
         v-else-if="segment.type === 'actionLines'"

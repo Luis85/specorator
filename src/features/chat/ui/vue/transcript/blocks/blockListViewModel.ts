@@ -7,7 +7,7 @@ import {
 } from '../../../../../../core/tools/toolNames';
 import type { ChatMessage, ContentBlock, SubagentInfo, ToolCallInfo } from '../../../../../../core/types';
 import { resolveSubagentLifecycleAdapter } from '../../../../controllers/subagentLifecycleResolution';
-import { projectProviderLifecycleSubagent } from './subagentViewModel';
+import { projectProviderLifecycleSubagent } from '../../../../rendering/subagentViewModel';
 
 /**
  * Pure dispatch resolution for `BlockList.vue`, mirroring

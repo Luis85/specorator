@@ -109,3 +109,10 @@ export function buildWebSearchSegments(
 
   return [{ type: 'empty', text: 'No result' }];
 }
+
+const DEFAULT_WEB_SEARCH_SUMMARY_MAX = 800;
+
+export function truncateWebSearchSummary(summary: string, maxLength = DEFAULT_WEB_SEARCH_SUMMARY_MAX): string {
+  if (summary.length <= maxLength) return summary;
+  return `${summary.slice(0, maxLength)}...`;
+}

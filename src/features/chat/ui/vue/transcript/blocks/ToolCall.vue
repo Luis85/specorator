@@ -14,6 +14,7 @@ import {
   TOOL_WRITE,
 } from '../../../../../../core/tools/toolNames';
 import type { ToolCallInfo } from '../../../../../../core/types';
+import { TOOL_CALL_STATUS_ICONS } from '../../../../rendering/toolCallViewModel';
 import { getInputText, getToolLabel } from '../../../../rendering/toolLabel';
 import { useCollapsible } from '../collapsible';
 import IconSpan from '../IconSpan.vue';
@@ -45,8 +46,6 @@ import WebSearchView from './WebSearchView.vue';
 const props = defineProps<{ toolCall: ToolCallInfo }>();
 
 const { resolve: resolveLink } = useFileLink();
-
-const STATUS_ICONS: Record<string, string> = { completed: 'check', error: 'x', blocked: 'shield-off' };
 
 const isBash = computed(() => props.toolCall.name === TOOL_BASH);
 const isTodoWrite = computed(() => props.toolCall.name === TOOL_TODO_WRITE);
@@ -102,7 +101,7 @@ const statusInfo = computed<StatusInfo>(() => {
   return {
     cls: `status-${status}`,
     ariaLabel: `Status: ${status}`,
-    icon: STATUS_ICONS[status] ?? null,
+    icon: TOOL_CALL_STATUS_ICONS[status as keyof typeof TOOL_CALL_STATUS_ICONS] ?? null,
   };
 });
 
