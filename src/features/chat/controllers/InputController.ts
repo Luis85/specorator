@@ -385,6 +385,9 @@ export class InputController {
     );
     if (!agentService) return;
 
+    // Deferred from buildOutgoingTurn: mark only after the runtime is acquired.
+    send.fileContextManager?.markCurrentNoteSent();
+
     await restoreResumeCheckpointIfNeeded(agentService, this.deps.state, this.deps.plugin);
 
     const ctx: DispatchedTurnContext = {
@@ -448,7 +451,7 @@ export class InputController {
       images: imagesForMessage ? [...imagesForMessage] : undefined,
     };
 
-    send.fileContextManager?.markCurrentNoteSent();
+    // markCurrentNoteSent() is deferred to dispatchComposerTurn (post-runtime) so an init-failure rollback keeps the current-note state for retry.
     // Added file/folder pills are consumed by this turn; clear them (keeps the current note).
     send.fileContextManager?.clearAttachedPills();
 

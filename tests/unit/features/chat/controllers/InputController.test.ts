@@ -2263,6 +2263,9 @@ describe('InputController - Message Queue', () => {
       expect(deps.state.messages).toHaveLength(0);
       expect(inputEl.value).toBe('test message');
       expect((deps as any).mockAgentService.query).not.toHaveBeenCalled();
+      // The turn never reached the runtime, so the current-note "sent" flag must
+      // NOT be consumed — a retry of the restored draft still sends currentNotePath.
+      expect(deps.getFileContextManager()?.markCurrentNoteSent).not.toHaveBeenCalled();
     });
   });
 
