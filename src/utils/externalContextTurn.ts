@@ -1,8 +1,12 @@
 import { buildExternalContextDisplayEntries, normalizePathForComparison } from './externalContext';
 
 /**
- * Drops redundant external-context roots when attached files already live under
- * that root (the composer mention suffix carries the same bytes on the wire).
+ * Drops an external-context root only when an attached file/folder resolves to
+ * the EXACT same path (a true duplicate — the composer mention suffix already
+ * carries those bytes). A directory root is NOT dropped just because one file
+ * under it is attached: the root grants scope over the whole directory (sibling
+ * files), while the mention only carries that single file — dropping it would
+ * silently lose access to the rest of the directory.
  */
 export function filterRedundantExternalContextPaths(
   paths: string[] | undefined,
@@ -10,16 +14,10 @@ export function filterRedundantExternalContextPaths(
 ): string[] | undefined {
   if (!paths || paths.length === 0) return undefined;
 
-  const normalizedAttached = [...attachedFiles].map(normalizePathForComparison);
+  const normalizedAttached = new Set([...attachedFiles].map(normalizePathForComparison));
   const uniqueRoots = [...new Set(paths.map(normalizePathForComparison))];
 
-  const filtered = uniqueRoots.filter((root) => {
-    const prefix = `${root}/`;
-    const coveredByAttachment = normalizedAttached.some(
-      (file) => file === root || file.startsWith(prefix),
-    );
-    return !coveredByAttachment;
-  });
+  const filtered = uniqueRoots.filter((root) => !normalizedAttached.has(root));
 
   return filtered.length > 0 ? filtered : undefined;
 }
