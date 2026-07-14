@@ -214,4 +214,20 @@ describe('PluginViewActivator.getTabSlotUsage (work-order budget)', () => {
     const activator = new PluginViewActivator(plugin);
     expect(activator.getTabSlotUsage()).toEqual({ used: 3, max: 5 });
   });
+
+  it('reports full usage when any view is mid-restore, even alongside a restored view', () => {
+    const restored = {
+      getTabManager: () => ({ countTabsByKind: (k: string) => (k === 'work-order' ? 1 : 0) }),
+      areTabsRestored: () => true,
+    };
+    const midRestore = {
+      getTabManager: () => ({ countTabsByKind: () => 0 }),
+      areTabsRestored: () => false, // tabs not hydrated yet — WO count unknown
+    };
+    const { plugin } = createPlugin({ agentBoardQueueCap: 5 });
+    (plugin.getAllViews as jest.Mock).mockReturnValue([restored, midRestore]);
+    const activator = new PluginViewActivator(plugin);
+    // Must NOT report the restored view's count alone (used: 1) — block capacity.
+    expect(activator.getTabSlotUsage()).toEqual({ used: 5, max: 5 });
+  });
 });

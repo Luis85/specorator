@@ -117,7 +117,6 @@ export class PluginViewActivator {
     }
 
     let used = this.plugin.chatTabReservations.pending;
-    let anyRestored = false;
     let anyMidRestore = false;
     for (const view of views) {
       const tabManager = view.getTabManager();
@@ -125,11 +124,14 @@ export class PluginViewActivator {
         anyMidRestore = true;
         continue;
       }
-      anyRestored = true;
       used += tabManager.countTabsByKind('work-order');
     }
 
-    if (anyMidRestore && !anyRestored) {
+    // A single mid-restore leaf may still hydrate persisted work-order tabs, so
+    // its contribution is unknown — even alongside already-restored views. Report
+    // full usage until every view's tabs are known, or the queue could launch
+    // extra work-order tabs and exceed agentBoardQueueCap once restore finishes.
+    if (anyMidRestore) {
       return { used: max, max };
     }
     return { used, max };

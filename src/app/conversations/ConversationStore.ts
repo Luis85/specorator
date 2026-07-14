@@ -216,15 +216,19 @@ export class ConversationStore {
     // History-backed usage recovery: only when meta-stored usage is absent. We
     // never overwrite live `conversation.usage`. `extractLastUsage` is optional;
     // the hook returns null on parse failure, but we also wrap in try/catch so
-    // a buggy implementation never breaks hydration.
+    // a buggy implementation never breaks hydration. Gated on `revisionUnchanged`
+    // like the message commit above — a stale outcome must not assign old usage.
     if (
-      isHydrationCommitReady(outcome)
+      revisionUnchanged
+      && isHydrationCommitReady(outcome)
       && !conversation.usage
       && typeof service.extractLastUsage === 'function'
     ) {
       try {
         const recovered = await service.extractLastUsage(conversation, ctx);
-        if (recovered) {
+        // extractLastUsage has its own await, so re-check the revision before
+        // assigning — a concurrent save/stream usage update during it must win.
+        if (recovered && (this.conversationRevisions.get(conversation.id) ?? 0) === revisionAtStart) {
           conversation.usage = recovered;
         }
       } catch {

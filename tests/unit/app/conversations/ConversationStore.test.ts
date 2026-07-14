@@ -337,6 +337,24 @@ describe('ConversationStore', () => {
       expect(result?.hydration.kind).toBe('error');
       expect(conv.messages.map((m) => m.id)).toEqual(['newer']);
     });
+
+    it('does not recover usage from a stale hydration that lost the revision race', async () => {
+      const { store } = createStore();
+      const conv = await store.createConversation();
+      const history = ProviderRegistry.getConversationHistoryService(conv.providerId);
+      (history.hydrateConversationHistory as jest.Mock).mockImplementation(async () => {
+        await store.updateConversation(conv.id, { title: 'bumped' });
+        return { kind: 'loaded', messages: [], sourceRef: 'k' };
+      });
+      (history as { extractLastUsage?: unknown }).extractLastUsage = jest
+        .fn()
+        .mockResolvedValue({ model: 'gpt-5', contextTokens: 999, contextWindow: 1, inputTokens: 1 });
+
+      await store.switchConversation(conv.id);
+
+      // The stale outcome must not assign recovered usage over the newer conversation.
+      expect(conv.usage).toBeUndefined();
+    });
   });
 
   describe('getConversationById', () => {
