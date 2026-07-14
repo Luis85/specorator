@@ -70,6 +70,11 @@ import {
 import { cleanupStaleCursorMcpServer } from './cursorMcpCleanup';
 import { buildCursorModelCatalogCliKey } from './cursorModelCatalog';
 import { getCachedCursorModelIds } from './cursorModelCatalog';
+import {
+  cursorSessionAdditionalDirectories,
+  cursorSessionRootsEqual,
+  normalizeCursorSessionRoots,
+} from './cursorSessionRoots';
 import { mapCursorToolInput } from './cursorToolInputMapping';
 import { MAX_CURSOR_TOOL_RESULT_CHARS } from './cursorToolNormalization';
 import { extractCursorUsage } from './cursorUsageMapping';
@@ -160,6 +165,10 @@ export class CursorChatRuntime implements ChatRuntime {
   private readonly readyListeners = new Set<(ready: boolean) => void>();
   private sessionId: string | null = null;
   private sessionInvalidated = false;
+  // External-context roots the live ACP session was opened with. A turn whose
+  // selection differs forces a fresh session (additionalDirectories are fixed at
+  // session/new), so the agent's readable scope tracks the attached folders.
+  private activeSessionRoots: string[] = [];
   private readonly sessionUpdateNormalizer = new AcpSessionUpdateNormalizer({
     maxToolOutputChars: MAX_CURSOR_TOOL_RESULT_CHARS,
   });
@@ -341,11 +350,12 @@ export class CursorChatRuntime implements ChatRuntime {
       }
 
       const cwd = getVaultPath(this.plugin.app) ?? process.cwd();
+      const externalRoots = this.resolveTurnExternalRoots(turn, queryOptions);
       // Capture the session id BEFORE ensureSession (which may mint a fresh one): a
       // turn starting without one (fork, provider switch, resume whose native session
       // never loaded) still carries history that must be re-injected into the prompt.
       const sessionIdAtTurnStart = this.sessionId;
-      const sessionId = await this.ensureSession(cwd);
+      const sessionId = await this.ensureSession(cwd, externalRoots);
       if (!sessionId) {
         yield { type: 'error', content: this.lastStartupErrorMessage ?? 'Failed to open a Cursor session.' };
         yield { type: 'done' };
@@ -530,6 +540,7 @@ export class CursorChatRuntime implements ChatRuntime {
     this.sessionId = null;
     this.loadedSessionId = null;
     this.sessionInvalidated = false;
+    this.activeSessionRoots = [];
     this.currentModeId = null;
     this.currentSessionModelId = null;
     this.advertisedModelValues = null;
@@ -834,9 +845,20 @@ export class CursorChatRuntime implements ChatRuntime {
     return stderr ? `${CURSOR_OLD_CLI_MESSAGE}\n\n${stderr}` : CURSOR_OLD_CLI_MESSAGE;
   }
 
-  private async ensureSession(cwd: string): Promise<string | null> {
+  private async ensureSession(cwd: string, roots: string[] = []): Promise<string | null> {
     if (!this.connection) {
       return null;
+    }
+    // additionalDirectories are fixed at session/new, so a changed external-root
+    // selection on a live session needs a fresh one (with history re-injected).
+    if (
+      this.loadedSessionId
+      && this.sessionId === this.loadedSessionId
+      && !cursorSessionRootsEqual(this.activeSessionRoots, roots)
+    ) {
+      this.sessionInvalidated = true;
+      this.sessionId = null;
+      this.loadedSessionId = null;
     }
     if (this.sessionId && this.loadedSessionId === this.sessionId) {
       return this.sessionId;
@@ -858,6 +880,7 @@ export class CursorChatRuntime implements ChatRuntime {
           cwd,
           mcpServers: [],
           sessionId: requestedId,
+          additionalDirectories: cursorSessionAdditionalDirectories(roots),
         });
         // Real Cursor session/load responses carry no sessionId (verified against
         // ACP wire captures 2026-07-12); the loaded session keeps the id we asked
@@ -866,6 +889,7 @@ export class CursorChatRuntime implements ChatRuntime {
         const loadedId = response.sessionId ?? requestedId;
         this.loadedSessionId = loadedId;
         this.sessionId = loadedId;
+        this.activeSessionRoots = roots;
         this.captureAdvertisedModelValues(response);
         this.captureEvent('session_load', { sessionId: loadedId });
         return loadedId;
@@ -877,10 +901,12 @@ export class CursorChatRuntime implements ChatRuntime {
               cwd,
               mcpServers: [],
               sessionId: requestedId,
+              additionalDirectories: cursorSessionAdditionalDirectories(roots),
             });
             const loadedId = retryResponse.sessionId ?? requestedId;
             this.loadedSessionId = loadedId;
             this.sessionId = loadedId;
+            this.activeSessionRoots = roots;
             this.captureAdvertisedModelValues(retryResponse);
             this.captureEvent('session_load', { sessionId: loadedId, retriedAfterAuth: true });
             return loadedId;
@@ -912,19 +938,27 @@ export class CursorChatRuntime implements ChatRuntime {
       }
     }
 
-    return this.createSession(cwd);
+    return this.createSession(cwd, roots);
   }
 
-  private async createSession(cwd: string): Promise<string | null> {
+  private async createSession(cwd: string, roots: string[] = []): Promise<string | null> {
     if (!this.connection) {
       return null;
     }
+    // Committing to a session opened with exactly these roots; track them so the
+    // next turn's ensureSession only recreates when the selection actually changes.
+    this.activeSessionRoots = roots;
+    const additionalDirectories = cursorSessionAdditionalDirectories(roots);
     try {
-      return await this.adoptFreshSession(await this.connection.newSession({ cwd, mcpServers: [] }));
+      return await this.adoptFreshSession(
+        await this.connection.newSession({ cwd, mcpServers: [], additionalDirectories }),
+      );
     } catch (error) {
       if (this.isAuthenticationFailure(error) && await this.tryAuthenticate()) {
         try {
-          return await this.adoptFreshSession(await this.connection.newSession({ cwd, mcpServers: [] }));
+          return await this.adoptFreshSession(
+            await this.connection.newSession({ cwd, mcpServers: [], additionalDirectories }),
+          );
         } catch (retryError) {
           this.lastStartupErrorMessage = this.formatRuntimeError(retryError);
           return null;
@@ -1147,6 +1181,18 @@ export class CursorChatRuntime implements ChatRuntime {
       catalogIds: this.getActiveCursorCatalogIds(),
       enabledIds: getCursorEnabledModels(settingsBag),
     });
+  }
+
+  // Selected external folders become the ACP session's additionalDirectories so
+  // the agent can read sibling files outside the vault cwd — mirroring Claude's
+  // externalContextPaths → additionalDirectories mapping.
+  private resolveTurnExternalRoots(
+    turn: PreparedChatTurn,
+    queryOptions?: ChatRuntimeQueryOptions,
+  ): string[] {
+    return normalizeCursorSessionRoots(
+      turn.request.externalContextPaths ?? queryOptions?.externalContextPaths,
+    );
   }
 
   // Model catalog for the ACTIVE endpoint (cli + env incl. CURSOR_BASE_URL) so

@@ -246,6 +246,88 @@ describe('CursorChatRuntime.ensureSession', () => {
     expect(bag.sessionInvalidated).toBe(false);
     expect(newSession).not.toHaveBeenCalled();
   });
+
+  it('passes selected external roots as additionalDirectories on session/new', async () => {
+    const runtime = makeRuntime();
+    const newSession = jest.fn().mockResolvedValue({ sessionId: 'S3' });
+    const bag = primeRuntime(runtime, { newSession });
+
+    const ensure = bag.ensureSession as (c: string, r?: string[]) => Promise<string | null>;
+    await ensure.call(runtime, '/cwd', ['/ext/a', '/ext/b']);
+
+    expect(newSession).toHaveBeenCalledWith(
+      expect.objectContaining({ cwd: '/cwd', additionalDirectories: ['/ext/a', '/ext/b'] }),
+    );
+    expect(bag.activeSessionRoots).toEqual(['/ext/a', '/ext/b']);
+  });
+
+  it('omits additionalDirectories when no external roots are selected', async () => {
+    const runtime = makeRuntime();
+    const newSession = jest.fn().mockResolvedValue({ sessionId: 'S4' });
+    const bag = primeRuntime(runtime, { newSession });
+
+    await (bag.ensureSession as (c: string, r?: string[]) => Promise<string | null>).call(runtime, '/cwd', []);
+
+    expect(newSession).toHaveBeenCalledWith(
+      expect.objectContaining({ additionalDirectories: undefined }),
+    );
+  });
+
+  it('threads external roots as additionalDirectories on session/load', async () => {
+    const runtime = makeRuntime();
+    const loadSession = jest.fn().mockResolvedValue(CURSOR_LOAD_SESSION_RESULT);
+    const bag = primeRuntime(runtime, { loadSession });
+    bag.sessionId = 'S1';
+    bag.loadedSessionId = null;
+
+    await (bag.ensureSession as (c: string, r?: string[]) => Promise<string | null>)
+      .call(runtime, '/tmp/specorator-test-vault', ['/ext/a']);
+
+    expect(loadSession).toHaveBeenCalledWith(
+      expect.objectContaining({ additionalDirectories: ['/ext/a'] }),
+    );
+    expect(bag.activeSessionRoots).toEqual(['/ext/a']);
+  });
+
+  it('mints a fresh session when the external-root selection changes on a live session', async () => {
+    const runtime = makeRuntime();
+    const newSession = jest.fn().mockResolvedValue({ sessionId: 'S5' });
+    const bag = primeRuntime(runtime, { newSession });
+    // A live session already opened with root /ext/a.
+    bag.sessionId = 'S-live';
+    bag.loadedSessionId = 'S-live';
+    bag.activeSessionRoots = ['/ext/a'];
+
+    const result = await (bag.ensureSession as (c: string, r?: string[]) => Promise<string | null>)
+      .call(runtime, '/cwd', ['/ext/a', '/ext/b']);
+
+    // The root change forces a new session (additionalDirectories are immutable),
+    // with sessionInvalidated set so the turn re-injects history.
+    expect(result).toBe('S5');
+    expect(newSession).toHaveBeenCalledWith(
+      expect.objectContaining({ additionalDirectories: ['/ext/a', '/ext/b'] }),
+    );
+    expect(bag.sessionInvalidated).toBe(true);
+    expect(bag.activeSessionRoots).toEqual(['/ext/a', '/ext/b']);
+  });
+
+  it('reuses the live session when the external-root selection is unchanged', async () => {
+    const runtime = makeRuntime();
+    const newSession = jest.fn();
+    const loadSession = jest.fn();
+    const bag = primeRuntime(runtime, { newSession, loadSession });
+    bag.sessionId = 'S-live';
+    bag.loadedSessionId = 'S-live';
+    bag.activeSessionRoots = ['/ext/a'];
+
+    const result = await (bag.ensureSession as (c: string, r?: string[]) => Promise<string | null>)
+      .call(runtime, '/cwd', ['/ext/a']);
+
+    expect(result).toBe('S-live');
+    expect(newSession).not.toHaveBeenCalled();
+    expect(loadSession).not.toHaveBeenCalled();
+    expect(bag.sessionInvalidated).toBe(false);
+  });
 });
 
 describe('CursorChatRuntime error classification', () => {
