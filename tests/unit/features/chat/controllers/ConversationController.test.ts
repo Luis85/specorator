@@ -414,6 +414,36 @@ describe('ConversationController', () => {
         expect(deps.state.messages).toHaveLength(0);
       });
 
+      it('clears the abandoned switch draft on New Chat so the next switch captures the current composer', async () => {
+        const hydration = new Promise<ReturnType<typeof loadedSwitchResult>>(() => {});
+        (deps.plugin.switchConversation as jest.Mock).mockReturnValue(hydration);
+        deps.state.currentConversationId = 'old-conv';
+        deps.state.messages = [{ id: 'old', role: 'user', content: 'old', timestamp: Date.now() }];
+
+        // A switch captures the composer draft ("draft-A") while hydrating.
+        deps.getInputEl().value = 'draft-A';
+        await controller.switchTo('new-conv');
+        await new Promise<void>((resolve) => setTimeout(resolve, 0));
+        expect((controller as unknown as { pendingSwitchDraft: unknown }).pendingSwitchDraft).not.toBeNull();
+
+        // New Chat abandons that switch: the captured draft has no target and must
+        // be dropped so the next switchTo re-captures rather than restoring "draft-A".
+        await controller.createNew();
+        expect((controller as unknown as { pendingSwitchDraft: unknown }).pendingSwitchDraft).toBeNull();
+
+        // The user types a fresh draft, then switches again and that load fails to
+        // commit — the restored draft must be the CURRENT one, never the stale "draft-A".
+        deps.getInputEl().value = 'draft-B';
+        (deps.plugin.switchConversation as jest.Mock).mockResolvedValue({
+          conversation: { id: 'conv-2', title: 'X', messages: [], createdAt: 0, lastActiveAt: 0 },
+          hydration: { kind: 'empty', reason: 'no-store', sourceRef: null },
+        });
+        await controller.switchTo('conv-2');
+        await controller.whenHydrated();
+
+        expect(deps.getInputEl().value).toBe('draft-B');
+      });
+
       it('re-hydrates when the bound conversation still has an empty transcript', async () => {
         deps.state.currentConversationId = 'same-conv';
         deps.state.messages = [];

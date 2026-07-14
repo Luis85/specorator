@@ -210,8 +210,11 @@ export class ConversationController {
       this.deps.dismissPendingInlinePrompts?.();
 
       // Abort an in-flight switchTo hydration so its late restoreConversation
-      // can't rebind this tab over the blank New Chat we're building.
+      // can't rebind this tab over the blank New Chat we're building. Drop the
+      // abandoned switch's draft too: New Chat blanks the composer, so leaving it
+      // would make the next switchTo skip capturing and restore a stale draft.
       this.cancelPendingHydration();
+      this.pendingSwitchDraft = null;
 
       if (force && state.isStreaming) {
         state.cancelRequested = true;
