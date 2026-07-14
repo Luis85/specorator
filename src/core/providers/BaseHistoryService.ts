@@ -104,7 +104,14 @@ export abstract class BaseHistoryService<
         const cacheStillCurrent =
           this.cacheEpoch === cacheEpoch
           && (this.conversationEpoch.get(conversation.id) ?? 0) === conversationEpoch;
-        if (resolvedKey && cacheStillCurrent) {
+        // Don't seed the cache when the triggering caller was cancelled: its
+        // outcome was delivered as `cancelled`, so ConversationStore never
+        // committed `outcome.messages`. Seeding here would let the next open take
+        // the fast-path `cached` branch (which only checks messages.length > 0)
+        // and skip re-committing the freshly loaded transcript over the stale
+        // in-memory one. A redundant reload for a joined live caller is fine;
+        // serving stale messages is not.
+        if (resolvedKey && cacheStillCurrent && !ctx.signal?.aborted) {
           this.hydrationCache.set(conversation.id, resolvedKey);
         }
       } else if (

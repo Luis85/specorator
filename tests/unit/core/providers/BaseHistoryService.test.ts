@@ -112,6 +112,37 @@ describe('BaseHistoryService.hydrateConversationHistory', () => {
     expect(svc.loadCalls).toBe(0);
   });
 
+  it('does not seed the cache when the triggering caller is cancelled mid-load', async () => {
+    const svc = new FakeHistoryService();
+    svc.loadDelayMs = 20;
+    svc.nextOutcome = {
+      kind: 'loaded',
+      messages: [{ id: 'm1', role: 'user', content: 'fresh', timestamp: 1 } as ChatMessage],
+      sourceRef: 'conv-1:sess-a',
+    };
+    // Stale in-memory messages already present (the fast-path only checks length).
+    const conv = makeConversation({
+      sessionId: 'sess-a',
+      messages: [{ id: 'stale', role: 'user', content: 'old', timestamp: 0 } as ChatMessage],
+    });
+    const controller = new AbortController();
+
+    const pending = svc.hydrateConversationHistory(conv, { ...ctx, signal: controller.signal });
+    controller.abort(); // cancel while the shared load is still running
+    const outcome = await pending;
+    expect(outcome.kind).toBe('error'); // delivered as cancelled; messages not committed
+
+    // Let the detached shared load finish — it must NOT seed the cache.
+    await new Promise((resolve) => setTimeout(resolve, 40));
+    expect(svc.loadCalls).toBe(1);
+
+    // A fresh open therefore re-loads instead of returning a false `cached` hit
+    // over the stale in-memory transcript.
+    const second = await svc.hydrateConversationHistory(conv, ctx);
+    expect(second.kind).toBe('loaded');
+    expect(svc.loadCalls).toBe(2);
+  });
+
   it('clears the cache entry on empty outcome', async () => {
     const svc = new FakeHistoryService();
     const messages: ChatMessage[] = [
