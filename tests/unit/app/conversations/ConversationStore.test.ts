@@ -266,6 +266,20 @@ describe('ConversationStore', () => {
       expect(repairViewsAfterDelete).toHaveBeenCalledWith(conv.id);
     });
 
+    it('finishes teardown (tombstone clear + repair) even when metadata delete throws', async () => {
+      const repairViewsAfterDelete = jest.fn().mockResolvedValue(undefined);
+      const { store, sessions } = createStore({ repairViewsAfterDelete });
+      const conv = await store.createConversation();
+      (sessions.deleteMetadata as jest.Mock).mockRejectedValueOnce(new Error('disk full'));
+
+      await expect(store.deleteConversation(conv.id)).rejects.toThrow('disk full');
+
+      // The conversation was already spliced, and the teardown still completed:
+      // views repaired and the tombstone cleared (a later switch is not stuck).
+      expect(store.getConversationSync(conv.id)).toBeNull();
+      expect(repairViewsAfterDelete).toHaveBeenCalledWith(conv.id);
+    });
+
     it('does nothing for an unknown id', async () => {
       const repairViewsAfterDelete = jest.fn();
       const { store, sessions } = createStore({ repairViewsAfterDelete });

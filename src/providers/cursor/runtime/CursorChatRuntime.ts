@@ -1141,8 +1141,11 @@ export class CursorChatRuntime implements ChatRuntime {
     const mode = familyValue
       ? resolveCursorEffortForFamily(familyValue, snapshot, cursorChatUIConfig)
       : (typeof snapshot.effortLevel === 'string' ? snapshot.effortLevel : undefined);
+    // Key the catalog lookup to the ACTIVE endpoint (cli + env incl.
+    // CURSOR_BASE_URL) so an endpoint/auth switch doesn't reuse stale model ids.
+    const cli = this.plugin.getResolvedProviderCliPath('cursor') ?? undefined;
     return resolveCursorModelSelectionForCli(familyValue, mode, {
-      catalogIds: getCachedCursorModelIds(),
+      catalogIds: getCachedCursorModelIds(cli, cli ? buildCursorAgentEnvironment(this.plugin, cli) : undefined),
       enabledIds: getCursorEnabledModels(settingsBag),
     });
   }

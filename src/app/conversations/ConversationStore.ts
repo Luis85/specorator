@@ -292,12 +292,19 @@ export class ConversationStore {
     if (currentIndex !== -1) {
       this.conversations.splice(currentIndex, 1);
     }
-    await this.deps.storage.sessions.deleteMetadata(id);
-    this.deletedConversationIds.delete(id);
-    this.metadataWriteTails.delete(id);
-    this.conversationRevisions.delete(id);
-
-    await this.deps.repairViewsAfterDelete(id);
+    // The conversation is already spliced from memory, so finish the teardown
+    // even if the metadata delete throws (transient I/O / already-missing file):
+    // clearing the tombstone + repairing views must still run, or open tabs stay
+    // bound to a deleted id that switchConversation/updateConversation reject
+    // until a plugin reload. The original error still propagates.
+    try {
+      await this.deps.storage.sessions.deleteMetadata(id);
+    } finally {
+      this.deletedConversationIds.delete(id);
+      this.metadataWriteTails.delete(id);
+      this.conversationRevisions.delete(id);
+      await this.deps.repairViewsAfterDelete(id);
+    }
   }
 
   async renameConversation(id: string, title: string): Promise<void> {
