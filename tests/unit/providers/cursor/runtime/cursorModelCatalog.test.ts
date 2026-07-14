@@ -22,12 +22,23 @@ describe('buildCursorModelCatalogCliKey', () => {
     expect(a).not.toBe(b);
   });
 
-  it('fingerprints auth presence without leaking the secret, and normalizes path + base url', () => {
-    expect(buildCursorModelCatalogCliKey('C:\\Bin\\Agent', { CURSOR_SESSION_TOKEN: 'tok' }))
-      .toBe('c:/bin/agent|auth|');
+  it('fingerprints the credential without leaking the secret, and normalizes path + base url', () => {
+    const withAuth = buildCursorModelCatalogCliKey('C:\\Bin\\Agent', { CURSOR_SESSION_TOKEN: 'tok' });
+    // path normalized, credential replaced by a non-secret 16-hex digest.
+    expect(withAuth).toMatch(/^c:\/bin\/agent\|[0-9a-f]{16}\|$/);
+    expect(withAuth).not.toContain('tok');
     const key = buildCursorModelCatalogCliKey('/usr/bin/agent', { CURSOR_BASE_URL: 'HTTPS://API.X ' });
     expect(key).toBe('/usr/bin/agent|noauth|https://api.x');
-    expect(key).not.toContain('tok');
+  });
+
+  it('changes the key when the credential rotates on the same CLI + base URL', () => {
+    const base = { CURSOR_BASE_URL: 'https://api.cursor.sh' };
+    const before = buildCursorModelCatalogCliKey('/usr/bin/agent', { ...base, CURSOR_API_KEY: 'key-1' });
+    const after = buildCursorModelCatalogCliKey('/usr/bin/agent', { ...base, CURSOR_API_KEY: 'key-2' });
+    expect(before).not.toBe(after);
+    // A session-token swap is likewise distinct from an api-key credential.
+    const tokenAuth = buildCursorModelCatalogCliKey('/usr/bin/agent', { ...base, CURSOR_SESSION_TOKEN: 'key-1' });
+    expect(tokenAuth).not.toBe(before);
   });
 
   it('is stable for identical inputs', () => {
@@ -125,9 +136,15 @@ describe('getCachedCursorModelIds', () => {
   });
 
   it('scopes cache by CLI identity and expires after TTL', () => {
-    seedCursorModelCatalogForTest(['model-a'], '/usr/bin/agent|auth|');
+    seedCursorModelCatalogForTest(
+      ['model-a'],
+      buildCursorModelCatalogCliKey('/usr/bin/agent', { CURSOR_API_KEY: 'x' }),
+    );
     expect(getCachedCursorModelIds('/usr/bin/agent', { CURSOR_API_KEY: 'x' })).toEqual(['model-a']);
     expect(getCachedCursorModelIds('/other/agent', { CURSOR_API_KEY: 'x' }))
+      .toEqual([...STATIC_FALLBACK_MODEL_IDS]);
+    // A rotated credential on the same CLI no longer hits the seeded cache.
+    expect(getCachedCursorModelIds('/usr/bin/agent', { CURSOR_API_KEY: 'rotated' }))
       .toEqual([...STATIC_FALLBACK_MODEL_IDS]);
 
     jest.useFakeTimers();
