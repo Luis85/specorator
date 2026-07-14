@@ -276,7 +276,7 @@ describe('ConversationStore', () => {
       expect(repairViewsAfterDelete).not.toHaveBeenCalled();
     });
 
-    it('clears the delete tombstone when quiescing fails, so the conversation stays reachable', async () => {
+    it('leaves the conversation reachable when quiescing fails (no tombstone set before quiesce)', async () => {
       const quiesceViewsForDelete = jest.fn().mockRejectedValue(new Error('tab save failed'));
       const { store, sessions } = createStore({ quiesceViewsForDelete });
       const conv = await store.createConversation();
@@ -286,9 +286,56 @@ describe('ConversationStore', () => {
       // The delete aborted before touching native artifacts...
       expect(sessions.deleteMetadata).not.toHaveBeenCalled();
       // ...and the conversation is NOT left stuck: still present and switchable
-      // (switchConversation would return null while tombstoned).
+      // (a tombstone would make switchConversation return null).
       expect(store.getConversationSync(conv.id)).not.toBeNull();
       await expect(store.switchConversation(conv.id)).resolves.not.toBeNull();
+    });
+
+    it('lets the quiesce save update the conversation before it is tombstoned', async () => {
+      // The real quiesce calls conversationController.save() → updateConversation
+      // to persist the latest sessionId/providerState. That must land BEFORE the
+      // delete reads the conversation for native deletion.
+      let sessionAtDeleteTime: string | undefined;
+      const { store } = createStore({
+        quiesceViewsForDelete: async (id) => {
+          await store.updateConversation(id, { title: 'saved-during-quiesce' });
+        },
+      });
+      const conv = await store.createConversation();
+      const history = ProviderRegistry.getConversationHistoryService(conv.providerId);
+      (history.deleteConversationSession as jest.Mock).mockImplementation((c: { title?: string }) => {
+        sessionAtDeleteTime = c.title;
+        return Promise.resolve({ kind: 'no-op', reason: 'no-session' });
+      });
+
+      await store.deleteConversation(conv.id);
+
+      // The quiesce save was NOT swallowed by an early tombstone.
+      expect(sessionAtDeleteTime).toBe('saved-during-quiesce');
+    });
+  });
+
+  describe('switchConversation revision race', () => {
+    it('does not commit a stale hydration that lost the revision race', async () => {
+      const { store } = createStore();
+      const conv = await store.createConversation();
+      conv.messages = [{ id: 'newer', role: 'user', content: 'newer', timestamp: 1 }];
+      const history = ProviderRegistry.getConversationHistoryService(conv.providerId);
+      (history.hydrateConversationHistory as jest.Mock).mockImplementation(async () => {
+        // A concurrent update bumps the revision WHILE the provider read awaits.
+        await store.updateConversation(conv.id, { title: 'bumped' });
+        return {
+          kind: 'loaded',
+          messages: [{ id: 'stale', role: 'user', content: 'stale', timestamp: 0 }],
+          sourceRef: 'k',
+        };
+      });
+
+      const result = await store.switchConversation(conv.id);
+
+      // The stale outcome is surfaced AND the newer in-memory messages survive.
+      expect(result?.hydration.kind).toBe('error');
+      expect(conv.messages.map((m) => m.id)).toEqual(['newer']);
     });
   });
 

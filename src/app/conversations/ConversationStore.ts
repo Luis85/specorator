@@ -181,11 +181,17 @@ export class ConversationStore {
       reason,
       signal,
     };
+    const revisionAtStart = this.conversationRevisions.get(conversation.id) ?? 0;
     const service = ProviderRegistry.getConversationHistoryService(conversation.providerId);
     const outcome = await service.hydrateConversationHistory(conversation, ctx);
+    // A concurrent updateConversation/delete bumped the revision while the
+    // provider read was awaiting: the loaded transcript is stale, so do NOT commit
+    // it over the newer in-memory messages (switchConversation surfaces the stale
+    // outcome, and a later metadata save must not persist the wrong messages).
+    const revisionUnchanged = (this.conversationRevisions.get(conversation.id) ?? 0) === revisionAtStart;
     switch (outcome.kind) {
       case 'loaded':
-        conversation.messages = outcome.messages;
+        if (revisionUnchanged) conversation.messages = outcome.messages;
         break;
       case 'cached':
       case 'empty':
@@ -233,29 +239,27 @@ export class ConversationStore {
     const index = this.conversations.findIndex((c) => c.id === id);
     if (index === -1) return;
 
-    this.deletedConversationIds.add(id);
+    // Bump the revision (invalidates any in-flight hydration) but do NOT tombstone
+    // yet: quiesce's save (conversationController.save → updateConversation) must
+    // persist the latest sessionId/providerState so deleteConversationSession sees
+    // a fresh session id. A tombstone here would make that save a no-op and leave
+    // the provider's native artifacts (e.g. Cursor/Opencode session files) behind.
     this.bumpConversationRevision(id);
     ProviderRegistry.getConversationHistoryService(
       this.conversations[index].providerId,
     ).invalidateConversationHistory?.(id);
 
     // Quiesce every open tab bound to this conversation before touching native
-    // artifacts. If quiescing throws (e.g. a tab save/cancel path rejects), abort
-    // the delete but clear the tombstone first — otherwise the conversation stays
-    // in `this.conversations` yet unreachable (switchConversation returns null,
-    // updateConversation no-ops for it) until a plugin reload.
-    try {
-      await this.deps.quiesceViewsForDelete(id);
-    } catch (error) {
-      this.deletedConversationIds.delete(id);
-      throw error;
-    }
+    // artifacts. If quiescing throws, the delete aborts here — no tombstone was
+    // set, so the conversation stays reachable (not stuck until a plugin reload).
+    await this.deps.quiesceViewsForDelete(id);
 
     const conversation = this.conversations.find((c) => c.id === id);
-    if (!conversation) {
-      this.deletedConversationIds.delete(id);
-      return;
-    }
+    if (!conversation) return;
+
+    // Now block resurrection (switchConversation / updateConversation) for the
+    // native-delete + splice window; rolled back on the error path below.
+    this.deletedConversationIds.add(id);
 
     const ctx: HydrationContext = {
       vaultPath: this.deps.getVaultPath(),
