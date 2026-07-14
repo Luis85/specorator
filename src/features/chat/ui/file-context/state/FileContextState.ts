@@ -44,6 +44,11 @@ export class FileContextState {
     this.sessionStarted = true;
   }
 
+  /** Undoes startSession() — used to roll back a send whose runtime init failed. */
+  endSession(): void {
+    this.sessionStarted = false;
+  }
+
   resetForNewConversation(): void {
     this.sessionStarted = false;
     this.currentNoteSent = false;

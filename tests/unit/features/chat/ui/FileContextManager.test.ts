@@ -592,6 +592,24 @@ describe('FileContextManager', () => {
       manager.destroy();
     });
 
+    it('resumes note tracking after endSession (send rollback undoes the freeze)', () => {
+      const app = createMockApp({ files: ['notes/a.md', 'notes/b.md'] });
+      const manager = new FileContextManager(
+        app, containerEl as any, inputEl, createMockCallbacks()
+      );
+
+      manager.setCurrentNote('notes/a.md');
+      manager.startSession();
+      // A failed-init rollback ends the session it optimistically started.
+      manager.endSession();
+      expect(manager.isSessionStarted()).toBe(false);
+
+      // A note switch before the retry now updates the current note again.
+      manager.handleFileOpen(createMockTFile('notes/b.md'));
+      expect(manager.getCurrentNotePath()).toBe('notes/b.md');
+      manager.destroy();
+    });
+
     it('should not attach file with excluded tag', () => {
       const fileCacheByPath = new Map<string, any>([
         ['notes/secret.md', { frontmatter: { tags: ['private'] } }],

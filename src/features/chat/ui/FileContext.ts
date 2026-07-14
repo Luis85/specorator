@@ -159,6 +159,16 @@ export class FileContextManager {
     this.state.startSession();
   }
 
+  /**
+   * Undoes startSession() so the active-note pill resumes following editor
+   * navigation. Used by the send rollback when runtime init fails before the
+   * first chunk — otherwise a note switch before retry wouldn't update the
+   * current note and the retry would send stale note context.
+   */
+  endSession() {
+    this.state.endSession();
+  }
+
   /** Resets state for a new conversation. */
   resetForNewConversation() {
     this.currentNotePath = null;

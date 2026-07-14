@@ -177,6 +177,10 @@ export interface ComposerRollbackSnapshot {
   // Captured BEFORE buildOutgoingTurn clears them, so a failed init rollback can
   // restore the user's pasted/dropped images too (not just text + file pills).
   attachedImages: ImageAttachment[];
+  // FileContext session-started state BEFORE beginStreamingTurnState's
+  // startSession() froze the active-note pill. Restored on rollback so a note
+  // switch before retry updates the current note (not stale context).
+  fileContextSessionStarted: boolean;
 }
 
 export function captureComposerRollbackSnapshot(send: ComposerSendContext): ComposerRollbackSnapshot {
@@ -189,6 +193,9 @@ export function captureComposerRollbackSnapshot(send: ComposerSendContext): Comp
     attachedFiles: [...(send.fileContextManager?.getAttachedFiles?.() ?? [])],
     attachedFolders: [...(send.fileContextManager?.getAttachedFolders?.() ?? [])],
     attachedImages: [...(send.imageContextManager?.getAttachedImages() ?? [])],
+    // Captured before startSession() runs, so rollback can restore the exact
+    // prior state (usually false on the first turn of an empty chat).
+    fileContextSessionStarted: send.fileContextManager?.isSessionStarted?.() ?? false,
   };
 }
 
@@ -219,6 +226,12 @@ export function rollbackOptimisticOutgoingTurn(
   if (send.fileContextManager) {
     send.fileContextManager.setAttachedFiles?.(snapshot.attachedFiles);
     send.fileContextManager.setAttachedFolders?.(snapshot.attachedFolders);
+    // beginStreamingTurnState called startSession(), freezing the active-note
+    // pill. If no session was started before this send, undo it so a note switch
+    // before the retry updates currentNotePath instead of sending stale context.
+    if (!snapshot.fileContextSessionStarted) {
+      send.fileContextManager.endSession?.();
+    }
   }
   // buildOutgoingTurn cleared the images before init failed; put them back so the
   // restored message is fully retryable (mirrors the text/pill restore above).

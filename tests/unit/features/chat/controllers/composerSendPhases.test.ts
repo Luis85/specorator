@@ -121,6 +121,54 @@ describe('composer rollback snapshot restores image attachments', () => {
   });
 });
 
+describe('composer rollback restores the FileContext session-started state', () => {
+  function makeSend(sessionStartedAtCapture: boolean): {
+    send: ComposerSendContext;
+    endSession: jest.Mock;
+  } {
+    const endSession = jest.fn();
+    const send = {
+      content: 'hi',
+      shouldUseInput: true,
+      consumesComposerDraft: false,
+      hasImages: false,
+      inputEl: makeInputEl('hi'),
+      imageContextManager: null,
+      fileContextManager: {
+        getAttachedFiles: () => [],
+        getAttachedFolders: () => [],
+        setAttachedFiles: jest.fn(),
+        setAttachedFolders: jest.fn(),
+        isSessionStarted: () => sessionStartedAtCapture,
+        endSession,
+      },
+    } as unknown as ComposerSendContext;
+    return { send, endSession };
+  }
+
+  it('ends the session on rollback when none was started before the send (first turn of empty chat)', () => {
+    const { send, endSession } = makeSend(false);
+    const snapshot = captureComposerRollbackSnapshot(send);
+    expect(snapshot.fileContextSessionStarted).toBe(false);
+
+    rollbackOptimisticOutgoingTurn(new ChatState(), snapshot, send, 'u1', 'a1', () => {});
+
+    // startSession() froze the active-note pill; rollback undoes it so a note
+    // switch before the retry updates the current note (not stale context).
+    expect(endSession).toHaveBeenCalledTimes(1);
+  });
+
+  it('leaves an already-started session alone on rollback', () => {
+    const { send, endSession } = makeSend(true);
+    const snapshot = captureComposerRollbackSnapshot(send);
+    expect(snapshot.fileContextSessionStarted).toBe(true);
+
+    rollbackOptimisticOutgoingTurn(new ChatState(), snapshot, send, 'u1', 'a1', () => {});
+
+    expect(endSession).not.toHaveBeenCalled();
+  });
+});
+
 describe('composer rollback snapshot restores the original draft', () => {
   it('restores the user draft, NOT the folded quick-action prompt, on a consumesComposerDraft rollback', () => {
     const inputEl = makeInputEl('my draft');
