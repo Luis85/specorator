@@ -63,11 +63,15 @@ export class RunSidecarStore {
   }
 
   private ensureEntryId(entry: TaskLedgerEntry): TaskLedgerEntry {
-    if (entry.id) return entry;
-    return {
-      ...entry,
-      id: `ledger-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`,
-    };
+    // Assign the id ON the caller's entry rather than a copy: LedgerWriter
+    // re-queues the SAME entry objects when a partial/ambiguous append rejects,
+    // so mutating here means a retry writes identical ids and readLedger's id
+    // dedupe collapses the duplicate. A returned copy would leave the in-memory
+    // entry id-less, so each retry would mint a new id and both rows would stick.
+    if (!entry.id) {
+      entry.id = `ledger-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
+    }
+    return entry;
   }
 
   async readLedger(runId: string): Promise<TaskLedgerEntry[]> {
