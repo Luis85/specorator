@@ -14,6 +14,12 @@ export interface AgentSubprocessSpec {
    * `.cmd`/`.bat` batch shim (the resolution itself stays provider-side).
    */
   windowsVerbatimArguments?: boolean;
+  /**
+   * Spawn the child in its own process group (POSIX `detached: true`) so a
+   * caller-supplied `killProcessTree` can signal the whole group and reap
+   * grandchildren. Left unset for one-shot children that don't fork tools.
+   */
+  detached?: boolean;
   /** Stderr ring-buffer byte cap (default 8000). */
   stderrBufferLimit?: number;
   /** SIGTERM→SIGKILL escalation delay in ms (default 3000). */
@@ -74,6 +80,9 @@ export class AgentSubprocess {
       cwd: this.spec.cwd,
       env: this.spec.env,
       windowsHide: true,
+      // POSIX-only: a group leader lets `killProcessTree` reap grandchildren.
+      // Windows uses `taskkill /T`, and `detached` there spawns a new console.
+      ...(this.spec.detached && process.platform !== 'win32' ? { detached: true } : {}),
       ...(this.spec.windowsVerbatimArguments ? { windowsVerbatimArguments: true } : {}),
     });
     this.proc = proc;

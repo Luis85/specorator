@@ -64,6 +64,25 @@ describe('AgentSubprocess', () => {
       expect(mockSpawn.mock.calls[1][2]).toMatchObject({ windowsVerbatimArguments: true });
     });
 
+    it('spawns detached (own process group) only on posix when detached is set', () => {
+      const realPlatform = process.platform;
+      try {
+        new AgentSubprocess(SPEC).start();
+        expect(mockSpawn.mock.calls[0][2]).not.toHaveProperty('detached');
+
+        Object.defineProperty(process, 'platform', { value: 'linux', configurable: true });
+        new AgentSubprocess({ ...SPEC, detached: true }).start();
+        expect(mockSpawn.mock.calls[1][2]).toMatchObject({ detached: true });
+
+        // Windows relies on taskkill /T instead — detached would spawn a console.
+        Object.defineProperty(process, 'platform', { value: 'win32', configurable: true });
+        new AgentSubprocess({ ...SPEC, detached: true }).start();
+        expect(mockSpawn.mock.calls[2][2]).not.toHaveProperty('detached');
+      } finally {
+        Object.defineProperty(process, 'platform', { value: realPlatform, configurable: true });
+      }
+    });
+
     it('is idempotent', () => {
       const p = new AgentSubprocess(SPEC);
       p.start();

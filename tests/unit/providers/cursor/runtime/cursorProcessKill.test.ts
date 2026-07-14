@@ -9,7 +9,10 @@ jest.mock('child_process', () => ({
   spawn: (...args: unknown[]) => mockSpawn(...args),
 }));
 
-import { forceKillCursorProcessTree } from '@/providers/cursor/runtime/cursorProcessKill';
+import {
+  forceKillCursorProcessGroup,
+  forceKillCursorProcessTree,
+} from '@/providers/cursor/runtime/cursorProcessKill';
 
 type MockChild = EventEmitter & { kill: jest.Mock; pid?: number };
 
@@ -109,5 +112,72 @@ describe('forceKillCursorProcessTree', () => {
 
     expect(mockSpawn).not.toHaveBeenCalled();
     expect(child.kill).toHaveBeenCalledWith('SIGKILL');
+  });
+});
+
+describe('forceKillCursorProcessGroup', () => {
+  const realPlatform = process.platform;
+  let killSpy: jest.SpyInstance;
+
+  beforeEach(() => {
+    killSpy = jest.spyOn(process, 'kill').mockImplementation(() => true);
+    mockSpawn.mockImplementation(() => {
+      const taskkill = new EventEmitter();
+      queueMicrotask(() => taskkill.emit('close', 0));
+      return taskkill;
+    });
+  });
+
+  afterEach(() => {
+    killSpy.mockRestore();
+    mockSpawn.mockReset();
+    Object.defineProperty(process, 'platform', { value: realPlatform, configurable: true });
+  });
+
+  it('signals the whole process group with a negative pid on posix', async () => {
+    Object.defineProperty(process, 'platform', { value: 'linux', configurable: true });
+    const child = createMockChild(1234);
+
+    await forceKillCursorProcessGroup(asSpawned(child));
+
+    expect(killSpy).toHaveBeenCalledWith(-1234, 'SIGKILL');
+    expect(child.kill).not.toHaveBeenCalled();
+  });
+
+  it('falls back to a direct SIGKILL when the group signal throws on posix', async () => {
+    Object.defineProperty(process, 'platform', { value: 'linux', configurable: true });
+    killSpy.mockImplementation(() => {
+      throw new Error('ESRCH');
+    });
+    const child = createMockChild(1234);
+
+    await forceKillCursorProcessGroup(asSpawned(child));
+
+    expect(killSpy).toHaveBeenCalledWith(-1234, 'SIGKILL');
+    expect(child.kill).toHaveBeenCalledWith('SIGKILL');
+  });
+
+  it('falls back to a direct SIGKILL when the child has no pid on posix', async () => {
+    Object.defineProperty(process, 'platform', { value: 'linux', configurable: true });
+    const child = createMockChild(undefined);
+
+    await forceKillCursorProcessGroup(asSpawned(child));
+
+    expect(killSpy).not.toHaveBeenCalled();
+    expect(child.kill).toHaveBeenCalledWith('SIGKILL');
+  });
+
+  it('reaps the whole tree with taskkill /T /F on win32', async () => {
+    Object.defineProperty(process, 'platform', { value: 'win32', configurable: true });
+    const child = createMockChild(1234);
+
+    await forceKillCursorProcessGroup(asSpawned(child));
+
+    expect(mockSpawn).toHaveBeenCalledWith('taskkill', ['/PID', '1234', '/T', '/F'], {
+      windowsHide: true,
+      stdio: 'ignore',
+    });
+    expect(killSpy).not.toHaveBeenCalled();
+    expect(child.kill).not.toHaveBeenCalled();
   });
 });

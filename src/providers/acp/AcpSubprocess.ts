@@ -14,6 +14,12 @@ export interface AcpSubprocessLaunchSpec {
    */
   windowsVerbatimArguments?: boolean;
   /**
+   * Spawn the child in its own process group (POSIX `detached: true`) so a
+   * `killProcessTree` reaper can signal the whole group. Threaded to
+   * `AgentSubprocess`.
+   */
+  detached?: boolean;
+  /**
    * Diagnostics tap: receives raw stderr chunks alongside the existing ring
    * buffer. Never throws upstream — calls are try/catch-wrapped.
    */

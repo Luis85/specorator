@@ -1,4 +1,5 @@
 import { buildCursorAcpLaunchSpec } from '@/providers/cursor/runtime/cursorAcpLaunch';
+import { forceKillCursorProcessGroup } from '@/providers/cursor/runtime/cursorProcessKill';
 
 describe('buildCursorAcpLaunchSpec', () => {
   it('appends the acp subcommand to the resolved cursor launch', () => {
@@ -12,8 +13,11 @@ describe('buildCursorAcpLaunchSpec', () => {
     expect(spec.env.PATH).toBe('/usr/bin');
   });
 
-  it('wires a tree-kill so shutdown reaps cursor-agent grandchildren (no Windows orphan leak)', () => {
+  it('spawns detached and wires the group-kill so shutdown reaps grandchildren on POSIX and Windows', () => {
     const spec = buildCursorAcpLaunchSpec('/home/u/.local/bin/cursor-agent', '/vault', {});
-    expect(typeof spec.killProcessTree).toBe('function');
+    // detached ⇒ the ACP process leads its own POSIX group so the reaper can
+    // signal the whole group; the group-killer also taskkill /T's on Windows.
+    expect(spec.detached).toBe(true);
+    expect(spec.killProcessTree).toBe(forceKillCursorProcessGroup);
   });
 });

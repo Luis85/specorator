@@ -1,6 +1,6 @@
 import { AcpJsonRpcTransport, AcpSubprocess, type AcpSubprocessLaunchSpec } from '../../acp';
 import { resolveCursorLaunch } from './cursorLaunch';
-import { forceKillCursorProcessTree } from './cursorProcessKill';
+import { forceKillCursorProcessGroup } from './cursorProcessKill';
 
 /**
  * Assembles the launch spec for `cursor-agent acp`. `resolveCursorLaunch`
@@ -20,10 +20,13 @@ export function buildCursorAcpLaunchSpec(
     cwd,
     env: launch.extraEnv ? { ...env, ...launch.extraEnv } : env,
     ...(launch.windowsVerbatimArguments ? { windowsVerbatimArguments: true } : {}),
+    // Lead our own POSIX process group so the reaper can signal the whole group;
+    // Windows relies on taskkill /T instead (see forceKillCursorProcessGroup).
+    detached: true,
     // Reap the whole tree on shutdown/recycle: cursor-agent forks shell/git
-    // grandchildren a bare SIGKILL orphans on Windows (parity with the one-shot
-    // CLI paths that already use taskkill /T /F).
-    killProcessTree: forceKillCursorProcessTree,
+    // grandchildren a bare child-only SIGKILL orphans (they reparent to init and
+    // keep running). Group-kills on POSIX, taskkill /T /F on Windows.
+    killProcessTree: forceKillCursorProcessGroup,
   };
 }
 
