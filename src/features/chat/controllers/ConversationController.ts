@@ -349,12 +349,9 @@ export class ConversationController {
         await this.save();
       }
 
-      // Preserve the pending draft across rapid re-switches. Switch #1 already
-      // captured the composer draft and cleared the textarea (below), so a second
-      // switch before #1 commits/restores would capture the now-EMPTY composer and
-      // clobber the saved draft — losing it if the second hydration then fails.
-      // Keep the first snapshot until a hydration commits (`pendingSwitchDraft =
-      // null`) or `restorePendingSwitchDraft` puts it back.
+      // Preserve the pending draft across rapid re-switches: switch #1 already
+      // cleared the textarea, so re-capturing would clobber the saved draft with
+      // the now-empty composer. Keep the first snapshot until commit/restore.
       if (!this.pendingSwitchDraft) {
         this.pendingSwitchDraft = captureComposerSwitchDraft(this.deps);
       }
