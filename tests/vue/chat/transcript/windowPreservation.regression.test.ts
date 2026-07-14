@@ -158,4 +158,37 @@ describe('transcript render-window preservation during streaming', () => {
 
     dispose();
   }, 30_000);
+
+  it('recomputes the trailing window when the SAME conversation is truncated in place (rewind)', async () => {
+    // A long transcript parks the window well into the list (start = 90). An
+    // in-place rewind of the SAME conversation shrinks it to 20 messages. The
+    // window's old start (90) now points past the whole transcript, so a plain
+    // clamp to next.length would slice away everything. The trailing window must
+    // be recomputed to 0 so all 20 surviving messages render.
+    const total = 2 * RENDER_WINDOW_SIZE + 10; // 170
+    const state = new ChatState();
+    state.currentConversationId = 'conv-a';
+    for (let i = 0; i < total; i++) state.addMessage(userMessage('m', i));
+
+    const projection = new TabTranscriptProjection(state);
+    const { container, dispose } = mount(projection);
+    await flushPromises();
+
+    // Trailing window active: a late message is mounted.
+    expect(container.querySelector('[data-message-id="m160"]')).not.toBeNull();
+
+    // Rewind truncates the SAME conversation to its first 20 messages.
+    state.clearMessages();
+    for (let i = 0; i < 20; i++) state.addMessage(userMessage('m', i));
+    projection.emit();
+    await flushPromises();
+
+    // Every surviving message renders — the transcript is not blank.
+    expect(container.querySelector('[data-message-id="m0"]')).not.toBeNull();
+    expect(container.querySelector('[data-message-id="m19"]')).not.toBeNull();
+    // The "Load earlier" control is gone: the whole (short) transcript is in view.
+    expect(container.querySelector('.specorator-load-earlier-btn')).toBeNull();
+
+    dispose();
+  }, 30_000);
 });

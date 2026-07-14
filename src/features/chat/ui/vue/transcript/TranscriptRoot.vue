@@ -100,7 +100,20 @@ watch(
 );
 watch(
   () => store.messages,
-  (next) => {
+  (next, prev) => {
+    // An in-place truncation of the SAME conversation (rewind) shrinks the list
+    // without touching conversationId or projectionRevision, so the reset watch
+    // above never fires. Clamping alone would leave `renderWindowStart` parked
+    // past the new tail (e.g. 90 → a 20-message list) and `MessageList` would
+    // slice away the whole transcript. Recompute the trailing window on a shrink
+    // so the surviving messages render; a plain append keeps the window put.
+    if (prev && next.length < prev.length) {
+      renderWindowStart.value = windowStartIndex(next.length);
+      if (next.length > 0) {
+        void requestHistoryScroll();
+      }
+      return;
+    }
     renderWindowStart.value = Math.min(Math.max(renderWindowStart.value, 0), next.length);
   },
 );
