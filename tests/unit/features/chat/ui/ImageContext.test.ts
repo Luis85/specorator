@@ -453,6 +453,50 @@ describe('ImageContextManager - Private Helpers', () => {
       const images = mgr.getAttachedImages();
       expect(images[0].mediaType).toBe('image/svg+xml');
     });
+
+    it('lets two concurrent paste/drop adds both complete (no cross-cancellation)', async () => {
+      const callbacks = createMockCallbacks();
+      const { container } = createContainerWithInputWrapper();
+      const inputEl = createMockTextArea();
+      const mgr: any = new ImageContextManager(container, inputEl, callbacks);
+      const makeFile = (name: string) => ({
+        name,
+        type: 'image/png',
+        size: 1024,
+        arrayBuffer: jest.fn().mockResolvedValue(new ArrayBuffer(4)),
+      } as unknown as File);
+
+      // Start both before awaiting either: both conversions are in-flight at once.
+      const [r1, r2] = await Promise.all([
+        mgr['addImageFromFile'](makeFile('a.png'), 'paste'),
+        mgr['addImageFromFile'](makeFile('b.png'), 'paste'),
+      ]);
+
+      expect(r1).toBe(true);
+      expect(r2).toBe(true);
+      expect(mgr.getAttachedImages()).toHaveLength(2);
+    });
+
+    it('still drops an in-flight add when the list is cleared mid-conversion', async () => {
+      const callbacks = createMockCallbacks();
+      const { container } = createContainerWithInputWrapper();
+      const inputEl = createMockTextArea();
+      const mgr: any = new ImageContextManager(container, inputEl, callbacks);
+      let resolveBuf: (b: ArrayBuffer) => void = () => {};
+      const file = {
+        name: 'slow.png',
+        type: 'image/png',
+        size: 1024,
+        arrayBuffer: () => new Promise<ArrayBuffer>((res) => { resolveBuf = res; }),
+      } as unknown as File;
+
+      const pending = mgr['addImageFromFile'](file, 'paste');
+      mgr.clearImages(); // reset bumps the generation while the conversion is pending
+      resolveBuf(new ArrayBuffer(4));
+
+      expect(await pending).toBe(false);
+      expect(mgr.hasImages()).toBe(false);
+    });
   });
 
 

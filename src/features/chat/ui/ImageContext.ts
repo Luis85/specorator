@@ -132,7 +132,11 @@ export class ImageContextManager {
       return false;
     }
 
-    const generation = ++this.attachGeneration;
+    // Capture (do NOT bump) the generation: it invalidates only on a
+    // clear/set/reset (clearImages/setImages bump it), so an in-flight conversion
+    // is dropped when the list is reset out from under it — but two concurrent
+    // paste/drop adds must BOTH complete rather than cancel each other.
+    const generation = this.attachGeneration;
 
     try {
       const base64 = await this.fileToBase64(file);

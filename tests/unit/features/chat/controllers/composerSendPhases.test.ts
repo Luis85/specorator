@@ -1,9 +1,12 @@
 import { createMockEl } from '@test/helpers/mockElement';
 
-import type { ChatMessage } from '@/core/types';
+import type { ChatMessage, ImageAttachment } from '@/core/types';
 import {
   bakeResponseDurationFooter,
+  captureComposerRollbackSnapshot,
+  type ComposerSendContext,
   resolveComposerSend,
+  rollbackOptimisticOutgoingTurn,
 } from '@/features/chat/controllers/composerSendPhases';
 import { ChatState } from '@/features/chat/state/ChatState';
 
@@ -73,6 +76,48 @@ describe('resolveComposerSend', () => {
     expect(send.content).toBe('typed draft');
     expect(send.shouldUseInput).toBe(true);
     expect(send.consumesComposerDraft).toBe(false);
+  });
+});
+
+describe('composer rollback snapshot restores image attachments', () => {
+  const img: ImageAttachment = {
+    id: 'i1', name: 'a.png', mediaType: 'image/png', data: 'AAAA', size: 4, source: 'paste',
+  };
+
+  function makeSend(images: ImageAttachment[]): { send: ComposerSendContext; setImages: jest.Mock } {
+    const setImages = jest.fn();
+    const send = {
+      content: 'hi',
+      shouldUseInput: true,
+      consumesComposerDraft: false,
+      hasImages: images.length > 0,
+      inputEl: makeInputEl('hi'),
+      imageContextManager: {
+        getAttachedImages: () => images,
+        setImages,
+      },
+      fileContextManager: null,
+    } as unknown as ComposerSendContext;
+    return { send, setImages };
+  }
+
+  it('captures the attached images and restores them via setImages on rollback', () => {
+    const { send, setImages } = makeSend([img]);
+    const snapshot = captureComposerRollbackSnapshot(send);
+    expect(snapshot.attachedImages).toEqual([img]);
+
+    const state = new ChatState();
+    rollbackOptimisticOutgoingTurn(state, snapshot, send, 'u1', 'a1', () => {});
+
+    // The images the failed send cleared are put back for retry.
+    expect(setImages).toHaveBeenCalledWith([img]);
+  });
+
+  it('restores an empty image list when none were attached', () => {
+    const { send, setImages } = makeSend([]);
+    const snapshot = captureComposerRollbackSnapshot(send);
+    rollbackOptimisticOutgoingTurn(new ChatState(), snapshot, send, 'u1', 'a1', () => {});
+    expect(setImages).toHaveBeenCalledWith([]);
   });
 });
 

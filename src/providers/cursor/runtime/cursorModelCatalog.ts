@@ -126,14 +126,20 @@ function dedupe(ids: string[]): string[] {
   return result;
 }
 
-/** Stable cache key scoped to the resolved CLI path and auth fingerprint (not secrets). */
+/** Stable cache key scoped to the resolved CLI path, auth fingerprint, and base
+ * URL (all non-secret). The base URL is part of the identity: two
+ * Cursor-compatible backends share a CLI path and an "auth present" fingerprint,
+ * so without it a `CURSOR_BASE_URL` switch would reuse the previous endpoint's
+ * model list/advertised wire ids and the selected model would fail
+ * `session/set_config_option` (or hide the new backend's models) until the TTL. */
 export function buildCursorModelCatalogCliKey(
   cliPath: string,
   env: Record<string, string>,
 ): string {
   const normalizedPath = cliPath.trim().replace(/\\/g, '/').toLowerCase();
   const authFingerprint = env.CURSOR_API_KEY || env.CURSOR_SESSION_TOKEN ? 'auth' : 'noauth';
-  return `${normalizedPath}|${authFingerprint}`;
+  const baseUrl = (env.CURSOR_BASE_URL ?? '').trim().toLowerCase();
+  return `${normalizedPath}|${authFingerprint}|${baseUrl}`;
 }
 
 function isCatalogFresh(cache: CursorModelCatalogCache, cliKey: string): boolean {
@@ -277,6 +283,6 @@ export function resetCursorModelCatalog(): void {
 }
 
 /** Seeds the module cache with explicit ids. Test-only. */
-export function seedCursorModelCatalogForTest(ids: readonly string[], cliKey = 'test-cli|noauth'): void {
+export function seedCursorModelCatalogForTest(ids: readonly string[], cliKey = 'test-cli|noauth|'): void {
   catalogCache = { ids: [...ids], fetchedAt: Date.now(), cliKey };
 }
