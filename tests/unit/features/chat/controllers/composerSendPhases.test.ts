@@ -121,6 +121,34 @@ describe('composer rollback snapshot restores image attachments', () => {
   });
 });
 
+describe('composer rollback snapshot restores the original draft', () => {
+  it('restores the user draft, NOT the folded quick-action prompt, on a consumesComposerDraft rollback', () => {
+    const inputEl = makeInputEl('my draft');
+    const send = resolveComposerSend({
+      inputEl,
+      imageContextManager: null,
+      fileContextManager: null,
+      overrides: { content: 'Summarize this.', includeComposerDraft: true },
+    });
+    // Sanity: the outgoing content folds the prompt + draft.
+    expect(send.content).toBe('Summarize this.\n\nmy draft');
+
+    const snapshot = captureComposerRollbackSnapshot(send);
+    expect(snapshot.inputText).toBe('my draft'); // not the generated prompt
+
+    inputEl.value = ''; // the send cleared the composer
+    rollbackOptimisticOutgoingTurn(new ChatState(), snapshot, send, 'u1', 'a1', () => {});
+    expect(inputEl.value).toBe('my draft');
+  });
+
+  it('restores the typed text on a plain user send rollback', () => {
+    const inputEl = makeInputEl('hello world');
+    const send = resolveComposerSend({ inputEl, imageContextManager: null, fileContextManager: null });
+    const snapshot = captureComposerRollbackSnapshot(send);
+    expect(snapshot.inputText).toBe('hello world');
+  });
+});
+
 describe('bakeResponseDurationFooter', () => {
   function makeAssistantMsg(): ChatMessage {
     return { id: 'a1', role: 'assistant', content: '', timestamp: 0, contentBlocks: [] };

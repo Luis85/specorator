@@ -23,6 +23,13 @@ export interface ComposerSendContext {
   consumesComposerDraft: boolean;
   hasImages: boolean;
   imageOverride?: ChatMessage['images'];
+  /**
+   * The composer textarea's ORIGINAL value at send time (before it was cleared).
+   * Used for rollback restore: a `consumesComposerDraft` send's `content` is the
+   * quick-action prompt folded with the draft, so restoring `content` would
+   * repopulate the composer with the generated prompt — restore this instead.
+   */
+  composerDraft: string;
   inputEl: HTMLTextAreaElement;
   imageContextManager: ImageContextManager | null;
   fileContextManager: FileContextManager | null;
@@ -93,6 +100,7 @@ export function resolveComposerSend(args: {
     consumesComposerDraft,
     hasImages,
     imageOverride,
+    composerDraft: args.inputEl.value,
     inputEl: args.inputEl,
     imageContextManager: args.imageContextManager,
     fileContextManager: args.fileContextManager,
@@ -173,7 +181,10 @@ export interface ComposerRollbackSnapshot {
 
 export function captureComposerRollbackSnapshot(send: ComposerSendContext): ComposerRollbackSnapshot {
   return {
-    inputText: send.content,
+    // A consumesComposerDraft send folded the quick-action prompt INTO `content`,
+    // so restore the user's original draft — not the generated prompt. A plain
+    // user send's `content` already IS the composer text.
+    inputText: send.consumesComposerDraft ? send.composerDraft : send.content,
     shouldRestoreInput: send.shouldUseInput || send.consumesComposerDraft,
     attachedFiles: [...(send.fileContextManager?.getAttachedFiles?.() ?? [])],
     attachedFolders: [...(send.fileContextManager?.getAttachedFolders?.() ?? [])],
