@@ -127,6 +127,15 @@ export class ConversationController {
   /** Aborts in-flight hydration and invalidates late async callbacks. */
   dispose(): void {
     this.lifecycleGeneration += 1;
+    this.cancelPendingHydration();
+  }
+
+  /**
+   * Aborts any in-flight background hydration (`switchTo`'s Phase B) and clears
+   * its bookkeeping so a late `hydrateAndRender` cannot rebind the tab to the
+   * superseded conversation. Used by reset (New Chat) and re-switch paths.
+   */
+  private cancelPendingHydration(): void {
     this.hydrationAbort?.abort();
     this.hydrationAbort = null;
     this.hydrationPromise = null;
@@ -199,6 +208,10 @@ export class ConversationController {
 
     try {
       this.deps.dismissPendingInlinePrompts?.();
+
+      // Abort an in-flight switchTo hydration so its late restoreConversation
+      // can't rebind this tab over the blank New Chat we're building.
+      this.cancelPendingHydration();
 
       if (force && state.isStreaming) {
         state.cancelRequested = true;
@@ -329,11 +342,7 @@ export class ConversationController {
     // Cancel this caller's prior hydration wait so its result cannot land in
     // the tab. The history service may finish a shared provider read for other
     // callers, but this controller drops the superseded result.
-    this.hydrationAbort?.abort();
-    this.hydrationAbort = null;
-    this.hydrationPromise = null;
-    this.pendingHydrationId = null;
-    state.isHydrating = false;
+    this.cancelPendingHydration();
 
     state.isSwitchingConversation = true;
     try {

@@ -377,6 +377,43 @@ describe('ConversationController', () => {
         expect(deps.state.messages[0]?.content).toBe('loaded');
       });
 
+      it('does not rebind the tab when New Chat is clicked mid-hydration', async () => {
+        let resolveHydration!: (value: ReturnType<typeof loadedSwitchResult>) => void;
+        const hydration = new Promise<ReturnType<typeof loadedSwitchResult>>((resolve) => {
+          resolveHydration = resolve;
+        });
+        (deps.plugin.switchConversation as jest.Mock).mockReturnValue(hydration);
+        deps.state.currentConversationId = 'old-conv';
+        deps.state.messages = [
+          { id: 'old', role: 'user', content: 'old', timestamp: Date.now() },
+        ];
+
+        // Start a history selection; its Phase-B hydration is still in flight.
+        await controller.switchTo('new-conv');
+        await new Promise<void>((resolve) => setTimeout(resolve, 0));
+
+        // User clicks New Chat before hydration resolves — the tab goes blank.
+        await controller.createNew();
+        expect(deps.state.currentConversationId).toBeNull();
+        expect(deps.state.messages).toHaveLength(0);
+
+        // The late hydration must NOT rebind the tab to the old selection.
+        resolveHydration(loadedSwitchResult({
+          id: 'new-conv',
+          title: 'Loaded Conversation',
+          messages: [{ id: 'new', role: 'assistant', content: 'loaded', timestamp: Date.now() }],
+          sessionId: 'session-1',
+          createdAt: Date.now(),
+          updatedAt: Date.now(),
+        }, [
+          { id: 'new', role: 'assistant', content: 'loaded', timestamp: Date.now() },
+        ]));
+        await controller.whenHydrated();
+
+        expect(deps.state.currentConversationId).toBeNull();
+        expect(deps.state.messages).toHaveLength(0);
+      });
+
       it('re-hydrates when the bound conversation still has an empty transcript', async () => {
         deps.state.currentConversationId = 'same-conv';
         deps.state.messages = [];
