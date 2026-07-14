@@ -239,8 +239,17 @@ export class ConversationStore {
       this.conversations[index].providerId,
     ).invalidateConversationHistory?.(id);
 
-    // Quiesce every open tab bound to this conversation before touching native artifacts.
-    await this.deps.quiesceViewsForDelete(id);
+    // Quiesce every open tab bound to this conversation before touching native
+    // artifacts. If quiescing throws (e.g. a tab save/cancel path rejects), abort
+    // the delete but clear the tombstone first — otherwise the conversation stays
+    // in `this.conversations` yet unreachable (switchConversation returns null,
+    // updateConversation no-ops for it) until a plugin reload.
+    try {
+      await this.deps.quiesceViewsForDelete(id);
+    } catch (error) {
+      this.deletedConversationIds.delete(id);
+      throw error;
+    }
 
     const conversation = this.conversations.find((c) => c.id === id);
     if (!conversation) {

@@ -275,6 +275,21 @@ describe('ConversationStore', () => {
       expect(sessions.deleteMetadata).not.toHaveBeenCalled();
       expect(repairViewsAfterDelete).not.toHaveBeenCalled();
     });
+
+    it('clears the delete tombstone when quiescing fails, so the conversation stays reachable', async () => {
+      const quiesceViewsForDelete = jest.fn().mockRejectedValue(new Error('tab save failed'));
+      const { store, sessions } = createStore({ quiesceViewsForDelete });
+      const conv = await store.createConversation();
+
+      await expect(store.deleteConversation(conv.id)).rejects.toThrow('tab save failed');
+
+      // The delete aborted before touching native artifacts...
+      expect(sessions.deleteMetadata).not.toHaveBeenCalled();
+      // ...and the conversation is NOT left stuck: still present and switchable
+      // (switchConversation would return null while tombstoned).
+      expect(store.getConversationSync(conv.id)).not.toBeNull();
+      await expect(store.switchConversation(conv.id)).resolves.not.toBeNull();
+    });
   });
 
   describe('getConversationById', () => {

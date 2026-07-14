@@ -1,4 +1,5 @@
 import {
+  buildCursorModelCatalogCliKey,
   CURSOR_MODEL_CATALOG_TTL_MS,
   getCachedCursorModelIds,
   isCursorModelCatalogDiscoveryFresh,
@@ -7,6 +8,34 @@ import {
   seedCursorModelCatalogForTest,
   STATIC_FALLBACK_MODEL_IDS,
 } from '@/providers/cursor/runtime/cursorModelCatalog';
+
+describe('buildCursorModelCatalogCliKey', () => {
+  it('distinguishes backends by CURSOR_BASE_URL even with the same path and auth', () => {
+    const a = buildCursorModelCatalogCliKey('/usr/bin/agent', {
+      CURSOR_API_KEY: 'k',
+      CURSOR_BASE_URL: 'https://api.cursor.sh',
+    });
+    const b = buildCursorModelCatalogCliKey('/usr/bin/agent', {
+      CURSOR_API_KEY: 'k',
+      CURSOR_BASE_URL: 'https://proxy.internal',
+    });
+    expect(a).not.toBe(b);
+  });
+
+  it('fingerprints auth presence without leaking the secret, and normalizes path + base url', () => {
+    expect(buildCursorModelCatalogCliKey('C:\\Bin\\Agent', { CURSOR_SESSION_TOKEN: 'tok' }))
+      .toBe('c:/bin/agent|auth|');
+    const key = buildCursorModelCatalogCliKey('/usr/bin/agent', { CURSOR_BASE_URL: 'HTTPS://API.X ' });
+    expect(key).toBe('/usr/bin/agent|noauth|https://api.x');
+    expect(key).not.toContain('tok');
+  });
+
+  it('is stable for identical inputs', () => {
+    const env = { CURSOR_API_KEY: 'k', CURSOR_BASE_URL: 'https://api.cursor.sh' };
+    expect(buildCursorModelCatalogCliKey('/usr/bin/agent', env))
+      .toBe(buildCursorModelCatalogCliKey('/usr/bin/agent', env));
+  });
+});
 
 describe('parseModelListOutput', () => {
   it('parses a JSON array of strings', () => {
@@ -96,7 +125,7 @@ describe('getCachedCursorModelIds', () => {
   });
 
   it('scopes cache by CLI identity and expires after TTL', () => {
-    seedCursorModelCatalogForTest(['model-a'], '/usr/bin/agent|auth');
+    seedCursorModelCatalogForTest(['model-a'], '/usr/bin/agent|auth|');
     expect(getCachedCursorModelIds('/usr/bin/agent', { CURSOR_API_KEY: 'x' })).toEqual(['model-a']);
     expect(getCachedCursorModelIds('/other/agent', { CURSOR_API_KEY: 'x' }))
       .toEqual([...STATIC_FALLBACK_MODEL_IDS]);
