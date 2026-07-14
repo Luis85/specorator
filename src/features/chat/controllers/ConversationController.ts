@@ -213,8 +213,11 @@ export class ConversationController {
       // can't rebind this tab over the blank New Chat we're building. Drop the
       // abandoned switch's draft too: New Chat blanks the composer, so leaving it
       // would make the next switchTo skip capturing and restore a stale draft.
+      // Clear the hydration spinner as well — the aborted hydrateAndRender's
+      // finally skips setTranscriptLoading(null) once hydrationAbort is nulled.
       this.cancelPendingHydration();
       this.pendingSwitchDraft = null;
+      this.deps.setTranscriptLoading(null);
 
       if (force && state.isStreaming) {
         state.cancelRequested = true;

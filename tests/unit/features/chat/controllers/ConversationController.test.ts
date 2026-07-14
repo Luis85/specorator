@@ -396,6 +396,10 @@ describe('ConversationController', () => {
         await controller.createNew();
         expect(deps.state.currentConversationId).toBeNull();
         expect(deps.state.messages).toHaveLength(0);
+        // The hydration spinner (shown by switchTo's Phase A) must be cleared, or
+        // it stays stuck over the blank New Chat once the aborted load's finally
+        // skips its own setTranscriptLoading(null).
+        expect(deps.setTranscriptLoading).toHaveBeenLastCalledWith(null);
 
         // The late hydration must NOT rebind the tab to the old selection.
         resolveHydration(loadedSwitchResult({
