@@ -648,6 +648,21 @@ describe('CursorChatRuntime.emitFinalUsage', () => {
     expect(push).toHaveBeenCalledTimes(1);
     expect(push.mock.calls[0][0].type).toBe('usage');
   });
+
+  it('strips the cursor: prefix before the catalog window fallback', () => {
+    const runtime = makeRuntime() as unknown as Record<string, unknown>;
+    runtime.contextUsage = null;
+    // A picker/settings model is namespaced; the window catalog is keyed by raw
+    // ids, so without stripping the prefix gpt-5 collapses to contextWindow: 0.
+    const { activeTurn, push } = makeActiveTurn('cursor:gpt-5');
+
+    (runtime.emitFinalUsage as (t: unknown, u: unknown) => void)
+      .call(runtime, activeTurn, { inputTokens: 100, outputTokens: 20 });
+
+    expect(push).toHaveBeenCalledTimes(1);
+    const usage = push.mock.calls[0][0].usage;
+    expect(usage.contextWindow).toBe(400_000);
+  });
 });
 
 describe('CursorChatRuntime.query history bootstrap', () => {

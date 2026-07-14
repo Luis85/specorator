@@ -70,6 +70,7 @@ import {
 import { cleanupStaleCursorMcpServer } from './cursorMcpCleanup';
 import { buildCursorModelCatalogCliKey } from './cursorModelCatalog';
 import { getCachedCursorModelIds } from './cursorModelCatalog';
+import { fromCursorModelValue } from './cursorModelId';
 import {
   cursorSessionAdditionalDirectories,
   cursorSessionRootsEqual,
@@ -1360,7 +1361,9 @@ export class CursorChatRuntime implements ChatRuntime {
     // window comes from the model catalog — pass it as the fallback so a prompt
     // response that DID carry token counts keeps the window/percentage instead of
     // collapsing to contextWindow: 0 on exactly the turns where tokens are known.
-    const fallback = extractCursorUsage({}, model);
+    // Strip the namespaced `cursor:` prefix first — the window catalog is keyed by
+    // raw ids (the emitted model stays as-is; downstream pricing/meter strip too).
+    const fallback = extractCursorUsage({}, fromCursorModelValue(model));
     const acpUsage = buildAcpUsageInfo({
       contextWindow: this.contextUsage,
       model,
