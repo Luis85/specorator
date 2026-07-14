@@ -97,6 +97,43 @@ describe('matchAdvertisedModelValue', () => {
     expect(matchAdvertisedModelValue(['gpt-5.4[reasoning=high,fast=true]'], 'gpt-5.4-medium-fast')).toBeNull();
   });
 
+  it('derives family/mode against the passed catalog, not the module cache', () => {
+    // `max` is a weak mode token: resolveCursorFamilyId only strips it when the
+    // catalog exposes a strong sibling. So the SAME resolvedId resolves to a
+    // different family/mode depending on the catalog threaded in — which is why
+    // the matcher must use the ACTIVE endpoint's ids, not a no-arg global cache.
+    const advertised = ['claude-opus-4-7[reasoning=max]'];
+    // Catalog with a strong sibling ⇒ `max` is a mode ⇒ family lines up + matches.
+    expect(
+      matchAdvertisedModelValue(advertised, 'claude-opus-4-7-max', [
+        'claude-opus-4-7-low',
+        'claude-opus-4-7-max',
+      ]),
+    ).toBe('claude-opus-4-7[reasoning=max]');
+    // Catalog where `max` is part of the family name ⇒ no advertised family lines up.
+    expect(
+      matchAdvertisedModelValue(advertised, 'claude-opus-4-7-max', ['claude-opus-4-7-max']),
+    ).toBeNull();
+  });
+
+  it('threads the catalog through the family-fallback matcher too', () => {
+    const advertised = ['claude-opus-4-7[reasoning=max]'];
+    const strongSiblingCatalog = ['claude-opus-4-7-low', 'claude-opus-4-7-max'];
+    expect(
+      matchAdvertisedModelValueWithFamilyFallback(
+        advertised,
+        'claude-opus-4-7-max',
+        true,
+        strongSiblingCatalog,
+      ),
+    ).toBe('claude-opus-4-7[reasoning=max]');
+    expect(
+      matchAdvertisedModelValueWithFamilyFallback(advertised, 'claude-opus-4-7-max', true, [
+        'claude-opus-4-7-max',
+      ]),
+    ).toBeNull();
+  });
+
   describe('against real advertised wire values (captured 2026-07-12)', () => {
     it('round-trips every advertised value as an exact match, incl. default[] and empty-bracket variants', () => {
       // Real Cursor advertises model ids carrying bracket variants (multi-axis,

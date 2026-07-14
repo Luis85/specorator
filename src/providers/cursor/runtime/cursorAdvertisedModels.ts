@@ -23,10 +23,16 @@ const CURSOR_AUTO_ADVERTISED_FAMILY = 'default';
  * silently pin a different effort). Returns null when nothing lines up — the
  * caller then skips the update rather than sending a value Cursor would
  * accept-then-reject on the next prompt.
+ *
+ * `knownIds` is the catalog to derive family/mode against; callers pass the
+ * ACTIVE endpoint's catalog (cli + env) so an endpoint/auth switch doesn't
+ * resolve the family/mode against the previous endpoint's model ids. Omitting
+ * it falls back to the no-arg module cache for lightweight callers/tests.
  */
 export function matchAdvertisedModelValue(
   advertised: string[] | null,
   resolvedId: string,
+  knownIds?: string[],
 ): string | null {
   if (!advertised || advertised.length === 0) {
     return null;
@@ -37,13 +43,13 @@ export function matchAdvertisedModelValue(
   if (resolvedId.trim().toLowerCase() === 'auto') {
     return advertised.find((value) => value.split('[', 1)[0] === CURSOR_AUTO_ADVERTISED_FAMILY) ?? null;
   }
-  const knownIds = getCachedCursorModelIds();
-  const resolvedFamily = resolveCursorFamilyId(resolvedId, knownIds);
+  const catalog = knownIds ?? getCachedCursorModelIds();
+  const resolvedFamily = resolveCursorFamilyId(resolvedId, catalog);
   const familyMatches = advertised.filter((value) => value.split('[', 1)[0] === resolvedFamily);
   if (familyMatches.length === 0) {
     return null;
   }
-  const resolvedMode = extractCursorModeValue(resolvedId, knownIds);
+  const resolvedMode = extractCursorModeValue(resolvedId, catalog);
   if (!resolvedMode) {
     // No variant requested: prefer the bare family value over an arbitrary
     // bracket variant, falling back to the first family sibling.
@@ -60,19 +66,20 @@ export function matchAdvertisedModelValueWithFamilyFallback(
   advertised: string[] | null,
   resolvedId: string,
   allowFamilyFallback: boolean,
+  knownIds?: string[],
 ): string | null {
-  const direct = matchAdvertisedModelValue(advertised, resolvedId);
+  const direct = matchAdvertisedModelValue(advertised, resolvedId, knownIds);
   if (direct) {
     return direct;
   }
   if (!allowFamilyFallback) {
     return null;
   }
-  const familyId = resolveCursorFamilyId(resolvedId, getCachedCursorModelIds());
+  const familyId = resolveCursorFamilyId(resolvedId, knownIds ?? getCachedCursorModelIds());
   if (!familyId || familyId === resolvedId) {
     return null;
   }
-  return matchAdvertisedModelValue(advertised, familyId);
+  return matchAdvertisedModelValue(advertised, familyId, knownIds);
 }
 
 interface BracketFields {

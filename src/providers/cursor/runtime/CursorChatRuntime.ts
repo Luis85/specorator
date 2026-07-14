@@ -1103,6 +1103,8 @@ export class CursorChatRuntime implements ChatRuntime {
       familyValue
         ? shouldAllowFamilyWireFallback(resolved, familyValue, settingsBag, cursorChatUIConfig)
         : false,
+      // Match against the ACTIVE endpoint's catalog, not the module cache.
+      this.getActiveCursorCatalogIds(),
     );
     if (!wireValue) {
       const message = t('provider.cursor.models.applyFailed');
@@ -1141,13 +1143,17 @@ export class CursorChatRuntime implements ChatRuntime {
     const mode = familyValue
       ? resolveCursorEffortForFamily(familyValue, snapshot, cursorChatUIConfig)
       : (typeof snapshot.effortLevel === 'string' ? snapshot.effortLevel : undefined);
-    // Key the catalog lookup to the ACTIVE endpoint (cli + env incl.
-    // CURSOR_BASE_URL) so an endpoint/auth switch doesn't reuse stale model ids.
-    const cli = this.plugin.getResolvedProviderCliPath('cursor') ?? undefined;
     return resolveCursorModelSelectionForCli(familyValue, mode, {
-      catalogIds: getCachedCursorModelIds(cli, cli ? buildCursorAgentEnvironment(this.plugin, cli) : undefined),
+      catalogIds: this.getActiveCursorCatalogIds(),
       enabledIds: getCursorEnabledModels(settingsBag),
     });
+  }
+
+  // Model catalog for the ACTIVE endpoint (cli + env incl. CURSOR_BASE_URL) so
+  // selection/advertised matching never resolve against a prior endpoint's ids.
+  private getActiveCursorCatalogIds(): string[] {
+    const cli = this.plugin.getResolvedProviderCliPath('cursor') ?? undefined;
+    return getCachedCursorModelIds(cli, cli ? buildCursorAgentEnvironment(this.plugin, cli) : undefined);
   }
 
   // First terminal writer wins: the racing paths (resolved/rejected prompt,
