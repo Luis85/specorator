@@ -1,7 +1,7 @@
 import type { ChatRuntime } from '../../../core/runtime/ChatRuntime';
 import type { ChatTurnMetadata, ChatTurnRequest } from '../../../core/runtime/types';
 import { TOOL_EXIT_PLAN_MODE } from '../../../core/tools/toolNames';
-import type { ChatMessage, PlanApprovalDecision } from '../../../core/types';
+import type { ChatMessage, ImageAttachment, PlanApprovalDecision } from '../../../core/types';
 import type { BrowserSelectionContext } from '../../../utils/browser';
 import type { CanvasSelectionContext } from '../../../utils/canvas';
 import { formatDurationMmSs } from '../../../utils/date';
@@ -166,6 +166,9 @@ export interface ComposerRollbackSnapshot {
   shouldRestoreInput: boolean;
   attachedFiles: string[];
   attachedFolders: string[];
+  // Captured BEFORE buildOutgoingTurn clears them, so a failed init rollback can
+  // restore the user's pasted/dropped images too (not just text + file pills).
+  attachedImages: ImageAttachment[];
 }
 
 export function captureComposerRollbackSnapshot(send: ComposerSendContext): ComposerRollbackSnapshot {
@@ -174,6 +177,7 @@ export function captureComposerRollbackSnapshot(send: ComposerSendContext): Comp
     shouldRestoreInput: send.shouldUseInput || send.consumesComposerDraft,
     attachedFiles: [...(send.fileContextManager?.getAttachedFiles?.() ?? [])],
     attachedFolders: [...(send.fileContextManager?.getAttachedFolders?.() ?? [])],
+    attachedImages: [...(send.imageContextManager?.getAttachedImages() ?? [])],
   };
 }
 
@@ -205,6 +209,9 @@ export function rollbackOptimisticOutgoingTurn(
     send.fileContextManager.setAttachedFiles?.(snapshot.attachedFiles);
     send.fileContextManager.setAttachedFolders?.(snapshot.attachedFolders);
   }
+  // buildOutgoingTurn cleared the images before init failed; put them back so the
+  // restored message is fully retryable (mirrors the text/pill restore above).
+  send.imageContextManager?.setImages(snapshot.attachedImages);
 }
 
 export function beginStreamingTurnState(
