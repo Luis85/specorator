@@ -84,12 +84,31 @@ describe('LedgerWriter', () => {
       milestoneThreshold: 999,
     });
     writer.enqueue(entry('Handoff written.'));
-    await writer.finalize();
-    // First terminal flush failed; the entry is re-queued for retry, not dropped.
-    expect(flushed).toEqual([]);
-    jest.advanceTimersByTime(5000);
-    await Promise.resolve(); await Promise.resolve(); await Promise.resolve();
+    const pending = writer.finalize();
+    await jest.advanceTimersByTimeAsync(5000);
+    await pending;
     expect(flushed).toEqual(['Handoff written.']);
+    jest.useRealTimers();
+  });
+
+  it('finalize resolves only after a retry drain completes', async () => {
+    jest.useFakeTimers();
+    let attempts = 0;
+    const flushed: string[] = [];
+    const writer = new LedgerWriter({
+      flush: async (entries) => {
+        attempts += 1;
+        if (attempts === 1) throw new Error('transient');
+        for (const e of entries) flushed.push(e.message);
+      },
+      intervalMs: 60000,
+      milestoneThreshold: 999,
+    });
+    writer.enqueue(entry('terminal'));
+    const pending = writer.finalize();
+    await jest.advanceTimersByTimeAsync(5000);
+    await pending;
+    expect(flushed).toEqual(['terminal']);
     jest.useRealTimers();
   });
 

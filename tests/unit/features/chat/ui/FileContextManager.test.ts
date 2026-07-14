@@ -540,7 +540,7 @@ describe('FileContextManager', () => {
       manager.destroy();
     });
 
-    it('should clear attachments when opening a new file before session starts', () => {
+    it('should replace the current-note attachment when opening a new file before session starts', () => {
       const app = createMockApp({ files: ['notes/a.md', 'notes/b.md'] });
       const manager = new FileContextManager(
         app, containerEl as any, inputEl, createMockCallbacks()
@@ -550,6 +550,29 @@ describe('FileContextManager', () => {
       const fileB = createMockTFile('notes/b.md');
       manager.handleFileOpen(fileB);
       expect(manager.getCurrentNotePath()).toBe('notes/b.md');
+      expect([...manager.getAttachedFiles()]).toEqual(['notes/b.md']);
+      manager.destroy();
+    });
+
+    it('preserves manually attached files and folders when the active file changes', () => {
+      const app = createMockApp({
+        files: ['notes/current.md', 'notes/next.md', 'context/reference.md'],
+      });
+      const manager = new FileContextManager(
+        app, containerEl as any, inputEl, createMockCallbacks()
+      );
+      manager.setCurrentNote('notes/current.md');
+      manager.attachFileAsPill('context/reference.md');
+      manager.attachFolderAsPill('context/folder');
+
+      manager.handleFileOpen(createMockTFile('notes/next.md'));
+
+      expect(manager.getCurrentNotePath()).toBe('notes/next.md');
+      expect([...manager.getAttachedFiles()]).toEqual([
+        'context/reference.md',
+        'notes/next.md',
+      ]);
+      expect([...manager.getAttachedFolders()]).toEqual(['context/folder']);
       manager.destroy();
     });
 
@@ -582,6 +605,24 @@ describe('FileContextManager', () => {
       const file = createMockTFile('notes/secret.md');
       manager.handleFileOpen(file);
       expect(manager.getCurrentNotePath()).toBeNull();
+      manager.destroy();
+    });
+
+    it('removes the current-note attachment when that file is excluded', () => {
+      const fileCacheByPath = new Map<string, any>([
+        ['notes/secret.md', { frontmatter: { tags: ['private'] } }],
+      ]);
+      const app = createMockApp({ files: ['notes/secret.md'], fileCacheByPath });
+      const manager = new FileContextManager(
+        app, containerEl as any, inputEl,
+        createMockCallbacks({ excludedTags: ['private'] })
+      );
+      manager.setCurrentNote('notes/secret.md');
+
+      manager.handleFileOpen(createMockTFile('notes/secret.md'));
+
+      expect(manager.getCurrentNotePath()).toBeNull();
+      expect([...manager.getAttachedFiles()]).toEqual([]);
       manager.destroy();
     });
   });

@@ -89,7 +89,10 @@ export interface ChatRuntimeEnsureReadyOptions {
 export type ChatRuntimeConversationState = Pick<
   Conversation,
   'sessionId' | 'providerState'
->;
+> & {
+  /** Present for normal chat bindings; optional for provider probes/tests. */
+  id?: string;
+};
 
 /**
  * Minimal bound-agent projection synced to a runtime before ensureReady() so

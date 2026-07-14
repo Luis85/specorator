@@ -16,9 +16,12 @@ import { type CursorProviderState, getCursorState, resolveCursorSessionId } from
 import {
   cursorWorkspaceHash,
   cursorWorkspaceHashLegacy,
-  loadCursorChatMessagesFromStoreResult,
+  loadCursorHistoryFromSources,
   loadCursorRawRecords,
+  resolveCursorAgentTranscriptPath,
+  resolveCursorHistorySources,
   resolveCursorStoreDbPath,
+  validateCursorAcpSessionVault,
 } from './cursorHistoryStore';
 
 export class CursorConversationHistoryService extends BaseHistoryService<CursorProviderState> {
@@ -30,8 +33,10 @@ export class CursorConversationHistoryService extends BaseHistoryService<CursorP
   ): string | null {
     const sessionId = resolveCursorSessionId(conversation);
     if (!sessionId || !ctx.vaultPath) return null;
-    const dbPath = resolveCursorStoreDbPath(ctx.vaultPath, sessionId);
-    return dbPath ? `${sessionId}::${dbPath}` : null;
+    const sources = resolveCursorHistorySources(ctx.vaultPath, sessionId);
+    return sources.length > 0
+      ? sources.map((source) => source.sourceRef).join('||')
+      : null;
   }
 
   protected async loadMessages(
@@ -42,23 +47,33 @@ export class CursorConversationHistoryService extends BaseHistoryService<CursorP
     if (!sessionId || !ctx.vaultPath) {
       return { kind: 'empty', reason: 'no-session', sourceRef: null };
     }
-    const dbPath = resolveCursorStoreDbPath(ctx.vaultPath, sessionId);
-    if (!dbPath) {
+
+    const acpValidationError = validateCursorAcpSessionVault(sessionId, ctx.vaultPath);
+    const sources = resolveCursorHistorySources(ctx.vaultPath, sessionId);
+    if (sources.length === 0) {
+      if (acpValidationError) {
+        return { kind: 'error', error: acpValidationError, sourceRef: null };
+      }
       return { kind: 'empty', reason: 'no-store', sourceRef: null };
     }
 
-    const sourceRef = `${sessionId}::${dbPath}`;
-    const result = loadCursorChatMessagesFromStoreResult(dbPath);
-    if (result.error) {
-      const error = typeof result.error === 'string'
-        ? { code: 'store-unreadable' as const, message: result.error }
-        : result.error;
+    const loaded = loadCursorHistoryFromSources(sources);
+    const sourceRef = loaded.sourceRef ?? sources[0]?.sourceRef ?? null;
+    if (loaded.error) {
+      const error = typeof loaded.error === 'string'
+        ? { code: 'store-unreadable' as const, message: loaded.error }
+        : loaded.error;
       return { kind: 'error', error, sourceRef };
     }
-    if (result.messages.length === 0) {
+    if (loaded.messages.length === 0) {
       return { kind: 'empty', reason: 'no-rows', sourceRef };
     }
-    return { kind: 'loaded', messages: result.messages, sourceRef };
+    return {
+      kind: 'loaded',
+      messages: loaded.messages,
+      sourceRef,
+      ...(loaded.degraded ? { cacheable: false } : {}),
+    };
   }
 
   resolveSessionIdForConversation(conversation: Conversation | null): string | null {
@@ -83,12 +98,27 @@ export class CursorConversationHistoryService extends BaseHistoryService<CursorP
       };
     }
 
+    const acpValidationError = validateCursorAcpSessionVault(sessionId, ctx.vaultPath);
+    const removedPaths: string[] = [];
+    const errors: string[] = [];
+
+    const acpDir = path.join(os.homedir(), '.cursor', 'acp-sessions', sessionId);
+    if (!acpValidationError) {
+      try {
+        if (fs.existsSync(acpDir)) {
+          fs.rmSync(acpDir, { recursive: true, force: true });
+          removedPaths.push(acpDir);
+        }
+      } catch (error) {
+        errors.push(error instanceof Error ? error.message : String(error));
+      }
+    }
+
     const chatsRoot = path.join(os.homedir(), '.cursor', 'chats');
     const candidateHashes = [
       cursorWorkspaceHash(ctx.vaultPath),
       cursorWorkspaceHashLegacy(ctx.vaultPath),
     ];
-    const removedPaths: string[] = [];
     const seenDirs = new Set<string>();
     for (const hash of candidateHashes) {
       const chatDir = path.join(chatsRoot, hash, sessionId);
@@ -100,9 +130,47 @@ export class CursorConversationHistoryService extends BaseHistoryService<CursorP
           fs.rmSync(chatDir, { recursive: true, force: true });
           removedPaths.push(chatDir);
         }
-      } catch {
-        // best-effort
+      } catch (error) {
+        errors.push(error instanceof Error ? error.message : String(error));
       }
+    }
+
+    const transcriptPath = resolveCursorAgentTranscriptPath(ctx.vaultPath, sessionId);
+    if (transcriptPath) {
+      try {
+        fs.rmSync(transcriptPath, { force: true });
+        removedPaths.push(transcriptPath);
+        const transcriptDir = path.dirname(transcriptPath);
+        if (fs.existsSync(transcriptDir) && fs.readdirSync(transcriptDir).length === 0) {
+          fs.rmSync(transcriptDir, { recursive: true, force: true });
+        }
+      } catch (error) {
+        errors.push(error instanceof Error ? error.message : String(error));
+      }
+    }
+
+    if (acpValidationError) {
+      return {
+        kind: 'error',
+        error: acpValidationError,
+        ...(removedPaths.length > 0 ? { paths: removedPaths } : {}),
+      };
+    }
+
+    if (errors.length > 0) {
+      return {
+        kind: 'error',
+        error: {
+          code: 'store-unreadable',
+          message: 'Could not delete Cursor session artifacts.',
+          detail: errors.join('; '),
+        },
+        ...(removedPaths.length > 0 ? { paths: removedPaths } : {}),
+      };
+    }
+
+    if (removedPaths.length === 0) {
+      return { kind: 'no-op', reason: 'no-session' };
     }
 
     return { kind: 'deleted', paths: removedPaths };
@@ -171,25 +239,35 @@ function hasUsageField(rec: Record<string, unknown>): boolean {
 export function extractLastUsageFromCursorRecords(
   records: readonly Record<string, unknown>[],
 ): UsageInfo | null {
-  // Walk back to front: find latest usage-bearing record AND latest model stamp.
-  let model: string | null = null;
+  // Walk back to front for the latest usage record, then pair it with the model
+  // active at or before that record — not a later model stamp.
+  let lastUsageIndex = -1;
   let lastUsageRecord: Record<string, unknown> | null = null;
 
   for (let i = records.length - 1; i >= 0; i--) {
     const rec = records[i];
     if (!isRecord(rec)) continue;
-
-    if (!model) {
-      const candidate = readModel(rec);
-      if (candidate) model = candidate;
-    }
-    if (!lastUsageRecord && hasUsageField(rec)) {
+    if (hasUsageField(rec)) {
+      lastUsageIndex = i;
       lastUsageRecord = rec;
+      break;
     }
-    if (model && lastUsageRecord) break;
   }
 
-  if (!lastUsageRecord || !model) return null;
+  if (!lastUsageRecord || lastUsageIndex < 0) return null;
+
+  let model: string | null = null;
+  for (let j = lastUsageIndex; j >= 0; j--) {
+    const rec = records[j];
+    if (!isRecord(rec)) continue;
+    const candidate = readModel(rec);
+    if (candidate) {
+      model = candidate;
+      break;
+    }
+  }
+
+  if (!model) return null;
 
   const usage = extractCursorUsage(lastUsageRecord, model);
   if (usage.contextTokens === 0 && usage.inputTokens === 0 && (usage.outputTokens ?? 0) === 0) {

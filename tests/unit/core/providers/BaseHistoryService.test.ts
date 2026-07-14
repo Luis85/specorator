@@ -216,4 +216,69 @@ describe('BaseHistoryService.hydrateConversationHistory', () => {
     expect(svc.loadCalls).toBe(1);
     expect(a).toEqual(b);
   });
+
+  it('does not let one caller cancellation poison another caller sharing the load', async () => {
+    const svc = new FakeHistoryService();
+    svc.loadDelayMs = 10;
+    svc.nextOutcome = {
+      kind: 'loaded',
+      messages: [{ id: 'm', role: 'user', content: 'hi', timestamp: 1 } as ChatMessage],
+      sourceRef: 'conv-1:sess-a',
+    };
+    const conv = makeConversation({ sessionId: 'sess-a' });
+    const firstController = new AbortController();
+
+    const first = svc.hydrateConversationHistory(conv, {
+      ...ctx,
+      signal: firstController.signal,
+    });
+    const second = svc.hydrateConversationHistory(conv, ctx);
+    firstController.abort();
+
+    const [firstOutcome, secondOutcome] = await Promise.all([first, second]);
+
+    expect(firstOutcome).toEqual(expect.objectContaining({
+      kind: 'error',
+      error: expect.objectContaining({ code: 'cancelled' }),
+    }));
+    expect(secondOutcome.kind).toBe('loaded');
+    expect(svc.loadCalls).toBe(1);
+  });
+
+  it('does not let an invalidated in-flight load reseed the cache', async () => {
+    const svc = new FakeHistoryService();
+    svc.loadDelayMs = 10;
+    svc.nextOutcome = {
+      kind: 'loaded',
+      messages: [{ id: 'm', role: 'user', content: 'old', timestamp: 1 } as ChatMessage],
+      sourceRef: 'conv-1:sess-a',
+    };
+    const conv = makeConversation({ sessionId: 'sess-a' });
+
+    const first = svc.hydrateConversationHistory(conv, ctx);
+    svc.invalidateConversationHistory(conv.id);
+    const firstOutcome = await first;
+    if (firstOutcome.kind === 'loaded') conv.messages = firstOutcome.messages;
+
+    await svc.hydrateConversationHistory(conv, ctx);
+    expect(svc.loadCalls).toBe(2);
+  });
+
+  it('does not dedupe in-flight loads across different source identities', async () => {
+    const svc = new FakeHistoryService();
+    svc.loadDelayMs = 10;
+    svc.nextOutcome = {
+      kind: 'loaded',
+      messages: [{ id: 'm', role: 'user', content: 'hi', timestamp: 1 } as ChatMessage],
+      sourceRef: 'source',
+    };
+    const conv = makeConversation({ sessionId: 'sess-a' });
+
+    const first = svc.hydrateConversationHistory(conv, ctx);
+    conv.sessionId = 'sess-b';
+    const second = svc.hydrateConversationHistory(conv, ctx);
+    await Promise.all([first, second]);
+
+    expect(svc.loadCalls).toBe(2);
+  });
 });

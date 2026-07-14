@@ -216,6 +216,33 @@ describe('RunSidecarStore.snapshotLedgerAsMarkdown', () => {
     expect(md.split('\n')).toHaveLength(1);
     expect(md).toBe('- t [running] line one line two line three');
   });
+
+  it('assigns stable ids and dedupes duplicate lines on read', async () => {
+    const { adapter, files } = makeFakeAdapter();
+    const store = new RunSidecarStore(adapter, '.specorator/runs');
+    const entry = {
+      id: 'ledger-1',
+      timestamp: '2026-06-06T12:00:00.000Z',
+      status: 'running' as const,
+      message: 'Run started (attempt 1)',
+    };
+    await store.appendLedgerBatch('run-dedupe', [entry, entry]);
+    files.set(
+      '.specorator/runs/run-dedupe/ledger.jsonl',
+      `${JSON.stringify(entry)}\n${JSON.stringify(entry)}\n`,
+    );
+    const entries = await store.readLedger('run-dedupe');
+    expect(entries).toHaveLength(1);
+    expect(entries[0].id).toBe('ledger-1');
+  });
+
+  it('records finalize failures for startup sweep preservation', async () => {
+    const { adapter, files } = makeFakeAdapter();
+    const store = new RunSidecarStore(adapter, '.specorator/runs');
+    await store.markFinalizeFailed('run-fail', 'missing markers');
+    expect(await store.hasFinalizeFailure('run-fail')).toBe(true);
+    expect(files.get('.specorator/runs/run-fail/finalize-failed.json')).toContain('missing markers');
+  });
 });
 
 describe('RunSidecarStore.ensureRunDir', () => {

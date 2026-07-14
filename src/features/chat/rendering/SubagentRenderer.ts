@@ -5,12 +5,11 @@ import { TOOL_TASK } from '../../../core/tools/toolNames';
 import type { SubagentInfo, ToolCallInfo } from '../../../core/types';
 import { setupCollapsible } from './collapsible';
 import {
-  getToolLabel,
-  getToolName,
-  getToolSummary,
   renderExpandedContent,
   setToolIcon,
 } from './ToolCallRenderer';
+import { getToolName, getToolSummary } from './toolCallViewModel';
+import { getToolLabel } from './toolLabel';
 
 interface SubagentToolView {
   wrapperEl: HTMLElement;
@@ -210,37 +209,6 @@ function setResultText(state: SubagentState, text: string): void {
   resultEl.setText(text);
 }
 
-function hydrateSyncSubagentStateFromStored(state: SubagentState, subagent: SubagentInfo): void {
-  state.info.description = subagent.description;
-  state.info.prompt = subagent.prompt;
-  state.info.mode = subagent.mode;
-  state.info.status = subagent.status;
-  state.info.result = subagent.result;
-
-  state.labelEl.setText(truncateDescription(subagent.description));
-  setPromptText(state.promptBodyEl, subagent.prompt || '');
-
-  for (const originalToolCall of subagent.toolCalls) {
-    const toolCall: ToolCallInfo = {
-      ...originalToolCall,
-      input: { ...originalToolCall.input },
-    };
-    addSubagentToolCall(state, toolCall);
-    if (toolCall.status !== 'running' || toolCall.result) {
-      updateSubagentToolResult(state, toolCall.id, toolCall);
-    }
-  }
-
-  if (subagent.status === 'completed' || subagent.status === 'error') {
-    const fallback = subagent.status === 'error' ? 'ERROR' : 'DONE';
-    finalizeSubagentBlock(state, subagent.result || fallback, subagent.status === 'error');
-  } else {
-    state.statusEl.className = 'specorator-subagent-status status-running';
-    state.statusEl.empty();
-    updateSyncHeaderAria(state);
-  }
-}
-
 export function createSubagentBlock(
   app: App,
   parentEl: HTMLElement,
@@ -381,20 +349,6 @@ export function finalizeSubagentBlock(
   updateSyncHeaderAria(state);
 }
 
-export function renderStoredSubagent(
-  app: App,
-  parentEl: HTMLElement,
-  subagent: SubagentInfo,
-): HTMLElement {
-  const state = createSubagentBlock(app, parentEl, subagent.id, {
-    description: subagent.description,
-    prompt: subagent.prompt,
-  });
-
-  hydrateSyncSubagentStateFromStored(state, subagent);
-  return state.wrapperEl;
-}
-
 export interface AsyncSubagentState {
   app: App;
   wrapperEl: HTMLElement;
@@ -411,25 +365,6 @@ function setAsyncWrapperStatus(wrapperEl: HTMLElement, status: string): void {
   classes.forEach(cls => wrapperEl.removeClass(cls));
   wrapperEl.addClass('async');
   wrapperEl.addClass(status);
-}
-
-function getAsyncDisplayStatus(asyncStatus: string | undefined): 'running' | 'completed' | 'error' | 'orphaned' {
-  switch (asyncStatus) {
-    case 'completed': return 'completed';
-    case 'error': return 'error';
-    case 'orphaned': return 'orphaned';
-    default: return 'running';
-  }
-}
-
-function getAsyncStatusText(asyncStatus: string | undefined): string {
-  switch (asyncStatus) {
-    case 'pending': return 'Initializing';
-    case 'completed': return ''; // Just show tick icon, no text
-    case 'error': return 'Error';
-    case 'orphaned': return 'Orphaned';
-    default: return 'Running in background';
-  }
 }
 
 function getAsyncStatusAriaLabel(asyncStatus: string | undefined): string {
@@ -613,72 +548,4 @@ export function markAsyncSubagentOrphaned(state: AsyncSubagentState): void {
   state.wrapperEl.addClass('orphaned');
 
   renderAsyncContentLikeSync(state.app, state.contentEl, state.info, 'orphaned');
-}
-
-/**
- * Render a stored async subagent from conversation history.
- * Expandable to show the task prompt. Collapsed by default.
- */
-export function renderStoredAsyncSubagent(
-  app: App,
-  parentEl: HTMLElement,
-  subagent: SubagentInfo,
-): HTMLElement {
-  const wrapperEl = parentEl.createDiv({ cls: 'specorator-subagent-list' });
-  const displayStatus = getAsyncDisplayStatus(subagent.asyncStatus);
-  setAsyncWrapperStatus(wrapperEl, displayStatus);
-
-  if (displayStatus === 'completed') {
-    wrapperEl.addClass('done');
-  } else if (displayStatus === 'error' || displayStatus === 'orphaned') {
-    wrapperEl.addClass('error');
-  }
-  wrapperEl.dataset.asyncSubagentId = subagent.id;
-
-  const statusText = getAsyncStatusText(subagent.asyncStatus);
-  const statusAriaLabel = getAsyncStatusAriaLabel(subagent.asyncStatus);
-
-  const { headerEl } = createSubagentHeader(
-    wrapperEl,
-    subagent.description,
-    `Background task: ${subagent.description} - ${statusAriaLabel} - click to expand`,
-  );
-
-  const statusTextEl = headerEl.createDiv({ cls: 'specorator-subagent-status-text' });
-  statusTextEl.setText(statusText);
-
-  let statusIconClass: string;
-  switch (displayStatus) {
-    case 'error':
-    case 'orphaned':
-      statusIconClass = 'status-error';
-      break;
-    case 'completed':
-      statusIconClass = 'status-completed';
-      break;
-    default:
-      statusIconClass = 'status-running';
-  }
-  const statusEl = headerEl.createDiv({ cls: `specorator-subagent-status ${statusIconClass}` });
-  statusEl.setAttribute('aria-label', `Status: ${statusAriaLabel}`);
-
-  switch (displayStatus) {
-    case 'completed':
-      setIcon(statusEl, 'check');
-      break;
-    case 'error':
-      setIcon(statusEl, 'x');
-      break;
-    case 'orphaned':
-      setIcon(statusEl, 'alert-circle');
-      break;
-  }
-
-  const contentEl = wrapperEl.createDiv({ cls: 'specorator-subagent-content' });
-  renderAsyncContentLikeSync(app, contentEl, subagent, displayStatus);
-
-  const state = { isExpanded: false };
-  setupCollapsible(wrapperEl, headerEl, contentEl, state);
-
-  return wrapperEl;
 }

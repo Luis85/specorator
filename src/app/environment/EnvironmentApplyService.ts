@@ -95,12 +95,16 @@ export class EnvironmentApplyService {
 
   /** Cancel in-flight streams, then re-sync/restart each affected tab's runtime. */
   private async syncAffectedTabs(affected: ProviderId[], changed: boolean): Promise<void> {
-    const tabManager = this.plugin.getView()?.getTabManager();
-    if (!tabManager) return;
-
-    const affectedTabs = tabManager.getAllTabs().filter((tab) =>
-      affected.includes(tab.providerId ?? DEFAULT_CHAT_PROVIDER_ID),
-    );
+    const affectedTabs: SyncableTab[] = [];
+    for (const view of this.plugin.getAllViews()) {
+      const tabManager = view.getTabManager();
+      if (!tabManager) continue;
+      for (const tab of tabManager.getAllTabs()) {
+        if (affected.includes(tab.providerId ?? DEFAULT_CHAT_PROVIDER_ID)) {
+          affectedTabs.push(tab);
+        }
+      }
+    }
 
     for (const tab of affectedTabs) {
       if (tab.state.isStreaming) tab.controllers.inputController?.cancelStreaming();

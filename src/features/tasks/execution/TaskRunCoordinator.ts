@@ -6,7 +6,7 @@ import { renderTaskPrompt } from '../prompt/TaskPromptRenderer';
 import type { RunSidecarHeartbeat } from '../storage/RunSidecarStore';
 import { ActiveRunRegistry } from './activeRunRegistry';
 import { RunSession, type RunSessionResult, type RunSessionWriteStatusOptions } from './RunSession';
-import type { TaskExecutionSurface } from './TaskExecutionSurface';
+import type { TaskExecutionSurface, TaskRunHandle } from './TaskExecutionSurface';
 
 export interface TaskRunCoordinatorDeps {
   executionSurface: TaskExecutionSurface;
@@ -29,6 +29,7 @@ export interface TaskRunCoordinatorDeps {
    * {@link finalizeLedgerToNote}.
    */
   appendLedger: (task: TaskSpec, runId: string, entry: TaskLedgerEntry) => Promise<void>;
+  appendLedgerBatch?: (task: TaskSpec, runId: string, entries: TaskLedgerEntry[]) => Promise<void>;
   /**
    * Snapshots the sidecar ledger into the work-order note's
    * `<!-- specorator:run-ledger-* -->` region. Called once on every terminal
@@ -154,6 +155,7 @@ export class TaskRunCoordinator {
     // here for the manual-run path. The surface releases it the moment the tab is
     // created; the finally below is the safety net for paths that never open one.
     const reservation = externalReservation ?? this.deps.reservations?.reserve();
+    let handle: TaskRunHandle | null = null;
     try {
       const prompt = await (this.deps.renderPrompt ?? renderTaskPrompt)(task);
       // Thread the roster agent id through to the surface so the run's
@@ -162,15 +164,16 @@ export class TaskRunCoordinator {
       const boundAgentId = task.frontmatter.agent?.startsWith('roster:')
         ? task.frontmatter.agent
         : undefined;
-      const handle = await this.deps.executionSurface.startTaskRun(task, {
+      const startedHandle = await this.deps.executionSurface.startTaskRun(task, {
         prompt,
         tabReservation: reservation,
         boundAgentId,
         provider,
         model,
       });
-      if (!handle.runId) {
-        const terminal = await handle.terminal;
+      handle = startedHandle;
+      if (!startedHandle.runId) {
+        const terminal = await startedHandle.terminal;
         // The surface couldn't open a chat tab/view (environmental, e.g. tab cap
         // or the view not ready) — not a card failure. Flag it so the queue
         // records a stable skip and waits for capacity instead of hot-retrying
@@ -180,18 +183,21 @@ export class TaskRunCoordinator {
 
       const session = new RunSession({
         task,
-        runId: handle.runId,
+        runId: startedHandle.runId,
         // The conversation is created lazily by the first chat turn, so read it
         // live: it is null at start and becomes non-null once the send binds it.
-        getConversationId: () => handle.conversationId,
-        sidepanelTabId: handle.sidepanelTabId,
-        stream: handle.stream,
+        getConversationId: () => startedHandle.conversationId,
+        sidepanelTabId: startedHandle.sidepanelTabId,
+        stream: startedHandle.stream,
         events: this.deps.events,
         now: this.deps.now,
         writeStatus: this.deps.writeTaskStatus,
         writeHeartbeat: this.deps.writeHeartbeat,
         // `task` is captured: `appendLedger` injects it for sidecar path resolution.
         appendLedger: (runId, entry) => this.deps.appendLedger(task, runId, entry),
+        appendLedgerBatch: this.deps.appendLedgerBatch
+          ? (runId, entries) => this.deps.appendLedgerBatch!(task, runId, entries)
+          : undefined,
         finalizeLedgerToNote: this.deps.finalizeLedgerToNote,
         writeHandoff: this.deps.writeHandoff,
         heartbeatIntervalMs: this.deps.heartbeatIntervalMs,
@@ -206,7 +212,7 @@ export class TaskRunCoordinator {
       // terminal: these calls are no-ops once the session is finishing (the
       // normal stream `done` fires before the terminal resolves, so it wins) or
       // after a stale-heartbeat settle.
-      void handle.terminal
+      void startedHandle.terminal
         .then((terminal) => {
           if (terminal.status === 'failed') session.fail(terminal.error ?? 'Chat run failed.');
           else if (terminal.status === 'canceled') session.cancel('Chat run canceled.');
@@ -221,6 +227,15 @@ export class TaskRunCoordinator {
       if (result.status === 'canceled') return { ok: false, error: result.error, canceled: true };
       return { ok: false, error: result.error };
     } finally {
+      // A work-order tab exists only for the lifetime of its RunSession. Closing
+      // it here (after terminal status/handoff/ledger writes have settled) frees
+      // the independent work-order tab budget for the next queued or manual run.
+      // Cleanup is best-effort and must never replace the run's real result.
+      try {
+        await handle?.dispose?.();
+      } catch {
+        // The owning chat view may already have closed during plugin teardown.
+      }
       // Idempotent with the surface's release at tab creation; covers early
       // failures (provider/guard errors) that never reach the surface.
       reservation?.release();

@@ -23,7 +23,7 @@ export interface AcpSubprocessLaunchSpec {
    * provider whose CLI forks shell/git grandchildren passes a `taskkill /T /F`
    * reaper so recycling the process doesn't orphan them on Windows.
    */
-  killProcessTree?: (proc: ChildProcess) => void;
+  killProcessTree?: (proc: ChildProcess) => void | Promise<void>;
 }
 
 type CloseListener = (error?: Error) => void;

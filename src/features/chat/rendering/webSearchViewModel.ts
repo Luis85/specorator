@@ -1,21 +1,10 @@
-/**
- * Pure view-model builder for WebSearchView.vue. Ports the branching control
- * flow of `rendering/webSearchRenderer.ts`'s `renderWebSearchExpanded` (and
- * its private helpers `parseWebSearchResult` / `renderWebSearchActionExpanded`)
- * into a list of renderable segments, reusing every already-exported pure
- * helper (`normalizeWebSearchDisplayData`, `isPlaceholderWebSearchResult`,
- * `shouldRenderWebSearchAction`, `hasStructuredWebSearchData`) rather than
- * reimplementing them. Only the non-exported parsing/line-building logic is
- * replicated here, since those functions write DOM directly in the legacy
- * renderer and cannot be imported as-is.
- */
-import { normalizeWebSearchDisplayData } from '../../../../rendering/toolLabel';
+import { normalizeWebSearchDisplayData } from './toolLabel';
 import {
   hasStructuredWebSearchData,
   isPlaceholderWebSearchResult,
   shouldRenderWebSearchAction,
   type WebSearchExpandedData,
-} from '../../../../rendering/webSearchExpandedHelpers';
+} from './webSearchExpandedHelpers';
 
 export interface WebSearchLink {
   title: string;
@@ -33,7 +22,6 @@ export type WebSearchSegment =
   | { type: 'rawLines'; text: string; maxLines: number }
   | { type: 'empty'; text: string };
 
-/** Ports the private `parseWebSearchResult` regex/JSON extraction. */
 function parseWebSearchResult(result: string): { links: WebSearchLink[]; summary: string } | null {
   const linksMatch = result.match(/Links:\s*(\[[\s\S]*?\])(?:\n|$)/);
   if (!linksMatch) return null;
@@ -44,13 +32,12 @@ function parseWebSearchResult(result: string): { links: WebSearchLink[]; summary
 
     const linksEndIndex = result.indexOf(linksMatch[0]) + linksMatch[0].length;
     const summary = result.slice(linksEndIndex).trim();
-    return { links: parsed.filter(l => l.title && l.url), summary };
+    return { links: parsed.filter(link => link.title && link.url), summary };
   } catch {
     return null;
   }
 }
 
-/** Ports the private `renderWebSearchActionExpanded` switch into line data. */
 function buildActionLines(data: WebSearchExpandedData): WebSearchActionLine[] {
   if (!hasStructuredWebSearchData(data)) return [];
 
@@ -58,25 +45,19 @@ function buildActionLines(data: WebSearchExpandedData): WebSearchActionLine[] {
   switch (data.actionType) {
     case 'open_page':
       lines.push({ kind: 'text', text: 'Open page' });
-      if (data.url) {
-        lines.push({ kind: 'link', title: data.url, url: data.url });
-      } else {
-        lines.push({ kind: 'text', text: 'URL unavailable' });
-      }
+      lines.push(data.url
+        ? { kind: 'link', title: data.url, url: data.url }
+        : { kind: 'text', text: 'URL unavailable' });
       break;
-
     case 'find_in_page':
       lines.push({ kind: 'text', text: 'Find in page' });
-      if (data.url) {
-        lines.push({ kind: 'link', title: data.url, url: data.url });
-      } else {
-        lines.push({ kind: 'text', text: 'URL unavailable' });
-      }
+      lines.push(data.url
+        ? { kind: 'link', title: data.url, url: data.url }
+        : { kind: 'text', text: 'URL unavailable' });
       if (data.pattern) {
         lines.push({ kind: 'text', text: `Pattern: ${data.pattern}` });
       }
       break;
-
     case 'search':
     default: {
       const primaryQuery = data.query || data.queries[0];
@@ -95,6 +76,7 @@ function buildActionLines(data: WebSearchExpandedData): WebSearchActionLine[] {
   return lines;
 }
 
+/** Shared DOM-free projection consumed by both Vue and the remaining detached lifecycle renderer. */
 export function buildWebSearchSegments(
   input: Record<string, unknown>,
   result: string | undefined,

@@ -39,8 +39,11 @@ import {
   pruneScopeSecretRefs,
   resolveProviderEnvVars,
 } from './core/providers/secretEnvVars';
-import type { ProviderId } from './core/providers/types';
-import type { AppTabManagerState } from './core/providers/types';
+import type {
+  AppTabManagerState,
+  ConversationSwitchResult,
+  ProviderId,
+} from './core/providers/types';
 import { SecretStore } from './core/security/secretStore';
 import { VaultFileAdapter } from './core/storage/VaultFileAdapter';
 import type {
@@ -432,6 +435,7 @@ export default class SpecoratorPlugin extends Plugin implements PluginContext {
     this.conversationStore = new ConversationStore({
       storage: this.storage,
       getVaultPath: () => getVaultPath(this.app),
+      quiesceViewsForDelete: (conversationId) => this.quiesceViewsBeforeConversationDelete(conversationId),
       repairViewsAfterDelete: (conversationId) => this.repairViewsAfterConversationDelete(conversationId),
       events: this.events,
     });
@@ -746,6 +750,23 @@ export default class SpecoratorPlugin extends Plugin implements PluginContext {
   // conversation back to a fresh conversation. Lives on the shell because it
   // reaches concrete view/tab controllers; the store invokes it through a
   // narrow callback so it stays free of feature dependencies.
+  private async quiesceViewsBeforeConversationDelete(conversationId: string): Promise<void> {
+    for (const view of this.getAllViews()) {
+      const tabManager = view.getTabManager();
+      if (!tabManager) continue;
+
+      for (const tab of tabManager.getAllTabs()) {
+        if (tab.conversationId === conversationId) {
+          tab.controllers.conversationController?.dispose();
+          tab.controllers.inputController?.cancelStreaming();
+          await tab.controllers.conversationController?.whenHydrated?.().catch(() => {});
+          await tab.controllers.conversationController?.save().catch(() => {});
+        }
+      }
+    }
+  }
+
+  // Resets every open tab bound to a deleted conversation back to a fresh chat.
   private async repairViewsAfterConversationDelete(conversationId: string): Promise<void> {
     for (const view of this.getAllViews()) {
       const tabManager = view.getTabManager();
@@ -753,7 +774,6 @@ export default class SpecoratorPlugin extends Plugin implements PluginContext {
 
       for (const tab of tabManager.getAllTabs()) {
         if (tab.conversationId === conversationId) {
-          tab.controllers.inputController?.cancelStreaming();
           await tab.controllers.conversationController?.createNew({ force: true });
         }
       }
@@ -768,10 +788,18 @@ export default class SpecoratorPlugin extends Plugin implements PluginContext {
     return this.conversationStore.createConversation(options);
   }
 
-  switchConversation(
+  async switchConversation(
     id: string,
     options?: { signal?: AbortSignal },
   ): Promise<Conversation | null> {
+    const result = await this.switchConversationWithHydration(id, options);
+    return result?.conversation ?? null;
+  }
+
+  switchConversationWithHydration(
+    id: string,
+    options?: { signal?: AbortSignal },
+  ): Promise<ConversationSwitchResult | null> {
     return this.conversationStore.switchConversation(id, options);
   }
 

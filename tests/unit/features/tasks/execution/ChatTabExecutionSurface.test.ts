@@ -26,6 +26,34 @@ function makeTask(overrides: Partial<TaskSpec['frontmatter']> = {}): TaskSpec {
   };
 }
 
+describe('ChatTabExecutionSurface.startTaskRun', () => {
+  it('closes the work-order tab when the run handle is disposed', async () => {
+    const closeTab = jest.fn(async () => true);
+    const tabHandle = {
+      conversationId: 'conv-1',
+      sidepanelTabId: 'tab-work-order',
+      subscribe: jest.fn(() => () => {}),
+      sendFollowUp: jest.fn(async () => undefined),
+      cancel: jest.fn(),
+      terminal: Promise.resolve({ status: 'completed' as const, finalAssistantContent: 'done' }),
+    };
+    const view = {
+      startTaskRunInFreshTab: jest.fn(async () => tabHandle),
+      getTabManager: () => ({ closeTab }),
+    };
+    const plugin = {
+      getView: () => view,
+      activateView: jest.fn(async () => undefined),
+    } as unknown as SpecoratorPlugin;
+    const surface = new ChatTabExecutionSurface(plugin);
+
+    const handle = await surface.startTaskRun(makeTask(), { prompt: 'PROMPT' });
+    await handle.dispose?.();
+
+    expect(closeTab).toHaveBeenCalledWith('tab-work-order', true);
+  });
+});
+
 describe('ChatTabExecutionSurface.requestCommitTurn', () => {
   it('delegates to SpecoratorView.injectCommitTurnForConversation with the work-order conversation', async () => {
     const injectSpy = jest.fn(async () => undefined);

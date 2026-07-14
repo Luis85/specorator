@@ -559,13 +559,14 @@ describe('SpecoratorPlugin', () => {
           },
           ui: { externalContextSelector: { getExternalContexts: jest.fn().mockReturnValue([]) } },
         }]),
+        getPersistedState: jest.fn().mockReturnValue({ tabs: [], activeTabId: null }),
       };
       const mockView = {
         getTabManager: jest.fn().mockReturnValue(mockTabManager),
         invalidateProviderCommandCaches: jest.fn(),
         refreshModelSelector: jest.fn(),
       };
-      jest.spyOn(plugin, 'getView').mockReturnValue(mockView as any);
+      jest.spyOn(plugin, 'getAllViews').mockReturnValue([mockView as any]);
 
       // Change env but not in a way that affects model
       await plugin.applyEnvironmentVariables('shared', 'SOME_VAR=value');
@@ -608,13 +609,14 @@ describe('SpecoratorPlugin', () => {
           },
           ui: { externalContextSelector: { getExternalContexts: jest.fn().mockReturnValue(['/live/context']) } },
         }]),
+        getPersistedState: jest.fn().mockReturnValue({ tabs: [], activeTabId: null }),
       };
       const mockView = {
         getTabManager: jest.fn().mockReturnValue(mockTabManager),
         invalidateProviderCommandCaches: jest.fn(),
         refreshModelSelector: jest.fn(),
       };
-      jest.spyOn(plugin, 'getView').mockReturnValue(mockView as any);
+      jest.spyOn(plugin, 'getAllViews').mockReturnValue([mockView as any]);
 
       await plugin.applyEnvironmentVariables('provider:claude', 'ANTHROPIC_MODEL=claude-sonnet-4-5');
 
@@ -815,6 +817,16 @@ describe('SpecoratorPlugin', () => {
       const result = await plugin.switchConversation(conv1.id);
 
       expect(result?.id).toBe(conv1.id);
+    });
+
+    it('exposes hydration details through the separate hydration-aware switch method', async () => {
+      await plugin.onload();
+      const conv = await plugin.createConversation();
+
+      const result = await plugin.switchConversationWithHydration(conv.id);
+
+      expect(result?.conversation.id).toBe(conv.id);
+      expect(result?.hydration.kind).toBeDefined();
     });
 
     // Note: Session ID restoration is now handled per-tab via TabManager

@@ -52,6 +52,29 @@ export function matchAdvertisedModelValue(
   return familyMatches.find((value) => advertisedVariantMatches(value, resolvedMode)) ?? null;
 }
 
+/**
+ * Exact wire match first; optionally retries with the bare family id when the
+ * resolved compound suffix cannot be satisfied (stale global effort, etc.).
+ */
+export function matchAdvertisedModelValueWithFamilyFallback(
+  advertised: string[] | null,
+  resolvedId: string,
+  allowFamilyFallback: boolean,
+): string | null {
+  const direct = matchAdvertisedModelValue(advertised, resolvedId);
+  if (direct) {
+    return direct;
+  }
+  if (!allowFamilyFallback) {
+    return null;
+  }
+  const familyId = resolveCursorFamilyId(resolvedId, getCachedCursorModelIds());
+  if (!familyId || familyId === resolvedId) {
+    return null;
+  }
+  return matchAdvertisedModelValue(advertised, familyId);
+}
+
 interface BracketFields {
   // The value part of every bracket segment (`reasoning=medium` → `medium`,
   // bare `thinking` → `thinking`). Effort matches against these.

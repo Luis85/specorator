@@ -17,6 +17,7 @@ export type ProviderTranslationKey =
   | 'provider.cursor.models.discoveredOne'
   | 'provider.cursor.models.discoveredMany'
   | 'provider.cursor.models.refreshFailed'
+  | 'provider.cursor.models.applyFailed'
 
   // Provider - Opencode subagent notices (Q-1 chunk 4)
   | 'provider.opencode.subagent.descriptionRequired'

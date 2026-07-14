@@ -128,6 +128,22 @@ describe('SpecoratorView.projectChatShellHeader', () => {
   });
 });
 
+describe('SpecoratorView history opening', () => {
+  it('requires a fresh tab so the tab cap never falls back to the active conversation', async () => {
+    const view = Object.create(SpecoratorView.prototype) as any;
+    const openConversation = jest.fn().mockResolvedValue(undefined);
+    view.tabManager = { openConversation };
+    view.closeHistoryDropdown = jest.fn();
+
+    await view.openHistoryConversationInNewTab('conv-history', true);
+
+    expect(openConversation).toHaveBeenCalledWith('conv-history', {
+      requireNewTab: true,
+      activate: true,
+    });
+  });
+});
+
 describe('SpecoratorView.injectCommitTurnForConversation', () => {
   type InjectHarness = {
     view: any;

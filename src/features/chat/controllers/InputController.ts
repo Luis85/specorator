@@ -31,6 +31,7 @@ import { InstructionModal } from '../../../shared/modals/InstructionConfirmModal
 import type { BrowserSelectionContext } from '../../../utils/browser';
 import type { CanvasSelectionContext } from '../../../utils/canvas';
 import type { EditorSelectionContext } from '../../../utils/editor';
+import { dedupeExternalContextPaths, filterRedundantExternalContextPaths } from '../../../utils/externalContextTurn';
 import { appendMarkdownSnippet } from '../../../utils/markdown';
 import type { BoundAgentProjection } from '../../agents/roster/boundAgentPersona';
 import { persistPastedImages } from '../services/persistPastedImages';
@@ -47,6 +48,7 @@ import {
   applyPlanApprovalDecision,
   bakeResponseDurationFooter,
   beginStreamingTurnState,
+  captureComposerRollbackSnapshot,
   clearConsumedComposerInput,
   completeApprovedNewSessionPlanToolCalls,
   type ComposerSendContext,
@@ -61,6 +63,7 @@ import {
   resolveComposerSend,
   resolveComposerSourceImages,
   restoreResumeCheckpointIfNeeded,
+  rollbackOptimisticOutgoingTurn,
 } from './composerSendPhases';
 import type { ConversationController } from './ConversationController';
 import type { InlineCardMounter } from './inlineCardMount';
@@ -367,12 +370,19 @@ export class InputController {
     // `queryOptions.model` so the provider's per-turn override beats the
     // global `settings.model` snapshot.
     const tabModelOverride = normalizeTabModelOverride(this.deps.getTabModelOverride?.());
+    const composerRollback = captureComposerRollbackSnapshot(send);
     const streamGeneration = beginStreamingTurnState(this.deps.state, send, this.deps);
 
     const outgoing = this.buildOutgoingTurn(send, options);
     const { userMsg, assistantMsg, deferredAiTitleGeneration } = await this.presentOutgoingTurn(outgoing);
 
-    const agentService = await this.acquireTurnRuntime(deferredAiTitleGeneration);
+    const agentService = await this.acquireTurnRuntime(
+      deferredAiTitleGeneration,
+      composerRollback,
+      send,
+      userMsg.id,
+      assistantMsg.id,
+    );
     if (!agentService) return;
 
     await restoreResumeCheckpointIfNeeded(agentService, this.deps.state, this.deps.plugin);
@@ -506,17 +516,32 @@ export class InputController {
   /** Lazy initialization: ensure service is ready before first query. */
   private async acquireTurnRuntime(
     deferredAiTitleGeneration: (() => void) | null,
+    composerRollback: ReturnType<typeof captureComposerRollbackSnapshot>,
+    send: ComposerSendContext,
+    userMsgId: string,
+    assistantMsgId: string,
   ): Promise<ChatRuntime | null> {
     const { state, streamController } = this.deps;
+    const rollback = (): void => {
+      rollbackOptimisticOutgoingTurn(
+        state,
+        composerRollback,
+        send,
+        userMsgId,
+        assistantMsgId,
+        () => this.deps.resetInputHeight(),
+      );
+      this.emit();
+    };
     if (this.deps.ensureServiceInitialized) {
       const ready = await this.deps.ensureServiceInitialized();
       if (!ready) {
         new Notice(t('chat.input.initFailed'));
         streamController.hideThinkingIndicator();
-        state.isStreaming = false;
         this.activeStreamingAssistantMessage = null;
         this.resetProviderMessageBoundaryState();
         deferredAiTitleGeneration?.();
+        rollback();
         return null;
       }
     }
@@ -527,6 +552,7 @@ export class InputController {
       this.activeStreamingAssistantMessage = null;
       this.resetProviderMessageBoundaryState();
       deferredAiTitleGeneration?.();
+      rollback();
       return null;
     }
     return agentService;
@@ -673,7 +699,7 @@ export class InputController {
     ctx: DispatchedTurnContext,
     turn: FinishedTurn,
   ): Promise<ProgrammaticSendResult | undefined> {
-    const { plugin, state, streamController, conversationController } = this.deps;
+    const { state, streamController, conversationController } = this.deps;
     const { finalAssistantMsg } = turn;
     const didCancelThisTurn = turn.wasInterrupted || state.cancelRequested;
     if (didCancelThisTurn && !state.pendingNewSessionPlan) {
@@ -723,7 +749,7 @@ export class InputController {
     // approve-new-session: the tool_result chunk is dropped because cancelRequested
     // was set before the stream loop could process it — manually set the result so
     // the saved conversation renders correctly when revisited
-    completeApprovedNewSessionPlanToolCalls(plugin.app, state, finalAssistantMsg);
+    completeApprovedNewSessionPlanToolCalls(state, finalAssistantMsg);
 
     // Persist usage and message state BEFORE the plan-approval branches. This ensures
     // a cancelled stream still saves the last usage chunk; without this, cancellation
@@ -920,6 +946,11 @@ export class InputController {
       : canvasSelectionController.getContext();
 
     const externalContextPaths = externalContextSelector?.getExternalContexts();
+    const attachedFiles = fileContextManager?.getAttachedFiles?.() ?? [];
+    const resolvedExternalPaths = filterRedundantExternalContextPaths(
+      dedupeExternalContextPaths(externalContextPaths),
+      attachedFiles,
+    );
     const isCompact = /^\/compact(\s|$)/i.test(options.content);
     // Fold pill mentions (attached files/folders) into the content sent to the provider.
     // getAttachedMentionSuffix() already excludes the current note; /compact must pass
@@ -943,9 +974,7 @@ export class InputController {
         editorSelection: editorContext,
         browserSelection: browserContext,
         canvasSelection: canvasContext,
-        externalContextPaths: externalContextPaths && externalContextPaths.length > 0
-          ? externalContextPaths
-          : undefined,
+        externalContextPaths: resolvedExternalPaths,
         enabledMcpServers: enabledMcpServers && enabledMcpServers.size > 0
           ? enabledMcpServers
           : undefined,

@@ -529,7 +529,9 @@ export type HistoryLoadErrorCode =
   | 'parse-failed'
   | 'invalid-session-id'
   | 'fork-checkpoint-not-found'
-  | 'cancelled';
+  | 'vault-mismatch'
+  | 'cancelled'
+  | 'stale';
 
 export interface HistoryLoadError {
   code: HistoryLoadErrorCode;
@@ -540,15 +542,37 @@ export interface HistoryLoadError {
 }
 
 export type HistoryLoadOutcome =
-  | { kind: 'loaded'; messages: ChatMessage[]; sourceRef: string }
+  | { kind: 'loaded'; messages: ChatMessage[]; sourceRef: string; cacheable?: boolean }
   | { kind: 'cached'; sourceRef: string }
   | { kind: 'empty'; reason: 'no-session' | 'no-store' | 'no-rows'; sourceRef: string | null }
   | { kind: 'error'; error: HistoryLoadError; sourceRef: string | null };
 
+/** Result of switching/opening a conversation after provider history hydration. */
+export interface ConversationSwitchResult {
+  conversation: Conversation;
+  hydration: HistoryLoadOutcome;
+}
+
+/** Whether a hydration outcome is safe to commit into the active transcript. */
+export function isHydrationCommitReady(outcome: HistoryLoadOutcome): boolean {
+  switch (outcome.kind) {
+    case 'loaded':
+    case 'cached':
+      return true;
+    case 'empty':
+      // A missing store is not a confirmed empty session — keep the prior transcript.
+      return outcome.reason !== 'no-store';
+    case 'error':
+      return false;
+    default:
+      return false;
+  }
+}
+
 export type DeleteHistoryOutcome =
   | { kind: 'deleted'; paths: string[] }
   | { kind: 'no-op'; reason: 'provider-owned' | 'no-session' }
-  | { kind: 'error'; error: HistoryLoadError };
+  | { kind: 'error'; error: HistoryLoadError; paths?: string[] };
 
 export interface ProviderForkSupport {
   isPendingForkConversation(conversation: Conversation): boolean;
@@ -589,6 +613,9 @@ export interface ProviderConversationHistoryService<
    * hydration site treats null as "no historical usage available."
    */
   extractLastUsage?(conversation: Conversation, ctx: HydrationContext): Promise<UsageInfo | null>;
+
+  /** Drops cached hydration for a conversation (e.g. after a completed local turn). */
+  invalidateConversationHistory?(conversationId: string): void;
 }
 
 export type ProviderTaskTerminalStatus = Extract<ToolCallInfo['status'], 'completed' | 'error'>;

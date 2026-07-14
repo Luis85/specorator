@@ -26,7 +26,7 @@ import {
 import { extractDiffData } from '../../../utils/diff';
 import { toVaultRelativeOpenPath } from '../../../utils/fileLink';
 import { scrollMessagesToBottom } from '../rendering/scrollToBottom';
-import { isBlockedToolResult } from '../rendering/ToolCallRenderer';
+import { isBlockedToolResult } from '../rendering/toolCallViewModel';
 import type { SubagentManager } from '../services/SubagentManager';
 import type { ChatState } from '../state/ChatState';
 import type { FileContextManager } from '../ui/FileContext';
@@ -121,8 +121,6 @@ export class StreamController {
       refreshTranscriptMessage: (messageId) => this.deps.refreshTranscriptMessage?.(messageId),
     });
     this.lifecycleSubagents = new ProviderLifecycleSubagentCoordinator({
-      plugin: deps.plugin,
-      state: deps.state,
       findToolCall: (msg, id) => this.findToolCall(msg, id),
       normalizeToolResultContent: (content) => this.normalizeToolResultContent(content),
       getSubagentLifecycleAdapter: (toolName) => this.getSubagentLifecycleAdapter(toolName),

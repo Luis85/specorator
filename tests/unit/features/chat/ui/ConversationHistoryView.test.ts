@@ -142,6 +142,36 @@ describe('ConversationHistoryView', () => {
     expect(onSelectConversation).toHaveBeenCalledWith('x');
   });
 
+  it('opens a non-current history row in a new tab on plain click', async () => {
+    const { view, plugin } = setup();
+    const container = createMockEl();
+    const onSelectConversation = jest.fn().mockResolvedValue(undefined);
+    const onOpenConversationInNewTab = jest.fn().mockResolvedValue(undefined);
+    plugin.getConversationList.mockReturnValue([
+      { id: 'x', title: 'X', createdAt: 1, lastResponseAt: 1 },
+    ]);
+
+    view.renderHistoryDropdown(container as never, {
+      onSelectConversation,
+      onOpenConversationInNewTab,
+    });
+
+    const content = container.children[1].children[0].querySelector('.specorator-history-item-content');
+    const click = content!._eventListeners?.get('click');
+    await click![0]({
+      stopPropagation: jest.fn(),
+      preventDefault: jest.fn(),
+      metaKey: false,
+      ctrlKey: false,
+      shiftKey: false,
+      altKey: false,
+    });
+    await flush();
+
+    expect(onOpenConversationInNewTab).toHaveBeenCalledWith('x', true);
+    expect(onSelectConversation).not.toHaveBeenCalled();
+  });
+
   it('skips title regeneration when auto-title generation is disabled', async () => {
     const { view, plugin } = setup();
     plugin.settings.enableAutoTitleGeneration = false;

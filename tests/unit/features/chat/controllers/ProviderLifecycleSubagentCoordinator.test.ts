@@ -7,8 +7,6 @@ import {
 
 function setup(overrides: Partial<ProviderLifecycleSubagentCoordinatorDeps> = {}) {
   const deps: ProviderLifecycleSubagentCoordinatorDeps = {
-    plugin: { app: {} } as never,
-    state: { currentContentEl: null },
     findToolCall: jest.fn().mockReturnValue(undefined),
     normalizeToolResultContent: (c) => String(c),
     getSubagentLifecycleAdapter: jest.fn().mockReturnValue(null),

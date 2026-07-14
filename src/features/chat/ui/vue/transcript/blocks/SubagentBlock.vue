@@ -24,8 +24,7 @@ import {
 /**
  * Renders a STORED subagent block — sync (nested tools, inline result) and
  * async (background lifecycle: pending/running/completed/error/orphaned) —
- * reproducing `SubagentRenderer.ts`'s `renderStoredSubagent`/
- * `renderStoredAsyncSubagent` DOM contract.
+ * owning the stored sync/async subagent DOM contract.
  *
  * Two projection paths, matching the legacy renderer's two entry points:
  *  - Task path (`{ toolCall }`): projects the incoming `ToolCallInfo` through

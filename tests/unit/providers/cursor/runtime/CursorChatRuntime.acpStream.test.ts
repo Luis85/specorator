@@ -83,7 +83,16 @@ class FakeAcpServer {
         this.respond(id, { protocolVersion: 1, agentCapabilities: { loadSession: true } });
         return;
       case 'session/new':
-        this.respond(id, { sessionId: this.sessionId });
+        this.respond(id, {
+          sessionId: this.sessionId,
+          models: {
+            availableModels: [
+              { id: 'auto' },
+              { id: 'gpt-5' },
+            ],
+          },
+          configOptions: [],
+        });
         return;
       case 'session/set_mode':
         this.respond(id, {});

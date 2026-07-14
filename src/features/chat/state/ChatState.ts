@@ -6,7 +6,7 @@ import type {
   ChatStateCallbacks,
   ChatStateData,
   QueuedMessage,
-  ThinkingBlockState,
+  ThinkingTimingState,
   TodoItem,
 } from './types';
 
@@ -32,7 +32,6 @@ function createInitialState(): ChatStateData {
     streamingIndicatorLabel: null,
     queueIndicatorEl: null,
     thinkingIndicatorTimeout: null,
-    toolCallElements: new Map(),
     usage: null,
     ignoreUsageUpdates: false,
     currentTodos: null,
@@ -213,11 +212,11 @@ export class ChatState {
     this.state.currentTextContent = value;
   }
 
-  get currentThinkingState(): ThinkingBlockState | null {
+  get currentThinkingState(): ThinkingTimingState | null {
     return this.state.currentThinkingState;
   }
 
-  set currentThinkingState(value: ThinkingBlockState | null) {
+  set currentThinkingState(value: ThinkingTimingState | null) {
     this.state.currentThinkingState = value;
   }
 
@@ -290,14 +289,6 @@ export class ChatState {
   set thinkingIndicatorTimeout(value: number | null) {
     this.state.thinkingIndicatorTimeout = value;
     this.thinkingIndicatorTimeoutWindow = value === null ? null : this.getDefaultTimerWindow();
-  }
-
-  // ============================================
-  // Tool Tracking Maps (mutable references)
-  // ============================================
-
-  get toolCallElements(): Map<string, HTMLElement> {
-    return this.state.toolCallElements;
   }
 
   // ============================================
@@ -495,14 +486,9 @@ export class ChatState {
     this.state.responseStartTime = null;
   }
 
-  clearMaps(): void {
-    this.state.toolCallElements.clear();
-  }
-
   resetForNewConversation(): void {
     this.clearMessages();
     this.resetStreamingState();
-    this.clearMaps();
     this.state.queuedMessage = null;
     this.usage = null;
     this.currentTodos = null;

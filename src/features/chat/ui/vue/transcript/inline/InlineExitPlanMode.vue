@@ -1,10 +1,9 @@
 <script setup lang="ts">
-import { onBeforeUnmount, onMounted, ref } from 'vue';
-
 import type { ExitPlanModeDecision } from '../../../../../../core/types/tools';
 import { CHOICE_CARD_HINTS_TEXT, type InlineChoiceRowSpec } from './inlineChoiceCard';
 import InlineChoiceList from './InlineChoiceList.vue';
 import PlanContentPreview from './PlanContentPreview.vue';
+import { useInlinePlanCard } from './useInlinePlanCard';
 
 /**
  * Vue port of `rendering/InlineExitPlanMode.ts`. Owns ONLY input capture +
@@ -35,10 +34,6 @@ const props = defineProps<{
   resolvePlanContent?: () => string | null;
 }>();
 
-const rootEl = ref<HTMLElement | null>(null);
-const choiceListRef = ref<InstanceType<typeof InlineChoiceList> | null>(null);
-let resolved = false;
-
 const readErrorMessage = props.planReadError
   ? `Could not read plan file: ${props.planReadError}. "Approve (new session)" will not include plan details.`
   : null;
@@ -48,20 +43,13 @@ function extractPlanContent(): string {
   return content ? `Implement this plan:\n\n${content}` : 'Implement the approved plan.';
 }
 
-function cleanupAbortListener(): void {
-  props.signal?.removeEventListener('abort', onAbort);
-}
-
-function handleResolve(decision: ExitPlanModeDecision | null): void {
-  if (resolved) return;
-  resolved = true;
-  cleanupAbortListener();
-  props.resolve(decision);
-}
-
-function onAbort(): void {
-  handleResolve(null);
-}
+const {
+  choiceListRef,
+  focusRoot,
+  handleResolve,
+  onRootKeyDown,
+  rootEl,
+} = useInlinePlanCard<ExitPlanModeDecision>(props.resolve, props.signal);
 
 const specs: InlineChoiceRowSpec[] = [
   {
@@ -80,27 +68,6 @@ const specs: InlineChoiceRowSpec[] = [
     onSubmit: (text) => handleResolve({ type: 'feedback', text }),
   },
 ];
-
-function onRootKeyDown(e: KeyboardEvent): void {
-  if (resolved) return;
-  choiceListRef.value?.handleKeyDown(e);
-}
-
-function focusRoot(): void {
-  rootEl.value?.focus();
-}
-
-onMounted(() => {
-  window.requestAnimationFrame(() => {
-    rootEl.value?.focus();
-    rootEl.value?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
-  });
-  props.signal?.addEventListener('abort', onAbort, { once: true });
-});
-
-onBeforeUnmount(() => {
-  handleResolve(null);
-});
 </script>
 
 <template>

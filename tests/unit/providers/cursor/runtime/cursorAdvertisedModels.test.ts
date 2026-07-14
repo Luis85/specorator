@@ -1,4 +1,4 @@
-import { matchAdvertisedModelValue } from '@/providers/cursor/runtime/cursorAdvertisedModels';
+import { matchAdvertisedModelValue, matchAdvertisedModelValueWithFamilyFallback } from '@/providers/cursor/runtime/cursorAdvertisedModels';
 
 import { CURSOR_ADVERTISED_MODEL_VALUES } from '../../../../fixtures/providers/cursor/realAcpCaptures';
 
@@ -127,6 +127,19 @@ describe('matchAdvertisedModelValue', () => {
   describe('Auto sentinel matching', () => {
     it('returns null for an Auto selection when no default value is advertised', () => {
       expect(matchAdvertisedModelValue(['gpt-5.4[reasoning=medium]'], 'auto')).toBeNull();
+    });
+  });
+
+  describe('matchAdvertisedModelValueWithFamilyFallback', () => {
+    it('falls back to the bare family when allowed and only a bracket sibling exists', () => {
+      const advertised = ['gpt-5.6-sol[context=272k,reasoning=medium,fast=false]'];
+      expect(matchAdvertisedModelValueWithFamilyFallback(advertised, 'gpt-5.6-sol-high', true))
+        .toBe('gpt-5.6-sol[context=272k,reasoning=medium,fast=false]');
+    });
+
+    it('does not fall back when disallowed even if a family sibling exists', () => {
+      const advertised = ['gpt-5.4[reasoning=high]'];
+      expect(matchAdvertisedModelValueWithFamilyFallback(advertised, 'gpt-5.4-medium', false)).toBeNull();
     });
   });
 });

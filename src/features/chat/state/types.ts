@@ -12,7 +12,7 @@ import type {
 import type { BrowserSelectionContext } from '../../../utils/browser';
 import type { CanvasSelectionContext } from '../../../utils/canvas';
 import type { EditorSelectionContext } from '../../../utils/editor';
-import type { ThinkingBlockState } from '../rendering/ThinkingBlockRenderer';
+import type { ThinkingTimingState } from '../rendering/ThinkingBlockRenderer';
 import type { EditedFileEntry } from '../utils/editedFiles';
 
 /** Queued message waiting to be sent after current streaming completes. */
@@ -96,7 +96,7 @@ export interface ChatStateData {
   currentContentEl: HTMLElement | null;
   currentTextEl: HTMLElement | null;
   currentTextContent: string;
-  currentThinkingState: ThinkingBlockState | null;
+  currentThinkingState: ThinkingTimingState | null;
 
   // Active reactive-stream pointers (the Vue transcript renders the in-flight
   // turn from these). `activeMessageId` is the streaming assistant message id;
@@ -122,9 +122,6 @@ export interface ChatStateData {
   queueIndicatorEl: HTMLElement | null;
   /** Debounce timeout for showing thinking indicator after inactivity. */
   thinkingIndicatorTimeout: number | null;
-
-  // Tool tracking maps
-  toolCallElements: Map<string, HTMLElement>;
 
   // Context window usage
   usage: UsageInfo | null;
@@ -184,7 +181,7 @@ export type {
   EditorSelectionContext,
   ImageAttachment,
   SubagentInfo,
-  ThinkingBlockState,
+  ThinkingTimingState,
   TodoItem,
   ToolCallInfo,
   UsageInfo,

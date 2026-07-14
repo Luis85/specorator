@@ -1,5 +1,9 @@
 import type { ChatMessage } from '../../../core/types';
-import { createThinkingBlock, finalizeThinkingBlock } from '../rendering/ThinkingBlockRenderer';
+import {
+  createThinkingTimingState,
+  finalizeThinkingTimingState,
+  type ThinkingTimingState,
+} from '../rendering/ThinkingBlockRenderer';
 import type { ChatState } from '../state/ChatState';
 
 export interface ThinkingRenderDeps {
@@ -10,15 +14,7 @@ export interface ThinkingRenderDeps {
 /**
  * Owns the streaming thinking-block lifecycle as pure reactive data: it grows
  * the open `thinking` content block on `msg.contentBlocks` (the Vue
- * `ThinkingBlock` renders the live growth + final `durationSeconds`). No render
- * loop and no `renderer`.
- *
- * `createThinkingBlock`/`finalizeThinkingBlock` are still used for the
- * `ThinkingBlockState` shape + the `startTime`-based duration, but they build
- * into the DETACHED `currentContentEl` sentinel, so the imperative DOM they
- * create is never attached and is GC'd — the reactive block is the real output.
- * `currentThinkingState` remains the "a thinking block is open" sentinel that
- * `StreamController.blockState()` reads.
+ * `ThinkingBlock` renders the live growth + final `durationSeconds`).
  */
 export class ThinkingRenderCoordinator {
   constructor(private readonly deps: ThinkingRenderDeps) {}
@@ -29,8 +25,7 @@ export class ThinkingRenderCoordinator {
 
     this.deps.hideThinkingIndicator();
     if (!state.currentThinkingState) {
-      // Detached (currentContentEl is the sentinel); no-op renderer.
-      state.currentThinkingState = createThinkingBlock(state.currentContentEl, async () => {});
+      state.currentThinkingState = createThinkingTimingState();
       this.openReactiveThinkingBlock(msg);
     }
 
@@ -43,7 +38,7 @@ export class ThinkingRenderCoordinator {
     if (!state.currentThinkingState) return;
 
     const thinkingState = state.currentThinkingState;
-    const durationSeconds = finalizeThinkingBlock(thinkingState);
+    const durationSeconds = finalizeThinkingTimingState(thinkingState);
     this.closeReactiveThinkingBlock(msg, thinkingState.content, durationSeconds);
 
     state.currentThinkingState = null;
@@ -94,3 +89,5 @@ export class ThinkingRenderCoordinator {
     state.activeBlockIndex = -1;
   }
 }
+
+export type { ThinkingTimingState };

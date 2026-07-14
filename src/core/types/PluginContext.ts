@@ -6,7 +6,7 @@ import type { SharedAppStorage } from '../bootstrap/storage';
 import type { EventBus } from '../events/EventBus';
 import type { Logger } from '../logging/Logger';
 import type { MissingMcpSecret } from '../mcp/mcpSecrets';
-import type { AppTabManagerState } from '../providers/types';
+import type { AppTabManagerState, ConversationSwitchResult } from '../providers/types';
 import type { ChatRuntime } from '../runtime/ChatRuntime';
 import type { SecretStore } from '../security/secretStore';
 import type {
@@ -106,6 +106,10 @@ export interface PluginContext
     id: string,
     options?: { signal?: AbortSignal },
   ): Promise<Conversation | null>;
+  switchConversationWithHydration(
+    id: string,
+    options?: { signal?: AbortSignal },
+  ): Promise<ConversationSwitchResult | null>;
   deleteConversation(id: string): Promise<void>;
   renameConversation(id: string, title: string): Promise<void>;
   updateConversation(id: string, updates: Partial<Conversation>): Promise<void>;

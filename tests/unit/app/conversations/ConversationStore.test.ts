@@ -38,6 +38,7 @@ function createMockSessions(metadata: SessionMetadata[] = []): MockSessions {
 function createStore(options?: {
   sessions?: MockSessions;
   vaultPath?: string | null;
+  quiesceViewsForDelete?: (conversationId: string) => Promise<void>;
   repairViewsAfterDelete?: (conversationId: string) => Promise<void>;
 }): { store: ConversationStore; sessions: MockSessions } {
   const sessions = options?.sessions ?? createMockSessions();
@@ -45,6 +46,8 @@ function createStore(options?: {
   const store = new ConversationStore({
     storage,
     getVaultPath: () => (options?.vaultPath !== undefined ? options.vaultPath : '/vault'),
+    quiesceViewsForDelete:
+      options?.quiesceViewsForDelete ?? (async () => undefined),
     repairViewsAfterDelete:
       options?.repairViewsAfterDelete ?? (async () => undefined),
     events: { emit: jest.fn(), on: jest.fn(), off: jest.fn(), setErrorSink: jest.fn() } as any,
@@ -135,7 +138,7 @@ describe('ConversationStore', () => {
 
       const result = await store.switchConversation(conv.id);
 
-      expect(result?.id).toBe(conv.id);
+      expect(result?.conversation.id).toBe(conv.id);
       expect(history.hydrateConversationHistory).toHaveBeenCalledWith(conv, {
         vaultPath: '/vault',
         reason: 'open',
@@ -245,14 +248,16 @@ describe('ConversationStore', () => {
 
   describe('deleteConversation', () => {
     it('removes the conversation, deletes provider session + metadata, and repairs views', async () => {
+      const quiesceViewsForDelete = jest.fn().mockResolvedValue(undefined);
       const repairViewsAfterDelete = jest.fn().mockResolvedValue(undefined);
-      const { store, sessions } = createStore({ repairViewsAfterDelete });
+      const { store, sessions } = createStore({ quiesceViewsForDelete, repairViewsAfterDelete });
       const conv = await store.createConversation();
       const history = ProviderRegistry.getConversationHistoryService(conv.providerId);
 
       await store.deleteConversation(conv.id);
 
       expect(store.getConversationSync(conv.id)).toBeNull();
+      expect(quiesceViewsForDelete).toHaveBeenCalledWith(conv.id);
       expect(history.deleteConversationSession).toHaveBeenCalledWith(conv, {
         vaultPath: '/vault',
         reason: 'open',
@@ -407,6 +412,7 @@ describe('ConversationStore', () => {
       const store = new ConversationStore({
         storage,
         getVaultPath: () => '/vault',
+        quiesceViewsForDelete: async () => undefined,
         repairViewsAfterDelete: async () => undefined,
         events: { emit, on: jest.fn(), off: jest.fn(), setErrorSink: jest.fn() } as any,
       });
@@ -425,7 +431,7 @@ describe('ConversationStore', () => {
 
       const result = await store.switchConversation(conv.id);
 
-      expect(result?.id).toBe(conv.id);
+      expect(result?.conversation.id).toBe(conv.id);
       expect(conv.messages).toEqual(loaded.messages);
       expect(emit).not.toHaveBeenCalledWith(
         'conversation:hydration-failed',
@@ -443,7 +449,7 @@ describe('ConversationStore', () => {
 
       const result = await store.switchConversation(conv.id);
 
-      expect(result?.id).toBe(conv.id);
+      expect(result?.conversation.id).toBe(conv.id);
       expect(conv.messages).toEqual([SEEDED]);
       expect(emit).not.toHaveBeenCalledWith(
         'conversation:hydration-failed',
@@ -462,7 +468,7 @@ describe('ConversationStore', () => {
 
       const result = await store.switchConversation(conv.id);
 
-      expect(result?.id).toBe(conv.id);
+      expect(result?.conversation.id).toBe(conv.id);
       expect(conv.messages).toEqual([SEEDED]);
       expect(emit).not.toHaveBeenCalledWith(
         'conversation:hydration-failed',
@@ -481,13 +487,32 @@ describe('ConversationStore', () => {
 
       const result = await store.switchConversation(conv.id);
 
-      expect(result?.id).toBe(conv.id);
+      expect(result?.conversation.id).toBe(conv.id);
       expect(conv.messages).toEqual([SEEDED]);
       expect(emit).toHaveBeenCalledWith('conversation:hydration-failed', {
         conversationId: conv.id,
         code: 'store-unreadable',
         message: 'x',
       });
+    });
+
+    it("does not emit 'conversation:hydration-failed' for expected cancellation", async () => {
+      const { store, emit } = makeHarnessWithHydrateOutcome({
+        kind: 'error',
+        error: { code: 'cancelled', message: 'Hydration cancelled' },
+        sourceRef: null,
+      });
+      const conv = await store.createConversation();
+      conv.messages.push(SEEDED);
+
+      const result = await store.switchConversation(conv.id);
+
+      expect(result?.conversation.id).toBe(conv.id);
+      expect(conv.messages).toEqual([SEEDED]);
+      expect(emit).not.toHaveBeenCalledWith(
+        'conversation:hydration-failed',
+        expect.anything(),
+      );
     });
 
     it('passes HydrationContext with vaultPath and reason to v2', async () => {
@@ -537,6 +562,7 @@ describe('ConversationStore', () => {
       const store = new ConversationStore({
         storage,
         getVaultPath: () => '/vault',
+        quiesceViewsForDelete: jest.fn().mockResolvedValue(undefined),
         repairViewsAfterDelete,
         events: { emit, on: jest.fn(), off: jest.fn(), setErrorSink: jest.fn() } as any,
       });
@@ -581,10 +607,11 @@ describe('ConversationStore', () => {
       );
     });
 
-    it("emits 'conversation:hydration-failed' on 'error' and still cleans up metadata", async () => {
+    it("emits 'conversation:hydration-failed' on provider error and preserves metadata for retry", async () => {
       const harness = makeHarnessWithDeleteOutcome({
         kind: 'error',
         error: { code: 'store-unreadable', message: 'boom' },
+        paths: ['/tmp/partially-removed.jsonl'],
       });
       const conv = await harness.store.createConversation();
 
@@ -595,8 +622,9 @@ describe('ConversationStore', () => {
         code: 'store-unreadable',
         message: 'boom',
       });
-      expect(harness.sessions.deleteMetadata).toHaveBeenCalledWith(conv.id);
-      expect(harness.repairViewsAfterDelete).toHaveBeenCalledWith(conv.id);
+      expect(harness.store.getConversationSync(conv.id)).toBe(conv);
+      expect(harness.sessions.deleteMetadata).not.toHaveBeenCalledWith(conv.id);
+      expect(harness.repairViewsAfterDelete).not.toHaveBeenCalledWith(conv.id);
     });
   });
 
@@ -670,7 +698,7 @@ describe('ConversationStore', () => {
 
       // Should not throw despite the recovery hook rejecting.
       const result = await store.switchConversation(conv.id);
-      expect(result?.id).toBe(conv.id);
+      expect(result?.conversation.id).toBe(conv.id);
       expect(conv.usage).toBeUndefined();
     });
 
@@ -704,7 +732,7 @@ describe('ConversationStore', () => {
       const conv = await store.createConversation();
 
       const result = await store.switchConversation(conv.id);
-      expect(result?.id).toBe(conv.id);
+      expect(result?.conversation.id).toBe(conv.id);
       expect(conv.usage).toBeUndefined();
     });
   });

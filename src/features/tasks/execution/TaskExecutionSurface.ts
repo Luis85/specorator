@@ -39,6 +39,12 @@ export interface TaskRunHandle {
   stream: ProviderStreamAdapter;
   /** Resolves when the underlying chat turn settles. */
   terminal: Promise<TaskRunTerminal>;
+  /**
+   * Releases surface-owned resources after the full work-order session settles.
+   * Chat-backed surfaces use this to close the hidden work-order tab; headless
+   * surfaces may omit it.
+   */
+  dispose?(): Promise<void>;
 }
 
 export interface TaskExecutionSurface {

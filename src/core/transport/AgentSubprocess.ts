@@ -25,7 +25,7 @@ export interface AgentSubprocessSpec {
    * grandchildren passes a `taskkill /T /F`-style reaper here so recycling a
    * wedged process doesn't leak the tree.
    */
-  killProcessTree?: (proc: ChildProcess) => void;
+  killProcessTree?: (proc: ChildProcess) => void | Promise<void>;
 }
 
 export interface AgentSubprocessCloseInfo {
@@ -139,6 +139,8 @@ export class AgentSubprocess {
     const killTree = this.spec.killProcessTree;
     await new Promise<void>((resolve) => {
       let settled = false;
+      let processExited = false;
+      let treeKillSettled = !killTree;
       // Hard ceiling: never let teardown hang if 'exit' never fires. Element type
       // is inferred (avoids the DOM-vs-node `setTimeout` return-type clash).
       const timers = [window.setTimeout(() => finish(), this.sigkillTimeoutMs * 2)];
@@ -149,14 +151,31 @@ export class AgentSubprocess {
         proc.off('exit', onExit);
         resolve();
       };
-      const onExit = () => finish();
+      const finishWhenComplete = (): void => {
+        if (processExited && treeKillSettled) finish();
+      };
+      const onExit = () => {
+        processExited = true;
+        finishWhenComplete();
+      };
 
       proc.once('exit', onExit);
       try {
         if (killTree) {
           // Reap the whole tree in one shot — a bare SIGTERM/SIGKILL on Windows
           // only hits the direct child and orphans its shell/git grandchildren.
-          killTree(proc);
+          void Promise.resolve(killTree(proc))
+            .catch(() => {
+              try {
+                proc.kill('SIGKILL');
+              } catch {
+                // already exited / not killable
+              }
+            })
+            .finally(() => {
+              treeKillSettled = true;
+              finishWhenComplete();
+            });
         } else {
           proc.kill('SIGTERM');
           timers.push(window.setTimeout(() => {

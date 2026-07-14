@@ -29,12 +29,27 @@ function createMockInputEl() {
 }
 
 function createMockFileContextManager() {
+  const attachedFiles = new Set<string>();
+  const attachedFolders = new Set<string>();
   return {
     startSession: jest.fn(),
     getCurrentNotePath: jest.fn().mockReturnValue(null),
     shouldSendCurrentNote: jest.fn().mockReturnValue(false),
     markCurrentNoteSent: jest.fn(),
-    clearAttachedPills: jest.fn(),
+    clearAttachedPills: jest.fn(() => {
+      attachedFiles.clear();
+      attachedFolders.clear();
+    }),
+    getAttachedFiles: jest.fn(() => new Set(attachedFiles)),
+    getAttachedFolders: jest.fn(() => new Set(attachedFolders)),
+    setAttachedFiles: jest.fn((files: string[]) => {
+      attachedFiles.clear();
+      for (const file of files) attachedFiles.add(file);
+    }),
+    setAttachedFolders: jest.fn((folders: string[]) => {
+      attachedFolders.clear();
+      for (const folder of folders) attachedFolders.add(folder);
+    }),
     transformContextMentions: jest.fn().mockImplementation((text: string) => text),
     getAttachedMentionSuffix: jest.fn().mockReturnValue(''),
   };
@@ -2244,7 +2259,9 @@ describe('InputController - Message Queue', () => {
       expect(mockNotice).toHaveBeenCalledWith('Failed to initialize agent service. Please try again.');
       expect(deps.streamController.hideThinkingIndicator).toHaveBeenCalled();
       expect(deps.state.isStreaming).toBe(false);
-      expect(deps.state.hasPendingConversationSave).toBe(true);
+      expect(deps.state.hasPendingConversationSave).toBe(false);
+      expect(deps.state.messages).toHaveLength(0);
+      expect(inputEl.value).toBe('test message');
       expect((deps as any).mockAgentService.query).not.toHaveBeenCalled();
     });
   });
@@ -2266,7 +2283,9 @@ describe('InputController - Message Queue', () => {
       await controller.sendMessage();
 
       expect(mockNotice).toHaveBeenCalledWith('Agent service not available. Please reload the plugin.');
-      expect(deps.state.hasPendingConversationSave).toBe(true);
+      expect(deps.state.hasPendingConversationSave).toBe(false);
+      expect(deps.state.messages).toHaveLength(0);
+      expect(inputEl.value).toBe('test message');
       expect((deps as any).mockAgentService.query).not.toHaveBeenCalled();
     });
   });

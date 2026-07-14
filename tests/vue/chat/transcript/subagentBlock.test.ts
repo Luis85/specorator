@@ -11,7 +11,7 @@ import SubagentBlock from '@/features/chat/ui/vue/transcript/blocks/SubagentBloc
  * sync + async DOM contracts via `SubagentBlock.vue` (which projects the
  * incoming `ToolCallInfo` through `subagentViewModel.resolveTaskSubagent`
  * first, then renders — mirroring `MessageSubagentRenderer.renderTaskSubagent`
- * + `SubagentRenderer.ts`'s `renderStoredSubagent`/`renderStoredAsyncSubagent`).
+ * + the retired stored sync/async subagent renderers).
  */
 function createTaskToolCall(overrides: Partial<ToolCallInfo> = {}): ToolCallInfo {
   return {

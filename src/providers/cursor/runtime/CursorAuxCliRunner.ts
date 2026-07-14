@@ -173,7 +173,7 @@ export class CursorAuxCliRunner implements AuxQueryRunner {
           clearKillTimer();
           killTimer = window.setTimeout(() => {
             if (child.exitCode === null && child.signalCode === null) {
-              forceKillCursorProcessTree(child);
+              void forceKillCursorProcessTree(child);
             }
           }, CURSOR_AUX_SIGKILL_TIMEOUT_MS);
         };

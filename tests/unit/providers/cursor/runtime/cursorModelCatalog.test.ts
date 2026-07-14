@@ -1,7 +1,10 @@
 import {
+  CURSOR_MODEL_CATALOG_TTL_MS,
   getCachedCursorModelIds,
+  isCursorModelCatalogDiscoveryFresh,
   parseModelListOutput,
   resetCursorModelCatalog,
+  seedCursorModelCatalogForTest,
   STATIC_FALLBACK_MODEL_IDS,
 } from '@/providers/cursor/runtime/cursorModelCatalog';
 
@@ -90,5 +93,17 @@ describe('getCachedCursorModelIds', () => {
 
   it('includes composer-1 in the fallback (not aliased away)', () => {
     expect(getCachedCursorModelIds()).toContain('composer-1');
+  });
+
+  it('scopes cache by CLI identity and expires after TTL', () => {
+    seedCursorModelCatalogForTest(['model-a'], '/usr/bin/agent|auth');
+    expect(getCachedCursorModelIds('/usr/bin/agent', { CURSOR_API_KEY: 'x' })).toEqual(['model-a']);
+    expect(getCachedCursorModelIds('/other/agent', { CURSOR_API_KEY: 'x' }))
+      .toEqual([...STATIC_FALLBACK_MODEL_IDS]);
+
+    jest.useFakeTimers();
+    jest.setSystemTime(Date.now() + CURSOR_MODEL_CATALOG_TTL_MS + 1);
+    expect(isCursorModelCatalogDiscoveryFresh('/usr/bin/agent', { CURSOR_API_KEY: 'x' })).toBe(false);
+    jest.useRealTimers();
   });
 });

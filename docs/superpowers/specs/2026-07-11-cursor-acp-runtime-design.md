@@ -98,12 +98,13 @@ Retired: `cursorStreamMapper` (+ its fixture suites), `cursorQueryLaunch`,
 stays in core), the stream-json flag builder in `cursorLaunchArgs`, per-turn
 `windowsSpawn` shim usage.
 
-Surviving unchanged: JSONL history hydration
-(`CursorConversationHistoryService`), settings + reconciliation, model
-catalog (one-shot CLI), `CursorAuxCliRunner` (+ json/text flag builders,
-read-only pinning), plan-path conventions, subagent definition
-discovery/mentions, `buildCursorAgentEnvironment` (including the cliPath →
-enhanced-PATH fix).
+Surviving provider-owned seams: history hydration, settings + reconciliation,
+the one-shot auxiliary runner, plan-path conventions, subagent definitions,
+and `buildCursorAgentEnvironment`. History now probes ownership-checked ACP
+SQLite, legacy SQLite, then project JSONL; no-ID tool blocks receive
+deterministic IDs. Model discovery remains a one-shot CLI query, but cache
+entries are scoped by resolved CLI identity, expire by TTL, and persist through
+serialized writes.
 
 Capabilities delta: `supportsPersistentRuntime: true`; everything else
 unchanged. `supportsMcpTools` stays `false` — MCP remains Cursor-managed via
@@ -211,6 +212,19 @@ corrected the docs-derived assumptions:
 an explicit multi-choice instruction — the model asked inline and consumed the
 answer as the next prompt. The blocking handler stays wired (it fires when the
 model emits the request), and the inline-ask path also works; both are supported.
+
+## Lifecycle hardening (2026-07-14)
+
+- Prompt dispatch is ownership-serialized; cancellation while waiting belongs
+  to that waiter and cannot leak into a later queued turn.
+- ACP session IDs are validated before path use. History deletion performs an
+  ownership preflight immediately before mutation.
+- Capture toggles reconcile on the live process; parsed JSON is deep
+  key-redacted before value-level scrubbing.
+- Model catalog cache/refresh/persistence are CLI-identity scoped, TTL bounded,
+  and serialized. A rejected model application fails the turn visibly.
+- Usage preserves prompt token counts with the catalog context window when ACP
+  omits `usage_update`.
 
 ## Docs updated in the same change
 

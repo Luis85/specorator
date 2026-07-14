@@ -394,6 +394,17 @@ describe('Cursor extractLastUsage', () => {
     expect(usage?.contextTokens).toBe(1049);
   });
 
+  it('pairs usage with the model active at that record, not a later stamp', () => {
+    const records = [
+      { type: 'system', model: 'model-a' },
+      { type: 'usage', usage: { input_tokens: 42, output_tokens: 7, total_tokens: 49 } },
+      { type: 'system', model: 'model-b' },
+    ];
+    const usage = extractLastUsageFromCursorRecords(records);
+    expect(usage?.model).toBe('model-a');
+    expect(usage?.inputTokens).toBe(42);
+  });
+
   it('service.extractLastUsage returns null when db path is unresolved', async () => {
     jest.spyOn(CursorStore, 'resolveCursorStoreDbPath').mockReturnValue(null);
     const svc = new CursorConversationHistoryService();

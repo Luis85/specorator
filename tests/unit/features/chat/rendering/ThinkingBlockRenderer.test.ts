@@ -3,7 +3,6 @@ import { createMockEl } from '@test/helpers/mockElement';
 import {
   createThinkingBlock,
   finalizeThinkingBlock,
-  renderStoredThinkingBlock,
 } from '@/features/chat/rendering/ThinkingBlockRenderer';
 
 // Mock renderContent function
@@ -112,13 +111,4 @@ describe('ThinkingBlockRenderer', () => {
     });
   });
 
-  describe('renderStoredThinkingBlock', () => {
-    it('should render stored block with duration label', () => {
-      const parentEl = createMockEl();
-
-      const wrapperEl = renderStoredThinkingBlock(parentEl, 'thinking content', 10, mockRenderContent);
-
-      expect(wrapperEl).toBeDefined();
-    });
-  });
 });

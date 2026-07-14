@@ -161,11 +161,11 @@ The feature layer consumes provider-neutral `StreamChunk` values. Providers own 
 The per-tab transcript — every stored and live turn — is a Vue 3 + Pinia island
 under `ui/vue/transcript/` (ADR 0005 sub-project 2, mirroring the shell island's
 sub-project 1 seam one level deeper, into each tab's `messagesEl`). The
-imperative `MessageRenderer` + every `rendering/*` block renderer + the
-DOM-patching streaming write-side were deleted; only the stream **output**
-changed (raw DOM mutation → reactive-data mutation). `TabManager`, controllers,
-`ChatState`, and `StreamController`'s chunk-routing/block-transition logic are
-untouched.
+imperative top-level/stored renderers and the DOM-patching streaming write-side
+were deleted; only detached lifecycle adapters still used by the stream
+coordinators remain under `rendering/`. Transcript output changed from raw DOM
+mutation to reactive-data mutation; `TabManager`, controllers, `ChatState`, and
+`StreamController` keep ownership of lifecycle and block transitions.
 
 - **Mount**: `mountTranscript(containerEl, plugin, component, callbacks)` (per
   tab, mirror of `mountChatShell`) `createApp(TranscriptRoot)` + a FRESH per-leaf
@@ -177,11 +177,13 @@ untouched.
 - **Store**: `ui/vue/transcript/stores/transcriptStore.ts` — `messages` +
   `activeStream` + welcome/loading/hydration transients, all `shallowRef`
   (whole-value replacement, no deep-proxy). Truth + I/O stay in `ChatState`.
-- **Projection seam + 3 emit points**: `tabs/tabTranscript.ts`'s
+- **Projection seam + identity**: `tabs/tabTranscript.ts`'s
   `TabTranscriptProjection` is the per-tab `TranscriptCallbacks.subscribe`
   source (mirror of the shell's `emitChatShellChange`). It fans a fully-projected
-  `TranscriptSnapshot` (`messages`, `activeStream`, greeting, loadingText,
-  hydrationError) to every observer on three emit points: `emit()` (streaming
+  `TranscriptSnapshot` (`conversationId`, monotonic `projectionRevision`,
+  `messages`, `activeStream`, greeting, loadingText, hydrationError) to every
+  observer. `TranscriptRoot` resets window/scroll state when conversation
+  identity changes and ignores stale revisions. Emit points are `emit()` (streaming
   transitions + message add/remove, called from `InputController`/coordinators),
   `setGreeting`/`setLoadingText`/`setHydrationError` (engine-pushed transients),
   and `refreshMessage(id)` (off-stream mutations).
@@ -220,24 +222,19 @@ untouched.
   `InlineExitPlanMode` / `InlinePlanApproval`) is mounted via the
   `mountInlineCard` seam, captures input, and calls an injected `resolve`.
   Abort/`dismissPendingApproval` resolves the promise with `null` (never rejects).
+  Both plan cards share `useInlinePlanCard` for focus, keyboard delegation,
+  optional abort, unmount, and exactly-once resolution.
 - **Runtime errors**: `RuntimeErrorCard.vue` renders the classified
   runtime-error card — `classifyRuntimeError` (cli-not-found / unauthenticated /
   context-too-large / generic) with open-settings, provider login hint, and real
   retry re-dispatch through the callbacks seam.
-- **Tracked parity follow-ups** (not visible functional loss): (1) auto-turn
-  retry suppression consistency and (2) a custom streaming-indicator text hook
-  are deferred; (3) the helper-extraction follow-up folds the re-implemented
-  `rendering/*` pure helpers (e.g. `webSearchViewModel` ↔ `webSearchRenderer`)
-  and the two shared inline-plan-card clone groups into shared modules (the
-  `scripts/quality-baseline.json` duplication bump this cutover locked in).
-  Provider-lifecycle spawn tools (CLI providers' spawn+wait/close tool sets)
-  consolidate into a single subagent card: `blockListViewModel` classifies a
-  spawn tool as a `subagent` item carrying a `SubagentInfo` pre-built via
-  `subagentViewModel.projectProviderLifecycleSubagent` (delegating to the
-  provider's `subagentLifecycleAdapter.buildSubagentInfo`), marks the
-  wait/close/hidden siblings consumed, and `SubagentBlock` renders the
-  pre-built info (mirrors the legacy
-  `MessageSubagentRenderer.renderProviderLifecycleSubagent`).
+- **Migration-debt cleanup**: top-level/stored shadow renderers and the obsolete
+  `toolCallElements` DOM map are gone. Tool name/summary/blocking logic and web
+  search branching are shared DOM-free view models consumed by Vue and the
+  remaining detached subagent adapter. Auto-turn retry suppression consistency
+  remains a tracked parity follow-up; custom streaming-indicator text is now
+  projected through `ActiveStreamState.label`.
+- **`ThinkingRenderCoordinator`** / **`ProviderLifecycleSubagentCoordinator`**: streaming thinking and provider-lifecycle spawn tools mutate reactive `ChatMessage` data only; Vue's `ThinkingBlock` / `blockListViewModel.projectProviderLifecycleSubagent` render the cards (no imperative subagent/thinking DOM).
 
 ## Key Patterns
 
@@ -264,7 +261,11 @@ for await (const chunk of runtime.query(preparedTurn, history)) {
 
 ## Gotchas
 
-- Work-order run tabs are real `TabManager` tabs but hidden from the visible tab badge row. The chat header Work Orders dropdown is the navigation affordance for active work-order tabs; ordinary tab badges render chat tabs only.
+- Work-order run tabs are real `TabManager` tabs but hidden from the visible tab badge row. The chat header Work Orders dropdown is the navigation affordance for active work-order tabs; ordinary tab badges render chat tabs only. Tab-slot accounting (`PluginViewActivator.getTabSlotUsage`) aggregates work-order tabs across **all** open Specorator leaves, not just the active view.
+- `TabManager.runTabMutation` serializes tab create/switch/close/open-conversation mutations; runtime init carries a generation counter and shared promise so stale init/cleanup cannot race teardown. `ConversationController.dispose()` and `destroyTab`'s awaited `pendingRuntimeCleanup` complete the teardown contract.
+- `ConversationStore` tracks delete tombstones + per-conversation revisions; hydration/save paths reject stale results, and conversation delete quiesces every view before metadata removal then repairs tabs afterward (`main.ts` split helpers).
+- Transcript snapshots carry `conversationId` + `projectionRevision` so history switches cannot render against the wrong conversation; `InputController` rolls back optimistic user/assistant placeholders and restores composer text/pills when runtime init fails before the first chunk.
+- Per-leaf tab layout persists through `SpecoratorView.getState()` / `setState()` (preferred over global plugin state on restore).
 - `SpecoratorView.startTaskRunInFreshTab` / `injectCommitTurnForConversation` are thin delegators to `SpecoratorViewWorkOrderBridge` (the Agent Board integration surface `ChatTabExecutionSurface` calls). The bridge never imports `SpecoratorView` — the cross-view conversation lookup is supplied as a `findConversationTab` callback — so there's no view↔bridge cycle. The view builds the bridge lazily so prototype-only test instances resolve it through the same callbacks.
 - `SpecoratorView.onClose()` must abort active tabs and dispose runtimes
 - `ChatState` is per-tab; `TabManager` coordinates tab-level operations such as fork targets, and delegates provider-aware command-catalog + runtime-warmup coordination (the per-tab command cache, in-flight warmup dedup, warmup-mode resolution, and cache-key construction) to `TabProviderCommandCoordinator`. The manager builds it via a lazy getter and feeds it live tab-set accessors (`getTabs`/`getActiveTab(Id)`/`filterTabsByProvider`) as callbacks, so there is no manager↔coordinator import cycle and prototype-only test instances still resolve it; the manager keeps thin delegators (`getSdkCommands`, `invalidateProviderCommandCaches`, `primeProviderRuntime`) so external callers stay green

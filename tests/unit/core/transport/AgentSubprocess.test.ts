@@ -202,5 +202,23 @@ describe('AgentSubprocess', () => {
       mockProc.emit('exit', 0, 'SIGKILL');
       await expect(done).resolves.toBeUndefined();
     });
+
+    it('awaits an asynchronous killProcessTree hook before completing shutdown', async () => {
+      let releaseKill!: () => void;
+      const killPending = new Promise<void>((resolve) => { releaseKill = resolve; });
+      const killProcessTree = jest.fn(() => killPending);
+      const p = new AgentSubprocess({ ...SPEC, killProcessTree });
+      p.start();
+
+      let settled = false;
+      const done = p.shutdown().then(() => { settled = true; });
+      mockProc.emit('exit', 0, 'SIGKILL');
+      await Promise.resolve();
+      expect(settled).toBe(false);
+
+      releaseKill();
+      await done;
+      expect(settled).toBe(true);
+    });
   });
 });

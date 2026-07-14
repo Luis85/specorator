@@ -70,9 +70,11 @@ export function capCursorToolResultLength(value: string): string {
 
 const CURSOR_SDK_NAME_TO_KIND: Partial<Record<string, string>> = {
   [TOOL_READ]: 'readToolCall',
+  ReadFile: 'readToolCall',
   [TOOL_BASH]: 'shellToolCall',
   [TOOL_GLOB]: 'globToolCall',
   [TOOL_GREP]: 'grepToolCall',
+  Find: 'grepToolCall',
   [TOOL_LS]: 'lsToolCall',
   [TOOL_WEB_FETCH]: 'webFetchToolCall',
   [TOOL_WEB_SEARCH]: 'webSearchToolCall',

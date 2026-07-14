@@ -28,6 +28,8 @@ export class TabTranscriptProjection {
    * cleared by the next `snapshot()`.
    */
   private readonly dirtyMessageIds = new Set<string>();
+  private projectionRevision = 0;
+  private lastConversationId: string | null = null;
 
   constructor(private readonly state: ChatState) {}
 
@@ -61,8 +63,11 @@ export class TabTranscriptProjection {
 
   /** Sets the hydration-spinner text (null clears it) and re-emits. */
   setLoadingText(loadingText: string | null): void {
-    if (loadingText === this.loadingText) return;
+    const unchanged = loadingText === this.loadingText;
     this.loadingText = loadingText;
+    // Re-raise a non-null loading string even when the value is unchanged so a
+    // retry after a dropped/stuck projection still paints the overlay.
+    if (unchanged && loadingText === null) return;
     this.emit();
   }
 
@@ -106,9 +111,17 @@ export class TabTranscriptProjection {
     }
     this.dirtyMessageIds.clear();
 
+    const conversationId = this.state.currentConversationId;
+    if (conversationId !== this.lastConversationId) {
+      this.lastConversationId = conversationId;
+      this.projectionRevision += 1;
+    }
+
     return {
       messages,
       activeStream: this.state.getActiveStreamSnapshot(),
+      conversationId,
+      projectionRevision: this.projectionRevision,
       // The greeting is a welcome-screen affordance: suppress it once the
       // transcript has messages (mirrors the legacy `updateWelcomeVisibility`
       // that added `.specorator-hidden` to the welcome block).

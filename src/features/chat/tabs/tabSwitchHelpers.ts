@@ -42,7 +42,11 @@ export function classifyPostActivateAction(tab: TabData): PostActivateAction {
     return isEmpty ? 'init-welcome' : 'none';
   }
   if (isEmpty) {
-    return state.isHydrating ? 'none' : 'hydrate';
+    // Always re-hydrate an empty transcript. `switchTo` aborts any in-flight
+    // hydration, so a stuck `isHydrating` flag must not block history reload
+    // when the user re-opens the same conversation or switches back to a tab
+    // whose Phase-B load never landed.
+    return 'hydrate';
   }
 
   const canPassiveSync = tab.service && !state.isStreaming && !state.hasPendingConversationSave;
@@ -80,5 +84,24 @@ export async function applyPostActivateAction(plugin: SpecoratorPlugin, tab: Tab
       break;
     default:
       break;
+  }
+}
+
+/**
+ * Activates an already-open conversation tab and waits for hydration to settle.
+ * Retries once when the transcript is still empty after Phase B (stuck bind or a
+ * prior switch that only completed Phase A).
+ */
+export async function activateOpenConversationTab(
+  switchToTab: (tabId: TabId) => Promise<void>,
+  tab: TabData,
+  conversationId: string,
+): Promise<void> {
+  await switchToTab(tab.id);
+  const controller = tab.controllers.conversationController;
+  await controller?.whenHydrated?.();
+  if (tab.state.messages.length === 0) {
+    await controller?.switchTo(conversationId);
+    await controller?.whenHydrated?.();
   }
 }

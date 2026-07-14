@@ -1,15 +1,15 @@
 <script setup lang="ts">
 import { computed } from 'vue';
 
+import { buildWebSearchSegments } from '../../../../rendering/webSearchViewModel';
 import ToolLinesExpanded from '../ToolLinesExpanded.vue';
 import ToolLink from '../ToolLink.vue';
-import { buildWebSearchSegments } from './webSearchViewModel';
 
 /**
- * Reproduces `rendering/webSearchRenderer.ts`'s `renderWebSearchExpanded`
- * DOM contract: parsed result links take priority, then a structured
+ * Renders the shared `webSearchViewModel` projection: parsed result links
+ * take priority, then a structured
  * action-card (open_page / find_in_page / search), then raw result lines,
- * then an empty state. See `webSearchViewModel.ts` for the branch logic.
+ * then an empty state.
  */
 const props = defineProps<{ input: Record<string, unknown>; result?: string }>();
 

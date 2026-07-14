@@ -136,6 +136,8 @@ export class AgentBoardView extends ItemView {
         this.plugin.runSidecarStore.writeHeartbeat(runId, { ...hb, runtimeId: this.plugin.runtimeId }),
       appendLedger: (_task, runId, entry) =>
         this.plugin.runSidecarStore.appendLedger(runId, entry),
+      appendLedgerBatch: (_task, runId, entries) =>
+        this.plugin.runSidecarStore.appendLedgerBatch(runId, entries),
       finalizeLedgerToNote: (task, runId) => this.finalizeLedgerToNote(task, runId),
       writeHandoff: (task, markdown) =>
         this.applyNoteChange(task.path, (content) => this.noteStore.writeHandoff(content, markdown)),
@@ -617,6 +619,7 @@ export class AgentBoardView extends ItemView {
           runId,
           error: message,
         });
+        await this.plugin.runSidecarStore.markFinalizeFailed(runId, message);
         // Keep the sidecar so the ledger stays recoverable; the next board
         // open's sweep won't touch it either (the task is still terminal-ish
         // here, so the sweep won't match a "no active task" predicate either —
@@ -654,7 +657,10 @@ export class AgentBoardView extends ItemView {
     await Promise.all(
       runIds
         .filter((id) => !activeRunIds.has(id))
-        .map((id) => this.plugin.runSidecarStore.cleanupRun(id)),
+        .map(async (id) => {
+          if (await this.plugin.runSidecarStore.hasFinalizeFailure(id)) return;
+          await this.plugin.runSidecarStore.cleanupRun(id);
+        }),
     );
   }
 
@@ -686,6 +692,7 @@ export class AgentBoardView extends ItemView {
       if (sharedRunRegistry.has(task.frontmatter.id)) continue;
       const runId = task.frontmatter.run_id;
       if (runId && await this.hasFreshSidecarHeartbeat(runId, nowMs)) continue;
+      const orphanLedgerEntry = { timestamp: now, status: 'failed' as const, message: 'orphaned by plugin reload' };
       try {
         // Write the failed status first: it only rewrites frontmatter, so a note
         // missing the generated run-ledger markers (hand-edited or older) is
@@ -694,13 +701,30 @@ export class AgentBoardView extends ItemView {
         await this.applyNoteChange(task.path, (content) =>
           this.noteStore.writeStatus(content, { status: 'failed', timestamp: now }),
         );
-        try {
-          await this.applyNoteChange(task.path, (content) =>
-            this.noteStore.appendLedger(content, { timestamp: now, status: 'failed', message: 'orphaned by plugin reload' }),
-          );
-        } catch {
-          // The note lacks the generated ledger region; the failed status above
-          // is what un-stalls the card, so proceed without the ledger line.
+        if (runId) {
+          await this.plugin.runSidecarStore.appendLedger(runId, orphanLedgerEntry);
+          const snapshot = await this.plugin.runSidecarStore.snapshotLedgerAsMarkdown(runId);
+          if (snapshot) {
+            try {
+              await this.applyNoteChange(task.path, (content) =>
+                this.noteStore.writeLedgerSnapshot(content, snapshot),
+              );
+            } catch {
+              // Note lacks generated ledger markers — sidecar still holds the lines.
+            }
+          }
+          if (!(await this.plugin.runSidecarStore.hasFinalizeFailure(runId))) {
+            await this.plugin.runSidecarStore.cleanupRun(runId);
+          }
+        } else {
+          try {
+            await this.applyNoteChange(task.path, (content) =>
+              this.noteStore.appendLedger(content, orphanLedgerEntry),
+            );
+          } catch {
+            // The note lacks the generated ledger region; the failed status above
+            // is what un-stalls the card, so proceed without the ledger line.
+          }
         }
         // The emitted status-changed(failed) clears the Vue store's pause overlay
         // (failed ≠ needs_input/approval) via useBoardEventRouting.

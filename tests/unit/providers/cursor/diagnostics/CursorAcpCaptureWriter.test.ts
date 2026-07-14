@@ -32,6 +32,24 @@ describe('CursorAcpCaptureWriter', () => {
     expect(JSON.parse(lines[1]).dir).toBe('agent');
   });
 
+  it('redacts nested secret keys in parsed wire frames', async () => {
+    const writer = new CursorAcpCaptureWriter({
+      baseDir: tmp,
+      meta: { cliVersion: 'x', pluginVersion: 'y', platform: 'linux' },
+    });
+    await writer.ready;
+    writer.wireFrame(
+      'client',
+      JSON.stringify({ method: 'session/prompt', params: { api_key: 'sk-live-secret', nested: { token: 'abc' } } }),
+    );
+    await writer.flush();
+
+    const lines = (await fs.readFile(path.join(writer.sessionDir, 'wire.jsonl'), 'utf8')).trim().split('\n');
+    const frame = JSON.parse(lines[0]).frame as string;
+    expect(frame).not.toContain('sk-live-secret');
+    expect(frame).toContain('[redacted]');
+  });
+
   it('writes lifecycle events and meta.json', async () => {
     const writer = new CursorAcpCaptureWriter({
       baseDir: tmp,

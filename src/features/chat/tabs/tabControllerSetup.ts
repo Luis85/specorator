@@ -134,6 +134,7 @@ export function buildTabConversationController(
       setTranscriptGreeting: (greeting) => tab.transcript?.setGreeting(greeting),
       setTranscriptLoading: (loadingText) => tab.transcript?.setLoadingText(loadingText),
       setTranscriptHydrationError: (error) => tab.transcript?.setHydrationError(error),
+      emitTranscript: () => tab.transcript?.emit(),
       getHistoryDropdown: () => null, // Tab doesn't have its own history dropdown
       getMessagesEl: () => dom.messagesEl,
       getInputEl: () => dom.inputEl,
@@ -164,6 +165,9 @@ export function buildTabConversationController(
 
         if (providerChanged) {
           syncTabProviderServices(tab, plugin);
+          if (tab.service && tab.service.providerId !== nextProviderId) {
+            await cleanupTabRuntime(tab);
+          }
         }
 
         // Bind session state only — runtime starts on send

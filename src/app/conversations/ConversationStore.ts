@@ -2,8 +2,8 @@ import type { SharedAppStorage } from '../../core/bootstrap/storage';
 import type { EventBus } from '../../core/events/EventBus';
 import { ProviderRegistry } from '../../core/providers/ProviderRegistry';
 import { hasForkSupport } from '../../core/providers/typeGuards';
-import type { HydrationContext, ProviderId } from '../../core/providers/types';
-import { DEFAULT_CHAT_PROVIDER_ID } from '../../core/providers/types';
+import type { ConversationSwitchResult, HistoryLoadOutcome,HydrationContext, ProviderId } from '../../core/providers/types';
+import { DEFAULT_CHAT_PROVIDER_ID, isHydrationCommitReady } from '../../core/providers/types';
 import type { Conversation, ConversationMeta } from '../../core/types';
 import { assertNever } from '../../utils/assertNever';
 import type { SpecoratorEventMap } from '../events/specoratorEvents';
@@ -21,9 +21,12 @@ export interface ConversationStoreDeps {
   storage: SharedAppStorage;
   getVaultPath(): string | null;
   /**
-   * Repairs open chat tabs bound to a just-deleted conversation. The shell
-   * cancels any active stream and resets the tab to a fresh conversation,
-   * preserving the prior in-shell delete behavior.
+   * Quiesces tabs bound to a conversation before native deletion begins.
+   */
+  quiesceViewsForDelete(conversationId: string): Promise<void>;
+  /**
+   * Resets open chat tabs after metadata removal so they no longer reference
+   * a deleted conversation id.
    */
   repairViewsAfterDelete(conversationId: string): Promise<void>;
   /**
@@ -46,6 +49,9 @@ export interface ConversationStoreDeps {
  */
 export class ConversationStore {
   private conversations: Conversation[] = [];
+  private readonly deletedConversationIds = new Set<string>();
+  private readonly metadataWriteTails = new Map<string, Promise<void>>();
+  private readonly conversationRevisions = new Map<string, number>();
 
   constructor(private readonly deps: ConversationStoreDeps) {}
 
@@ -139,21 +145,108 @@ export class ConversationStore {
   async switchConversation(
     id: string,
     options?: { signal?: AbortSignal },
-  ): Promise<Conversation | null> {
+  ): Promise<ConversationSwitchResult | null> {
+    if (this.deletedConversationIds.has(id)) return null;
+
     const conversation = this.conversations.find((c) => c.id === id);
     if (!conversation) return null;
 
-    await this.loadSdkMessagesForConversation(conversation, 'open', options?.signal);
+    const revisionAtStart = this.conversationRevisions.get(id) ?? 0;
+    const hydration = await this.hydrateConversationHistory(
+      conversation,
+      'open',
+      options?.signal,
+    );
+    if ((this.conversationRevisions.get(id) ?? 0) !== revisionAtStart) {
+      return {
+        conversation,
+        hydration: {
+          kind: 'error',
+          error: { code: 'stale', message: 'Conversation changed during hydration' },
+          sourceRef: null,
+        },
+      };
+    }
 
-    return conversation;
+    return { conversation, hydration };
+  }
+
+  private async hydrateConversationHistory(
+    conversation: Conversation,
+    reason: HydrationContext['reason'] = 'open',
+    signal?: AbortSignal,
+  ): Promise<HistoryLoadOutcome> {
+    const ctx: HydrationContext = {
+      vaultPath: this.deps.getVaultPath(),
+      reason,
+      signal,
+    };
+    const service = ProviderRegistry.getConversationHistoryService(conversation.providerId);
+    const outcome = await service.hydrateConversationHistory(conversation, ctx);
+    switch (outcome.kind) {
+      case 'loaded':
+        conversation.messages = outcome.messages;
+        break;
+      case 'cached':
+      case 'empty':
+        break;
+      case 'error':
+        // Cancellation is expected when a newer conversation supersedes this
+        // caller. It must not produce a failure toast/banner for normal tab
+        // switching; the shared provider read may still complete for another
+        // caller.
+        if (outcome.error.code !== 'cancelled') {
+          this.deps.events.emit('conversation:hydration-failed', {
+            conversationId: conversation.id,
+            code: outcome.error.code,
+            message: outcome.error.message,
+          });
+        }
+        break;
+      default:
+        assertNever(outcome);
+    }
+
+    // History-backed usage recovery: only when meta-stored usage is absent. We
+    // never overwrite live `conversation.usage`. `extractLastUsage` is optional;
+    // the hook returns null on parse failure, but we also wrap in try/catch so
+    // a buggy implementation never breaks hydration.
+    if (
+      isHydrationCommitReady(outcome)
+      && !conversation.usage
+      && typeof service.extractLastUsage === 'function'
+    ) {
+      try {
+        const recovered = await service.extractLastUsage(conversation, ctx);
+        if (recovered) {
+          conversation.usage = recovered;
+        }
+      } catch {
+        // Best-effort. Silently swallow recovery failures.
+      }
+    }
+
+    return outcome;
   }
 
   async deleteConversation(id: string): Promise<void> {
     const index = this.conversations.findIndex((c) => c.id === id);
     if (index === -1) return;
 
-    const conversation = this.conversations[index];
-    this.conversations.splice(index, 1);
+    this.deletedConversationIds.add(id);
+    this.bumpConversationRevision(id);
+    ProviderRegistry.getConversationHistoryService(
+      this.conversations[index].providerId,
+    ).invalidateConversationHistory?.(id);
+
+    // Quiesce every open tab bound to this conversation before touching native artifacts.
+    await this.deps.quiesceViewsForDelete(id);
+
+    const conversation = this.conversations.find((c) => c.id === id);
+    if (!conversation) {
+      this.deletedConversationIds.delete(id);
+      return;
+    }
 
     const ctx: HydrationContext = {
       vaultPath: this.deps.getVaultPath(),
@@ -167,17 +260,25 @@ export class ConversationStore {
       case 'no-op':
         break;
       case 'error':
+        this.deletedConversationIds.delete(id);
         this.deps.events.emit('conversation:hydration-failed', {
           conversationId: id,
           code: outcome.error.code,
           message: outcome.error.message,
         });
-        break;
+        return;
       default:
         assertNever(outcome);
     }
 
+    const currentIndex = this.conversations.findIndex((c) => c.id === id);
+    if (currentIndex !== -1) {
+      this.conversations.splice(currentIndex, 1);
+    }
     await this.deps.storage.sessions.deleteMetadata(id);
+    this.deletedConversationIds.delete(id);
+    this.metadataWriteTails.delete(id);
+    this.conversationRevisions.delete(id);
 
     await this.deps.repairViewsAfterDelete(id);
   }
@@ -204,43 +305,64 @@ export class ConversationStore {
   }
 
   async updateConversation(id: string, updates: Partial<Conversation>): Promise<void> {
-    const conversation = this.conversations.find((c) => c.id === id);
-    if (!conversation) return;
+    return this.runSerializedMetadataWrite(id, async () => {
+      const conversation = this.conversations.find((c) => c.id === id);
+      if (!conversation || this.deletedConversationIds.has(id)) return;
 
-    // providerId is immutable — strip it from updates to prevent accidental mutation
-    const safeUpdates = { ...updates };
-    delete safeUpdates.providerId;
-    const previousTitle = conversation.title;
-    Object.assign(conversation, safeUpdates, { updatedAt: Date.now() });
+      // providerId is immutable — strip it from updates to prevent accidental mutation
+      const safeUpdates = { ...updates };
+      delete safeUpdates.providerId;
+      const previousTitle = conversation.title;
+      Object.assign(conversation, safeUpdates, { updatedAt: Date.now() });
+      this.bumpConversationRevision(id);
 
-    await this.deps.storage.sessions.saveMetadata(
-      this.deps.storage.sessions.toSessionMetadata(conversation),
-    );
+      await this.deps.storage.sessions.saveMetadata(
+        this.deps.storage.sessions.toSessionMetadata(conversation),
+      );
 
-    if (conversation.title !== previousTitle) {
-      this.deps.events.emit('conversation:renamed', {
-        conversationId: id,
-        title: conversation.title,
-      });
-    }
+      if (conversation.title !== previousTitle) {
+        this.deps.events.emit('conversation:renamed', {
+          conversationId: id,
+          title: conversation.title,
+        });
+      }
 
-    // Clear image data from memory after save (data is persisted by SDK).
-    // Skip for pending forks: their deep-cloned images aren't in SDK storage yet.
-    // `hasForkSupport` is the typed guard — providers without a `forkSupport`
-    // slot have no fork concept, so treat them as non-pending.
-    const historyService = ProviderRegistry.getConversationHistoryService(conversation.providerId);
-    const isPendingFork = hasForkSupport(historyService)
-      ? historyService.forkSupport.isPendingForkConversation(conversation)
-      : false;
-    if (!isPendingFork) {
-      for (const msg of conversation.messages) {
-        if (msg.images) {
-          for (const img of msg.images) {
-            img.data = '';
+      // Clear image data from memory after save (data is persisted by SDK).
+      // Skip for pending forks: their deep-cloned images aren't in SDK storage yet.
+      // `hasForkSupport` is the typed guard — providers without a `forkSupport`
+      // slot have no fork concept, so treat them as non-pending.
+      const historyService = ProviderRegistry.getConversationHistoryService(conversation.providerId);
+      const isPendingFork = hasForkSupport(historyService)
+        ? historyService.forkSupport.isPendingForkConversation(conversation)
+        : false;
+      if (!isPendingFork) {
+        for (const msg of conversation.messages) {
+          if (msg.images) {
+            for (const img of msg.images) {
+              img.data = '';
+            }
           }
         }
       }
-    }
+
+      if (safeUpdates.messages) {
+        historyService.invalidateConversationHistory?.(id);
+      }
+    });
+  }
+
+  private bumpConversationRevision(conversationId: string): void {
+    this.conversationRevisions.set(
+      conversationId,
+      (this.conversationRevisions.get(conversationId) ?? 0) + 1,
+    );
+  }
+
+  private runSerializedMetadataWrite(id: string, write: () => Promise<void>): Promise<void> {
+    const prior = this.metadataWriteTails.get(id) ?? Promise.resolve();
+    const next = prior.then(write, write);
+    this.metadataWriteTails.set(id, next.then(() => undefined, () => undefined));
+    return next;
   }
 
   async getConversationById(id: string): Promise<Conversation | null> {
@@ -280,45 +402,7 @@ export class ConversationStore {
     reason: HydrationContext['reason'] = 'open',
     signal?: AbortSignal,
   ): Promise<void> {
-    const ctx: HydrationContext = {
-      vaultPath: this.deps.getVaultPath(),
-      reason,
-      signal,
-    };
-    const service = ProviderRegistry.getConversationHistoryService(conversation.providerId);
-    const outcome = await service.hydrateConversationHistory(conversation, ctx);
-    switch (outcome.kind) {
-      case 'loaded':
-        conversation.messages = outcome.messages;
-        break;
-      case 'cached':
-      case 'empty':
-        break;
-      case 'error':
-        this.deps.events.emit('conversation:hydration-failed', {
-          conversationId: conversation.id,
-          code: outcome.error.code,
-          message: outcome.error.message,
-        });
-        break;
-      default:
-        assertNever(outcome);
-    }
-
-    // History-backed usage recovery: only when meta-stored usage is absent. We
-    // never overwrite live `conversation.usage`. `extractLastUsage` is optional;
-    // the hook returns null on parse failure, but we also wrap in try/catch so
-    // a buggy implementation never breaks hydration.
-    if (!conversation.usage && typeof service.extractLastUsage === 'function') {
-      try {
-        const recovered = await service.extractLastUsage(conversation, ctx);
-        if (recovered) {
-          conversation.usage = recovered;
-        }
-      } catch {
-        // Best-effort. Silently swallow recovery failures.
-      }
-    }
+    await this.hydrateConversationHistory(conversation, reason, signal);
   }
 
   private getConversationPreview(conv: Conversation): string {

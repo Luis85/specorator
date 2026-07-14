@@ -32,7 +32,8 @@
       "renameFailed": "Failed to rename conversation",
       "linkedNotFound": "Linked conversation not found. It may have been deleted.",
       "linkedNoFreeTab": "Cannot open conversation: tab limit reached. Close a tab first.",
-      "loading": "Loading conversation…"
+      "loading": "Loading conversation…",
+      "storeUnavailable": "Conversation history is not available yet for this session."
     },
     "rewind": {
       "confirmMessage": "이 시점으로 되감으시겠습니까? 이 메시지 이후의 파일 변경 사항이 되돌려집니다. 수동으로 또는 bash를 통해 편집된 파일에는 영향을 미치지 않습니다.",
@@ -775,7 +776,8 @@
         "noModels": "Cursor returned no models. If you are not signed in, run `cursor-agent login`.",
         "discoveredOne": "Discovered 1 Cursor model.",
         "discoveredMany": "Discovered {count} Cursor models.",
-        "refreshFailed": "Failed to refresh Cursor models."
+        "refreshFailed": "Failed to refresh Cursor models.",
+        "applyFailed": "Could not apply the selected Cursor model to this session. Try picking it again or start a new conversation."
       },
       "subagent": {
         "saved": "Saved subagent \"{name}\".",

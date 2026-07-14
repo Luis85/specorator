@@ -3,6 +3,7 @@ import { computed } from 'vue';
 
 import { extractResolvedAnswersFromResultText } from '../../../../../../core/tools/toolInput';
 import type { AskUserQuestionItem, ToolCallInfo } from '../../../../../../core/types';
+import { formatAskUserQuestionDisplayAnswer } from '../askUserQuestionDisplayAnswer';
 
 /**
  * Reproduces the read-only ANSWERED branch of
@@ -19,12 +20,6 @@ import type { AskUserQuestionItem, ToolCallInfo } from '../../../../../../core/t
  * here (props must not be mutated) in favor of a pure computed re-derivation.
  */
 const props = defineProps<{ toolCall: ToolCallInfo }>();
-
-function formatAnswer(raw: unknown): string {
-  if (Array.isArray(raw)) return raw.join(', ');
-  if (typeof raw === 'string') return raw;
-  return '';
-}
 
 const questions = computed<AskUserQuestionItem[] | undefined>(() => {
   const raw = props.toolCall.input.questions;
@@ -49,11 +44,25 @@ const rows = computed<AnswerRow[] | null>(() => {
   return qs.map((q, i) => ({
     index: i + 1,
     question: q.question,
-    answer: formatAnswer((q.id ? ans[q.id] : undefined) ?? ans[q.question]),
+    answer: formatAskUserQuestionDisplayAnswer(
+      (q.id ? ans[q.id] : undefined) ?? ans[q.question],
+      q.isSecret === true,
+    ),
   }));
 });
 
-const fallbackText = computed(() => props.toolCall.result || 'Waiting for answer...');
+const fallbackText = computed(() => {
+  const qs = questions.value;
+  const ans = answers.value;
+  if (qs?.some((q) => q.isSecret === true) && ans) {
+    return qs.map((q) => {
+      const raw = (q.id ? ans[q.id] : undefined) ?? ans[q.question];
+      const display = formatAskUserQuestionDisplayAnswer(raw, q.isSecret === true);
+      return `${q.question}=${display || 'Not answered'}`;
+    }).join('; ');
+  }
+  return props.toolCall.result || 'Waiting for answer...';
+});
 </script>
 
 <template>

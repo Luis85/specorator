@@ -368,6 +368,9 @@ describe('Tab - Cross-Provider Model Rejection', () => {
     tab.lifecycleState = 'bound_cold';
     tab.providerId = 'claude';
     tab.conversationId = 'conv-1';
+    const modelBefore = plugin.settings.model;
+    const savedClaudeModelBefore = plugin.settings.savedProviderModel.claude;
+    plugin.saveSettings.mockClear();
 
     // Get the onModelChange callback from toolbar
     const toolbarModule = jest.requireMock('@/features/chat/ui/InputToolbar') as {
@@ -383,6 +386,9 @@ describe('Tab - Cross-Provider Model Rejection', () => {
     expect(Notice).toHaveBeenCalledWith(expect.stringContaining('Cannot switch provider'));
     // Provider should remain Claude
     expect(tab.providerId).toBe('claude');
+    expect(plugin.settings.model).toBe(modelBefore);
+    expect(plugin.settings.savedProviderModel.claude).toBe(savedClaudeModelBefore);
+    expect(plugin.saveSettings).not.toHaveBeenCalled();
   });
 
   it('allows same-provider model change on bound tab', async () => {

@@ -10,7 +10,8 @@ vi.mock('@/utils/fileLink', () => ({
 import type { App } from 'obsidian';
 
 import type { ToolCallInfo } from '@/core/types';
-import { getToolLabel, getToolName, getToolSummary } from '@/features/chat/rendering/ToolCallRenderer';
+import { getToolName, getToolSummary } from '@/features/chat/rendering/toolCallViewModel';
+import { getToolLabel } from '@/features/chat/rendering/toolLabel';
 import ToolCall from '@/features/chat/ui/vue/transcript/blocks/ToolCall.vue';
 import type { TranscriptCallbacks } from '@/features/chat/ui/vue/transcript/transcriptCallbacks';
 import { APP_KEY, CALLBACKS_KEY } from '@/features/chat/ui/vue/transcript/transcriptKeys';
@@ -19,7 +20,7 @@ import { resolveOpenableVaultPath } from '@/utils/fileLink';
 /**
  * Parity twin of `toolCall.characterization.test.ts`: reproduces the same
  * six representative DOM contracts via `ToolCall.vue` instead of the legacy
- * `renderStoredToolCall`.
+ * the retired stored tool renderer.
  */
 function createToolCall(overrides: Partial<ToolCallInfo> = {}): ToolCallInfo {
   return {

@@ -130,6 +130,16 @@ export class FileContextManager {
     return this.state.getAttachedFiles();
   }
 
+  setAttachedFiles(files: string[]): void {
+    this.state.setAttachedFiles(files);
+    this.refreshChips();
+  }
+
+  setAttachedFolders(folders: string[]): void {
+    this.state.setAttachedFolders(folders);
+    this.refreshChips();
+  }
+
   /** Checks whether current note should be sent for this session. */
   shouldSendCurrentNote(notePath?: string | null): boolean {
     const resolvedPath = notePath ?? this.currentNotePath;
@@ -191,9 +201,13 @@ export class FileContextManager {
     if (!normalizedPath) return;
 
     if (!this.state.isSessionStarted()) {
-      // Pre-session file switch resets attachments — clears file AND folder pills.
-      this.state.clearAttachments();
-      if (!this.hasExcludedTag(file)) {
+      // The active-note pill follows editor navigation, but manually attached
+      // files and folders belong to the composer draft and must survive it.
+      const isExcluded = this.hasExcludedTag(file);
+      if (this.currentNotePath && (this.currentNotePath !== normalizedPath || isExcluded)) {
+        this.state.detachFile(this.currentNotePath);
+      }
+      if (!isExcluded) {
         this.currentNotePath = normalizedPath;
         this.state.attachFile(normalizedPath);
       } else {
@@ -418,17 +432,53 @@ export class FileContextManager {
   private handleFolderRenamed(oldPath: string, newPath: string): void {
     const normalizedOld = this.normalizePathForVault(oldPath);
     const normalizedNew = this.normalizePathForVault(newPath);
-    if (!normalizedOld || !this.state.getAttachedFolders().has(normalizedOld)) return;
-    this.state.detachFolder(normalizedOld);
-    if (normalizedNew) this.state.attachFolder(normalizedNew);
-    this.refreshChips();
+    if (!normalizedOld) return;
+
+    let needsUpdate = false;
+    if (normalizedOld && this.state.getAttachedFolders().has(normalizedOld)) {
+      this.state.detachFolder(normalizedOld);
+      if (normalizedNew) this.state.attachFolder(normalizedNew);
+      needsUpdate = true;
+    }
+
+    const prefix = `${normalizedOld}/`;
+    for (const file of [...this.state.getAttachedFiles()]) {
+      if (file === normalizedOld || file.startsWith(prefix)) {
+        const suffix = file.slice(normalizedOld.length);
+        this.state.detachFile(file);
+        if (normalizedNew) {
+          this.state.attachFile(`${normalizedNew}${suffix}`);
+        }
+        needsUpdate = true;
+      }
+    }
+
+    if (needsUpdate) {
+      this.refreshChips();
+    }
   }
 
   private handleFolderDeleted(deletedPath: string): void {
     const normalized = this.normalizePathForVault(deletedPath);
-    if (!normalized || !this.state.getAttachedFolders().has(normalized)) return;
-    this.state.detachFolder(normalized);
-    this.refreshChips();
+    if (!normalized) return;
+
+    let needsUpdate = false;
+    if (this.state.getAttachedFolders().has(normalized)) {
+      this.state.detachFolder(normalized);
+      needsUpdate = true;
+    }
+
+    const prefix = `${normalized}/`;
+    for (const file of [...this.state.getAttachedFiles()]) {
+      if (file === normalized || file.startsWith(prefix)) {
+        this.state.detachFile(file);
+        needsUpdate = true;
+      }
+    }
+
+    if (needsUpdate) {
+      this.refreshChips();
+    }
   }
 
   // ========================================

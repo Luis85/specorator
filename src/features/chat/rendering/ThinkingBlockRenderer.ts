@@ -12,6 +12,31 @@ export interface ThinkingBlockState {
   isExpanded: boolean;
 }
 
+/** Data-only thinking timing used by the Vue transcript streaming path. */
+export interface ThinkingTimingState {
+  content: string;
+  startTime: number;
+  timerInterval: number | null;
+}
+
+export function createThinkingTimingState(): ThinkingTimingState {
+  return { content: '', startTime: Date.now(), timerInterval: null };
+}
+
+export function finalizeThinkingTimingState(state: ThinkingTimingState): number {
+  if (state.timerInterval) {
+    window.clearInterval(state.timerInterval);
+    state.timerInterval = null;
+  }
+  return Math.floor((Date.now() - state.startTime) / 1000);
+}
+
+export function cleanupThinkingTimingState(state: ThinkingTimingState | null): void {
+  if (state?.timerInterval) {
+    window.clearInterval(state.timerInterval);
+  }
+}
+
 export function createThinkingBlock(
   parentEl: HTMLElement,
   renderContent: RenderContentFn
@@ -87,40 +112,10 @@ export function finalizeThinkingBlock(state: ThinkingBlockState): number {
   return durationSeconds;
 }
 
-export function cleanupThinkingBlock(state: ThinkingBlockState | null) {
+export function cleanupThinkingBlock(
+  state: Pick<ThinkingBlockState, 'timerInterval'> | ThinkingTimingState | null,
+) {
   if (state?.timerInterval) {
     window.clearInterval(state.timerInterval);
   }
-}
-
-export function renderStoredThinkingBlock(
-  parentEl: HTMLElement,
-  content: string,
-  durationSeconds: number | undefined,
-  renderContent: RenderContentFn
-): HTMLElement {
-  const wrapperEl = parentEl.createDiv({ cls: 'specorator-thinking-block' });
-
-  // Header (clickable to expand/collapse)
-  const header = wrapperEl.createDiv({ cls: 'specorator-thinking-header' });
-  header.setAttribute('tabindex', '0');
-  header.setAttribute('role', 'button');
-  header.setAttribute('aria-label', 'Extended thinking - click to expand');
-
-  // Label with duration
-  const labelEl = header.createSpan({ cls: 'specorator-thinking-label' });
-  const labelText = durationSeconds !== undefined ? `Thought for ${durationSeconds}s` : 'Thought';
-  labelEl.setText(labelText);
-
-  // Collapsible content
-  const contentEl = wrapperEl.createDiv({ cls: 'specorator-thinking-content' });
-  void renderContent(contentEl, content).catch(() => {
-    contentEl.setText(content);
-  });
-
-  // Setup collapsible behavior (handles click, keyboard, ARIA, CSS)
-  const state = { isExpanded: false };
-  setupCollapsible(wrapperEl, header, contentEl, state);
-
-  return wrapperEl;
 }

@@ -1,5 +1,3 @@
-import type { App } from 'obsidian';
-
 import type { ChatRuntime } from '../../../core/runtime/ChatRuntime';
 import type { ChatTurnMetadata, ChatTurnRequest } from '../../../core/runtime/types';
 import { TOOL_EXIT_PLAN_MODE } from '../../../core/tools/toolNames';
@@ -9,7 +7,6 @@ import type { CanvasSelectionContext } from '../../../utils/canvas';
 import { formatDurationMmSs } from '../../../utils/date';
 import type { EditorSelectionContext } from '../../../utils/editor';
 import { COMPLETION_FLAVOR_WORDS } from '../constants';
-import { updateToolCallResult } from '../rendering/ToolCallRenderer';
 import type { ChatState } from '../state/ChatState';
 import type { FileContextManager } from '../ui/FileContext';
 import type { ImageContextManager } from '../ui/ImageContext';
@@ -124,6 +121,90 @@ export function resolveComposerSourceImages(
 
 export function normalizeTabModelOverride(raw: string | null | undefined): string | null {
   return typeof raw === 'string' && raw.trim() ? raw.trim() : null;
+}
+
+/** Outgoing composer draft captured before a history switch clears the input. */
+export interface ComposerSwitchDraftSnapshot {
+  inputText: string;
+  attachedFiles: string[];
+  attachedFolders: string[];
+}
+
+export interface ComposerSwitchDraftDeps {
+  getInputEl: () => HTMLTextAreaElement;
+  getFileContextManager: () => {
+    getAttachedFiles?: () => Iterable<string>;
+    getAttachedFolders?: () => Iterable<string>;
+    setAttachedFiles?: (paths: string[]) => void;
+    setAttachedFolders?: (paths: string[]) => void;
+  } | null;
+}
+
+export function captureComposerSwitchDraft(deps: ComposerSwitchDraftDeps): ComposerSwitchDraftSnapshot {
+  const fileCtx = deps.getFileContextManager();
+  return {
+    inputText: deps.getInputEl().value,
+    attachedFiles: [...(fileCtx?.getAttachedFiles?.() ?? [])],
+    attachedFolders: [...(fileCtx?.getAttachedFolders?.() ?? [])],
+  };
+}
+
+export function restoreComposerSwitchDraft(
+  deps: ComposerSwitchDraftDeps,
+  snapshot: ComposerSwitchDraftSnapshot,
+  resetInputHeight?: () => void,
+): void {
+  deps.getInputEl().value = snapshot.inputText;
+  resetInputHeight?.();
+  const fileCtx = deps.getFileContextManager();
+  fileCtx?.setAttachedFiles?.(snapshot.attachedFiles);
+  fileCtx?.setAttachedFolders?.(snapshot.attachedFolders);
+}
+
+export interface ComposerRollbackSnapshot {
+  inputText: string;
+  shouldRestoreInput: boolean;
+  attachedFiles: string[];
+  attachedFolders: string[];
+}
+
+export function captureComposerRollbackSnapshot(send: ComposerSendContext): ComposerRollbackSnapshot {
+  return {
+    inputText: send.content,
+    shouldRestoreInput: send.shouldUseInput || send.consumesComposerDraft,
+    attachedFiles: [...(send.fileContextManager?.getAttachedFiles?.() ?? [])],
+    attachedFolders: [...(send.fileContextManager?.getAttachedFolders?.() ?? [])],
+  };
+}
+
+export function rollbackOptimisticOutgoingTurn(
+  state: ChatState,
+  snapshot: ComposerRollbackSnapshot,
+  send: ComposerSendContext,
+  userMsgId: string,
+  assistantMsgId: string,
+  resetInputHeight: () => void,
+): void {
+  state.messages = state.messages.filter(
+    (message) => message.id !== userMsgId && message.id !== assistantMsgId,
+  );
+  state.isStreaming = false;
+  state.hasPendingConversationSave = false;
+  state.activeMessageId = null;
+  state.activeBlockIndex = -1;
+  state.currentContentEl = null;
+  state.currentTextEl = null;
+  state.currentTextContent = '';
+  state.currentThinkingState = null;
+
+  if (snapshot.shouldRestoreInput) {
+    send.inputEl.value = snapshot.inputText;
+    resetInputHeight();
+  }
+  if (send.fileContextManager) {
+    send.fileContextManager.setAttachedFiles?.(snapshot.attachedFiles);
+    send.fileContextManager.setAttachedFolders?.(snapshot.attachedFolders);
+  }
 }
 
 export function beginStreamingTurnState(
@@ -250,7 +331,6 @@ export function bakeResponseDurationFooter(
  * the saved conversation renders correctly when revisited.
  */
 export function completeApprovedNewSessionPlanToolCalls(
-  app: App,
   state: ChatState,
   finalAssistantMsg: ChatMessage,
 ): void {
@@ -262,7 +342,6 @@ export function completeApprovedNewSessionPlanToolCalls(
     if (tc.name === TOOL_EXIT_PLAN_MODE && !tc.result) {
       tc.status = 'completed';
       tc.result = 'User approved the plan and started a new session.';
-      updateToolCallResult(app, tc.id, tc, state.toolCallElements);
     }
   }
 }

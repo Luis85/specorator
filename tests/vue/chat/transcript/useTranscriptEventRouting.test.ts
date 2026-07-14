@@ -21,6 +21,8 @@ describe('useTranscriptEventRouting', () => {
     push({
       messages: [{ id: '1', role: 'assistant', content: '', timestamp: 0 }],
       activeStream: null,
+      conversationId: 'conv-1',
+      projectionRevision: 1,
       greeting: 'Good morning',
       loadingText: null,
       hydrationError: null,

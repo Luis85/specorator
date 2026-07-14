@@ -1,7 +1,7 @@
 ---
 title: Cursor ACP diagnostics capture — wire, stderr, and lifecycle recording
 date: 2026-07-11
-status: approved (brainstorm-validated)
+status: implemented (2026-07-14 hardening complete)
 scope: src/providers/cursor, src/providers/acp, src/core/transport, src/core/logging
 relates-to: docs/superpowers/specs/2026-07-11-cursor-acp-runtime-design.md
 ---
@@ -55,11 +55,13 @@ agent acp stdio ──AcpSubprocess──▶ JsonRpcStdioClient
 
 - Writer I/O failure: disable capture for the session, warn once via
   `logger.scope('cursor.capture')`, continue the turn untouched.
-- Setting toggled mid-session: takes effect on the next process spawn (no
-  hot-attach — keeps the writer lifecycle identical to the process lifecycle).
-- Redaction: serialized frame lines run through the core `scrubString`
-  value-level scrubber (same contract as the logger) before hitting disk;
-  the spawn event records env variable NAMES only, never values.
+- Setting toggled mid-session: reconciled against the live process. Transport
+  hooks always dereference the current writer, so enabling creates one without
+  respawn and disabling flushes/drops it immediately.
+- Redaction: JSON frames are parsed and deep key-redacted before serialization,
+  then value-level scrubbing catches secret-shaped substrings; malformed/non-JSON
+  lines use the string scrubber fallback. Spawn events record env variable names
+  only, never values.
 
 ## Testing
 
@@ -72,8 +74,8 @@ agent acp stdio ──AcpSubprocess──▶ JsonRpcStdioClient
 
 ## Out of scope (YAGNI)
 
-Zip/export bundles, hot-attach mid-session, Opencode adoption (seam is ready;
-wire it when needed), UI viewers for captures.
+Zip/export bundles, Opencode adoption (seam is ready; wire it when needed), and
+UI viewers for captures.
 
 ## Validation tie-in
 

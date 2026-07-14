@@ -131,7 +131,7 @@ describe('switchTo history (projection → transcript)', () => {
     projection.emit();
     projection.setLoadingText('Loading…');
     await flushPromises();
-    expect(container.querySelector('.specorator-loading')).not.toBeNull();
+    expect(container.querySelector('.specorator-loading--overlay')).not.toBeNull();
     expect(container.querySelector('.specorator-message')).toBeNull();
 
     // Phase B — restoreConversation: assign the loaded transcript, then clear
@@ -141,7 +141,7 @@ describe('switchTo history (projection → transcript)', () => {
     projection.setLoadingText(null);
     await flushPromises();
 
-    expect(container.querySelector('.specorator-loading')).toBeNull();
+    expect(container.querySelector('.specorator-loading--overlay')).toBeNull();
     expect(container.querySelectorAll('.specorator-message')).toHaveLength(5);
     expect(container.textContent).toContain('historical message 4');
   });

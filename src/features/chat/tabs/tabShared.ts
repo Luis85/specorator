@@ -193,6 +193,26 @@ export async function updateTabProviderSettings(
   return snapshot;
 }
 
+/** Synchronously projects a manual model pick into plugin settings (incl. effort). */
+export function commitModelPickToProviderSettings(
+  plugin: SpecoratorPlugin,
+  providerId: ProviderId,
+  model: string,
+): void {
+  const uiConfig = ProviderRegistry.getChatUIConfig(providerId);
+  const snapshot = ProviderSettingsCoordinator.getProviderSettingsSnapshot(
+    plugin.settings,
+    providerId,
+  );
+  snapshot.model = model;
+  uiConfig.applyModelDefaults(model, snapshot);
+  ProviderSettingsCoordinator.commitProviderSettingsSnapshot(
+    plugin.settings,
+    providerId,
+    snapshot,
+  );
+}
+
 export function refreshTabProviderUI(tab: TabData, plugin: SpecoratorPlugin): void {
   const capabilities = getTabCapabilities(tab, plugin);
   const permissionMode = getTabPermissionMode(tab, plugin);

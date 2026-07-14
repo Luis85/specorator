@@ -5,7 +5,7 @@ import type SpecoratorPlugin from '../../../main';
 import { cleanupThinkingBlock } from '../rendering/ThinkingBlockRenderer';
 import { getTabProviderId } from './providerResolution';
 import { createTabRuntimeHost } from './tabRuntimeHost';
-import { isClosingLifecycleState, isConversationLike } from './tabShared';
+import { isConversationLike } from './tabShared';
 import type { TabData } from './types';
 
 /**
@@ -54,82 +54,89 @@ export async function initializeTabService(
     return;
   }
 
-  let service: ChatRuntime | null = null;
-  let unsubscribeReadyState: (() => void) | null = null;
-  const previousService = tab.service;
-
-  try {
-    tab.service = null;
-    tab.serviceInitialized = false;
-    // Record the outgoing cleanup on the tab before awaiting (same pattern as
-    // cleanupTabRuntime) so an overlapping initializeTabService awaits it via
-    // tab.pendingRuntimeCleanup instead of constructing a replacement while the
-    // old CLI process is still exiting.
-    if (typeof previousService?.cleanup === 'function') {
-      const cleanupPromise = Promise.resolve(previousService.cleanup()).finally(() => {
-        if (tab.pendingRuntimeCleanup === cleanupPromise) {
-          tab.pendingRuntimeCleanup = null;
-        }
-      });
-      tab.pendingRuntimeCleanup = cleanupPromise;
-      await cleanupPromise;
-    }
-    // A previous switch path may have detached and torn down a runtime
-    // fire-and-forget (e.g. the new-conversation reset). Await that too so the
-    // old process is fully gone before we construct a replacement.
-    if (tab.pendingRuntimeCleanup) {
-      await tab.pendingRuntimeCleanup;
-    }
-
-    // Construction-time UI host (ADR-0001 Phase 2): the host closes over live
-    // tab state, so it is built once per runtime and never re-wired.
-    const runtime = ProviderRegistry.createChatRuntime({
-      plugin,
-      providerId,
-      host: createTabRuntimeHost(tab, plugin),
-    });
-    service = runtime;
-    unsubscribeReadyState = runtime.onReadyStateChange(() => {});
-    tab.dom.eventCleanups.push(() => unsubscribeReadyState?.());
-
-    // Passive sync: set session state without starting the runtime process.
-    // The runtime starts on demand when query() is called.
-    if (conversation) {
-      const hasMessages = conversation.messages.length > 0;
-      const externalContextPaths = hasMessages
-        ? conversation.externalContextPaths || []
-        : (plugin.settings.persistentExternalContextPaths || []);
-
-      runtime.syncConversationState(conversation, externalContextPaths);
-    }
-
-    // Re-check after async operations — tab may have been closed during init
-    if (isClosingLifecycleState(tab.lifecycleState)) {
-      unsubscribeReadyState?.();
-      await service?.cleanup();
+  if (tab.runtimeInitPromise) {
+    await tab.runtimeInitPromise.catch(() => {});
+    if (tab.serviceInitialized && tab.service?.providerId === providerId) {
       return;
     }
-
-
-    tab.providerId = providerId;
-    tab.service = service;
-    tab.serviceInitialized = true;
-
-    // Update lifecycle state
-    if (tab.lifecycleState === 'blank') {
-      tab.draftModel = null;
-    }
-    tab.lifecycleState = 'bound_active';
-  } catch (error) {
-    // Clean up partial state on failure
-    unsubscribeReadyState?.();
-    await service?.cleanup();
-    tab.service = null;
-    tab.serviceInitialized = false;
-
-    // Re-throw to let caller handle (e.g., show error to user)
-    throw error;
   }
+
+  const initGeneration = (tab.runtimeInitGeneration ?? 0) + 1;
+  tab.runtimeInitGeneration = initGeneration;
+  const isStaleInit = (): boolean =>
+    tab.lifecycleState === 'closing' || tab.runtimeInitGeneration !== initGeneration;
+
+  const runInit = async (): Promise<void> => {
+    let service: ChatRuntime | null = null;
+    let unsubscribeReadyState: (() => void) | null = null;
+    const previousService = tab.service;
+
+    try {
+      tab.service = null;
+      tab.serviceInitialized = false;
+      if (typeof previousService?.cleanup === 'function') {
+        const cleanupPromise = Promise.resolve(previousService.cleanup()).finally(() => {
+          if (tab.pendingRuntimeCleanup === cleanupPromise) {
+            tab.pendingRuntimeCleanup = null;
+          }
+        });
+        tab.pendingRuntimeCleanup = cleanupPromise;
+        await cleanupPromise;
+      }
+      if (tab.pendingRuntimeCleanup) {
+        await tab.pendingRuntimeCleanup;
+      }
+      if (isStaleInit()) {
+        return;
+      }
+
+      const runtime = ProviderRegistry.createChatRuntime({
+        plugin,
+        providerId,
+        host: createTabRuntimeHost(tab, plugin),
+      });
+      service = runtime;
+      unsubscribeReadyState = runtime.onReadyStateChange(() => {});
+      tab.dom.eventCleanups.push(() => unsubscribeReadyState?.());
+
+      if (conversation) {
+        const hasMessages = conversation.messages.length > 0;
+        const externalContextPaths = hasMessages
+          ? conversation.externalContextPaths || []
+          : (plugin.settings.persistentExternalContextPaths || []);
+
+        runtime.syncConversationState(conversation, externalContextPaths);
+      }
+
+      if (isStaleInit()) {
+        unsubscribeReadyState?.();
+        await service?.cleanup();
+        return;
+      }
+
+      tab.providerId = providerId;
+      tab.service = service;
+      tab.serviceInitialized = true;
+
+      if (tab.lifecycleState === 'blank') {
+        tab.draftModel = null;
+      }
+      tab.lifecycleState = 'bound_active';
+    } catch (error) {
+      unsubscribeReadyState?.();
+      await service?.cleanup();
+      tab.service = null;
+      tab.serviceInitialized = false;
+      throw error;
+    }
+  };
+
+  tab.runtimeInitPromise = runInit().finally(() => {
+    if (tab.runtimeInitGeneration === initGeneration) {
+      tab.runtimeInitPromise = null;
+    }
+  });
+  await tab.runtimeInitPromise;
 }
 
 /**
@@ -155,12 +162,10 @@ export function deactivateTab(tab: TabData): void {
 }
 
 /**
- * Cleans up a tab and releases all resources.
- * Made async to ensure proper cleanup ordering.
+ * Stops selection/navigation controllers and disposes the conversation controller.
  */
-export async function destroyTab(tab: TabData): Promise<void> {
-  tab.lifecycleState = 'closing';
-
+function stopTabControllers(tab: TabData): void {
+  tab.controllers.conversationController?.dispose();
   tab.controllers.selectionController?.stop();
   tab.controllers.selectionController?.clear();
   tab.controllers.browserSelectionController?.stop();
@@ -168,13 +173,11 @@ export async function destroyTab(tab: TabData): Promise<void> {
   tab.controllers.canvasSelectionController?.stop();
   tab.controllers.canvasSelectionController?.clear();
   tab.controllers.navigationController?.dispose();
+}
 
-  cleanupThinkingBlock(tab.state.currentThinkingState);
-  tab.state.currentThinkingState = null;
-
-  // Dismiss pending inline prompts before DOM teardown
+/** Tears down tab UI widgets and auxiliary services before DOM removal. */
+function destroyTabUi(tab: TabData): void {
   tab.controllers.inputController?.dismissPendingApproval();
-
   tab.controllers.inputController?.destroyResumeDropdown();
   tab.ui.fileContextManager?.destroy();
   tab.ui.editedFilesView?.destroy();
@@ -196,6 +199,21 @@ export async function destroyTab(tab: TabData): Promise<void> {
   tab.ui.statusPanel = null;
   tab.ui.navigationSidebar?.destroy();
   tab.ui.navigationSidebar = null;
+}
+
+/**
+ * Cleans up a tab and releases all resources.
+ * Made async to ensure proper cleanup ordering.
+ */
+export async function destroyTab(tab: TabData): Promise<void> {
+  tab.lifecycleState = 'closing';
+
+  stopTabControllers(tab);
+
+  cleanupThinkingBlock(tab.state.currentThinkingState);
+  tab.state.currentThinkingState = null;
+
+  destroyTabUi(tab);
 
   tab.services.subagentManager.orphanAllActive();
   tab.services.subagentManager.clear();
@@ -213,6 +231,9 @@ export async function destroyTab(tab: TabData): Promise<void> {
 
   // Clean up runtime before removing DOM. Await so the provider subprocess is
   // actually killed before teardown completes (prevents orphaned CLI processes).
+  if (tab.pendingRuntimeCleanup) {
+    await tab.pendingRuntimeCleanup.catch(() => {});
+  }
   await tab.service?.cleanup();
   tab.service = null;
   tab.dom.contentEl.remove();

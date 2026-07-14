@@ -118,4 +118,35 @@ describe('AskQuestionResult', () => {
 
     expect(container.querySelector('.specorator-tool-result-text')?.textContent).toBe('Waiting for answer...');
   });
+
+  it('masks secret answers in review rows after hydration', async () => {
+    const toolCall = createToolCall({
+      input: { questions: [{ id: 'q1', question: 'API key?', isSecret: true }] },
+      resolvedAnswers: { q1: 'sk-live-secret-value' },
+    });
+    const { container } = render(AskQuestionResult, { props: { toolCall } });
+    await flushPromises();
+
+    expect(container.querySelector('.specorator-ask-review-a-text')?.textContent).toBe('••••••');
+    expect(container.textContent).not.toContain('sk-live-secret-value');
+  });
+
+  it('leaves non-secret answers visible in review rows', async () => {
+    const toolCall = createToolCall({
+      input: {
+        questions: [
+          { id: 'q1', question: 'Color?', isSecret: false },
+          { id: 'q2', question: 'API key?', isSecret: true },
+        ],
+      },
+      resolvedAnswers: { q1: 'Blue', q2: 'sk-live-secret-value' },
+    });
+    const { container } = render(AskQuestionResult, { props: { toolCall } });
+    await flushPromises();
+
+    const answers = container.querySelectorAll('.specorator-ask-review-a-text');
+    expect(answers[0]?.textContent).toBe('Blue');
+    expect(answers[1]?.textContent).toBe('••••••');
+    expect(container.textContent).not.toContain('sk-live-secret-value');
+  });
 });

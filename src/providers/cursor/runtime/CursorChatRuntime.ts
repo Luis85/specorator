@@ -1,5 +1,7 @@
 import * as path from 'node:path';
 
+import { Notice } from 'obsidian';
+
 import { SPECORATOR_STORAGE_PATH } from '../../../core/bootstrap/StoragePaths';
 import { ProviderSettingsCoordinator } from '../../../core/providers/ProviderSettingsCoordinator';
 import type { ProviderCapabilities, ProviderId } from '../../../core/providers/types';
@@ -19,6 +21,7 @@ import { TOOL_TODO_WRITE } from '../../../core/tools/toolNames';
 import type { ChatMessage, Conversation, SlashCommand, StreamChunk } from '../../../core/types';
 import type { PluginContext } from '../../../core/types/PluginContext';
 import { asSettingsBag } from '../../../core/types/settings';
+import { t } from '../../../i18n/i18n';
 import { getVaultPath } from '../../../utils/path';
 import type { AcpJsonRpcTransport, AcpSubprocess } from '../../acp';
 import {
@@ -37,26 +40,35 @@ import {
   buildAcpUsageInfo,
   buildActiveTurnEffect,
   extractAcpSessionModelState,
+  JsonRpcErrorResponse,
+  JsonRpcTransportClosedError,
   mapApprovalDecision,
   normalizeApprovalInput,
   selectPermissionOption,
 } from '../../acp';
 import { CURSOR_PROVIDER_CAPABILITIES } from '../capabilities';
 import { CursorAcpCaptureWriter } from '../diagnostics/CursorAcpCaptureWriter';
+import { validateCursorAcpSessionVault } from '../history/cursorSessionOwnership';
 import { encodeCursorTurn } from '../prompt/encodeCursorTurn';
 import { getCursorEnabledModels, getCursorProviderSettings } from '../settings';
 import { getCursorState, resolveCursorSessionId } from '../types';
+import { cursorChatUIConfig } from '../ui/CursorChatUIConfig';
 import { registerCursorAcpExtensions } from './cursorAcpExtensions';
 import { buildCursorAcpLaunchSpec, startCursorAcpProcess } from './cursorAcpLaunch';
 import { buildCursorAcpPromptBlocks } from './cursorAcpPrompt';
 import { resolveCursorAcpMode } from './cursorAcpSession';
 import { createCursorAcpToolStreamAdapter } from './cursorAcpToolNames';
-import { matchAdvertisedModelValue } from './cursorAdvertisedModels';
+import { matchAdvertisedModelValueWithFamilyFallback } from './cursorAdvertisedModels';
 import { loadCursorAdvertisedModels, saveCursorAdvertisedModels } from './cursorAdvertisedModelStore';
 import { buildCursorAgentEnvironment } from './cursorAgentEnv';
 import { runWithCursorAgentSpawnLock } from './cursorAgentSpawnLock';
-import { resolveCursorModelSelectionForCli } from './cursorCliModel';
+import {
+  resolveCursorEffortForFamily,
+  resolveCursorModelSelectionForCli,
+  shouldAllowFamilyWireFallback,
+} from './cursorCliModel';
 import { cleanupStaleCursorMcpServer } from './cursorMcpCleanup';
+import { buildCursorModelCatalogCliKey } from './cursorModelCatalog';
 import { getCachedCursorModelIds } from './cursorModelCatalog';
 import { mapCursorToolInput } from './cursorToolInputMapping';
 import { MAX_CURSOR_TOOL_RESULT_CHARS } from './cursorToolNormalization';
@@ -84,6 +96,8 @@ const CURSOR_CANCEL_ESCALATION_MS = 5_000;
 // just above the cancel escalation (which recycles the process and settles the
 // prompt) so query() can never hang past it.
 const CURSOR_TURN_SERIALIZE_CEILING_MS = CURSOR_CANCEL_ESCALATION_MS + 1_000;
+const CURSOR_TURN_BUSY_MESSAGE =
+  'Cursor agent is still finishing the previous turn. Stop the current turn or wait a moment, then retry.';
 const CURSOR_OLD_CLI_MESSAGE =
   'Cursor CLI does not support ACP (`agent acp`). Update cursor-agent (`cursor-agent update` or reinstall from cursor.com/cli), then retry.';
 const CURSOR_LOGIN_MESSAGE =
@@ -97,17 +111,23 @@ export class CursorChatRuntime implements ChatRuntime {
   // awaits it — bounded by the cancel-escalation window — so turns serialize and a
   // cancelled turn's late blocking requests can't leak into the next turn.
   private pendingPromptSettled: Promise<void> | null = null;
+  /** Atomically reserves the next prompt slot across simultaneous query() starts. */
+  private promptStartTail: Promise<void> = Promise.resolve();
   // Wire ids from the session's advertised model `configOptions`/`models`. Cursor
   // ACP rejects a bare CLI id (`gpt-5.4-medium`) that is not one of these exact
   // values — it can report the model as selected yet fail the next prompt with
   // "AI Model Not Found". applySelectedModel only sends an advertised value.
   private advertisedModelValues: string[] | null = null;
+  private activeCliKey: string | null = null;
   // Aborts a pending blocking cursor/ask_question await so cancel()/cleanup can
   // answer the still-open RPC instead of leaving the agent stuck on it.
   private askQuestionAbortController: AbortController | null = null;
-  // Set by cancel(), cleared at turn entry: catches a Stop during awaitPriorTurnSettled,
-  // where no turn abort controller exists yet so the aborted-signal check would miss it.
-  private startupCancelRequested = false;
+  // Set by cancel() for the turn currently claiming/waiting on prompt ownership.
+  // Consumed once when ownership is granted so a later queued query cannot clear
+  // an earlier turn's Stop that arrived during awaitPriorTurnSettled.
+  private ownershipCancelRequested = false;
+  /** Count of query() callers blocked in awaitPriorTurnSettled. */
+  private serializeWaiters = 0;
   private autoApprovePermissions = false;
   // Diagnostics-only, default-off sink for ACP wire frames/stderr/lifecycle
   // events (see docs/superpowers/specs/2026-07-11-cursor-acp-capture-design.md).
@@ -119,6 +139,8 @@ export class CursorChatRuntime implements ChatRuntime {
   private contextUsage: AcpUsageUpdate | null = null;
   private currentModeId: string | null = null;
   private currentSessionModelId: string | null = null;
+  /** Conversation explicitly bound to this per-tab runtime. */
+  private boundConversationId: string | null = null;
   private currentTurnIsPlan = false;
   private currentTurnSawAssistantContent = false;
   // Set once cursor/create_plan has blocked on the user's decision in-turn
@@ -147,6 +169,16 @@ export class CursorChatRuntime implements ChatRuntime {
   private turnMetadata: ChatTurnMetadata = {};
   private unregisterExtensions: (() => void) | null = null;
   private unregisterTransportClose: (() => void) | null = null;
+  /** Bumps on cleanup/restart so stale startup work cannot publish handles. */
+  private processGeneration = 0;
+  /** Serializes startup, forced restart, and cleanup across concurrent callers. */
+  private lifecycleTail: Promise<void> = Promise.resolve();
+  /** Dedupes concurrent cold starts while a startup is already in flight. */
+  private startupPromise: Promise<boolean> | null = null;
+  /** Unique per runtime instance so capture dirs never collide across restarts. */
+  private readonly runtimeInstanceId =
+    `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+  private captureSequence = 0;
 
   constructor(
     private readonly plugin: PluginContext,
@@ -177,6 +209,7 @@ export class CursorChatRuntime implements ChatRuntime {
   setResumeCheckpoint(_checkpointId: string | undefined): void {}
 
   syncConversationState(conversation: ChatRuntimeConversationState | null): void {
+    this.boundConversationId = conversation?.id ?? null;
     const nextSessionId = conversation ? resolveCursorSessionId(conversation) : null;
     if (this.sessionId !== nextSessionId) {
       this.sessionInvalidated = false;
@@ -200,40 +233,62 @@ export class CursorChatRuntime implements ChatRuntime {
       return false;
     }
 
-    // A forced ensureReady (env/CLI resync) must restart even when the process
-    // is alive; startProcess shuts the old one down before the fresh spawn.
-    const alive = Boolean(
-      this.process?.isAlive() && this.transport && !this.transport.isClosed && this.connection,
-    );
-    if (alive && options?.force !== true) {
-      // The process is reused across turns, so a captureAcpTraffic toggle since
-      // the spawn never reached it — reconcile the writer against the current
-      // setting here (no respawn; the sink hooks read this.captureWriter live).
-      await this.reconcileCaptureWriter(cli);
-      return true;
+    if (this.startupPromise && options?.force !== true) {
+      return this.startupPromise;
     }
 
-    try {
-      await this.startProcess(cli);
-      return true;
-    } catch (error) {
-      this.setReady(false);
-      this.plugin.logger.scope('cursor.acp').warn('startup failed', error);
-      return false;
-    }
+    return this.withLifecycleLock(async () => {
+      // A forced ensureReady (env/CLI resync) must restart even when the process
+      // is alive; startProcess shuts the old one down before the fresh spawn.
+      const alive = Boolean(
+        this.process?.isAlive() && this.transport && !this.transport.isClosed && this.connection,
+      );
+      if (alive && options?.force !== true) {
+        // The process is reused across turns, so a captureAcpTraffic toggle since
+        // the spawn never reached it — reconcile the writer against the current
+        // setting here (no respawn; the sink hooks read this.captureWriter live).
+        await this.reconcileCaptureWriter(cli);
+        return true;
+      }
+
+      if (this.startupPromise && options?.force !== true) {
+        return this.startupPromise;
+      }
+
+      this.startupPromise = (async () => {
+        try {
+          await this.startProcess(cli);
+          return true;
+        } catch (error) {
+          this.setReady(false);
+          this.plugin.logger.scope('cursor.acp').warn('startup failed', error);
+          return false;
+        } finally {
+          this.startupPromise = null;
+        }
+      })();
+
+      return this.startupPromise;
+    });
   }
 
   // Fresh per-turn abort scope for the blocking ask_question / create_plan RPCs. A
-  // Stop during awaitPriorTurnSettled (startupCancelRequested) pre-aborts it, since
+  // Stop during awaitPriorTurnSettled pre-aborts it via cancelDuringClaimWait, since
   // turnSignal didn't exist then for the startup-cancel bail to catch it.
-  private beginTurnAbortScope(): AbortSignal {
+  private beginTurnAbortScope(cancelDuringClaimWait: boolean): AbortSignal {
     this.askQuestionAbortController?.abort();
     const controller = new AbortController();
-    if (this.startupCancelRequested) {
+    if (cancelDuringClaimWait) {
       controller.abort();
     }
     this.askQuestionAbortController = controller;
     return controller.signal;
+  }
+
+  private consumeOwnershipCancelRequest(): boolean {
+    const requested = this.ownershipCancelRequested;
+    this.ownershipCancelRequested = false;
+    return requested;
   }
 
   async *query(
@@ -241,7 +296,6 @@ export class CursorChatRuntime implements ChatRuntime {
     conversationHistory?: ChatMessage[],
     queryOptions?: ChatRuntimeQueryOptions,
   ): AsyncGenerator<StreamChunk> {
-    this.startupCancelRequested = false;
     const cli = this.plugin.getResolvedProviderCliPath('cursor');
     if (!cli) {
       yield { type: 'error', content: 'Cursor Agent CLI not found. Configure it in Cursor settings.' };
@@ -253,138 +307,191 @@ export class CursorChatRuntime implements ChatRuntime {
     // share one session id, so A's late sessionId-less blocking request could see B's
     // rotated signal and open A's plan into B. Waiting for A to settle BEFORE rotating
     // the controller keeps A's aborted signal current so A's late requests cancel.
-    await this.awaitPriorTurnSettled();
-    // Reset AFTER the wait: a cancelled prior turn's finalize runs during it and would else leave stale planCompleted.
-    this.turnMetadata = {};
-
-    const turnSignal = this.beginTurnAbortScope();
-
-    yield { type: 'user_message_start', content: turn.persistedContent };
-    yield { type: 'assistant_message_start' };
-
-    if (!this.staleMcpCleaned) {
-      this.staleMcpCleaned = true;
-      await cleanupStaleCursorMcpServer();
-    }
-
-    let startupError: string | null = null;
-    if (!(await this.ensureReady())) {
-      startupError = this.lastStartupErrorMessage ?? CURSOR_OLD_CLI_MESSAGE;
-    }
-    if (startupError || !this.connection) {
-      yield { type: 'error', content: startupError ?? 'Cursor ACP runtime is not ready.' };
+    const releasePromptOwnership = await this.claimPromptOwnership();
+    if (!releasePromptOwnership) {
+      yield { type: 'error', content: CURSOR_TURN_BUSY_MESSAGE };
       yield { type: 'done' };
       return;
     }
 
-    const cwd = getVaultPath(this.plugin.app) ?? process.cwd();
-    // Capture the session id BEFORE ensureSession (which may mint a fresh one): a
-    // turn starting without one (fork, provider switch, resume whose native session
-    // never loaded) still carries history that must be re-injected into the prompt.
-    const sessionIdAtTurnStart = this.sessionId;
-    const sessionId = await this.ensureSession(cwd);
-    if (!sessionId) {
-      yield { type: 'error', content: this.lastStartupErrorMessage ?? 'Failed to open a Cursor session.' };
-      yield { type: 'done' };
-      return;
-    }
+    let promptDispatched = false;
+    try {
+      // Reset AFTER the wait: a cancelled prior turn's finalize runs during it and would else leave stale planCompleted.
+      this.turnMetadata = {};
 
-    const shouldBootstrapHistory = (conversationHistory?.length ?? 0) > 0
-      && (!sessionIdAtTurnStart || this.sessionInvalidated);
+      const cancelDuringClaimWait = this.consumeOwnershipCancelRequest();
+      const turnSignal = this.beginTurnAbortScope(cancelDuringClaimWait);
 
-    const mode = resolveCursorAcpMode(this.plugin.settings.permissionMode);
-    this.autoApprovePermissions = mode.autoApprove;
-    // Independent RPCs on the same session — issued concurrently so the turn
-    // doesn't pay two sequential round-trips before the prompt is sent.
-    await Promise.all([
-      this.applyMode(sessionId, mode.modeId),
-      this.applySelectedModel(sessionId, queryOptions),
-    ]);
-    // Arm the plan flag only once plan mode is actually in effect: a requested plan
-    // turn whose set_mode failed (applyMode swallows rejections) runs as non-plan so
-    // its ordinary assistant text won't spuriously open the post-plan approval card.
-    // The cursor/create_plan side-channel still sets planCompleted if the agent plans.
-    this.currentTurnIsPlan = mode.modeId === 'plan' && this.currentModeId === 'plan';
+      yield { type: 'user_message_start', content: turn.persistedContent };
+      yield { type: 'assistant_message_start' };
 
-    // Stop during startup aborts turnSignal; beginTurnAbortScope also pre-aborts it
-    // for a Stop during awaitPriorTurnSettled. Bail before session/prompt fires.
-    if (turnSignal.aborted) {
-      yield { type: 'done' };
-      return;
-    }
-
-    this.activeTurn?.queue.close();
-    const activeTurn: ActiveTurn = {
-      queue: new AcpStreamChunkQueue(),
-      sessionId,
-      usageModel: this.resolveActiveModel(queryOptions),
-      promptSettled: false,
-    };
-    this.activeTurn = activeTurn;
-    this.currentTurnSawAssistantContent = false;
-    this.currentTurnPlanDecidedInline = false;
-    this.currentTurnPlanToolCallId = null;
-    this.contextUsage = null;
-    this.sessionUpdateNormalizer.reset();
-    this.toolStreamAdapter.reset();
-
-    const history = shouldBootstrapHistory ? (conversationHistory ?? []) : [];
-
-    const promptPromise = this.connection.prompt({
-      prompt: buildCursorAcpPromptBlocks(turn, history, queryOptions?.boundAgentPrompt),
-      sessionId,
-    }).then((response) => {
-      this.emitFinalUsage(activeTurn, response.usage ?? null);
-      this.finalizePlanTurnMetadata();
-      this.pushTurnTermination(activeTurn, [{ type: 'done' }]);
-    }).catch((error) => {
-      this.pushTurnTermination(activeTurn, [{ type: 'error', content: this.formatRuntimeError(error) }, { type: 'done' }]);
-    }).finally(() => {
-      // Prompt settled: the one signal that stands the escalation timer down.
-      // Set before nulling activeTurn so the timer can't see a nulled activeTurn
-      // paired with an unsettled prompt.
-      activeTurn.promptSettled = true;
-      if (this.activeTurn === activeTurn) {
-        this.activeTurn = null;
+      if (!this.staleMcpCleaned) {
+        this.staleMcpCleaned = true;
+        await cleanupStaleCursorMcpServer();
       }
+
+      let startupError: string | null = null;
+      if (!(await this.ensureReady())) {
+        startupError = this.lastStartupErrorMessage ?? CURSOR_OLD_CLI_MESSAGE;
+      }
+      if (startupError || !this.connection) {
+        yield { type: 'error', content: startupError ?? 'Cursor ACP runtime is not ready.' };
+        yield { type: 'done' };
+        return;
+      }
+
+      const cwd = getVaultPath(this.plugin.app) ?? process.cwd();
+      // Capture the session id BEFORE ensureSession (which may mint a fresh one): a
+      // turn starting without one (fork, provider switch, resume whose native session
+      // never loaded) still carries history that must be re-injected into the prompt.
+      const sessionIdAtTurnStart = this.sessionId;
+      const sessionId = await this.ensureSession(cwd);
+      if (!sessionId) {
+        yield { type: 'error', content: this.lastStartupErrorMessage ?? 'Failed to open a Cursor session.' };
+        yield { type: 'done' };
+        return;
+      }
+
+      const shouldBootstrapHistory = (conversationHistory?.length ?? 0) > 0
+        && (!sessionIdAtTurnStart || this.sessionInvalidated);
+
+      try {
+        await this.prepareSessionForPromptTurn(sessionId, queryOptions);
+      } catch (error) {
+        yield { type: 'error', content: this.formatRuntimeError(error) };
+        yield { type: 'done' };
+        return;
+      }
+
+      // Stop during startup aborts turnSignal; beginTurnAbortScope also pre-aborts it
+      // for a Stop during awaitPriorTurnSettled. Bail before session/prompt fires.
+      if (turnSignal.aborted) {
+        yield { type: 'done' };
+        return;
+      }
+
+      this.activeTurn?.queue.close();
+      const activeTurn: ActiveTurn = {
+        queue: new AcpStreamChunkQueue(),
+        sessionId,
+        usageModel: this.resolveActiveModel(queryOptions),
+        promptSettled: false,
+      };
+      this.activeTurn = activeTurn;
+      this.currentTurnSawAssistantContent = false;
+      this.currentTurnPlanDecidedInline = false;
+      this.currentTurnPlanToolCallId = null;
+      this.contextUsage = null;
+      this.sessionUpdateNormalizer.reset();
+      this.toolStreamAdapter.reset();
+
+      const history = shouldBootstrapHistory ? (conversationHistory ?? []) : [];
+
+      promptDispatched = true;
+      const promptPromise = Promise.resolve().then(() => this.connection!.prompt({
+        prompt: buildCursorAcpPromptBlocks(turn, history, queryOptions?.boundAgentPrompt),
+        sessionId,
+      })).then((response) => {
+        this.emitFinalUsage(activeTurn, response.usage ?? null);
+        this.finalizePlanTurnMetadata();
+        this.pushTurnTermination(activeTurn, [{ type: 'done' }]);
+      }).catch((error) => {
+        this.pushTurnTermination(activeTurn, [{ type: 'error', content: this.formatRuntimeError(error) }, { type: 'done' }]);
+      }).finally(() => {
+        // Prompt settled: the one signal that stands the escalation timer down.
+        // Set before nulling activeTurn so the timer can't see a nulled activeTurn
+        // paired with an unsettled prompt.
+        activeTurn.promptSettled = true;
+        if (this.activeTurn === activeTurn) {
+          this.activeTurn = null;
+        }
+        releasePromptOwnership();
+      });
+
+      try {
+        while (true) {
+          const chunk = await activeTurn.queue.next();
+          if (!chunk) {
+            break;
+          }
+          yield chunk;
+        }
+        await promptPromise;
+      } finally {
+        if (this.activeTurn === activeTurn) {
+          this.activeTurn = null;
+        }
+      }
+    } finally {
+      if (!promptDispatched) {
+        releasePromptOwnership();
+      }
+    }
+  }
+
+  private async claimPromptOwnership(): Promise<(() => void) | null> {
+    const priorClaim = this.promptStartTail;
+    let releaseClaim!: () => void;
+    const claimSlot = new Promise<void>((resolve) => {
+      releaseClaim = resolve;
     });
+    this.promptStartTail = priorClaim.then(() => claimSlot);
+    await priorClaim;
 
     try {
-      // Retained so the NEXT query() serializes behind this prompt's settlement
-      // (resolved, rejected, or recycled by the cancel escalation) before it starts.
-      this.pendingPromptSettled = promptPromise;
-      while (true) {
-        const chunk = await activeTurn.queue.next();
-        if (!chunk) {
-          break;
+      if (!(await this.awaitPriorTurnSettled())) {
+        this.consumeOwnershipCancelRequest();
+        return null;
+      }
+      let releaseReservation!: () => void;
+      const reservation = new Promise<void>((resolve) => {
+        releaseReservation = resolve;
+      });
+      this.pendingPromptSettled = reservation;
+      let released = false;
+      return () => {
+        if (released) return;
+        released = true;
+        releaseReservation();
+        if (this.pendingPromptSettled === reservation) {
+          this.pendingPromptSettled = null;
         }
-        yield chunk;
-      }
-      await promptPromise;
+      };
     } finally {
-      if (this.activeTurn === activeTurn) {
-        this.activeTurn = null;
-      }
+      releaseClaim();
     }
   }
 
   // Bounded serialize wait for a prior turn's prompt (see the call site in query()
-  // for the attribution gap this closes). No-op on the first turn or once the prior
-  // prompt has settled. withTimeout clears its ceiling timer on the settle path; on
-  // the ceiling it rejects, which we swallow so query() proceeds past the bound.
-  private async awaitPriorTurnSettled(): Promise<void> {
+  // for the attribution gap this closes). Returns false when the prior prompt is
+  // still live after cancel/recycle — callers must not issue a second session/prompt.
+  private async awaitPriorTurnSettled(): Promise<boolean> {
     if (!this.pendingPromptSettled) {
-      return;
+      return true;
     }
-    await withTimeout(
-      this.pendingPromptSettled,
-      CURSOR_TURN_SERIALIZE_CEILING_MS,
-      new Error('cursor turn serialize ceiling'),
-    ).catch(() => {});
+    this.serializeWaiters += 1;
+    try {
+      const settled = await withTimeout(
+        this.pendingPromptSettled,
+        CURSOR_TURN_SERIALIZE_CEILING_MS,
+        new Error('cursor turn serialize ceiling'),
+      ).then(() => true).catch(() => false);
+      if (settled) {
+        return true;
+      }
+
+      this.cancel();
+      await this.recycleProcess();
+      return false;
+    } finally {
+      this.serializeWaiters -= 1;
+    }
   }
 
   cancel(): void {
-    this.startupCancelRequested = true;
+    if (this.serializeWaiters > 0) {
+      this.ownershipCancelRequested = true;
+    }
     const turn = this.activeTurn;
     if (this.connection && this.sessionId) {
       this.connection.cancel({ sessionId: this.sessionId });
@@ -405,8 +512,9 @@ export class CursorChatRuntime implements ChatRuntime {
   // out of query() on cancel nulls activeTurn while the prompt is still live. If
   // unsettled after the grace period, terminate locally and recycle the process.
   private armCancelEscalation(turn: ActiveTurn): void {
+    const generation = this.processGeneration;
     window.setTimeout(() => {
-      if (turn.promptSettled) {
+      if (turn.promptSettled || generation !== this.processGeneration) {
         return;
       }
       this.captureEvent('cancel_escalation');
@@ -414,7 +522,7 @@ export class CursorChatRuntime implements ChatRuntime {
         { type: 'error', content: 'Cursor agent did not stop after cancel; restarting the agent process.' },
         { type: 'done' },
       ]);
-      void this.shutdownProcess();
+      void this.recycleProcess(generation);
     }, CURSOR_CANCEL_ESCALATION_MS);
   }
 
@@ -446,13 +554,20 @@ export class CursorChatRuntime implements ChatRuntime {
   }
 
   async cleanup(): Promise<void> {
-    this.activeTurn?.queue.close();
-    this.activeTurn = null;
-    // Resolve any pending blocking ask_question before tearing down the process.
-    this.askQuestionAbortController?.abort();
-    this.askQuestionAbortController = null;
-    await this.shutdownProcess();
-    this.readyListeners.clear();
+    // Supersede immediately, before waiting on the lifecycle lock. An in-flight
+    // initialize then disposes its local handles instead of briefly publishing
+    // a runtime that cleanup has already invalidated.
+    this.processGeneration += 1;
+    this.startupPromise = null;
+    await this.withLifecycleLock(async () => {
+      this.activeTurn?.queue.close();
+      this.activeTurn = null;
+      // Resolve any pending blocking ask_question before tearing down the process.
+      this.askQuestionAbortController?.abort();
+      this.askQuestionAbortController = null;
+      await this.shutdownProcess();
+      this.readyListeners.clear();
+    });
   }
 
   // rewind() omitted — Cursor Agent does not support rewind
@@ -486,89 +601,158 @@ export class CursorChatRuntime implements ChatRuntime {
   }
 
   private async startProcess(cliPath: string): Promise<void> {
+    const generation = ++this.processGeneration;
     await this.shutdownProcess();
+
     this.lastStartupErrorMessage = null;
 
     const cwd = getVaultPath(this.plugin.app) ?? process.cwd();
     const env = buildCursorAgentEnvironment(this.plugin, cliPath);
+    this.activeCliKey = buildCursorModelCatalogCliKey(cliPath, env);
     const spec = buildCursorAcpLaunchSpec(cliPath, cwd, env);
 
     this.captureWriter = this.buildCaptureWriter(cliPath);
 
-    // Always wire the sink hooks and read `this.captureWriter` dynamically per
-    // frame (a null-check when capture is off) so a mid-session toggle can flip
-    // capture live — `reconcileCaptureWriter` builds/drops the writer without a
-    // respawn, which the persistent process would otherwise require.
-    const { process: proc, transport } = await runWithCursorAgentSpawnLock(
-      async () => startCursorAcpProcess(spec, {
-        onStderrData: (chunk) => this.captureWriter?.stderr(chunk),
-        onWireFrame: (direction, rawLine) => this.captureWriter?.wireFrame(direction, rawLine),
-      }),
-    );
-    this.process = proc;
-    this.transport = transport;
-    this.unregisterTransportClose = transport.onClose(() => this.handleTransportClosed(transport));
-    // envKeys only — env VALUES must never reach the capture sink.
-    this.captureEvent('spawn', { cliPath, args: spec.args, envKeys: Object.keys(spec.env) });
+    let localProcess: AcpSubprocess | null = null;
+    let localTransport: AcpJsonRpcTransport | null = null;
+    let localConnection: AcpClientConnection | null = null;
+    let unregisterLocalTransportClose: (() => void) | null = null;
+    let unregisterLocalExtensions: (() => void) | null = null;
 
-    this.connection = new AcpClientConnection({
-      clientInfo: { name: 'specorator', version: this.plugin.manifest?.version ?? '0.0.0' },
-      delegate: {
-        onSessionNotification: (notification) => this.handleSessionNotification(notification),
-        requestPermission: (request) => this.handlePermissionRequest(request),
-      },
-      transport,
-    });
-    this.unregisterExtensions = registerCursorAcpExtensions(transport, {
-      askUser: this.host.askUser,
-      exitPlanMode: this.host.exitPlanMode,
-      getAskSignal: () => this.askQuestionAbortController?.signal,
-      emitChunk: (chunk, sessionId) => {
-        // A blocking extension request (create_plan / update_todos) can resolve
-        // just as the turn rolls over; drop its chunk when it names a session
-        // that is no longer the active turn's, or it would misroute into the
-        // next turn's queue. An absent id keeps the prior unconditional path.
-        if (sessionId !== undefined && sessionId !== this.activeTurn?.sessionId) {
-          return;
-        }
-        this.activeTurn?.queue.push(chunk);
-      },
-      markPlanDecidedInline: (sessionId) => {
-        // Same guard as emitChunk: a stale create_plan that resolves against a
-        // superseded turn names its old session, so ignore it — only the active
-        // turn's in-turn plan decision may suppress its own post-turn card.
-        if (sessionId !== undefined && sessionId !== this.activeTurn?.sessionId) {
-          return;
-        }
-        this.currentTurnPlanDecidedInline = true;
-      },
-      // Guards the blocking create_plan card the same way: an absent session id
-      // stays active (legacy unconditional path); a present one must match the
-      // active turn, or the stale create_plan is cancelled without opening UI.
-      isActiveSession: (sessionId) => sessionId === undefined || sessionId === this.activeTurn?.sessionId,
-      // approve-new-session abandons this turn for a fresh session; the host only
-      // sets cancelRequested (unwinds the consumer loop, never reaches the agent),
-      // so fire session/cancel here or the agent keeps implementing the plan.
-      requestTurnCancel: () => this.cancel(),
-    });
+    const disposeLocal = async (): Promise<void> => {
+      unregisterLocalExtensions?.();
+      unregisterLocalTransportClose?.();
+      localConnection?.dispose();
+      localTransport?.dispose();
+      if (localProcess) {
+        this.captureEvent('exit');
+        await localProcess.shutdown().catch(() => {});
+      }
+    };
 
-    transport.start();
     try {
+      // Always wire the sink hooks and read `this.captureWriter` dynamically per
+      // frame (a null-check when capture is off) so a mid-session toggle can flip
+      // capture live — `reconcileCaptureWriter` builds/drops the writer without a
+      // respawn, which the persistent process would otherwise require.
+      const { process: proc, transport } = await runWithCursorAgentSpawnLock(
+        async () => startCursorAcpProcess(spec, {
+          onStderrData: (chunk) => this.captureWriter?.stderr(chunk),
+          onWireFrame: (direction, rawLine) => this.captureWriter?.wireFrame(direction, rawLine),
+        }),
+      );
+      localProcess = proc;
+      localTransport = transport;
+      if (generation !== this.processGeneration) {
+        throw new Error('Cursor ACP startup superseded');
+      }
+
+      unregisterLocalTransportClose = transport.onClose(() => this.handleTransportClosed(transport));
+      // envKeys only — env VALUES must never reach the capture sink.
+      this.captureEvent('spawn', { cliPath, args: spec.args, envKeys: Object.keys(spec.env) });
+
+      localConnection = new AcpClientConnection({
+        clientInfo: { name: 'specorator', version: this.plugin.manifest?.version ?? '0.0.0' },
+        delegate: {
+          onSessionNotification: (notification) => this.handleSessionNotification(notification),
+          requestPermission: (request) => this.handlePermissionRequest(request),
+        },
+        transport,
+      });
+      unregisterLocalExtensions = registerCursorAcpExtensions(transport, {
+        askUser: this.host.askUser,
+        exitPlanMode: this.host.exitPlanMode,
+        getAskSignal: () => this.askQuestionAbortController?.signal,
+        emitChunk: (chunk, sessionId) => {
+          if (sessionId !== undefined && sessionId !== this.activeTurn?.sessionId) {
+            return;
+          }
+          this.activeTurn?.queue.push(chunk);
+        },
+        markPlanDecidedInline: (sessionId) => {
+          if (sessionId !== undefined && sessionId !== this.activeTurn?.sessionId) {
+            return;
+          }
+          this.currentTurnPlanDecidedInline = true;
+        },
+        isActiveSession: (sessionId) => sessionId === undefined || sessionId === this.activeTurn?.sessionId,
+        requestTurnCancel: () => this.cancel(),
+      });
+
+      transport.start();
       const initResult = await withTimeout(
-        this.connection.initialize(),
+        localConnection.initialize(),
         CURSOR_ACP_INIT_TIMEOUT_MS,
         new Error('ACP initialize timed out'),
       );
+      if (generation !== this.processGeneration) {
+        throw new Error('Cursor ACP startup superseded');
+      }
+
       this.captureEvent('initialize', {
         agentInfo: initResult.agentInfo ?? null,
         capabilities: initResult.agentCapabilities ?? null,
       });
+
+      this.unregisterExtensions?.();
+      this.unregisterTransportClose?.();
+      this.connection?.dispose();
+      this.transport?.dispose();
+      if (this.process) {
+        await this.process.shutdown().catch(() => {});
+      }
+
+      this.process = localProcess;
+      this.transport = localTransport;
+      this.connection = localConnection;
+      this.unregisterTransportClose = unregisterLocalTransportClose;
+      this.unregisterExtensions = unregisterLocalExtensions;
+      localProcess = null;
+      localTransport = null;
+      localConnection = null;
+      unregisterLocalTransportClose = null;
+      unregisterLocalExtensions = null;
+      this.setReady(true);
     } catch (error) {
-      this.lastStartupErrorMessage = this.describeStartupFailure(error);
-      await this.shutdownProcess();
+      if (generation === this.processGeneration) {
+        this.lastStartupErrorMessage = this.describeStartupFailure(error, localProcess);
+      }
+      this.captureEvent('startup_error', {
+        message: error instanceof Error ? error.message : String(error),
+      });
+      await disposeLocal();
+      if (this.captureWriter) {
+        await this.captureWriter.flush();
+        this.captureWriter = null;
+      }
       throw error;
     }
-    this.setReady(true);
+  }
+
+  private async withLifecycleLock<T>(body: () => Promise<T>): Promise<T> {
+    const prior = this.lifecycleTail;
+    let release!: () => void;
+    const slot = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    this.lifecycleTail = prior.then(() => slot);
+    await prior;
+    try {
+      return await body();
+    } finally {
+      release();
+    }
+  }
+
+  private async recycleProcess(expectedGeneration?: number): Promise<void> {
+    await this.withLifecycleLock(async () => {
+      if (expectedGeneration !== undefined && expectedGeneration !== this.processGeneration) {
+        return;
+      }
+      this.processGeneration += 1;
+      this.startupPromise = null;
+      await this.shutdownProcess();
+    });
   }
 
   // Diagnostics only — default off. Returns null when the setting is off or the
@@ -586,6 +770,8 @@ export class CursorChatRuntime implements ChatRuntime {
     const baseDir = path.join(vaultPath, SPECORATOR_STORAGE_PATH, 'captures', 'cursor');
     return new CursorAcpCaptureWriter({
       baseDir,
+      sessionName:
+        `${this.runtimeInstanceId}-${++this.captureSequence}-${buildCaptureSessionName()}`,
       meta: {
         // No cheap `cursor-agent --version` probe exists at spawn time; the
         // CLI path is the fallback identity signal for the session.
@@ -638,11 +824,13 @@ export class CursorChatRuntime implements ChatRuntime {
     }
   }
 
-  private describeStartupFailure(_error: unknown): string {
+  private describeStartupFailure(_error: unknown, startupProcess?: AcpSubprocess | null): string {
     // Any failure before initialize resolves — immediate exit ("unknown
     // subcommand"), closed transport, or timeout — means the installed
     // cursor-agent predates ACP. One actionable message covers them all.
-    const stderr = this.process?.getStderrSnapshot() ?? '';
+    const stderr = startupProcess?.getStderrSnapshot()
+      ?? this.process?.getStderrSnapshot()
+      ?? '';
     return stderr ? `${CURSOR_OLD_CLI_MESSAGE}\n\n${stderr}` : CURSOR_OLD_CLI_MESSAGE;
   }
 
@@ -656,6 +844,15 @@ export class CursorChatRuntime implements ChatRuntime {
 
     if (this.sessionId) {
       const requestedId = this.sessionId;
+      const ownershipError = validateCursorAcpSessionVault(requestedId, cwd);
+      if (ownershipError) {
+        this.lastStartupErrorMessage = ownershipError.message;
+        this.plugin.logger.scope('cursor.acp').warn(
+          'refusing to load Cursor session from another workspace',
+          ownershipError,
+        );
+        return null;
+      }
       try {
         const response = await this.connection.loadSession({
           cwd,
@@ -673,9 +870,41 @@ export class CursorChatRuntime implements ChatRuntime {
         this.captureEvent('session_load', { sessionId: loadedId });
         return loadedId;
       } catch (error) {
+        let loadError = error;
+        if (this.isAuthenticationFailure(loadError) && await this.tryAuthenticate()) {
+          try {
+            const retryResponse = await this.connection.loadSession({
+              cwd,
+              mcpServers: [],
+              sessionId: requestedId,
+            });
+            const loadedId = retryResponse.sessionId ?? requestedId;
+            this.loadedSessionId = loadedId;
+            this.sessionId = loadedId;
+            this.captureAdvertisedModelValues(retryResponse);
+            this.captureEvent('session_load', { sessionId: loadedId, retriedAfterAuth: true });
+            return loadedId;
+          } catch (retryError) {
+            loadError = retryError;
+          }
+        }
+
+        if (this.isSessionLoadTransportFailure(loadError)) {
+          // Preserve the requested session id so a transient transport failure
+          // can retry on the next turn instead of minting a fresh session.
+          this.plugin.logger.scope('cursor.acp')
+            .warn('session/load transport failure; preserving session id', loadError);
+          this.lastStartupErrorMessage = this.formatRuntimeError(loadError);
+          this.captureEvent('session_load_transport_failure', { sessionId: requestedId });
+          return null;
+        }
+
         // Load-bearing no-spike fallback: an id-mapping mismatch degrades to a
         // fresh session with history re-injected on the next prompt.
-        this.plugin.logger.scope('cursor.acp').warn('session/load failed; falling back to new session', error);
+        this.plugin.logger.scope('cursor.acp').warn(
+          'session/load failed; falling back to new session',
+          loadError,
+        );
         this.captureEvent('session_load_fallback');
         this.sessionInvalidated = true;
         this.sessionId = null;
@@ -691,17 +920,19 @@ export class CursorChatRuntime implements ChatRuntime {
       return null;
     }
     try {
-      return this.adoptFreshSession(await this.connection.newSession({ cwd, mcpServers: [] }));
+      return await this.adoptFreshSession(await this.connection.newSession({ cwd, mcpServers: [] }));
     } catch (error) {
-      if (await this.tryAuthenticate()) {
+      if (this.isAuthenticationFailure(error) && await this.tryAuthenticate()) {
         try {
-          return this.adoptFreshSession(await this.connection.newSession({ cwd, mcpServers: [] }));
+          return await this.adoptFreshSession(await this.connection.newSession({ cwd, mcpServers: [] }));
         } catch (retryError) {
           this.lastStartupErrorMessage = this.formatRuntimeError(retryError);
           return null;
         }
       }
-      this.lastStartupErrorMessage = CURSOR_LOGIN_MESSAGE + '\n\n' + this.formatRuntimeError(error);
+      this.lastStartupErrorMessage = this.isAuthenticationFailure(error)
+        ? `${CURSOR_LOGIN_MESSAGE}\n\n${this.formatRuntimeError(error)}`
+        : this.formatRuntimeError(error);
       return null;
     }
   }
@@ -709,14 +940,59 @@ export class CursorChatRuntime implements ChatRuntime {
   // Adopts a freshly minted session: a new session starts on the agent's default
   // model and mode, so drop the tracked selections to force applyMode/
   // applySelectedModel to reapply, and record its advertised model wire ids.
-  private adoptFreshSession(response: AcpNewSessionResponse): string {
+  private async adoptFreshSession(response: AcpNewSessionResponse): Promise<string> {
     this.loadedSessionId = response.sessionId;
     this.sessionId = response.sessionId;
     this.currentModeId = null;
     this.currentSessionModelId = null;
     this.captureAdvertisedModelValues(response);
     this.captureEvent('session_new', { sessionId: response.sessionId });
+    await this.persistNewSessionId(response.sessionId);
     return response.sessionId;
+  }
+
+  private async persistNewSessionId(sessionId: string): Promise<void> {
+    const conversationId = this.boundConversationId;
+    if (!conversationId) return;
+    const conversation = this.plugin.getConversationSync(conversationId);
+    if (!conversation) return;
+    const existingState = getCursorState(conversation.providerState);
+    if (existingState.chatSessionId === sessionId && conversation.sessionId === sessionId) {
+      return;
+    }
+    try {
+      await this.plugin.updateConversation(conversationId, {
+        sessionId,
+        providerState: { ...existingState, chatSessionId: sessionId },
+      });
+    } catch (error) {
+      this.plugin.logger.scope('cursor.acp').warn('persist new session id failed', error);
+    }
+  }
+
+  private isAuthenticationFailure(error: unknown): boolean {
+    const message = (error instanceof Error ? error.message : String(error)).trim();
+    if (error instanceof JsonRpcErrorResponse) {
+      const dataCode = readStructuredErrorCode(error.data);
+      if (dataCode && /^(?:AUTH|AUTHENTICATION|UNAUTHENTICATED|UNAUTHORIZED)(?:_|$)/u.test(dataCode)) {
+        return true;
+      }
+    }
+    return /\b(?:authentication required|login required|not authenticated|unauthenticated|unauthorized)\b/iu
+      .test(message);
+  }
+
+  private isSessionLoadTransportFailure(error: unknown): boolean {
+    if (error instanceof JsonRpcTransportClosedError) {
+      return true;
+    }
+    const code = (error as NodeJS.ErrnoException | null | undefined)?.code;
+    if (typeof code === 'string' && ['ECONNRESET', 'EPIPE', 'ETIMEDOUT'].includes(code.toUpperCase())) {
+      return true;
+    }
+    const message = error instanceof Error ? error.message.trim() : String(error).trim();
+    return /^(?:ACP|JSON-RPC) transport (?:closed|disconnected)\b/iu.test(message)
+      || /\b(?:request )?timed out\b/iu.test(message);
   }
 
   private async tryAuthenticate(): Promise<boolean> {
@@ -765,10 +1041,33 @@ export class CursorChatRuntime implements ChatRuntime {
     this.advertisedModelValues = values;
     // Persist a real catalog so a later cold resume (session/load advertises none)
     // can still match a model change on its first turn.
-    if (values.length > 0) {
-      void saveCursorAdvertisedModels(this.plugin.storage.getAdapter(), values)
+    if (values.length > 0 && this.activeCliKey) {
+      void saveCursorAdvertisedModels(
+        this.plugin.storage.getAdapter(),
+        this.activeCliKey,
+        values,
+      )
         .catch((error) => this.plugin.logger.scope('cursor.acp').warn('persist advertised models failed', error));
     }
+  }
+
+  private async prepareSessionForPromptTurn(
+    sessionId: string,
+    queryOptions?: ChatRuntimeQueryOptions,
+  ): Promise<void> {
+    const mode = resolveCursorAcpMode(this.plugin.settings.permissionMode);
+    this.autoApprovePermissions = mode.autoApprove;
+    // Independent RPCs on the same session — issued concurrently so the turn
+    // doesn't pay two sequential round-trips before the prompt is sent.
+    await Promise.all([
+      this.applyMode(sessionId, mode.modeId),
+      this.applySelectedModel(sessionId, queryOptions),
+    ]);
+    // Arm the plan flag only once plan mode is actually in effect: a requested plan
+    // turn whose set_mode failed (applyMode swallows rejections) runs as non-plan so
+    // its ordinary assistant text won't spuriously open the post-plan approval card.
+    // The cursor/create_plan side-channel still sets planCompleted if the agent plans.
+    this.currentTurnIsPlan = mode.modeId === 'plan' && this.currentModeId === 'plan';
   }
 
   private async applySelectedModel(
@@ -786,19 +1085,31 @@ export class CursorChatRuntime implements ChatRuntime {
     if (!advertised || advertised.length === 0) {
       // Cold resume: session/load advertised no models. Recover the last catalog
       // a session/new persisted so the selection can still match this turn.
-      advertised = await loadCursorAdvertisedModels(this.plugin.storage.getAdapter()).catch(() => null);
+      if (this.activeCliKey) {
+        advertised = await loadCursorAdvertisedModels(
+          this.plugin.storage.getAdapter(),
+          this.activeCliKey,
+        ).catch(() => null);
+      }
       if (advertised) {
         this.advertisedModelValues = advertised;
       }
     }
-    const wireValue = matchAdvertisedModelValue(advertised, resolved);
+    const settingsBag = asSettingsBag(this.plugin.settings);
+    const familyValue = this.resolveActiveModel(queryOptions) ?? undefined;
+    const wireValue = matchAdvertisedModelValueWithFamilyFallback(
+      advertised,
+      resolved,
+      familyValue
+        ? shouldAllowFamilyWireFallback(resolved, familyValue, settingsBag, cursorChatUIConfig)
+        : false,
+    );
     if (!wireValue) {
-      // No advertised value matches: sending the bare id here would let Cursor
-      // report it selected yet break the next prompt ("AI Model Not Found"), so
-      // stay on the session's current model instead.
+      const message = t('provider.cursor.models.applyFailed');
       this.plugin.logger.scope('cursor.acp')
-        .warn('no advertised model value matches selection; skipping setConfigOption', resolved);
-      return;
+        .warn('no advertised model value matches selection; failing turn', resolved);
+      new Notice(message, 8000);
+      throw new Error(message);
     }
     if (wireValue === this.currentSessionModelId) {
       return;
@@ -813,11 +1124,11 @@ export class CursorChatRuntime implements ChatRuntime {
       this.currentSessionModelId = wireValue;
       this.captureEvent('model_apply', { value: wireValue, ok: true });
     } catch (error) {
-      // Best-effort: whether Cursor's ACP dialect implements
-      // session/set_config_option is doc-unknown, so a rejection just leaves the
-      // turn on the agent's default model rather than failing the turn.
+      const message = error instanceof Error ? error.message : t('provider.cursor.models.applyFailed');
       this.plugin.logger.scope('cursor.acp').warn('setConfigOption(model) failed', error);
       this.captureEvent('model_apply', { value: wireValue, ok: false });
+      new Notice(message, 8000);
+      throw error instanceof Error ? error : new Error(message);
     }
   }
 
@@ -827,7 +1138,9 @@ export class CursorChatRuntime implements ChatRuntime {
     const settingsBag = asSettingsBag(this.plugin.settings);
     const snapshot = ProviderSettingsCoordinator.getProviderSettingsSnapshot(settingsBag, 'cursor');
     const familyValue = this.resolveActiveModel(queryOptions) ?? undefined;
-    const mode = typeof snapshot.effortLevel === 'string' ? snapshot.effortLevel : undefined;
+    const mode = familyValue
+      ? resolveCursorEffortForFamily(familyValue, snapshot, cursorChatUIConfig)
+      : (typeof snapshot.effortLevel === 'string' ? snapshot.effortLevel : undefined);
     return resolveCursorModelSelectionForCli(familyValue, mode, {
       catalogIds: getCachedCursorModelIds(),
       enabledIds: getCursorEnabledModels(settingsBag),
@@ -1090,6 +1403,18 @@ export class CursorChatRuntime implements ChatRuntime {
 // symbol can never collide with a real decision.
 const APPROVAL_CANCELLED = Symbol('cursor-approval-cancelled');
 
+function readStructuredErrorCode(data: unknown): string | null {
+  if (!data || typeof data !== 'object' || Array.isArray(data)) return null;
+  const record = data as Record<string, unknown>;
+  for (const key of ['code', 'reason', 'type']) {
+    const value = record[key];
+    if (typeof value === 'string' && value.trim()) {
+      return value.trim().toUpperCase();
+    }
+  }
+  return null;
+}
+
 function raceApprovalAgainstCancel<T>(
   promise: Promise<T>,
   signal?: AbortSignal,
@@ -1118,4 +1443,13 @@ function withTimeout<T>(promise: Promise<T>, ms: number, timeoutError: Error): P
       (error) => { window.clearTimeout(timer); reject(error); },
     );
   });
+}
+
+function buildCaptureSessionName(): string {
+  const now = new Date();
+  const pad = (value: number, width = 2): string => String(value).padStart(width, '0');
+  const stamp =
+    `${now.getUTCFullYear()}${pad(now.getUTCMonth() + 1)}${pad(now.getUTCDate())}` +
+    `-${pad(now.getUTCHours())}${pad(now.getUTCMinutes())}${pad(now.getUTCSeconds())}`;
+  return `${stamp}-${process.pid}`;
 }

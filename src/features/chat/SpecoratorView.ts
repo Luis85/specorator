@@ -2,6 +2,7 @@ import type { WorkspaceLeaf } from 'obsidian';
 import { ItemView, Notice, Scope } from 'obsidian';
 import { type App as VueApp, createApp, markRaw } from 'vue';
 
+import { validateTabManagerState } from '../../core/bootstrap/tabManagerState';
 import type { ChatTabReservation } from '../../core/chatTabReservations';
 import { GIT_COMMIT_PROMPT } from '../../core/prompt/gitCommit';
 import { getHiddenProviderCommandSet } from '../../core/providers/commands/hiddenCommands';
@@ -33,7 +34,7 @@ import {
 } from './tabs/Tab';
 import { TabManager } from './tabs/TabManager';
 import { refreshBoundAgentDisplayModels } from './tabs/tabShared';
-import type { TabData, TabId, TaskRunTabHandle } from './tabs/types';
+import type { PersistedTabManagerState, TabData, TabId, TaskRunTabHandle } from './tabs/types';
 import { GitActionButton } from './ui/GitActionButton';
 import type { ChatShellCallbacks, ChatShellSnapshot } from './ui/vue/chatShellCallbacks';
 import { CALLBACKS_KEY, CONTENT_HOST_KEY, PLUGIN_KEY } from './ui/vue/chatShellKeys';
@@ -94,6 +95,8 @@ export class SpecoratorView extends ItemView {
 
   // Debouncing for tab state persistence
   private pendingPersist: number | null = null;
+  /** Per-leaf tab layout restored from Obsidian view state (preferred over global plugin state). */
+  private viewTabManagerState: PersistedTabManagerState | null = null;
 
   constructor(leaf: WorkspaceLeaf, plugin: SpecoratorPlugin) {
     super(leaf);
@@ -137,6 +140,20 @@ export class SpecoratorView extends ItemView {
 
   getIcon(): string {
     return 'bot';
+  }
+
+  getState(): Record<string, unknown> {
+    if (!this.tabManager) {
+      return {};
+    }
+    return { tabManagerState: this.tabManager.getPersistedState() };
+  }
+
+  async setState(state: Record<string, unknown>): Promise<void> {
+    const validated = validateTabManagerState(state.tabManagerState);
+    if (validated) {
+      this.viewTabManagerState = validated;
+    }
   }
 
   /** Refreshes model-dependent UI across all tabs (used after settings/env changes). */
@@ -849,7 +866,7 @@ export class SpecoratorView extends ItemView {
     activate = true,
   ): Promise<void> {
     await this.tabManager?.openConversation(conversationId, {
-      preferNewTab: true,
+      requireNewTab: true,
       activate,
     });
     this.closeHistoryDropdown();
@@ -1002,10 +1019,11 @@ export class SpecoratorView extends ItemView {
   private async restoreOrCreateTabs(): Promise<void> {
     if (!this.tabManager) return;
 
-    // Try to restore from persisted state
-    const persistedState = await this.plugin.storage.getTabManagerState();
+    const persistedState = this.viewTabManagerState
+      ?? await this.plugin.storage.getTabManagerState();
     if (persistedState && persistedState.openTabs.length > 0) {
       await this.tabManager.restoreState(persistedState);
+      this.viewTabManagerState = null;
       return;
     }
 
@@ -1023,6 +1041,7 @@ export class SpecoratorView extends ItemView {
       this.pendingPersist = null;
       if (!this.tabManager) return;
       const state = this.tabManager.getPersistedState();
+      void this.leaf.setViewState({ type: VIEW_TYPE_SPECORATOR, state: this.getState() });
       this.plugin.persistTabManagerState(state).catch(() => {
         // Silently ignore persistence errors
       });

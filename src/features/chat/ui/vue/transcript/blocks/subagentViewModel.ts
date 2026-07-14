@@ -224,7 +224,7 @@ export interface SubagentResultDisplay {
 /**
  * Reproduces the result-section text rules shared by
  * `finalizeSubagentBlock` (sync) and `renderAsyncContentLikeSync` (async,
- * also used by `renderStoredAsyncSubagent`): no section while running, an
+ * from the retired stored async renderer): no section while running, an
  * orphan-specific fallback, and a DONE/ERROR fallback otherwise.
  */
 export function resolveSubagentResultText(

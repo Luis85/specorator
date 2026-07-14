@@ -1,7 +1,6 @@
 /* Loading state shown in the conversation pane while a transcript is being
-   hydrated after a tab switch. Replaces the welcome / message list until the
-   `restoreConversation` post-hydrate restore lands. Pairs with
-   `MessageRenderer.renderLoading`. */
+   hydrated after a tab switch. The Vue transcript keeps the message list
+   mounted and covers it with the overlay modifier until restore completes. */
 
 .specorator-loading {
   display: flex;
@@ -12,6 +11,13 @@
   padding: 40px 16px;
   color: var(--text-muted);
   font-size: var(--font-ui-small);
+}
+
+.specorator-loading--overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  background: var(--background-primary);
 }
 
 .specorator-loading-spinner {

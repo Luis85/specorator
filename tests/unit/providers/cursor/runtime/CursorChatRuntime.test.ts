@@ -1,8 +1,17 @@
 import { ProviderSettingsCoordinator } from '@/core/providers/ProviderSettingsCoordinator';
 import { createHeadlessRuntimeHost, type RuntimeHost } from '@/core/runtime/RuntimeHost';
-import { AcpStreamChunkQueue } from '@/providers/acp';
+import {
+  AcpStreamChunkQueue,
+  JsonRpcErrorResponse,
+  JsonRpcTransportClosedError,
+} from '@/providers/acp';
 import * as acpBuild from '@/providers/acp/buildAcpUsageInfo';
 import { CursorChatRuntime } from '@/providers/cursor/runtime/CursorChatRuntime';
+import {
+  resetCursorModelCatalog,
+  seedCursorModelCatalogForTest,
+} from '@/providers/cursor/runtime/cursorModelCatalog';
+import { getHostnameKey } from '@/utils/env';
 
 import {
   CURSOR_ADVERTISED_MODEL_VALUES,
@@ -108,7 +117,7 @@ describe('CursorChatRuntime (ACP)', () => {
 
   it('drops a Stop pressed during the prior-prompt wait, before session/prompt fires', async () => {
     // The turn is blocked in awaitPriorTurnSettled with no activeTurn/abort controller
-    // yet, so cancel() there is only caught by startupCancelRequested — not turnSignal.
+    // yet, so cancel() there is only caught by ownershipCancelRequested — not turnSignal.
     stubProviderSnapshot();
     const runtime = makeRuntime();
     let releasePrior!: () => void;
@@ -126,6 +135,9 @@ describe('CursorChatRuntime (ACP)', () => {
     const turn = { persistedContent: 'x', prompt: 'x', request: { images: [] } };
     const gen = runtime.query(turn as never, undefined, undefined);
     const firstStep = gen.next(); // advances into awaitPriorTurnSettled
+    for (let i = 0; i < 30; i += 1) {
+      await Promise.resolve();
+    }
 
     runtime.cancel();   // Stop pressed while blocked on the prior prompt
     releasePrior();     // let the wait complete
@@ -159,6 +171,25 @@ describe('CursorChatRuntime.ensureReady force restart', () => {
       .mockResolvedValue();
 
     await expect(runtime.ensureReady({ force: true })).resolves.toBe(true);
+    expect(startProcess).toHaveBeenCalledTimes(1);
+  });
+
+  it('single-flights concurrent ensureReady calls into one startup', async () => {
+    const runtime = makeRuntime();
+    let releaseStartup!: () => void;
+    const startupGate = new Promise<void>((resolve) => { releaseStartup = resolve; });
+    const startProcess = jest
+      .spyOn(runtime as unknown as { startProcess: (c: string) => Promise<void> }, 'startProcess')
+      .mockImplementation(async () => {
+        await startupGate;
+        primeRuntime(runtime, {});
+      });
+
+    const first = runtime.ensureReady();
+    const second = runtime.ensureReady();
+    releaseStartup();
+    await Promise.all([first, second]);
+
     expect(startProcess).toHaveBeenCalledTimes(1);
   });
 });
@@ -198,6 +229,45 @@ describe('CursorChatRuntime.ensureSession', () => {
     // sessionInvalidated is what triggers the history re-injection on this turn.
     expect(bag.sessionInvalidated).toBe(true);
     expect(bag.sessionId).toBe('S2');
+  });
+
+  it('preserves the session id on transient session/load transport failures', async () => {
+    const runtime = makeRuntime();
+    const loadSession = jest.fn().mockRejectedValue(new Error('ACP transport closed unexpectedly'));
+    const newSession = jest.fn();
+    const bag = primeRuntime(runtime, { loadSession, newSession });
+    bag.sessionId = 'S1';
+    bag.loadedSessionId = null;
+
+    const result = await (bag.ensureSession as (c: string) => Promise<string | null>).call(runtime, '/cwd');
+
+    expect(result).toBeNull();
+    expect(bag.sessionId).toBe('S1');
+    expect(bag.sessionInvalidated).toBe(false);
+    expect(newSession).not.toHaveBeenCalled();
+  });
+});
+
+describe('CursorChatRuntime error classification', () => {
+  it('uses structured JSON-RPC authentication failures without matching unrelated auth text', () => {
+    const runtime = makeRuntime() as unknown as Record<string, unknown>;
+    const classify = (runtime.isAuthenticationFailure as (error: unknown) => boolean).bind(runtime);
+
+    expect(classify(new JsonRpcErrorResponse(
+      'session/new',
+      -32000,
+      'Authentication required',
+      { code: 'AUTH_REQUIRED' },
+    ))).toBe(true);
+    expect(classify(new Error('authoritative model metadata unavailable'))).toBe(false);
+  });
+
+  it('recognizes the structured transport-closed error without treating arbitrary closed text as transport failure', () => {
+    const runtime = makeRuntime() as unknown as Record<string, unknown>;
+    const classify = (runtime.isSessionLoadTransportFailure as (error: unknown) => boolean).bind(runtime);
+
+    expect(classify(new JsonRpcTransportClosedError())).toBe(true);
+    expect(classify(new Error('closed beta session not found'))).toBe(false);
   });
 });
 
@@ -698,29 +768,59 @@ describe('CursorChatRuntime.query turn serialization', () => {
     expect(order).toEqual(['A', 'B']);
   });
 
-  it('lets turn B proceed after the bounded ceiling when turn A never settles', async () => {
+  it('atomically assigns turn ownership before simultaneous query starts can both prompt', async () => {
+    const runtime = makeRuntime();
+    const { aPrompt, prompt, order } = primeSerializedTurns(runtime);
+    const ready = deferred<boolean>();
+    jest.spyOn(runtime, 'ensureReady').mockImplementation(() => ready.promise);
+
+    const aDone = drain(runtime.query(turn as never));
+    const bDone = drain(runtime.query(turn as never));
+    await flush();
+    ready.resolve(true);
+    await flush();
+
+    expect(prompt).toHaveBeenCalledTimes(1);
+    expect(order).toEqual(['A']);
+
+    aPrompt.resolve({ usage: null });
+    await Promise.all([aDone, bDone]);
+    expect(order).toEqual(['A', 'B']);
+  });
+
+  it('rejects turn B with a busy error after the bounded ceiling when turn A never settles', async () => {
     jest.useFakeTimers();
     const runtime = makeRuntime();
-    const { bag, aPrompt, prompt } = primeSerializedTurns(runtime);
-    // The escalation would recycle the process; stub it so the never-settling
-    // prompt is the only thing gating B, leaving the ceiling as the sole release.
-    const shutdownProcess = jest.fn().mockResolvedValue(undefined);
-    bag.shutdownProcess = shutdownProcess;
+    const { aPrompt, prompt } = primeSerializedTurns(runtime);
+    const shutdownProcess = jest
+      .spyOn(runtime as unknown as { shutdownProcess: () => Promise<void> }, 'shutdownProcess')
+      .mockResolvedValue(undefined);
 
     void drain(runtime.query(turn as never));
     await flush();
     runtime.cancel();
 
-    const bDone = drain(runtime.query(turn as never));
+    const chunks: unknown[] = [];
+    const bDone = (async () => {
+      for await (const chunk of runtime.query(turn as never)) {
+        chunks.push(chunk);
+      }
+    })();
     await flush();
-    expect(prompt).toHaveBeenCalledTimes(1); // B parked on the ceiling
+    expect(prompt).toHaveBeenCalledTimes(1);
 
     jest.advanceTimersByTime(CURSOR_SERIALIZE_CEILING_MS);
     await flush();
     await bDone;
-    expect(prompt).toHaveBeenCalledTimes(2); // ceiling released B
 
-    aPrompt.resolve({ usage: null }); // unwind turn A's abandoned generator
+    expect(prompt).toHaveBeenCalledTimes(1);
+    expect(shutdownProcess).toHaveBeenCalled();
+    expect(chunks).toEqual(expect.arrayContaining([
+      expect.objectContaining({ type: 'error' }),
+      expect.objectContaining({ type: 'done' }),
+    ]));
+
+    aPrompt.resolve({ usage: null });
     await flush();
   });
 
@@ -769,6 +869,158 @@ describe('CursorChatRuntime.query turn serialization', () => {
     await drain(runtime.query(turn as never));
 
     expect(prompt).toHaveBeenCalledTimes(2);
+  });
+});
+
+describe('CursorChatRuntime.query prompt ownership exception safety', () => {
+  beforeEach(stubProviderSnapshot);
+  afterEach(() => {
+    jest.useRealTimers();
+    jest.restoreAllMocks();
+  });
+
+  const turn = { persistedContent: 'hi', prompt: 'ask now', request: { images: [] } };
+
+  async function flush(): Promise<void> {
+    for (let i = 0; i < 30; i += 1) {
+      await Promise.resolve();
+    }
+  }
+
+  function primePromptable(runtime: CursorChatRuntime): jest.Mock {
+    const prompt = jest.fn().mockResolvedValue({ usage: null });
+    const setMode = jest.fn().mockResolvedValue({});
+    const bag = primeRuntime(runtime, { prompt, setMode });
+    bag.sessionId = 'S1';
+    bag.loadedSessionId = 'S1';
+    return prompt;
+  }
+
+  it('releases ownership when the consumer closes the generator after user_message_start', async () => {
+    const runtime = makeRuntime();
+    const prompt = primePromptable(runtime);
+    jest.spyOn(runtime, 'ensureReady').mockImplementation(async () => {
+      await new Promise((resolve) => { setTimeout(resolve, 50); });
+      return true;
+    });
+
+    const gen = runtime.query(turn as never);
+    const first = await gen.next();
+    expect(first.value).toEqual(expect.objectContaining({ type: 'user_message_start' }));
+    await gen.return(undefined);
+    await flush();
+
+    await (async () => {
+      for await (const _chunk of runtime.query(turn as never)) {
+        void _chunk;
+      }
+    })();
+    await flush();
+
+    expect(prompt).toHaveBeenCalledTimes(1);
+  });
+
+  it('releases ownership when the consumer closes the generator after assistant_message_start', async () => {
+    const runtime = makeRuntime();
+    const prompt = primePromptable(runtime);
+    jest.spyOn(runtime, 'ensureReady').mockImplementation(async () => {
+      await new Promise((resolve) => { setTimeout(resolve, 50); });
+      return true;
+    });
+
+    const gen = runtime.query(turn as never);
+    await gen.next();
+    const second = await gen.next();
+    expect(second.value).toEqual(expect.objectContaining({ type: 'assistant_message_start' }));
+    await gen.return(undefined);
+    await flush();
+
+    await (async () => {
+      for await (const _chunk of runtime.query(turn as never)) {
+        void _chunk;
+      }
+    })();
+    await flush();
+
+    expect(prompt).toHaveBeenCalledTimes(1);
+  });
+
+  it('releases ownership when ensureReady fails so the next query can prompt', async () => {
+    const runtime = makeRuntime();
+    const prompt = primePromptable(runtime);
+    jest.spyOn(runtime, 'ensureReady')
+      .mockResolvedValueOnce(false)
+      .mockResolvedValue(true);
+
+    for await (const _chunk of runtime.query(turn as never)) {
+      void _chunk;
+    }
+    await flush();
+
+    for await (const _chunk of runtime.query(turn as never)) {
+      void _chunk;
+    }
+    await flush();
+
+    expect(prompt).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not let a later queued query clear a Stop that arrived during the serialize wait', async () => {
+    const runtime = makeRuntime();
+    const priorPrompt = (() => {
+      let resolve!: (value: { usage: null }) => void;
+      const promise = new Promise<{ usage: null }>((res) => { resolve = res; });
+      return { promise, resolve };
+    })();
+    const prompt = jest.fn()
+      .mockImplementationOnce(() => priorPrompt.promise)
+      .mockImplementationOnce(() => Promise.resolve({ usage: null }));
+    const setMode = jest.fn().mockResolvedValue({});
+    const bag = primeRuntime(runtime, { prompt, setMode, cancel: jest.fn() });
+    bag.sessionId = 'S1';
+    bag.loadedSessionId = 'S1';
+
+    void (async () => {
+      for await (const _chunk of runtime.query(turn as never)) {
+        void _chunk;
+      }
+    })();
+    await flush();
+
+    const blocked = (async () => {
+      for await (const _chunk of runtime.query(turn as never)) {
+        void _chunk;
+      }
+    })();
+    await flush();
+    runtime.cancel();
+
+    priorPrompt.resolve({ usage: null });
+    await flush();
+    await blocked;
+    await flush();
+
+    expect(prompt).toHaveBeenCalledTimes(1);
+  });
+
+  it('prompts exactly once across A then B then C when each prior turn settles normally', async () => {
+    const runtime = makeRuntime();
+    const prompt = jest.fn().mockResolvedValue({ usage: null });
+    const setMode = jest.fn().mockResolvedValue({});
+    const bag = primeRuntime(runtime, { prompt, setMode });
+    bag.sessionId = 'S1';
+    bag.loadedSessionId = 'S1';
+
+    for (const label of ['A', 'B', 'C']) {
+      await (async () => {
+        for await (const _chunk of runtime.query({ ...turn, persistedContent: label } as never)) {
+          void _chunk;
+        }
+      })();
+      await flush();
+    }
+
+    expect(prompt).toHaveBeenCalledTimes(3);
   });
 });
 
@@ -954,6 +1206,31 @@ describe('CursorChatRuntime.cancel escalation', () => {
     expect(shutdownProcess).not.toHaveBeenCalled();
     expect(queue.isClosed).toBe(true);
   });
+
+  it('does not let a stale escalation timer recycle a replacement process generation', async () => {
+    jest.useFakeTimers();
+    const runtime = makeRuntime();
+    const { bag, shutdownProcess } = primeCancellableTurn(runtime);
+    bag.processGeneration = 7;
+
+    runtime.cancel();
+    bag.processGeneration = 8;
+    jest.advanceTimersByTime(5_000);
+    await Promise.resolve();
+
+    expect(shutdownProcess).not.toHaveBeenCalled();
+  });
+
+  it('rechecks generation inside the lifecycle lock before a queued escalation recycles', async () => {
+    const runtime = makeRuntime();
+    const { bag, shutdownProcess } = primeCancellableTurn(runtime);
+    bag.processGeneration = 8;
+
+    await (bag.recycleProcess as (expectedGeneration?: number) => Promise<void>).call(runtime, 7);
+
+    expect(shutdownProcess).not.toHaveBeenCalled();
+    expect(bag.processGeneration).toBe(8);
+  });
 });
 
 describe('CursorChatRuntime.handleTransportClosed', () => {
@@ -993,7 +1270,12 @@ describe('CursorChatRuntime.handleTransportClosed', () => {
 });
 
 describe('CursorChatRuntime.applySelectedModel (advertised wire ids)', () => {
-  afterEach(() => jest.restoreAllMocks());
+  beforeEach(stubProviderSnapshot);
+
+  afterEach(() => {
+    jest.restoreAllMocks();
+    resetCursorModelCatalog();
+  });
 
   function primeModel(
     runtime: CursorChatRuntime,
@@ -1045,7 +1327,7 @@ describe('CursorChatRuntime.applySelectedModel (advertised wire ids)', () => {
     expect(setConfigOption.mock.calls[0][0].value).toBe('gpt-5.4[reasoning=medium]');
   });
 
-  it('skips setConfigOption when the family matches but no advertised variant does', async () => {
+  it('rejects setConfigOption when the family matches but no advertised variant does', async () => {
     const runtime = makeRuntime();
     const setConfigOption = jest.fn().mockResolvedValue({ configOptions: [] });
     // Silently sending high for a medium selection would misreport the effort.
@@ -1053,10 +1335,45 @@ describe('CursorChatRuntime.applySelectedModel (advertised wire ids)', () => {
       'gpt-5.4[reasoning=high]',
     ]);
 
-    await applyModel(bag, runtime);
+    await expect(applyModel(bag, runtime)).rejects.toThrow();
 
     expect(setConfigOption).not.toHaveBeenCalled();
     expect(bag.currentSessionModelId).toBeNull();
+  });
+
+  it('applies gpt-5.6-sol when global effort is high but only medium is advertised', async () => {
+    resetCursorModelCatalog();
+    seedCursorModelCatalogForTest(['gpt-5.6-sol-medium']);
+    const hostnameKey = getHostnameKey();
+    const runtime = makeRuntime({
+      settings: {
+        permissionMode: 'normal',
+        effortLevel: 'high',
+        model: 'cursor:gpt-5.6-sol',
+        providers: {
+          cursor: {
+            enabledModelsByHost: { [hostnameKey]: ['gpt-5.6-sol-medium'] },
+          },
+        },
+      },
+    });
+    const setConfigOption = jest.fn().mockResolvedValue({ configOptions: [] });
+    const bag = primeRuntime(runtime, { setConfigOption });
+    bag.advertisedModelValues = ['gpt-5.6-sol[context=272k,reasoning=medium,fast=false]'];
+
+    await (bag.applySelectedModel as (s: string, q?: unknown) => Promise<void>).call(
+      runtime,
+      'S1',
+      { model: 'cursor:gpt-5.6-sol' },
+    );
+
+    expect(setConfigOption).toHaveBeenCalledWith({
+      configId: 'model',
+      sessionId: 'S1',
+      type: 'select',
+      value: 'gpt-5.6-sol[context=272k,reasoning=medium,fast=false]',
+    });
+    resetCursorModelCatalog();
   });
 
   it('prefers the bare family wire id when no variant was requested', async () => {
@@ -1125,34 +1442,34 @@ describe('CursorChatRuntime.applySelectedModel (advertised wire ids)', () => {
     expect(setConfigOption).not.toHaveBeenCalled();
   });
 
-  it('skips Auto entirely when the catalog advertises no default entry', async () => {
+  it('rejects Auto when the catalog advertises no default entry', async () => {
     const runtime = makeRuntime();
     const setConfigOption = jest.fn().mockResolvedValue({ configOptions: [] });
     const bag = primeModel(runtime, setConfigOption, 'auto', ['gpt-5.4[reasoning=medium]']);
 
-    await applyModel(bag, runtime);
+    await expect(applyModel(bag, runtime)).rejects.toThrow();
 
     expect(setConfigOption).not.toHaveBeenCalled();
     expect(bag.currentSessionModelId).toBeNull();
   });
 
-  it('skips setConfigOption entirely when no advertised value matches the family', async () => {
+  it('rejects setConfigOption when no advertised value matches the family', async () => {
     const runtime = makeRuntime();
     const setConfigOption = jest.fn().mockResolvedValue({ configOptions: [] });
     const bag = primeModel(runtime, setConfigOption, 'gpt-5.4-medium', ['claude-4.6-opus[thinking]']);
 
-    await applyModel(bag, runtime);
+    await expect(applyModel(bag, runtime)).rejects.toThrow();
 
     expect(setConfigOption).not.toHaveBeenCalled();
     expect(bag.currentSessionModelId).toBeNull();
   });
 
-  it('skips setConfigOption when the session advertised no models at all', async () => {
+  it('rejects setConfigOption when the session advertised no models at all', async () => {
     const runtime = makeRuntime();
     const setConfigOption = jest.fn().mockResolvedValue({ configOptions: [] });
     const bag = primeModel(runtime, setConfigOption, 'gpt-5.4-medium', null);
 
-    await applyModel(bag, runtime);
+    await expect(applyModel(bag, runtime)).rejects.toThrow();
 
     expect(setConfigOption).not.toHaveBeenCalled();
   });
@@ -1178,12 +1495,12 @@ describe('CursorChatRuntime.applySelectedModel (advertised wire ids)', () => {
     expect(setConfigOption).not.toHaveBeenCalled();
   });
 
-  it('swallows a setConfigOption rejection without advancing the cache', async () => {
+  it('propagates a setConfigOption rejection without advancing the cache', async () => {
     const runtime = makeRuntime();
     const setConfigOption = jest.fn().mockRejectedValue(new Error('unsupported'));
     const bag = primeModel(runtime, setConfigOption, 'gpt-5.4-medium', ['gpt-5.4[reasoning=medium]']);
 
-    await applyModel(bag, runtime);
+    await expect(applyModel(bag, runtime)).rejects.toThrow('unsupported');
 
     expect(setConfigOption).toHaveBeenCalled();
     expect(bag.currentSessionModelId).toBeNull();
@@ -1191,6 +1508,8 @@ describe('CursorChatRuntime.applySelectedModel (advertised wire ids)', () => {
 });
 
 describe('CursorChatRuntime.captureAdvertisedModelValues', () => {
+  beforeEach(stubProviderSnapshot);
+
   it('captures wire ids from a session response config option', () => {
     const runtime = makeRuntime() as unknown as Record<string, unknown>;
     (runtime.captureAdvertisedModelValues as (r: unknown) => void).call(runtime, {
@@ -1298,7 +1617,7 @@ describe('CursorChatRuntime.captureAdvertisedModelValues', () => {
     });
   });
 
-  it('stores an empty catalog when the FIRST response advertises none, and applySelectedModel skips (existing behavior)', async () => {
+  it('stores an empty catalog when the FIRST response advertises none, and applySelectedModel rejects', async () => {
     const runtime = makeRuntime();
     const newSession = jest.fn().mockResolvedValue({ sessionId: 'S1', models: { availableModels: [] }, configOptions: [] });
     const setConfigOption = jest.fn().mockResolvedValue({ configOptions: [] });
@@ -1309,13 +1628,34 @@ describe('CursorChatRuntime.captureAdvertisedModelValues', () => {
 
     jest.spyOn(runtime as unknown as { resolveCursorModelForSession: () => string | undefined }, 'resolveCursorModelForSession')
       .mockReturnValue('gpt-5.4-medium');
-    await (bag.applySelectedModel as (s: string, q?: unknown) => Promise<void>).call(
-      runtime,
-      bag.sessionId as string,
-      undefined,
-    );
+    await expect(
+      (bag.applySelectedModel as (s: string, q?: unknown) => Promise<void>).call(
+        runtime,
+        bag.sessionId as string,
+        undefined,
+      ),
+    ).rejects.toThrow();
 
     expect(setConfigOption).not.toHaveBeenCalled();
+  });
+});
+
+describe('CursorChatRuntime capture naming', () => {
+  it('allocates a distinct capture directory for repeated writers in one runtime', () => {
+    const runtime = makeRuntime({
+      settings: {
+        permissionMode: 'normal',
+        providerConfigs: { cursor: { captureAcpTraffic: true } },
+      },
+    }) as unknown as Record<string, unknown>;
+    const build = (runtime.buildCaptureWriter as (cliPath: string) => unknown).bind(runtime);
+
+    const first = build('/bin/cursor-agent') as Record<string, unknown>;
+    const second = build('/bin/cursor-agent') as Record<string, unknown>;
+
+    expect(first).toBeTruthy();
+    expect(second).toBeTruthy();
+    expect(first.sessionDir).not.toBe(second.sessionDir);
   });
 });
 

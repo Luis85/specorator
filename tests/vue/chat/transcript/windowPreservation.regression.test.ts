@@ -130,6 +130,7 @@ describe('transcript render-window preservation during streaming', () => {
   it('resets to the trailing window when a different conversation is loaded', async () => {
     const total = 2 * RENDER_WINDOW_SIZE + 10; // 170
     const state = new ChatState();
+    state.currentConversationId = 'conv-a';
     for (let i = 0; i < total; i++) state.addMessage(userMessage('m', i));
 
     const projection = new TabTranscriptProjection(state);
@@ -140,9 +141,10 @@ describe('transcript render-window preservation during streaming', () => {
     await clickLoadEarlier(container);
     expect(container.querySelector('[data-message-id="m10"]')).not.toBeNull();
 
-    // Switch to a DIFFERENT conversation (new first-id). The window must reset to
+    // Switch to a DIFFERENT conversation (new id). The window must reset to
     // the trailing region: the new conversation's early messages are hidden again.
     const nextTotal = RENDER_WINDOW_SIZE + 40; // 120
+    state.currentConversationId = 'conv-b';
     state.clearMessages();
     for (let i = 0; i < nextTotal; i++) state.addMessage(userMessage('n', i));
     projection.emit();

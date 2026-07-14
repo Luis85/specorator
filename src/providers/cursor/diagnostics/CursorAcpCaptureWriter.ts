@@ -1,7 +1,7 @@
 import * as fs from 'node:fs/promises';
 import * as path from 'node:path';
 
-import { scrubString } from '../../../core/logging/redact';
+import { redactJsonLine, redactSerializable, scrubString } from '../../../core/logging/redact';
 
 const MAX_CAPTURE_SESSIONS = 20;
 
@@ -36,11 +36,14 @@ export class CursorAcpCaptureWriter {
   }
 
   wireFrame(dir: 'client' | 'agent', rawLine: string): void {
-    this.append('wire.jsonl', JSON.stringify({ t: Date.now(), dir, frame: rawLine }));
+    this.append('wire.jsonl', JSON.stringify({ t: Date.now(), dir, frame: redactJsonLine(rawLine) }));
   }
 
   event(kind: string, data: Record<string, unknown> = {}): void {
-    this.append('lifecycle.jsonl', JSON.stringify({ t: Date.now(), kind, ...data }));
+    this.append(
+      'lifecycle.jsonl',
+      JSON.stringify({ t: Date.now(), kind, ...(redactSerializable(data) as Record<string, unknown>) }),
+    );
   }
 
   stderr(chunk: string): void {

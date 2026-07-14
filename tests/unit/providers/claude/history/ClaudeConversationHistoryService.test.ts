@@ -95,7 +95,9 @@ describe('ClaudeConversationHistoryService.hydrateConversationHistory', () => {
     expect(out.kind).toBe('error');
     // eslint-disable-next-line jest/no-conditional-expect
     if (out.kind === 'error') expect(out.error.code).toBe('cancelled');
-    expect(callCount).toBe(1);
+    // Caller cancellation does not poison the shared provider read: the walk
+    // finishes without inheriting the caller's AbortSignal.
+    expect(callCount).toBe(3);
   });
 
   it('returns error:store-unreadable when every load reports an error', async () => {

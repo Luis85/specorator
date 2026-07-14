@@ -27,6 +27,8 @@ export class ImageContextManager {
   private inputEl: HTMLTextAreaElement;
   private attachedImages: Map<string, ImageAttachment> = new Map();
   private enabled = true;
+  /** Monotonic token — stale async conversions are dropped after clear/reset. */
+  private attachGeneration = 0;
 
   constructor(
     containerEl: HTMLElement,
@@ -65,6 +67,7 @@ export class ImageContextManager {
   }
 
   clearImages() {
+    this.attachGeneration += 1;
     this.attachedImages.clear();
     this.updateImagePreview();
     this.callbacks.onImagesChanged();
@@ -72,6 +75,7 @@ export class ImageContextManager {
 
   /** Sets images directly (used for queued messages). */
   setImages(images: ImageAttachment[]) {
+    this.attachGeneration += 1;
     this.attachedImages.clear();
     for (const image of images) {
       this.attachedImages.set(image.id, image);
@@ -128,8 +132,13 @@ export class ImageContextManager {
       return false;
     }
 
+    const generation = ++this.attachGeneration;
+
     try {
       const base64 = await this.fileToBase64(file);
+      if (generation !== this.attachGeneration) {
+        return false;
+      }
 
       const attachment: ImageAttachment = {
         id: this.generateId(),

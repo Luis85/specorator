@@ -29,6 +29,8 @@ export const useTranscriptStore = defineStore('transcript', () => {
   const loadingText = shallowRef<string | null>(null);
   /** Recorded history-hydration failure banner (`setHydrationError`/`clearHydrationBanner`). */
   const hydrationError = shallowRef<TranscriptHydrationError | null>(null);
+  const conversationId = shallowRef<string | null>(null);
+  const projectionRevision = shallowRef(0);
 
   function setMessages(next: ChatMessage[]): void {
     messages.value = next;
@@ -45,6 +47,10 @@ export const useTranscriptStore = defineStore('transcript', () => {
   function setHydrationError(next: TranscriptHydrationError | null): void {
     hydrationError.value = next;
   }
+  function setConversationIdentity(nextId: string | null, nextRevision: number): void {
+    conversationId.value = nextId;
+    projectionRevision.value = nextRevision;
+  }
 
   return {
     messages,
@@ -52,10 +58,13 @@ export const useTranscriptStore = defineStore('transcript', () => {
     greeting,
     loadingText,
     hydrationError,
+    conversationId,
+    projectionRevision,
     setMessages,
     setActiveStream,
     setGreeting,
     setLoadingText,
     setHydrationError,
+    setConversationIdentity,
   };
 });

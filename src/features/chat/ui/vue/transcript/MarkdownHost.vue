@@ -20,17 +20,26 @@ async function render(): Promise<void> {
   if (!el || el.nodeType !== 1) return;
   const mine = ++generation;
   const pending = el.ownerDocument.createElement('div');
-  await renderMarkdownInto({
-    app,
-    component,
-    el: pending,
-    markdown: props.markdown,
-    mediaFolder: plugin.settings.mediaFolder ?? '',
-    deferMath: props.deferMath,
-  });
-  if (mine !== generation) return; // a newer render landed; drop this one
-  el.empty();
-  while (pending.firstChild) el.appendChild(pending.firstChild);
+  el.dataset.specoratorMarkdownPending = 'true';
+  try {
+    await renderMarkdownInto({
+      app,
+      component,
+      el: pending,
+      markdown: props.markdown,
+      mediaFolder: plugin.settings.mediaFolder ?? '',
+      deferMath: props.deferMath,
+    });
+    if (mine !== generation) return; // a newer render landed; drop this one
+    el.empty();
+    while (pending.firstChild) el.appendChild(pending.firstChild);
+  } finally {
+    if (mine === generation) {
+      delete el.dataset.specoratorMarkdownPending;
+      const CustomEventCtor = el.ownerDocument.defaultView?.CustomEvent ?? CustomEvent;
+      el.dispatchEvent(new CustomEventCtor('specorator-markdown-rendered', { bubbles: true }));
+    }
+  }
 }
 
 onMounted(render);
