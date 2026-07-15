@@ -3,6 +3,11 @@ import '@/providers';
 import { EventEmitter } from 'events';
 
 import { CursorAuxCliRunner } from '@/providers/cursor/runtime/CursorAuxCliRunner';
+import {
+  buildCursorModelCatalogCliKey,
+  resetCursorModelCatalog,
+  seedCursorModelCatalogForTest,
+} from '@/providers/cursor/runtime/cursorModelCatalog';
 
 jest.mock('@/utils/path', () => ({
   getVaultPath: jest.fn().mockReturnValue('/test/vault'),
@@ -61,6 +66,24 @@ function queueReply(json: string): void {
 describe('CursorAuxCliRunner shared-runner contract', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    resetCursorModelCatalog();
+  });
+
+  it('ignores shared effort state but preserves an explicit model variant', () => {
+    seedCursorModelCatalogForTest(
+      ['gpt-5.6-sol-medium', 'gpt-5.6-sol-high'],
+      buildCursorModelCatalogCliKey('/usr/bin/cursor-agent', {}),
+    );
+    const plugin = createMockPlugin();
+    plugin.settings.providers.cursor.model = 'cursor:gpt-5.6-sol';
+    plugin.settings.effortLevel = 'high';
+    const runner = new CursorAuxCliRunner(plugin);
+    const resolve = (runner as unknown as {
+      resolveCliModel: (model?: string) => string | undefined;
+    }).resolveCliModel.bind(runner);
+
+    expect(resolve('cursor:gpt-5.6-sol')).toBe('gpt-5.6-sol-medium');
+    expect(resolve('cursor:gpt-5.6-sol-high')).toBe('gpt-5.6-sol-high');
   });
 
   it('emits the final text once through onTextChunk', async () => {

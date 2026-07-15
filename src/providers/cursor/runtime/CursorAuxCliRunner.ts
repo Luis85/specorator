@@ -121,11 +121,13 @@ export class CursorAuxCliRunner implements AuxQueryRunner {
       || (typeof providerSettings.model === 'string' && providerSettings.model.trim()
         ? providerSettings.model.trim()
         : undefined);
-    const mode = typeof providerSettings.effortLevel === 'string'
-      ? providerSettings.effortLevel
-      : undefined;
-    return resolveCursorModelSelectionForCli(familyValue, mode, {
-      catalogIds: getCachedCursorModelIds(),
+    const cliPath = this.plugin.getResolvedProviderCliPath('cursor') ?? undefined;
+    const catalogIds = getCachedCursorModelIds(
+      cliPath,
+      cliPath ? buildCursorAgentEnvironment(this.plugin, cliPath) : undefined,
+    );
+    return resolveCursorModelSelectionForCli(familyValue, undefined, {
+      catalogIds,
       enabledIds: getCursorEnabledModels(settingsBag),
     });
   }

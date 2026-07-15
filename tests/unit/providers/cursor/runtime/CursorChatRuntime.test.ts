@@ -33,7 +33,24 @@ function makeRuntime(
     storage: { getAdapter: () => ({ exists: async () => false, read: async () => '', write: async () => {} }) },
     ...overrides,
   };
-  return new CursorChatRuntime(plugin as never, host);
+  const runtime = new CursorChatRuntime(plugin as never, host);
+  const bag = runtime as unknown as Record<string, unknown>;
+  const modelState = bag.sessionModel as Record<string, unknown>;
+  Object.defineProperties(runtime, {
+    advertisedModelValues: {
+      get: () => modelState.values,
+      set: (value: unknown) => { modelState.values = value; },
+    },
+    currentSessionModelId: {
+      get: () => modelState.currentValue,
+      set: (value: unknown) => { modelState.currentValue = value; },
+    },
+    modelConfigId: {
+      get: () => modelState.configId,
+      set: (value: unknown) => { modelState.configId = value; },
+    },
+  });
+  return runtime;
 }
 
 // The cursor provider isn't registered in the unit lane, so the settings-snapshot
@@ -573,9 +590,12 @@ describe('CursorChatRuntime.emitFinalUsage', () => {
 
   // The model is resolved once at turn start onto ActiveTurn.usageModel; null
   // suppresses every usage emission (usage contract: never emit without a model).
-  function makeActiveTurn(usageModel: string | null = 'gpt-5') {
+  function makeActiveTurn(usageModel: string | null = 'gpt-5', usageContextWindow = 0) {
     const push = jest.fn();
-    return { activeTurn: { queue: { push }, sessionId: 'S', usageModel }, push };
+    return {
+      activeTurn: { queue: { push }, sessionId: 'S', usageContextWindow, usageModel },
+      push,
+    };
   }
 
   it('emits the ACP usage payload when prompt usage is present', () => {
@@ -662,6 +682,17 @@ describe('CursorChatRuntime.emitFinalUsage', () => {
     expect(push).toHaveBeenCalledTimes(1);
     const usage = push.mock.calls[0][0].usage;
     expect(usage.contextWindow).toBe(400_000);
+  });
+
+  it('uses the effective ACP model context window for new model families', () => {
+    const runtime = makeRuntime() as unknown as Record<string, unknown>;
+    runtime.contextUsage = null;
+    const { activeTurn, push } = makeActiveTurn('cursor:gpt-5.6-luna', 272_000);
+
+    (runtime.emitFinalUsage as (t: unknown, u: unknown) => void)
+      .call(runtime, activeTurn, { inputTokens: 100, outputTokens: 20 });
+
+    expect(push.mock.calls[0][0].usage.contextWindow).toBe(272_000);
   });
 });
 
@@ -1393,6 +1424,10 @@ describe('CursorChatRuntime.applySelectedModel (advertised wire ids)', () => {
 
   it('sends the advertised wire id when the resolved family prefix matches', async () => {
     const runtime = makeRuntime();
+    const persist = jest.spyOn(
+      runtime as unknown as { persistAdvertisedModelState: () => Promise<void> },
+      'persistAdvertisedModelState',
+    ).mockResolvedValue();
     const setConfigOption = jest.fn().mockResolvedValue({ configOptions: [] });
     const bag = primeModel(runtime, setConfigOption, 'gpt-5.4-medium', [
       'gpt-5.4[reasoning=medium]',
@@ -1408,6 +1443,7 @@ describe('CursorChatRuntime.applySelectedModel (advertised wire ids)', () => {
       value: 'gpt-5.4[reasoning=medium]',
     });
     expect(bag.currentSessionModelId).toBe('gpt-5.4[reasoning=medium]');
+    expect(persist).toHaveBeenCalled();
   });
 
   it('matches the requested variant, not the first family sibling', async () => {
@@ -1470,6 +1506,97 @@ describe('CursorChatRuntime.applySelectedModel (advertised wire ids)', () => {
       type: 'select',
       value: 'gpt-5.6-sol[context=272k,reasoning=medium,fast=false]',
     });
+    resetCursorModelCatalog();
+  });
+
+  it('treats CLI effort preferences as non-authoritative for an ACP session', async () => {
+    resetCursorModelCatalog();
+    seedCursorModelCatalogForTest(['gpt-5.6-luna-high', 'gpt-5.6-luna-medium']);
+    const runtime = makeRuntime({
+      settings: {
+        permissionMode: 'normal',
+        effortLevel: 'high',
+        model: 'cursor:gpt-5.6-luna',
+      },
+    });
+    const setConfigOption = jest.fn().mockResolvedValue({ configOptions: [] });
+    const bag = primeRuntime(runtime, { setConfigOption });
+    bag.advertisedModelValues = ['gpt-5.6-luna[context=272k,reasoning=medium,fast=false]'];
+
+    await (bag.applySelectedModel as (s: string, q?: unknown) => Promise<void>).call(
+      runtime,
+      'S1',
+      { model: 'cursor:gpt-5.6-luna' },
+    );
+
+    expect(setConfigOption).toHaveBeenCalledWith({
+      configId: 'model',
+      sessionId: 'S1',
+      type: 'select',
+      value: 'gpt-5.6-luna[context=272k,reasoning=medium,fast=false]',
+    });
+  });
+
+  it('preserves an explicit query variant so unsupported effort fails visibly', async () => {
+    resetCursorModelCatalog();
+    seedCursorModelCatalogForTest(['gpt-5.6-luna-high', 'gpt-5.6-luna-medium']);
+    const runtime = makeRuntime();
+    const setConfigOption = jest.fn().mockResolvedValue({ configOptions: [] });
+    const bag = primeRuntime(runtime, { setConfigOption });
+    bag.advertisedModelValues = ['gpt-5.6-luna[context=272k,reasoning=medium,fast=false]'];
+
+    await expect(
+      (bag.applySelectedModel as (s: string, q?: unknown) => Promise<void>).call(
+        runtime,
+        'S1',
+        { model: 'cursor:gpt-5.6-luna-high' },
+      ),
+    ).rejects.toThrow();
+
+    expect(setConfigOption).not.toHaveBeenCalled();
+  });
+
+  it('rejects gpt-5.6-luna-high when only medium is on the wire', async () => {
+    resetCursorModelCatalog();
+    seedCursorModelCatalogForTest(['gpt-5.6-luna-high', 'gpt-5.6-luna-medium']);
+    const runtime = makeRuntime({
+      settings: {
+        permissionMode: 'normal',
+        effortLevel: 'high',
+        model: 'cursor:gpt-5.6-luna',
+      },
+    });
+    const setConfigOption = jest.fn().mockResolvedValue({ configOptions: [] });
+    const bag = primeModel(runtime, setConfigOption, 'gpt-5.6-luna-high', [
+      'gpt-5.6-luna[context=272k,reasoning=medium,fast=false]',
+    ]);
+
+    await expect(applyModel(bag, runtime)).rejects.toThrow();
+
+    expect(setConfigOption).not.toHaveBeenCalled();
+    expect(bag.currentSessionModelId).toBeNull();
+    resetCursorModelCatalog();
+  });
+
+  it('rejects gpt-5.6-luna-none when the wire omits an explicit reasoning axis', async () => {
+    resetCursorModelCatalog();
+    seedCursorModelCatalogForTest(['gpt-5.6-luna-none']);
+    const runtime = makeRuntime({
+      settings: {
+        permissionMode: 'normal',
+        effortLevel: 'none',
+        model: 'cursor:gpt-5.6-luna',
+      },
+    });
+    const setConfigOption = jest.fn().mockResolvedValue({ configOptions: [] });
+    const bag = primeModel(runtime, setConfigOption, 'gpt-5.6-luna-none', [
+      'gpt-5.6-luna[context=272k,fast=false]',
+    ]);
+
+    await expect(applyModel(bag, runtime)).rejects.toThrow();
+
+    expect(setConfigOption).not.toHaveBeenCalled();
+    expect(bag.currentSessionModelId).toBeNull();
     resetCursorModelCatalog();
   });
 
@@ -1592,6 +1719,93 @@ describe('CursorChatRuntime.applySelectedModel (advertised wire ids)', () => {
     expect(setConfigOption).not.toHaveBeenCalled();
   });
 
+  it('uses the model config id advertised by the session', async () => {
+    const runtime = makeRuntime();
+    const setConfigOption = jest.fn().mockResolvedValue({ configOptions: [] });
+    const bag = primeModel(runtime, setConfigOption, 'gpt-5.4-medium', ['gpt-5.4[reasoning=medium]']);
+    bag.modelConfigId = 'selected_model';
+
+    await applyModel(bag, runtime);
+
+    expect(setConfigOption).toHaveBeenCalledWith({
+      configId: 'selected_model',
+      sessionId: 'S1',
+      type: 'select',
+      value: 'gpt-5.4[reasoning=medium]',
+    });
+  });
+
+  it('rejects an agent-normalized model that differs from the requested value', async () => {
+    const runtime = makeRuntime();
+    const setConfigOption = jest.fn().mockResolvedValue({
+      configOptions: [{
+        id: 'model',
+        name: 'Model',
+        type: 'select',
+        category: 'model',
+        currentValue: 'gpt-5.4[reasoning=high]',
+        options: [
+          { name: 'GPT-5.4 Medium', value: 'gpt-5.4[reasoning=medium]' },
+          { name: 'GPT-5.4 High', value: 'gpt-5.4[reasoning=high]' },
+        ],
+      }],
+    });
+    const bag = primeModel(runtime, setConfigOption, 'gpt-5.4-medium', [
+      'gpt-5.4[reasoning=medium]',
+      'gpt-5.4[reasoning=high]',
+    ]);
+
+    await expect(applyModel(bag, runtime)).rejects.toThrow();
+
+    expect(bag.currentSessionModelId).toBe('gpt-5.4[reasoning=high]');
+    expect(bag.advertisedModelValues).toEqual([
+      'gpt-5.4[reasoning=medium]',
+      'gpt-5.4[reasoning=high]',
+    ]);
+  });
+
+  it('does not overwrite an authoritative config update with an empty RPC response', async () => {
+    const runtime = makeRuntime();
+    const bag = runtime as unknown as Record<string, unknown>;
+    const setConfigOption = jest.fn(async () => {
+      await (bag.handleSessionNotification as (n: unknown) => Promise<void>).call(runtime, {
+        sessionId: 'S1',
+        update: {
+          sessionUpdate: 'config_option_update',
+          configOptions: [{
+            id: 'model',
+            name: 'Model',
+            type: 'select',
+            category: 'model',
+            currentValue: 'gpt-5.4[reasoning=high]',
+            options: [
+              { name: 'GPT-5.4 Medium', value: 'gpt-5.4[reasoning=medium]' },
+              { name: 'GPT-5.4 High', value: 'gpt-5.4[reasoning=high]' },
+            ],
+          }],
+        },
+      });
+      return { configOptions: [] };
+    });
+    primeRuntime(runtime, { setConfigOption });
+    bag.sessionId = 'S1';
+    bag.advertisedModelValues = [
+      'gpt-5.4[reasoning=medium]',
+      'gpt-5.4[reasoning=high]',
+    ];
+    jest.spyOn(
+      runtime as unknown as { resolveCursorModelForSession: () => string | undefined },
+      'resolveCursorModelForSession',
+    ).mockReturnValue('gpt-5.4-medium');
+
+    await expect(
+      (bag.applySelectedModel as (s: string, q?: unknown) => Promise<void>)
+        .call(runtime, 'S1', undefined),
+    ).rejects.toThrow();
+
+    expect(bag.currentSessionModelId).toBe('gpt-5.4[reasoning=high]');
+  });
+
   it('propagates a setConfigOption rejection without advancing the cache', async () => {
     const runtime = makeRuntime();
     const setConfigOption = jest.fn().mockRejectedValue(new Error('unsupported'));
@@ -1627,6 +1841,28 @@ describe('CursorChatRuntime.captureAdvertisedModelValues', () => {
       'gpt-5.4[reasoning=medium]',
       'gpt-5.4[reasoning=high]',
     ]);
+    expect(runtime.modelConfigId).toBe('model');
+    expect(runtime.currentSessionModelId).toBe('gpt-5.4[reasoning=medium]');
+  });
+
+  it('captures the opaque model config id instead of assuming model', () => {
+    const runtime = makeRuntime() as unknown as Record<string, unknown>;
+    (runtime.captureAdvertisedModelValues as (r: unknown) => void).call(runtime, {
+      sessionId: 'S1',
+      configOptions: [{
+        id: 'selected_model',
+        name: 'Model',
+        type: 'select',
+        category: 'model',
+        currentValue: 'gpt-5.4[reasoning=high]',
+        options: [
+          { name: 'GPT-5.4 High', value: 'gpt-5.4[reasoning=high]' },
+        ],
+      }],
+    });
+
+    expect(runtime.modelConfigId).toBe('selected_model');
+    expect(runtime.currentSessionModelId).toBe('gpt-5.4[reasoning=high]');
   });
 
   it('falls back to the legacy models state when no config option is advertised', () => {
@@ -1648,9 +1884,84 @@ describe('CursorChatRuntime.captureAdvertisedModelValues', () => {
 
     await (bag.createSession as (c: string) => Promise<string | null>).call(runtime, '/cwd');
     expect(bag.advertisedModelValues).toEqual(['auto']);
+    expect(bag.currentSessionModelId).toBeNull();
 
     runtime.resetSession();
     expect(bag.advertisedModelValues).toBeNull();
+  });
+
+  it('reapplies the selected model once after session/new even when currentValue already matches', async () => {
+    resetCursorModelCatalog();
+    seedCursorModelCatalogForTest(['gpt-5.6-terra']);
+    const wireValue = 'gpt-5.6-terra[context=272k,reasoning=medium,fast=false]';
+    const newSessionResponse = {
+      sessionId: 'S3',
+      models: {
+        currentModelId: wireValue,
+        availableModels: [{ modelId: wireValue, name: 'gpt-5.6-terra' }],
+      },
+      configOptions: [{
+        id: 'model',
+        name: 'Model',
+        type: 'select',
+        category: 'model',
+        currentValue: wireValue,
+        options: [{ name: 'gpt-5.6-terra', value: wireValue }],
+      }],
+    };
+    const runtime = makeRuntime();
+    const setConfigOption = jest.fn().mockResolvedValue({
+      configOptions: newSessionResponse.configOptions,
+    });
+    const bag = primeRuntime(runtime, {
+      newSession: jest.fn().mockResolvedValue(newSessionResponse),
+      setConfigOption,
+    });
+
+    await (bag.createSession as (c: string) => Promise<string | null>).call(runtime, '/cwd');
+    await (bag.applySelectedModel as (s: string, q?: unknown) => Promise<void>).call(
+      runtime,
+      newSessionResponse.sessionId,
+      { model: 'cursor:gpt-5.6-terra' },
+    );
+
+    expect(setConfigOption).toHaveBeenCalledWith({
+      configId: 'model',
+      sessionId: newSessionResponse.sessionId,
+      type: 'select',
+      value: wireValue,
+    });
+  });
+
+  it('persists a fresh session model as unconfirmed until explicit application succeeds', async () => {
+    const runtime = makeRuntime();
+    const bag = runtime as unknown as Record<string, unknown>;
+    const persistedCurrentValues: unknown[] = [];
+    jest.spyOn(
+      runtime as unknown as { persistAdvertisedModelState: () => Promise<void> },
+      'persistAdvertisedModelState',
+    ).mockImplementation(async () => {
+      persistedCurrentValues.push(bag.currentSessionModelId);
+    });
+    const wireValue = 'gpt-5.6-terra[context=272k,reasoning=medium,fast=false]';
+
+    await (bag.adoptFreshSession as (r: unknown) => Promise<string>).call(runtime, {
+      sessionId: 'S3',
+      models: {
+        currentModelId: wireValue,
+        availableModels: [{ modelId: wireValue, name: 'gpt-5.6-terra' }],
+      },
+      configOptions: [{
+        id: 'model',
+        name: 'Model',
+        type: 'select',
+        category: 'model',
+        currentValue: wireValue,
+        options: [{ name: 'gpt-5.6-terra', value: wireValue }],
+      }],
+    });
+
+    expect(persistedCurrentValues).toEqual([null]);
   });
 
   it('is populated by a successful session/load', async () => {
@@ -1870,6 +2181,60 @@ describe('CursorChatRuntime.handleSessionNotification plan-content gate', () => 
     });
 
     expect(bag.currentModeId).toBe('plan');
+  });
+
+  it('tracks model config updates between turns', async () => {
+    const runtime = makeRuntime();
+    const bag = runtime as unknown as Record<string, unknown>;
+    bag.sessionId = 'S1';
+    bag.activeTurn = null;
+
+    await (bag.handleSessionNotification as (n: unknown) => Promise<void>).call(runtime, {
+      sessionId: 'S1',
+      update: {
+        sessionUpdate: 'config_option_update',
+        configOptions: [{
+          id: 'selected_model',
+          name: 'Model',
+          type: 'select',
+          category: 'model',
+          currentValue: 'gpt-5.4[reasoning=high]',
+          options: [
+            { name: 'GPT-5.4 High', value: 'gpt-5.4[reasoning=high]' },
+          ],
+        }],
+      },
+    });
+
+    expect(bag.modelConfigId).toBe('selected_model');
+    expect(bag.currentSessionModelId).toBe('gpt-5.4[reasoning=high]');
+    expect(bag.advertisedModelValues).toEqual(['gpt-5.4[reasoning=high]']);
+  });
+
+  it('clears stale legal values when a model config update advertises none', async () => {
+    const runtime = makeRuntime();
+    const bag = runtime as unknown as Record<string, unknown>;
+    bag.sessionId = 'S1';
+    bag.currentSessionModelId = 'gpt-5.4[reasoning=high]';
+    bag.advertisedModelValues = ['gpt-5.4[reasoning=high]'];
+
+    await (bag.handleSessionNotification as (n: unknown) => Promise<void>).call(runtime, {
+      sessionId: 'S1',
+      update: {
+        sessionUpdate: 'config_option_update',
+        configOptions: [{
+          id: 'selected_model',
+          name: 'Model',
+          type: 'select',
+          category: 'model',
+          currentValue: 'gpt-5.4[reasoning=high]',
+          options: [],
+        }],
+      },
+    });
+
+    expect(bag.modelConfigId).toBe('selected_model');
+    expect(bag.advertisedModelValues).toEqual([]);
   });
 
   it('records the context window carried by a usage_update', async () => {

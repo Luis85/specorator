@@ -39,7 +39,6 @@ import {
   buildAcpApprovalDecisionOptions,
   buildAcpUsageInfo,
   buildActiveTurnEffect,
-  extractAcpSessionModelState,
   JsonRpcErrorResponse,
   JsonRpcTransportClosedError,
   mapApprovalDecision,
@@ -50,27 +49,26 @@ import { CURSOR_PROVIDER_CAPABILITIES } from '../capabilities';
 import { CursorAcpCaptureWriter } from '../diagnostics/CursorAcpCaptureWriter';
 import { validateCursorAcpSessionVault } from '../history/cursorSessionOwnership';
 import { encodeCursorTurn } from '../prompt/encodeCursorTurn';
-import { getCursorEnabledModels, getCursorProviderSettings } from '../settings';
+import { getCursorProviderSettings } from '../settings';
 import { getCursorState, resolveCursorSessionId } from '../types';
-import { cursorChatUIConfig } from '../ui/CursorChatUIConfig';
 import { registerCursorAcpExtensions } from './cursorAcpExtensions';
 import { buildCursorAcpLaunchSpec, startCursorAcpProcess } from './cursorAcpLaunch';
 import { buildCursorAcpPromptBlocks } from './cursorAcpPrompt';
 import { resolveCursorAcpMode } from './cursorAcpSession';
 import { createCursorAcpToolStreamAdapter } from './cursorAcpToolNames';
-import { matchAdvertisedModelValueWithFamilyFallback } from './cursorAdvertisedModels';
-import { loadCursorAdvertisedModels, saveCursorAdvertisedModels } from './cursorAdvertisedModelStore';
 import { buildCursorAgentEnvironment } from './cursorAgentEnv';
 import { runWithCursorAgentSpawnLock } from './cursorAgentSpawnLock';
-import {
-  resolveCursorEffortForFamily,
-  resolveCursorModelSelectionForCli,
-  shouldAllowFamilyWireFallback,
-} from './cursorCliModel';
 import { cleanupStaleCursorMcpServer } from './cursorMcpCleanup';
 import { buildCursorModelCatalogCliKey } from './cursorModelCatalog';
 import { getCachedCursorModelIds } from './cursorModelCatalog';
+import { extractCursorModeValue, resolveCursorFamilyId } from './cursorModelFamily';
 import { fromCursorModelValue } from './cursorModelId';
+import { cursorModelContextWindow } from './cursorModelWindowCatalog';
+import { CursorSessionModelState } from './CursorSessionModelState';
+import {
+  loadCursorSessionModelState,
+  saveCursorSessionModelState,
+} from './cursorSessionModelStore';
 import {
   cursorSessionAdditionalDirectories,
   cursorSessionRootsEqual,
@@ -88,6 +86,7 @@ interface ActiveTurn {
   // settings snapshot per frame. Null suppresses usage chunks (usage contract:
   // never emit without a model).
   usageModel: string | null;
+  usageContextWindow: number;
   // Set by the prompt RPC's settle chain, NOT generator teardown. The cancel
   // escalation reads this instead of this.activeTurn, which a consumer bail-out
   // nulls while the prompt (and agent) is still live.
@@ -119,11 +118,7 @@ export class CursorChatRuntime implements ChatRuntime {
   private pendingPromptSettled: Promise<void> | null = null;
   /** Atomically reserves the next prompt slot across simultaneous query() starts. */
   private promptStartTail: Promise<void> = Promise.resolve();
-  // Wire ids from the session's advertised model `configOptions`/`models`. Cursor
-  // ACP rejects a bare CLI id (`gpt-5.4-medium`) that is not one of these exact
-  // values — it can report the model as selected yet fail the next prompt with
-  // "AI Model Not Found". applySelectedModel only sends an advertised value.
-  private advertisedModelValues: string[] | null = null;
+  private readonly sessionModel = new CursorSessionModelState();
   private activeCliKey: string | null = null;
   // Aborts a pending blocking cursor/ask_question await so cancel()/cleanup can
   // answer the still-open RPC instead of leaving the agent stuck on it.
@@ -144,7 +139,6 @@ export class CursorChatRuntime implements ChatRuntime {
   private connection: AcpClientConnection | null = null;
   private contextUsage: AcpUsageUpdate | null = null;
   private currentModeId: string | null = null;
-  private currentSessionModelId: string | null = null;
   /** Conversation explicitly bound to this per-tab runtime. */
   private boundConversationId: string | null = null;
   private currentTurnIsPlan = false;
@@ -223,8 +217,7 @@ export class CursorChatRuntime implements ChatRuntime {
     const nextSessionId = conversation ? resolveCursorSessionId(conversation) : null;
     if (this.sessionId !== nextSessionId) {
       this.sessionInvalidated = false;
-      this.currentSessionModelId = null;
-      this.advertisedModelValues = null;
+      this.sessionModel.reset();
       // The next session has no mode/model applied yet; clearing the caches
       // forces applyMode/applySelectedModel to re-issue set_mode/set_config for
       // it. Without the mode reset, a plan-mode UI can early-return against a
@@ -385,6 +378,7 @@ export class CursorChatRuntime implements ChatRuntime {
       const activeTurn: ActiveTurn = {
         queue: new AcpStreamChunkQueue(),
         sessionId,
+        usageContextWindow: cursorModelContextWindow(this.sessionModel.currentValue),
         usageModel: this.resolveActiveModel(queryOptions),
         promptSettled: false,
       };
@@ -543,8 +537,7 @@ export class CursorChatRuntime implements ChatRuntime {
     this.sessionInvalidated = false;
     this.activeSessionRoots = [];
     this.currentModeId = null;
-    this.currentSessionModelId = null;
-    this.advertisedModelValues = null;
+    this.sessionModel.reset();
   }
 
   getSessionId(): string | null {
@@ -972,15 +965,15 @@ export class CursorChatRuntime implements ChatRuntime {
     }
   }
 
-  // Adopts a freshly minted session: a new session starts on the agent's default
-  // model and mode, so drop the tracked selections to force applyMode/
-  // applySelectedModel to reapply, and record its advertised model wire ids.
   private async adoptFreshSession(response: AcpNewSessionResponse): Promise<string> {
     this.loadedSessionId = response.sessionId;
     this.sessionId = response.sessionId;
     this.currentModeId = null;
-    this.currentSessionModelId = null;
-    this.captureAdvertisedModelValues(response);
+    this.sessionModel.reset();
+    this.captureAdvertisedModelValues(response, false);
+    this.sessionModel.forceReapply();
+    await this.persistAdvertisedModelState()
+      .catch((error) => this.plugin.logger.scope('cursor.acp').warn('persist fresh model state failed', error));
     this.captureEvent('session_new', { sessionId: response.sessionId });
     await this.persistNewSessionId(response.sessionId);
     return response.sessionId;
@@ -1058,32 +1051,33 @@ export class CursorChatRuntime implements ChatRuntime {
     }
   }
 
-  // Records the session's advertised model wire ids (session/new or session/load)
-  // so applySelectedModel can send an exact-matching value (Cursor rejects bare CLI
-  // ids). Real session/load responses advertise none (realAcpCaptures.ts:84-90), so
-  // an empty extraction only replaces a previously empty/unset catalog, never a known one.
   private captureAdvertisedModelValues(
     response: AcpNewSessionResponse | AcpLoadSessionResponse,
-  ): void {
-    const state = extractAcpSessionModelState({
-      configOptions: response.configOptions,
-      models: response.models,
-    });
-    const values = state.availableModels.map((model) => model.id);
-    if (values.length === 0 && this.advertisedModelValues && this.advertisedModelValues.length > 0) {
-      return;
+    persist = true,
+    expectedRevision?: number,
+  ): boolean {
+    const result = expectedRevision === undefined
+      ? this.sessionModel.capture(response)
+      : this.sessionModel.captureAtRevision(response, expectedRevision);
+    if (!result) {
+      return true;
     }
-    this.advertisedModelValues = values;
-    // Persist a real catalog so a later cold resume (session/load advertises none)
-    // can still match a model change on its first turn.
-    if (values.length > 0 && this.activeCliKey) {
-      void saveCursorAdvertisedModels(
-        this.plugin.storage.getAdapter(),
-        this.activeCliKey,
-        values,
-      )
+    if (persist && result.shouldPersist) {
+      void this.persistAdvertisedModelState()
         .catch((error) => this.plugin.logger.scope('cursor.acp').warn('persist advertised models failed', error));
     }
+    return result.hasAuthoritativeCurrent;
+  }
+
+  private async persistAdvertisedModelState(): Promise<void> {
+    if (!this.activeCliKey || !this.sessionModel.values) {
+      return;
+    }
+    await saveCursorSessionModelState(
+      this.plugin.storage.getAdapter(),
+      this.activeCliKey,
+      this.sessionModel.snapshot(),
+    );
   }
 
   private async prepareSessionForPromptTurn(
@@ -1116,29 +1110,21 @@ export class CursorChatRuntime implements ChatRuntime {
     if (!resolved) {
       return;
     }
-    let advertised = this.advertisedModelValues;
-    if (!advertised || advertised.length === 0) {
-      // Cold resume: session/load advertised no models. Recover the last catalog
-      // a session/new persisted so the selection can still match this turn.
+    const advertised = this.sessionModel.values;
+    if ((!advertised || advertised.length === 0) && !this.sessionModel.isAuthoritative) {
+      const restoreRevision = this.sessionModel.revision;
       if (this.activeCliKey) {
-        advertised = await loadCursorAdvertisedModels(
+        const persisted = await loadCursorSessionModelState(
           this.plugin.storage.getAdapter(),
           this.activeCliKey,
         ).catch(() => null);
-      }
-      if (advertised) {
-        this.advertisedModelValues = advertised;
+        if (persisted) {
+          this.sessionModel.restoreAtRevision(persisted, restoreRevision);
+        }
       }
     }
-    const settingsBag = asSettingsBag(this.plugin.settings);
-    const familyValue = this.resolveActiveModel(queryOptions) ?? undefined;
-    const wireValue = matchAdvertisedModelValueWithFamilyFallback(
-      advertised,
+    const wireValue = this.sessionModel.match(
       resolved,
-      familyValue
-        ? shouldAllowFamilyWireFallback(resolved, familyValue, settingsBag, cursorChatUIConfig)
-        : false,
-      // Match against the ACTIVE endpoint's catalog, not the module cache.
       this.getActiveCursorCatalogIds(),
     );
     if (!wireValue) {
@@ -1148,17 +1134,27 @@ export class CursorChatRuntime implements ChatRuntime {
       new Notice(message, 8000);
       throw new Error(message);
     }
-    if (wireValue === this.currentSessionModelId) {
+    if (wireValue === this.sessionModel.currentValue) {
       return;
     }
     try {
-      await this.connection.setConfigOption({
-        configId: 'model',
+      const configRevision = this.sessionModel.revision;
+      const response = await this.connection.setConfigOption({
+        configId: this.sessionModel.configId,
         sessionId,
         type: 'select',
         value: wireValue,
       });
-      this.currentSessionModelId = wireValue;
+      const hasAuthoritativeCurrent = this.captureAdvertisedModelValues({
+        configOptions: response.configOptions,
+      }, true, configRevision);
+      if (!hasAuthoritativeCurrent && this.sessionModel.confirmApplied(wireValue, configRevision)) {
+        void this.persistAdvertisedModelState()
+          .catch((error) => this.plugin.logger.scope('cursor.acp').warn('persist selected model failed', error));
+      }
+      if (this.sessionModel.currentValue !== wireValue) {
+        throw new Error(t('provider.cursor.models.applyFailed'));
+      }
       this.captureEvent('model_apply', { value: wireValue, ok: true });
     } catch (error) {
       const message = error instanceof Error ? error.message : t('provider.cursor.models.applyFailed');
@@ -1169,19 +1165,16 @@ export class CursorChatRuntime implements ChatRuntime {
     }
   }
 
-  // Mirrors the retired pre-ACP stream-json launch path: the picked model
-  // family plus effort mode resolved against the enabled/catalog id sets.
   private resolveCursorModelForSession(queryOptions?: ChatRuntimeQueryOptions): string | undefined {
-    const settingsBag = asSettingsBag(this.plugin.settings);
-    const snapshot = ProviderSettingsCoordinator.getProviderSettingsSnapshot(settingsBag, 'cursor');
     const familyValue = this.resolveActiveModel(queryOptions) ?? undefined;
-    const mode = familyValue
-      ? resolveCursorEffortForFamily(familyValue, snapshot, cursorChatUIConfig)
-      : (typeof snapshot.effortLevel === 'string' ? snapshot.effortLevel : undefined);
-    return resolveCursorModelSelectionForCli(familyValue, mode, {
-      catalogIds: this.getActiveCursorCatalogIds(),
-      enabledIds: getCursorEnabledModels(settingsBag),
-    });
+    if (!familyValue) {
+      return undefined;
+    }
+    const rawId = fromCursorModelValue(familyValue);
+    const catalog = this.getActiveCursorCatalogIds();
+    return extractCursorModeValue(rawId, catalog)
+      ? rawId
+      : resolveCursorFamilyId(rawId, catalog);
   }
 
   // Selected external folders become the ACP session's additionalDirectories so
@@ -1236,6 +1229,14 @@ export class CursorChatRuntime implements ChatRuntime {
     if (notification.update.sessionUpdate === 'current_mode_update') {
       if (notification.sessionId === this.sessionId) {
         this.currentModeId = notification.update.currentModeId;
+      }
+      return;
+    }
+    if (notification.update.sessionUpdate === 'config_option_update') {
+      if (notification.sessionId === this.sessionId) {
+        this.captureAdvertisedModelValues({
+          configOptions: notification.update.configOptions,
+        });
       }
       return;
     }
@@ -1364,11 +1365,12 @@ export class CursorChatRuntime implements ChatRuntime {
     // Strip the namespaced `cursor:` prefix first — the window catalog is keyed by
     // raw ids (the emitted model stays as-is; downstream pricing/meter strip too).
     const fallback = extractCursorUsage({}, fromCursorModelValue(model));
+    const fallbackContextWindow = activeTurn.usageContextWindow || fallback.contextWindow;
     const acpUsage = buildAcpUsageInfo({
       contextWindow: this.contextUsage,
       model,
       promptUsage,
-      fallbackContextWindowSize: fallback.contextWindow,
+      fallbackContextWindowSize: fallbackContextWindow,
     });
     if (acpUsage) {
       activeTurn.queue.push({ sessionId: activeTurn.sessionId, type: 'usage', usage: acpUsage });
@@ -1397,8 +1399,8 @@ export class CursorChatRuntime implements ChatRuntime {
           ? { cacheReadInputTokens: fallback.cacheReadInputTokens }
           : {}),
         contextTokens: fallback.contextTokens,
-        contextWindow: fallback.contextWindow,
-        contextWindowIsAuthoritative: fallback.contextWindowIsAuthoritative,
+        contextWindow: fallbackContextWindow,
+        contextWindowIsAuthoritative: fallbackContextWindow > 0,
       }),
     });
   }
@@ -1447,8 +1449,7 @@ export class CursorChatRuntime implements ChatRuntime {
     }
     this.loadedSessionId = null;
     this.currentModeId = null;
-    this.currentSessionModelId = null;
-    this.advertisedModelValues = null;
+    this.sessionModel.reset();
     if (this.captureWriter) {
       await this.captureWriter.flush();
       this.captureWriter = null;

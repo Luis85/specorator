@@ -1,4 +1,5 @@
 import { CURSOR_PROVIDER_CAPABILITIES } from '@/providers/cursor/capabilities';
+import { getCursorProviderSettings } from '@/providers/cursor/settings';
 import { cursorChatUIConfig } from '@/providers/cursor/ui/CursorChatUIConfig';
 
 const TEST_HOST = 'host-a';
@@ -164,8 +165,8 @@ describe('cursorChatUIConfig.getContextWindowSize', () => {
 });
 
 describe('cursor capabilities', () => {
-  it('exposes the shared effort reasoning control', () => {
-    expect(CURSOR_PROVIDER_CAPABILITIES.reasoningControl).toBe('effort');
+  it('does not advertise an independent effort control over ACP', () => {
+    expect(CURSOR_PROVIDER_CAPABILITIES.reasoningControl).toBe('none');
   });
 });
 
@@ -177,46 +178,49 @@ describe('cursorChatUIConfig families', () => {
     expect(options[0].value).toBe('cursor:auto');
   });
 
-  it('serves the family mode variants as reasoning options', () => {
+  it('does not expose CLI suffix variants as ACP reasoning capabilities', () => {
     const s = settings({ enabled: ['sonnet-4', 'sonnet-4-thinking'] });
-    expect(cursorChatUIConfig.getReasoningOptions('cursor:sonnet-4', s).map(o => o.value)).toEqual(['standard', 'thinking']);
-    expect(cursorChatUIConfig.isAdaptiveReasoningModel('cursor:sonnet-4', s)).toBe(true);
+    expect(cursorChatUIConfig.getReasoningOptions('cursor:sonnet-4', s)).toEqual([]);
+    expect(cursorChatUIConfig.isAdaptiveReasoningModel('cursor:sonnet-4', s)).toBe(false);
+    expect(cursorChatUIConfig.getDefaultReasoningValue('cursor:sonnet-4', s)).toBe('standard');
   });
 
   it('marks a single-mode family as non-adaptive', () => {
     expect(cursorChatUIConfig.isAdaptiveReasoningModel('cursor:composer-2', settings({ enabled: ['composer-2'] }))).toBe(false);
   });
 
-  it('persists the selected mode per family', () => {
+  it('does not project a stored CLI mode into ACP effort state', () => {
     const s = settings({ enabled: ['sonnet-4', 'sonnet-4-thinking'] });
+    const before = getCursorProviderSettings(s).preferredModeByFamily;
     cursorChatUIConfig.applyReasoningSelection?.('cursor:sonnet-4', 'thinking', s);
-    expect(cursorChatUIConfig.getDefaultReasoningValue('cursor:sonnet-4', s)).toBe('thinking');
+    expect(cursorChatUIConfig.getDefaultReasoningValue('cursor:sonnet-4', s)).toBe('standard');
+    expect(getCursorProviderSettings(s).preferredModeByFamily).toEqual(before);
   });
 
-  it('normalizes a full-variant model value to its family', () => {
+  it('preserves an explicit full-variant model value for exact ACP matching', () => {
     const s = settings({ enabled: ['sonnet-4', 'sonnet-4-thinking'] });
-    expect(cursorChatUIConfig.normalizeModelVariant('cursor:sonnet-4-thinking', s)).toBe('cursor:sonnet-4');
+    expect(cursorChatUIConfig.normalizeModelVariant('cursor:sonnet-4-thinking', s))
+      .toBe('cursor:sonnet-4-thinking');
   });
 });
 
 describe('cursorChatUIConfig defaults for families without a bare variant', () => {
-  it('defaults effortLevel to the first valid mode when bare family is not real', () => {
+  it('defaults ACP effortLevel to standard when no independent selector exists', () => {
     // claude-opus-4-7 has only -low/-medium/-high/... variants, no bare id.
     const s = settings({
       enabled: ['claude-opus-4-7-low', 'claude-opus-4-7-medium', 'claude-opus-4-7-high'],
     });
     const value = cursorChatUIConfig.getDefaultReasoningValue('cursor:claude-opus-4-7', s);
-    expect(value).not.toBe('standard');
-    expect(['low', 'medium', 'high']).toContain(value);
+    expect(value).toBe('standard');
   });
 
-  it('applyModelDefaults seeds effortLevel with a runnable mode', () => {
+  it('applyModelDefaults does not mutate the shared effort setting', () => {
     const s = settings({
       enabled: ['claude-opus-4-7-low', 'claude-opus-4-7-medium', 'claude-opus-4-7-high'],
     });
+    s.effortLevel = 'high';
     cursorChatUIConfig.applyModelDefaults('cursor:claude-opus-4-7', s);
-    expect(s.effortLevel).not.toBe('standard');
-    expect(['low', 'medium', 'high']).toContain(s.effortLevel as string);
+    expect(s.effortLevel).toBe('high');
   });
 
   it('keeps standard as the default when the bare family IS discovered', () => {

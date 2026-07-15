@@ -1,4 +1,3 @@
-import type { ProviderChatUIConfig } from '../../../core/providers/types';
 import { getCachedCursorModelIds } from './cursorModelCatalog';
 import {
   combineCursorModelSelection,
@@ -174,49 +173,4 @@ export function resolveCursorModelSelectionForCli(
     : mode;
 
   return resolveRunnableSelection(familyId, effectiveMode, resolvedContext);
-}
-
-/**
- * Picks an effort/mode value that the model family's picker actually offers.
- * Global `effortLevel` (e.g. `high` from another provider) is ignored when it
- * would combine into an un-runnable id such as `gpt-5.6-sol-high` while only a
- * `medium` wire variant exists.
- */
-export function resolveCursorEffortForFamily(
-  familyValue: string,
-  settings: Record<string, unknown>,
-  uiConfig: Pick<ProviderChatUIConfig, 'getReasoningOptions' | 'getDefaultReasoningValue'>,
-): string | undefined {
-  const effort = typeof settings.effortLevel === 'string' ? settings.effortLevel : undefined;
-  const variants = uiConfig.getReasoningOptions(familyValue, settings);
-  if (variants.length === 0) {
-    return effort;
-  }
-  const valid = new Set(variants.map((option) => option.value));
-  if (effort && valid.has(effort)) {
-    return effort;
-  }
-  return uiConfig.getDefaultReasoningValue(familyValue, settings);
-}
-
-/** True when a failed wire match may fall back to the bare family id. */
-export function shouldAllowFamilyWireFallback(
-  resolvedId: string,
-  familyValue: string | undefined,
-  settings: Record<string, unknown>,
-  uiConfig: Pick<ProviderChatUIConfig, 'getReasoningOptions'>,
-): boolean {
-  if (!familyValue?.trim()) {
-    return false;
-  }
-  const embeddedMode = extractCursorModeValue(resolvedId, getCachedCursorModelIds());
-  if (!embeddedMode) {
-    return false;
-  }
-  const variants = uiConfig.getReasoningOptions(familyValue, settings);
-  if (variants.length === 0) {
-    return true;
-  }
-  const valid = new Set(variants.map((option) => option.value));
-  return !valid.has(embeddedMode);
 }

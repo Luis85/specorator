@@ -1,4 +1,4 @@
-import { matchAdvertisedModelValue, matchAdvertisedModelValueWithFamilyFallback } from '@/providers/cursor/runtime/cursorAdvertisedModels';
+import { matchAdvertisedModelValue } from '@/providers/cursor/runtime/cursorAdvertisedModels';
 
 import { CURSOR_ADVERTISED_MODEL_VALUES } from '../../../../fixtures/providers/cursor/realAcpCaptures';
 
@@ -10,6 +10,34 @@ describe('matchAdvertisedModelValue', () => {
 
   it('returns an exact advertised value untouched', () => {
     expect(matchAdvertisedModelValue(['auto', 'gpt-5.4[reasoning=medium]'], 'auto')).toBe('auto');
+  });
+
+  it('matches none effort against reasoning=none on the wire', () => {
+    const advertised = ['gpt-5.6-luna[context=272k,reasoning=none,fast=false]'];
+    expect(matchAdvertisedModelValue(advertised, 'gpt-5.6-luna-none'))
+      .toBe('gpt-5.6-luna[context=272k,reasoning=none,fast=false]');
+  });
+
+  it('does not infer none effort when the wire omits the reasoning axis', () => {
+    const advertised = ['gpt-5.6-luna[context=272k,fast=false]'];
+    expect(matchAdvertisedModelValue(advertised, 'gpt-5.6-luna-none'))
+      .toBeNull();
+  });
+
+  it('does not match none against a sibling carrying a higher reasoning level', () => {
+    const advertised = [
+      'gpt-5.6-luna[context=272k,reasoning=medium,fast=false]',
+      'gpt-5.6-luna[context=272k,fast=false]',
+    ];
+    expect(matchAdvertisedModelValue(advertised, 'gpt-5.6-luna-none'))
+      .toBeNull();
+    expect(matchAdvertisedModelValue(['gpt-5.6-luna[context=272k,reasoning=medium,fast=false]'], 'gpt-5.6-luna-none'))
+      .toBeNull();
+  });
+
+  it('matches gpt-5.5-none style ids from the real catalog snapshot', () => {
+    const advertised = ['gpt-5.5[reasoning=none,fast=false]', 'gpt-5.5[reasoning=low,fast=false]'];
+    expect(matchAdvertisedModelValue(advertised, 'gpt-5.5-none')).toBe('gpt-5.5[reasoning=none,fast=false]');
   });
 
   it('matches the requested variant regardless of advertised order', () => {
@@ -28,6 +56,13 @@ describe('matchAdvertisedModelValue', () => {
 
   it('falls back to the first family sibling for a bare selection with no bare wire id', () => {
     expect(matchAdvertisedModelValue(['gpt-5.4[reasoning=high]'], 'gpt-5.4')).toBe('gpt-5.4[reasoning=high]');
+  });
+
+  it('does not choose an arbitrary sibling for an ambiguous bare family selection', () => {
+    expect(matchAdvertisedModelValue([
+      'gpt-5.4[reasoning=medium]',
+      'gpt-5.4[reasoning=high]',
+    ], 'gpt-5.4')).toBeNull();
   });
 
   it('matches a bare-token bracket variant (e.g. thinking)', () => {
@@ -116,24 +151,6 @@ describe('matchAdvertisedModelValue', () => {
     ).toBeNull();
   });
 
-  it('threads the catalog through the family-fallback matcher too', () => {
-    const advertised = ['claude-opus-4-7[reasoning=max]'];
-    const strongSiblingCatalog = ['claude-opus-4-7-low', 'claude-opus-4-7-max'];
-    expect(
-      matchAdvertisedModelValueWithFamilyFallback(
-        advertised,
-        'claude-opus-4-7-max',
-        true,
-        strongSiblingCatalog,
-      ),
-    ).toBe('claude-opus-4-7[reasoning=max]');
-    expect(
-      matchAdvertisedModelValueWithFamilyFallback(advertised, 'claude-opus-4-7-max', true, [
-        'claude-opus-4-7-max',
-      ]),
-    ).toBeNull();
-  });
-
   describe('against real advertised wire values (captured 2026-07-12)', () => {
     it('round-trips every advertised value as an exact match, incl. default[] and empty-bracket variants', () => {
       // Real Cursor advertises model ids carrying bracket variants (multi-axis,
@@ -167,16 +184,4 @@ describe('matchAdvertisedModelValue', () => {
     });
   });
 
-  describe('matchAdvertisedModelValueWithFamilyFallback', () => {
-    it('falls back to the bare family when allowed and only a bracket sibling exists', () => {
-      const advertised = ['gpt-5.6-sol[context=272k,reasoning=medium,fast=false]'];
-      expect(matchAdvertisedModelValueWithFamilyFallback(advertised, 'gpt-5.6-sol-high', true))
-        .toBe('gpt-5.6-sol[context=272k,reasoning=medium,fast=false]');
-    });
-
-    it('does not fall back when disallowed even if a family sibling exists', () => {
-      const advertised = ['gpt-5.4[reasoning=high]'];
-      expect(matchAdvertisedModelValueWithFamilyFallback(advertised, 'gpt-5.4-medium', false)).toBeNull();
-    });
-  });
 });

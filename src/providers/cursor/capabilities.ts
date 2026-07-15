@@ -12,5 +12,5 @@ export const CURSOR_PROVIDER_CAPABILITIES: Readonly<ProviderCapabilities> = Obje
   supportsImageAttachments: true,
   supportsInstructionMode: true,
   supportsMcpTools: false,
-  reasoningControl: 'effort',
+  reasoningControl: 'none',
 });

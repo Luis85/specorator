@@ -1,4 +1,5 @@
 import type { ModelPricing } from '../../../core/providers/types';
+import { cursorWireContextWindow, parseCursorWireModel } from './cursorWireModel';
 
 interface CatalogEntry {
   contextWindow: number;
@@ -19,9 +20,10 @@ const CATALOG: Readonly<Record<string, CatalogEntry>> = {
   'grok-4': { contextWindow: 200_000 },
 };
 
-export function cursorModelContextWindow(modelId: string | undefined): number {
+export function cursorModelContextWindow(modelId: string | null | undefined): number {
   if (!modelId) return 0;
-  return CATALOG[modelId]?.contextWindow ?? 0;
+  return CATALOG[modelId]?.contextWindow
+    ?? cursorWireContextWindow(parseCursorWireModel(modelId));
 }
 
 export function cursorModelPricing(modelId: string | undefined): ModelPricing | null {

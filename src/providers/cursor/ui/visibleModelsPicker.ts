@@ -35,9 +35,13 @@ interface CursorPickerView {
 
 // All discovered + currently-enabled raw ids (auto excluded). Source for the
 // family grouping shown in the list.
-function getAllCursorRawIds(settingsBag: Record<string, unknown>): string[] {
-  const discovered = getCachedCursorModelIds().filter((id) => id !== 'auto');
-  const enabled = getCursorEnabledModels(settingsBag).filter((id) => id !== 'auto');
+function getAllCursorRawIds(view: CursorPickerView): string[] {
+  const cliPath = view.context.plugin.getResolvedProviderCliPath('cursor') ?? undefined;
+  const discovered = getCachedCursorModelIds(
+    cliPath,
+    cliPath ? buildCursorAgentEnvironment(view.context.plugin, cliPath) : undefined,
+  ).filter((id) => id !== 'auto');
+  const enabled = getCursorEnabledModels(view.settingsBag).filter((id) => id !== 'auto');
   const seen = new Set<string>();
   const result: string[] = [];
   for (const id of [...discovered, ...enabled]) {
@@ -51,8 +55,8 @@ function getAllCursorRawIds(settingsBag: Record<string, unknown>): string[] {
 
 // The raw ids that make up a family (bare id + its variant ids), restricted
 // to what is actually discovered/enabled.
-function familyMemberRawIds(settingsBag: Record<string, unknown>, familyId: string): string[] {
-  const all = getAllCursorRawIds(settingsBag);
+function familyMemberRawIds(view: CursorPickerView, familyId: string): string[] {
+  const all = getAllCursorRawIds(view);
   const variantValues = getCursorModelVariants(familyId, all).map((v) => v.value);
   return all.filter((id) =>
     id === familyId
@@ -60,13 +64,13 @@ function familyMemberRawIds(settingsBag: Record<string, unknown>, familyId: stri
 }
 
 // A family is enabled when any of its member raw ids is enabled.
-function isFamilyEnabled(settingsBag: Record<string, unknown>, familyId: string): boolean {
-  const enabled = new Set(getCursorEnabledModels(settingsBag));
-  return familyMemberRawIds(settingsBag, familyId).some((id) => enabled.has(id));
+function isFamilyEnabled(view: CursorPickerView, familyId: string): boolean {
+  const enabled = new Set(getCursorEnabledModels(view.settingsBag));
+  return familyMemberRawIds(view, familyId).some((id) => enabled.has(id));
 }
 
 function visibleFamilies(view: CursorPickerView): CursorModelFamily[] {
-  return buildCursorFamilies(getAllCursorRawIds(view.settingsBag)).filter((family) =>
+  return buildCursorFamilies(getAllCursorRawIds(view)).filter((family) =>
     matchesCursorModelQuery(family.familyId, view.searchQuery)
     || matchesCursorModelQuery(family.label, view.searchQuery));
 }
@@ -78,8 +82,8 @@ async function persistEnabledModels(view: CursorPickerView, ids: string[]): Prom
 }
 
 function renderCount(view: CursorPickerView): void {
-  const families = buildCursorFamilies(getAllCursorRawIds(view.settingsBag));
-  const selected = families.filter((family) => isFamilyEnabled(view.settingsBag, family.familyId)).length;
+  const families = buildCursorFamilies(getAllCursorRawIds(view));
+  const selected = families.filter((family) => isFamilyEnabled(view, family.familyId)).length;
   view.countEl.setText(`${selected} of ${families.length} families selected`);
 }
 
@@ -88,10 +92,10 @@ function renderFamilyRow(view: CursorPickerView, family: CursorModelFamily): voi
   rowEl.title = family.familyId;
 
   const checkboxEl = rowEl.createEl('input', { type: 'checkbox' });
-  checkboxEl.checked = isFamilyEnabled(view.settingsBag, family.familyId);
+  checkboxEl.checked = isFamilyEnabled(view, family.familyId);
   checkboxEl.addEventListener('change', () => {
     const current = getCursorEnabledModels(view.settingsBag).filter((entry) => entry !== 'auto');
-    const members = new Set(familyMemberRawIds(view.settingsBag, family.familyId));
+    const members = new Set(familyMemberRawIds(view, family.familyId));
     const next = checkboxEl.checked
       ? [...new Set([...current, ...members])]
       : current.filter((entry) => !members.has(entry));
@@ -121,7 +125,7 @@ function renderFamilyList(view: CursorPickerView): void {
 
   if (families.length === 0) {
     const emptyEl = view.listEl.createDiv({ cls: 'specorator-cursor-model-picker-empty' });
-    if (buildCursorFamilies(getAllCursorRawIds(view.settingsBag)).length === 0) {
+    if (buildCursorFamilies(getAllCursorRawIds(view)).length === 0) {
       emptyEl.setText('No models discovered yet. Set the Cursor CLI path below, then refresh the model list.');
     } else {
       emptyEl.setText('No models match your filter.');
@@ -143,7 +147,7 @@ async function selectAllVisibleFamilies(view: CursorPickerView): Promise<void> {
   const current = getCursorEnabledModels(view.settingsBag).filter((id) => id !== 'auto');
   const next = new Set(current);
   for (const family of visibleFamilies(view)) {
-    for (const id of familyMemberRawIds(view.settingsBag, family.familyId)) {
+    for (const id of familyMemberRawIds(view, family.familyId)) {
       next.add(id);
     }
   }

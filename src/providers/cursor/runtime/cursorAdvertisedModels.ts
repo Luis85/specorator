@@ -5,6 +5,7 @@ import {
   extractCursorModeValue,
   resolveCursorFamilyId,
 } from './cursorModelFamily';
+import { type CursorWireModel,parseCursorWireModel } from './cursorWireModel';
 
 // Auto sentinel family: real Cursor sessions advertise Auto as `default[]`
 // (tests/fixtures/providers/cursor/realAcpCaptures.ts:35-37), never as the
@@ -32,7 +33,7 @@ const CURSOR_AUTO_ADVERTISED_FAMILY = 'default';
 export function matchAdvertisedModelValue(
   advertised: string[] | null,
   resolvedId: string,
-  knownIds?: string[],
+  knownIds?: readonly string[],
 ): string | null {
   if (!advertised || advertised.length === 0) {
     return null;
@@ -41,91 +42,57 @@ export function matchAdvertisedModelValue(
     return resolvedId;
   }
   if (resolvedId.trim().toLowerCase() === 'auto') {
-    return advertised.find((value) => value.split('[', 1)[0] === CURSOR_AUTO_ADVERTISED_FAMILY) ?? null;
+    return advertised.find(
+      (value) => parseCursorWireModel(value).family === CURSOR_AUTO_ADVERTISED_FAMILY,
+    ) ?? null;
   }
   const catalog = knownIds ?? getCachedCursorModelIds();
   const resolvedFamily = resolveCursorFamilyId(resolvedId, catalog);
-  const familyMatches = advertised.filter((value) => value.split('[', 1)[0] === resolvedFamily);
+  const familyMatches = advertised.filter(
+    (value) => parseCursorWireModel(value).family === resolvedFamily,
+  );
   if (familyMatches.length === 0) {
     return null;
   }
   const resolvedMode = extractCursorModeValue(resolvedId, catalog);
   if (!resolvedMode) {
-    // No variant requested: prefer the bare family value over an arbitrary
-    // bracket variant, falling back to the first family sibling.
-    return familyMatches.find((value) => !value.includes('[')) ?? familyMatches[0];
+    // No variant requested: prefer a bare family value. A parameterized sibling
+    // is safe only when ACP advertises exactly one legal value for that family;
+    // choosing the first of several would silently pick an effort.
+    return familyMatches.find((value) => !parseCursorWireModel(value).hasBracket)
+      ?? (familyMatches.length === 1 ? familyMatches[0] : null);
   }
   return familyMatches.find((value) => advertisedVariantMatches(value, resolvedMode)) ?? null;
 }
 
-/**
- * Exact wire match first; optionally retries with the bare family id when the
- * resolved compound suffix cannot be satisfied (stale global effort, etc.).
- */
-export function matchAdvertisedModelValueWithFamilyFallback(
-  advertised: string[] | null,
-  resolvedId: string,
-  allowFamilyFallback: boolean,
-  knownIds?: string[],
-): string | null {
-  const direct = matchAdvertisedModelValue(advertised, resolvedId, knownIds);
-  if (direct) {
-    return direct;
-  }
-  if (!allowFamilyFallback) {
-    return null;
-  }
-  const familyId = resolveCursorFamilyId(resolvedId, knownIds ?? getCachedCursorModelIds());
-  if (!familyId || familyId === resolvedId) {
-    return null;
-  }
-  return matchAdvertisedModelValue(advertised, familyId, knownIds);
-}
-
-interface BracketFields {
-  // The value part of every bracket segment (`reasoning=medium` → `medium`,
-  // bare `thinking` → `thinking`). Effort matches against these.
-  values: Set<string>;
-  // key → value for `key=value` segments (`fast=true` → `fast`↦`true`).
-  keyed: Map<string, string>;
-}
-
-// Parses a wire value's bracket suffix into its per-axis fields. Advertised
-// values encode each axis as a separate bracket segment
-// (`gpt-5.4[reasoning=medium,fast=true]`, bare-token `claude-4.6-opus[thinking]`),
-// which is why a single-segment equality check never matched a compound CLI
-// suffix like `medium-fast`. Returns null when there is no bracket at all.
-function parseBracketFields(wireValue: string): BracketFields | null {
-  const start = wireValue.indexOf('[');
-  if (start === -1) {
-    return null;
-  }
-  const end = wireValue.lastIndexOf(']');
-  const inner = wireValue.slice(start + 1, end > start ? end : undefined);
-  const values = new Set<string>();
-  const keyed = new Map<string, string>();
-  for (const rawSegment of inner.split(',')) {
-    const segment = rawSegment.trim();
-    if (!segment) {
-      continue;
-    }
-    const eq = segment.indexOf('=');
-    if (eq === -1) {
-      values.add(segment);
-    } else {
-      const key = segment.slice(0, eq).trim();
-      const value = segment.slice(eq + 1).trim();
-      values.add(value);
-      keyed.set(key, value);
-    }
-  }
-  return { values, keyed };
-}
-
 // True when the advertised value carries the given flag axis, whether encoded as
 // a bare bracket token (`[thinking]`) or a keyed flag (`[fast=true]`).
-function bracketHasFlag(fields: BracketFields, axis: string): boolean {
+function bracketHasFlag(fields: CursorWireModel, axis: string): boolean {
   return fields.values.has(axis) || fields.keyed.get(axis) === 'true';
+}
+
+/** Reads the reasoning/effort level encoded on the wire, if any. */
+function bracketReasoningLevel(fields: CursorWireModel): string | null {
+  const reasoning = fields.keyed.get('reasoning');
+  if (reasoning) {
+    return reasoning;
+  }
+  const effort = fields.keyed.get('effort');
+  if (effort) {
+    return effort;
+  }
+  return null;
+}
+
+function bracketEffortMatches(fields: CursorWireModel, effort: string): boolean {
+  if (effort === CURSOR_STANDARD_MODE) {
+    return true;
+  }
+  const wireLevel = bracketReasoningLevel(fields);
+  if (wireLevel === effort || fields.values.has(effort)) {
+    return true;
+  }
+  return false;
 }
 
 // An advertised value matches the resolved compound suffix when EVERY axis the
@@ -138,12 +105,12 @@ function bracketHasFlag(fields: BracketFields, axis: string): boolean {
 // one the selection didn't ask for must NOT match, or a plain `medium`
 // selection could silently pin the `fast` or `thinking` variant instead.
 function advertisedVariantMatches(wireValue: string, mode: string): boolean {
-  const fields = parseBracketFields(wireValue);
-  if (!fields) {
+  const fields = parseCursorWireModel(wireValue);
+  if (!fields.hasBracket) {
     return false;
   }
   const { effort, thinking, fast } = decomposeMode(mode);
-  if (effort !== CURSOR_STANDARD_MODE && !fields.values.has(effort)) {
+  if (!bracketEffortMatches(fields, effort)) {
     return false;
   }
   if (thinking !== bracketHasFlag(fields, 'thinking')) {

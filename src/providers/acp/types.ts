@@ -147,8 +147,17 @@ export interface AcpModelInfo {
   description?: string | null;
 }
 
+export type AcpSessionModelInfo =
+  | (AcpModelInfo & { modelId?: string })
+  | {
+    description?: string | null;
+    id?: string;
+    modelId: string;
+    name: string;
+  };
+
 export interface AcpSessionModelState {
-  availableModels: AcpModelInfo[];
+  availableModels: AcpSessionModelInfo[];
   currentModelId: string;
 }
 

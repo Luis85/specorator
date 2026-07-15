@@ -1,5 +1,6 @@
 // Real Cursor ACP wire captures, distilled to typed constants (captured
-// 2026-07-12 against `agent acp`). Every shape here was lifted verbatim from the
+// 2026-07-12 and refreshed 2026-07-15 against `agent acp`). Every shape here was
+// lifted verbatim from the
 // on-the-wire JSON-RPC frames — model catalogs are trimmed to a representative
 // subset and long plan bodies are truncated, but field names, nesting, and
 // notable quirks (session/load returning no sessionId; cursor/task arriving as a
@@ -34,12 +35,12 @@ export const CURSOR_NEW_SESSION_RESULT: AcpNewSessionResponse = {
   models: {
     currentModelId: 'default[]',
     availableModels: [
-      { id: 'default[]', name: 'Auto' },
-      { id: 'composer-2.5[fast=true]', name: 'composer-2.5' },
-      { id: 'claude-opus-4-8[thinking=true,context=300k,effort=high,fast=false]', name: 'claude-opus-4-8' },
-      { id: 'gpt-5.4[context=272k,reasoning=medium,fast=false]', name: 'gpt-5.4' },
-      { id: 'claude-opus-4-5[thinking=true]', name: 'claude-opus-4-5' },
-      { id: 'gemini-3.1-pro[]', name: 'gemini-3.1-pro' },
+      { modelId: 'default[]', name: 'Auto' },
+      { modelId: 'composer-2.5[fast=true]', name: 'composer-2.5' },
+      { modelId: 'claude-opus-4-8[thinking=true,context=300k,effort=high,fast=false]', name: 'claude-opus-4-8' },
+      { modelId: 'gpt-5.4[context=272k,reasoning=medium,fast=false]', name: 'gpt-5.4' },
+      { modelId: 'claude-opus-4-5[thinking=true]', name: 'claude-opus-4-5' },
+      { modelId: 'gemini-3.1-pro[]', name: 'gemini-3.1-pro' },
     ],
   },
   configOptions: [
@@ -79,7 +80,9 @@ export const CURSOR_NEW_SESSION_RESULT: AcpNewSessionResponse = {
 // `configOptions` — the values `matchAdvertisedModelValue` matches selections
 // against.
 export const CURSOR_ADVERTISED_MODEL_VALUES: string[] =
-  (CURSOR_NEW_SESSION_RESULT.models?.availableModels ?? []).map((model) => model.id);
+  (CURSOR_NEW_SESSION_RESULT.models?.availableModels ?? [])
+    .map((model) => model.modelId ?? model.id)
+    .filter((value): value is string => typeof value === 'string');
 
 // (b) Real `session/load` result — NOTE: no `sessionId`. The agent echoes only
 // the session config; the loaded session keeps the id the caller requested.

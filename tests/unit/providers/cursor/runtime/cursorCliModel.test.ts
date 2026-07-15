@@ -1,15 +1,11 @@
 import {
-  resolveCursorEffortForFamily,
   resolveCursorModelForCli,
   resolveCursorModelSelectionForCli,
-  shouldAllowFamilyWireFallback,
 } from '@/providers/cursor/runtime/cursorCliModel';
 import {
   resetCursorModelCatalog,
   seedCursorModelCatalogForTest,
 } from '@/providers/cursor/runtime/cursorModelCatalog';
-import { CURSOR_STANDARD_MODE } from '@/providers/cursor/runtime/cursorModelFamily';
-import { toCursorModelValue } from '@/providers/cursor/runtime/cursorModelId';
 
 describe('resolveCursorModelForCli', () => {
   it('strips the cursor: prefix so the raw id reaches --model', () => {
@@ -121,67 +117,5 @@ describe('resolveCursorModelSelectionForCli', () => {
       .toBe('claude-opus-4-8-max');
 
     resetCursorModelCatalog();
-  });
-});
-
-describe('resolveCursorEffortForFamily', () => {
-  const uiConfig = {
-    getReasoningOptions: () => [{ value: CURSOR_STANDARD_MODE, label: 'Standard' }],
-    getDefaultReasoningValue: () => CURSOR_STANDARD_MODE,
-  };
-
-  afterEach(() => {
-    resetCursorModelCatalog();
-  });
-
-  it('keeps a valid effort when the family offers that mode', () => {
-    const ui = {
-      getReasoningOptions: () => [
-        { value: CURSOR_STANDARD_MODE, label: 'Standard' },
-        { value: 'high', label: 'High' },
-      ],
-      getDefaultReasoningValue: () => CURSOR_STANDARD_MODE,
-    };
-    expect(resolveCursorEffortForFamily('cursor:gpt-5.4', { effortLevel: 'high' }, ui)).toBe('high');
-  });
-
-  it('replaces a stale global effort with the family default', () => {
-    resetCursorModelCatalog();
-    seedCursorModelCatalogForTest(['gpt-5.6-sol-medium']);
-    expect(resolveCursorEffortForFamily(
-      toCursorModelValue('gpt-5.6-sol'),
-      { effortLevel: 'high', providers: { cursor: { enabledModelsByHost: { host: ['gpt-5.6-sol-medium'] } } } },
-      uiConfig,
-    )).toBe(CURSOR_STANDARD_MODE);
-  });
-});
-
-describe('shouldAllowFamilyWireFallback', () => {
-  const uiConfig = {
-    getReasoningOptions: () => [{ value: CURSOR_STANDARD_MODE, label: 'Standard' }],
-  };
-
-  it('allows fallback when the resolved suffix is not offered for the family', () => {
-    expect(shouldAllowFamilyWireFallback(
-      'gpt-5.6-sol-high',
-      toCursorModelValue('gpt-5.6-sol'),
-      {},
-      uiConfig,
-    )).toBe(true);
-  });
-
-  it('blocks fallback when the suffix matches a picker variant', () => {
-    const ui = {
-      getReasoningOptions: () => [
-        { value: CURSOR_STANDARD_MODE, label: 'Standard' },
-        { value: 'medium', label: 'Medium' },
-      ],
-    };
-    expect(shouldAllowFamilyWireFallback(
-      'gpt-5.4-medium',
-      toCursorModelValue('gpt-5.4'),
-      {},
-      ui,
-    )).toBe(false);
   });
 });
