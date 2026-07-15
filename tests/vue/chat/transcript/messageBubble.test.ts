@@ -159,7 +159,7 @@ describe('MessageBubble', () => {
     expect(msgEl.querySelector('.specorator-text-block')?.textContent).toContain('Hi there');
   });
 
-  it('assistant action bar co-locates inside the last text block, beside the copy button (one hover row)', async () => {
+  it('assistant action bar co-locates inside the last text block, beside the copy button (one row below the response)', async () => {
     const msg: ChatMessage = {
       id: 'a1',
       role: 'assistant',

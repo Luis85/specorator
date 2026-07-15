@@ -106,7 +106,7 @@
 }
 
 .specorator-message-assistant {
-  position: relative; /* anchors the message-level fallback .specorator-text-actions */
+  position: relative; /* positioning context for absolutely-positioned descendants */
   background: transparent;
   align-self: stretch;
   width: 100%;
@@ -135,16 +135,21 @@
   margin: 0;
 }
 
+/* Copy + agent-action buttons share one row directly below the response, so
+   they no longer overlap the last line of text. Each is an in-flow, always-
+   visible faint icon that brightens on hover. */
+.specorator-text-block-actions-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 6px;
+}
+
 .specorator-text-copy-btn {
-  position: absolute;
-  bottom: 0;
-  inset-inline-end: 0;
   border: none;
   color: var(--text-faint);
   cursor: pointer;
-  opacity: 0;
-  transition: opacity 0.15s ease, color 0.15s ease;
-  z-index: 2;
+  transition: color 0.15s ease;
   display: flex;
   align-items: center;
   gap: 4px;
@@ -155,40 +160,24 @@
   height: 16px;
 }
 
-.specorator-text-block:hover .specorator-text-copy-btn {
-  opacity: 1;
-}
-
 .specorator-text-copy-btn:hover {
   color: var(--text-normal);
 }
 
-/* Per-message agent actions (e.g. Create work order) sit just left of the copy button. */
+/* Per-message agent actions (thumbs up/down, create work order) sit in the
+   shared row below the response, left of the copy button. */
 .specorator-text-actions {
-  position: absolute;
-  bottom: 0;
-  inset-inline-end: 22px;
   display: flex;
   align-items: center;
   gap: 8px;
-  opacity: 0;
-  transition: opacity 0.15s ease;
-  z-index: 2;
 }
 
-/* The assistant action bar sits inside the last `.specorator-text-block`,
-   beside that block's copy button (`inset-inline-end: 22px` vs the copy button's
-   `0`), so both anchor to the same box and form one row. Reveal it on the same
-   hover the copy button uses so the whole row appears together. */
-.specorator-text-block:hover .specorator-text-actions {
-  opacity: 1;
-}
-
-/* Tool-only / error-only responses have no text block to host the bar, so it
-   falls back to a direct child of message-content (see MessageBubble). Reveal
-   that one on message hover — there is no copy button to align a row with. */
-.specorator-message-assistant:hover > .specorator-message-content > .specorator-text-actions {
-  opacity: 1;
+/* Tool-only / error-only / protocol-only responses have no text block to host
+   the shared row, so the action bar falls back to a direct child of
+   message-content (see MessageBubble). Give that one its own row below the
+   content — there is no co-located copy button to share a row with. */
+.specorator-message-content > .specorator-text-actions {
+  margin-top: 6px;
 }
 
 .specorator-text-action-btn {

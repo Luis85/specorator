@@ -32,7 +32,8 @@ const providerId = computed(() => callbacks?.getProviderId() ?? DEFAULT_CHAT_PRO
 
 const items = computed(() => resolveBlockListItems(props.msg, providerId.value));
 // Key of the last text item — the assistant action bar renders into that
-// TextBlock's `actions` slot so it sits beside the copy button as one hover row.
+// TextBlock's `actions` slot so it shares the actions row below the response
+// with the copy button.
 const lastTextKey = computed(() => {
   for (let i = items.value.length - 1; i >= 0; i--) {
     if (items.value[i].kind === 'text') return items.value[i].key;
