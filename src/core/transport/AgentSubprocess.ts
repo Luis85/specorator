@@ -141,11 +141,26 @@ export class AgentSubprocess {
 
   async shutdown(): Promise<void> {
     const proc = this.proc;
-    if (!proc || typeof proc.exitCode === 'number' || !this.alive) {
+    if (!proc) {
       return;
     }
 
     const killTree = this.spec.killProcessTree;
+    if (typeof proc.exitCode === 'number' || !this.alive) {
+      // The direct child already exited, but a detached process group's shell/git
+      // grandchildren can outlive it. The normal alive path below never runs once
+      // exitCode is set, so reap the group here — otherwise a cleanup/restart
+      // after transport close leaves the grandchildren running.
+      if (killTree && typeof proc.pid === 'number') {
+        try {
+          await Promise.resolve(killTree(proc));
+        } catch {
+          // Best-effort: the leader is gone; a surviving group is all we can reap.
+        }
+      }
+      return;
+    }
+
     await new Promise<void>((resolve) => {
       let settled = false;
       let processExited = false;

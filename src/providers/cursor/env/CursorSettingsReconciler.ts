@@ -8,7 +8,11 @@ import { toCursorModelValue } from '../runtime/cursorModelId';
 import { getCursorProviderSettings, updateCursorProviderSettings } from '../settings';
 import { getCursorState } from '../types';
 
-const ENV_HASH_KEYS = ['CURSOR_API_KEY', 'CURSOR_BASE_URL'];
+// CURSOR_SESSION_TOKEN is part of the active account/backend identity (it also
+// keys the model-catalog cache), so a token-only change must reconcile: reset the
+// session and invalidate saved Cursor session ids rather than let the new
+// credential load the prior credential's native session artifacts.
+const ENV_HASH_KEYS = ['CURSOR_API_KEY', 'CURSOR_SESSION_TOKEN', 'CURSOR_BASE_URL'];
 
 const cursorEnvHashSpec: EnvHashReconcilerSpec = {
   providerId: 'cursor',

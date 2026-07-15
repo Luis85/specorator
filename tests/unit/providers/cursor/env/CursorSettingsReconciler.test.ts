@@ -56,6 +56,39 @@ describe('cursorSettingsReconciler.reconcileModelWithEnvironment', () => {
     cursorSettingsReconciler.reconcileModelWithEnvironment(s, []);
     expect(s.model).toBe('composer-2');
   });
+
+  function boundCursorConversation() {
+    return {
+      id: 'c1',
+      providerId: 'cursor',
+      sessionId: 'sess-1',
+      providerState: { chatSessionId: 'sess-1' },
+    } as never;
+  }
+
+  it('invalidates the bound session when only CURSOR_SESSION_TOKEN changes', () => {
+    const s = settings('CURSOR_API_KEY=k\nCURSOR_SESSION_TOKEN=t1');
+    // Seed the saved hash for the current (t1) credential.
+    cursorSettingsReconciler.reconcileModelWithEnvironment(s, []);
+
+    // Rotate ONLY the session token — the API key and base URL are unchanged.
+    (s.providerConfigs as { cursor: { environmentVariables: string } }).cursor.environmentVariables =
+      'CURSOR_API_KEY=k\nCURSOR_SESSION_TOKEN=t2';
+    const conv = boundCursorConversation();
+    cursorSettingsReconciler.reconcileModelWithEnvironment(s, [conv]);
+
+    // Session dropped so the new credential can't load the prior one's artifacts.
+    expect((conv as { sessionId: string | null }).sessionId).toBeNull();
+    expect((conv as { providerState: unknown }).providerState).toBeUndefined();
+  });
+
+  it('leaves the bound session intact when the token is unchanged', () => {
+    const s = settings('CURSOR_API_KEY=k\nCURSOR_SESSION_TOKEN=t1');
+    cursorSettingsReconciler.reconcileModelWithEnvironment(s, []);
+    const conv = boundCursorConversation();
+    cursorSettingsReconciler.reconcileModelWithEnvironment(s, [conv]);
+    expect((conv as { sessionId: string | null }).sessionId).toBe('sess-1');
+  });
 });
 
 describe('normalizeModelVariantSettings migration', () => {
