@@ -58,8 +58,9 @@ const segments = computed<WorkOrderProtocolSegment[]>(() => {
 });
 
 // Index of the last markdown segment: the `actions` slot (the assistant message
-// action bar) renders inside THAT `.specorator-text-block`, beside its copy
-// button, so the thumbs/work-order buttons and copy form one hover row.
+// action bar) renders inside THAT `.specorator-text-block`, in the shared
+// actions row below the rendered markdown, beside its copy button — so the
+// thumbs/work-order buttons and copy form one row directly under the response.
 const lastMarkdownIndex = computed(() => {
   let last = -1;
   segments.value.forEach((segment, i) => {
@@ -97,11 +98,13 @@ const lastMarkdownIndex = computed(() => {
           :markdown="segment.content"
           :defer-math="deferMath"
         />
-        <CopyButton :text="segment.content" />
-        <slot
-          v-if="i === lastMarkdownIndex"
-          name="actions"
-        />
+        <div class="specorator-text-block-actions-row">
+          <slot
+            v-if="i === lastMarkdownIndex"
+            name="actions"
+          />
+          <CopyButton :text="segment.content" />
+        </div>
       </div>
       <WorkOrderProgressCard
         v-else-if="segment.type === 'progress'"

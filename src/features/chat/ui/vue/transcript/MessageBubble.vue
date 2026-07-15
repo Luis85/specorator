@@ -29,9 +29,9 @@ import { hasVisibleBlock, hasVisibleText } from './visibleContentHelpers';
  * not render nothing.
  *
  * The assistant action bar is rendered by `BlockList` into the last text
- * block's `actions` slot (beside that block's copy button), reproducing the
- * legacy anchor-into-the-last-`.specorator-text-block` placement so the
- * thumbs/work-order buttons and the copy button form one hover row. The user
+ * block's `actions` slot, sharing an in-flow actions row with that block's copy
+ * button, so the thumbs/work-order buttons and the copy button form one row
+ * directly below the response (not an overlay on the last line). The user
  * toolbar (fork/rewind/copy/actions) stays a message-level sibling below.
  */
 const props = defineProps<{ msg: ChatMessage }>();
@@ -58,7 +58,8 @@ const isInterruptOnly = computed(
 );
 
 // The assistant action bar normally renders inside the last text block's
-// MARKDOWN segment (beside its copy button — one hover row). A response with no
+// MARKDOWN segment (in the actions row below the response, beside its copy
+// button). A response with no
 // such host — tool-only / error-only (no text item), OR a work-order response
 // whose last text item splits into protocol-only cards (a `text` item but NO
 // markdown segment) — has nowhere to mount the co-located slot, so a

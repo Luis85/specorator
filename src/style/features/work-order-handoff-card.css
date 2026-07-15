@@ -1,6 +1,4 @@
 .specorator-work-order-handoff-card {
-  /* Positioning context for card-anchored `.specorator-text-actions` (absolute). */
-  position: relative;
   margin: 8px 0;
   padding: 8px;
   border: 1px solid var(--background-modifier-border);
@@ -100,13 +98,4 @@
 
 .specorator-work-order-handoff-card-section-body {
   color: var(--text-normal);
-}
-
-/* Handoff-only messages anchor `.specorator-text-actions` under the card instead
-   of a `.specorator-text-block`. That shared element is opacity:0 and is only
-   revealed by `.specorator-text-block:hover` in messages.css, so reveal it on card
-   hover/focus here too — otherwise actions like "Create work order" stay hidden. */
-.specorator-work-order-handoff-card:hover .specorator-text-actions,
-.specorator-work-order-handoff-card:focus-within .specorator-text-actions {
-  opacity: 1;
 }
