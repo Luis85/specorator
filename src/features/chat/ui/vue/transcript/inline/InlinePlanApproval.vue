@@ -1,10 +1,9 @@
 <script setup lang="ts">
-import { onBeforeUnmount, onMounted, ref } from 'vue';
-
 import type { PlanApprovalDecision } from '../../../../../../core/types/tools';
 import { CHOICE_CARD_HINTS_TEXT, type InlineChoiceRowSpec } from './inlineChoiceCard';
 import InlineChoiceList from './InlineChoiceList.vue';
 import PlanContentPreview from './PlanContentPreview.vue';
+import { useInlinePlanCard } from './useInlinePlanCard';
 
 /**
  * Vue port of `rendering/InlinePlanApproval.ts`. Owns ONLY input capture +
@@ -28,17 +27,15 @@ const props = defineProps<{
   planReadError: string | null;
 }>();
 
-const rootEl = ref<HTMLElement | null>(null);
-const choiceListRef = ref<InstanceType<typeof InlineChoiceList> | null>(null);
-let resolved = false;
-
 const readErrorMessage = props.planReadError ? `Could not read plan file: ${props.planReadError}` : null;
 
-function handleResolve(decision: PlanApprovalDecision | null): void {
-  if (resolved) return;
-  resolved = true;
-  props.resolve(decision);
-}
+const {
+  choiceListRef,
+  focusRoot,
+  handleResolve,
+  onRootKeyDown,
+  rootEl,
+} = useInlinePlanCard<PlanApprovalDecision>(props.resolve);
 
 const specs: InlineChoiceRowSpec[] = [
   {
@@ -57,26 +54,6 @@ const specs: InlineChoiceRowSpec[] = [
     onSelect: () => handleResolve({ type: 'cancel' }),
   },
 ];
-
-function onRootKeyDown(e: KeyboardEvent): void {
-  if (resolved) return;
-  choiceListRef.value?.handleKeyDown(e);
-}
-
-function focusRoot(): void {
-  rootEl.value?.focus();
-}
-
-onMounted(() => {
-  window.requestAnimationFrame(() => {
-    rootEl.value?.focus();
-    rootEl.value?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
-  });
-});
-
-onBeforeUnmount(() => {
-  handleResolve(null);
-});
 </script>
 
 <template>

@@ -3,10 +3,11 @@ import { computed } from 'vue';
 
 import { getToolIcon } from '../../../../../../core/tools/toolIcons';
 import type { ToolCallInfo } from '../../../../../../core/types';
+import { shouldShowRunningPlaceholder } from '../../../../rendering/subagentViewModel';
+import { TOOL_CALL_STATUS_ICONS } from '../../../../rendering/toolCallViewModel';
 import { getToolLabel } from '../../../../rendering/toolLabel';
 import { useCollapsible } from '../collapsible';
 import { useIconDiv } from './subagentIconDiv';
-import { shouldShowRunningPlaceholder } from './subagentViewModel';
 import ToolContentLines from './ToolContentLines.vue';
 import { useToolNameSummary } from './toolNameSummary';
 
@@ -24,14 +25,8 @@ import { useToolNameSummary } from './toolNameSummary';
  */
 const props = defineProps<{ toolCall: ToolCallInfo }>();
 
-const SUBAGENT_TOOL_STATUS_ICONS: Partial<Record<ToolCallInfo['status'], string>> = {
-  completed: 'check',
-  error: 'x',
-  blocked: 'shield-off',
-};
-
 const { toolName, toolSummary } = useToolNameSummary(() => props.toolCall);
-const statusIcon = computed(() => SUBAGENT_TOOL_STATUS_ICONS[props.toolCall.status] ?? null);
+const statusIcon = computed(() => TOOL_CALL_STATUS_ICONS[props.toolCall.status as keyof typeof TOOL_CALL_STATUS_ICONS] ?? null);
 const showRunningPlaceholder = computed(() => shouldShowRunningPlaceholder(props.toolCall));
 
 const { expanded, toggle, onKeydown, ariaLabel } = useCollapsible({

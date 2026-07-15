@@ -26,7 +26,7 @@ import {
 import { extractDiffData } from '../../../utils/diff';
 import { toVaultRelativeOpenPath } from '../../../utils/fileLink';
 import { scrollMessagesToBottom } from '../rendering/scrollToBottom';
-import { isBlockedToolResult } from '../rendering/ToolCallRenderer';
+import { isBlockedToolResult } from '../rendering/toolCallViewModel';
 import type { SubagentManager } from '../services/SubagentManager';
 import type { ChatState } from '../state/ChatState';
 import type { FileContextManager } from '../ui/FileContext';
@@ -121,8 +121,6 @@ export class StreamController {
       refreshTranscriptMessage: (messageId) => this.deps.refreshTranscriptMessage?.(messageId),
     });
     this.lifecycleSubagents = new ProviderLifecycleSubagentCoordinator({
-      plugin: deps.plugin,
-      state: deps.state,
       findToolCall: (msg, id) => this.findToolCall(msg, id),
       normalizeToolResultContent: (content) => this.normalizeToolResultContent(content),
       getSubagentLifecycleAdapter: (toolName) => this.getSubagentLifecycleAdapter(toolName),
@@ -404,7 +402,7 @@ export class StreamController {
     // Check if this is an update to an existing tool call
     const existingToolCall = this.findToolCall(msg, chunk.id);
     if (existingToolCall) {
-      this.mergeExistingToolCallInput(existingToolCall, chunk.input);
+      this.mergeExistingToolCallInput(existingToolCall, chunk.input, chunk.name);
       return;
     }
 
@@ -423,15 +421,31 @@ export class StreamController {
    * Merges a later tool_use chunk's input into an existing tool call and re-runs
    * the same panel/plan side effects as a fresh tool. The merged input lands on
    * the reactive `toolCall` object, so the Vue block updates on the next emit.
+   *
+   * A repeated tool_use for the same id can also correct the tool NAME: an ACP
+   * call first rendered under a prose title, then re-emitted with the semantic
+   * kind (edit/delete), arrives with a changed `chunkName`. Adopting it on the
+   * reactive object is what lets the Vue WriteEditView / delete bookkeeping run —
+   * so a name-only change (empty input) still updates the data and re-renders.
    */
   private mergeExistingToolCallInput(
     existingToolCall: ToolCallInfo,
     chunkInput: Record<string, unknown>,
+    chunkName?: string,
   ): void {
-    const newInput = chunkInput || {};
-    if (Object.keys(newInput).length === 0) return;
+    const nameChanged = chunkName !== undefined && chunkName !== existingToolCall.name;
+    if (nameChanged) {
+      existingToolCall.name = chunkName;
+    }
 
-    existingToolCall.input = { ...existingToolCall.input, ...newInput };
+    const newInput = chunkInput || {};
+    const hasNewInput = Object.keys(newInput).length > 0;
+    if (!hasNewInput && !nameChanged) return;
+
+    if (hasNewInput) {
+      existingToolCall.input = { ...existingToolCall.input, ...newInput };
+    }
+
     // Re-run side effects on input updates (streaming may complete the input)
     this.applyToolInputSideEffects(existingToolCall.name, existingToolCall.input);
   }

@@ -5,6 +5,7 @@ import { DEFAULT_CHAT_PROVIDER_ID } from '../../../../../../core/providers/types
 import type { ChatMessage } from '../../../../../../core/types';
 import { formatDurationMmSs } from '../../../../../../utils/date';
 import { classifyRuntimeError } from '../../../../controllers/runtimeErrorClassification';
+import MessageActionBar from '../cards/MessageActionBar.vue';
 import { CALLBACKS_KEY } from '../transcriptKeys';
 import { hasDurationFooter, resolveBlockListItems } from './blockListViewModel';
 import ContextCompactedMarker from './ContextCompactedMarker.vue';
@@ -30,6 +31,14 @@ const callbacks = inject(CALLBACKS_KEY, undefined);
 const providerId = computed(() => callbacks?.getProviderId() ?? DEFAULT_CHAT_PROVIDER_ID);
 
 const items = computed(() => resolveBlockListItems(props.msg, providerId.value));
+// Key of the last text item — the assistant action bar renders into that
+// TextBlock's `actions` slot so it sits beside the copy button as one hover row.
+const lastTextKey = computed(() => {
+  for (let i = items.value.length - 1; i >= 0; i--) {
+    if (items.value[i].kind === 'text') return items.value[i].key;
+  }
+  return null;
+});
 const showFooter = computed(() => hasDurationFooter(props.msg));
 const flavorWord = computed(() => props.msg.durationFlavorWord || 'Baked');
 const durationText = computed(() => formatDurationMmSs(props.msg.durationSeconds ?? 0));
@@ -51,7 +60,15 @@ const durationText = computed(() => formatDurationMmSs(props.msg.durationSeconds
       role="assistant"
       :content="item.content"
       :defer-math="item.deferMath"
-    />
+    >
+      <template #actions>
+        <MessageActionBar
+          v-if="item.key === lastTextKey"
+          :msg="msg"
+          role="assistant"
+        />
+      </template>
+    </TextBlock>
     <ContextCompactedMarker v-else-if="item.kind === 'context_compacted'" />
     <RuntimeErrorCard
       v-else-if="item.kind === 'runtime_error'"

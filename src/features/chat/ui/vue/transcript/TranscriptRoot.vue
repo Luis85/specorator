@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { inject, nextTick, onMounted, ref, watch } from 'vue';
 
+import { scrollMessagesToBottom } from '../../../rendering/scrollToBottom';
 import LoadEarlierControl from './LoadEarlierControl.vue';
 import MessageList from './MessageList.vue';
 import { useTranscriptStore } from './stores/transcriptStore';
@@ -40,7 +41,37 @@ onMounted(() => {
   if (scrollEl.value && scrollEl.value.nodeType === 1 && mountScrollHost) {
     mountScrollHost(scrollEl.value);
   }
+  if (store.messages.length > 0) {
+    void requestHistoryScroll();
+  }
 });
+
+let historyScrollPending = false;
+
+async function requestHistoryScroll(): Promise<void> {
+  historyScrollPending = true;
+  await nextTick();
+  finishHistoryScrollIfReady();
+}
+
+function finishHistoryScrollIfReady(): void {
+  const el = scrollEl.value;
+  if (
+    !historyScrollPending
+    || !el
+    || el.querySelector('[data-specorator-markdown-pending="true"]')
+  ) {
+    return;
+  }
+  scrollMessagesToBottom(el);
+  historyScrollPending = false;
+}
+
+function onMarkdownRendered(): void {
+  if (historyScrollPending) {
+    void nextTick().then(finishHistoryScrollIfReady);
+  }
+}
 
 // Trailing render window, mirroring `renderMessages`. The projection pushes a
 // FRESH `store.messages` array on EVERY emit (`ChatState.messages` is a copying
@@ -54,22 +85,45 @@ onMounted(() => {
 // message) the window `[start, end]` already includes the new tail, so keep
 // `renderWindowStart` put; only clamp defensively.
 const renderWindowStart = ref(windowStartIndex(store.messages.length));
-let prevFirstId: string | null = store.messages[0]?.id ?? null;
-let prevLength = store.messages.length;
+watch(
+  () => [store.conversationId, store.projectionRevision] as const,
+  ([nextId, nextRevision], [prevId, prevRevision]) => {
+    const isConversationReset =
+      nextId !== prevId
+      || nextRevision !== prevRevision;
+    if (!isConversationReset) return;
+    renderWindowStart.value = windowStartIndex(store.messages.length);
+    if (store.messages.length > 0) {
+      void requestHistoryScroll();
+    }
+  },
+);
 watch(
   () => store.messages,
-  (next) => {
-    const nextFirstId = next[0]?.id ?? null;
-    const isConversationReset =
-      prevLength === 0 // first load into an empty transcript
-      || next.length < prevLength // truncate / rewind
-      || nextFirstId !== prevFirstId; // switch / reload (identity changed)
-    renderWindowStart.value = isConversationReset
-      ? windowStartIndex(next.length)
-      : Math.min(Math.max(renderWindowStart.value, 0), next.length);
-    prevFirstId = nextFirstId;
-    prevLength = next.length;
-  }
+  (next, prev) => {
+    // An in-place truncation of the SAME conversation (rewind) shrinks the list
+    // without touching conversationId or projectionRevision, so the reset watch
+    // above never fires. Clamping alone would leave `renderWindowStart` parked
+    // past the new tail (e.g. 90 → a 20-message list) and `MessageList` would
+    // slice away the whole transcript. Recompute the trailing window on a shrink
+    // so the surviving messages render; a plain append keeps the window put.
+    if (prev && next.length < prev.length) {
+      renderWindowStart.value = windowStartIndex(next.length);
+      if (next.length > 0) {
+        void requestHistoryScroll();
+      }
+      return;
+    }
+    renderWindowStart.value = Math.min(Math.max(renderWindowStart.value, 0), next.length);
+  },
+);
+
+watch(
+  () => store.loadingText,
+  async (next, previous) => {
+    if (previous === null || next !== null || store.messages.length === 0) return;
+    await requestHistoryScroll();
+  },
 );
 
 /**
@@ -98,29 +152,29 @@ async function onLoadEarlier(): Promise<void> {
   <div
     ref="scrollEl"
     class="specorator-messages"
+    @specorator-markdown-rendered="onMarkdownRendered"
   >
-    <template v-if="store.loadingText !== null">
-      <div class="specorator-loading">
-        <div class="specorator-loading-spinner" />
-        <div class="specorator-loading-text">
-          {{ store.loadingText }}
-        </div>
+    <WelcomeBanner
+      :greeting="store.greeting"
+      :hydration-error="store.hydrationError"
+    />
+    <LoadEarlierControl
+      v-if="renderWindowStart > 0"
+      @load-earlier="onLoadEarlier"
+    />
+    <MessageList
+      :messages="store.messages"
+      :render-window-start="renderWindowStart"
+    />
+    <StreamingIndicator />
+    <div
+      v-if="store.loadingText !== null"
+      class="specorator-loading specorator-loading--overlay"
+    >
+      <div class="specorator-loading-spinner" />
+      <div class="specorator-loading-text">
+        {{ store.loadingText }}
       </div>
-    </template>
-    <template v-else>
-      <WelcomeBanner
-        :greeting="store.greeting"
-        :hydration-error="store.hydrationError"
-      />
-      <LoadEarlierControl
-        v-if="renderWindowStart > 0"
-        @load-earlier="onLoadEarlier"
-      />
-      <MessageList
-        :messages="store.messages"
-        :render-window-start="renderWindowStart"
-      />
-      <StreamingIndicator />
-    </template>
+    </div>
   </div>
 </template>

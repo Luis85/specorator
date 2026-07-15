@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { ref } from 'vue';
 
 import type { ToolCallInfo } from '@/core/types';
-import { getToolName, getToolSummary } from '@/features/chat/rendering/ToolCallRenderer';
+import { getToolName, getToolSummary } from '@/features/chat/rendering/toolCallViewModel';
 import { useToolNameSummary } from '@/features/chat/ui/vue/transcript/blocks/toolNameSummary';
 
 function createToolCall(overrides: Partial<ToolCallInfo> = {}): ToolCallInfo {

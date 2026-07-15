@@ -29,6 +29,19 @@ describe('cursorModelContextWindow', () => {
   it('returns 0 for unknown ids so the caller can flag non-authoritative windows', () => {
     expect(cursorModelContextWindow('totally-fake-model')).toBe(0);
   });
+
+  it('parses context windows from ACP bracketed model values', () => {
+    expect(cursorModelContextWindow('gpt-5.6-luna[context=272k,reasoning=medium,fast=false]'))
+      .toBe(272_000);
+    expect(cursorModelContextWindow('claude-opus-4-8[thinking=true,context=300k,effort=high]'))
+      .toBe(300_000);
+    expect(cursorModelContextWindow('claude-sonnet-5[context=1m,effort=high]'))
+      .toBe(1_000_000);
+  });
+
+  it('ignores invalid bracketed context values', () => {
+    expect(cursorModelContextWindow('gpt-5.6-luna[context=huge,reasoning=medium]')).toBe(0);
+  });
 });
 
 describe('cursorModelPricing', () => {

@@ -281,49 +281,68 @@ const cursorHarness: ProviderHarness = {
   } as unknown as Conversation),
   stubStore: (scenario) => {
     const spies: jest.SpyInstance[] = [];
-    // A stable, non-null db path keeps the cache key deterministic across
-    // hydrate calls so the `cached` scenario can verify the hit.
     const stubDbPath = '/cursor-fake/.cursor/chats/h/cursor-sess-a/store.db';
-    const dbPathSpy = jest.spyOn(CursorStore, 'resolveCursorStoreDbPath');
-    spies.push(dbPathSpy);
+    const stubSourceRef = 'cursor-sess-a::acp-sqlite::' + stubDbPath + '::1:1';
+    const sourcesSpy = jest.spyOn(CursorStore, 'resolveCursorHistorySources');
+    spies.push(sourcesSpy);
 
     switch (scenario) {
       case 'loaded':
       case 'cached':
       case 'force-refresh':
       case 'cancelled': {
-        dbPathSpy.mockReturnValue(stubDbPath);
+        sourcesSpy.mockReturnValue([{
+          kind: 'acp-sqlite',
+          path: stubDbPath,
+          sourceRef: stubSourceRef,
+        }]);
         spies.push(
-          jest.spyOn(CursorStore, 'loadCursorChatMessagesFromStoreResult').mockReturnValue({
+          jest.spyOn(CursorStore, 'loadCursorHistoryFromSources').mockReturnValue({
             messages: [SAMPLE_MESSAGE],
+            sourceRef: stubSourceRef,
           }),
         );
         break;
       }
       case 'empty': {
-        dbPathSpy.mockReturnValue(stubDbPath);
+        sourcesSpy.mockReturnValue([{
+          kind: 'acp-sqlite',
+          path: stubDbPath,
+          sourceRef: stubSourceRef,
+        }]);
         spies.push(
-          jest.spyOn(CursorStore, 'loadCursorChatMessagesFromStoreResult').mockReturnValue({
+          jest.spyOn(CursorStore, 'loadCursorHistoryFromSources').mockReturnValue({
             messages: [],
+            sourceRef: stubSourceRef,
           }),
         );
         break;
       }
       case 'error-unreadable': {
-        dbPathSpy.mockReturnValue(stubDbPath);
+        sourcesSpy.mockReturnValue([{
+          kind: 'acp-sqlite',
+          path: stubDbPath,
+          sourceRef: stubSourceRef,
+        }]);
         spies.push(
-          jest.spyOn(CursorStore, 'loadCursorChatMessagesFromStoreResult').mockReturnValue({
+          jest.spyOn(CursorStore, 'loadCursorHistoryFromSources').mockReturnValue({
             messages: [],
+            sourceRef: stubSourceRef,
             error: 'Cursor history: SQL read failed (...)',
           }),
         );
         break;
       }
       case 'error-sqlite-unavailable': {
-        dbPathSpy.mockReturnValue(stubDbPath);
+        sourcesSpy.mockReturnValue([{
+          kind: 'acp-sqlite',
+          path: stubDbPath,
+          sourceRef: stubSourceRef,
+        }]);
         spies.push(
-          jest.spyOn(CursorStore, 'loadCursorChatMessagesFromStoreResult').mockReturnValue({
+          jest.spyOn(CursorStore, 'loadCursorHistoryFromSources').mockReturnValue({
             messages: [],
+            sourceRef: stubSourceRef,
             error: {
               code: 'sqlite-unavailable',
               message: 'Cursor history requires Node 22.5+ (node:sqlite).',

@@ -50,9 +50,28 @@ export class RunSidecarStore {
   }
 
   async appendLedger(runId: string, entry: TaskLedgerEntry): Promise<void> {
+    await this.appendLedgerBatch(runId, [entry]);
+  }
+
+  async appendLedgerBatch(runId: string, entries: TaskLedgerEntry[]): Promise<void> {
+    if (entries.length === 0) return;
     await this.ensureRunDir(runId);
-    const line = `${JSON.stringify(entry)}\n`;
-    await this.adapter.append(this.ledgerPath(runId), line);
+    const payload = entries
+      .map((entry) => `${JSON.stringify(this.ensureEntryId(entry))}\n`)
+      .join('');
+    await this.adapter.append(this.ledgerPath(runId), payload);
+  }
+
+  private ensureEntryId(entry: TaskLedgerEntry): TaskLedgerEntry {
+    // Assign the id ON the caller's entry rather than a copy: LedgerWriter
+    // re-queues the SAME entry objects when a partial/ambiguous append rejects,
+    // so mutating here means a retry writes identical ids and readLedger's id
+    // dedupe collapses the duplicate. A returned copy would leave the in-memory
+    // entry id-less, so each retry would mint a new id and both rows would stick.
+    if (!entry.id) {
+      entry.id = `ledger-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
+    }
+    return entry;
   }
 
   async readLedger(runId: string): Promise<TaskLedgerEntry[]> {
@@ -69,7 +88,32 @@ export class RunSidecarStore {
         // Corrupt line — drop it; the rest of the ledger is still recoverable.
       }
     }
-    return entries;
+    return this.dedupeLedgerEntries(entries);
+  }
+
+  /** Records that a terminal snapshot into the work-order note failed. */
+  async markFinalizeFailed(runId: string, error: string): Promise<void> {
+    await this.ensureRunDir(runId);
+    await this.adapter.write(
+      `${this.runDir(runId)}/finalize-failed.json`,
+      JSON.stringify({ at: new Date().toISOString(), error }),
+    );
+  }
+
+  async hasFinalizeFailure(runId: string): Promise<boolean> {
+    return this.adapter.exists(`${this.runDir(runId)}/finalize-failed.json`);
+  }
+
+  private dedupeLedgerEntries(entries: TaskLedgerEntry[]): TaskLedgerEntry[] {
+    const seen = new Set<string>();
+    const deduped: TaskLedgerEntry[] = [];
+    for (const entry of entries) {
+      const key = entry.id ?? `${entry.timestamp}::${entry.status}::${entry.message}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      deduped.push(entry);
+    }
+    return deduped;
   }
 
   async snapshotLedgerAsMarkdown(runId: string): Promise<string> {

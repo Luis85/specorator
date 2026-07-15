@@ -176,11 +176,14 @@ export class ConversationHistoryView {
       text: isCurrent ? 'Current session' : this.formatDate(conv.lastResponseAt ?? conv.createdAt),
     });
 
-    if (!isCurrent) {
+    const canReloadCurrent = isCurrent && (state.messages?.length ?? 0) === 0;
+    if (!isCurrent || canReloadCurrent) {
       content.addEventListener('click', (e) => {
         e.stopPropagation();
-        if (this.isHistoryNewTabModifierClick(e) && options.onOpenConversationInNewTab) {
-          e.preventDefault();
+        if (options.onOpenConversationInNewTab) {
+          if (this.isHistoryNewTabModifierClick(e)) {
+            e.preventDefault();
+          }
           runConversationAction(
             () => this.runHistoryAction(
               () => options.onOpenConversationInNewTab?.(conv.id, true),

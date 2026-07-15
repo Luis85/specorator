@@ -6,13 +6,19 @@ import * as path from 'path';
 const os = jest.requireActual<typeof osType>('os');
 
 import { TOOL_READ, TOOL_WRITE } from '@/core/tools/toolNames';
+import { getToolSummary } from '@/features/chat/rendering/toolCallViewModel';
 import {
+  buildChatMessagesFromCursorAgentTranscript,
   buildChatMessagesFromCursorHistoryRecords,
   classifyCursorSqliteOpenError,
   cursorWorkspaceHash,
   cursorWorkspaceHashLegacy,
   loadCursorChatMessagesFromStoreResult,
+  loadCursorHistoryFromSources,
+  resolveCursorAgentTranscriptPath,
+  resolveCursorHistorySources,
   resolveCursorStoreDbPath,
+  validateCursorAcpSessionVault,
 } from '@/providers/cursor/history/cursorHistoryStore';
 
 describe('cursorHistoryStore', () => {
@@ -114,6 +120,43 @@ describe('buildChatMessagesFromCursorHistoryRecords', () => {
     expect(editAssistant.toolCalls?.[0]?.diffData?.diffLines.length).toBeGreaterThan(0);
   });
 
+  it('synthesizes deterministic tool-call ids when blobs omit ids', () => {
+    const messages = buildChatMessagesFromCursorHistoryRecords([
+      {
+        rowId: 'user-1',
+        record: { role: 'user', content: 'run tool' },
+      },
+      {
+        rowId: 'asst-1',
+        record: {
+          role: 'assistant',
+          content: [
+            {
+              type: 'tool-call',
+              toolName: 'readToolCall',
+              args: { path: 'README.md' },
+            },
+          ],
+        },
+      },
+      {
+        rowId: 'tool-1',
+        record: {
+          role: 'tool',
+          content: [{
+            type: 'tool-result',
+            result: { success: { content: '# Title' } },
+          }],
+        },
+      },
+    ]);
+
+    expect(messages).toHaveLength(2);
+    const toolId = messages[1].toolCalls?.[0]?.id;
+    expect(toolId).toMatch(/^cursor-tc-[a-f0-9]{16}$/);
+    expect(messages[1].toolCalls?.[0]?.status).toBe('completed');
+  });
+
   it('skips IDE bootstrap user blobs', () => {
     const messages = buildChatMessagesFromCursorHistoryRecords([
       {
@@ -145,6 +188,87 @@ describe('buildChatMessagesFromCursorHistoryRecords', () => {
     expect(messages.map((m) => m.timestamp)).toEqual([1_000, 1_001, 1_002]);
     const sorted = [...messages].sort((a, b) => a.timestamp - b.timestamp);
     expect(sorted.map((m) => m.content)).toEqual(['first', 'second', 'third']);
+  });
+});
+
+describe('buildChatMessagesFromCursorAgentTranscript', () => {
+  it('loads user and assistant text from Cursor 2.x JSONL records', () => {
+    const messages = buildChatMessagesFromCursorAgentTranscript([
+      JSON.stringify({
+        role: 'user',
+        message: {
+          content: [{
+            type: 'text',
+            text: '<timestamp>Now</timestamp>\n<user_query>\nLoad this conversation\n</user_query>',
+          }],
+        },
+      }),
+      JSON.stringify({
+        role: 'assistant',
+        message: {
+          content: [
+            { type: 'text', text: 'Loaded response' },
+            { type: 'tool_use', name: 'ReadFile', input: { path: 'README.md' } },
+          ],
+        },
+      }),
+      JSON.stringify({ type: 'turn_ended', status: 'success' }),
+      '{ malformed',
+    ], 1_000);
+
+    expect(messages).toEqual([
+      expect.objectContaining({
+        role: 'user',
+        content: 'Load this conversation',
+        timestamp: 1_000,
+      }),
+      expect.objectContaining({
+        role: 'assistant',
+        content: 'Loaded response',
+        timestamp: 1_001,
+      }),
+    ]);
+  });
+
+  it('loads string message content and real tool_use/tool_result block names', () => {
+    const messages = buildChatMessagesFromCursorAgentTranscript([
+      JSON.stringify({
+        role: 'user',
+        message: { content: '<user_query>Read the file</user_query>' },
+      }),
+      JSON.stringify({
+        role: 'assistant',
+        message: {
+          content: [{
+            type: 'tool_use',
+            id: 'tc-real-read',
+            name: 'readToolCall',
+            input: { path: 'README.md' },
+          }],
+        },
+      }),
+      JSON.stringify({
+        role: 'tool',
+        message: {
+          content: [{
+            type: 'tool_result',
+            tool_use_id: 'tc-real-read',
+            content: '# Real transcript',
+          }],
+        },
+      }),
+    ], 2_000);
+
+    expect(messages[0]).toMatchObject({
+      role: 'user',
+      content: 'Read the file',
+    });
+    expect(messages[1]?.toolCalls?.[0]).toMatchObject({
+      id: 'tc-real-read',
+      name: TOOL_READ,
+      status: 'completed',
+      result: '# Real transcript',
+    });
   });
 });
 
@@ -246,6 +370,25 @@ describe('resolveCursorStoreDbPath two-hash fallback', () => {
     fs.rmSync(tmpHome, { recursive: true, force: true });
   });
 
+  it('prefers the current Cursor ACP session store', () => {
+    const sessionId = 'session-acp';
+    const acpStore = path.join(
+      tmpHome,
+      '.cursor',
+      'acp-sessions',
+      sessionId,
+      'store.db',
+    );
+    fs.mkdirSync(path.dirname(acpStore), { recursive: true });
+    fs.writeFileSync(
+      path.join(path.dirname(acpStore), 'meta.json'),
+      JSON.stringify({ cwd: '/vault/Test' }),
+    );
+    fs.writeFileSync(acpStore, '');
+
+    expect(resolveCursorStoreDbPath('/vault/Test', sessionId)).toBe(acpStore);
+  });
+
   it('falls back to the legacy hash when the normalized hash has no store', () => {
     const vault = 'D:\\Projects\\Specorator';
     const legacy = cursorWorkspaceHashLegacy(vault);
@@ -255,5 +398,232 @@ describe('resolveCursorStoreDbPath two-hash fallback', () => {
 
     const resolved = resolveCursorStoreDbPath(vault, 'sess-123');
     expect(resolved).toBe(path.join(legacyDir, 'store.db'));
+  });
+
+  it('resolves Cursor 2.x project-scoped agent transcripts', () => {
+    const vault = '/vault/Test';
+    const sessionId = 'session-123';
+    const slug = path.resolve(vault).replace(/[:\\/]+/g, '-');
+    const transcript = path.join(
+      tmpHome,
+      '.cursor',
+      'projects',
+      slug,
+      'agent-transcripts',
+      sessionId,
+      `${sessionId}.jsonl`,
+    );
+    fs.mkdirSync(path.dirname(transcript), { recursive: true });
+    fs.writeFileSync(transcript, '');
+
+    expect(resolveCursorAgentTranscriptPath(vault, sessionId)).toBe(transcript);
+  });
+
+  it('rejects ACP sessions whose meta.json cwd does not match the vault', () => {
+    const sessionId = 'session-vault-mismatch';
+    const acpDir = path.join(tmpHome, '.cursor', 'acp-sessions', sessionId);
+    fs.mkdirSync(acpDir, { recursive: true });
+    fs.writeFileSync(path.join(acpDir, 'meta.json'), JSON.stringify({ cwd: 'C:\\\\Other\\\\Vault' }));
+    fs.writeFileSync(path.join(acpDir, 'store.db'), '');
+
+    expect(resolveCursorHistorySources('/vault/Test', sessionId)).toEqual([]);
+    expect(validateCursorAcpSessionVault(sessionId, '/vault/Test')?.code).toBe('vault-mismatch');
+  });
+
+  it('rejects ACP stores whose ownership metadata is missing', () => {
+    const sessionId = 'session-missing-meta';
+    const acpDir = path.join(tmpHome, '.cursor', 'acp-sessions', sessionId);
+    fs.mkdirSync(acpDir, { recursive: true });
+    fs.writeFileSync(path.join(acpDir, 'store.db'), '');
+
+    expect(resolveCursorHistorySources('/vault/Test', sessionId)).toEqual([]);
+    expect(validateCursorAcpSessionVault(sessionId, '/vault/Test')?.code)
+      .toBe('store-unreadable');
+  });
+
+  it('rejects a global ACP session directory without store.db when ownership metadata is missing', () => {
+    const sessionId = 'session-dir-without-store-or-meta';
+    fs.mkdirSync(path.join(tmpHome, '.cursor', 'acp-sessions', sessionId), { recursive: true });
+
+    expect(validateCursorAcpSessionVault(sessionId, '/vault/Test')?.code)
+      .toBe('store-unreadable');
+  });
+
+  it('rejects mismatched ACP metadata even when store.db is absent', () => {
+    const sessionId = 'session-meta-without-store';
+    const acpDir = path.join(tmpHome, '.cursor', 'acp-sessions', sessionId);
+    fs.mkdirSync(acpDir, { recursive: true });
+    fs.writeFileSync(path.join(acpDir, 'meta.json'), JSON.stringify({ cwd: '/other/Vault' }));
+
+    expect(validateCursorAcpSessionVault(sessionId, '/vault/Test')?.code)
+      .toBe('vault-mismatch');
+  });
+
+  it('accepts matching ACP ownership metadata even when store.db is absent', () => {
+    const sessionId = 'session-owned-meta-without-store';
+    const acpDir = path.join(tmpHome, '.cursor', 'acp-sessions', sessionId);
+    fs.mkdirSync(acpDir, { recursive: true });
+    fs.writeFileSync(path.join(acpDir, 'meta.json'), JSON.stringify({ cwd: '/vault/Test' }));
+
+    expect(validateCursorAcpSessionVault(sessionId, '/vault/Test')).toBeNull();
+  });
+
+  it('orders sources as ACP sqlite, legacy sqlite, then exact-project JSONL', () => {
+    const vault = '/vault/Test';
+    const sessionId = 'session-order';
+    const acpStore = path.join(tmpHome, '.cursor', 'acp-sessions', sessionId, 'store.db');
+    fs.mkdirSync(path.dirname(acpStore), { recursive: true });
+    fs.writeFileSync(path.join(path.dirname(acpStore), 'meta.json'), JSON.stringify({ cwd: vault }));
+    fs.writeFileSync(acpStore, 'db');
+
+    const legacyDir = path.join(
+      tmpHome,
+      '.cursor',
+      'chats',
+      cursorWorkspaceHash(vault),
+      sessionId,
+    );
+    fs.mkdirSync(legacyDir, { recursive: true });
+    fs.writeFileSync(path.join(legacyDir, 'store.db'), 'legacy');
+
+    const slug = path.resolve(vault).replace(/[:\\/]+/g, '-');
+    const transcript = path.join(
+      tmpHome,
+      '.cursor',
+      'projects',
+      slug,
+      'agent-transcripts',
+      sessionId,
+      `${sessionId}.jsonl`,
+    );
+    fs.mkdirSync(path.dirname(transcript), { recursive: true });
+    fs.writeFileSync(transcript, '[]');
+
+    const sources = resolveCursorHistorySources(vault, sessionId);
+    expect(sources.map((source) => source.kind)).toEqual(['acp-sqlite', 'legacy-sqlite', 'jsonl']);
+  });
+
+  it('changes the ACP source identity when the WAL generation changes', () => {
+    const vault = '/vault/Test';
+    const sessionId = 'session-wal-generation';
+    const acpDir = path.join(tmpHome, '.cursor', 'acp-sessions', sessionId);
+    const dbPath = path.join(acpDir, 'store.db');
+    fs.mkdirSync(acpDir, { recursive: true });
+    fs.writeFileSync(path.join(acpDir, 'meta.json'), JSON.stringify({ cwd: vault }));
+    fs.writeFileSync(dbPath, 'db');
+
+    const before = resolveCursorHistorySources(vault, sessionId)[0]?.sourceRef;
+    fs.writeFileSync(`${dbPath}-wal`, 'wal mutation');
+    const after = resolveCursorHistorySources(vault, sessionId)[0]?.sourceRef;
+
+    expect(after).not.toBe(before);
+  });
+
+  it('treats a later readable empty fallback as authoritative over an earlier error', () => {
+    const badDb = path.join(tmpHome, 'bad-store.db');
+    const emptyJsonl = path.join(tmpHome, 'empty.jsonl');
+    fs.writeFileSync(badDb, 'not sqlite');
+    fs.writeFileSync(emptyJsonl, '');
+
+    const result = loadCursorHistoryFromSources([
+      { kind: 'legacy-sqlite', path: badDb, sourceRef: 'bad-db' },
+      { kind: 'jsonl', path: emptyJsonl, sourceRef: 'empty-jsonl' },
+    ]);
+
+    expect(result).toEqual({
+      messages: [],
+      sourceRef: 'empty-jsonl',
+    });
+  });
+
+  it('prefers a later clean source over a degraded partial parse', () => {
+    const degradedJsonl = path.join(tmpHome, 'degraded.jsonl');
+    const cleanJsonl = path.join(tmpHome, 'clean.jsonl');
+    fs.writeFileSync(
+      degradedJsonl,
+      `${JSON.stringify({
+        role: 'user',
+        message: { content: [{ type: 'text', text: 'partial' }] },
+      })}\n{ malformed`,
+    );
+    fs.writeFileSync(
+      cleanJsonl,
+      `${JSON.stringify({
+        role: 'user',
+        message: { content: [{ type: 'text', text: 'complete' }] },
+      })}\n`,
+    );
+
+    const result = loadCursorHistoryFromSources([
+      { kind: 'jsonl', path: degradedJsonl, sourceRef: 'degraded' },
+      { kind: 'jsonl', path: cleanJsonl, sourceRef: 'clean' },
+    ]);
+
+    expect(result.sourceRef).toBe('clean');
+    expect(result.degraded).toBeUndefined();
+    expect(result.messages[0]?.content).toBe('complete');
+  });
+});
+
+describe('buildChatMessagesFromCursorAgentTranscript tool blocks', () => {
+  it('normalizes current tool_use name/input blocks for transcript summaries', () => {
+    const messages = buildChatMessagesFromCursorAgentTranscript([
+      JSON.stringify({
+        role: 'assistant',
+        message: {
+          content: [
+            {
+              type: 'tool_use',
+              id: 'tc-read',
+              name: 'ReadFile',
+              input: { path: 'src/main.ts' },
+            },
+            {
+              type: 'tool_use',
+              id: 'tc-find',
+              name: 'Find',
+              input: { query: 'hydrateConversationHistory', path: 'src/providers' },
+            },
+          ],
+        },
+      }),
+    ]);
+
+    const toolCalls = messages[0]?.toolCalls ?? [];
+    expect(toolCalls).toHaveLength(2);
+    expect(getToolSummary(toolCalls[0].name, toolCalls[0].input)).toBe('main.ts');
+    expect(getToolSummary(toolCalls[1].name, toolCalls[1].input))
+      .toBe('hydrateConversationHistory');
+  });
+
+  it('preserves and resolves tool-only turns using canonical tool normalization', () => {
+    const messages = buildChatMessagesFromCursorAgentTranscript([
+      JSON.stringify({
+        role: 'assistant',
+        message: {
+          content: [{
+            type: 'tool-call',
+            toolCallId: 'tc-read',
+            toolName: 'readToolCall',
+            args: { path: 'README.md' },
+          }],
+        },
+      }),
+      JSON.stringify({
+        role: 'tool',
+        message: {
+          content: [{
+            type: 'tool-result',
+            toolCallId: 'tc-read',
+            toolName: 'readToolCall',
+            result: { success: { content: '# Title' } },
+          }],
+        },
+      }),
+    ]);
+    expect(messages).toHaveLength(1);
+    expect(messages[0]?.toolCalls?.[0]?.name).toBe(TOOL_READ);
+    expect(messages[0]?.toolCalls?.[0]?.status).toBe('completed');
+    expect(messages[0]?.toolCalls?.[0]?.result).toContain('# Title');
   });
 });

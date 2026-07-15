@@ -14,10 +14,24 @@ export interface AgentSubprocessSpec {
    * `.cmd`/`.bat` batch shim (the resolution itself stays provider-side).
    */
   windowsVerbatimArguments?: boolean;
+  /**
+   * Spawn the child in its own process group (POSIX `detached: true`) so a
+   * caller-supplied `killProcessTree` can signal the whole group and reap
+   * grandchildren. Left unset for one-shot children that don't fork tools.
+   */
+  detached?: boolean;
   /** Stderr ring-buffer byte cap (default 8000). */
   stderrBufferLimit?: number;
   /** SIGTERM→SIGKILL escalation delay in ms (default 3000). */
   sigkillTimeoutMs?: number;
+  /**
+   * Optional hard tree-kill used by `shutdown()` INSTEAD of the SIGTERM→SIGKILL
+   * escalation. A bare kill on Windows only signals the direct child, orphaning
+   * grandchildren (a CLI agent's shell/git tools); a provider that forks such
+   * grandchildren passes a `taskkill /T /F`-style reaper here so recycling a
+   * wedged process doesn't leak the tree.
+   */
+  killProcessTree?: (proc: ChildProcess) => void | Promise<void>;
 }
 
 export interface AgentSubprocessCloseInfo {
@@ -66,6 +80,9 @@ export class AgentSubprocess {
       cwd: this.spec.cwd,
       env: this.spec.env,
       windowsHide: true,
+      // POSIX-only: a group leader lets `killProcessTree` reap grandchildren.
+      // Windows uses `taskkill /T`, and `detached` there spawns a new console.
+      ...(this.spec.detached && process.platform !== 'win32' ? { detached: true } : {}),
       ...(this.spec.windowsVerbatimArguments ? { windowsVerbatimArguments: true } : {}),
     });
     this.proc = proc;
@@ -124,36 +141,77 @@ export class AgentSubprocess {
 
   async shutdown(): Promise<void> {
     const proc = this.proc;
-    if (!proc || typeof proc.exitCode === 'number' || !this.alive) {
+    if (!proc) {
+      return;
+    }
+
+    const killTree = this.spec.killProcessTree;
+    if (typeof proc.exitCode === 'number' || !this.alive) {
+      // The direct child already exited, but a detached process group's shell/git
+      // grandchildren can outlive it. The normal alive path below never runs once
+      // exitCode is set, so reap the group here — otherwise a cleanup/restart
+      // after transport close leaves the grandchildren running.
+      if (killTree && typeof proc.pid === 'number') {
+        try {
+          await Promise.resolve(killTree(proc));
+        } catch {
+          // Best-effort: the leader is gone; a surviving group is all we can reap.
+        }
+      }
       return;
     }
 
     await new Promise<void>((resolve) => {
       let settled = false;
+      let processExited = false;
+      let treeKillSettled = !killTree;
+      // Hard ceiling: never let teardown hang if 'exit' never fires. Element type
+      // is inferred (avoids the DOM-vs-node `setTimeout` return-type clash).
+      const timers = [window.setTimeout(() => finish(), this.sigkillTimeoutMs * 2)];
       const finish = () => {
         if (settled) return;
         settled = true;
-        window.clearTimeout(killTimer);
-        window.clearTimeout(giveUpTimer);
+        timers.forEach((timer) => window.clearTimeout(timer));
         proc.off('exit', onExit);
         resolve();
       };
-      const onExit = () => finish();
-      const killTimer = window.setTimeout(() => {
-        try {
-          if (this.alive) {
-            proc.kill('SIGKILL');
-          }
-        } catch {
-          // already exited / not killable — the give-up timer will resolve
-        }
-      }, this.sigkillTimeoutMs);
-      // Hard ceiling: never let teardown hang if 'exit' never fires.
-      const giveUpTimer = window.setTimeout(finish, this.sigkillTimeoutMs * 2);
+      const finishWhenComplete = (): void => {
+        if (processExited && treeKillSettled) finish();
+      };
+      const onExit = () => {
+        processExited = true;
+        finishWhenComplete();
+      };
 
       proc.once('exit', onExit);
       try {
-        proc.kill('SIGTERM');
+        if (killTree) {
+          // Reap the whole tree in one shot — a bare SIGTERM/SIGKILL on Windows
+          // only hits the direct child and orphans its shell/git grandchildren.
+          void Promise.resolve(killTree(proc))
+            .catch(() => {
+              try {
+                proc.kill('SIGKILL');
+              } catch {
+                // already exited / not killable
+              }
+            })
+            .finally(() => {
+              treeKillSettled = true;
+              finishWhenComplete();
+            });
+        } else {
+          proc.kill('SIGTERM');
+          timers.push(window.setTimeout(() => {
+            try {
+              if (this.alive) {
+                proc.kill('SIGKILL');
+              }
+            } catch {
+              // already exited / not killable — the give-up timer will resolve
+            }
+          }, this.sigkillTimeoutMs));
+        }
       } catch {
         // Process already gone between the guard and the kill — nothing to await.
         finish();

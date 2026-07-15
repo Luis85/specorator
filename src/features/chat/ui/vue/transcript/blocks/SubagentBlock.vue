@@ -4,9 +4,6 @@ import { computed } from 'vue';
 import { getToolIcon } from '../../../../../../core/tools/toolIcons';
 import { TOOL_TASK } from '../../../../../../core/tools/toolNames';
 import type { SubagentInfo, ToolCallInfo } from '../../../../../../core/types';
-import { useCollapsible } from '../collapsible';
-import { useIconDiv } from './subagentIconDiv';
-import SubagentToolItem from './SubagentToolItem.vue';
 import {
   buildAsyncHeaderAriaLabel,
   buildAsyncRootClasses,
@@ -19,13 +16,15 @@ import {
   resolveSubagentResultText,
   resolveTaskSubagent,
   truncateDescription,
-} from './subagentViewModel';
+} from '../../../../rendering/subagentViewModel';
+import { useCollapsible } from '../collapsible';
+import { useIconDiv } from './subagentIconDiv';
+import SubagentToolItem from './SubagentToolItem.vue';
 
 /**
  * Renders a STORED subagent block — sync (nested tools, inline result) and
  * async (background lifecycle: pending/running/completed/error/orphaned) —
- * reproducing `SubagentRenderer.ts`'s `renderStoredSubagent`/
- * `renderStoredAsyncSubagent` DOM contract.
+ * owning the stored sync/async subagent DOM contract.
  *
  * Two projection paths, matching the legacy renderer's two entry points:
  *  - Task path (`{ toolCall }`): projects the incoming `ToolCallInfo` through

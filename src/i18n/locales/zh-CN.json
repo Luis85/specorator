@@ -32,7 +32,8 @@
       "renameFailed": "Failed to rename conversation",
       "linkedNotFound": "Linked conversation not found. It may have been deleted.",
       "linkedNoFreeTab": "Cannot open conversation: tab limit reached. Close a tab first.",
-      "loading": "Loading conversation…"
+      "loading": "Loading conversation…",
+      "storeUnavailable": "Conversation history is not available yet for this session."
     },
     "rewind": {
       "confirmMessage": "回退到此处？此消息之后的文件更改将被还原。回退不会影响手动或通过 bash 编辑的文件。",
@@ -393,6 +394,10 @@
     "codexSafeMode": {
       "name": "Safe mode",
       "desc": "Sandbox mode used when the Safe toggle is active."
+    },
+    "captureAcpTraffic": {
+      "name": "捕获 ACP 流量",
+      "desc": "仅用于诊断——捕获内容可能包含提示文本。将当前会话的 Cursor ACP 线路帧、stderr 和生命周期事件记录到 .specorator/captures/cursor。"
     },
     "environment": "环境",
     "customVariables": {
@@ -771,7 +776,8 @@
         "noModels": "Cursor returned no models. If you are not signed in, run `cursor-agent login`.",
         "discoveredOne": "Discovered 1 Cursor model.",
         "discoveredMany": "Discovered {count} Cursor models.",
-        "refreshFailed": "Failed to refresh Cursor models."
+        "refreshFailed": "Failed to refresh Cursor models.",
+        "applyFailed": "Could not apply the selected Cursor model to this session. Try picking it again or start a new conversation."
       },
       "subagent": {
         "saved": "Saved subagent \"{name}\".",
@@ -784,6 +790,10 @@
         "nameWhitespace": "Name cannot start or end with whitespace.",
         "nameDotSegment": "Name cannot be a dot segment.",
         "nameReservedChars": "Name cannot contain path separators or reserved characters."
+      },
+      "capture": {
+        "folderUnavailable": "Cursor ACP capture folder unavailable: vault path not found.",
+        "openFailed": "Failed to open the Cursor ACP capture folder: {error}"
       }
     }
   },
@@ -1218,6 +1228,7 @@
     "openSkillLibrary": "Open Skill Library",
     "openLoopLibrary": "Open loop library",
     "openLibrary": "Open Library",
-    "openQuickActions": "Open Quick Actions"
+    "openQuickActions": "Open Quick Actions",
+    "cursorOpenAcpCaptures": "Cursor: open ACP capture folder"
   }
 }

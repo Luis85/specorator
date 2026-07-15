@@ -95,12 +95,16 @@ export class EnvironmentApplyService {
 
   /** Cancel in-flight streams, then re-sync/restart each affected tab's runtime. */
   private async syncAffectedTabs(affected: ProviderId[], changed: boolean): Promise<void> {
-    const tabManager = this.plugin.getView()?.getTabManager();
-    if (!tabManager) return;
-
-    const affectedTabs = tabManager.getAllTabs().filter((tab) =>
-      affected.includes(tab.providerId ?? DEFAULT_CHAT_PROVIDER_ID),
-    );
+    const affectedTabs: SyncableTab[] = [];
+    for (const view of this.plugin.getAllViews()) {
+      const tabManager = view.getTabManager();
+      if (!tabManager) continue;
+      for (const tab of tabManager.getAllTabs()) {
+        if (affected.includes(tab.providerId ?? DEFAULT_CHAT_PROVIDER_ID)) {
+          affectedTabs.push(tab);
+        }
+      }
+    }
 
     for (const tab of affectedTabs) {
       if (tab.state.isStreaming) tab.controllers.inputController?.cancelStreaming();
@@ -123,12 +127,14 @@ export class EnvironmentApplyService {
     if (!tab.service || !tab.serviceInitialized) return true;
     try {
       this.syncTabRuntimeState(tab);
+      // Always FORCE a respawn: a persistent runtime (Claude / Cursor / Codex /
+      // Opencode ACP) keeps a live child that still holds the OLD credentials /
+      // base URL, so a non-forced ensureReady early-returns and the env change
+      // never reaches the process. `changed` additionally drops the session.
       if (changed) {
         tab.service.resetSession();
-        await tab.service.ensureReady();
-      } else {
-        await tab.service.ensureReady({ force: true });
       }
+      await tab.service.ensureReady({ force: true });
       return true;
     } catch {
       return false;

@@ -32,6 +32,13 @@ function fakePlugin(opts: {
             areTabsRestored: () => opts.restored ?? true,
           }
         : null,
+    getAllViews: () =>
+      opts.hasView
+        ? [{
+            getTabManager: () => tabManager,
+            areTabsRestored: () => opts.restored ?? true,
+          }]
+        : [],
     app: { workspace: { getLeavesOfType: () => [] } },
     lastKnownTabManagerState: null,
   } as never;

@@ -2,7 +2,7 @@ import type { ChatRuntime } from '../../../core/runtime/ChatRuntime';
 import { isSubagentToolName, TOOL_AGENT_OUTPUT, TOOL_TASK } from '../../../core/tools/toolNames';
 import type { ChatMessage, StreamChunk, SubagentInfo, ToolCallInfo } from '../../../core/types';
 import type { SDKToolUseResult } from '../../../core/types/diff';
-import { isBlockedToolResult } from '../rendering/ToolCallRenderer';
+import { isBlockedToolResult } from '../rendering/toolCallViewModel';
 import type { SubagentManager } from '../services/SubagentManager';
 import type { ChatState } from '../state/ChatState';
 import { createRunningToolCall } from './toolCallAppend';

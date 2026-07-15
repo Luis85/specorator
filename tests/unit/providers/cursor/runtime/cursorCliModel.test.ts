@@ -1,4 +1,7 @@
-import { resolveCursorModelForCli, resolveCursorModelSelectionForCli } from '@/providers/cursor/runtime/cursorCliModel';
+import {
+  resolveCursorModelForCli,
+  resolveCursorModelSelectionForCli,
+} from '@/providers/cursor/runtime/cursorCliModel';
 import {
   resetCursorModelCatalog,
   seedCursorModelCatalogForTest,

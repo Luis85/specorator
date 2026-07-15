@@ -2,6 +2,7 @@
 import { onBeforeUnmount, onMounted, ref, watch } from 'vue';
 
 import type { AskUserQuestionItem, AskUserQuestionOption } from '../../../../../../core/types/tools';
+import { formatAskUserQuestionDisplayAnswer } from '../askUserQuestionDisplayAnswer';
 import AskCustomInputRow from './AskCustomInputRow.vue';
 import AskOptionRow from './AskOptionRow.vue';
 import { coerceOption, deduplicateOptions } from './askUserQuestionOptions';
@@ -119,7 +120,10 @@ function getAnswerText(idx: number): string {
   const parts: string[] = [];
   if (selected.length > 0) parts.push(selected.join(', '));
   if (custom.trim()) parts.push(custom.trim());
-  return parts.join(', ');
+  return formatAskUserQuestionDisplayAnswer(
+    parts.join(', '),
+    questions[idx].isSecret === true,
+  );
 }
 
 function cleanupAbortListener(): void {

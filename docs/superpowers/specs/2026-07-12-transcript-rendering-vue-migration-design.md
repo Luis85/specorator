@@ -265,8 +265,8 @@ untouched, so the blast radius is the transcript view + the streaming write-side
 
 - Jest `collectCoverageFrom` excludes `src/features/chat/ui/vue/**` (already excluded for the
   shell); Vitest `coverage.include` adds the new transcript tree.
-- LOC ratchet re-locked (large net deletion expected: `MessageRenderer` + `rendering/*` +
-  DOM-patch coordinator paths out, SFCs in).
+- LOC ratchet re-locked (large net deletion: `MessageRenderer`, top-level/stored
+  renderers, and DOM-patch coordinator paths out; detached lifecycle adapters remain).
 - `check:css` + the `.specorator-vue` namespace guard cover the new styles; the legacy
   `.specorator-*` transcript classes the DOM contract requires are retained.
 - `check:quality` ratchet re-locked after the cut.
@@ -289,6 +289,20 @@ untouched, so the blast radius is the transcript view + the streaming write-side
 5. **`ChatState` field removal** ripples to `InputController` / `tabRuntimeHost` (they read
    `state.currentContentEl` etc.) → those reads migrate to the reactive-data equivalents in the
    same PR; typecheck is the backstop.
+
+## Identity and migration-debt hardening (2026-07-14)
+
+- Every snapshot carries `conversationId` and a monotonic
+  `projectionRevision`. `TranscriptRoot` resets window/scroll state on identity
+  changes and rejects stale projections, including delayed history hydration.
+- Optimistic composer placeholders roll back and the original draft/pills are
+  restored when runtime initialization fails before the first chunk.
+- The obsolete `toolCallElements` DOM map and top-level/stored shadow renderers
+  were deleted. Tool name/summary/blocking and web-search branching now live in
+  shared DOM-free projections.
+- Both inline plan cards share one focus/keyboard/abort/exactly-once lifecycle
+  composable. The remaining imperative renderer is only the detached subagent
+  lifecycle adapter still consumed by stream coordinators.
 
 ## Out of scope (later sub-projects)
 

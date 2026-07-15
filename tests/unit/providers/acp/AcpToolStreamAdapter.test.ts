@@ -142,17 +142,19 @@ describe('AcpToolStreamAdapter', () => {
       expect(chunk).toEqual(input[0]);
     });
 
-    it('passes rawOutput from the tool call into normalizeToolUseResult', () => {
+    it('passes rawOutput and ACP content from the tool call into normalizeToolUseResult', () => {
       const { adapter, calls } = makePresentation();
       const stream = new AcpToolStreamAdapter(adapter);
+      const content = [{ type: 'diff' as const, path: 'a.md', oldText: 'x', newText: 'y' }];
       stream.normalizeToolCall(
-        toolCall({ kind: 'read', rawInput: { expectResult: true }, rawOutput: { v: 1 } }),
+        toolCall({ kind: 'read', rawInput: { expectResult: true }, rawOutput: { v: 1 }, content }),
         [{ type: 'tool_result', id: 'tc-1', content: '' }],
       );
       expect(calls.normalizeToolUseResult).toHaveBeenCalledWith(
         'read',
         { expectResult: true, normalized: true },
         { v: 1 },
+        content,
       );
     });
   });
@@ -206,6 +208,40 @@ describe('AcpToolStreamAdapter', () => {
       ]);
     });
 
+    it('re-emits a tool_use when a later update changes the normalized name, even without rawInput', () => {
+      // A call first emitted under a prose title, then corrected by a semantic
+      // kind on a later update, must re-emit the tool_use so the consumer adopts
+      // the canonical name — the update here carries no rawInput.
+      const { adapter } = makePresentation();
+      const stream = new AcpToolStreamAdapter(adapter);
+      stream.normalizeToolCall(
+        toolCall({ title: 'Applying changes' }),
+        [{ type: 'tool_use', id: 'tc-1', name: 'ignored', input: {} }],
+      );
+      const result = stream.normalizeToolCallUpdate(toolCallUpdate({ kind: 'edit' }), []);
+      expect(result).toEqual([
+        {
+          type: 'tool_use',
+          id: 'tc-1',
+          name: 'norm:edit',
+          input: { normalized: true },
+        },
+      ]);
+    });
+
+    it('does not re-emit a tool_use when the normalized name is unchanged and rawInput is absent', () => {
+      const { adapter } = makePresentation();
+      const stream = new AcpToolStreamAdapter(adapter);
+      stream.normalizeToolCall(
+        toolCall({ kind: 'edit' }),
+        [{ type: 'tool_use', id: 'tc-1', name: 'ignored', input: {} }],
+      );
+      const result = stream.normalizeToolCallUpdate(toolCallUpdate({ kind: 'edit' }), [
+        { type: 'text', content: 'tail' },
+      ]);
+      expect(result).toEqual([{ type: 'text', content: 'tail' }]);
+    });
+
     it('merges new rawInput fields into the existing state (additive)', () => {
       const { adapter } = makePresentation();
       const stream = new AcpToolStreamAdapter(adapter);
@@ -256,6 +292,44 @@ describe('AcpToolStreamAdapter', () => {
       ]);
       const lastCall = calls.normalizeToolUseResult.mock.calls.at(-1);
       expect(lastCall).toEqual(['read', { expectResult: true, normalized: true }, 'updated-output']);
+    });
+
+    it('re-normalizes partial updates from the accumulated RAW input, not the normalized shape', () => {
+      // A non-idempotent normalizer (like Cursor's `path` → `file_path`
+      // projection) reads only raw keys; feeding it its own output back would
+      // drop the projected fields on every partial update.
+      const { adapter } = makePresentation();
+      (adapter.normalizeToolInput as jest.Mock).mockImplementation(
+        (_raw: string | undefined, input: Record<string, unknown>) => ({
+          file_path: input.path ?? '',
+          content: input.content ?? '',
+        }),
+      );
+      const stream = new AcpToolStreamAdapter(adapter);
+      stream.normalizeToolCall(toolCall({ kind: 'edit', rawInput: { path: 'a.md' } }), []);
+      const [synthetic] = stream.normalizeToolCallUpdate(
+        toolCallUpdate({ rawInput: { content: 'body' } }),
+        [],
+      );
+      expect(synthetic).toMatchObject({
+        input: { file_path: 'a.md', content: 'body' },
+      });
+    });
+
+    it('retains the last-seen content and rawOutput for a terminal update that carries neither', () => {
+      // Protocol-allowed split: the diff/output arrives on an in_progress
+      // update, the terminal completed update carries only the status.
+      const { adapter, calls } = makePresentation();
+      const stream = new AcpToolStreamAdapter(adapter);
+      const content = [{ type: 'diff' as const, path: 'a.md', oldText: 'x', newText: 'y' }];
+      stream.normalizeToolCall(toolCall({ kind: 'edit', rawInput: { expectResult: true } }), []);
+      stream.normalizeToolCallUpdate(toolCallUpdate({ content, rawOutput: { ok: true } }), []);
+      stream.normalizeToolCallUpdate(toolCallUpdate({ status: 'completed' }), [
+        { type: 'tool_result', id: 'tc-1', content: '' },
+      ]);
+      const lastCall = calls.normalizeToolUseResult.mock.calls.at(-1);
+      expect(lastCall?.[2]).toEqual({ ok: true });
+      expect(lastCall?.[3]).toEqual(content);
     });
 
     it('consults resolveRawToolName on every update so name resolution stays delegated', () => {

@@ -1,7 +1,7 @@
 import { computed, type ComputedRef } from 'vue';
 
 import type { ToolCallInfo } from '../../../../../../core/types';
-import { getToolName, getToolSummary } from '../../../../rendering/ToolCallRenderer';
+import { getToolName, getToolSummary } from '../../../../rendering/toolCallViewModel';
 
 export interface ToolNameSummary {
   toolName: ComputedRef<string>;
@@ -11,7 +11,7 @@ export interface ToolNameSummary {
 /**
  * Shared `getToolName`/`getToolSummary` projection, reused by `ToolCall.vue`
  * and `SubagentToolItem.vue` (both dispatch a tool call's header name +
- * summary text through the same `ToolCallRenderer.ts` pure helpers, just
+ * summary text through the same DOM-free helpers, just
  * inside differently-shaped wrapper markup).
  */
 export function useToolNameSummary(getToolCall: () => ToolCallInfo): ToolNameSummary {

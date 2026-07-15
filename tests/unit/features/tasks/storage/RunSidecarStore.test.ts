@@ -216,6 +216,65 @@ describe('RunSidecarStore.snapshotLedgerAsMarkdown', () => {
     expect(md.split('\n')).toHaveLength(1);
     expect(md).toBe('- t [running] line one line two line three');
   });
+
+  it('assigns stable ids and dedupes duplicate lines on read', async () => {
+    const { adapter, files } = makeFakeAdapter();
+    const store = new RunSidecarStore(adapter, '.specorator/runs');
+    const entry = {
+      id: 'ledger-1',
+      timestamp: '2026-06-06T12:00:00.000Z',
+      status: 'running' as const,
+      message: 'Run started (attempt 1)',
+    };
+    await store.appendLedgerBatch('run-dedupe', [entry, entry]);
+    files.set(
+      '.specorator/runs/run-dedupe/ledger.jsonl',
+      `${JSON.stringify(entry)}\n${JSON.stringify(entry)}\n`,
+    );
+    const entries = await store.readLedger('run-dedupe');
+    expect(entries).toHaveLength(1);
+    expect(entries[0].id).toBe('ledger-1');
+  });
+
+  it('reuses a stable id across a failed-then-retried append so read dedupes the duplicate', async () => {
+    // LedgerWriter re-queues the SAME entry objects when an append rejects after a
+    // partial/ambiguous write. The id must be assigned ON the entry (not a copy),
+    // so the retry writes the identical id and readLedger collapses the duplicate.
+    const { adapter, files } = makeFakeAdapter();
+    const store = new RunSidecarStore(adapter, '.specorator/runs');
+    const entry = {
+      timestamp: '2026-06-06T12:00:00.000Z',
+      status: 'running' as const,
+      message: 'progress: partial write',
+    };
+
+    // First attempt: the payload lands on disk but the append call rejects.
+    const realAppend = adapter.append.bind(adapter);
+    adapter.append = jest.fn(async (path: string, data: string) => {
+      await realAppend(path, data);
+      throw new Error('append interrupted');
+    }) as DataAdapter['append'];
+    await expect(store.appendLedgerBatch('run-retry', [entry])).rejects.toThrow('append interrupted');
+
+    // Retry with the SAME object (as LedgerWriter would), this time succeeding.
+    adapter.append = realAppend;
+    await store.appendLedgerBatch('run-retry', [entry]);
+
+    // Two physical lines were written, but with one stable id — read dedupes to one.
+    const raw = files.get('.specorator/runs/run-retry/ledger.jsonl') as string;
+    expect(raw.split('\n').filter((l) => l.length > 0)).toHaveLength(2);
+    const entries = await store.readLedger('run-retry');
+    expect(entries).toHaveLength(1);
+    expect(entries[0].message).toBe('progress: partial write');
+  });
+
+  it('records finalize failures for startup sweep preservation', async () => {
+    const { adapter, files } = makeFakeAdapter();
+    const store = new RunSidecarStore(adapter, '.specorator/runs');
+    await store.markFinalizeFailed('run-fail', 'missing markers');
+    expect(await store.hasFinalizeFailure('run-fail')).toBe(true);
+    expect(files.get('.specorator/runs/run-fail/finalize-failed.json')).toContain('missing markers');
+  });
 });
 
 describe('RunSidecarStore.ensureRunDir', () => {

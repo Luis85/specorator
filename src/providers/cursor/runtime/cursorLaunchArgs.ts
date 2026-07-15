@@ -23,20 +23,17 @@ export interface BuildCursorAgentFlagArgsOptions {
 }
 
 /**
- * Builds the leading flags common to every Cursor invocation shape: print mode,
- * the output format, any format-specific flags (e.g. `--stream-partial-output`),
- * the workspace directory, and `--trust`. Permission and tail flags are appended
- * by the per-shape builders.
+ * Builds the leading flags common to every Cursor aux-runner invocation shape:
+ * print mode, the output format, the workspace directory, and `--trust`.
+ * Permission and tail flags are appended by the per-shape builders.
  */
 function buildCursorBaseArgs(
-  outputFormat: 'stream-json' | 'json' | 'text',
+  outputFormat: 'json' | 'text',
   workspaceDir: string,
-  extraFlags: string[] = [],
 ): string[] {
   return [
     '-p',
     '--output-format', outputFormat,
-    ...extraFlags,
     '--workspace', workspaceDir,
     '--trust',
   ];
@@ -64,15 +61,6 @@ function appendCursorCommonTailArgs(
   if (includeApproveMcps && options.approveMcps) {
     args.push('--approve-mcps');
   }
-}
-
-export function buildCursorAgentFlagArgs(options: BuildCursorAgentFlagArgsOptions): string[] {
-  const args = buildCursorBaseArgs('stream-json', options.workspaceDir, ['--stream-partial-output']);
-
-  appendCursorPermissionModeArgs(args, options.permissionMode, options.platform);
-  appendCursorCommonTailArgs(args, options);
-
-  return args;
 }
 
 function appendCursorPermissionModeArgs(

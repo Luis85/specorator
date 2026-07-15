@@ -53,6 +53,28 @@ export function redactArgs(args: unknown[]): unknown[] {
   return args.map((arg) => redactValue(arg, new WeakSet()));
 }
 
+/** Deep-clone a JSON-serializable value with key- and value-level redaction. */
+export function redactSerializable(value: unknown): unknown {
+  return redactValue(value, new WeakSet());
+}
+
+/**
+ * Parses a JSON line when possible, applies deep key redaction, and re-serializes.
+ * Falls back to string scrubbing when the payload is not JSON.
+ */
+export function redactJsonLine(line: string): string {
+  const trimmed = line.trim();
+  if (!trimmed.startsWith('{') && !trimmed.startsWith('[')) {
+    return scrubString(line);
+  }
+  try {
+    const parsed = JSON.parse(trimmed) as unknown;
+    return JSON.stringify(redactSerializable(parsed));
+  } catch {
+    return scrubString(line);
+  }
+}
+
 function redactValue(value: unknown, seen: WeakSet<object>): unknown {
   if (typeof value === 'string') return scrubString(value);
   if (value === null || typeof value !== 'object') return value;

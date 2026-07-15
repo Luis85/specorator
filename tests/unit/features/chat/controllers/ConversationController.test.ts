@@ -1,3 +1,4 @@
+import { asSwitchResult, loadedSwitchResult } from '@test/helpers/conversationSwitch';
 import { createMockEl } from '@test/helpers/mockElement';
 import { Menu, Notice } from 'obsidian';
 
@@ -41,14 +42,14 @@ function createMockDeps(overrides: Partial<ConversationControllerDeps> = {}): Co
         createdAt: Date.now(),
         updatedAt: Date.now(),
       }),
-      switchConversation: jest.fn().mockResolvedValue({
+      switchConversation: jest.fn().mockResolvedValue(asSwitchResult({
         id: 'switched-conv',
         title: 'Switched Conversation',
         messages: [],
         sessionId: null,
         createdAt: Date.now(),
         updatedAt: Date.now(),
-      }),
+      })),
       getConversationById: jest.fn().mockResolvedValue(null),
       getConversationSync: jest.fn().mockReturnValue(null),
       getConversationList: jest.fn().mockReturnValue([]),
@@ -70,6 +71,7 @@ function createMockDeps(overrides: Partial<ConversationControllerDeps> = {}): Co
     setTranscriptGreeting: jest.fn(),
     setTranscriptLoading: jest.fn(),
     setTranscriptHydrationError: jest.fn(),
+    emitTranscript: jest.fn(),
     subagentManager: {
       orphanAllActive: jest.fn(),
       clear: jest.fn(),
@@ -273,14 +275,227 @@ describe('ConversationController', () => {
         expect(deps.plugin.switchConversation).not.toHaveBeenCalled();
       });
 
-      it('should not switch to current conversation', async () => {
+      it('should not switch to current conversation when the transcript is already loaded', async () => {
         deps.state.currentConversationId = 'same-conv';
+        deps.state.messages = [
+          { id: 'm1', role: 'user', content: 'hello', timestamp: Date.now() },
+        ];
 
         await controller.switchTo('same-conv');
 
         await controller.whenHydrated();
 
         expect(deps.plugin.switchConversation).not.toHaveBeenCalled();
+      });
+
+      it('retains the current conversation until target hydration succeeds', async () => {
+        const currentMessage = {
+          id: 'old-message',
+          role: 'user' as const,
+          content: 'keep this visible',
+          timestamp: Date.now(),
+        };
+        deps.state.currentConversationId = 'old-conv';
+        deps.state.messages = [currentMessage];
+        (deps.plugin.switchConversation as jest.Mock).mockRejectedValue(
+          new Error('history read failed'),
+        );
+
+        await controller.switchTo('new-conv');
+
+        // Phase A is non-destructive: title binding and messages stay on the
+        // last known-good conversation while the target loads.
+        expect(deps.state.currentConversationId).toBe('old-conv');
+        expect(deps.state.messages).toEqual([currentMessage]);
+
+        await controller.whenHydrated();
+
+        expect(deps.state.currentConversationId).toBe('old-conv');
+        expect(deps.state.messages).toEqual([currentMessage]);
+        expect(deps.setTranscriptLoading).toHaveBeenLastCalledWith(null);
+      });
+
+      it('restores the outgoing composer draft when hydration cannot commit', async () => {
+        deps.state.currentConversationId = 'old-conv';
+        deps.state.messages = [{ id: 'm1', role: 'user', content: 'hi', timestamp: Date.now() }];
+        deps.getInputEl().value = 'draft text';
+        const fileCtx = deps.getFileContextManager()!;
+        fileCtx.getAttachedFiles = jest.fn(() => new Set(['note.md']));
+        fileCtx.getAttachedFolders = jest.fn(() => new Set(['folder/']));
+        fileCtx.setAttachedFiles = jest.fn();
+        fileCtx.setAttachedFolders = jest.fn();
+
+        (deps.plugin.switchConversation as jest.Mock).mockResolvedValue({
+          conversation: { id: 'new-conv', title: 'New', messages: [], createdAt: 0, lastActiveAt: 0 },
+          hydration: { kind: 'empty', reason: 'no-store', sourceRef: null },
+        });
+
+        await controller.switchTo('new-conv');
+        await controller.whenHydrated();
+
+        expect(deps.getInputEl().value).toBe('draft text');
+        expect(fileCtx.setAttachedFiles).toHaveBeenCalledWith(['note.md']);
+        expect(fileCtx.setAttachedFolders).toHaveBeenCalledWith(['folder/']);
+        expect(deps.setTranscriptHydrationError).toHaveBeenCalledWith({
+          code: 'store-missing',
+          message: expect.stringContaining('not available'),
+        });
+      });
+
+      it('does not restart a live hydration when the same target is selected twice', async () => {
+        let resolveHydration!: (value: ReturnType<typeof asSwitchResult>) => void;
+        const hydration = new Promise<ReturnType<typeof asSwitchResult>>((resolve) => {
+          resolveHydration = resolve;
+        });
+        (deps.plugin.switchConversation as jest.Mock).mockReturnValue(hydration);
+        deps.state.currentConversationId = 'old-conv';
+        deps.state.messages = [
+          { id: 'old', role: 'user', content: 'old', timestamp: Date.now() },
+        ];
+
+        await controller.switchTo('new-conv');
+        await controller.switchTo('new-conv');
+        await new Promise<void>((resolve) => setTimeout(resolve, 0));
+
+        expect(deps.plugin.switchConversation).toHaveBeenCalledTimes(1);
+
+        resolveHydration(loadedSwitchResult({
+          id: 'new-conv',
+          title: 'Loaded Conversation',
+          messages: [
+            { id: 'new', role: 'assistant', content: 'loaded', timestamp: Date.now() },
+          ],
+          sessionId: 'session-1',
+          createdAt: Date.now(),
+          updatedAt: Date.now(),
+        }, [
+          { id: 'new', role: 'assistant', content: 'loaded', timestamp: Date.now() },
+        ]));
+        await controller.whenHydrated();
+
+        expect(deps.state.currentConversationId).toBe('new-conv');
+        expect(deps.state.messages[0]?.content).toBe('loaded');
+      });
+
+      it('does not rebind the tab when New Chat is clicked mid-hydration', async () => {
+        let resolveHydration!: (value: ReturnType<typeof loadedSwitchResult>) => void;
+        const hydration = new Promise<ReturnType<typeof loadedSwitchResult>>((resolve) => {
+          resolveHydration = resolve;
+        });
+        (deps.plugin.switchConversation as jest.Mock).mockReturnValue(hydration);
+        deps.state.currentConversationId = 'old-conv';
+        deps.state.messages = [
+          { id: 'old', role: 'user', content: 'old', timestamp: Date.now() },
+        ];
+
+        // Start a history selection; its Phase-B hydration is still in flight.
+        await controller.switchTo('new-conv');
+        await new Promise<void>((resolve) => setTimeout(resolve, 0));
+
+        // User clicks New Chat before hydration resolves — the tab goes blank.
+        await controller.createNew();
+        expect(deps.state.currentConversationId).toBeNull();
+        expect(deps.state.messages).toHaveLength(0);
+        // The hydration spinner (shown by switchTo's Phase A) must be cleared, or
+        // it stays stuck over the blank New Chat once the aborted load's finally
+        // skips its own setTranscriptLoading(null).
+        expect(deps.setTranscriptLoading).toHaveBeenLastCalledWith(null);
+
+        // The late hydration must NOT rebind the tab to the old selection.
+        resolveHydration(loadedSwitchResult({
+          id: 'new-conv',
+          title: 'Loaded Conversation',
+          messages: [{ id: 'new', role: 'assistant', content: 'loaded', timestamp: Date.now() }],
+          sessionId: 'session-1',
+          createdAt: Date.now(),
+          updatedAt: Date.now(),
+        }, [
+          { id: 'new', role: 'assistant', content: 'loaded', timestamp: Date.now() },
+        ]));
+        await controller.whenHydrated();
+
+        expect(deps.state.currentConversationId).toBeNull();
+        expect(deps.state.messages).toHaveLength(0);
+      });
+
+      it('clears the abandoned switch draft on New Chat so the next switch captures the current composer', async () => {
+        const hydration = new Promise<ReturnType<typeof loadedSwitchResult>>(() => {});
+        (deps.plugin.switchConversation as jest.Mock).mockReturnValue(hydration);
+        deps.state.currentConversationId = 'old-conv';
+        deps.state.messages = [{ id: 'old', role: 'user', content: 'old', timestamp: Date.now() }];
+
+        // A switch captures the composer draft ("draft-A") while hydrating.
+        deps.getInputEl().value = 'draft-A';
+        await controller.switchTo('new-conv');
+        await new Promise<void>((resolve) => setTimeout(resolve, 0));
+        expect((controller as unknown as { pendingSwitchDraft: unknown }).pendingSwitchDraft).not.toBeNull();
+
+        // New Chat abandons that switch: the captured draft has no target and must
+        // be dropped so the next switchTo re-captures rather than restoring "draft-A".
+        await controller.createNew();
+        expect((controller as unknown as { pendingSwitchDraft: unknown }).pendingSwitchDraft).toBeNull();
+
+        // The user types a fresh draft, then switches again and that load fails to
+        // commit — the restored draft must be the CURRENT one, never the stale "draft-A".
+        deps.getInputEl().value = 'draft-B';
+        (deps.plugin.switchConversation as jest.Mock).mockResolvedValue({
+          conversation: { id: 'conv-2', title: 'X', messages: [], createdAt: 0, lastActiveAt: 0 },
+          hydration: { kind: 'empty', reason: 'no-store', sourceRef: null },
+        });
+        await controller.switchTo('conv-2');
+        await controller.whenHydrated();
+
+        expect(deps.getInputEl().value).toBe('draft-B');
+      });
+
+      it('re-hydrates when the bound conversation still has an empty transcript', async () => {
+        deps.state.currentConversationId = 'same-conv';
+        deps.state.messages = [];
+        (deps.plugin.switchConversation as jest.Mock).mockResolvedValue(asSwitchResult({
+          id: 'same-conv',
+          title: 'Loaded Conversation',
+          messages: [
+            { id: 'm1', role: 'assistant', content: 'historical reply', timestamp: Date.now() },
+          ],
+          sessionId: 'session-1',
+          createdAt: Date.now(),
+          updatedAt: Date.now(),
+        }));
+
+        await controller.switchTo('same-conv');
+
+        await controller.whenHydrated();
+
+        expect(deps.plugin.switchConversation).toHaveBeenCalledWith(
+          'same-conv',
+          expect.objectContaining({ signal: expect.any(AbortSignal) }),
+        );
+        expect(deps.state.messages).toHaveLength(1);
+        expect(deps.state.messages[0]?.content).toBe('historical reply');
+        expect(deps.setTranscriptLoading).toHaveBeenCalledWith(null);
+      });
+
+      it('retries hydration when the bound conversation is stuck loading with an empty transcript', async () => {
+        deps.state.currentConversationId = 'same-conv';
+        deps.state.messages = [];
+        deps.state.isHydrating = true;
+        (deps.plugin.switchConversation as jest.Mock).mockResolvedValue(asSwitchResult({
+          id: 'same-conv',
+          title: 'Loaded Conversation',
+          messages: [
+            { id: 'm1', role: 'user', content: 'hello again', timestamp: Date.now() },
+          ],
+          sessionId: 'session-1',
+          createdAt: Date.now(),
+          updatedAt: Date.now(),
+        }));
+
+        await controller.switchTo('same-conv');
+
+        await controller.whenHydrated();
+
+        expect(deps.plugin.switchConversation).toHaveBeenCalled();
+        expect(deps.state.messages).toHaveLength(1);
       });
 
       it('should reset file context when switching conversations', async () => {
@@ -337,11 +552,11 @@ describe('ConversationController', () => {
       it('restores the transcript after switching to a conversation with messages', async () => {
         deps.state.currentConversationId = 'old-conv';
         deps.state.messages = [];
-        (deps.plugin.switchConversation as jest.Mock).mockResolvedValue({
+        (deps.plugin.switchConversation as jest.Mock).mockResolvedValue(asSwitchResult({
           id: 'new-conv',
           messages: [{ id: '1', role: 'user', content: 'test', timestamp: Date.now() }],
           sessionId: null,
-        });
+        }));
 
         await controller.switchTo('new-conv');
 
@@ -637,12 +852,12 @@ describe('ConversationController', () => {
       const fileContextManager = deps.getFileContextManager()!;
       deps.state.currentConversationId = 'old-conv';
 
-      (deps.plugin.switchConversation as jest.Mock).mockResolvedValue({
+      (deps.plugin.switchConversation as jest.Mock).mockResolvedValue(asSwitchResult({
         id: 'new-conv',
         messages: [{ id: '1', role: 'user', content: 'test', timestamp: Date.now() }],
         sessionId: null,
         currentNote: 'docs/readme.md',
-      });
+      }));
 
       await controller.switchTo('new-conv');
 
@@ -655,12 +870,12 @@ describe('ConversationController', () => {
       const fileContextManager = deps.getFileContextManager()!;
       deps.state.currentConversationId = 'old-conv';
 
-      (deps.plugin.switchConversation as jest.Mock).mockResolvedValue({
+      (deps.plugin.switchConversation as jest.Mock).mockResolvedValue(asSwitchResult({
         id: 'new-conv',
         messages: [],
         sessionId: null,
         currentNote: undefined,
-      });
+      }));
 
       await controller.switchTo('new-conv');
 
@@ -672,11 +887,11 @@ describe('ConversationController', () => {
     it('projects the transcript and seeds the greeting on switch', async () => {
       deps.state.currentConversationId = 'old-conv';
 
-      (deps.plugin.switchConversation as jest.Mock).mockResolvedValue({
+      (deps.plugin.switchConversation as jest.Mock).mockResolvedValue(asSwitchResult({
         id: 'new-conv',
         messages: [],
         sessionId: null,
-      });
+      }));
 
       await controller.switchTo('new-conv');
 
@@ -694,11 +909,11 @@ describe('ConversationController', () => {
   describe('hydration error banner', () => {
     it('renders a pending hydration failure on switch once the tab is bound', async () => {
       deps.state.currentConversationId = 'old-conv';
-      (deps.plugin.switchConversation as jest.Mock).mockResolvedValue({
+      (deps.plugin.switchConversation as jest.Mock).mockResolvedValue(asSwitchResult({
         id: 'new-conv',
         messages: [],
         sessionId: null,
-      });
+      }));
       // First consume call (stale drop at switch start) → null; second call
       // (in restoreConversation, after bind) → the freshly emitted failure.
       (deps.consumePendingHydrationError as jest.Mock)
@@ -718,11 +933,11 @@ describe('ConversationController', () => {
 
     it('clears the banner and drops a stale failure at switch start', async () => {
       deps.state.currentConversationId = 'old-conv';
-      (deps.plugin.switchConversation as jest.Mock).mockResolvedValue({
+      (deps.plugin.switchConversation as jest.Mock).mockResolvedValue(asSwitchResult({
         id: 'new-conv',
         messages: [],
         sessionId: null,
-      });
+      }));
 
       await controller.switchTo('new-conv');
 
@@ -828,8 +1043,11 @@ describe('ConversationController', () => {
         expect(actions!.children.length).toBe(3);
       });
 
-      it('should not show select click handler on current conversation', () => {
+      it('should not show select click handler on current conversation with a loaded transcript', () => {
         deps.state.currentConversationId = 'conv-1';
+        deps.state.messages = [
+          { id: 'm1', role: 'user', content: 'hello', timestamp: Date.now() },
+        ];
 
         (deps.plugin.getConversationList as jest.Mock).mockReturnValue([
           { id: 'conv-1', title: 'Current', createdAt: 1000, lastResponseAt: 1000 },
@@ -842,6 +1060,23 @@ describe('ConversationController', () => {
         const content = item.querySelector('.specorator-history-item-content');
         const listeners = content?._eventListeners?.get('click');
         expect(listeners).toBeUndefined();
+      });
+
+      it('should allow reloading the current conversation when its transcript is still empty', () => {
+        deps.state.currentConversationId = 'conv-1';
+        deps.state.messages = [];
+
+        (deps.plugin.getConversationList as jest.Mock).mockReturnValue([
+          { id: 'conv-1', title: 'Current', createdAt: 1000, lastResponseAt: 1000 },
+        ]);
+
+        controller.updateHistoryDropdown();
+
+        const list = dropdown.children[1];
+        const item = list.children[0];
+        const content = item.querySelector('.specorator-history-item-content');
+        const listeners = content?._eventListeners?.get('click');
+        expect(listeners?.length).toBeGreaterThan(0);
       });
 
       it('should attach select click handler on non-current conversations', () => {
@@ -1623,13 +1858,13 @@ describe('ConversationController - MCP Server Persistence', () => {
   describe('switchTo', () => {
     it('should restore enabled MCP servers when switching conversations', async () => {
       deps.state.currentConversationId = 'old-conv';
-      (deps.plugin.switchConversation as jest.Mock).mockResolvedValue({
+      (deps.plugin.switchConversation as jest.Mock).mockResolvedValue(asSwitchResult({
         id: 'new-conv',
         providerId: 'claude',
         messages: [],
         sessionId: null,
         enabledMcpServers: ['switched-server'],
-      });
+      }));
 
       await controller.switchTo('new-conv');
 
@@ -1640,13 +1875,13 @@ describe('ConversationController - MCP Server Persistence', () => {
 
     it('should clear MCP servers when switching to conversation with no servers', async () => {
       deps.state.currentConversationId = 'old-conv';
-      (deps.plugin.switchConversation as jest.Mock).mockResolvedValue({
+      (deps.plugin.switchConversation as jest.Mock).mockResolvedValue(asSwitchResult({
         id: 'new-conv',
         providerId: 'claude',
         messages: [],
         sessionId: null,
         enabledMcpServers: undefined,
-      });
+      }));
 
       await controller.switchTo('new-conv');
 
@@ -1671,7 +1906,7 @@ describe('ConversationController - MCP Server Persistence', () => {
         ensureServiceForConversation,
         plugin: {
           ...createMockDeps().plugin,
-          switchConversation: jest.fn().mockResolvedValue(switchedConversation),
+          switchConversation: jest.fn().mockResolvedValue(asSwitchResult(switchedConversation)),
         } as any,
       });
       controller = new ConversationController(deps);
@@ -1799,6 +2034,7 @@ describe('ConversationController - Race Condition Guards', () => {
       await controller.whenHydrated();
 
       expect(deps.state.isSwitchingConversation).toBe(false);
+      expect(deps.setTranscriptLoading).toHaveBeenCalledWith(null);
     });
 
     it('should set isHydrating flag while the deferred transcript load is in flight', async () => {
@@ -1812,14 +2048,14 @@ describe('ConversationController - Race Condition Guards', () => {
       (deps.plugin.switchConversation as jest.Mock).mockImplementation(async () => {
         hydratingDuringLoad = deps.state.isHydrating;
         switchingDuringLoad = deps.state.isSwitchingConversation;
-        return {
+        return asSwitchResult({
           id: 'new-conv',
           title: 'New Conversation',
           messages: [],
           sessionId: null,
           createdAt: Date.now(),
           updatedAt: Date.now(),
-        };
+        });
       });
 
       await controller.switchTo('new-conv');
@@ -1829,6 +2065,93 @@ describe('ConversationController - Race Condition Guards', () => {
       expect(switchingDuringLoad).toBe(false);
       expect(deps.state.isHydrating).toBe(false);
       expect(deps.state.isSwitchingConversation).toBe(false);
+    });
+
+    it('does not restore a stale hydration after a newer switchTo rebinds the tab', async () => {
+      deps.state.currentConversationId = 'old-conv';
+      let releaseFirstLoad: (() => void) | undefined;
+      const firstLoadGate = new Promise<void>((resolve) => {
+        releaseFirstLoad = resolve;
+      });
+      (deps.plugin.switchConversation as jest.Mock).mockImplementation(async (id: string) => {
+        if (id === 'first-conv') {
+          await firstLoadGate;
+          return loadedSwitchResult({
+            id: 'first-conv',
+            title: 'First',
+            messages: [{ id: 'm1', role: 'assistant', content: 'stale', timestamp: 1 }],
+            sessionId: null,
+            createdAt: 1,
+            updatedAt: 1,
+          }, [{ id: 'm1', role: 'assistant', content: 'stale', timestamp: 1 }]);
+        }
+        return loadedSwitchResult({
+          id: 'second-conv',
+          title: 'Second',
+          messages: [{ id: 'm2', role: 'assistant', content: 'fresh', timestamp: 2 }],
+          sessionId: null,
+          createdAt: 2,
+          updatedAt: 2,
+        }, [{ id: 'm2', role: 'assistant', content: 'fresh', timestamp: 2 }]);
+      });
+
+      const firstSwitch = controller.switchTo('first-conv');
+      await new Promise<void>((resolve) => window.setTimeout(resolve, 0));
+      await controller.switchTo('second-conv');
+      releaseFirstLoad?.();
+      await controller.whenHydrated();
+      await firstSwitch;
+
+      expect(deps.state.currentConversationId).toBe('second-conv');
+      expect(deps.state.messages).toHaveLength(1);
+      expect(deps.state.messages[0]?.content).toBe('fresh');
+    });
+
+    it('forces a transcript projection after Phase A raises the hydration spinner', async () => {
+      deps.state.currentConversationId = 'old-conv';
+
+      await controller.switchTo('new-conv');
+
+      expect(deps.emitTranscript).toHaveBeenCalled();
+    });
+
+    it('restores the transcript when provider bind fails after history hydration', async () => {
+      deps.state.currentConversationId = 'old-conv';
+      const ensureServiceForConversation = jest
+        .fn()
+        .mockRejectedValue(new Error('provider bind failed'));
+      deps = createMockDeps({
+        ensureServiceForConversation,
+      });
+      controller = new ConversationController(deps);
+      (deps.plugin.switchConversation as jest.Mock).mockResolvedValue(asSwitchResult({
+        id: 'new-conv',
+        title: 'History Conversation',
+        messages: [
+          { id: 'm1', role: 'assistant', content: 'historical reply', timestamp: Date.now() },
+        ],
+        sessionId: 'session-1',
+        createdAt: Date.now(),
+        updatedAt: Date.now(),
+      }));
+
+      await controller.switchTo('new-conv');
+      await controller.whenHydrated();
+
+      expect(ensureServiceForConversation).toHaveBeenCalled();
+      expect(deps.state.messages).toHaveLength(1);
+      expect(deps.state.messages[0]?.content).toBe('historical reply');
+      expect(deps.setTranscriptLoading).toHaveBeenCalledWith(null);
+    });
+
+    it('does not persist an empty bound transcript before re-hydrating from history', async () => {
+      deps.state.currentConversationId = 'stuck-conv';
+      deps.state.messages = [];
+
+      await controller.switchTo('stuck-conv');
+      await controller.whenHydrated();
+
+      expect(deps.plugin.updateConversation).not.toHaveBeenCalled();
     });
   });
 
@@ -1852,11 +2175,11 @@ describe('ConversationController - Race Condition Guards', () => {
         switchPromiseResolve!();
         await createPromise;
 
-        return {
+        return asSwitchResult({
           id: 'new-conv',
           messages: [],
           sessionId: null,
-        };
+        });
       });
 
       await controller.switchTo('new-conv');
@@ -1968,12 +2291,12 @@ describe('ConversationController - Persistent External Context Paths', () => {
     });
 
     it('should use persistent paths when switching to empty conversation (msg=0)', async () => {
-      (deps.plugin.switchConversation as jest.Mock).mockResolvedValue({
+      (deps.plugin.switchConversation as jest.Mock).mockResolvedValue(asSwitchResult({
         id: 'empty-conv',
         messages: [],
         sessionId: null,
         externalContextPaths: ['/old/saved/path'],
-      });
+      }));
 
       await controller.switchTo('empty-conv');
 
@@ -1986,12 +2309,12 @@ describe('ConversationController - Persistent External Context Paths', () => {
     });
 
     it('should restore saved paths when switching to conversation with messages', async () => {
-      (deps.plugin.switchConversation as jest.Mock).mockResolvedValue({
+      (deps.plugin.switchConversation as jest.Mock).mockResolvedValue(asSwitchResult({
         id: 'conv-with-messages',
         messages: [{ id: '1', role: 'user', content: 'test', timestamp: Date.now() }],
         sessionId: null,
         externalContextPaths: ['/saved/path/from/session'],
-      });
+      }));
 
       await controller.switchTo('conv-with-messages');
 
@@ -2004,12 +2327,12 @@ describe('ConversationController - Persistent External Context Paths', () => {
     });
 
     it('should restore empty array for conversation with messages but no saved paths', async () => {
-      (deps.plugin.switchConversation as jest.Mock).mockResolvedValue({
+      (deps.plugin.switchConversation as jest.Mock).mockResolvedValue(asSwitchResult({
         id: 'conv-with-messages',
         messages: [{ id: '1', role: 'user', content: 'test', timestamp: Date.now() }],
         sessionId: null,
         externalContextPaths: undefined,
-      });
+      }));
 
       await controller.switchTo('conv-with-messages');
 
@@ -2035,12 +2358,12 @@ describe('ConversationController - Persistent External Context Paths', () => {
 
       // Step 2: User switches to session 1 and adds path B, settings now have [A, B]
       deps.state.currentConversationId = 'session-0'; // Currently in session 0
-      (deps.plugin.switchConversation as jest.Mock).mockResolvedValue({
+      (deps.plugin.switchConversation as jest.Mock).mockResolvedValue(asSwitchResult({
         id: 'session-1',
         messages: [{ id: '1', role: 'user', content: 'test', timestamp: Date.now() }],
         sessionId: null,
         externalContextPaths: [],
-      });
+      }));
       await controller.switchTo('session-1');
       await controller.whenHydrated();
 
@@ -2048,12 +2371,12 @@ describe('ConversationController - Persistent External Context Paths', () => {
       (deps.plugin.settings as any).persistentExternalContextPaths = ['/path/a', '/path/b'];
 
       // Step 3: User returns to session 0 (empty)
-      (deps.plugin.switchConversation as jest.Mock).mockResolvedValue({
+      (deps.plugin.switchConversation as jest.Mock).mockResolvedValue(asSwitchResult({
         id: 'session-0',
         messages: [], // Empty session
         sessionId: null,
         externalContextPaths: ['/path/a'], // Only had A when originally created
-      });
+      }));
 
       jest.clearAllMocks();
       await controller.switchTo('session-0');
@@ -2374,7 +2697,7 @@ describe('ConversationController - switchTo fork path', () => {
       providerSessionId: undefined,
       forkSource: { sessionId: 'source-session-abc', resumeAt: 'assistant-uuid-1' },
     };
-    (deps.plugin.switchConversation as jest.Mock).mockResolvedValue(forkConversation);
+    (deps.plugin.switchConversation as jest.Mock).mockResolvedValue(asSwitchResult(forkConversation));
 
     await controller.switchTo('fork-conv');
 
@@ -2396,7 +2719,7 @@ describe('ConversationController - switchTo fork path', () => {
       providerSessionId: 'own-session-xyz',
       forkSource: { sessionId: 'source-session-abc', resumeAt: 'assistant-uuid-1' },
     };
-    (deps.plugin.switchConversation as jest.Mock).mockResolvedValue(forkConversation);
+    (deps.plugin.switchConversation as jest.Mock).mockResolvedValue(asSwitchResult(forkConversation));
 
     await controller.switchTo('fork-conv');
 
@@ -2417,12 +2740,12 @@ describe('ConversationController - restoreExternalContextPaths null selector', (
     const controller = new ConversationController(deps);
 
     deps.state.currentConversationId = 'old-conv';
-    (deps.plugin.switchConversation as jest.Mock).mockResolvedValue({
+    (deps.plugin.switchConversation as jest.Mock).mockResolvedValue(asSwitchResult({
       id: 'new-conv',
       messages: [{ id: '1', role: 'user', content: 'test', timestamp: Date.now() }],
       sessionId: null,
       externalContextPaths: ['/some/path'],
-    });
+    }));
 
     // Should not throw even though selector is null
     await expect(controller.switchTo('new-conv')).resolves.not.toThrow();

@@ -1,6 +1,7 @@
 import { Notice } from 'obsidian';
 
-import type { TitleGenerationService } from '../../../core/providers/types';
+import type { ConversationSwitchResult, TitleGenerationService } from '../../../core/providers/types';
+import { isHydrationCommitReady } from '../../../core/providers/types';
 import type { ChatRuntime } from '../../../core/runtime/ChatRuntime';
 import type { ChatRewindMode } from '../../../core/runtime/types';
 import type { ChatMessage, Conversation } from '../../../core/types';
@@ -16,6 +17,11 @@ import type { ImageContextManager } from '../ui/ImageContext';
 import type { ExternalContextSelector, McpServerSelector } from '../ui/InputToolbar';
 import type { StatusPanel } from '../ui/StatusPanel';
 import { deriveEditedFilesFromMessages } from '../utils/editedFiles';
+import {
+  captureComposerSwitchDraft,
+  type ComposerSwitchDraftSnapshot,
+  restoreComposerSwitchDraft,
+} from './composerSendPhases';
 import {
   resolveRewindTarget,
   rewindConfirmMessage,
@@ -48,6 +54,8 @@ export interface ConversationControllerDeps {
   setTranscriptLoading: (loadingText: string | null) => void;
   /** Sets/clears the history-hydration failure banner in the Vue transcript store. */
   setTranscriptHydrationError: (error: { code: string; message: string } | null) => void;
+  /** Re-projects the Vue transcript from the current ChatState snapshot. */
+  emitTranscript?: () => void;
   getHistoryDropdown: () => HTMLElement | null;
   getMessagesEl: () => HTMLElement;
   getInputEl: () => HTMLTextAreaElement;
@@ -93,6 +101,11 @@ export class ConversationController {
    * to observe the post-hydrate state. Null when no hydration is in flight.
    */
   private hydrationPromise: Promise<void> | null = null;
+  /** Conversation currently being hydrated by {@link hydrationPromise}. */
+  private pendingHydrationId: string | null = null;
+  /** Outgoing composer draft held until target hydration commits or fails. */
+  private pendingSwitchDraft: ComposerSwitchDraftSnapshot | null = null;
+  private lifecycleGeneration = 0;
   private historyView: ConversationHistoryView;
 
   constructor(deps: ConversationControllerDeps, callbacks: ConversationCallbacks = {}) {
@@ -109,6 +122,25 @@ export class ConversationController {
       onSelectConversation: (id) => this.switchTo(id),
       onReloadAfterActiveDelete: () => this.loadActive(),
     });
+  }
+
+  /** Aborts in-flight hydration and invalidates late async callbacks. */
+  dispose(): void {
+    this.lifecycleGeneration += 1;
+    this.cancelPendingHydration();
+  }
+
+  /**
+   * Aborts any in-flight background hydration (`switchTo`'s Phase B) and clears
+   * its bookkeeping so a late `hydrateAndRender` cannot rebind the tab to the
+   * superseded conversation. Used by reset (New Chat) and re-switch paths.
+   */
+  private cancelPendingHydration(): void {
+    this.hydrationAbort?.abort();
+    this.hydrationAbort = null;
+    this.hydrationPromise = null;
+    this.pendingHydrationId = null;
+    this.deps.state.isHydrating = false;
   }
 
   private getAgentService(): ChatRuntime | null {
@@ -177,6 +209,16 @@ export class ConversationController {
     try {
       this.deps.dismissPendingInlinePrompts?.();
 
+      // Abort an in-flight switchTo hydration so its late restoreConversation
+      // can't rebind this tab over the blank New Chat we're building. Drop the
+      // abandoned switch's draft too: New Chat blanks the composer, so leaving it
+      // would make the next switchTo skip capturing and restore a stale draft.
+      // Clear the hydration spinner as well — the aborted hydrateAndRender's
+      // finally skips setTranscriptLoading(null) once hydrationAbort is nulled.
+      this.cancelPendingHydration();
+      this.pendingSwitchDraft = null;
+      this.deps.setTranscriptLoading(null);
+
       if (force && state.isStreaming) {
         state.cancelRequested = true;
         state.bumpStreamGeneration();
@@ -197,7 +239,6 @@ export class ConversationController {
       state.currentTextEl = null;
       state.currentTextContent = '';
       state.currentThinkingState = null;
-      state.toolCallElements.clear();
       state.isStreaming = false;
 
       // Reset to entry point state - no conversation created yet
@@ -274,8 +315,14 @@ export class ConversationController {
       return;
     }
 
-    await this.deps.ensureServiceForConversation?.(conversation);
+    // Land the transcript before provider bind so a bind failure cannot leave the
+    // pane empty after the hydration spinner clears.
     this.restoreConversation(conversation, { autoAttachFile: true });
+    try {
+      await this.deps.ensureServiceForConversation?.(conversation);
+    } catch {
+      // Best-effort bind after reload; the transcript is already visible.
+    }
     this.updateWelcomeVisibility();
 
     this.callbacks.onConversationLoaded?.();
@@ -285,16 +332,23 @@ export class ConversationController {
   async switchTo(id: string): Promise<void> {
     const { state, subagentManager } = this.deps;
 
-    if (id === state.currentConversationId) return;
+    // Keep one live load per target. Re-selecting an empty conversation while
+    // its hydration is already running must not abort and restart that same
+    // request — provider history services may still be finishing the first load.
+    if (this.hydrationPromise && this.pendingHydrationId === id) {
+      return;
+    }
+    if (id === state.currentConversationId && state.messages.length > 0) {
+      return;
+    }
     if (state.isStreaming) return;
     if (state.isSwitchingConversation) return;
     if (state.isCreatingConversation) return;
 
-    // Cancel any prior hydration so its result doesn't land in the new tab.
-    // The fetched conversation aborts via HydrationContext.signal; this side
-    // also short-circuits the post-load DOM restore in `hydrateAndRender`.
-    this.hydrationAbort?.abort();
-    this.hydrationAbort = null;
+    // Cancel this caller's prior hydration wait so its result cannot land in
+    // the tab. The history service may finish a shared provider read for other
+    // callers, but this controller drops the superseded result.
+    this.cancelPendingHydration();
 
     state.isSwitchingConversation = true;
     try {
@@ -304,29 +358,35 @@ export class ConversationController {
       // hydrate below and is rendered in restoreConversation.
       this.deps.setTranscriptHydrationError(null);
       this.deps.consumePendingHydrationError?.(id);
-      await this.save();
+      // Skip persisting an empty bound transcript — it would clobber metadata and
+      // cannot help the outgoing conversation (there is nothing to save).
+      if (!(state.currentConversationId && state.messages.length === 0)) {
+        await this.save();
+      }
+
+      // Preserve the pending draft across rapid re-switches: switch #1 already
+      // cleared the textarea, so re-capturing would clobber the saved draft with
+      // the now-empty composer. Keep the first snapshot until commit/restore.
+      if (!this.pendingSwitchDraft) {
+        this.pendingSwitchDraft = captureComposerSwitchDraft(this.deps);
+      }
 
       subagentManager.orphanAllActive();
       subagentManager.clear();
 
-      // Phase A — instant UI swap. Bind the tab to the target conversation,
-      // clear input + history dropdown, and render a spinner in place of the
-      // message list. This runs entirely sync so `switchTo` resolves quickly
-      // and the tab manager's switch guard releases right away, keeping the
-      // UI responsive (and the user able to switch to yet another tab) while
-      // the transcript loads in the background.
-      state.currentConversationId = id;
-      state.messages = [];
-      state.usage = null;
-      state.currentTodos = null;
-      state.clearEditedFiles();
-      state.hasPendingConversationSave = false;
+      // Phase A — show loading without committing the target conversation.
+      // The current title and transcript remain the last known-good state until
+      // Phase B succeeds; a cancelled/failed load therefore cannot strand the
+      // tab with a new title and an empty message list.
       this.deps.getInputEl().value = '';
       this.deps.clearQueuedMessage();
       this.deps.clearRetryableTurn();
       this.deps.getHistoryDropdown()?.removeClass('visible');
       // Show the hydration spinner in the Vue transcript while Phase B loads.
       this.deps.setTranscriptLoading(t('chat.history.loading'));
+      // Force one projection so the overlay lands even if a prior hydration
+      // left the same loading string cached without a live observer.
+      this.deps.emitTranscript?.();
     } finally {
       state.isSwitchingConversation = false;
     }
@@ -337,6 +397,7 @@ export class ConversationController {
     // runners and trip Electron's unhandledRejection logs in production.
     const abort = new AbortController();
     this.hydrationAbort = abort;
+    this.pendingHydrationId = id;
     state.isHydrating = true;
     this.hydrationPromise = this.hydrateAndRender(id, abort).catch(() => {
       // `hydrateAndRender` surfaces user-visible failures inline (hydration
@@ -370,7 +431,9 @@ export class ConversationController {
     id: string,
     abort: AbortController,
   ): Promise<void> {
-    const { plugin, state } = this.deps;
+    const { state } = this.deps;
+    const lifecycleGeneration = this.lifecycleGeneration;
+    let restored = false;
     try {
       // Yield to a macrotask so the browser commits the Phase A spinner
       // DOM before sync work in `restoreConversation` (DOM rebuild for the
@@ -379,25 +442,91 @@ export class ConversationController {
       // `restoreState`) resolves through microtasks only, so without this
       // yield the spinner stays invisible and the user only sees a freeze.
       await new Promise<void>((resolve) => window.setTimeout(resolve, 0));
-      if (abort.signal.aborted) return;
+      if (abort.signal.aborted || lifecycleGeneration !== this.lifecycleGeneration) return;
 
-      const conversation = await plugin.switchConversation(id, { signal: abort.signal });
-      if (abort.signal.aborted) return;
-      if (!conversation) return;
+      const switchResult = await this.switchConversationForHydration(id, abort.signal);
+      if (abort.signal.aborted || this.hydrationAbort !== abort || lifecycleGeneration !== this.lifecycleGeneration) return;
+      if (!switchResult) {
+        this.deps.setTranscriptLoading(null);
+        this.deps.setTranscriptGreeting(this.getGreeting());
+        this.restorePendingSwitchDraftForHydration(id);
+        return;
+      }
 
-      await this.deps.ensureServiceForConversation?.(conversation);
-      if (abort.signal.aborted) return;
+      const { conversation, hydration } = switchResult;
+      if (!isHydrationCommitReady(hydration)) {
+        if (hydration.kind === 'error' && hydration.error.code !== 'cancelled') {
+          this.deps.setTranscriptHydrationError({
+            code: hydration.error.code,
+            message: hydration.error.message,
+          });
+        } else if (hydration.kind === 'empty' && hydration.reason === 'no-store') {
+          this.deps.setTranscriptHydrationError({
+            code: 'store-missing',
+            message: t('chat.history.storeUnavailable'),
+          });
+        }
+        this.restorePendingSwitchDraftForHydration(id);
+        return;
+      }
 
+      this.pendingSwitchDraft = null;
+
+      // Restore before provider bind so bind failures cannot discard a loaded
+      // transcript (the spinner clears in finally only when `restored` is false).
       this.restoreConversation(conversation);
+      restored = true;
+
+      try {
+        await this.deps.ensureServiceForConversation?.(conversation);
+      } catch {
+        // Best-effort bind after history hydration; transcript is already visible.
+      }
+      if (abort.signal.aborted || state.currentConversationId !== conversation.id || lifecycleGeneration !== this.lifecycleGeneration) return;
+
       this.updateWelcomeVisibility();
       this.callbacks.onConversationSwitched?.();
     } finally {
       if (this.hydrationAbort === abort) {
         this.hydrationAbort = null;
         this.hydrationPromise = null;
+        this.pendingHydrationId = null;
         state.isHydrating = false;
+        if (!restored) {
+          this.deps.setTranscriptLoading(null);
+        }
       }
     }
+  }
+
+  private async switchConversationForHydration(
+    id: string,
+    signal: AbortSignal,
+  ): Promise<ConversationSwitchResult | null> {
+    const plugin = this.deps.plugin;
+    if (typeof plugin.switchConversationWithHydration === 'function') {
+      return plugin.switchConversationWithHydration(id, { signal });
+    }
+
+    // Compatibility for lightweight hosts and older embedders that only expose
+    // switchConversation. Some transitional callers already return the richer
+    // result through that method, so accept both shapes.
+    const legacy = await plugin.switchConversation(id, { signal }) as
+      | Conversation
+      | ConversationSwitchResult
+      | null;
+    if (!legacy) return null;
+    if ('conversation' in legacy && 'hydration' in legacy) {
+      return legacy;
+    }
+    return {
+      conversation: legacy,
+      hydration: {
+        kind: 'loaded',
+        messages: legacy.messages,
+        sourceRef: `legacy-switch:${id}`,
+      },
+    };
   }
 
   async rewind(
@@ -543,6 +672,17 @@ export class ConversationController {
     state.hasPendingConversationSave = false;
   }
 
+  private restorePendingSwitchDraftForHydration(hydrationId: string): void {
+    if (this.pendingHydrationId !== hydrationId) return;
+    this.restorePendingSwitchDraft();
+  }
+
+  private restorePendingSwitchDraft(): void {
+    if (!this.pendingSwitchDraft) return;
+    restoreComposerSwitchDraft(this.deps, this.pendingSwitchDraft);
+    this.pendingSwitchDraft = null;
+  }
+
   /**
    * Shared logic for restoring a conversation into the current tab.
    * Used by both loadActive() and switchTo() to avoid duplication.
@@ -606,6 +746,11 @@ export class ConversationController {
     // emit time missed because the tab wasn't bound yet).
     const hydrationError = this.deps.consumePendingHydrationError?.(conversation.id);
     if (hydrationError) this.deps.setTranscriptHydrationError(hydrationError);
+
+    // Belt-and-suspenders: the assignments above already emit via
+    // onMessagesChanged / setTranscriptLoading, but force one final projection
+    // so a subscribe registered in the same turn as mount still lands.
+    this.deps.emitTranscript?.();
   }
 
   /**

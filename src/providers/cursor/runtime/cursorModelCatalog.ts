@@ -1,4 +1,5 @@
 import { spawn } from 'child_process';
+import { createHash } from 'crypto';
 
 import { acquireCursorAgentSpawnLock } from './cursorAgentSpawnLock';
 import { resolveCursorLaunch } from './cursorLaunch';
@@ -15,14 +16,14 @@ export const STATIC_FALLBACK_MODEL_IDS: readonly string[] = [
   'composer-1',
 ];
 
-interface CursorModelCatalogCache {
+interface CursorModelCatalogEntry {
   ids: string[];
   fetchedAt: number;
 }
 
-let catalogCache: CursorModelCatalogCache | null = null;
-
 const LIST_MODELS_TIMEOUT_MS = 10_000;
+/** Discovery cache TTL — stale entries fall back until refresh succeeds. */
+export const CURSOR_MODEL_CATALOG_TTL_MS = 5 * 60 * 1000;
 // Cursor model ids are alphanumeric plus `.`, `-`, `/`. Trailing `:` is
 // disallowed so the `Tip:` footer line cursor-agent prints does not leak into
 // the catalog (it would otherwise satisfy the regex).
@@ -34,11 +35,16 @@ const TEXT_HEADER_PATTERN = /available models|models?:?$/i;
 const TEXT_FOOTER_PATTERN = /^tip\s*:/i;
 
 function extractIdFromObject(entry: Record<string, unknown>): string | null {
-  for (const key of ['id', 'name', 'model']) {
+  for (const key of ['modelId', 'id', 'model']) {
     const value = entry[key];
     if (typeof value === 'string' && value.trim()) {
-      return value.trim();
+      const candidate = value.trim();
+      return MODEL_ID_PATTERN.test(candidate) ? candidate : null;
     }
+  }
+  const name = entry.name;
+  if (typeof name === 'string' && MODEL_ID_PATTERN.test(name.trim())) {
+    return name.trim();
   }
   return null;
 }
@@ -64,7 +70,7 @@ function parseJsonModelList(stdout: string): string[] | null {
   for (const entry of source) {
     if (typeof entry === 'string') {
       const trimmed = entry.trim();
-      if (trimmed) {
+      if (MODEL_ID_PATTERN.test(trimmed)) {
         ids.push(trimmed);
       }
     } else if (entry && typeof entry === 'object') {
@@ -123,6 +129,99 @@ function dedupe(ids: string[]): string[] {
   return result;
 }
 
+/** Opaque cache identity scoped to the CLI, account, and backend. The raw path
+ * and URL may contain usernames, credentials, or query tokens, so only this
+ * digest is persisted to the vault cache. */
+function cursorEnvironmentValue(env: Record<string, string>, key: string): string {
+  if (process.platform !== 'win32') {
+    return env[key] ?? '';
+  }
+  const match = Object.entries(env).find(([name]) => name.toLowerCase() === key.toLowerCase());
+  return match?.[1] ?? '';
+}
+
+export function buildCursorModelCatalogCliKey(
+  cliPath: string,
+  env: Record<string, string>,
+): string {
+  const slashPath = cliPath.trim().replace(/\\/g, '/');
+  const normalizedPath = process.platform === 'win32' ? slashPath.toLowerCase() : slashPath;
+  const rawBaseUrl = cursorEnvironmentValue(env, 'CURSOR_BASE_URL').trim();
+  let baseUrl = rawBaseUrl;
+  try {
+    baseUrl = new URL(rawBaseUrl).toString();
+  } catch {
+    // Empty and non-standard endpoint values are still stable identity inputs.
+  }
+  const identity = [
+    normalizedPath,
+    cursorEnvironmentValue(env, 'CURSOR_API_KEY'),
+    cursorEnvironmentValue(env, 'CURSOR_SESSION_TOKEN'),
+    baseUrl,
+  ].join('\0');
+  const digest = createHash('sha256').update(identity).digest('hex').slice(0, 24);
+  return `cursor-cli:${digest}`;
+}
+
+function isCatalogFresh(entry: CursorModelCatalogEntry): boolean {
+  return Date.now() - entry.fetchedAt <= CURSOR_MODEL_CATALOG_TTL_MS;
+}
+
+export class CursorModelCatalogCache {
+  private readonly entries = new Map<string, CursorModelCatalogEntry>();
+  private readonly inFlight = new Map<string, Promise<string[]>>();
+
+  get(cliKey?: string): string[] {
+    const entry = cliKey ? this.entries.get(cliKey) : undefined;
+    return entry && entry.ids.length > 0 && isCatalogFresh(entry)
+      ? [...entry.ids]
+      : [...STATIC_FALLBACK_MODEL_IDS];
+  }
+
+  isFresh(cliKey?: string): boolean {
+    const entry = cliKey ? this.entries.get(cliKey) : undefined;
+    return Boolean(entry?.ids.length && isCatalogFresh(entry));
+  }
+
+  refresh(cliKey: string, loader: () => Promise<string[]>): Promise<string[]> {
+    const active = this.inFlight.get(cliKey);
+    if (active) {
+      return active;
+    }
+
+    const refresh = (async () => {
+      try {
+        const ids = await loader();
+        if (ids.length > 0) {
+          this.seed(cliKey, ids);
+        }
+      } catch {
+        // A failed probe must not destroy the last good catalog.
+      }
+      return this.get(cliKey);
+    })();
+    this.inFlight.set(cliKey, refresh);
+    void refresh.finally(() => {
+      if (this.inFlight.get(cliKey) === refresh) {
+        this.inFlight.delete(cliKey);
+      }
+    });
+    return refresh;
+  }
+
+  reset(): void {
+    this.entries.clear();
+    this.inFlight.clear();
+  }
+
+  seed(cliKey: string, ids: readonly string[]): void {
+    this.entries.set(cliKey, { ids: [...ids], fetchedAt: Date.now() });
+  }
+}
+
+const modelCatalog = new CursorModelCatalogCache();
+let testCatalogKey: string | null = null;
+
 /**
  * Parses `cursor-agent --list-models` output. Tries JSON first (array of
  * strings, or array/object-wrapped objects carrying id/name/model), then falls
@@ -139,14 +238,12 @@ export function parseModelListOutput(stdout: string): string[] {
   return dedupe(ids);
 }
 
-async function runListModels(
+function collectListModelsOutput(
   cliPath: string,
   env: Record<string, string>,
   cwd: string,
 ): Promise<string> {
-  const releaseSpawnLock = await acquireCursorAgentSpawnLock();
-  try {
-    return await new Promise((resolve, reject) => {
+  return new Promise((resolve, reject) => {
     const launch = resolveCursorLaunch(cliPath, ['--list-models']);
     const child = spawn(launch.command, launch.args, {
       cwd,
@@ -160,14 +257,15 @@ async function runListModels(
     let settled = false;
 
     const timer = window.setTimeout(() => {
-      if (!settled) {
-        settled = true;
-        // This is a timed-out background probe, so reap the whole tree at once
-        // rather than a SIGTERM the CLI (or a descendant) may ignore on Windows,
-        // which would otherwise leave an orphaned cursor-agent behind.
-        forceKillCursorProcessTree(child);
-        reject(new Error('Timed out listing Cursor models'));
+      if (settled) {
+        return;
       }
+      settled = true;
+      // This is a timed-out background probe, so reap the whole tree at once
+      // rather than a SIGTERM the CLI (or a descendant) may ignore on Windows.
+      void forceKillCursorProcessTree(child).finally(() => {
+        reject(new Error('Timed out listing Cursor models'));
+      });
     }, LIST_MODELS_TIMEOUT_MS);
 
     child.stdout?.on('data', (chunk: Buffer) => {
@@ -190,6 +288,16 @@ async function runListModels(
       }
     });
   });
+}
+
+async function runListModels(
+  cliPath: string,
+  env: Record<string, string>,
+  cwd: string,
+): Promise<string> {
+  const releaseSpawnLock = await acquireCursorAgentSpawnLock();
+  try {
+    return await collectListModelsOutput(cliPath, env, cwd);
   } finally {
     releaseSpawnLock();
   }
@@ -206,36 +314,46 @@ export async function refreshCursorModelCatalog(
   cwd: string = process.cwd(),
 ): Promise<string[]> {
   if (!cliPath?.trim()) {
-    return getCachedCursorModelIds();
+    return getCachedCursorModelIds(cliPath, env);
   }
 
-  try {
+  const cliKey = buildCursorModelCatalogCliKey(cliPath, env);
+  return modelCatalog.refresh(cliKey, async () => {
     const stdout = await runListModels(cliPath, env, cwd);
-    const ids = parseModelListOutput(stdout);
-    if (ids.length === 0) {
-      return getCachedCursorModelIds();
-    }
-    catalogCache = { ids, fetchedAt: Date.now() };
-    return ids;
-  } catch {
-    return getCachedCursorModelIds();
-  }
+    return parseModelListOutput(stdout);
+  });
 }
 
-/** Returns cached discovered ids if present, else the static fallback. */
-export function getCachedCursorModelIds(): string[] {
-  if (catalogCache && catalogCache.ids.length > 0) {
-    return [...catalogCache.ids];
-  }
-  return [...STATIC_FALLBACK_MODEL_IDS];
+/** Returns cached discovered ids when fresh for this CLI, else the static fallback. */
+export function getCachedCursorModelIds(
+  cliPath?: string,
+  env?: Record<string, string>,
+): string[] {
+  const cliKey = cliPath && env
+    ? buildCursorModelCatalogCliKey(cliPath, env)
+    : testCatalogKey ?? undefined;
+  return modelCatalog.get(cliKey);
+}
+
+/** Whether the in-memory catalog is a fresh discovery (not static fallback). */
+export function isCursorModelCatalogDiscoveryFresh(
+  cliPath?: string,
+  env?: Record<string, string>,
+): boolean {
+  const cliKey = cliPath && env
+    ? buildCursorModelCatalogCliKey(cliPath, env)
+    : testCatalogKey ?? undefined;
+  return modelCatalog.isFresh(cliKey);
 }
 
 /** Clears the module cache. Test-only. */
 export function resetCursorModelCatalog(): void {
-  catalogCache = null;
+  modelCatalog.reset();
+  testCatalogKey = null;
 }
 
 /** Seeds the module cache with explicit ids. Test-only. */
-export function seedCursorModelCatalogForTest(ids: readonly string[]): void {
-  catalogCache = { ids: [...ids], fetchedAt: Date.now() };
+export function seedCursorModelCatalogForTest(ids: readonly string[], cliKey = 'test-cli|noauth|'): void {
+  modelCatalog.seed(cliKey, ids);
+  testCatalogKey = cliKey;
 }

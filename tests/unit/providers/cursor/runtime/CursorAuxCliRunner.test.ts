@@ -3,6 +3,11 @@ import '@/providers';
 import { EventEmitter } from 'events';
 
 import { CursorAuxCliRunner } from '@/providers/cursor/runtime/CursorAuxCliRunner';
+import {
+  buildCursorModelCatalogCliKey,
+  resetCursorModelCatalog,
+  seedCursorModelCatalogForTest,
+} from '@/providers/cursor/runtime/cursorModelCatalog';
 
 jest.mock('@/utils/path', () => ({
   getVaultPath: jest.fn().mockReturnValue('/test/vault'),
@@ -61,6 +66,24 @@ function queueReply(json: string): void {
 describe('CursorAuxCliRunner shared-runner contract', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    resetCursorModelCatalog();
+  });
+
+  it('ignores shared effort state but preserves an explicit model variant', () => {
+    seedCursorModelCatalogForTest(
+      ['gpt-5.6-sol-medium', 'gpt-5.6-sol-high'],
+      buildCursorModelCatalogCliKey('/usr/bin/cursor-agent', {}),
+    );
+    const plugin = createMockPlugin();
+    plugin.settings.providers.cursor.model = 'cursor:gpt-5.6-sol';
+    plugin.settings.effortLevel = 'high';
+    const runner = new CursorAuxCliRunner(plugin);
+    const resolve = (runner as unknown as {
+      resolveCliModel: (model?: string) => string | undefined;
+    }).resolveCliModel.bind(runner);
+
+    expect(resolve('cursor:gpt-5.6-sol')).toBe('gpt-5.6-sol-medium');
+    expect(resolve('cursor:gpt-5.6-sol-high')).toBe('gpt-5.6-sol-high');
   });
 
   it('emits the final text once through onTextChunk', async () => {
@@ -130,6 +153,8 @@ describe('CursorAuxCliRunner shared-runner contract', () => {
       (child as any).signalCode = null;
       (child as any).pid = 9911;
       mockSpawn.mockImplementationOnce(() => child);
+      const taskkill = new EventEmitter();
+      mockSpawn.mockImplementationOnce(() => taskkill);
 
       const controller = new AbortController();
       const runner = new CursorAuxCliRunner(createMockPlugin());
@@ -147,11 +172,11 @@ describe('CursorAuxCliRunner shared-runner contract', () => {
       expect(child.kill).toHaveBeenCalledWith('SIGTERM');
 
       jest.advanceTimersByTime(3_000);
-      const treeKill = mockSpawn.mock.calls.find((call) => call[0] === 'taskkill');
-      expect(treeKill).toBeDefined();
-      expect(treeKill?.[1]).toEqual(
-        expect.arrayContaining(['/PID', '9911', '/T', '/F']),
-      );
+      expect(mockSpawn).toHaveBeenLastCalledWith('taskkill', ['/PID', '9911', '/T', '/F'], {
+        windowsHide: true,
+        stdio: 'ignore',
+      });
+      taskkill.emit('close', 0);
 
       jest.useRealTimers();
       // Release the never-closing child so the pending promise settles.

@@ -33,7 +33,11 @@ export const mountCursorCliPathSetting: ProviderSettingsWidgetMount = (host, con
 
   const setting = new Setting(host)
     .setName(`Cursor Agent CLI path (${hostnameKey})`)
-    .setDesc('Path to the `agent` binary, or leave empty to search PATH.');
+    .setDesc(
+      'Path to the `agent` binary, or leave empty to search PATH. Specorator drives it over ACP (`agent acp`); ' +
+        'MCP servers from project/user .cursor/mcp.json are available in chat, but team-level/dashboard-configured ' +
+        'MCP servers do not apply in ACP mode.',
+    );
 
   addCliPathTextControl({
     setting,

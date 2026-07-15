@@ -3,6 +3,7 @@ import {
   getCommandHotkeys,
   resetCommandHotkeysForTests,
 } from '@/core/commands/commandHotkeyRegistry';
+import { ProviderWorkspaceRegistry } from '@/core/providers/ProviderWorkspaceRegistry';
 import { activateLibrary } from '@/features/library/activateLibrary';
 import type { ChatTabExecutionSurface } from '@/features/tasks/execution/ChatTabExecutionSurface';
 import type { ChatWorkOrderLinker } from '@/features/tasks/execution/ChatWorkOrderLinker';
@@ -18,6 +19,12 @@ import type SpecoratorPlugin from '@/main';
 // The five library commands target the unified Vue Library; stub the activation seam.
 jest.mock('@/features/library/activateLibrary', () => ({
   activateLibrary: jest.fn().mockResolvedValue(undefined),
+}));
+
+jest.mock('@/core/providers/ProviderWorkspaceRegistry', () => ({
+  ProviderWorkspaceRegistry: {
+    openDiagnosticsCaptureFolder: jest.fn().mockResolvedValue(undefined),
+  },
 }));
 
 jest.mock('@/features/tasks/ui/createWorkOrderInteractive', () => ({
@@ -74,6 +81,7 @@ const EXPECTED_COMMAND_IDS = [
   'create-work-order-from-chat-conversation',
   'copy-diagnostic-logs',
   'clear-diagnostic-logs',
+  'cursor-open-acp-captures',
   'inline-edit',
   'new-tab',
   'new-session',
@@ -159,5 +167,17 @@ describe('registerPluginCommands', () => {
     const cmd = commands.find((c) => c.id === 'clear-diagnostic-logs')!;
     cmd.callback?.();
     expect((plugin.logger.clear as jest.Mock)).toHaveBeenCalled();
+  });
+
+  it('cursor-open-acp-captures routes through ProviderWorkspaceRegistry, not a direct provider import', () => {
+    const { plugin, commands } = createPlugin();
+    registerPluginCommands({
+      plugin,
+      taskExecutionSurface: {} as ChatTabExecutionSurface,
+      chatWorkOrderLinker: {} as ChatWorkOrderLinker,
+    });
+    const cmd = commands.find((c) => c.id === 'cursor-open-acp-captures')!;
+    cmd.callback?.();
+    expect(ProviderWorkspaceRegistry.openDiagnosticsCaptureFolder).toHaveBeenCalledWith('cursor');
   });
 });

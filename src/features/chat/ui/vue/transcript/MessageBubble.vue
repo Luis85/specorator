@@ -5,8 +5,9 @@ import { computed, inject } from 'vue';
 import { DEFAULT_CHAT_PROVIDER_ID } from '../../../../../core/providers/types';
 import type { ChatMessage } from '../../../../../core/types';
 import { extractVaultMentions } from '../../../../../utils/vaultMentions';
+import { splitWorkOrderProtocolForDisplay } from '../../../rendering/WorkOrderProtocolDisplay';
 import BlockList from './blocks/BlockList.vue';
-import { shouldRenderToolCall } from './blocks/blockListViewModel';
+import { resolveBlockListItems, shouldRenderToolCall } from './blocks/blockListViewModel';
 import TextBlock from './blocks/TextBlock.vue';
 import MessageActionBar from './cards/MessageActionBar.vue';
 import MessageContextCard from './cards/MessageContextCard.vue';
@@ -27,13 +28,11 @@ import { hasVisibleBlock, hasVisibleText } from './visibleContentHelpers';
  * context message (if one ever occurred) would still show the bare marker —
  * not render nothing.
  *
- * The assistant action bar is appended as a plain sibling after `BlockList`
- * (and the interrupt indicator) rather than reproducing the legacy anchor-
- * into-the-last-`.specorator-text-block` placement — `MessageActionBar.vue`'s
- * own docs flag that anchoring as this component's concern, and this task
- * intentionally keeps the simpler flat placement (tracked parity gap, not a
- * visible functional loss: the buttons still render, just at the end of the
- * content column instead of hugging the last text block's hover area).
+ * The assistant action bar is rendered by `BlockList` into the last text
+ * block's `actions` slot (beside that block's copy button), reproducing the
+ * legacy anchor-into-the-last-`.specorator-text-block` placement so the
+ * thumbs/work-order buttons and the copy button form one hover row. The user
+ * toolbar (fork/rewind/copy/actions) stays a message-level sibling below.
  */
 const props = defineProps<{ msg: ChatMessage }>();
 
@@ -57,6 +56,31 @@ const hasVisibleContent = computed(() => {
 const isInterruptOnly = computed(
   () => !!props.msg.isInterrupt && (props.msg.role === 'user' || !hasVisibleContent.value)
 );
+
+// The assistant action bar normally renders inside the last text block's
+// MARKDOWN segment (beside its copy button — one hover row). A response with no
+// such host — tool-only / error-only (no text item), OR a work-order response
+// whose last text item splits into protocol-only cards (a `text` item but NO
+// markdown segment) — has nowhere to mount the co-located slot, so a
+// message-level fallback covers it; else eligible actions (thumbs/work-order,
+// gated on chatMessageText, which also reads `content`) would vanish. The
+// condition mirrors BlockList's lastTextKey + TextBlock's markdown-segment slot
+// so exactly one of the two placements renders.
+const hasMarkdownHost = computed(() => {
+  const items = resolveBlockListItems(props.msg, providerId.value);
+  let lastText: string | null = null;
+  for (let i = items.length - 1; i >= 0; i--) {
+    const item = items[i];
+    if (item.kind === 'text') {
+      lastText = item.content;
+      break;
+    }
+  }
+  if (lastText === null) return false;
+  const workOrderPath = callbacks?.getWorkOrderPath() ?? null;
+  if (!workOrderPath) return true; // no split → the text always renders as markdown
+  return splitWorkOrderProtocolForDisplay(lastText).some((segment) => segment.type === 'markdown');
+});
 
 const textToShow = computed(() => props.msg.displayContent ?? props.msg.content);
 
@@ -131,6 +155,7 @@ const mentions = computed(() => {
           class="specorator-text-block"
         ><span class="specorator-interrupted">Interrupted</span> <span class="specorator-interrupted-hint">· What should Specorator do instead?</span></div>
         <MessageActionBar
+          v-if="!hasMarkdownHost"
           :msg="msg"
           role="assistant"
         />

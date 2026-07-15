@@ -110,7 +110,7 @@ describe('AgentBoardView.recoverOrphanedRuns', () => {
       ],
       invalidNotes: [],
     };
-    view.noteStore = { writeStatus, appendLedger };
+    view.noteStore = { writeStatus, appendLedger, writeLedgerSnapshot: jest.fn((c: string) => c) };
     view.pauseState = new Map();
     view.plugin = {
       events,
@@ -120,6 +120,11 @@ describe('AgentBoardView.recoverOrphanedRuns', () => {
           if (options.sidecarThrows) throw new Error('boom');
           return options.sidecarHeartbeat;
         }),
+        appendLedger: jest.fn(async () => undefined),
+        snapshotLedgerAsMarkdown: jest.fn(async () => '- orphan line'),
+        cleanupRun: jest.fn(async () => undefined),
+        markFinalizeFailed: jest.fn(async () => undefined),
+        hasFinalizeFailure: jest.fn(async () => false),
       },
     };
     view.applyNoteChange = jest.fn(async (_path: string, transform: (c: string) => string) => {
@@ -153,17 +158,20 @@ describe('AgentBoardView.recoverOrphanedRuns', () => {
   it('marks the run failed when neither frontmatter nor sidecar heartbeat is recent', async () => {
     // No sidecar heartbeat at all — there is no signal that a live writer
     // exists, so the orphan adoption path runs and the ledger line lands.
-    const { view, writeStatus, appendLedger, events } = makeView({ sidecarHeartbeat: null });
+    const { view, writeStatus, events } = makeView({ sidecarHeartbeat: null });
 
     await view['recoverOrphanedRuns']();
 
     expect(writeStatus).toHaveBeenCalledTimes(1);
     expect(writeStatus.mock.calls[0][1]).toMatchObject({ status: 'failed' });
-    expect(appendLedger).toHaveBeenCalledTimes(1);
-    expect(appendLedger.mock.calls[0][1]).toMatchObject({
-      status: 'failed',
-      message: 'orphaned by plugin reload',
-    });
+    expect(view.plugin.runSidecarStore.appendLedger).toHaveBeenCalledWith(
+      'run-1',
+      expect.objectContaining({
+        status: 'failed',
+        message: 'orphaned by plugin reload',
+      }),
+    );
+    expect(view.plugin.runSidecarStore.cleanupRun).toHaveBeenCalledWith('run-1');
     expect(events.emit).toHaveBeenCalledWith('task:status-changed', {
       taskId: 'wo-1',
       path: 'tasks/wo.md',
@@ -306,6 +314,7 @@ describe('AgentBoardView.sweepStaleSidecars', () => {
       runSidecarStore: {
         listRuns,
         cleanupRun,
+        hasFinalizeFailure: jest.fn(async () => false),
       },
     };
     return { view, listRuns, cleanupRun };
@@ -394,7 +403,11 @@ describe('AgentBoardView.finalizeLedgerToNote', () => {
     view.plugin = {
       events,
       logger: { scope: () => ({ warn: jest.fn(), info: jest.fn() }) },
-      runSidecarStore: { snapshotLedgerAsMarkdown, cleanupRun },
+      runSidecarStore: {
+        snapshotLedgerAsMarkdown,
+        cleanupRun,
+        markFinalizeFailed: jest.fn(async () => undefined),
+      },
     };
     view.applyNoteChange = applyNoteChange;
     return { view, cleanupRun, snapshotLedgerAsMarkdown, writeLedgerSnapshot, applyNoteChange, events };

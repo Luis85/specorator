@@ -176,6 +176,18 @@ radius is the frame only. Merge is gated on the full suite plus a manual vault s
    → audit that call path so the ask-user card's mini tab-bar stays consistent with the Vue
    strip (reuse the same projection, or leave it imperative if it is independent).
 
+## Multi-view lifecycle hardening (2026-07-14)
+
+- `TabManager` serializes create/switch/close/open-conversation mutations and
+  reserves capacity before asynchronous setup. Runtime initialization is
+  generation-scoped and shares one in-flight promise per tab.
+- Tab capacity, environment application, conversation quiescing, and
+  work-order routing aggregate all live Specorator leaves.
+- Each leaf persists its own tabs through Obsidian `getState()` / `setState()`;
+  no global plugin-state snapshot can overwrite another view's layout.
+- Provider rebind and tab destruction await runtime cleanup; disposed
+  conversation controllers abort hydration and invalidate late callbacks.
+
 ## Out of scope (later sub-projects)
 
 Transcript rendering, the composer / input toolbar, and the side panels (status, conversation

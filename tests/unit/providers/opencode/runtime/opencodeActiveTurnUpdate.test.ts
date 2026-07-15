@@ -48,6 +48,30 @@ describe('buildActiveTurnEffect — message_chunk', () => {
     );
     expect(effect.sawAssistantContent).toBe(false);
   });
+
+  it('does not flag assistant content for a boundary-only chunk (start, no text)', () => {
+    const boundaryOnly = [{ type: 'assistant_message_start', itemId: 'a1' }] as never;
+    const effect = buildActiveTurnEffect(
+      { type: 'message_chunk', role: 'assistant', messageId: 'a1', content, streamChunks: boundaryOnly },
+      makeContext(),
+    );
+    // The boundary chunk is not real content, so the post-plan gate must stay closed.
+    expect(effect.sawAssistantContent).toBe(false);
+    // ...but the boundary chunk still forwards as a stream chunk.
+    expect(effect.chunks).toEqual(boundaryOnly);
+  });
+
+  it('does not flag assistant content for thinking-role updates', () => {
+    // The normalizer emits thinking chunks only on role 'thinking' updates
+    // (assistant-role updates carry text chunks), so thinking output never
+    // satisfies the "produced assistant content" gate — same as on main.
+    const thinking = [{ type: 'thinking', content: 'reasoning' }] as never;
+    const effect = buildActiveTurnEffect(
+      { type: 'message_chunk', role: 'thinking' as never, messageId: 'a1', content, streamChunks: thinking },
+      makeContext(),
+    );
+    expect(effect.sawAssistantContent).toBe(false);
+  });
 });
 
 describe('buildActiveTurnEffect — tool calls', () => {
@@ -87,5 +111,17 @@ describe('buildActiveTurnEffect — usage', () => {
       makeContext({ promptUsage: null }),
     );
     expect(effect.chunks).toEqual([]);
+  });
+
+  it('suppresses the usage chunk when no model resolves, but keeps the context window', () => {
+    const usage = { used: 100, size: 1000 } as never;
+    const effect = buildActiveTurnEffect(
+      { type: 'usage', usage },
+      makeContext({ resolveUsageModel: () => null }),
+    );
+    // usage contract: never emit without a model; the authoritative window is
+    // still recorded so the final usage chunk can thread it through.
+    expect(effect.chunks).toEqual([]);
+    expect(effect.contextUsage).toBe(usage);
   });
 });

@@ -1,146 +1,129 @@
 import {
-  buildAllowlistedSubprocessEnvironment,
-  SUBPROCESS_ENV_ALLOWLIST,
+  buildFullSubprocessEnvironment,
+  pickEnvValueCaseInsensitive,
+  SUBPROCESS_ENV_DENYLIST,
 } from '@/core/providers/subprocessEnvironmentAllowlist';
 
-describe('buildAllowlistedSubprocessEnvironment', () => {
-  it('drops unrelated host env vars by default', () => {
-    const result = buildAllowlistedSubprocessEnvironment({
+describe('buildFullSubprocessEnvironment', () => {
+  it('passes the full host environment through (Claude-parity)', () => {
+    const result = buildFullSubprocessEnvironment({
       processEnv: {
         PATH: '/usr/bin',
         HOME: '/home/test',
-        SECRET_TOKEN: 'sk-leak-me',
-        NPM_TOKEN: 'npm-secret',
+        SECRET_TOKEN: 'sk-host',
+        NPM_TOKEN: 'npm-host',
         DEBUG: '1',
       },
       customEnv: {},
-      providerPrefixPattern: /^CURSOR_/i,
     });
-    expect(result.SECRET_TOKEN).toBeUndefined();
-    expect(result.NPM_TOKEN).toBeUndefined();
-    expect(result.DEBUG).toBeUndefined();
+    // No allowlist: unrelated host vars now reach the child, matching how the
+    // Claude SDK spawns ({ ...process.env }).
+    expect(result.SECRET_TOKEN).toBe('sk-host');
+    expect(result.NPM_TOKEN).toBe('npm-host');
+    expect(result.DEBUG).toBe('1');
     expect(result.PATH).toBe('/usr/bin');
     expect(result.HOME).toBe('/home/test');
   });
 
-  it('explicitly refuses NODE_TLS_REJECT_UNAUTHORIZED', () => {
-    const result = buildAllowlistedSubprocessEnvironment({
+  it('drops undefined-valued process env entries', () => {
+    const result = buildFullSubprocessEnvironment({
+      processEnv: { PATH: '/usr/bin', UNSET: undefined },
+      customEnv: {},
+    });
+    expect('UNSET' in result).toBe(false);
+  });
+
+  it('still refuses NODE_TLS_REJECT_UNAUTHORIZED from host and custom env', () => {
+    const result = buildFullSubprocessEnvironment({
       processEnv: { NODE_TLS_REJECT_UNAUTHORIZED: '0', PATH: '/usr/bin' },
       customEnv: { NODE_TLS_REJECT_UNAUTHORIZED: '0' },
-      providerPrefixPattern: /^CURSOR_/i,
     });
     expect(result.NODE_TLS_REJECT_UNAUTHORIZED).toBeUndefined();
   });
 
   it('refuses NODE_TLS_REJECT_UNAUTHORIZED in any letter case (Windows env-var names are case-insensitive)', () => {
-    const result = buildAllowlistedSubprocessEnvironment({
+    const result = buildFullSubprocessEnvironment({
       processEnv: {
         node_tls_reject_unauthorized: '0',
         Node_TLS_REJECT_UNAUTHORIZED: '0',
         PATH: '/usr/bin',
       },
-      customEnv: {
-        node_tls_reject_unauthorized: '0',
-        Node_TLS_REJECT_UNAUTHORIZED: '0',
-      },
-      providerPrefixPattern: /^CURSOR_/i,
+      customEnv: { node_tls_reject_unauthorized: '0' },
     });
     expect(result.node_tls_reject_unauthorized).toBeUndefined();
     expect(result.Node_TLS_REJECT_UNAUTHORIZED).toBeUndefined();
     expect(result.NODE_TLS_REJECT_UNAUTHORIZED).toBeUndefined();
   });
 
-  it('passes through GIT_SSH_COMMAND, SSH_AUTH_SOCK, NODE_OPTIONS, NODE_EXTRA_CA_CERTS', () => {
-    const result = buildAllowlistedSubprocessEnvironment({
-      processEnv: {
-        GIT_SSH_COMMAND: 'ssh -i ~/.ssh/id_x',
-        SSH_AUTH_SOCK: '/tmp/ssh.sock',
-        NODE_OPTIONS: '--max-old-space-size=4096',
-        NODE_EXTRA_CA_CERTS: '/etc/ssl/ca.pem',
-      },
-      customEnv: {},
-      providerPrefixPattern: /^CURSOR_/i,
-    });
-    expect(result.GIT_SSH_COMMAND).toBe('ssh -i ~/.ssh/id_x');
-    expect(result.SSH_AUTH_SOCK).toBe('/tmp/ssh.sock');
-    expect(result.NODE_OPTIONS).toBe('--max-old-space-size=4096');
-    expect(result.NODE_EXTRA_CA_CERTS).toBe('/etc/ssl/ca.pem');
-  });
-
-  it('passes through provider-prefix keys from host env', () => {
-    const result = buildAllowlistedSubprocessEnvironment({
-      processEnv: { CURSOR_API_KEY: 'cur-key' },
-      customEnv: {},
-      providerPrefixPattern: /^CURSOR_/i,
-    });
-    expect(result.CURSOR_API_KEY).toBe('cur-key');
+  it('exposes the denylist for inspection', () => {
+    expect(SUBPROCESS_ENV_DENYLIST.has('NODE_TLS_REJECT_UNAUTHORIZED')).toBe(true);
   });
 
   it('customEnv overrides processEnv values for the same key', () => {
-    const result = buildAllowlistedSubprocessEnvironment({
+    const result = buildFullSubprocessEnvironment({
       processEnv: { CURSOR_API_KEY: 'host-key', PATH: '/usr/bin' },
       customEnv: { CURSOR_API_KEY: 'override' },
-      providerPrefixPattern: /^CURSOR_/i,
     });
     expect(result.CURSOR_API_KEY).toBe('override');
   });
 
-  it('customEnv keys outside the allowlist still pass through (user opt-in)', () => {
-    const result = buildAllowlistedSubprocessEnvironment({
+  it('applies the pathOverride as the single canonical PATH key', () => {
+    const result = buildFullSubprocessEnvironment({
       processEnv: { PATH: '/usr/bin' },
-      customEnv: { MY_CUSTOM_VAR: 'yes' },
-      providerPrefixPattern: /^CURSOR_/i,
-    });
-    expect(result.MY_CUSTOM_VAR).toBe('yes');
-  });
-
-  it('exposes the allowlist for inspection', () => {
-    expect(SUBPROCESS_ENV_ALLOWLIST.has('PATH')).toBe(true);
-    expect(SUBPROCESS_ENV_ALLOWLIST.has('SECRET_TOKEN')).toBe(false);
-  });
-
-  it('matches the allowlist case-insensitively for Windows-style mixed-case env keys', () => {
-    // On Windows, `Object.entries(process.env)` typically yields mixed-case
-    // keys such as `ComSpec`, `ProgramFiles`, `ProgramData`, `windir`. The
-    // canonical allowlist entries are uppercase. An exact-case Set lookup
-    // would drop them and the spawned CLI would lose standard Windows vars.
-    const result = buildAllowlistedSubprocessEnvironment({
-      processEnv: {
-        ComSpec: 'C:\\Windows\\System32\\cmd.exe',
-        ProgramFiles: 'C:\\Program Files',
-        ProgramData: 'C:\\ProgramData',
-        windir: 'C:\\Windows',
-        Path: 'C:\\Windows\\System32',
-      },
       customEnv: {},
-      providerPrefixPattern: /^CURSOR_/i,
+      pathOverride: '/enhanced/bin:/usr/bin',
     });
-    expect(result.ComSpec).toBe('C:\\Windows\\System32\\cmd.exe');
-    expect(result.ProgramFiles).toBe('C:\\Program Files');
-    expect(result.ProgramData).toBe('C:\\ProgramData');
-    expect(result.windir).toBe('C:\\Windows');
+    expect(result.PATH).toBe('/enhanced/bin:/usr/bin');
+  });
+
+  it('collapses Windows `Path` + `pathOverride` into a single enhanced `PATH` key', () => {
+    // The child shell resolves PATH case-insensitively; shipping both `Path`
+    // (host) and `PATH` (enhanced) could let it pick the un-enhanced one.
+    const result = buildFullSubprocessEnvironment({
+      processEnv: { Path: 'C:\\Windows\\System32' },
+      customEnv: {},
+      pathOverride: 'C:\\Windows\\System32;C:\\Program Files\\Git\\bin',
+    });
+    const pathKeys = Object.keys(result).filter((key) => key.toUpperCase() === 'PATH');
+    expect(pathKeys).toEqual(['PATH']);
+    expect(result.PATH).toBe('C:\\Windows\\System32;C:\\Program Files\\Git\\bin');
+    expect(result.Path).toBeUndefined();
+  });
+
+  it('keeps the pathOverride even when host `PATH` and a customEnv `Path` differ in case', () => {
+    const result = buildFullSubprocessEnvironment({
+      processEnv: { PATH: '/host/bin' },
+      customEnv: { Path: '/custom/bin' },
+      pathOverride: '/host/bin:/enhanced/git/bin',
+    });
+    const pathKeys = Object.keys(result).filter((key) => key.toUpperCase() === 'PATH');
+    expect(pathKeys).toEqual(['PATH']);
+    expect(result.PATH).toBe('/host/bin:/enhanced/git/bin');
+    expect(result.Path).toBeUndefined();
+  });
+
+  it('leaves a lone `Path` key untouched when there is no duplicate', () => {
+    const result = buildFullSubprocessEnvironment({
+      processEnv: { Path: 'C:\\Windows\\System32' },
+      customEnv: {},
+    });
     expect(result.Path).toBe('C:\\Windows\\System32');
+    expect(result.PATH).toBeUndefined();
+  });
+});
+
+describe('pickEnvValueCaseInsensitive', () => {
+  it('finds a value under any letter case', () => {
+    expect(pickEnvValueCaseInsensitive({ Path: '/a' }, 'PATH')).toBe('/a');
+    expect(pickEnvValueCaseInsensitive({ path: '/b' }, 'PATH')).toBe('/b');
+    expect(pickEnvValueCaseInsensitive({ PATH: '/c' }, 'PATH')).toBe('/c');
   });
 
-  it('forwards XDG base-dir keys so host XDG_DATA_HOME flows through to the CLI', () => {
-    // Opencode reads XDG_DATA_HOME to locate its database under
-    // $XDG_DATA_HOME/opencode/. Our DB-path resolution and the CLI must see
-    // the same value, otherwise hydration points at the wrong DB.
-    const result = buildAllowlistedSubprocessEnvironment({
-      processEnv: {
-        XDG_DATA_HOME: '/home/u/data',
-        XDG_CONFIG_HOME: '/home/u/cfg',
-        XDG_CACHE_HOME: '/home/u/cache',
-        XDG_STATE_HOME: '/home/u/state',
-        XDG_RUNTIME_DIR: '/run/u',
-      },
-      customEnv: {},
-      providerPrefixPattern: /^OPENCODE_/i,
-    });
-    expect(result.XDG_DATA_HOME).toBe('/home/u/data');
-    expect(result.XDG_CONFIG_HOME).toBe('/home/u/cfg');
-    expect(result.XDG_CACHE_HOME).toBe('/home/u/cache');
-    expect(result.XDG_STATE_HOME).toBe('/home/u/state');
-    expect(result.XDG_RUNTIME_DIR).toBe('/run/u');
+  it('returns undefined when no case-variant is present', () => {
+    expect(pickEnvValueCaseInsensitive({ HOME: '/h' }, 'PATH')).toBeUndefined();
+  });
+
+  it('returns the last-declared match when several variants coexist', () => {
+    expect(pickEnvValueCaseInsensitive({ Path: '/a', PATH: '/b' }, 'PATH')).toBe('/b');
   });
 });

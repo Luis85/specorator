@@ -73,6 +73,8 @@ export interface TaskBoardModel {
 }
 
 export interface TaskLedgerEntry {
+  /** Stable id assigned at write time; dedupes partial-batch retries on read. */
+  id?: string;
   timestamp: string;
   status: TaskStatus;
   message: string;

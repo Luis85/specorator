@@ -1,80 +1,24 @@
 /**
- * Subprocess env allowlist shared across providers that spawn CLI subprocesses
- * (Cursor, Opencode). Adding a key here is a security decision — never add a
- * key that can change how the subprocess loads code (NODE_OPTIONS is allowed
- * because users tune memory limits; NODE_TLS_REJECT_UNAUTHORIZED is explicitly
- * never allowed because it disables certificate validation).
+ * Subprocess environment for providers that spawn a CLI subprocess (Cursor,
+ * Opencode, Codex). These providers spread the FULL host environment onto the
+ * child — parity with the Claude SDK spawn, which uses
+ * `{ ...process.env, PATH: enhancedPath }`. A GUI-launched host (Obsidian /
+ * Electron) otherwise hands its CLI child an impoverished environment whose own
+ * shell tool then can't resolve host binaries (git/node "not on PATH"). The one
+ * hard filter kept is the denylist kill-switch below; provider API keys and MCP
+ * secrets live in Obsidian SecretStorage, never in the process environment.
  */
-export const SUBPROCESS_ENV_ALLOWLIST: ReadonlySet<string> = new Set([
-  // Base shell context
-  'PATH',
-  'HOME',
-  'USERPROFILE',
-  'USERNAME',
-  'USER',
-  'LOGNAME',
-  'SHELL',
-  'TERM',
-  // Locale
-  'LANG',
-  'LC_ALL',
-  'LC_CTYPE',
-  // Temp paths
-  'TMPDIR',
-  'TMP',
-  'TEMP',
-  // XDG base dirs (apps look here for config/data/cache/state locations)
-  'XDG_CONFIG_HOME',
-  'XDG_DATA_HOME',
-  'XDG_CACHE_HOME',
-  'XDG_STATE_HOME',
-  'XDG_RUNTIME_DIR',
-  // Windows
-  'COMSPEC',
-  'SystemRoot',
-  'SYSTEMROOT',
-  'APPDATA',
-  'LOCALAPPDATA',
-  'PROGRAMFILES',
-  'PROGRAMFILES(X86)',
-  'PROGRAMDATA',
-  'WINDIR',
-  // Proxies (lowercase variants matter for curl/git)
-  'HTTP_PROXY',
-  'HTTPS_PROXY',
-  'NO_PROXY',
-  'http_proxy',
-  'https_proxy',
-  'no_proxy',
-  // TLS cert bundles
-  'SSL_CERT_FILE',
-  'SSL_CERT_DIR',
-  'NODE_EXTRA_CA_CERTS',
-  // Git / SSH
-  'GIT_SSH_COMMAND',
-  'GIT_TERMINAL_PROMPT',
-  'SSH_AUTH_SOCK',
-  'SSH_AGENT_PID',
-  // Node runtime tuning (NOT NODE_TLS_REJECT_UNAUTHORIZED)
-  'NODE_OPTIONS',
-  // CI flag
-  'CI',
-]);
 
 /**
- * Keys we always refuse to forward, even if a future allowlist change picks
- * them up by accident. Acts as a kill-switch.
+ * Keys we always refuse to forward. Acts as a kill-switch.
  *
  * Matched case-insensitively because Windows env-var names are themselves
  * case-insensitive: `process.env.node_tls_reject_unauthorized` and
  * `process.env.NODE_TLS_REJECT_UNAUTHORIZED` refer to the same OS variable on
- * Windows. An exact-case check would let a user enter the lowercase form in
- * the provider custom env (or the host could carry it pre-canonicalized) and
- * re-enable the TLS bypass this kill-switch is meant to block.
- *
- * On POSIX env-var names are case-sensitive, but no legitimate variable
- * shares a case-insensitive collision with the canonical name here, so the
- * normalization is safe to apply on every platform.
+ * Windows. An exact-case check would let a user enter the lowercase form in the
+ * provider custom env (or the host carry it pre-canonicalized) and re-enable the
+ * TLS bypass this kill-switch blocks. On POSIX names are case-sensitive, but no
+ * legitimate variable collides case-insensitively with the canonical name here.
  */
 export const SUBPROCESS_ENV_DENYLIST: ReadonlySet<string> = new Set([
   'NODE_TLS_REJECT_UNAUTHORIZED',
@@ -84,54 +28,94 @@ const SUBPROCESS_ENV_DENYLIST_UPPER: ReadonlySet<string> = new Set(
   [...SUBPROCESS_ENV_DENYLIST].map((k) => k.toUpperCase()),
 );
 
-/**
- * Uppercase shadow of the allowlist for case-insensitive matching. Mirrors
- * the denylist shape and exists for the same reason: Windows env-var names
- * are case-insensitive, and `Object.entries(process.env)` on Windows often
- * yields mixed-case keys (`ComSpec`, `ProgramFiles`, `ProgramData`, `windir`)
- * that an exact-case Set lookup would silently drop.
- */
-const SUBPROCESS_ENV_ALLOWLIST_UPPER: ReadonlySet<string> = new Set(
-  [...SUBPROCESS_ENV_ALLOWLIST].map((k) => k.toUpperCase()),
-);
-
 function isDeniedKey(key: string): boolean {
   return SUBPROCESS_ENV_DENYLIST_UPPER.has(key.toUpperCase());
 }
 
-function isAllowedKey(key: string): boolean {
-  return SUBPROCESS_ENV_ALLOWLIST_UPPER.has(key.toUpperCase());
+/**
+ * Case-insensitive env-value lookup. A provider Environment entered as `Path=`
+ * or `path=` (common on Windows) must still feed the enhanced-PATH override, or
+ * the collapse below would delete the user's variant and drop their tool dirs.
+ * Returns the last-declared matching value (later entries win).
+ */
+export function pickEnvValueCaseInsensitive(
+  env: Record<string, string | undefined>,
+  name: string,
+): string | undefined {
+  const upper = name.toUpperCase();
+  let found: string | undefined;
+  for (const [key, value] of Object.entries(env)) {
+    if (key.toUpperCase() === upper && value !== undefined) {
+      found = value;
+    }
+  }
+  return found;
 }
 
-export interface BuildAllowlistedSubprocessEnvironmentOptions {
+export interface BuildSubprocessEnvironmentOptions {
   processEnv: Record<string, string | undefined>;
   customEnv: Record<string, string>;
-  /** Provider-scoped prefix that should always pass through (e.g. /^CURSOR_/i, /^OPENCODE_/i). */
-  providerPrefixPattern: RegExp;
-  /** Optional override of the PATH key — providers may want to enhance PATH. */
+  /** Optional override of the PATH key — providers enhance PATH (node/git dirs). */
   pathOverride?: string;
 }
 
-export function buildAllowlistedSubprocessEnvironment(
-  opts: BuildAllowlistedSubprocessEnvironmentOptions,
+/**
+ * Full host-environment passthrough (Claude-parity). Spreads every processEnv
+ * then customEnv key; the ALLOWLIST that used to gate this was removed so no
+ * provider hits a missing-var/PATH problem the Claude integration doesn't. Only
+ * the denylist kill-switch is enforced, and PATH is overridden + collapsed to a
+ * single canonical key so a Windows child can't resolve the un-enhanced `Path`.
+ */
+export function buildFullSubprocessEnvironment(
+  opts: BuildSubprocessEnvironmentOptions,
 ): Record<string, string> {
   const out: Record<string, string> = {};
   for (const [key, value] of Object.entries(opts.processEnv)) {
-    if (value === undefined) continue;
-    if (isDeniedKey(key)) continue;
-    const passesAllowlist = isAllowedKey(key);
-    const passesPrefix = opts.providerPrefixPattern.test(key);
-    if (!passesAllowlist && !passesPrefix) continue;
+    if (value === undefined || isDeniedKey(key)) continue;
     out[key] = value;
   }
-  // customEnv is user-opt-in; pass everything in it (including unlisted keys)
-  // but still apply the denylist so users cannot accidentally re-enable TLS bypass.
+  // customEnv (provider settings → Environment) is user-opt-in; the denylist
+  // still applies so it can't re-enable the TLS bypass.
   for (const [key, value] of Object.entries(opts.customEnv)) {
     if (isDeniedKey(key)) continue;
     out[key] = value;
   }
   if (opts.pathOverride !== undefined) {
+    // Delete every case-variant first so the override is the sole PATH key.
+    // Overwriting `out.PATH` in place would leave its original insertion
+    // position, so a later-inserted differently-cased `Path` would win the
+    // collapse below and discard the enhanced override.
+    deleteCaseVariants(out, 'PATH');
     out.PATH = opts.pathOverride;
   }
+  collapseDuplicatePathKeys(out);
   return out;
+}
+
+function deleteCaseVariants(env: Record<string, string>, canonical: string): void {
+  const upper = canonical.toUpperCase();
+  for (const key of Object.keys(env)) {
+    if (key.toUpperCase() === upper) {
+      delete env[key];
+    }
+  }
+}
+
+/**
+ * Windows env-var names are case-insensitive, so `process.env` carries `Path`
+ * while a `pathOverride` (or a customEnv entry) writes `PATH`. Shipping BOTH
+ * case-variants to the child means its shell resolves PATH case-insensitively
+ * and may pick the un-enhanced `Path`, silently discarding the override. When
+ * two or more variants exist, collapse them onto a single canonical `PATH`
+ * holding the last-written value (preserving pathOverride/customEnv precedence).
+ * A lone PATH key of any casing is left untouched.
+ */
+function collapseDuplicatePathKeys(env: Record<string, string>): void {
+  const pathKeys = Object.keys(env).filter((key) => key.toUpperCase() === 'PATH');
+  if (pathKeys.length < 2) {
+    return;
+  }
+  const winner = env[pathKeys[pathKeys.length - 1]];
+  deleteCaseVariants(env, 'PATH');
+  env.PATH = winner;
 }

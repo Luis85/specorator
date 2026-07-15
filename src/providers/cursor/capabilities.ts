@@ -2,7 +2,7 @@ import type { ProviderCapabilities } from '../../core/providers/types';
 
 export const CURSOR_PROVIDER_CAPABILITIES: Readonly<ProviderCapabilities> = Object.freeze({
   providerId: 'cursor',
-  supportsPersistentRuntime: false,
+  supportsPersistentRuntime: true,
   supportsNativeHistory: true,
   supportsPlanMode: true,
   planPathPrefix: '.cursor/plans',
@@ -12,5 +12,5 @@ export const CURSOR_PROVIDER_CAPABILITIES: Readonly<ProviderCapabilities> = Obje
   supportsImageAttachments: true,
   supportsInstructionMode: true,
   supportsMcpTools: false,
-  reasoningControl: 'effort',
+  reasoningControl: 'none',
 });

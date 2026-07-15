@@ -20,4 +20,5 @@ export type CommandsTranslationKey =
   | 'commands.openSkillLibrary'
   | 'commands.openLoopLibrary'
   | 'commands.openLibrary'
-  | 'commands.openQuickActions';
+  | 'commands.openQuickActions'
+  | 'commands.cursorOpenAcpCaptures';

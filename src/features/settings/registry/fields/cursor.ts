@@ -30,6 +30,7 @@ export function registerCursorTabFields(): void {
       { id: 'models', label: t('settings.models'), order: 10 },
       { id: 'subagents', label: t('settings.subagents.name'), order: 20 },
       { id: 'environment', label: t('settings.environment'), order: 30 },
+      { id: 'diagnostics', label: 'Diagnostics', order: 40 },
     ],
   });
 
@@ -111,5 +112,16 @@ export function registerCursorTabFields(): void {
     },
     default: '',
     keywords: ['environment', 'env', 'variables', 'api key', 'cursor'],
+  });
+
+  r.registerField({
+    id: 'providerConfigs.cursor.captureAcpTraffic',
+    tabId: 'cursor',
+    sectionId: 'diagnostics',
+    label: t('settings.captureAcpTraffic.name'),
+    description: t('settings.captureAcpTraffic.desc'),
+    type: { kind: 'toggle' },
+    default: false,
+    keywords: ['acp', 'capture', 'diagnostics', 'wire', 'trace', 'debug', 'cursor'],
   });
 }

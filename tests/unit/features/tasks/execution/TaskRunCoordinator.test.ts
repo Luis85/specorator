@@ -50,6 +50,7 @@ class FakeSurface implements TaskExecutionSurface {
   providers: Array<string | undefined> = [];
   models: Array<string | undefined> = [];
   readonly adapter = new SyntheticStreamAdapter();
+  readonly dispose = jest.fn(async () => {});
 
   constructor(private readonly opts: { runId?: string; terminal?: TaskRunTerminal } = {}) {}
 
@@ -73,6 +74,7 @@ class FakeSurface implements TaskExecutionSurface {
         : this.adapter
             .whenEnded()
             .then((payload) => ({ status: 'completed' as const, finalAssistantContent: payload.finalAssistantContent })),
+      dispose: this.dispose,
     };
   }
 }
@@ -258,6 +260,18 @@ describe('TaskRunCoordinator', () => {
     expect(surface.prompts[0]).toContain('Task ID: task-1');
   });
 
+  it('disposes the task-run surface after a completed run', async () => {
+    const { coordinator, surface } = makeCoordinator();
+    const run = coordinator.run(makeTask());
+    await flushMicrotasks();
+    surface.adapter.emitText(VALID_HANDOFF);
+    surface.adapter.emitEnd({ status: 'completed', finalAssistantContent: VALID_HANDOFF });
+
+    await run;
+
+    expect(surface.dispose).toHaveBeenCalledTimes(1);
+  });
+
   it('delegates a completed run with no handoff to an implicit needs_input pause that stays alive', async () => {
     const { coordinator, statuses, surface } = makeCoordinator();
     const p = coordinator.run(makeTask());
@@ -293,6 +307,15 @@ describe('TaskRunCoordinator', () => {
       canceled: true,
     });
     expect(statuses[statuses.length - 1]).toBe('canceled');
+  });
+
+  it('disposes the task-run surface after cancellation', async () => {
+    const surface = new FakeSurface({ terminal: { status: 'canceled', finalAssistantContent: '' } });
+    const { coordinator } = makeCoordinator(surface);
+
+    await coordinator.run(makeTask());
+
+    expect(surface.dispose).toHaveBeenCalledTimes(1);
   });
 
   it('rejects a concurrent run of the same work order while the first is still starting', async () => {

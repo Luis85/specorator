@@ -138,9 +138,6 @@ async function renderAutoTriggeredTurn(tab: TabData, result: AutoTurnResult): Pr
 
   if (hasVisibleContent) {
     tab.state.addMessage(assistantMsg);
-    if (!previousContentEl) {
-      tab.state.toolCallElements.clear();
-    }
     // Detached sentinel (see InputController.activateStreamingAssistantMessage):
     // marks an active assistant message for the stream pipeline; the Vue
     // transcript renders `assistantMsg` from reactive data.

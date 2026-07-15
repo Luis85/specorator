@@ -40,10 +40,15 @@ describe('CursorConversationHistoryService.hydrateConversationHistory', () => {
   afterEach(() => { jest.restoreAllMocks(); });
 
   it('returns error:sqlite-unavailable when node:sqlite cannot be required', async () => {
-    jest.spyOn(Store, 'resolveCursorStoreDbPath').mockReturnValue('/tmp/cursor.db');
-    jest.spyOn(Store, 'loadCursorChatMessagesFromStoreResult').mockReturnValue({
+    jest.spyOn(Store, 'resolveCursorHistorySources').mockReturnValue([{
+      kind: 'acp-sqlite',
+      path: '/tmp/cursor.db',
+      sourceRef: 's::acp-sqlite::/tmp/cursor.db::1:1',
+    }]);
+    jest.spyOn(Store, 'loadCursorHistoryFromSources').mockReturnValue({
       messages: [],
-      error: { code: 'sqlite-unavailable', message: 'Cursor history requires node:sqlite.' },
+      sourceRef: 's::acp-sqlite::/tmp/cursor.db::1:1',
+      error: { code: 'sqlite-unavailable', message: 'Cursor history requires Node 22.5+ (node:sqlite).' },
     });
     const svc = new CursorConversationHistoryService();
     const out = await svc.hydrateConversationHistory(makeConversation('s'), {
@@ -53,6 +58,63 @@ describe('CursorConversationHistoryService.hydrateConversationHistory', () => {
     expect(out.kind).toBe('error');
     // eslint-disable-next-line jest/no-conditional-expect
     if (out.kind === 'error') expect(out.error.code).toBe('sqlite-unavailable');
+  });
+
+  it('loads Cursor 2.x agent transcript JSONL when the legacy SQLite store is absent', async () => {
+    jest.spyOn(Store, 'resolveCursorHistorySources').mockReturnValue([{
+      kind: 'jsonl',
+      path: '/tmp/session.jsonl',
+      sourceRef: 's::jsonl::/tmp/session.jsonl::1:1',
+    }]);
+    jest.spyOn(Store, 'loadCursorHistoryFromSources').mockReturnValue({
+      messages: [{
+        id: 'm1',
+        role: 'user',
+        content: 'restored',
+        timestamp: 1,
+      }],
+      sourceRef: 's::jsonl::/tmp/session.jsonl::1:1',
+    });
+    const svc = new CursorConversationHistoryService();
+
+    const out = await svc.hydrateConversationHistory(makeConversation('s'), {
+      vaultPath: '/vault',
+      reason: 'open',
+    });
+
+    expect(out).toEqual(expect.objectContaining({
+      kind: 'loaded',
+      messages: [expect.objectContaining({ content: 'restored' })],
+    }));
+  });
+
+  it('marks a degraded SQLite/JSONL parse as non-cacheable', async () => {
+    jest.spyOn(Store, 'resolveCursorHistorySources').mockReturnValue([{
+      kind: 'jsonl',
+      path: '/tmp/session.jsonl',
+      sourceRef: 's::jsonl::/tmp/session.jsonl::1:1',
+    }]);
+    jest.spyOn(Store, 'loadCursorHistoryFromSources').mockReturnValue({
+      messages: [{
+        id: 'm1',
+        role: 'user',
+        content: 'partial history',
+        timestamp: 1,
+      }],
+      sourceRef: 's::jsonl::/tmp/session.jsonl::1:1',
+      degraded: true,
+    });
+    const svc = new CursorConversationHistoryService();
+
+    const out = await svc.hydrateConversationHistory(makeConversation('s'), {
+      vaultPath: '/vault',
+      reason: 'open',
+    });
+
+    expect(out).toEqual(expect.objectContaining({
+      kind: 'loaded',
+      cacheable: false,
+    }));
   });
 });
 
@@ -80,6 +142,39 @@ describe('CursorConversationHistoryService.deleteConversationSession', () => {
   function ctxFor(vaultPath: string): HydrationContext {
     return { vaultPath, reason: 'open' };
   }
+
+  it('falls back to exact-project JSONL when ACP metadata belongs to another vault', async () => {
+    const vault = '/vault/Test';
+    const sessionId = 'sess-cross-vault-fallback';
+    const acpDir = path.join(tmpHome, '.cursor', 'acp-sessions', sessionId);
+    fs.mkdirSync(acpDir, { recursive: true });
+    fs.writeFileSync(path.join(acpDir, 'meta.json'), JSON.stringify({ cwd: '/other/Vault' }));
+    fs.writeFileSync(path.join(acpDir, 'store.db'), '');
+
+    const slug = path.resolve(vault).replace(/[:\\/]+/g, '-');
+    const transcript = path.join(
+      tmpHome,
+      '.cursor',
+      'projects',
+      slug,
+      'agent-transcripts',
+      sessionId,
+      `${sessionId}.jsonl`,
+    );
+    fs.mkdirSync(path.dirname(transcript), { recursive: true });
+    fs.writeFileSync(transcript, `${JSON.stringify({
+      role: 'user',
+      message: { content: [{ type: 'text', text: 'safe fallback' }] },
+    })}\n`);
+
+    const svc = new CursorConversationHistoryService();
+    const out = await svc.hydrateConversationHistory(makeConversation(sessionId), ctxFor(vault));
+
+    expect(out).toEqual(expect.objectContaining({
+      kind: 'loaded',
+      messages: [expect.objectContaining({ content: 'safe fallback' })],
+    }));
+  });
 
   it('returns deleted with the normalized-hash directory in paths', async () => {
     const vault = '/vault/Test';
@@ -122,6 +217,20 @@ describe('CursorConversationHistoryService.deleteConversationSession', () => {
     // eslint-disable-next-line jest/no-conditional-expect
     if (out.kind === 'error') expect(out.error.code).toBe('invalid-session-id');
     expect(fs.existsSync(path.join(chatsRoot, 'sentinel'))).toBe(true);
+  });
+
+  it('refuses to delete an unowned global ACP directory when store.db is absent', async () => {
+    const vault = '/vault/Test';
+    const sessionId = 'sess-unowned-no-store';
+    const acpDir = path.join(tmpHome, '.cursor', 'acp-sessions', sessionId);
+    fs.mkdirSync(acpDir, { recursive: true });
+    fs.writeFileSync(path.join(acpDir, 'meta.json'), JSON.stringify({ cwd: '/other/Vault' }));
+
+    const svc = new CursorConversationHistoryService();
+    const out = await svc.deleteConversationSession(makeConversation(sessionId), ctxFor(vault));
+
+    expect(out.kind).toBe('error');
+    expect(fs.existsSync(acpDir)).toBe(true);
   });
 
   it('returns no-op:no-session when sessionId is null or vaultPath is null', async () => {

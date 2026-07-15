@@ -1,4 +1,7 @@
-import { buildAllowlistedSubprocessEnvironment } from '../../../core/providers/subprocessEnvironmentAllowlist';
+import {
+  buildFullSubprocessEnvironment,
+  pickEnvValueCaseInsensitive,
+} from '../../../core/providers/subprocessEnvironmentAllowlist';
 import { getEnhancedPath } from '../../../utils/env';
 
 /**
@@ -16,10 +19,9 @@ export function buildOpencodeRuntimeEnv(
     OPENCODE_DISABLE_CLAUDE_CODE_PROMPT: 'true',
     ...(databasePathOverride ? { OPENCODE_DB: databasePathOverride } : {}),
   };
-  return buildAllowlistedSubprocessEnvironment({
+  return buildFullSubprocessEnvironment({
     processEnv: process.env,
     customEnv: { ...resolvedEnv, ...opencodeExtras },
-    providerPrefixPattern: /^OPENCODE_/i,
-    pathOverride: getEnhancedPath(resolvedEnv.PATH, cliPath || undefined),
+    pathOverride: getEnhancedPath(pickEnvValueCaseInsensitive(resolvedEnv, 'PATH'), cliPath || undefined),
   });
 }

@@ -240,6 +240,22 @@ describe('InlineAskUserQuestion.vue', () => {
     expect(customInput.attributes('placeholder')).toBe('Enter secret.');
   });
 
+  it('masks secret answers on the review screen while preserving plaintext in resolve', async () => {
+    const resolve = vi.fn();
+    const input = { questions: [{ question: 'API key?', options: [], isOther: true, isSecret: true }] };
+    const wrapper = mountCard({ resolve, input });
+
+    const customInput = wrapper.find('.specorator-ask-custom-text');
+    await customInput.setValue('sk-live-secret-value');
+    await keydown(wrapper, 'ArrowRight');
+
+    expect(wrapper.find('.specorator-ask-review-a-text').text()).toBe('••••••');
+    expect(wrapper.text()).not.toContain('sk-live-secret-value');
+
+    await keydown(wrapper, 'Enter');
+    expect(resolve).toHaveBeenCalledWith({ 'API key?': 'sk-live-secret-value' });
+  });
+
   it('Escape at top level resolves null; Escape while input-focused only exits input focus', async () => {
     const resolve = vi.fn();
     const input = { questions: [{ question: 'Q1', options: [], isOther: true }] };

@@ -10,6 +10,10 @@ import type { ActiveStreamState, TranscriptHydrationError } from './stores/trans
 export interface TranscriptSnapshot {
   messages: ChatMessage[];
   activeStream: ActiveStreamState | null;
+  /** Bound conversation id; drives render-window reset on switch. */
+  conversationId: string | null;
+  /** Monotonic per-tab projection generation; bumps on conversation switch. */
+  projectionRevision: number;
   /** Welcome greeting text; empty string hides it (e.g. once messages exist). */
   greeting: string;
   /** Non-null while a conversation/tab-switch hydration spinner is in flight. */

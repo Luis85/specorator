@@ -52,6 +52,8 @@ export interface RunSessionDeps {
    * terminal via {@link finalizeLedgerToNote}.
    */
   appendLedger: (runId: string, entry: TaskLedgerEntry) => Promise<void>;
+  /** Optional batch append for sidecar writes (preferred over per-entry loops). */
+  appendLedgerBatch?: (runId: string, entries: TaskLedgerEntry[]) => Promise<void>;
   /**
    * Snapshots the sidecar ledger into the work-order note's
    * `<!-- specorator:run-ledger-* -->` region. Called once on every terminal
@@ -127,8 +129,14 @@ export class RunSession {
       // the per-entry event. Batching stays at the writer to avoid one syscall
       // per progress line; the writer's order is preserved here by `for...of`.
       flush: async (entries) => {
+        if (this.deps.appendLedgerBatch) {
+          await this.deps.appendLedgerBatch(this.deps.runId, entries);
+        } else {
+          for (const entry of entries) {
+            await this.deps.appendLedger(this.deps.runId, entry);
+          }
+        }
         for (const entry of entries) {
-          await this.deps.appendLedger(this.deps.runId, entry);
           this.deps.events.emit('task:ledger-appended', { taskId: this.taskId, path: this.path, entry });
         }
       },
@@ -554,14 +562,16 @@ export class RunSession {
    * doesn't read as the session wrapping itself in its own dep.
    */
   private async writeLedgerSnapshotBestEffort(): Promise<void> {
-    // Drain the sidecar queue first so the snapshot includes every entry the
-    // run produced (the writer batches, so the most recent enqueue may still
-    // be pending). Best-effort: a transient flush failure still proceeds to
-    // snapshot what's on disk rather than hanging the terminal write.
+    // Wait for the writer to drain (including retry backoff) before snapshotting
+    // so partial batches never land in the note without their trailing entries.
     try {
-      await this.ledger.flushNow();
+      await this.ledger.finalize();
     } catch {
-      // Sidecar append failed; snapshot what's on disk anyway.
+      try {
+        await this.ledger.flushNow();
+      } catch {
+        // Sidecar append failed; snapshot what's on disk anyway.
+      }
     }
     try {
       await this.deps.finalizeLedgerToNote(this.deps.task, this.deps.runId);

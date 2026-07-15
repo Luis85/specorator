@@ -1,3 +1,4 @@
+import type { ChildProcess } from 'node:child_process';
 import type { Readable, Writable } from 'node:stream';
 
 import { AgentSubprocess } from '../../core/transport/AgentSubprocess';
@@ -7,6 +8,28 @@ export interface AcpSubprocessLaunchSpec {
   command: string;
   cwd: string;
   env: NodeJS.ProcessEnv;
+  /**
+   * cmd.exe verbatim-args flag for a resolved Windows `.cmd`/`.bat` batch
+   * shim. Threaded straight through to `AgentSubprocess`.
+   */
+  windowsVerbatimArguments?: boolean;
+  /**
+   * Spawn the child in its own process group (POSIX `detached: true`) so a
+   * `killProcessTree` reaper can signal the whole group. Threaded to
+   * `AgentSubprocess`.
+   */
+  detached?: boolean;
+  /**
+   * Diagnostics tap: receives raw stderr chunks alongside the existing ring
+   * buffer. Never throws upstream — calls are try/catch-wrapped.
+   */
+  onStderrData?: (chunk: string) => void;
+  /**
+   * Optional hard tree-kill for `shutdown()` (see `AgentSubprocessSpec`). A
+   * provider whose CLI forks shell/git grandchildren passes a `taskkill /T /F`
+   * reaper so recycling the process doesn't orphan them on Windows.
+   */
+  killProcessTree?: (proc: ChildProcess) => void | Promise<void>;
 }
 
 type CloseListener = (error?: Error) => void;
@@ -18,9 +41,11 @@ type CloseListener = (error?: Error) => void;
  */
 export class AcpSubprocess {
   private readonly proc: AgentSubprocess;
+  private readonly onStderrData?: (chunk: string) => void;
 
   constructor(launchSpec: AcpSubprocessLaunchSpec) {
     this.proc = new AgentSubprocess(launchSpec);
+    this.onStderrData = launchSpec.onStderrData;
   }
 
   get stdin(): Writable {
@@ -37,6 +62,15 @@ export class AcpSubprocess {
 
   start(): void {
     this.proc.start();
+    if (this.onStderrData) {
+      this.proc.stderr.on('data', (chunk: Buffer | string) => {
+        try {
+          this.onStderrData?.(typeof chunk === 'string' ? chunk : chunk.toString('utf8'));
+        } catch {
+          // A diagnostics tap must never break the transport.
+        }
+      });
+    }
   }
 
   isAlive(): boolean {

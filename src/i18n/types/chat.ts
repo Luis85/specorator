@@ -9,6 +9,7 @@ export type ChatTranslationKey =
   | 'chat.history.linkedNotFound'
   | 'chat.history.linkedNoFreeTab'
   | 'chat.history.loading'
+  | 'chat.history.storeUnavailable'
 
   // Chat - File / folder context commands (Q-1 chunk 9, main.ts entries)
   | 'chat.context.fileNoTab'

@@ -1,34 +1,19 @@
-import type { ApprovalDecisionOption } from '../../../core/runtime/types';
-import type { ApprovalDecision } from '../../../core/types';
-import type { AcpRequestPermissionResponse } from '../../acp';
-
-export type OpencodePermissionOptionKind =
-  | 'allow_once'
-  | 'allow_always'
-  | 'reject_once'
-  | 'reject_always';
-
-export interface OpencodePermissionOption {
-  kind: OpencodePermissionOptionKind;
-  name: string;
-  optionId: string;
-}
+export {
+  buildAcpApprovalDecisionOptions,
+  mapApprovalDecision,
+  normalizeApprovalInput,
+  selectPermissionOption,
+} from '../../acp/acpApprovalMapping';
+export {
+  type AcpPermissionOption as OpencodePermissionOption,
+  type AcpPermissionOptionKind as OpencodePermissionOptionKind,
+} from '../../acp/types';
 
 export interface OpencodePermissionPresentation {
   blockedPath?: string;
   decisionReason?: string;
   description: string;
   toolName: string;
-}
-
-export function normalizeApprovalInput(rawInput: unknown): Record<string, unknown> {
-  if (rawInput && typeof rawInput === 'object' && !Array.isArray(rawInput)) {
-    return rawInput as Record<string, unknown>;
-  }
-  if (rawInput === undefined) {
-    return {};
-  }
-  return { value: rawInput };
 }
 
 /**
@@ -188,67 +173,6 @@ export function buildOpencodePermissionPresentation(
     default:
       return buildDefaultPresentation(permissionId, blockedPath);
   }
-}
-
-export function mapApprovalDecision(
-  decision: ApprovalDecision,
-  options: readonly Pick<OpencodePermissionOption, 'kind' | 'optionId'>[],
-): AcpRequestPermissionResponse {
-  if (decision === 'allow') {
-    return selectPermissionOption(options, ['allow_once', 'allow_always']);
-  }
-
-  if (decision === 'allow-always') {
-    return selectPermissionOption(options, ['allow_always', 'allow_once']);
-  }
-
-  if (decision === 'deny') {
-    return selectPermissionOption(options, ['reject_once', 'reject_always']);
-  }
-
-  if (typeof decision === 'object' && decision.type === 'select-option') {
-    return {
-      outcome: {
-        optionId: decision.value,
-        outcome: 'selected',
-      },
-    };
-  }
-
-  return { outcome: { outcome: 'cancelled' } };
-}
-
-export function buildAcpApprovalDecisionOptions(
-  options: readonly OpencodePermissionOption[],
-): ApprovalDecisionOption[] {
-  return options.map((option) => ({
-    ...(option.kind === 'allow_once'
-      ? { decision: 'allow' as const }
-      : option.kind === 'allow_always'
-      ? { decision: 'allow-always' as const }
-      : {}),
-    label: option.name,
-    value: option.optionId,
-  }));
-}
-
-export function selectPermissionOption(
-  options: readonly Pick<OpencodePermissionOption, 'kind' | 'optionId'>[],
-  preferredKinds: readonly OpencodePermissionOptionKind[],
-): AcpRequestPermissionResponse {
-  for (const kind of preferredKinds) {
-    const option = options.find((entry) => entry.kind === kind);
-    if (option) {
-      return {
-        outcome: {
-          optionId: option.optionId,
-          outcome: 'selected',
-        },
-      };
-    }
-  }
-
-  return { outcome: { outcome: 'cancelled' } };
 }
 
 function normalizePermissionId(value: string | null | undefined): string {

@@ -56,9 +56,31 @@ describe('AgentSubprocess', () => {
       }));
     });
 
-    it('passes windowsVerbatimArguments only when set', () => {
+    it('passes windowsVerbatimArguments through to spawn when set, and omits it otherwise', () => {
+      new AgentSubprocess(SPEC).start();
+      expect(mockSpawn.mock.calls[0][2]).not.toHaveProperty('windowsVerbatimArguments');
+
       new AgentSubprocess({ ...SPEC, windowsVerbatimArguments: true }).start();
-      expect(mockSpawn.mock.calls[0][2]).toMatchObject({ windowsVerbatimArguments: true });
+      expect(mockSpawn.mock.calls[1][2]).toMatchObject({ windowsVerbatimArguments: true });
+    });
+
+    it('spawns detached (own process group) only on posix when detached is set', () => {
+      const realPlatform = process.platform;
+      try {
+        new AgentSubprocess(SPEC).start();
+        expect(mockSpawn.mock.calls[0][2]).not.toHaveProperty('detached');
+
+        Object.defineProperty(process, 'platform', { value: 'linux', configurable: true });
+        new AgentSubprocess({ ...SPEC, detached: true }).start();
+        expect(mockSpawn.mock.calls[1][2]).toMatchObject({ detached: true });
+
+        // Windows relies on taskkill /T instead — detached would spawn a console.
+        Object.defineProperty(process, 'platform', { value: 'win32', configurable: true });
+        new AgentSubprocess({ ...SPEC, detached: true }).start();
+        expect(mockSpawn.mock.calls[2][2]).not.toHaveProperty('detached');
+      } finally {
+        Object.defineProperty(process, 'platform', { value: realPlatform, configurable: true });
+      }
     });
 
     it('is idempotent', () => {
@@ -187,6 +209,69 @@ describe('AgentSubprocess', () => {
     it('is a no-op when never started', async () => {
       await expect(new AgentSubprocess(SPEC).shutdown()).resolves.toBeUndefined();
       expect(mockProc.kill).not.toHaveBeenCalled();
+    });
+
+    it('uses the killProcessTree hook (tree kill) instead of SIGTERM/SIGKILL when provided', async () => {
+      const killProcessTree = jest.fn();
+      const p = new AgentSubprocess({ ...SPEC, killProcessTree });
+      p.start();
+      const done = p.shutdown();
+      expect(killProcessTree).toHaveBeenCalledWith(mockProc);
+      expect(mockProc.kill).not.toHaveBeenCalled();
+      mockProc.emit('exit', 0, 'SIGKILL');
+      await expect(done).resolves.toBeUndefined();
+    });
+
+    it('awaits an asynchronous killProcessTree hook before completing shutdown', async () => {
+      let releaseKill!: () => void;
+      const killPending = new Promise<void>((resolve) => { releaseKill = resolve; });
+      const killProcessTree = jest.fn(() => killPending);
+      const p = new AgentSubprocess({ ...SPEC, killProcessTree });
+      p.start();
+
+      let settled = false;
+      const done = p.shutdown().then(() => { settled = true; });
+      mockProc.emit('exit', 0, 'SIGKILL');
+      await Promise.resolve();
+      expect(settled).toBe(false);
+
+      releaseKill();
+      await done;
+      expect(settled).toBe(true);
+    });
+
+    it('reaps the process group via killProcessTree even when the direct child already exited', async () => {
+      // A detached group's shell/git grandchildren can outlive the direct child.
+      // A cleanup/restart after the child crashed must still reap the group.
+      const killProcessTree = jest.fn();
+      (mockProc as unknown as { pid: number }).pid = 4242;
+      const p = new AgentSubprocess({ ...SPEC, killProcessTree });
+      p.start();
+      mockProc.emit('exit', 1, null); // child gone: alive=false
+      mockProc.exitCode = 1;
+
+      await p.shutdown();
+
+      expect(killProcessTree).toHaveBeenCalledWith(mockProc);
+      expect(mockProc.kill).not.toHaveBeenCalled();
+    });
+
+    it('does not group-reap an exited child with no pid or no reaper', async () => {
+      const killProcessTree = jest.fn();
+      // No pid ⇒ nothing to signal.
+      const p = new AgentSubprocess({ ...SPEC, killProcessTree });
+      p.start();
+      mockProc.emit('exit', 1, null);
+      mockProc.exitCode = 1;
+      await p.shutdown();
+      expect(killProcessTree).not.toHaveBeenCalled();
+
+      // No reaper configured ⇒ exited child is a clean no-op.
+      const p2 = new AgentSubprocess(SPEC);
+      p2.start();
+      mockProc.emit('exit', 1, null);
+      mockProc.exitCode = 1;
+      await expect(p2.shutdown()).resolves.toBeUndefined();
     });
   });
 });

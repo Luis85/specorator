@@ -41,17 +41,20 @@ jest.mock('@/features/chat/rendering/ThinkingBlockRenderer', () => ({
     contentEl: {},
     content: '',
     startTime: Date.now(),
+    timerInterval: null,
+  })),
+  createThinkingTimingState: jest.fn().mockImplementation(() => ({
+    content: '',
+    startTime: Date.now(),
+    timerInterval: null,
   })),
   finalizeThinkingBlock: jest.fn().mockReturnValue(0),
+  finalizeThinkingTimingState: jest.fn().mockReturnValue(0),
+  cleanupThinkingBlock: jest.fn(),
 }));
 
-jest.mock('@/features/chat/rendering/ToolCallRenderer', () => ({
-  getToolName: jest.fn().mockReturnValue('Read'),
-  getToolSummary: jest.fn().mockReturnValue('file.md'),
+jest.mock('@/features/chat/rendering/toolCallViewModel', () => ({
   isBlockedToolResult: jest.fn().mockReturnValue(false),
-  renderToolCall: jest.fn(),
-  updateToolCallResult: jest.fn(),
-  decorateToolSummaryPath: jest.fn(),
 }));
 
 jest.mock('@/utils/path', () => ({
@@ -536,9 +539,9 @@ describe('StreamController - Text Content', () => {
     });
 
     it('grows a single reactive thinking block and stamps durationSeconds on finalize', async () => {
-      const { createThinkingBlock, finalizeThinkingBlock } = jest.requireMock('@/features/chat/rendering/ThinkingBlockRenderer');
-      finalizeThinkingBlock.mockReturnValueOnce(7);
-      createThinkingBlock.mockReturnValueOnce({
+      const { createThinkingTimingState, finalizeThinkingTimingState } = jest.requireMock('@/features/chat/rendering/ThinkingBlockRenderer');
+      finalizeThinkingTimingState.mockReturnValueOnce(7);
+      createThinkingTimingState.mockReturnValueOnce({
         container: createMockEl(),
         contentEl: createMockEl(),
         content: '',
@@ -560,8 +563,8 @@ describe('StreamController - Text Content', () => {
     });
 
     it('keeps thinking and text blocks in stream order across a transition', async () => {
-      const { createThinkingBlock } = jest.requireMock('@/features/chat/rendering/ThinkingBlockRenderer');
-      createThinkingBlock.mockReturnValueOnce({
+      const { createThinkingTimingState } = jest.requireMock('@/features/chat/rendering/ThinkingBlockRenderer');
+      createThinkingTimingState.mockReturnValueOnce({
         container: createMockEl(),
         contentEl: createMockEl(),
         content: '',
@@ -577,9 +580,9 @@ describe('StreamController - Text Content', () => {
     });
 
     it('finalizes a reasoning-only turn: done then InputController-style finalize keeps the thinking block', async () => {
-      const { createThinkingBlock, finalizeThinkingBlock } = jest.requireMock('@/features/chat/rendering/ThinkingBlockRenderer');
-      finalizeThinkingBlock.mockReturnValueOnce(4);
-      createThinkingBlock.mockReturnValueOnce({
+      const { createThinkingTimingState, finalizeThinkingTimingState } = jest.requireMock('@/features/chat/rendering/ThinkingBlockRenderer');
+      finalizeThinkingTimingState.mockReturnValueOnce(4);
+      createThinkingTimingState.mockReturnValueOnce({
         container: createMockEl(),
         contentEl: createMockEl(),
         content: '',
@@ -628,8 +631,8 @@ describe('StreamController - Text Content', () => {
       });
 
       it('tracks the open thinking block pointers', async () => {
-        const { createThinkingBlock } = jest.requireMock('@/features/chat/rendering/ThinkingBlockRenderer');
-        createThinkingBlock.mockReturnValueOnce({
+        const { createThinkingTimingState } = jest.requireMock('@/features/chat/rendering/ThinkingBlockRenderer');
+        createThinkingTimingState.mockReturnValueOnce({
           container: createMockEl(),
           contentEl: createMockEl(),
           content: '',
@@ -1655,10 +1658,10 @@ describe('StreamController - Text Content', () => {
 
   describe('Thinking block finalization', () => {
     it('should finalize thinking block and add to contentBlocks', async () => {
-      const { createThinkingBlock } = jest.requireMock('@/features/chat/rendering/ThinkingBlockRenderer');
+      const { createThinkingTimingState } = jest.requireMock('@/features/chat/rendering/ThinkingBlockRenderer');
       const msg = createTestMessage();
       deps.state.currentContentEl = createMockEl();
-      createThinkingBlock.mockReturnValueOnce({
+      createThinkingTimingState.mockReturnValueOnce({
         container: createMockEl(),
         contentEl: createMockEl(),
         content: '',
@@ -1700,9 +1703,9 @@ describe('StreamController - Text Content', () => {
     });
 
     it('accumulates streamed reasoning into the reactive thinking block', async () => {
-      const { createThinkingBlock } = jest.requireMock('@/features/chat/rendering/ThinkingBlockRenderer');
+      const { createThinkingTimingState } = jest.requireMock('@/features/chat/rendering/ThinkingBlockRenderer');
       const msg = createTestMessage();
-      createThinkingBlock.mockReturnValueOnce({
+      createThinkingTimingState.mockReturnValueOnce({
         container: createMockEl(),
         contentEl: createMockEl(),
         content: '',
@@ -1716,9 +1719,9 @@ describe('StreamController - Text Content', () => {
     });
 
     it('accumulates math reasoning into the reactive thinking block', async () => {
-      const { createThinkingBlock } = jest.requireMock('@/features/chat/rendering/ThinkingBlockRenderer');
+      const { createThinkingTimingState } = jest.requireMock('@/features/chat/rendering/ThinkingBlockRenderer');
       const msg = createTestMessage();
-      createThinkingBlock.mockReturnValueOnce({
+      createThinkingTimingState.mockReturnValueOnce({
         container: createMockEl(),
         contentEl: createMockEl(),
         content: '',
@@ -1731,9 +1734,9 @@ describe('StreamController - Text Content', () => {
     });
 
     it('persists the math reasoning block content when finalizing', async () => {
-      const { createThinkingBlock } = jest.requireMock('@/features/chat/rendering/ThinkingBlockRenderer');
+      const { createThinkingTimingState } = jest.requireMock('@/features/chat/rendering/ThinkingBlockRenderer');
       const msg = createTestMessage();
-      createThinkingBlock.mockReturnValueOnce({
+      createThinkingTimingState.mockReturnValueOnce({
         container: createMockEl(),
         contentEl: createMockEl(),
         content: '',
@@ -1949,10 +1952,10 @@ describe('StreamController - Text Content', () => {
 
   describe('Text ↔ Thinking transitions', () => {
     it('text arrives while thinking state is active → finalizeCurrentThinkingBlock is called', async () => {
-      const { createThinkingBlock, finalizeThinkingBlock } = jest.requireMock('@/features/chat/rendering/ThinkingBlockRenderer');
+      const { createThinkingTimingState, finalizeThinkingTimingState } = jest.requireMock('@/features/chat/rendering/ThinkingBlockRenderer');
       const msg = createTestMessage();
       deps.state.currentContentEl = createMockEl();
-      createThinkingBlock.mockReturnValueOnce({
+      createThinkingTimingState.mockReturnValueOnce({
         container: createMockEl(),
         contentEl: createMockEl(),
         content: '',
@@ -1962,7 +1965,7 @@ describe('StreamController - Text Content', () => {
       await controller.handleStreamChunk({ type: 'thinking', content: 'Let me think...' }, msg);
       await controller.handleStreamChunk({ type: 'text', content: 'Hello' }, msg);
 
-      expect(finalizeThinkingBlock).toHaveBeenCalled();
+      expect(finalizeThinkingTimingState).toHaveBeenCalled();
       expect(deps.state.currentThinkingState).toBeNull();
       expect(msg.contentBlocks).toContainEqual(
         expect.objectContaining({ type: 'thinking', content: 'Let me think...' })
@@ -1983,10 +1986,10 @@ describe('StreamController - Text Content', () => {
     });
 
     it('tool_use arrives while thinking state → finalizeCurrentThinkingBlock is called', async () => {
-      const { createThinkingBlock, finalizeThinkingBlock } = jest.requireMock('@/features/chat/rendering/ThinkingBlockRenderer');
+      const { createThinkingTimingState, finalizeThinkingTimingState } = jest.requireMock('@/features/chat/rendering/ThinkingBlockRenderer');
       const msg = createTestMessage();
       deps.state.currentContentEl = createMockEl();
-      createThinkingBlock.mockReturnValueOnce({
+      createThinkingTimingState.mockReturnValueOnce({
         container: createMockEl(),
         contentEl: createMockEl(),
         content: '',
@@ -1999,7 +2002,7 @@ describe('StreamController - Text Content', () => {
         msg
       );
 
-      expect(finalizeThinkingBlock).toHaveBeenCalled();
+      expect(finalizeThinkingTimingState).toHaveBeenCalled();
       expect(deps.state.currentThinkingState).toBeNull();
       expect(msg.contentBlocks).toContainEqual(
         expect.objectContaining({ type: 'thinking', content: 'Reasoning...' })
@@ -2063,7 +2066,6 @@ describe('StreamController - Text Content', () => {
     });
 
     it('Agent output tool result handled via handleAgentOutputToolResult returning true', async () => {
-      const { updateToolCallResult } = jest.requireMock('@/features/chat/rendering/ToolCallRenderer');
       const msg = createTestMessage();
       deps.state.currentContentEl = createMockEl();
 
@@ -2081,7 +2083,6 @@ describe('StreamController - Text Content', () => {
         false,
         { foo: 'bar' }
       );
-      expect(updateToolCallResult).not.toHaveBeenCalled();
     });
 
     it('async_subagent_result finalizes and hydrates the matching background subagent', async () => {
@@ -2375,7 +2376,7 @@ describe('StreamController - Text Content', () => {
   });
 
   describe('Codex subagent lifecycle', () => {
-    it('renders prompt immediately and final result after wait_agent resolves', async () => {
+    it('tracks spawn/wait lifecycle tool calls without imperative subagent DOM', async () => {
       const { createSubagentBlock, finalizeSubagentBlock } = jest.requireMock('@/features/chat/rendering/SubagentRenderer');
       const msg = createTestMessage();
       deps.state.currentContentEl = createMockEl();
@@ -2387,12 +2388,6 @@ describe('StreamController - Text Content', () => {
           planPathPrefix: '/.codex/plans/',
         }),
       }) as any;
-
-      const subagentState = {
-        info: { id: 'spawn-1', description: 'Codex subagent', prompt: '', status: 'running', toolCalls: [] },
-        labelEl: { setText: jest.fn() },
-      };
-      createSubagentBlock.mockReturnValueOnce(subagentState);
 
       await controller.handleStreamChunk(
         {
@@ -2432,27 +2427,17 @@ describe('StreamController - Text Content', () => {
         msg,
       );
 
-      expect(createSubagentBlock).toHaveBeenCalledWith(
-        expect.anything(),
-        expect.anything(),
-        'spawn-1',
-        expect.objectContaining({
-          description: 'Codex subagent (gpt-5.4-mini)',
-          prompt: 'Inspect utils.ts and return the final patch summary.',
-        }),
-      );
-      expect(subagentState.info.description).toBe('Zeno (gpt-5.4-mini)');
-      expect(finalizeSubagentBlock).toHaveBeenCalledWith(
-        subagentState,
-        'Patched utils.ts and verified imports.',
-        false,
-      );
+      expect(createSubagentBlock).not.toHaveBeenCalled();
+      expect(finalizeSubagentBlock).not.toHaveBeenCalled();
+      const spawn = msg.toolCalls!.find((tc) => tc.id === 'spawn-1');
+      expect(spawn).toBeDefined();
+      expect(spawn?.status).toBe('completed');
+      expect(spawn?.result).toBe('Patched utils.ts and verified imports.');
     });
   });
 
   describe('Async task tool result', () => {
     it('tool_result for a pending async task returns true from handleAsyncTaskToolResult', async () => {
-      const { updateToolCallResult } = jest.requireMock('@/features/chat/rendering/ToolCallRenderer');
       const msg = createTestMessage();
       deps.state.currentContentEl = createMockEl();
 
@@ -2470,7 +2455,6 @@ describe('StreamController - Text Content', () => {
         undefined
       );
 
-      expect(updateToolCallResult).not.toHaveBeenCalled();
       expect(msg.toolCalls).toEqual([]);
     });
 
@@ -2711,7 +2695,7 @@ describe('StreamController - Plan Mode', () => {
     });
 
     it('should not mark AskUserQuestion as blocked even when result looks blocked', async () => {
-      const { isBlockedToolResult } = jest.requireMock('@/features/chat/rendering/ToolCallRenderer');
+      const { isBlockedToolResult } = jest.requireMock('@/features/chat/rendering/toolCallViewModel');
       (isBlockedToolResult as jest.Mock).mockReturnValueOnce(true);
 
       const msg = createTestMessage();
@@ -2731,7 +2715,7 @@ describe('StreamController - Plan Mode', () => {
     });
 
     it('should not mark ExitPlanMode as blocked even when result looks blocked', async () => {
-      const { isBlockedToolResult } = jest.requireMock('@/features/chat/rendering/ToolCallRenderer');
+      const { isBlockedToolResult } = jest.requireMock('@/features/chat/rendering/toolCallViewModel');
       (isBlockedToolResult as jest.Mock).mockReturnValueOnce(true);
 
       const msg = createTestMessage();
@@ -2751,7 +2735,7 @@ describe('StreamController - Plan Mode', () => {
     });
 
     it('should mark regular tool as blocked when result is blocked', async () => {
-      const { isBlockedToolResult } = jest.requireMock('@/features/chat/rendering/ToolCallRenderer');
+      const { isBlockedToolResult } = jest.requireMock('@/features/chat/rendering/toolCallViewModel');
       (isBlockedToolResult as jest.Mock).mockReturnValueOnce(true);
 
       const msg = createTestMessage();
@@ -2900,6 +2884,27 @@ describe('StreamController - edited files', () => {
     await completeTool(msg, { id: 't2', name: 'delete', input: { path: 'notes/x.md' } });
 
     expect(deps.state.editedFiles).toEqual([]);
+  });
+
+  it('adopts a corrected tool name on a repeated tool_use so edit bookkeeping runs', async () => {
+    // ACP first renders the call under a prose title; a later tool_use for the
+    // same id supplies the canonical Edit name + canonicalized input. The
+    // corrected name must reach edited-file bookkeeping at tool_result time.
+    const msg = createTestMessage();
+    await controller.handleStreamChunk(
+      { type: 'tool_use', id: 't1', name: 'Applying changes', input: {} },
+      msg,
+    );
+    await controller.handleStreamChunk(
+      { type: 'tool_use', id: 't1', name: 'Edit', input: { file_path: 'notes/e.md' } },
+      msg,
+    );
+    await controller.handleStreamChunk(
+      { type: 'tool_result', id: 't1', content: 'ok' },
+      msg,
+    );
+
+    expect(deps.state.editedFiles.map((entry) => entry.path)).toEqual(['notes/e.md']);
   });
 
   it('records a file edited by a sync sub-agent', async () => {
@@ -3113,7 +3118,7 @@ describe('StreamController - reactive tool-call data (Task 16 write-side)', () =
   });
 
   it('does not attach diffData to a blocked write (WriteEditView error branch)', async () => {
-    const { isBlockedToolResult } = jest.requireMock('@/features/chat/rendering/ToolCallRenderer');
+    const { isBlockedToolResult } = jest.requireMock('@/features/chat/rendering/toolCallViewModel');
     (isBlockedToolResult as jest.Mock).mockReturnValueOnce(true);
     const msg = createTestMessage();
 

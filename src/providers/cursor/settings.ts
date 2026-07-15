@@ -68,6 +68,10 @@ export interface CursorProviderSettings {
   lastModel: string;
   environmentVariables: string;
   environmentHash: string;
+  // Diagnostics only: records ACP wire frames/stderr/lifecycle events to
+  // <vault>/.specorator/captures/cursor when true. Default off — captures may
+  // contain prompt text. See CursorAcpCaptureWriter.
+  captureAcpTraffic: boolean;
 }
 
 export const DEFAULT_CURSOR_PROVIDER_SETTINGS: Readonly<CursorProviderSettings> = Object.freeze({
@@ -80,6 +84,7 @@ export const DEFAULT_CURSOR_PROVIDER_SETTINGS: Readonly<CursorProviderSettings> 
   lastModel: '',
   environmentVariables: '',
   environmentHash: '',
+  captureAcpTraffic: false,
 });
 
 export function getCursorProviderSettings(settings: Record<string, unknown>): CursorProviderSettings {
@@ -98,6 +103,8 @@ export function getCursorProviderSettings(settings: Record<string, unknown>): Cu
       ?? DEFAULT_CURSOR_PROVIDER_SETTINGS.environmentVariables,
     environmentHash: (config.environmentHash as string | undefined)
       ?? DEFAULT_CURSOR_PROVIDER_SETTINGS.environmentHash,
+    captureAcpTraffic: (config.captureAcpTraffic as boolean | undefined)
+      ?? DEFAULT_CURSOR_PROVIDER_SETTINGS.captureAcpTraffic,
   };
 }
 
@@ -133,6 +140,7 @@ export function updateCursorProviderSettings(
     lastModel: next.lastModel,
     environmentVariables: next.environmentVariables,
     environmentHash: next.environmentHash,
+    captureAcpTraffic: next.captureAcpTraffic,
   });
   return next;
 }

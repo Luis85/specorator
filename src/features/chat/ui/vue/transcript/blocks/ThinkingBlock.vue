@@ -1,6 +1,11 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
 
+import {
+  formatThinkingFinalLabel,
+  formatThinkingLiveLabel,
+  THINKING_BLOCK_HEADER_ARIA_LABEL,
+} from '../../../../rendering/ThinkingBlockRenderer';
 import { useCollapsible } from '../collapsible';
 import MarkdownHost from '../MarkdownHost.vue';
 
@@ -33,8 +38,8 @@ onBeforeUnmount(() => {
 });
 
 const label = computed(() => {
-  if (props.live) return `Thinking ${liveSeconds.value}s...`;
-  if (props.durationSeconds !== undefined) return `Thought for ${props.durationSeconds}s`;
+  if (props.live) return formatThinkingLiveLabel(liveSeconds.value);
+  if (props.durationSeconds !== undefined) return formatThinkingFinalLabel(props.durationSeconds);
   return 'Thought';
 });
 </script>
@@ -49,7 +54,7 @@ const label = computed(() => {
       tabindex="0"
       role="button"
       :aria-expanded="expanded ? 'true' : 'false'"
-      aria-label="Extended thinking - click to expand"
+      :aria-label="THINKING_BLOCK_HEADER_ARIA_LABEL"
       @click="toggle"
       @keydown="onKeydown"
     >

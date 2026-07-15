@@ -6,7 +6,7 @@ parent: "[[Multi Provider Support]]"
 ---
 # Specorator — Install Cursor (Windows)
 
-This manual walks Windows users through installing the **Cursor Agent CLI** (`cursor-agent` / `agent`), the runtime Specorator drives when the Cursor provider is enabled. Specorator drives it by spawning the `cursor-agent` CLI directly (`--output-format stream-json`, parsed as NDJSON) — **not** ACP; you only need the CLI on `PATH` (or pointed at explicitly).
+This manual walks Windows users through installing the **Cursor Agent CLI** (`cursor-agent` / `agent`), the runtime Specorator drives when the Cursor provider is enabled. Specorator drives it over first-party **ACP** — it spawns `agent acp` as a persistent process and speaks the Agent Client Protocol over stdio JSON-RPC, the same transport family Opencode uses. You need a **recent enough CLI build that ships the `acp` subcommand** (see [Verify the install](#verify-the-install)) on `PATH`, or pointed at explicitly, and you need to be **logged in** (see [Authenticate](#authenticate)) — `session/new` fails for an unauthenticated CLI the same way the old stream-json path did.
 
 See [settings](settings.md) for the Cursor tab layout, and [cursor-model-families-and-modes](cursor-model-families-and-modes.md) for how Cursor model families and modes show up in chat.
 
@@ -64,6 +64,14 @@ A version string means success.
 
 > The CLI ships two entry points — `cursor-agent` and `agent`. Both invoke the same binary. Specorator's auto-detect looks for `agent` first on Windows.
 
+Specorator additionally needs a CLI build that supports `agent acp` (the persistent ACP server subcommand). Confirm it is present:
+
+```powershell
+agent acp --help
+```
+
+If this errors with an unknown-subcommand message, your install predates ACP support — update it (see [Updating](#updating)) before enabling the Cursor provider. An out-of-date CLI surfaces as a clear "update cursor-agent" error the first time Specorator tries to start a Cursor chat, rather than a hang.
+
 ---
 
 ## Authenticate
@@ -117,6 +125,32 @@ WSL installs update by re-running the `curl ... | bash` line inside the distro.
 
 ---
 
+## Collecting diagnostics
+
+If a Cursor session misbehaves and you need to hand a developer the raw ACP
+traffic, turn on **Capture ACP traffic** under **Settings → Specorator →
+Cursor → Diagnostics**. It is off by default.
+
+- **Diagnostics only — captures may contain prompt text.** Secrets are
+  redacted best-effort (API keys, bearer tokens, `user:pass@host` URLs), but
+  the capture is not a substitute for reviewing what you send before sharing
+  it.
+- Enabling the toggle takes effect on the *next* `agent acp` spawn — it does
+  not retroactively capture an already-running session.
+- Each session writes to its own timestamped folder under
+  `<vault>/.specorator/captures/cursor/`: `wire.jsonl` (every ACP request/
+  response/notification), `stderr.log`, `lifecycle.jsonl` (spawn, initialize,
+  session new/load, mode/model changes, cancel, exit), and `meta.json`
+  (CLI path, plugin version, platform, start time). Only the newest 20
+  session folders are kept.
+- Run the **Cursor: open ACP capture folder** command (Command Palette) to
+  reveal the folder in your OS file manager. The folder is created on demand
+  if no capture has run yet.
+- Turn the toggle back off when you are done — it stays off across restarts
+  until you enable it again.
+
+---
+
 ## Troubleshooting
 
 | Symptom | Fix |
@@ -138,7 +172,7 @@ Cursor in Specorator is narrower than Claude. The composer hides controls the Cu
 - **Rewind** — not supported (`cursor-agent` reports `rewind: false`).
 - **Fork** — not supported on Cursor conversations.
 - **Provider slash commands** — Cursor does not expose runtime-discovered `/` commands. Specorator-defined `/` commands still work.
-- **In-app MCP management** — Specorator does not edit Cursor's MCP config. Use Cursor's own tooling.
+- **In-app MCP management** — Specorator does not edit Cursor's MCP config. Use Cursor's own tooling. Project (`.cursor/mcp.json`) and user-level MCP servers are picked up over ACP the same as before; **team-level/dashboard-configured MCP servers do not apply in ACP mode** — only project/user `.cursor/mcp.json` entries reach the `agent acp` session.
 - **Subagents** — Cursor does not expose a `Task`-style subagent tool.
 
 Plan mode, the YOLO/Safe permission toggle, image attachments, the `#` instruction mode, and session resume from `~/.cursor/chats/<workspace>/<session>/` all work.

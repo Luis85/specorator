@@ -24,10 +24,6 @@ export function activateStreamingAssistantMessage(
   messagesEl: HTMLElement,
   message: ChatMessage,
 ): void {
-  if (!state.currentContentEl) {
-    state.toolCallElements.clear();
-  }
-
   state.currentContentEl = messagesEl.ownerDocument.createElement('div');
   state.currentTextEl = null;
   state.currentTextContent = '';

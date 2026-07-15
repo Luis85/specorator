@@ -807,6 +807,26 @@ describe('TabManager - Conversation Management', () => {
       expect(switchSpy).toHaveBeenCalledWith('tab-with-conv');
     });
 
+    it('re-hydrates when the conversation tab is bound but the transcript is still empty', async () => {
+      const tabWithConv = createMockTabData({
+        id: 'tab-with-conv',
+        conversationId: 'conv-123',
+      });
+      tabWithConv.state.messages = [];
+      const switchTo = jest.fn().mockResolvedValue(undefined);
+      const whenHydrated = jest.fn().mockResolvedValue(undefined);
+      tabWithConv.controllers.conversationController = { switchTo, whenHydrated } as any;
+      mockCreateTab.mockReturnValueOnce(tabWithConv);
+      await manager.createTab();
+
+      jest.spyOn(manager, 'switchToTab').mockResolvedValue(undefined);
+
+      await manager.openConversation('conv-123');
+
+      expect(switchTo).toHaveBeenCalledWith('conv-123');
+      expect(whenHydrated).toHaveBeenCalled();
+    });
+
     it('should create new tab when preferNewTab is true', async () => {
       plugin.getConversationById.mockResolvedValue({ id: 'conv-new' });
 
@@ -2279,7 +2299,7 @@ describe('TabManager - Service Initialization Errors', () => {
 });
 
 describe('TabManager - Concurrent Switch Guard', () => {
-  it('should prevent concurrent tab switches', async () => {
+  it('serializes concurrent tab switches through the mutation queue', async () => {
     const callbacks: TabManagerCallbacks = {
       onTabSwitched: jest.fn(),
     };
@@ -2288,10 +2308,8 @@ describe('TabManager - Concurrent Switch Guard', () => {
     const tab1 = await manager.createTab();
     const tab2 = await manager.createTab();
 
-    // Set up tab-1 to trigger the async conversationController.switchTo path
-    // so that switchToTab hangs mid-execution with isSwitchingTab = true
     let resolveSwitchTo!: () => void;
-    const hangingPromise = new Promise<void>(resolve => {
+    const hangingPromise = new Promise<void>((resolve) => {
       resolveSwitchTo = resolve;
     });
     tab1!.conversationId = 'conv-1';
@@ -2300,25 +2318,16 @@ describe('TabManager - Concurrent Switch Guard', () => {
 
     jest.clearAllMocks();
 
-    // Start first switch to tab-1 (will hang on conversationController.switchTo)
     const firstSwitch = manager.switchToTab(tab1!.id);
+    await Promise.resolve();
+    await Promise.resolve();
 
-    // While first switch is in progress, try a second switch.
-    // isSwitchingTab is true, so this should return immediately (lines 143-144)
-    await manager.switchToTab(tab2!.id);
+    const secondSwitch = manager.switchToTab(tab2!.id);
 
-    expect(mockDeactivateTab).toHaveBeenCalledTimes(1);
-    expect(mockActivateTab).toHaveBeenCalledTimes(1);
-
-    // Resolve the hanging first switch
     resolveSwitchTo();
     await firstSwitch;
+    await secondSwitch;
 
-    expect(callbacks.onTabSwitched).toHaveBeenCalledTimes(1);
-
-    // After first switch completes, isSwitchingTab is false
-    // and subsequent switches should work normally
-    await manager.switchToTab(tab2!.id);
     expect(callbacks.onTabSwitched).toHaveBeenCalledTimes(2);
   });
 });

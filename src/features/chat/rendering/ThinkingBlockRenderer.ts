@@ -12,6 +12,41 @@ export interface ThinkingBlockState {
   isExpanded: boolean;
 }
 
+/** Data-only thinking timing used by the Vue transcript streaming path. */
+export interface ThinkingTimingState {
+  content: string;
+  startTime: number;
+  timerInterval: number | null;
+}
+
+export const THINKING_BLOCK_HEADER_ARIA_LABEL = 'Extended thinking - click to expand';
+
+export function formatThinkingLiveLabel(elapsedSeconds: number): string {
+  return `Thinking ${elapsedSeconds}s...`;
+}
+
+export function formatThinkingFinalLabel(durationSeconds: number): string {
+  return `Thought for ${durationSeconds}s`;
+}
+
+export function createThinkingTimingState(): ThinkingTimingState {
+  return { content: '', startTime: Date.now(), timerInterval: null };
+}
+
+export function finalizeThinkingTimingState(state: ThinkingTimingState): number {
+  if (state.timerInterval) {
+    window.clearInterval(state.timerInterval);
+    state.timerInterval = null;
+  }
+  return Math.floor((Date.now() - state.startTime) / 1000);
+}
+
+export function cleanupThinkingTimingState(state: ThinkingTimingState | null): void {
+  if (state?.timerInterval) {
+    window.clearInterval(state.timerInterval);
+  }
+}
+
 export function createThinkingBlock(
   parentEl: HTMLElement,
   renderContent: RenderContentFn
@@ -23,17 +58,17 @@ export function createThinkingBlock(
   header.setAttribute('tabindex', '0');
   header.setAttribute('role', 'button');
   header.setAttribute('aria-expanded', 'false');
-  header.setAttribute('aria-label', 'Extended thinking - click to expand');
+  header.setAttribute('aria-label', THINKING_BLOCK_HEADER_ARIA_LABEL);
 
   // Label with timer
   const labelEl = header.createSpan({ cls: 'specorator-thinking-label' });
   const startTime = Date.now();
-  labelEl.setText('Thinking 0s...');
+  labelEl.setText(formatThinkingLiveLabel(0));
 
   // Start timer interval to update label every second
   const timerInterval = window.setInterval(() => {
     const elapsed = Math.floor((Date.now() - startTime) / 1000);
-    labelEl.setText(`Thinking ${elapsed}s...`);
+    labelEl.setText(formatThinkingLiveLabel(elapsed));
   }, 1000);
 
   // Collapsible content (collapsed by default)
@@ -76,7 +111,7 @@ export function finalizeThinkingBlock(state: ThinkingBlockState): number {
   const durationSeconds = Math.floor((Date.now() - state.startTime) / 1000);
 
   // Update label to show final duration (without "...")
-  state.labelEl.setText(`Thought for ${durationSeconds}s`);
+  state.labelEl.setText(formatThinkingFinalLabel(durationSeconds));
 
   // Collapse when done and sync state
   const header = state.wrapperEl.querySelector('.specorator-thinking-header');
@@ -87,40 +122,10 @@ export function finalizeThinkingBlock(state: ThinkingBlockState): number {
   return durationSeconds;
 }
 
-export function cleanupThinkingBlock(state: ThinkingBlockState | null) {
+export function cleanupThinkingBlock(
+  state: Pick<ThinkingBlockState, 'timerInterval'> | ThinkingTimingState | null,
+) {
   if (state?.timerInterval) {
     window.clearInterval(state.timerInterval);
   }
-}
-
-export function renderStoredThinkingBlock(
-  parentEl: HTMLElement,
-  content: string,
-  durationSeconds: number | undefined,
-  renderContent: RenderContentFn
-): HTMLElement {
-  const wrapperEl = parentEl.createDiv({ cls: 'specorator-thinking-block' });
-
-  // Header (clickable to expand/collapse)
-  const header = wrapperEl.createDiv({ cls: 'specorator-thinking-header' });
-  header.setAttribute('tabindex', '0');
-  header.setAttribute('role', 'button');
-  header.setAttribute('aria-label', 'Extended thinking - click to expand');
-
-  // Label with duration
-  const labelEl = header.createSpan({ cls: 'specorator-thinking-label' });
-  const labelText = durationSeconds !== undefined ? `Thought for ${durationSeconds}s` : 'Thought';
-  labelEl.setText(labelText);
-
-  // Collapsible content
-  const contentEl = wrapperEl.createDiv({ cls: 'specorator-thinking-content' });
-  void renderContent(contentEl, content).catch(() => {
-    contentEl.setText(content);
-  });
-
-  // Setup collapsible behavior (handles click, keyboard, ARIA, CSS)
-  const state = { isExpanded: false };
-  setupCollapsible(wrapperEl, header, contentEl, state);
-
-  return wrapperEl;
 }

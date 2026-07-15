@@ -159,6 +159,86 @@ describe('MessageBubble', () => {
     expect(msgEl.querySelector('.specorator-text-block')?.textContent).toContain('Hi there');
   });
 
+  it('assistant action bar co-locates inside the last text block, beside the copy button (one hover row)', async () => {
+    const msg: ChatMessage = {
+      id: 'a1',
+      role: 'assistant',
+      content: '',
+      timestamp: 1,
+      contentBlocks: [{ type: 'text', content: 'Hi there' }],
+    } as ChatMessage;
+    const callbacks = makeCallbacks({
+      getMessageActions: vi.fn(() => [
+        { id: 'wo', label: 'Create work order', icon: 'briefcase', run: vi.fn() },
+      ]),
+    });
+    const { container } = mountBubble(msg, callbacks);
+    await flushPromises();
+
+    const textBlock = container.querySelector('.specorator-text-block') as HTMLElement;
+    // Both the copy button and the action bar live in the same text block, so
+    // they anchor to the same box and render as one row.
+    expect(textBlock.querySelector('.specorator-text-copy-btn')).not.toBeNull();
+    expect(textBlock.querySelector('.specorator-text-actions')).not.toBeNull();
+    expect(textBlock.querySelector('.specorator-text-action-btn')).not.toBeNull();
+  });
+
+  it('mounts a message-level fallback action bar when a response has no text block to host it', async () => {
+    // Tool-only contentBlocks (no text item) but eligible actions via `content`:
+    // the co-located slot has no host, so the bar falls back to message level.
+    const msg = {
+      id: 'a1',
+      role: 'assistant',
+      content: 'summary prose',
+      timestamp: 1,
+      contentBlocks: [{ type: 'tool_use', id: 't1', name: 'Bash' }],
+      toolCalls: [{ id: 't1', name: 'Bash', status: 'completed', input: {} }],
+    } as unknown as ChatMessage;
+    const callbacks = makeCallbacks({
+      getMessageActions: vi.fn(() => [
+        { id: 'wo', label: 'Create work order', icon: 'briefcase', run: vi.fn() },
+      ]),
+    });
+    const { container } = mountBubble(msg, callbacks);
+    await flushPromises();
+
+    // No text block exists, but the action bar still renders (message-level).
+    expect(container.querySelector('.specorator-text-block')).toBeNull();
+    const bar = container.querySelector('.specorator-message-content > .specorator-text-actions');
+    expect(bar).not.toBeNull();
+    expect(bar!.querySelector('.specorator-text-action-btn')).not.toBeNull();
+  });
+
+  it('renders the message-level fallback for a work-order response that splits into protocol-only cards', async () => {
+    // A `text` item exists (resolveBlockListItems), but the work-order split
+    // yields only a progress card — no markdown segment to host the slot — so
+    // the fallback must cover it (else the actions would vanish).
+    const msg = {
+      id: 'wo1',
+      role: 'assistant',
+      content: '',
+      timestamp: 1,
+      contentBlocks: [
+        { type: 'text', content: '<specorator_progress>\nstep: Building\ndone: 1/3\n</specorator_progress>' },
+      ],
+    } as unknown as ChatMessage;
+    const callbacks = makeCallbacks({
+      getWorkOrderPath: vi.fn(() => 'Agent Board/wo.md'),
+      getMessageActions: vi.fn(() => [
+        { id: 'wo', label: 'Create work order', icon: 'briefcase', run: vi.fn() },
+      ]),
+    });
+    const { container } = mountBubble(msg, callbacks);
+    await flushPromises();
+
+    // Protocol-only: the progress card renders, but no markdown text block does.
+    expect(container.querySelector('.specorator-work-order-progress-card')).not.toBeNull();
+    expect(container.querySelector('.specorator-text-block')).toBeNull();
+    const bar = container.querySelector('.specorator-message-content > .specorator-text-actions');
+    expect(bar).not.toBeNull();
+    expect(bar!.querySelector('.specorator-text-action-btn')).not.toBeNull();
+  });
+
   it('renders nothing for an assistant message with no visible content', async () => {
     const msg: ChatMessage = { id: 'a1', role: 'assistant', content: '', timestamp: 1 };
     const { container } = mountBubble(msg, makeCallbacks());

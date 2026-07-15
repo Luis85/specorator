@@ -18,14 +18,16 @@ describe('buildCodexAppServerEnvironment', () => {
     Object.assign(process.env, savedEnv);
   });
 
-  it('does not leak unrelated host secrets into the Codex spawn env', () => {
-    process.env.AWS_SECRET_ACCESS_KEY = 'aws-leak-me';
-    process.env.UNRELATED_SECRET = 'nope';
+  it('passes host env vars through (full Claude-parity env) but still denies the TLS kill-switch', () => {
+    // The allowlist was removed so the Codex app-server and its shell tools
+    // resolve host binaries, matching how the Claude SDK spawns.
+    process.env.AWS_SECRET_ACCESS_KEY = 'aws-present';
+    process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0';
 
     const env = buildCodexAppServerEnvironment(makePlugin({}));
 
-    expect(env.AWS_SECRET_ACCESS_KEY).toBeUndefined();
-    expect(env.UNRELATED_SECRET).toBeUndefined();
+    expect(env.AWS_SECRET_ACCESS_KEY).toBe('aws-present');
+    expect(env.NODE_TLS_REJECT_UNAUTHORIZED).toBeUndefined();
   });
 
   it('preserves OPENAI_/CODEX_-prefixed host vars', () => {

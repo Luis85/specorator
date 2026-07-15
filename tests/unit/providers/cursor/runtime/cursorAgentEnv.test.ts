@@ -1,5 +1,16 @@
+import * as fs from 'fs';
+
 import type { PluginContext } from '@/core/types/PluginContext';
 import { buildCursorAgentEnvironment } from '@/providers/cursor/runtime/cursorAgentEnv';
+
+jest.mock('fs', () => ({
+  ...jest.requireActual('fs'),
+  // Default: Git Bash absent (statSync throws) so shell-selection tests without an
+  // explicit override exercise the PowerShell fallback path.
+  statSync: jest.fn(() => {
+    throw new Error('ENOENT');
+  }),
+}));
 
 jest.mock('@/utils/env', () => ({
   parseEnvironmentVariables: jest.fn((text: string) => {
@@ -45,9 +56,21 @@ describe('buildCursorAgentEnvironment', () => {
     setPlatform(originalPlatform);
   });
 
-  it('does not leak unrelated host env vars', () => {
+  it('passes host env vars through (full Claude-parity env)', () => {
+    // The allowlist was removed so no provider hits a missing-var/PATH problem
+    // the Claude integration doesn't; the TLS kill-switch is still filtered.
     const env = buildCursorAgentEnvironment(makePlugin(''));
-    expect(env.SECRET_TOKEN).toBeUndefined();
+    expect(env.SECRET_TOKEN).toBe('dummy-leak-me');
+  });
+
+  it('folds a lowercase custom `Path` entry into the enhanced PATH (case-insensitive)', () => {
+    // A provider Environment entered as `Path=` (common on Windows) must still
+    // feed the override, or the collapse would delete it and drop the tool dirs.
+    // Assert containment, not equality: on Windows the shell-env step appends
+    // Git dirs to PATH, so the exact value differs by platform.
+    const env = buildCursorAgentEnvironment(makePlugin('Path=/custom/tools'));
+    expect(env.PATH).toContain('/custom/tools');
+    expect(env.Path).toBeUndefined();
   });
 
   it('refuses NODE_TLS_REJECT_UNAUTHORIZED even when the host sets it', () => {
@@ -63,6 +86,16 @@ describe('buildCursorAgentEnvironment', () => {
   it('lets custom env override host values', () => {
     const env = buildCursorAgentEnvironment(makePlugin('CURSOR_API_KEY=override'));
     expect(env.CURSOR_API_KEY).toBe('override');
+  });
+
+  it('threads the resolved CLI path into enhanced-PATH construction', () => {
+    // Parity with Claude/Opencode: the cursor-agent install dir carries its own
+    // bundled node; passing the CLI path lets getEnhancedPath add that dir so
+    // the agent's child tools can resolve node/binaries.
+    const { getEnhancedPath } = jest.requireMock('@/utils/env') as { getEnhancedPath: jest.Mock };
+    getEnhancedPath.mockClear();
+    buildCursorAgentEnvironment(makePlugin(''), '/home/test/.local/bin/cursor-agent');
+    expect(getEnhancedPath).toHaveBeenCalledWith(undefined, '/home/test/.local/bin/cursor-agent');
   });
 
   describe('on Windows', () => {
@@ -113,6 +146,38 @@ describe('buildCursorAgentEnvironment', () => {
       expect(env.MSYSTEM).toBe('MINGW64');
       expect(env.EXEPATH).toBe('C:\\Program Files\\Git\\bin');
       expect(env.SHELL).toBe('C:\\Program Files\\Git\\bin\\bash.exe');
+    });
+  });
+
+  describe('on Windows without host Git Bash signals', () => {
+    beforeEach(() => {
+      setPlatform('win32');
+      process.env = {
+        SystemRoot: 'C:\\Windows',
+        ProgramFiles: 'C:\\Program Files',
+        PATH: 'C:\\Users\\test\\AppData\\Local\\cursor-agent',
+      };
+      (fs.statSync as jest.Mock).mockReset();
+    });
+
+    it('points SHELL at Git Bash when Git for Windows is installed (avoids the broken console-less PowerShell executor)', () => {
+      (fs.statSync as jest.Mock).mockImplementation((p: fs.PathLike) => {
+        if (String(p).endsWith('bash.exe')) return { isFile: () => true } as fs.Stats;
+        throw new Error('ENOENT');
+      });
+      const env = buildCursorAgentEnvironment(makePlugin(''));
+      expect(env.SHELL).toBe('C:\\Program Files\\Git\\bin\\bash.exe');
+      expect(env.MSYSTEM).toBe('MINGW64');
+      expect(env.EXEPATH).toBe('C:\\Program Files\\Git');
+    });
+
+    it('falls back to PowerShell when Git Bash is not installed', () => {
+      (fs.statSync as jest.Mock).mockImplementation(() => {
+        throw new Error('ENOENT');
+      });
+      const env = buildCursorAgentEnvironment(makePlugin(''));
+      expect(env.SHELL).toBe('C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe');
+      expect(env.MSYSTEM).toBeUndefined();
     });
   });
 });

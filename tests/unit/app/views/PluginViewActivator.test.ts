@@ -45,6 +45,7 @@ function createPlugin(opts: {
       agentBoardQueueCap: opts.agentBoardQueueCap ?? 3,
     },
     getView: jest.fn().mockReturnValue(view),
+    getAllViews: jest.fn().mockReturnValue(view ? [view] : []),
     lastKnownTabManagerState: {
       openTabs: opts.lastKnownOpenTabs
         ?? new Array(opts.lastKnownOpenTabCount ?? 0).fill({ tabId: 'tab', conversationId: null }),
@@ -197,5 +198,36 @@ describe('PluginViewActivator.getTabSlotUsage (work-order budget)', () => {
     });
     const activator = new PluginViewActivator(plugin);
     expect(activator.getTabSlotUsage()).toEqual({ used: 0, max: 1 });
+  });
+
+  it('aggregates work-order tabs across every live Specorator view', () => {
+    const viewA = {
+      getTabManager: () => ({ countTabsByKind: (k: string) => (k === 'work-order' ? 1 : 0) }),
+      areTabsRestored: () => true,
+    };
+    const viewB = {
+      getTabManager: () => ({ countTabsByKind: (k: string) => (k === 'work-order' ? 2 : 0) }),
+      areTabsRestored: () => true,
+    };
+    const { plugin } = createPlugin({ agentBoardQueueCap: 5 });
+    (plugin.getAllViews as jest.Mock).mockReturnValue([viewA, viewB]);
+    const activator = new PluginViewActivator(plugin);
+    expect(activator.getTabSlotUsage()).toEqual({ used: 3, max: 5 });
+  });
+
+  it('reports full usage when any view is mid-restore, even alongside a restored view', () => {
+    const restored = {
+      getTabManager: () => ({ countTabsByKind: (k: string) => (k === 'work-order' ? 1 : 0) }),
+      areTabsRestored: () => true,
+    };
+    const midRestore = {
+      getTabManager: () => ({ countTabsByKind: () => 0 }),
+      areTabsRestored: () => false, // tabs not hydrated yet — WO count unknown
+    };
+    const { plugin } = createPlugin({ agentBoardQueueCap: 5 });
+    (plugin.getAllViews as jest.Mock).mockReturnValue([restored, midRestore]);
+    const activator = new PluginViewActivator(plugin);
+    // Must NOT report the restored view's count alone (used: 1) — block capacity.
+    expect(activator.getTabSlotUsage()).toEqual({ used: 5, max: 5 });
   });
 });

@@ -78,8 +78,16 @@ export class InlinePromptController {
     const { state } = this.deps;
     const parentEl = this.requireParentEl();
 
-    const planFilePath = state.planFilePath;
-    const { content, error } = this.readPlanContent(planFilePath);
+    // Cursor supplies the plan inline via cursor/create_plan (no plan FILE).
+    // Prefer it over any plan file still referenced by state.planFilePath from a
+    // previous plan-file flow in this tab — planFilePath is not cleared per turn,
+    // so reading it would preview and approve the STALE previous plan. Only read
+    // the plan file when there is no inline plan (Claude/Codex plan-file flow).
+    const inlinePlan = typeof input.plan === 'string' && input.plan ? input.plan : null;
+    const { content, error } = inlinePlan
+      ? { content: null, error: null }
+      : this.readPlanContent(state.planFilePath);
+    const planContent = inlinePlan ?? content;
     const allowedPrompts = Array.isArray(input.allowedPrompts)
       ? (input.allowedPrompts as Array<{ tool: string; prompt: string }>)
       : undefined;
@@ -88,10 +96,10 @@ export class InlinePromptController {
       (resolve) => this.deps.mountInlineCard.mountExitPlanMode(parentEl, {
         resolve,
         signal,
-        planPreview: content,
+        planPreview: planContent,
         planReadError: error,
         allowedPrompts,
-        resolvePlanContent: () => content,
+        resolvePlanContent: () => planContent,
       }),
       (handle) => { this.pendingExitPlanModeInline = handle; },
       null,

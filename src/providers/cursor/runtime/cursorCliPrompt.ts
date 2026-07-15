@@ -2,10 +2,6 @@ import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
 
-import type { PreparedChatTurn } from '../../../core/runtime/types';
-import type { ChatMessage } from '../../../core/types';
-import { buildContextFromHistory, buildPromptWithHistoryContext } from '../../../utils/session';
-
 // Windows CreateProcess argv and cmd.exe wrappers fail once the full command line
 // grows too large (ENAMETOOLONG). cursor-agent accepts `@/path/to/prompt.txt` to
 // load prompt text from disk instead of argv.
@@ -14,49 +10,6 @@ export const CURSOR_CLI_INLINE_PROMPT_MAX_CHARS = 8_000;
 export interface ResolvedCursorCliPrompt {
   arg: string;
   cleanup?: () => void;
-}
-
-export interface BuildCursorAgentPromptOptions {
-  turn: PreparedChatTurn;
-  conversationHistory?: ChatMessage[];
-  resumeSessionId?: string | null;
-  boundAgentPrompt?: string;
-}
-
-/**
- * Cursor relies on `--resume` for multi-turn context. When that session id is
- * missing, rebuild prior turns into the prompt (OpenCode-style recovery).
- *
- * The bound agent persona is PREPENDED as a leading directive (Cursor's CLI has
- * no system-prompt flag), so the model adopts the role before reading the user
- * turn instead of treating it as a trailing footnote. Re-sent every turn because
- * Cursor is one-shot per turn.
- */
-export function buildCursorAgentPrompt(options: BuildCursorAgentPromptOptions): string {
-  const {
-    turn,
-    conversationHistory,
-    resumeSessionId,
-    boundAgentPrompt,
-  } = options;
-
-  let prompt = turn.prompt;
-
-  if (!resumeSessionId && conversationHistory && conversationHistory.length > 0) {
-    const historyContext = buildContextFromHistory(conversationHistory);
-    prompt = buildPromptWithHistoryContext(
-      historyContext,
-      prompt,
-      turn.request.text,
-      conversationHistory,
-    );
-  }
-
-  if (boundAgentPrompt) {
-    prompt = `${boundAgentPrompt}\n\n---\n\n${prompt}`;
-  }
-
-  return prompt;
 }
 
 export function resolveCursorCliPromptArg(prompt: string): ResolvedCursorCliPrompt {

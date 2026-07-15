@@ -38,6 +38,7 @@ function createMockSessions(metadata: SessionMetadata[] = []): MockSessions {
 function createStore(options?: {
   sessions?: MockSessions;
   vaultPath?: string | null;
+  quiesceViewsForDelete?: (conversationId: string) => Promise<void>;
   repairViewsAfterDelete?: (conversationId: string) => Promise<void>;
 }): { store: ConversationStore; sessions: MockSessions } {
   const sessions = options?.sessions ?? createMockSessions();
@@ -45,6 +46,8 @@ function createStore(options?: {
   const store = new ConversationStore({
     storage,
     getVaultPath: () => (options?.vaultPath !== undefined ? options.vaultPath : '/vault'),
+    quiesceViewsForDelete:
+      options?.quiesceViewsForDelete ?? (async () => undefined),
     repairViewsAfterDelete:
       options?.repairViewsAfterDelete ?? (async () => undefined),
     events: { emit: jest.fn(), on: jest.fn(), off: jest.fn(), setErrorSink: jest.fn() } as any,
@@ -135,7 +138,7 @@ describe('ConversationStore', () => {
 
       const result = await store.switchConversation(conv.id);
 
-      expect(result?.id).toBe(conv.id);
+      expect(result?.conversation.id).toBe(conv.id);
       expect(history.hydrateConversationHistory).toHaveBeenCalledWith(conv, {
         vaultPath: '/vault',
         reason: 'open',
@@ -245,19 +248,35 @@ describe('ConversationStore', () => {
 
   describe('deleteConversation', () => {
     it('removes the conversation, deletes provider session + metadata, and repairs views', async () => {
+      const quiesceViewsForDelete = jest.fn().mockResolvedValue(undefined);
       const repairViewsAfterDelete = jest.fn().mockResolvedValue(undefined);
-      const { store, sessions } = createStore({ repairViewsAfterDelete });
+      const { store, sessions } = createStore({ quiesceViewsForDelete, repairViewsAfterDelete });
       const conv = await store.createConversation();
       const history = ProviderRegistry.getConversationHistoryService(conv.providerId);
 
       await store.deleteConversation(conv.id);
 
       expect(store.getConversationSync(conv.id)).toBeNull();
+      expect(quiesceViewsForDelete).toHaveBeenCalledWith(conv.id);
       expect(history.deleteConversationSession).toHaveBeenCalledWith(conv, {
         vaultPath: '/vault',
         reason: 'open',
       });
       expect(sessions.deleteMetadata).toHaveBeenCalledWith(conv.id);
+      expect(repairViewsAfterDelete).toHaveBeenCalledWith(conv.id);
+    });
+
+    it('finishes teardown (tombstone clear + repair) even when metadata delete throws', async () => {
+      const repairViewsAfterDelete = jest.fn().mockResolvedValue(undefined);
+      const { store, sessions } = createStore({ repairViewsAfterDelete });
+      const conv = await store.createConversation();
+      (sessions.deleteMetadata as jest.Mock).mockRejectedValueOnce(new Error('disk full'));
+
+      await expect(store.deleteConversation(conv.id)).rejects.toThrow('disk full');
+
+      // The conversation was already spliced, and the teardown still completed:
+      // views repaired and the tombstone cleared (a later switch is not stuck).
+      expect(store.getConversationSync(conv.id)).toBeNull();
       expect(repairViewsAfterDelete).toHaveBeenCalledWith(conv.id);
     });
 
@@ -269,6 +288,86 @@ describe('ConversationStore', () => {
 
       expect(sessions.deleteMetadata).not.toHaveBeenCalled();
       expect(repairViewsAfterDelete).not.toHaveBeenCalled();
+    });
+
+    it('leaves the conversation reachable when quiescing fails (no tombstone set before quiesce)', async () => {
+      const quiesceViewsForDelete = jest.fn().mockRejectedValue(new Error('tab save failed'));
+      const { store, sessions } = createStore({ quiesceViewsForDelete });
+      const conv = await store.createConversation();
+
+      await expect(store.deleteConversation(conv.id)).rejects.toThrow('tab save failed');
+
+      // The delete aborted before touching native artifacts...
+      expect(sessions.deleteMetadata).not.toHaveBeenCalled();
+      // ...and the conversation is NOT left stuck: still present and switchable
+      // (a tombstone would make switchConversation return null).
+      expect(store.getConversationSync(conv.id)).not.toBeNull();
+      await expect(store.switchConversation(conv.id)).resolves.not.toBeNull();
+    });
+
+    it('lets the quiesce save update the conversation before it is tombstoned', async () => {
+      // The real quiesce calls conversationController.save() → updateConversation
+      // to persist the latest sessionId/providerState. That must land BEFORE the
+      // delete reads the conversation for native deletion.
+      let sessionAtDeleteTime: string | undefined;
+      const { store } = createStore({
+        quiesceViewsForDelete: async (id) => {
+          await store.updateConversation(id, { title: 'saved-during-quiesce' });
+        },
+      });
+      const conv = await store.createConversation();
+      const history = ProviderRegistry.getConversationHistoryService(conv.providerId);
+      (history.deleteConversationSession as jest.Mock).mockImplementation((c: { title?: string }) => {
+        sessionAtDeleteTime = c.title;
+        return Promise.resolve({ kind: 'no-op', reason: 'no-session' });
+      });
+
+      await store.deleteConversation(conv.id);
+
+      // The quiesce save was NOT swallowed by an early tombstone.
+      expect(sessionAtDeleteTime).toBe('saved-during-quiesce');
+    });
+  });
+
+  describe('switchConversation revision race', () => {
+    it('does not commit a stale hydration that lost the revision race', async () => {
+      const { store } = createStore();
+      const conv = await store.createConversation();
+      conv.messages = [{ id: 'newer', role: 'user', content: 'newer', timestamp: 1 }];
+      const history = ProviderRegistry.getConversationHistoryService(conv.providerId);
+      (history.hydrateConversationHistory as jest.Mock).mockImplementation(async () => {
+        // A concurrent update bumps the revision WHILE the provider read awaits.
+        await store.updateConversation(conv.id, { title: 'bumped' });
+        return {
+          kind: 'loaded',
+          messages: [{ id: 'stale', role: 'user', content: 'stale', timestamp: 0 }],
+          sourceRef: 'k',
+        };
+      });
+
+      const result = await store.switchConversation(conv.id);
+
+      // The stale outcome is surfaced AND the newer in-memory messages survive.
+      expect(result?.hydration.kind).toBe('error');
+      expect(conv.messages.map((m) => m.id)).toEqual(['newer']);
+    });
+
+    it('does not recover usage from a stale hydration that lost the revision race', async () => {
+      const { store } = createStore();
+      const conv = await store.createConversation();
+      const history = ProviderRegistry.getConversationHistoryService(conv.providerId);
+      (history.hydrateConversationHistory as jest.Mock).mockImplementation(async () => {
+        await store.updateConversation(conv.id, { title: 'bumped' });
+        return { kind: 'loaded', messages: [], sourceRef: 'k' };
+      });
+      (history as { extractLastUsage?: unknown }).extractLastUsage = jest
+        .fn()
+        .mockResolvedValue({ model: 'gpt-5', contextTokens: 999, contextWindow: 1, inputTokens: 1 });
+
+      await store.switchConversation(conv.id);
+
+      // The stale outcome must not assign recovered usage over the newer conversation.
+      expect(conv.usage).toBeUndefined();
     });
   });
 
@@ -407,6 +506,7 @@ describe('ConversationStore', () => {
       const store = new ConversationStore({
         storage,
         getVaultPath: () => '/vault',
+        quiesceViewsForDelete: async () => undefined,
         repairViewsAfterDelete: async () => undefined,
         events: { emit, on: jest.fn(), off: jest.fn(), setErrorSink: jest.fn() } as any,
       });
@@ -425,7 +525,7 @@ describe('ConversationStore', () => {
 
       const result = await store.switchConversation(conv.id);
 
-      expect(result?.id).toBe(conv.id);
+      expect(result?.conversation.id).toBe(conv.id);
       expect(conv.messages).toEqual(loaded.messages);
       expect(emit).not.toHaveBeenCalledWith(
         'conversation:hydration-failed',
@@ -443,7 +543,7 @@ describe('ConversationStore', () => {
 
       const result = await store.switchConversation(conv.id);
 
-      expect(result?.id).toBe(conv.id);
+      expect(result?.conversation.id).toBe(conv.id);
       expect(conv.messages).toEqual([SEEDED]);
       expect(emit).not.toHaveBeenCalledWith(
         'conversation:hydration-failed',
@@ -462,7 +562,7 @@ describe('ConversationStore', () => {
 
       const result = await store.switchConversation(conv.id);
 
-      expect(result?.id).toBe(conv.id);
+      expect(result?.conversation.id).toBe(conv.id);
       expect(conv.messages).toEqual([SEEDED]);
       expect(emit).not.toHaveBeenCalledWith(
         'conversation:hydration-failed',
@@ -481,13 +581,32 @@ describe('ConversationStore', () => {
 
       const result = await store.switchConversation(conv.id);
 
-      expect(result?.id).toBe(conv.id);
+      expect(result?.conversation.id).toBe(conv.id);
       expect(conv.messages).toEqual([SEEDED]);
       expect(emit).toHaveBeenCalledWith('conversation:hydration-failed', {
         conversationId: conv.id,
         code: 'store-unreadable',
         message: 'x',
       });
+    });
+
+    it("does not emit 'conversation:hydration-failed' for expected cancellation", async () => {
+      const { store, emit } = makeHarnessWithHydrateOutcome({
+        kind: 'error',
+        error: { code: 'cancelled', message: 'Hydration cancelled' },
+        sourceRef: null,
+      });
+      const conv = await store.createConversation();
+      conv.messages.push(SEEDED);
+
+      const result = await store.switchConversation(conv.id);
+
+      expect(result?.conversation.id).toBe(conv.id);
+      expect(conv.messages).toEqual([SEEDED]);
+      expect(emit).not.toHaveBeenCalledWith(
+        'conversation:hydration-failed',
+        expect.anything(),
+      );
     });
 
     it('passes HydrationContext with vaultPath and reason to v2', async () => {
@@ -537,6 +656,7 @@ describe('ConversationStore', () => {
       const store = new ConversationStore({
         storage,
         getVaultPath: () => '/vault',
+        quiesceViewsForDelete: jest.fn().mockResolvedValue(undefined),
         repairViewsAfterDelete,
         events: { emit, on: jest.fn(), off: jest.fn(), setErrorSink: jest.fn() } as any,
       });
@@ -581,10 +701,11 @@ describe('ConversationStore', () => {
       );
     });
 
-    it("emits 'conversation:hydration-failed' on 'error' and still cleans up metadata", async () => {
+    it("emits 'conversation:hydration-failed' on provider error and preserves metadata for retry", async () => {
       const harness = makeHarnessWithDeleteOutcome({
         kind: 'error',
         error: { code: 'store-unreadable', message: 'boom' },
+        paths: ['/tmp/partially-removed.jsonl'],
       });
       const conv = await harness.store.createConversation();
 
@@ -595,8 +716,9 @@ describe('ConversationStore', () => {
         code: 'store-unreadable',
         message: 'boom',
       });
-      expect(harness.sessions.deleteMetadata).toHaveBeenCalledWith(conv.id);
-      expect(harness.repairViewsAfterDelete).toHaveBeenCalledWith(conv.id);
+      expect(harness.store.getConversationSync(conv.id)).toBe(conv);
+      expect(harness.sessions.deleteMetadata).not.toHaveBeenCalledWith(conv.id);
+      expect(harness.repairViewsAfterDelete).not.toHaveBeenCalledWith(conv.id);
     });
   });
 
@@ -670,7 +792,7 @@ describe('ConversationStore', () => {
 
       // Should not throw despite the recovery hook rejecting.
       const result = await store.switchConversation(conv.id);
-      expect(result?.id).toBe(conv.id);
+      expect(result?.conversation.id).toBe(conv.id);
       expect(conv.usage).toBeUndefined();
     });
 
@@ -704,7 +826,7 @@ describe('ConversationStore', () => {
       const conv = await store.createConversation();
 
       const result = await store.switchConversation(conv.id);
-      expect(result?.id).toBe(conv.id);
+      expect(result?.conversation.id).toBe(conv.id);
       expect(conv.usage).toBeUndefined();
     });
   });

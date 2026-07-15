@@ -5,6 +5,7 @@ import type {
   AcpSessionConfigSelectOption,
   AcpSessionConfigSelectOptions,
   AcpSessionMode,
+  AcpSessionModelInfo,
   AcpSessionModelState,
   AcpSessionModeState,
 } from './types';
@@ -47,10 +48,43 @@ export function extractAcpSessionModelState(params: {
   if (items) {
     return { availableModels: items, currentModelId: current };
   }
+  const normalized = normalizeAcpModelList(params.models?.availableModels);
+  if (normalized.length > 0) {
+    return {
+      availableModels: normalized,
+      currentModelId: params.models?.currentModelId ?? current,
+    };
+  }
   return {
-    availableModels: params.models?.availableModels ?? [],
+    availableModels: [],
     currentModelId: params.models?.currentModelId ?? current,
   };
+}
+
+/** Cursor's wire uses `modelId`; older captures used `id`. Normalize either shape. */
+function normalizeAcpModelInfo(
+  model: AcpSessionModelInfo,
+): AcpModelInfo | null {
+  const id = model.modelId?.trim() || model.id?.trim();
+  if (!id) {
+    return null;
+  }
+  return {
+    ...(model.description ? { description: model.description } : {}),
+    id,
+    name: model.name,
+  };
+}
+
+function normalizeAcpModelList(
+  models: AcpSessionModelInfo[] | null | undefined,
+): AcpModelInfo[] {
+  if (!models) {
+    return [];
+  }
+  return models
+    .map(normalizeAcpModelInfo)
+    .filter((model): model is AcpModelInfo => model !== null);
 }
 
 export function extractAcpSessionModeState(params: {
@@ -78,14 +112,14 @@ export function extractAcpSessionThoughtLevelState(params: {
   };
 }
 
-// `items` is null when the config option is missing or empty so callers fall back to
-// the session's own metadata. `current` is always the config option's `currentValue`
-// when one exists, so fallbacks can still seed a current id from it.
+// `items` is null only when the config option is missing. An advertised empty
+// selector is authoritative: callers must not revive stale legacy metadata.
+// `current` is always the config option's `currentValue` when one exists.
 function resolveSelectItems(
   configOptions: AcpSessionConfigOption[] | null | undefined,
   category: 'model' | 'mode' | 'thought_level',
 ): { configId: string | null; current: string | null; items: SelectItem[] | null } {
-  const selectOption = findSessionConfigSelectOption(configOptions, category);
+  const selectOption = findAcpSessionConfigSelectOption(configOptions, category);
   if (!selectOption) {
     return { configId: null, current: null, items: null };
   }
@@ -99,11 +133,11 @@ function resolveSelectItems(
   return {
     configId: selectOption.id,
     current: selectOption.currentValue,
-    items: items.length > 0 ? items : null,
+    items,
   };
 }
 
-function findSessionConfigSelectOption(
+export function findAcpSessionConfigSelectOption(
   configOptions: AcpSessionConfigOption[] | null | undefined,
   category: 'model' | 'mode' | 'thought_level',
 ): Extract<AcpSessionConfigOption, { type: 'select' }> | null {

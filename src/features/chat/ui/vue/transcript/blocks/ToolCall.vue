@@ -14,6 +14,7 @@ import {
   TOOL_WRITE,
 } from '../../../../../../core/tools/toolNames';
 import type { ToolCallInfo } from '../../../../../../core/types';
+import { TOOL_CALL_STATUS_ICONS } from '../../../../rendering/toolCallViewModel';
 import { getInputText, getToolLabel } from '../../../../rendering/toolLabel';
 import { useCollapsible } from '../collapsible';
 import IconSpan from '../IconSpan.vue';
@@ -25,24 +26,15 @@ import { useToolNameSummary } from './toolNameSummary';
 import WebSearchView from './WebSearchView.vue';
 
 /**
- * Reproduces `rendering/ToolCallRenderer.ts`'s `renderStoredToolCall` DOM
- * contract for a STORED (non-streaming) tool call — collapsed by default,
- * dispatching to the specialized body components. `toolName`/`toolSummary`
+ * Owns the stored and live generic tool-call DOM contract, collapsed by
+ * default and dispatching to specialized body components. `toolName`/`toolSummary`
  * come from the shared `useToolNameSummary` composable (also used by
- * `SubagentToolItem.vue`), which wraps `getToolName`/`getToolSummary` —
- * pure, exported functions from `ToolCallRenderer.ts`; only that file's
- * DOM-writing exports are ported rather than reused.
+ * `SubagentToolItem.vue`), which wraps the shared DOM-free projections.
  *
- * `initiallyExpanded` is always `false` here, matching
- * `renderStoredToolCall`'s hardcoded `{ initiallyExpanded: false }` — the
- * legacy function does NOT read `toolCall.isExpanded` for the stored path
- * (only the live `renderToolCall` path resets that field to `false`).
+ * `initiallyExpanded` is always `false` for stored tools; live
+ * `toolCall.isExpanded` state is preserved by Vue.
  *
- * `data-tool-id` is stamped here even though `renderStoredToolCall` itself
- * never sets it (only the live `renderToolCall` variant does, via
- * `toolCallElements`) — a deliberate forward-looking addition for the
- * future block-list orchestration (Task 10) to key off of, not part of the
- * characterized legacy contract.
+ * `data-tool-id` is the stable block-list orchestration key.
  *
  * The `.specorator-tool-summary` link decoration reproduces
  * `decorateToolSummaryPath`: only Read/Write/Edit (`input.file_path`) and LS
@@ -54,8 +46,6 @@ import WebSearchView from './WebSearchView.vue';
 const props = defineProps<{ toolCall: ToolCallInfo }>();
 
 const { resolve: resolveLink } = useFileLink();
-
-const STATUS_ICONS: Record<string, string> = { completed: 'check', error: 'x', blocked: 'shield-off' };
 
 const isBash = computed(() => props.toolCall.name === TOOL_BASH);
 const isTodoWrite = computed(() => props.toolCall.name === TOOL_TODO_WRITE);
@@ -111,7 +101,7 @@ const statusInfo = computed<StatusInfo>(() => {
   return {
     cls: `status-${status}`,
     ariaLabel: `Status: ${status}`,
-    icon: STATUS_ICONS[status] ?? null,
+    icon: TOOL_CALL_STATUS_ICONS[status as keyof typeof TOOL_CALL_STATUS_ICONS] ?? null,
   };
 });
 

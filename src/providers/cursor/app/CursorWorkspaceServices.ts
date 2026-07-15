@@ -12,6 +12,7 @@ import { asSettingsBag } from '../../../core/types/settings';
 import { getVaultPath } from '../../../utils/path';
 import { CursorAgentMentionProvider } from '../agents/CursorAgentMentionProvider';
 import { CursorSkillCatalog } from '../commands/CursorSkillCatalog';
+import { openCursorAcpCaptureFolder } from '../diagnostics/openCursorAcpCaptureFolder';
 import { buildCursorAgentEnvironment } from '../runtime/cursorAgentEnv';
 import { cursorCliSpec } from '../runtime/CursorCliResolver';
 import { refreshCursorModelCatalog } from '../runtime/cursorModelCatalog';
@@ -39,7 +40,7 @@ function warmCursorModelCatalog(plugin: PluginContext, cliResolver: ProviderCliR
   if (!cliPath) {
     return;
   }
-  const env = buildCursorAgentEnvironment(plugin);
+  const env = buildCursorAgentEnvironment(plugin, cliPath);
   const cwd = getVaultPath(plugin.app) ?? process.cwd();
   void refreshCursorModelCatalog(cliPath, env, cwd).catch((err: unknown) => {
     const message = err instanceof Error ? err.message : String(err);
@@ -76,6 +77,7 @@ export async function createCursorWorkspaceServices(
     refreshAgentMentions: async () => {
       await agentMentionProvider.loadAgents();
     },
+    openDiagnosticsCaptureFolder: () => openCursorAcpCaptureFolder(plugin),
   };
 }
 

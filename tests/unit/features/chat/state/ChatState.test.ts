@@ -55,7 +55,6 @@ describe('ChatState', () => {
       expect(state.streamingIndicatorMode).toBeNull();
       expect(state.queueIndicatorEl).toBeNull();
       expect(state.thinkingIndicatorTimeout).toBeNull();
-      expect(state.toolCallElements).toBeInstanceOf(Map);
       expect(state.usage).toBeNull();
       expect(state.ignoreUsageUpdates).toBe(false);
       expect(state.currentTodos).toBeNull();
@@ -296,16 +295,6 @@ describe('ChatState', () => {
       expect(chatState.streamingIndicatorMode).toBeNull();
       expect(chatState.getActiveStreamSnapshot()).toBeNull();
     });
-  });
-
-  describe('tool tracking maps', () => {
-    it('returns mutable toolCallElements map', () => {
-      const chatState = new ChatState();
-      const el = {} as HTMLElement;
-      chatState.toolCallElements.set('tool-1', el);
-      expect(chatState.toolCallElements.get('tool-1')).toBe(el);
-    });
-
   });
 
   describe('usage', () => {
@@ -554,17 +543,6 @@ describe('ChatState', () => {
     });
   });
 
-  describe('clearMaps', () => {
-    it('clears all tracking maps', () => {
-      const chatState = new ChatState();
-      chatState.toolCallElements.set('a', {} as HTMLElement);
-
-      chatState.clearMaps();
-
-      expect(chatState.toolCallElements.size).toBe(0);
-    });
-  });
-
   describe('resetForNewConversation', () => {
     it('resets all conversation state', () => {
       const onMessagesChanged = jest.fn();
@@ -583,7 +561,6 @@ describe('ChatState', () => {
       chatState.isStreaming = true;
       chatState.cancelRequested = true;
       chatState.currentContentEl = {} as HTMLElement;
-      chatState.toolCallElements.set('a', {} as HTMLElement);
       chatState.queuedMessage = { content: 'queued', editorContext: null, canvasContext: null };
       chatState.usage = { inputTokens: 100, outputTokens: 50 } as any;
       chatState.currentTodos = [{ content: 'Test', status: 'pending' as const, activeForm: 'Testing' }];
@@ -599,7 +576,6 @@ describe('ChatState', () => {
       expect(chatState.isStreaming).toBe(false);
       expect(chatState.cancelRequested).toBe(false);
       expect(chatState.currentContentEl).toBeNull();
-      expect(chatState.toolCallElements.size).toBe(0);
       expect(chatState.queuedMessage).toBeNull();
       expect(chatState.usage).toBeNull();
       expect(chatState.currentTodos).toBeNull();

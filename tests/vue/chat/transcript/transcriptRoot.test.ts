@@ -5,6 +5,7 @@ import { flushPromises } from '@vue/test-utils';
 import { App, Component, MarkdownRenderer } from 'obsidian';
 import { createPinia, setActivePinia } from 'pinia';
 import { beforeEach, describe, expect, it, type Mock, vi } from 'vitest';
+import { nextTick } from 'vue';
 
 import type { ChatMessage } from '@/core/types';
 import { useTranscriptStore } from '@/features/chat/ui/vue/transcript/stores/transcriptStore';
@@ -167,16 +168,18 @@ describe('TranscriptRoot', () => {
     expect(scrollEl.scrollTop).toBe(600);
   });
 
-  it('resets the render window when store.messages identity changes (new conversation/reload)', async () => {
+  it('resets the render window when conversation identity changes (new conversation/reload)', async () => {
     const store = useTranscriptStore();
+    store.setConversationIdentity('conv-1', 1);
     store.setMessages(userMessages(81));
 
     const { container } = mountRoot(makeCallbacks());
     await flushPromises();
     expect(container.querySelector('.specorator-load-earlier')).not.toBeNull();
 
-    // A fresh conversation load replaces the array with a short one — the
-    // window resets to 0 (fits entirely), not to a stale offset.
+    // A fresh conversation load bumps identity and replaces the array with a short one —
+    // the window resets to 0 (fits entirely), not to a stale offset.
+    store.setConversationIdentity('conv-2', 2);
     store.setMessages(userMessages(4));
     await flushPromises();
 
@@ -184,7 +187,7 @@ describe('TranscriptRoot', () => {
     expect(container.querySelectorAll('.specorator-message')).toHaveLength(4);
   });
 
-  it('renders the loading state instead of welcome/messages when loadingText is set', async () => {
+  it('renders the loading overlay above messages when loadingText is set', async () => {
     const store = useTranscriptStore();
     store.setMessages(userMessages(5));
     store.setLoadingText('Loading conversation…');
@@ -192,11 +195,74 @@ describe('TranscriptRoot', () => {
     const { container } = mountRoot(makeCallbacks());
     await flushPromises();
 
-    const loader = container.querySelector('.specorator-loading');
+    const loader = container.querySelector('.specorator-loading--overlay');
     expect(loader).not.toBeNull();
     expect(loader!.querySelector('.specorator-loading-text')?.textContent).toBe('Loading conversation…');
-    expect(container.querySelector('.specorator-welcome')).toBeNull();
-    expect(container.querySelector('.specorator-message')).toBeNull();
+    expect(container.querySelectorAll('.specorator-message')).toHaveLength(5);
+  });
+
+  it('scrolls to the bottom after historical messages finish loading', async () => {
+    const store = useTranscriptStore();
+    store.setLoadingText('Loading conversation…');
+    const { container } = mountRoot(makeCallbacks());
+    await flushPromises();
+
+    const scrollEl = container.querySelector('.specorator-messages') as HTMLElement;
+    Object.defineProperty(scrollEl, 'scrollHeight', {
+      configurable: true,
+      get: () => 1_200,
+    });
+    Object.defineProperty(scrollEl, 'scrollTop', {
+      configurable: true,
+      value: 0,
+      writable: true,
+    });
+
+    store.setMessages(userMessages(20));
+    store.setLoadingText(null);
+    await flushPromises();
+
+    expect(scrollEl.scrollTop).toBe(1_200);
+  });
+
+  it('re-scrolls after asynchronous historical markdown reaches its final height', async () => {
+    let finishRender!: () => void;
+    let markdownRendered = false;
+    const renderGate = new Promise<void>((resolve) => {
+      finishRender = resolve;
+    });
+    renderMock.mockImplementation(async (md: string, el: HTMLElement) => {
+      await renderGate;
+      markdownRendered = true;
+      el.createDiv({ cls: 'rendered-md', text: md });
+    });
+
+    const store = useTranscriptStore();
+    store.setLoadingText('Loading conversation…');
+    const { container } = mountRoot(makeCallbacks());
+    await nextTick();
+
+    const scrollEl = container.querySelector('.specorator-messages') as HTMLElement;
+    Object.defineProperty(scrollEl, 'scrollHeight', {
+      configurable: true,
+      get: () => markdownRendered ? 1_200 : 200,
+    });
+    Object.defineProperty(scrollEl, 'scrollTop', {
+      configurable: true,
+      value: 0,
+      writable: true,
+    });
+
+    store.setMessages(userMessages(1));
+    store.setLoadingText(null);
+    await nextTick();
+    await nextTick();
+    expect(scrollEl.scrollTop).toBeLessThan(1_200);
+
+    finishRender();
+    await flushPromises();
+
+    expect(scrollEl.scrollTop).toBe(1_200);
   });
 
   it('renders the hydration-error banner from the store via WelcomeBanner', async () => {

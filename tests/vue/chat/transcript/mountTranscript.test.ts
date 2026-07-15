@@ -107,6 +107,8 @@ describe('mountTranscript', () => {
     const { callbacks } = makeProjectingCallbacks({
       messages: userMessages(3),
       activeStream: null,
+      conversationId: null,
+      projectionRevision: 0,
       greeting: '',
       loadingText: null,
       hydrationError: null,
@@ -130,6 +132,8 @@ describe('mountTranscript', () => {
     const { callbacks, push } = makeProjectingCallbacks({
       messages: userMessages(1),
       activeStream: null,
+      conversationId: null,
+      projectionRevision: 0,
       greeting: '',
       loadingText: null,
       hydrationError: null,
@@ -143,6 +147,8 @@ describe('mountTranscript', () => {
     push({
       messages: userMessages(1),
       activeStream: { messageId: 'm0', blockIndex: 0, isThinking: true, isWriting: false, elapsedSeconds: 0 },
+      conversationId: null,
+      projectionRevision: 0,
       greeting: '',
       loadingText: null,
       hydrationError: null,
@@ -161,6 +167,8 @@ describe('mountTranscript', () => {
     const { callbacks } = makeProjectingCallbacks({
       messages: userMessages(1),
       activeStream: null,
+      conversationId: null,
+      projectionRevision: 0,
       greeting: '',
       loadingText: null,
       hydrationError: null,
@@ -199,6 +207,8 @@ describe('mountTranscript', () => {
     const { callbacks } = makeProjectingCallbacks({
       messages: userMessages(1),
       activeStream: null,
+      conversationId: null,
+      projectionRevision: 0,
       greeting: '',
       loadingText: null,
       hydrationError: null,
@@ -245,6 +255,8 @@ describe('mountTranscript', () => {
     const { callbacks, disposed } = makeProjectingCallbacks({
       messages: userMessages(1),
       activeStream: null,
+      conversationId: null,
+      projectionRevision: 0,
       greeting: '',
       loadingText: null,
       hydrationError: null,

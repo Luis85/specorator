@@ -148,8 +148,8 @@ runtime lifecycle, tab switching) is stable and must not be touched.
 ## Sub-project 2 — Transcript rendering (2026-07-12)
 
 The ADR 0004/0005 island seam pushed one level deeper, into the per-tab
-`messagesEl`. The imperative `MessageRenderer`, every `rendering/*` block
-renderer, and the DOM-patching streaming write-side were deleted and replaced
+`messagesEl`. The imperative `MessageRenderer`, top-level/stored block
+renderers, and the DOM-patching streaming write-side were deleted and replaced
 by a single Vue 3 + Pinia island (`ui/vue/transcript/`) that renders both stored
 and live turns through one reactive path. `TabManager`, tab lifecycle, provider
 runtimes, and `StreamController`'s chunk-routing + block-transition projection
@@ -218,18 +218,18 @@ reactive-data mutation.
    bookkeeping into it, then extracted it back out to
    `controllers/streamingMessageLifecycle.ts` to keep the LOC ceiling shrinking
    rather than grow. `scripts/quality-baseline.json`'s duplication counters rose
-   deliberately (cloneGroups 32→36, duplicatedLines 787→1048) — a few pure
-   `rendering/*` helpers were re-implemented as Vue viewmodels and the two inline
-   plan cards share ~64 lines; extracting those clone groups is a tracked
-   follow-up (complexFunctions and maintainability improved in the same pass).
+   deliberately (cloneGroups 32→36, duplicatedLines 787→1048) during cutover.
+   The 2026-07-14 debt sweep moved web-search/tool-header logic into shared
+   DOM-free viewmodels, shared both plan cards' lifecycle, removed stored shadow
+   renderers, and deleted the obsolete `toolCallElements` DOM map. Detached
+   subagent lifecycle adapters remain until their stream coordinators become
+   data-only.
 
 ### Deferred follow-ups (sub-project 2)
 
-- Helper-extraction: fold the re-implemented `rendering/*` pure helpers (e.g.
-  `webSearchViewModel` ↔ `webSearchRenderer`) and the shared inline-plan-card
-  clone groups into shared modules, unwinding the duplication-baseline bump.
 - Auto-turn retry-suppression consistency and a custom streaming-indicator text
-  hook are tracked parity gaps (not visible functional loss).
+  hook were tracked parity gaps; the indicator text hook now projects through
+  `ActiveStreamState.label`, while retry-suppression consistency remains.
 - Provider-lifecycle spawn tools render as a plain `ToolCall`; the consolidated
   spawn+wait+close card is unbuilt.
 

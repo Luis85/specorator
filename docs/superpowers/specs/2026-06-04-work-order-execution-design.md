@@ -585,6 +585,18 @@ One run per provider (Claude, Codex, Opencode, Cursor) with:
 
 Recorded by attaching the work-order ledger to the implementation PR.
 
+## Durable ledger hardening (2026-07-14)
+
+- `TaskLedgerEntry.id` is assigned before append. `RunSidecarStore` serializes
+  batch writes and dedupes reads by stable id (legacy entries fall back to
+  timestamp/status/message), making partial-batch retries idempotent.
+- `LedgerWriter.finalize()` waits through retry/backoff until its queue drains.
+  `RunSession` snapshots only after that confirmed drain, so terminal entries
+  cannot be omitted by an early dispose.
+- Snapshot/note failure does not hang terminal settlement. It creates a
+  `finalize-failed.json` marker and preserves the run sidecar; startup sweep
+  skips marked sidecars instead of deleting the only durable ledger copy.
+
 ## Migration / compatibility
 
 - New optional frontmatter fields (`heartbeat`, `pause_reason`) — existing notes parse unchanged.

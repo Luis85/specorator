@@ -32,7 +32,8 @@
       "renameFailed": "Failed to rename conversation",
       "linkedNotFound": "Linked conversation not found. It may have been deleted.",
       "linkedNoFreeTab": "Cannot open conversation: tab limit reached. Close a tab first.",
-      "loading": "Loading conversation…"
+      "loading": "Loading conversation…",
+      "storeUnavailable": "Conversation history is not available yet for this session."
     },
     "rewind": {
       "confirmMessage": "Retroceder até este ponto? As alterações de arquivos após esta mensagem serão revertidas. O retrocesso não afeta arquivos editados manualmente ou via bash.",
@@ -393,6 +394,10 @@
     "codexSafeMode": {
       "name": "Safe mode",
       "desc": "Sandbox mode used when the Safe toggle is active."
+    },
+    "captureAcpTraffic": {
+      "name": "Capturar tráfego ACP",
+      "desc": "Apenas diagnóstico — as capturas podem conter texto do prompt. Registra os frames ACP do Cursor, stderr e eventos de ciclo de vida da sessão atual em .specorator/captures/cursor."
     },
     "environment": "Ambiente",
     "customVariables": {
@@ -771,7 +776,8 @@
         "noModels": "Cursor returned no models. If you are not signed in, run `cursor-agent login`.",
         "discoveredOne": "Discovered 1 Cursor model.",
         "discoveredMany": "Discovered {count} Cursor models.",
-        "refreshFailed": "Failed to refresh Cursor models."
+        "refreshFailed": "Failed to refresh Cursor models.",
+        "applyFailed": "Could not apply the selected Cursor model to this session. Try picking it again or start a new conversation."
       },
       "subagent": {
         "saved": "Saved subagent \"{name}\".",
@@ -784,6 +790,10 @@
         "nameWhitespace": "Name cannot start or end with whitespace.",
         "nameDotSegment": "Name cannot be a dot segment.",
         "nameReservedChars": "Name cannot contain path separators or reserved characters."
+      },
+      "capture": {
+        "folderUnavailable": "Cursor ACP capture folder unavailable: vault path not found.",
+        "openFailed": "Failed to open the Cursor ACP capture folder: {error}"
       }
     }
   },
@@ -1218,6 +1228,7 @@
     "openSkillLibrary": "Open Skill Library",
     "openLoopLibrary": "Open loop library",
     "openLibrary": "Open Library",
-    "openQuickActions": "Open Quick Actions"
+    "openQuickActions": "Open Quick Actions",
+    "cursorOpenAcpCaptures": "Cursor: open ACP capture folder"
   }
 }

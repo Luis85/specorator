@@ -18,6 +18,7 @@ export class LedgerWriter {
   private retryAttempt = 0;
   private disposed = false;
   private disposeAfterDrain = false;
+  private drainWaiters: Array<() => void> = [];
 
   constructor(private readonly opts: LedgerWriterOptions) {
     this.scheduleInterval();
@@ -62,6 +63,7 @@ export class LedgerWriter {
       this.retryAttempt += 1;
       if (this.retryAttempt > RETRY_BACKOFF_MS.length) {
         this.opts.onDegraded?.();
+        this.resolveDrainWaiters();
       } else {
         // Re-queue at the front and schedule a retry.
         this.queue = [...batch, ...this.queue];
@@ -73,7 +75,13 @@ export class LedgerWriter {
     // the queue to drain, dispose now that nothing is pending.
     if (this.disposeAfterDrain && this.queue.length === 0) {
       this.dispose();
+      this.resolveDrainWaiters();
     }
+  }
+
+  private resolveDrainWaiters(): void {
+    const waiters = this.drainWaiters.splice(0);
+    for (const resolve of waiters) resolve();
   }
 
   /**
@@ -86,9 +94,12 @@ export class LedgerWriter {
     await this.flushNow();
     if (this.queue.length === 0) {
       this.dispose();
-    } else {
-      this.disposeAfterDrain = true;
+      return;
     }
+    this.disposeAfterDrain = true;
+    await new Promise<void>((resolve) => {
+      this.drainWaiters.push(resolve);
+    });
   }
 
   tail(): TaskLedgerEntry[] {

@@ -1,4 +1,7 @@
-import { buildAllowlistedSubprocessEnvironment } from '../../../core/providers/subprocessEnvironmentAllowlist';
+import {
+  buildFullSubprocessEnvironment,
+  pickEnvValueCaseInsensitive,
+} from '../../../core/providers/subprocessEnvironmentAllowlist';
 import type { ProviderId } from '../../../core/providers/types';
 import type { PluginContext } from '../../../core/types/PluginContext';
 import { getEnhancedPath } from '../../../utils/env';
@@ -22,14 +25,12 @@ export function buildCodexAppServerEnvironment(
   providerId: ProviderId = 'codex',
 ): Record<string, string> {
   const customEnv = plugin.getResolvedEnvironmentVariables(providerId);
-  // Codex is an opt-in third-party CLI launched with the vault as cwd; route the
-  // child env through the shared allowlist so host secrets aren't inherited.
-  // OPENAI_/CODEX_-prefixed host vars (e.g. OPENAI_API_KEY) pass through.
-  return buildAllowlistedSubprocessEnvironment({
+  // Full host-env passthrough (Claude-parity) so the child and its shell tools
+  // resolve host binaries; only the TLS-bypass kill-switch is filtered.
+  return buildFullSubprocessEnvironment({
     processEnv: process.env,
     customEnv,
-    providerPrefixPattern: /^(OPENAI|CODEX)_/i,
-    pathOverride: getEnhancedPath(customEnv.PATH),
+    pathOverride: getEnhancedPath(pickEnvValueCaseInsensitive(customEnv, 'PATH')),
   });
 }
 

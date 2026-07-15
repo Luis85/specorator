@@ -1,15 +1,12 @@
-import type { App } from 'obsidian';
-
 import type { ChatRuntime } from '../../../core/runtime/ChatRuntime';
 import type { ChatTurnMetadata, ChatTurnRequest } from '../../../core/runtime/types';
 import { TOOL_EXIT_PLAN_MODE } from '../../../core/tools/toolNames';
-import type { ChatMessage, PlanApprovalDecision } from '../../../core/types';
+import type { ChatMessage, ImageAttachment, PlanApprovalDecision } from '../../../core/types';
 import type { BrowserSelectionContext } from '../../../utils/browser';
 import type { CanvasSelectionContext } from '../../../utils/canvas';
 import { formatDurationMmSs } from '../../../utils/date';
 import type { EditorSelectionContext } from '../../../utils/editor';
 import { COMPLETION_FLAVOR_WORDS } from '../constants';
-import { updateToolCallResult } from '../rendering/ToolCallRenderer';
 import type { ChatState } from '../state/ChatState';
 import type { FileContextManager } from '../ui/FileContext';
 import type { ImageContextManager } from '../ui/ImageContext';
@@ -26,6 +23,13 @@ export interface ComposerSendContext {
   consumesComposerDraft: boolean;
   hasImages: boolean;
   imageOverride?: ChatMessage['images'];
+  /**
+   * The composer textarea's ORIGINAL value at send time (before it was cleared).
+   * Used for rollback restore: a `consumesComposerDraft` send's `content` is the
+   * quick-action prompt folded with the draft, so restoring `content` would
+   * repopulate the composer with the generated prompt — restore this instead.
+   */
+  composerDraft: string;
   inputEl: HTMLTextAreaElement;
   imageContextManager: ImageContextManager | null;
   fileContextManager: FileContextManager | null;
@@ -96,6 +100,7 @@ export function resolveComposerSend(args: {
     consumesComposerDraft,
     hasImages,
     imageOverride,
+    composerDraft: args.inputEl.value,
     inputEl: args.inputEl,
     imageContextManager: args.imageContextManager,
     fileContextManager: args.fileContextManager,
@@ -124,6 +129,113 @@ export function resolveComposerSourceImages(
 
 export function normalizeTabModelOverride(raw: string | null | undefined): string | null {
   return typeof raw === 'string' && raw.trim() ? raw.trim() : null;
+}
+
+/** Outgoing composer draft captured before a history switch clears the input. */
+export interface ComposerSwitchDraftSnapshot {
+  inputText: string;
+  attachedFiles: string[];
+  attachedFolders: string[];
+}
+
+export interface ComposerSwitchDraftDeps {
+  getInputEl: () => HTMLTextAreaElement;
+  getFileContextManager: () => {
+    getAttachedFiles?: () => Iterable<string>;
+    getAttachedFolders?: () => Iterable<string>;
+    setAttachedFiles?: (paths: string[]) => void;
+    setAttachedFolders?: (paths: string[]) => void;
+  } | null;
+}
+
+export function captureComposerSwitchDraft(deps: ComposerSwitchDraftDeps): ComposerSwitchDraftSnapshot {
+  const fileCtx = deps.getFileContextManager();
+  return {
+    inputText: deps.getInputEl().value,
+    attachedFiles: [...(fileCtx?.getAttachedFiles?.() ?? [])],
+    attachedFolders: [...(fileCtx?.getAttachedFolders?.() ?? [])],
+  };
+}
+
+export function restoreComposerSwitchDraft(
+  deps: ComposerSwitchDraftDeps,
+  snapshot: ComposerSwitchDraftSnapshot,
+  resetInputHeight?: () => void,
+): void {
+  deps.getInputEl().value = snapshot.inputText;
+  resetInputHeight?.();
+  const fileCtx = deps.getFileContextManager();
+  fileCtx?.setAttachedFiles?.(snapshot.attachedFiles);
+  fileCtx?.setAttachedFolders?.(snapshot.attachedFolders);
+}
+
+export interface ComposerRollbackSnapshot {
+  inputText: string;
+  shouldRestoreInput: boolean;
+  attachedFiles: string[];
+  attachedFolders: string[];
+  // Captured BEFORE buildOutgoingTurn clears them, so a failed init rollback can
+  // restore the user's pasted/dropped images too (not just text + file pills).
+  attachedImages: ImageAttachment[];
+  // FileContext session-started state BEFORE beginStreamingTurnState's
+  // startSession() froze the active-note pill. Restored on rollback so a note
+  // switch before retry updates the current note (not stale context).
+  fileContextSessionStarted: boolean;
+}
+
+export function captureComposerRollbackSnapshot(send: ComposerSendContext): ComposerRollbackSnapshot {
+  return {
+    // A consumesComposerDraft send folded the quick-action prompt INTO `content`,
+    // so restore the user's original draft — not the generated prompt. A plain
+    // user send's `content` already IS the composer text.
+    inputText: send.consumesComposerDraft ? send.composerDraft : send.content,
+    shouldRestoreInput: send.shouldUseInput || send.consumesComposerDraft,
+    attachedFiles: [...(send.fileContextManager?.getAttachedFiles?.() ?? [])],
+    attachedFolders: [...(send.fileContextManager?.getAttachedFolders?.() ?? [])],
+    attachedImages: [...(send.imageContextManager?.getAttachedImages() ?? [])],
+    // Captured before startSession() runs, so rollback can restore the exact
+    // prior state (usually false on the first turn of an empty chat).
+    fileContextSessionStarted: send.fileContextManager?.isSessionStarted?.() ?? false,
+  };
+}
+
+export function rollbackOptimisticOutgoingTurn(
+  state: ChatState,
+  snapshot: ComposerRollbackSnapshot,
+  send: ComposerSendContext,
+  userMsgId: string,
+  assistantMsgId: string,
+  resetInputHeight: () => void,
+): void {
+  state.messages = state.messages.filter(
+    (message) => message.id !== userMsgId && message.id !== assistantMsgId,
+  );
+  state.isStreaming = false;
+  state.hasPendingConversationSave = false;
+  state.activeMessageId = null;
+  state.activeBlockIndex = -1;
+  state.currentContentEl = null;
+  state.currentTextEl = null;
+  state.currentTextContent = '';
+  state.currentThinkingState = null;
+
+  if (snapshot.shouldRestoreInput) {
+    send.inputEl.value = snapshot.inputText;
+    resetInputHeight();
+  }
+  if (send.fileContextManager) {
+    send.fileContextManager.setAttachedFiles?.(snapshot.attachedFiles);
+    send.fileContextManager.setAttachedFolders?.(snapshot.attachedFolders);
+    // beginStreamingTurnState called startSession(), freezing the active-note
+    // pill. If no session was started before this send, undo it so a note switch
+    // before the retry updates currentNotePath instead of sending stale context.
+    if (!snapshot.fileContextSessionStarted) {
+      send.fileContextManager.endSession?.();
+    }
+  }
+  // buildOutgoingTurn cleared the images before init failed; put them back so the
+  // restored message is fully retryable (mirrors the text/pill restore above).
+  send.imageContextManager?.setImages(snapshot.attachedImages);
 }
 
 export function beginStreamingTurnState(
@@ -250,7 +362,6 @@ export function bakeResponseDurationFooter(
  * the saved conversation renders correctly when revisited.
  */
 export function completeApprovedNewSessionPlanToolCalls(
-  app: App,
   state: ChatState,
   finalAssistantMsg: ChatMessage,
 ): void {
@@ -262,7 +373,6 @@ export function completeApprovedNewSessionPlanToolCalls(
     if (tc.name === TOOL_EXIT_PLAN_MODE && !tc.result) {
       tc.status = 'completed';
       tc.result = 'User approved the plan and started a new session.';
-      updateToolCallResult(app, tc.id, tc, state.toolCallElements);
     }
   }
 }

@@ -2,6 +2,7 @@ import {
   AcpSessionUpdateNormalizer,
   renderAcpContentBlock,
 } from '../../../../src/providers/acp';
+import { CURSOR_PLAN_SESSION_UPDATE } from '../../../fixtures/providers/cursor/realAcpCaptures';
 
 describe('AcpSessionUpdateNormalizer', () => {
   it('emits assistant message boundaries once per message id', () => {
@@ -89,6 +90,73 @@ describe('AcpSessionUpdateNormalizer', () => {
       }],
       type: 'tool_call_update',
     });
+  });
+
+  it('passes a real captured plan session/update through as a plan-typed result', () => {
+    const normalizer = new AcpSessionUpdateNormalizer();
+
+    // Real Cursor `plan` session/update (captured 2026-07-12): entries carry
+    // content + priority + status. The normalizer forwards it verbatim behind the
+    // plan discriminant for the runtime's plan panel.
+    const result = normalizer.normalize({
+      sessionUpdate: 'plan',
+      ...CURSOR_PLAN_SESSION_UPDATE,
+    });
+
+    expect(result).toEqual({
+      type: 'plan',
+      plan: { sessionUpdate: 'plan', entries: CURSOR_PLAN_SESSION_UPDATE.entries },
+    });
+    const plan = (result as { plan: { entries: Array<{ content: string; priority: string; status: string }> } }).plan;
+    expect(plan.entries[0]).toEqual({
+      content: 'Add src/utils/readingTime.ts with strip/count/estimate + unit tests',
+      priority: 'medium',
+      status: 'pending',
+    });
+  });
+
+  it('caps accumulated tool output at maxToolOutputChars', () => {
+    const normalizer = new AcpSessionUpdateNormalizer({ maxToolOutputChars: 10 });
+
+    normalizer.normalize({
+      sessionUpdate: 'tool_call',
+      title: 'grep',
+      toolCallId: 'tool-1',
+    });
+    const done = normalizer.normalize({
+      content: [{
+        content: { text: 'x'.repeat(50), type: 'text' },
+        type: 'content',
+      }],
+      sessionUpdate: 'tool_call_update',
+      status: 'completed',
+      toolCallId: 'tool-1',
+    });
+
+    const result = (done as { streamChunks: Array<{ type: string; content?: string }> })
+      .streamChunks.find((chunk) => chunk.type === 'tool_result');
+    expect(result?.content).toBe(`${'x'.repeat(10)}\n… [truncated 40 characters]`);
+  });
+
+  it('does not re-truncate the retained output on a payload-less terminal update', () => {
+    const normalizer = new AcpSessionUpdateNormalizer({ maxToolOutputChars: 10 });
+
+    normalizer.normalize({ sessionUpdate: 'tool_call', title: 'grep', toolCallId: 'tool-1' });
+    normalizer.normalize({
+      content: [{ content: { text: 'y'.repeat(30), type: 'text' }, type: 'content' }],
+      sessionUpdate: 'tool_call_update',
+      status: 'in_progress',
+      toolCallId: 'tool-1',
+    });
+    const done = normalizer.normalize({
+      sessionUpdate: 'tool_call_update',
+      status: 'completed',
+      toolCallId: 'tool-1',
+    });
+
+    const result = (done as { streamChunks: Array<{ type: string; content?: string }> })
+      .streamChunks.find((chunk) => chunk.type === 'tool_result');
+    expect(result?.content).toBe(`${'y'.repeat(10)}\n… [truncated 20 characters]`);
   });
 
   it('maps ACP commands into slash commands', () => {

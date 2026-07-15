@@ -147,8 +147,17 @@ export interface AcpModelInfo {
   description?: string | null;
 }
 
+export type AcpSessionModelInfo =
+  | (AcpModelInfo & { modelId?: string })
+  | {
+    description?: string | null;
+    id?: string;
+    modelId: string;
+    name: string;
+  };
+
 export interface AcpSessionModelState {
-  availableModels: AcpModelInfo[];
+  availableModels: AcpSessionModelInfo[];
   currentModelId: string;
 }
 
@@ -206,7 +215,11 @@ export interface AcpLoadSessionResponse {
   configOptions?: AcpSessionConfigOption[] | null;
   models?: AcpSessionModelState | null;
   modes?: AcpSessionModeState | null;
-  sessionId: AcpSessionId;
+  // Optional: real Cursor `session/load` responses carry no `sessionId` (verified
+  // against ACP wire captures 2026-07-12) — the loaded session keeps the id the
+  // caller requested. Opencode servers do echo it, so callers coalesce with the
+  // requested id.
+  sessionId?: AcpSessionId;
 }
 
 export interface AcpListSessionsRequest {

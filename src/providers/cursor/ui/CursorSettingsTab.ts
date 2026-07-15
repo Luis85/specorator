@@ -2,8 +2,10 @@ import { Setting } from 'obsidian';
 
 import { widgetContextFromTabRenderer } from '../../../core/providers/settingsWidgets';
 import type { ProviderSettingsTabRenderer } from '../../../core/providers/types';
+import { asSettingsBag } from '../../../core/types';
 import { t } from '../../../i18n/i18n';
 import { maybeGetCursorWorkspaceServices } from '../app/cursorWorkspaceAccess';
+import { getCursorProviderSettings, updateCursorProviderSettings } from '../settings';
 import {
   cursorSettingsWidgets,
   mountCursorCliPathSetting,
@@ -20,6 +22,8 @@ import { mountCursorVisibleModelsPicker } from './visibleModelsPicker';
  */
 export const cursorSettingsTabRenderer: ProviderSettingsTabRenderer = {
   render(container, context) {
+    const settingsBag = asSettingsBag(context.plugin.settings);
+    const cursorSettings = getCursorProviderSettings(settingsBag);
     const widgetContext = widgetContextFromTabRenderer(context, () => {
       container.empty();
       cursorSettingsTabRenderer.render(container, context);
@@ -35,6 +39,19 @@ export const cursorSettingsTabRenderer: ProviderSettingsTabRenderer = {
     }
 
     mountCursorEnvironmentSection(container, widgetContext, t('settings.environment'));
+
+    new Setting(container).setName('Diagnostics').setHeading();
+    new Setting(container)
+      .setName(t('settings.captureAcpTraffic.name'))
+      .setDesc(t('settings.captureAcpTraffic.desc'))
+      .addToggle((toggle) =>
+        toggle
+          .setValue(cursorSettings.captureAcpTraffic)
+          .onChange(async (value) => {
+            updateCursorProviderSettings(settingsBag, { captureAcpTraffic: value });
+            await context.plugin.saveSettings();
+          })
+      );
   },
   widgets: cursorSettingsWidgets,
 };

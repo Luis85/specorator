@@ -49,6 +49,7 @@ export class ChatTabExecutionSurface implements TaskExecutionSurface {
     if (!handle) {
       return this.failed('Could not open a work-order tab (work-order tab limit reached).');
     }
+    let disposed = false;
 
     return {
       runId,
@@ -60,6 +61,11 @@ export class ChatTabExecutionSurface implements TaskExecutionSurface {
       sidepanelTabId: handle.sidepanelTabId,
       stream: new ChatTabStreamAdapter(handle),
       terminal: handle.terminal,
+      dispose: async () => {
+        if (disposed) return;
+        disposed = true;
+        await view.getTabManager()?.closeTab(handle.sidepanelTabId, true);
+      },
     };
   }
 

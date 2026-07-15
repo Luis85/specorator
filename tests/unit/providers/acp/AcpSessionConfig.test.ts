@@ -95,7 +95,42 @@ describe('AcpSessionConfig', () => {
     });
   });
 
-  it('falls back to ACP session model metadata when the config option has no discovered entries', () => {
+  it('normalizes modelId-only session metadata from Cursor wire captures', () => {
+    expect(extractAcpSessionModelState({
+      models: {
+        availableModels: [
+          { modelId: 'gpt-5.6-luna[context=272k,reasoning=medium,fast=false]', name: 'gpt-5.6-luna' },
+        ],
+        currentModelId: 'gpt-5.6-luna[context=272k,reasoning=medium,fast=false]',
+      },
+    })).toEqual({
+      availableModels: [
+        {
+          id: 'gpt-5.6-luna[context=272k,reasoning=medium,fast=false]',
+          name: 'gpt-5.6-luna',
+        },
+      ],
+      currentModelId: 'gpt-5.6-luna[context=272k,reasoning=medium,fast=false]',
+    });
+  });
+
+  it('prefers the current modelId field when both wire identifiers are present', () => {
+    expect(extractAcpSessionModelState({
+      models: {
+        availableModels: [{
+          id: 'legacy-id',
+          modelId: 'current-id',
+          name: 'Current',
+        }],
+        currentModelId: 'current-id',
+      },
+    })).toEqual({
+      availableModels: [{ id: 'current-id', name: 'Current' }],
+      currentModelId: 'current-id',
+    });
+  });
+
+  it('treats an advertised empty model selector as authoritative', () => {
     expect(extractAcpSessionModelState({
       configOptions: [
         {
@@ -114,10 +149,8 @@ describe('AcpSessionConfig', () => {
         currentModelId: 'openai/gpt-5-mini',
       },
     })).toEqual({
-      availableModels: [
-        { description: 'Fast', id: 'openai/gpt-5-mini', name: 'OpenAI/GPT-5 Mini' },
-      ],
-      currentModelId: 'openai/gpt-5-mini',
+      availableModels: [],
+      currentModelId: 'anthropic/claude-sonnet-4/high',
     });
   });
 
@@ -190,7 +223,7 @@ describe('AcpSessionConfig', () => {
     });
   });
 
-  it('falls back to ACP session mode metadata when the config option has no discovered entries', () => {
+  it('treats an advertised empty mode selector as authoritative', () => {
     expect(extractAcpSessionModeState({
       configOptions: [
         {
@@ -210,11 +243,8 @@ describe('AcpSessionConfig', () => {
         currentModeId: 'build',
       },
     })).toEqual({
-      availableModes: [
-        { id: 'build', name: 'Build' },
-        { description: 'Planning-first agent', id: 'plan', name: 'Plan' },
-      ],
-      currentModeId: 'build',
+      availableModes: [],
+      currentModeId: 'plan',
     });
   });
 

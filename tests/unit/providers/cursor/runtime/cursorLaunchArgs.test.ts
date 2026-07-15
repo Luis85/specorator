@@ -1,22 +1,21 @@
 import {
-  buildCursorAgentFlagArgs,
   buildCursorAgentJsonModeFlagArgs,
+  buildCursorAgentTextModeFlagArgs,
   resolveCursorSandboxMode,
 } from '@/providers/cursor/runtime/cursorLaunchArgs';
 
 describe('cursorLaunchArgs', () => {
   const workspace = '/vault';
 
-  it('builds stream-json argv with trust and sandbox for normal mode', () => {
-    const args = buildCursorAgentFlagArgs({
+  it('builds json argv with trust and sandbox for normal mode', () => {
+    const args = buildCursorAgentJsonModeFlagArgs({
       workspaceDir: workspace,
       permissionMode: 'normal',
       resumeSessionId: null,
     });
     expect(args).toContain('-p');
     expect(args).toContain('--output-format');
-    expect(args).toContain('stream-json');
-    expect(args).toContain('--stream-partial-output');
+    expect(args).toContain('json');
     expect(args).toContain('--workspace');
     expect(args).toContain(workspace);
     expect(args).toContain('--trust');
@@ -25,7 +24,7 @@ describe('cursorLaunchArgs', () => {
   });
 
   it('adds force and disabled sandbox for yolo', () => {
-    const args = buildCursorAgentFlagArgs({
+    const args = buildCursorAgentJsonModeFlagArgs({
       workspaceDir: workspace,
       permissionMode: 'yolo',
     });
@@ -34,7 +33,7 @@ describe('cursorLaunchArgs', () => {
   });
 
   it('adds plan mode for plan permission', () => {
-    const args = buildCursorAgentFlagArgs({
+    const args = buildCursorAgentJsonModeFlagArgs({
       workspaceDir: workspace,
       permissionMode: 'plan',
     });
@@ -44,7 +43,7 @@ describe('cursorLaunchArgs', () => {
 
   it('uses disabled sandbox on Windows for normal and plan modes', () => {
     expect(resolveCursorSandboxMode('win32')).toBe('disabled');
-    const normal = buildCursorAgentFlagArgs({
+    const normal = buildCursorAgentJsonModeFlagArgs({
       workspaceDir: workspace,
       permissionMode: 'normal',
       platform: 'win32',
@@ -53,7 +52,7 @@ describe('cursorLaunchArgs', () => {
     expect(normal).toContain('disabled');
     expect(normal).not.toContain('enabled');
 
-    const plan = buildCursorAgentFlagArgs({
+    const plan = buildCursorAgentJsonModeFlagArgs({
       workspaceDir: workspace,
       permissionMode: 'plan',
       platform: 'win32',
@@ -68,7 +67,7 @@ describe('cursorLaunchArgs', () => {
     expect(resolveCursorSandboxMode('darwin')).toBe('enabled');
     expect(resolveCursorSandboxMode('linux')).toBe('enabled');
 
-    const normal = buildCursorAgentFlagArgs({
+    const normal = buildCursorAgentJsonModeFlagArgs({
       workspaceDir: workspace,
       permissionMode: 'normal',
       platform: 'darwin',
@@ -78,7 +77,7 @@ describe('cursorLaunchArgs', () => {
   });
 
   it('appends resume and model when provided', () => {
-    const args = buildCursorAgentFlagArgs({
+    const args = buildCursorAgentJsonModeFlagArgs({
       workspaceDir: workspace,
       permissionMode: 'normal',
       model: 'composer-2-fast',
@@ -90,15 +89,15 @@ describe('cursorLaunchArgs', () => {
     expect(args).toContain('composer-2-fast');
   });
 
-  it('json mode omits stream partial flags', () => {
-    const args = buildCursorAgentJsonModeFlagArgs({
+  it('text mode omits MCP approval even when requested', () => {
+    const args = buildCursorAgentTextModeFlagArgs({
       workspaceDir: workspace,
       permissionMode: 'normal',
+      approveMcps: true,
     });
     expect(args).toContain('--output-format');
-    expect(args).toContain('json');
-    expect(args).not.toContain('stream-json');
-    expect(args).not.toContain('--stream-partial-output');
+    expect(args).toContain('text');
+    expect(args).not.toContain('--approve-mcps');
   });
 
   it('read-only json mode forces ask mode and never escalates to force/disabled sandbox', () => {

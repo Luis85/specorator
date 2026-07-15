@@ -33,33 +33,72 @@ describe('cursorSettingsReconciler.reconcileModelWithEnvironment', () => {
     expect(s.model).toBe('cursor:gpt-5.5');
   });
 
+  it('preserves an explicit CURSOR_MODEL variant for exact ACP matching', () => {
+    const s = settings('CURSOR_API_KEY=k\nCURSOR_MODEL=sonnet-4-thinking');
+    cursorSettingsReconciler.reconcileModelWithEnvironment(s, []);
+    expect(s.model).toBe('cursor:sonnet-4-thinking');
+  });
+
   it('preserves a still-valid (namespaced) selection when CURSOR_MODEL is absent', () => {
     const s = settings('CURSOR_API_KEY=k', { model: 'cursor:composer-2' });
     cursorSettingsReconciler.reconcileModelWithEnvironment(s, []);
     expect(s.model).toBe('cursor:composer-2');
   });
 
-  it('resets to the first option when the current selection is not a valid option', () => {
+  it('leaves an explicit selection untouched when CURSOR_MODEL is absent', () => {
     const s = settings('CURSOR_API_KEY=k', { model: 'cursor:no-longer-here' });
     cursorSettingsReconciler.reconcileModelWithEnvironment(s, []);
-    expect(s.model).toBe('cursor:auto');
+    expect(s.model).toBe('cursor:no-longer-here');
   });
 
-  it('resets a legacy raw value to the first namespaced option', () => {
+  it('leaves legacy raw state untouched instead of normalizing during env reconciliation', () => {
     const s = settings('CURSOR_API_KEY=k', { model: 'composer-2' });
     cursorSettingsReconciler.reconcileModelWithEnvironment(s, []);
-    expect(s.model).toBe('cursor:auto');
+    expect(s.model).toBe('composer-2');
+  });
+
+  function boundCursorConversation() {
+    return {
+      id: 'c1',
+      providerId: 'cursor',
+      sessionId: 'sess-1',
+      providerState: { chatSessionId: 'sess-1' },
+    } as never;
+  }
+
+  it('invalidates the bound session when only CURSOR_SESSION_TOKEN changes', () => {
+    const s = settings('CURSOR_API_KEY=k\nCURSOR_SESSION_TOKEN=t1');
+    // Seed the saved hash for the current (t1) credential.
+    cursorSettingsReconciler.reconcileModelWithEnvironment(s, []);
+
+    // Rotate ONLY the session token — the API key and base URL are unchanged.
+    (s.providerConfigs as { cursor: { environmentVariables: string } }).cursor.environmentVariables =
+      'CURSOR_API_KEY=k\nCURSOR_SESSION_TOKEN=t2';
+    const conv = boundCursorConversation();
+    cursorSettingsReconciler.reconcileModelWithEnvironment(s, [conv]);
+
+    // Session dropped so the new credential can't load the prior one's artifacts.
+    expect((conv as { sessionId: string | null }).sessionId).toBeNull();
+    expect((conv as { providerState: unknown }).providerState).toBeUndefined();
+  });
+
+  it('leaves the bound session intact when the token is unchanged', () => {
+    const s = settings('CURSOR_API_KEY=k\nCURSOR_SESSION_TOKEN=t1');
+    cursorSettingsReconciler.reconcileModelWithEnvironment(s, []);
+    const conv = boundCursorConversation();
+    cursorSettingsReconciler.reconcileModelWithEnvironment(s, [conv]);
+    expect((conv as { sessionId: string | null }).sessionId).toBe('sess-1');
   });
 });
 
 describe('normalizeModelVariantSettings migration', () => {
-  it('collapses a persisted full-variant model to its family and seeds the mode', () => {
+  it('preserves a persisted full-variant model for exact ACP matching', () => {
     const bag: Record<string, unknown> = { model: 'cursor:sonnet-4-thinking' };
     const changed = cursorSettingsReconciler.normalizeModelVariantSettings(bag);
-    expect(changed).toBe(true);
-    expect(bag.model).toBe('cursor:sonnet-4');
-    expect(bag.effortLevel).toBe('thinking');
-    expect(getCursorProviderSettings(bag).preferredModeByFamily['sonnet-4']).toBe('thinking');
+    expect(changed).toBe(false);
+    expect(bag.model).toBe('cursor:sonnet-4-thinking');
+    expect(bag.effortLevel).toBeUndefined();
+    expect(getCursorProviderSettings(bag).preferredModeByFamily).toEqual({});
   });
 
   it('leaves a bare family model unchanged', () => {

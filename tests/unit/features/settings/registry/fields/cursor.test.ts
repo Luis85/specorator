@@ -18,11 +18,21 @@ describe('Cursor tab registry fields', () => {
     expect(disabledTabs.find((t) => t.id === 'cursor')).toBeUndefined();
   });
 
-  it('registers 3 sections under Cursor in spec order', () => {
+  it('registers 4 sections under Cursor in spec order', () => {
     registerCursorTabFields();
     const r = getSettingsRegistry();
     const sections = r.getSections('cursor', enabled);
-    expect(sections.map((s) => s.id)).toEqual(['models', 'subagents', 'environment']);
+    expect(sections.map((s) => s.id)).toEqual(['models', 'subagents', 'environment', 'diagnostics']);
+  });
+
+  it('registers the captureAcpTraffic toggle under diagnostics, defaulted off', () => {
+    registerCursorTabFields();
+    const r = getSettingsRegistry();
+    const field = r.getAllFields().find((f) => f.id === 'providerConfigs.cursor.captureAcpTraffic');
+    expect(field).toBeDefined();
+    expect(field?.sectionId).toBe('diagnostics');
+    expect(field?.type.kind).toBe('toggle');
+    expect(field?.default).toBe(false);
   });
 
   it('replaces the flat cliPath field with the hostname-keyed cliPathsByHost widget', () => {

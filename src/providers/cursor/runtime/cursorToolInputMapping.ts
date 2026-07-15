@@ -40,7 +40,7 @@ function mapGlobInput(args: Record<string, unknown>): Record<string, unknown> {
 
 function mapGrepInput(args: Record<string, unknown>): Record<string, unknown> {
   const out: Record<string, unknown> = {
-    pattern: stringValue(args.pattern),
+    pattern: stringValue(args.pattern ?? args.query),
   };
   const target = stringValue(args.path ?? args.targetDirectory);
   if (target) out.path = target;

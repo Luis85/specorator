@@ -62,7 +62,7 @@ export class CursorAuxCliRunner implements AuxQueryRunner {
       : prompt;
     const { arg: promptArg, cleanup: cleanupPromptFile } = resolveCursorCliPromptArg(fullPrompt);
 
-    const env = buildCursorAgentEnvironment(this.plugin);
+    const env = buildCursorAgentEnvironment(this.plugin, cli);
     let result: { stdout: string; stderr: string; code: number | null; signal: NodeJS.Signals | null };
     try {
       result = await this.spawnOnce(
@@ -121,11 +121,13 @@ export class CursorAuxCliRunner implements AuxQueryRunner {
       || (typeof providerSettings.model === 'string' && providerSettings.model.trim()
         ? providerSettings.model.trim()
         : undefined);
-    const mode = typeof providerSettings.effortLevel === 'string'
-      ? providerSettings.effortLevel
-      : undefined;
-    return resolveCursorModelSelectionForCli(familyValue, mode, {
-      catalogIds: getCachedCursorModelIds(),
+    const cliPath = this.plugin.getResolvedProviderCliPath('cursor') ?? undefined;
+    const catalogIds = getCachedCursorModelIds(
+      cliPath,
+      cliPath ? buildCursorAgentEnvironment(this.plugin, cliPath) : undefined,
+    );
+    return resolveCursorModelSelectionForCli(familyValue, undefined, {
+      catalogIds,
       enabledIds: getCursorEnabledModels(settingsBag),
     });
   }
@@ -173,7 +175,7 @@ export class CursorAuxCliRunner implements AuxQueryRunner {
           clearKillTimer();
           killTimer = window.setTimeout(() => {
             if (child.exitCode === null && child.signalCode === null) {
-              forceKillCursorProcessTree(child);
+              void forceKillCursorProcessTree(child);
             }
           }, CURSOR_AUX_SIGKILL_TIMEOUT_MS);
         };

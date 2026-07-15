@@ -48,7 +48,8 @@ describe('refreshCursorModelCatalog list-models timeout', () => {
     Object.defineProperty(process, 'platform', { value: 'win32', configurable: true });
     // The probe child never emits close; the taskkill child must spawn cleanly.
     const probe = createMockChild(7777);
-    mockSpawn.mockImplementationOnce(() => probe).mockImplementation(() => createMockChild());
+    const taskkill = createMockChild();
+    mockSpawn.mockImplementationOnce(() => probe).mockImplementationOnce(() => taskkill);
 
     jest.useFakeTimers();
     const pending = refreshCursorModelCatalog('/usr/bin/cursor-agent', {}, '/vault');
@@ -59,12 +60,17 @@ describe('refreshCursorModelCatalog list-models timeout', () => {
 
     jest.advanceTimersByTime(15_000);
 
-    const treeKill = mockSpawn.mock.calls.find((call) => call[0] === 'taskkill');
-    expect(treeKill).toBeDefined();
-    expect(treeKill?.[1]).toEqual(
-      expect.arrayContaining(['/PID', '7777', '/T', '/F']),
-    );
+    expect(mockSpawn).toHaveBeenNthCalledWith(2, 'taskkill', ['/PID', '7777', '/T', '/F'], {
+      windowsHide: true,
+      stdio: 'ignore',
+    });
 
+    let settled = false;
+    void pending.then(() => { settled = true; });
+    await Promise.resolve();
+    expect(settled).toBe(false);
+
+    taskkill.emit('close', 0);
     jest.useRealTimers();
     const ids = await pending;
     // Discovery failed → existing fallback is returned, never an empty list.

@@ -46,6 +46,38 @@ describe('buildAcpUsageInfo', () => {
     expect(usage).toBeNull();
   });
 
+  it('uses fallbackContextWindowSize (non-authoritative) when no usage_update carried a window', () => {
+    // Cursor emits no usage_update, so the final session/prompt response carries
+    // token counts but no window — the catalog window must fill in, or the panel
+    // shows contextWindow 0 and loses the percentage.
+    const usage = buildAcpUsageInfo({
+      model: 'sonnet-via-cursor',
+      promptUsage: { inputTokens: 900, outputTokens: 100, totalTokens: 1000 },
+      contextWindow: null,
+      fallbackContextWindowSize: 200_000,
+    });
+    expect(usage?.contextWindow).toBe(200_000);
+    expect(usage?.contextTokens).toBe(1000);
+    expect(usage?.contextWindowIsAuthoritative).toBe(false);
+  });
+
+  it('lets an authoritative contextWindow win over fallbackContextWindowSize', () => {
+    const usage = buildAcpUsageInfo({
+      model: 'sonnet-via-cursor',
+      promptUsage: { inputTokens: 900, outputTokens: 100, totalTokens: 1000 },
+      contextWindow: { size: 128_000, used: 1000 },
+      fallbackContextWindowSize: 200_000,
+    });
+    expect(usage?.contextWindow).toBe(128_000);
+    expect(usage?.contextWindowIsAuthoritative).toBe(true);
+  });
+
+  it('still returns null with only a fallback window and no tokens/usage_update', () => {
+    expect(
+      buildAcpUsageInfo({ model: 'sonnet-via-cursor', fallbackContextWindowSize: 200_000 }),
+    ).toBeNull();
+  });
+
   it('throws when called without a model id (shared builder contract)', () => {
     expect(() =>
       buildAcpUsageInfo({ model: '', promptUsage: null, contextWindow: { size: 100, used: 0 } }),

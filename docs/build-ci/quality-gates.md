@@ -306,6 +306,15 @@ the LOC guard, applied to whole-repo metrics:
 - A deliberate regression (rare, reviewed trade-off) bumps the baseline the
   same way, justified in the PR.
 
+> **Match CI when measuring or updating the baseline.** fallow's CRAP-based
+> complexity metrics silently switch coverage models depending on whether a
+> gitignored `coverage/` directory exists locally (`istanbul` when present,
+> `static_estimated` otherwise), so a local run right after `npm run
+> test:coverage` can report different `complexFunctions`/`criticalComplexity`
+> than CI's clean checkout. Always measure and `--update` from a cache-free
+> state: `rm -rf coverage .fallow && npm run check:quality`. See
+> [`docs/tech-debt/2026-07-11-fallow-coverage-model-divergence.md`](../tech-debt/2026-07-11-fallow-coverage-model-divergence.md).
+
 The wrapper exists because fallow's own gate flags (`--fail-on-regression`,
 `--min-score`) did not reliably drive the process exit code as of 2.91; the
 JSON report is stable, so the ratchet parses that instead.

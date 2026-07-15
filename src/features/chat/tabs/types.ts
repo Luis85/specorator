@@ -292,6 +292,12 @@ export interface TabData {
    */
   pendingRuntimeCleanup?: Promise<void> | null;
 
+  /** Monotonic generation for in-flight runtime initialization. */
+  runtimeInitGeneration?: number;
+
+  /** Shared promise for concurrent initializeTabService callers. */
+  runtimeInitPromise?: Promise<void> | null;
+
   /** Per-tab chat state. */
   state: ChatState;
 

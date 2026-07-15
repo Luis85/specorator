@@ -95,14 +95,17 @@ export class PluginViewActivator {
    */
   getTabSlotUsage(): { used: number; max: number } {
     const max = this.getMaxTabsLimitFor('work-order');
-    const view = this.plugin.getView();
-    const tabManager = view?.getTabManager();
-    if (tabManager && view?.areTabsRestored()) {
-      const wo = tabManager.countTabsByKind('work-order');
-      return { used: wo + this.plugin.chatTabReservations.pending, max };
-    }
-    const leaves = this.plugin.app.workspace.getLeavesOfType(VIEW_TYPE_SPECORATOR);
-    if (leaves.length > 0) {
+    const views = typeof this.plugin.getAllViews === 'function'
+      ? this.plugin.getAllViews()
+      : (() => {
+          const view = this.plugin.getView();
+          return view ? [view] : [];
+        })();
+    if (views.length === 0) {
+      const leaves = this.plugin.app.workspace.getLeavesOfType(VIEW_TYPE_SPECORATOR);
+      if (leaves.length === 0) {
+        return { used: this.plugin.chatTabReservations.pending, max };
+      }
       if (leaves.every((leaf) => leaf.isDeferred)) {
         const persistedWorkOrderTabs = this.getLastKnownOpenTabCountFor('work-order');
         return {
@@ -112,7 +115,26 @@ export class PluginViewActivator {
       }
       return { used: max, max };
     }
-    return { used: this.plugin.chatTabReservations.pending, max };
+
+    let used = this.plugin.chatTabReservations.pending;
+    let anyMidRestore = false;
+    for (const view of views) {
+      const tabManager = view.getTabManager();
+      if (!tabManager || !view.areTabsRestored()) {
+        anyMidRestore = true;
+        continue;
+      }
+      used += tabManager.countTabsByKind('work-order');
+    }
+
+    // A single mid-restore leaf may still hydrate persisted work-order tabs, so
+    // its contribution is unknown — even alongside already-restored views. Report
+    // full usage until every view's tabs are known, or the queue could launch
+    // extra work-order tabs and exceed agentBoardQueueCap once restore finishes.
+    if (anyMidRestore) {
+      return { used: max, max };
+    }
+    return { used, max };
   }
 
   async runNextReadyWorkOrder(): Promise<void> {
