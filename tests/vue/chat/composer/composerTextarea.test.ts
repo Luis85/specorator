@@ -1,7 +1,7 @@
 import '@/providers';
 
 import { flushPromises } from '@vue/test-utils';
-import { Component } from 'obsidian';
+import { Component, Platform } from 'obsidian';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { mountTabComposer } from '@/features/chat/tabs/tabComposerMount';
@@ -67,6 +67,10 @@ describe('ComposerTextarea (hard cutover)', () => {
   it('Mod+Enter still routes through tabInputWiring to sendMessage', async () => {
     const { tab, textarea } = mountAndWire();
     await flushPromises();
+
+    // The send modifier is platform-coupled: metaKey satisfies it only on mac.
+    // Pin explicitly rather than leaning on the obsidian mock's isMacOS default.
+    Platform.isMacOS = true;
 
     textarea.value = 'send me';
     textarea.focus();

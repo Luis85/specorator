@@ -1,14 +1,11 @@
 import { flushPromises } from '@vue/test-utils';
-import { App, Component } from 'obsidian';
+import { Component } from 'obsidian';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { ComposerCallbacks } from '@/features/chat/ui/vue/composer/composerCallbacks';
 import { mountComposer } from '@/features/chat/ui/vue/composer/mountComposer';
-import type SpecoratorPlugin from '@/main';
 
-function makePlugin(): SpecoratorPlugin {
-  return { app: new App(), settings: {} } as unknown as SpecoratorPlugin;
-}
+import { makePlugin } from './_kit';
 
 function makeCallbacks(): { callbacks: ComposerCallbacks; registered: Record<string, HTMLElement | null> } {
   const registered: Record<string, HTMLElement | null> = {
