@@ -1,6 +1,6 @@
 # Chat Feature
 
-Main sidebar chat interface. `SpecoratorView` assembles tabs, controllers, provider-backed services, and two Vue 3 + Pinia islands around the shared `ChatRuntime` boundary. Both the outer frame — header, tab-badge strip, and tab-content host (ADR 0005 sub-project 1) — AND the per-tab transcript rendering (`MessageRenderer` + block renderers, ADR 0005 sub-project 2) are now Vue islands under `ui/vue/`, mounted over the untouched imperative engine (`TabManager`, controllers, `ChatState`, stream-consumption state machines). See "Chat Shell Vue Island" and "Transcript Vue Island" below. Still-imperative: the composer + input toolbar and the remaining side panels (status panel, navigation sidebar, file/image context) — future sub-projects.
+Main sidebar chat interface. `SpecoratorView` assembles tabs, controllers, provider-backed services, and three Vue 3 + Pinia islands around the shared `ChatRuntime` boundary. The outer frame — header, tab-badge strip, and tab-content host (ADR 0005 sub-project 1) — the per-tab transcript rendering (`MessageRenderer` + block renderers, ADR 0005 sub-project 2), AND the per-tab composer (toolbar, chips, textarea host, ADR 0005 sub-project 3) are now Vue islands under `ui/vue/`, mounted over the untouched imperative engine (`TabManager`, controllers, `ChatState`, stream-consumption state machines). See "Chat Shell Vue Island", "Transcript Vue Island", and "Composer Vue Island" below. Still-imperative: the remaining side panels (status panel, navigation sidebar) — the final sub-project.
 
 ## Provider Boundary Status
 
@@ -49,8 +49,12 @@ SpecoratorView (lifecycle + assembly)
 │   ├── TabManager
 │   ├── TabProviderCommandCoordinator
 │   └── Tab
+├── Composer Vue island (ui/vue/composer/, ADR 0005 sub-project 3)
+│   ├── ComposerRoot → ComposerWrapper (toolbar + chips + textarea host)
+│   ├── ComposerToolbar → 9 widgets (Model/Mode/Thinking/ServiceTier/…)
+│   ├── context/ (FileChips, ImageChips, SelectionIndicators host)
+│   └── dropdowns/ (Slash/Mention/ResumeSession, coordinator-driven)
 └── UI Components
-    ├── InputToolbar
     ├── FileContextManager
     ├── ImageContextManager
     ├── StatusPanel
@@ -118,9 +122,9 @@ Vue-provided content host.
   ("island hosts imperative widget"). They migrate to Vue with a later
   sub-project (side panels).
 - **Out of scope for this island**: transcript rendering migrated separately in
-  ADR 0005 sub-project 2 (see "Transcript Vue Island" below). The composer +
-  input toolbar and the remaining side panels (status panel, navigation
-  sidebar, file/image context) stay fully imperative — each is its own future
+  ADR 0005 sub-project 2 (see "Transcript Vue Island" below), and the composer
+  in ADR 0005 sub-project 3 (see "Composer Vue Island" below). The remaining
+  side panels (status panel, navigation sidebar) stay imperative — the final
   sub-project of the larger chat Vue migration (see ADR 0005 and
   `docs/superpowers/specs/2026-07-11-chat-shell-vue-migration-design.md`).
 
@@ -235,6 +239,101 @@ mutation to reactive-data mutation; `TabManager`, controllers, `ChatState`, and
   remains a tracked parity follow-up; custom streaming-indicator text is now
   projected through `ActiveStreamState.label`.
 - **`ThinkingRenderCoordinator`** / **`ProviderLifecycleSubagentCoordinator`**: streaming thinking and provider-lifecycle spawn tools mutate reactive `ChatMessage` data only; Vue's `ThinkingBlock` / `blockListViewModel.projectProviderLifecycleSubagent` render the cards (no imperative subagent/thinking DOM).
+
+## Composer Vue Island
+
+The per-tab composer — the input toolbar (nine widgets), file/image/current-note
+chips, the edited-files bar, the wrapper-mode classes, the textarea host, and the
+caret-anchored slash/mention/resume dropdowns — is a Vue 3 + Pinia island under
+`ui/vue/composer/` (ADR 0005 sub-project 3, the shell/transcript island seam
+pushed into each tab's `composerHostEl`). The imperative `InputToolbar`,
+`ui/toolbar/*` pure-render widgets, `FileChipsView`, `EditedFilesView`, and the
+composer's imperative DOM assembly were deleted or reduced to state-only;
+`InputController`, `tabInputWiring`, every controller, and `ChatState` are
+unchanged. The engine still owns truth + I/O; only the composer *output* changed
+from DOM assembly to reactive-data projection.
+
+- **Mount**: `mountTabComposer(tab, plugin, component, toolbarWiring)`
+  (`tabs/tabComposerMount.ts`, per tab, mirror of `mountTranscript`) constructs
+  the projection + the `ComposerDropdownCoordinator`, builds the toolbar-action
+  callbacks, then calls `mountComposer(composerHostEl, …)`
+  (`ui/vue/composer/mountComposer.ts`) — `createApp(ComposerRoot)` + a FRESH
+  per-leaf `createComposerPinia()` (never a shared singleton — each tab owns its
+  own input state). It runs BETWEEN `createTab` and `initializeTabUI`, so the
+  child SFCs' `onMounted` registers (`register*`) write every `tab.dom.*` handle
+  before any controller reads them. A rejected toolbar action surfaces a `Notice`
+  (restoring the deleted widgets' behavior), then re-projects.
+- **Store**: `ui/vue/composer/stores/composerStore.ts` (`useComposerStore`) is a
+  reactive read-model over one tab's composer — `toolbar` / `chips` /
+  `editedFiles` / `streaming` / `dropdown` / `inputMode` / `draftMeta` /
+  `wrapperMode`, all `shallowRef` (whole-value replacement, no deep-proxy). Truth
+  + I/O stay in `InputController` / `ChatState` / the toolbar-setting owners / the
+  context + mode managers. Two subtleties: `wrapperMode` OWNS the three
+  `.specorator-input-*-mode` wrapper classes (`ComposerWrapper` binds
+  plan/instruction/bang-bash) — the engine's former imperative `classList.toggle`
+  is gone, so a re-patch can't drop them (locked by the DOM-contract test's
+  re-projection guard); and `chips.currentNote` is projected + removed SEPARATELY
+  from `chips.files` (removing it nulls `FileContextManager.currentNotePath` so
+  `shouldSendCurrentNote()` stops re-attaching, whereas files/folders detach their
+  pill). The store NEVER holds the draft string — the textarea `.value` is
+  engine-owned.
+- **Projection seam**: `tabs/tabComposer.ts`'s `TabComposerProjection` is the
+  per-tab `ComposerCallbacks.subscribe` source (mirror of `TabTranscriptProjection`).
+  It reads the tab lazily at emit time and fans a fully-projected
+  `ComposerSnapshot` (all eight slices) to every observer; `useComposerEventRouting`
+  subscribes SYNCHRONOUSLY during setup (so a same-turn emit is not dropped) and
+  fans it into the store setters. Emit points: `emit()` (any composer-relevant
+  engine change — settings, chips, streaming, mode, dropdown), and the toolbar
+  delegators re-project after each action. External-context mutations re-project
+  ASYNC through the selector's `onChange` (never a synchronous emit — the picker
+  resolves on a microtask, so a sync emit would carry the stale list).
+- **Callbacks contract**: `ComposerCallbacks` (`ui/vue/composer/composerCallbacks.ts`,
+  provided via `CALLBACKS_KEY`) is the only Vue→engine path — the toolbar-action
+  delegators (`onSetModel` / `onSetMode` / `onSetEffortLevel` / `onSetThinkingBudget`
+  / `onSetServiceTier` / `onSetPermission` / `onTogglePlanMode` / `onToggleMcpServer`
+  / external-context add/remove/persist), the unified `onRemoveChip(key, kind)`
+  (`kind` `'current' | 'file' | 'folder' | 'image'`; `key` is a vault path except
+  images, keyed by id), `onOpenImage` / `onOpenFile` / `onOpenEditedFile`, the
+  dropdown navigation delegators, and the element-handle registers
+  (`registerInputContainer` / `registerNavRow` / `registerInputWrapper` /
+  `registerContextRow` / `registerQueueRow` / `registerInputEl` +
+  `registerSelectionIndicator` / `registerBrowserIndicator` / `registerCanvasIndicator`).
+  There is NO `onSend`/`onCancel` — send is keyboard-only (Enter / Mod+Enter via
+  `tabInputWiring`), and there is no send button (strict parity).
+- **Engine-driven hosts** (Vue renders the node, the engine owns its behavior):
+  the `textarea.specorator-input` — `ComposerTextarea.vue` renders it and hands
+  back the raw node; the engine owns `.value` / caret / IME composition / height
+  AND `placeholder` (`TriggerInputMode` sets it directly for `#`/`!` modes), Vue
+  never binds a v-model or reactive attrs. The `.specorator-input-queue-row` —
+  `QueuedMessageController.updateQueueIndicator()` builds the
+  `.specorator-queue-indicator-*` DOM into it and toggles its visibility; Vue
+  never renders its children. The three selection indicators
+  (`.specorator-selection-indicator` / `-browser-selection-indicator` /
+  `-canvas-indicator`) — `SelectionIndicators.vue` renders the `<div>`s (legacy
+  classes + initial `.specorator-hidden`) and hands the raw nodes to the untouched
+  `SelectionController` / `BrowserSelectionController` / `CanvasSelectionController`,
+  which mutate `textContent` + `.specorator-hidden` directly. Each is a
+  leave-me-alone host — no `v-for`, never diffed.
+- **`.specorator-*` DOM contract**: Vue owns the composer DOM but several
+  still-imperative consumers read it by class or hold raw handles and are OUT of
+  scope — `ChatDropController` (drop overlay on `.specorator-input-wrapper`),
+  `InlinePromptController` (hides `.specorator-input-container`), the shell nav-row
+  Teleport (`resolveNavRowEl` → `.specorator-input-nav-row`), the three selection
+  controllers, `QueuedMessageController` (queue row), `updateContextRowHasContent`
+  (reads chip `.specorator-visible-flex`, toggles `.has-content`), and
+  `tabInputWiring`/`InputController` (`textarea.specorator-input`). The components
+  therefore emit the exact legacy `.specorator-*` classes + register every handle.
+  `tests/vue/chat/composer/composerDomContract.test.ts` mounts the real
+  `mountTabComposer` over a rich projection and asserts every consumer-read class,
+  every element handle, and the three engine-driven-host drives — the regression
+  backstop until the side-panels sub-project migrates the remaining consumers.
+- **Dropdowns**: the caret-anchored slash/mention/resume overlays are Vue
+  (`ui/vue/composer/dropdowns/`), driven by `store.dropdown.kind`; keyboard
+  navigation still flows through `tabInputWiring` → the detectors →
+  `ComposerDropdownCoordinator` (which owns `{ kind, items, activeIndex, anchorRect }`
+  and re-projects on each mutation). The chat composer delegates entirely to that
+  coordinator; the imperative `shared/components/SlashCommandDropdown.ts` is
+  retained ONLY for the inline-edit flow, which keeps its own shared DOM widget.
 
 ## Key Patterns
 
