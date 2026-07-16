@@ -163,6 +163,16 @@ describe('card keyboard access + list semantics', () => {
     expect(callbacks.onOpenDetail).not.toHaveBeenCalled();
   });
 
+  it('does NOT hijack the context-menu keys from an inner control (nested inputs keep their native menu)', async () => {
+    const { container, callbacks } = mountBoard({ lanes: [makeLane('ready', 'Ready', [makeTask('c1', 'ready')])], errors: [] });
+    const inner = (container as HTMLElement).querySelector('.specorator-agent-board-card-action-more') as HTMLElement;
+
+    await fireEvent.keyDown(inner, { key: 'ContextMenu' });
+    await fireEvent.keyDown(inner, { key: 'F10', shiftKey: true });
+
+    expect(callbacks.onContextMenu).not.toHaveBeenCalled();
+  });
+
   it('opens the context menu on the ContextMenu key and Shift+F10, positioned via a MouseEvent', async () => {
     const { container, callbacks } = mountBoard({ lanes: [makeLane('ready', 'Ready', [makeTask('c1', 'ready')])], errors: [] });
     const el = card(container as HTMLElement, 'c1');
@@ -251,6 +261,36 @@ describe('toolbar attention chip + focusCard jump', () => {
     });
     const chip = container.querySelector('.specorator-agent-board-toolbar-attention');
     expect(chip?.textContent).toContain('1 waiting on you');
+  });
+
+  it('expands a collapsed lane to reach its waiting card, then focuses it (jump is not a silent no-op)', async () => {
+    // A needs_input card in a user-collapsed lane is still counted by the chip,
+    // but the collapsed strip renders no card DOM — the jump must expand the
+    // lane (onToggleLaneCollapse) and focus the card once it mounts.
+    const waiting = makeTask('w1', 'needs_input');
+    const collapsedLane = makeLane('paused', 'Paused', [waiting], { collapsible: true, collapsed: true });
+    const callbacks = makeCallbacks();
+    const { store, container } = mountBoard({ lanes: [collapsedLane], errors: [] }, callbacks);
+    // The toggle persists config and repaints via reload; simulate that by
+    // swapping in the expanded layout when the callback fires.
+    (callbacks.onToggleLaneCollapse as ReturnType<typeof vi.fn>).mockImplementation((laneId: string) => {
+      expect(laneId).toBe('paused');
+      store.layout = { lanes: [makeLane('paused', 'Paused', [waiting], { collapsible: true, collapsed: false })], errors: [] };
+    });
+
+    expect(card(container as HTMLElement, 'w1')).toBeNull(); // collapsed: no card DOM
+    const chip = container.querySelector('.specorator-agent-board-toolbar-attention') as HTMLElement;
+    expect(chip.textContent).toContain('1 waiting on you'); // still counted
+
+    await fireEvent.click(chip);
+    expect(callbacks.onToggleLaneCollapse).toHaveBeenCalledTimes(1);
+
+    await waitFor(() => {
+      const el = card(container as HTMLElement, 'w1');
+      expect(el).toBeTruthy();
+      expect(el.ownerDocument.activeElement).toBe(el);
+      expect(el.classList.contains('is-attention-target')).toBe(true);
+    });
   });
 
   it('clears the attention flash class after the flash window', async () => {

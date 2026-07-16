@@ -52,6 +52,7 @@ onMounted(() => {
 onUnmounted(() => {
   if (clockId !== null) window.clearInterval(clockId);
   clockId = null;
+  stopExpandPoll();
   for (const timer of flashTimers.values()) window.clearTimeout(timer);
   flashTimers.clear();
 });
@@ -93,14 +94,21 @@ function mountEmptyIcon(el: Element | ComponentPublicInstance | null): void {
 // scroll falls back to an instant jump).
 const rootEl = ref<HTMLElement | null>(null);
 const ATTENTION_FLASH_MS = 1300;
+// Collapsed-lane expand poll: the collapse toggle persists config and repaints
+// through the guarded reload, so the card element lands asynchronously.
+const ATTENTION_EXPAND_INTERVAL_MS = 100;
+const ATTENTION_EXPAND_TRIES = 15;
 const flashTimers = new Map<HTMLElement, number>();
+let expandPollId: number | null = null;
 
-function focusCard(taskId: string): void {
+function findCard(taskId: string): HTMLElement | null {
   const host = rootEl.value;
-  if (!host) return;
+  if (!host) return null;
   const escaped = taskId.replace(/["\\]/g, '\\$&');
-  const card = host.querySelector<HTMLElement>(`.specorator-agent-board-card[data-task-id="${escaped}"]`);
-  if (!card) return;
+  return host.querySelector<HTMLElement>(`.specorator-agent-board-card[data-task-id="${escaped}"]`);
+}
+
+function revealCard(card: HTMLElement): void {
   const reduceMotion = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false;
   card.scrollIntoView?.({ behavior: reduceMotion ? 'auto' : 'smooth', block: 'nearest', inline: 'nearest' });
   card.focus({ preventScroll: true });
@@ -114,6 +122,34 @@ function focusCard(taskId: string): void {
       flashTimers.delete(card);
     }, ATTENTION_FLASH_MS),
   );
+}
+
+function stopExpandPoll(): void {
+  if (expandPollId !== null) window.clearInterval(expandPollId);
+  expandPollId = null;
+}
+
+function focusCard(taskId: string): void {
+  const card = findCard(taskId);
+  if (card) {
+    revealCard(card);
+    return;
+  }
+  // No card DOM for a counted attention task ⇒ its lane is collapsed (the
+  // strip renders no cards). Expand the owning lane, then poll briefly for the
+  // card to mount off the toggle's async config-save → reload round-trip.
+  const lane = store.layout.lanes.find((l) => l.tasks.some((t) => t.frontmatter.id === taskId));
+  if (!lane?.collapsed) return;
+  cb.onToggleLaneCollapse(lane.id);
+  stopExpandPoll();
+  let tries = 0;
+  expandPollId = window.setInterval(() => {
+    const el = findCard(taskId);
+    tries += 1;
+    if (el === null && tries < ATTENTION_EXPAND_TRIES) return;
+    stopExpandPoll();
+    if (el) revealCard(el);
+  }, ATTENTION_EXPAND_INTERVAL_MS);
 }
 provide(FOCUS_CARD_KEY, focusCard);
 

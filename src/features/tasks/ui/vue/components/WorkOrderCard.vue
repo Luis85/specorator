@@ -61,15 +61,18 @@ const cardAriaLabel = computed(() =>
   t('tasks.board.card.ariaLabel', { title: props.task.frontmatter.title, status: statusLabel.value }),
 );
 
-// Keyboard access for the card itself. Enter/Space open the detail modal only
-// when the CARD is the focused element — inner controls (action cluster, reply
-// field) keep their own key semantics and bubble here with target ≠
-// currentTarget. ContextMenu / Shift+F10 open the right-click menu positioned
-// on the card's rect (the menu API takes a MouseEvent for placement).
+// Keyboard access for the card itself, gated to when the CARD is the focused
+// element — inner controls (action cluster, reply field) keep their own key
+// semantics and bubble here with target ≠ currentTarget. That guard covers the
+// context-menu keys too: ContextMenu / Shift+F10 inside a nested input must
+// keep the control's native menu, not be captured for the card menu.
+// Enter/Space open the detail modal; ContextMenu / Shift+F10 open the
+// right-click menu positioned on the card's rect (the menu API takes a
+// MouseEvent for placement).
 function onCardKeydown(event: KeyboardEvent): void {
   const card = event.currentTarget as HTMLElement;
+  if (event.target !== card) return;
   if (event.key === 'Enter' || event.key === ' ') {
-    if (event.target !== card) return;
     event.preventDefault();
     cb.onOpenDetail(props.task);
     return;
