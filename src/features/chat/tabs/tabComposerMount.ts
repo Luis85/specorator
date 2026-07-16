@@ -98,7 +98,7 @@ export function mountTabComposer(
       else fc?.detachFilePill(key);
     },
     onOpenImage: (id) => { tab.ui.imageContextManager?.openImageById(id); },
-    onOpenFile: (path) => { void plugin.app.workspace.openLinkText(path, '', 'tab'); },
+    onOpenFile: (path) => { openEditedFile(plugin.app, path); },
     onOpenEditedFile: (path) => { openEditedFile(plugin.app, path); },
     registerInputContainer: (el) => { tab.dom.inputContainerEl = el; },
     registerNavRow: (el) => { tab.dom.navRowEl = el; },

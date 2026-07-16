@@ -79,12 +79,12 @@ function initializeContextManagers(tab: TabData, plugin: SpecoratorPlugin): void
   );
   tab.ui.fileContextManager.setMcpManager(getProviderMcpManager(getTabProviderId(tab, plugin)));
 
-  // Image context manager - drag/drop uses inputContainerEl, preview in contextRowEl
+  // Image context manager - drag/drop uses inputContainerEl; the preview strip is
+  // now Vue-owned (ImageChips.vue in the context row), so no preview container.
   tab.ui.imageContextManager = new ImageContextManager(
     dom.inputContainerEl,
     dom.inputEl,
-    { onImagesChanged: onContextChanged },
-    dom.contextRowEl
+    { onImagesChanged: onContextChanged }
   );
 
   tab.ui.chatDropController = new ChatDropController(dom.inputContainerEl, {

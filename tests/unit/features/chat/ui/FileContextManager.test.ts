@@ -105,11 +105,13 @@ function createMockApp(options: {
 function createMockCallbacks(options: {
   externalContexts?: string[];
   excludedTags?: string[];
+  onChipsChanged?: () => void;
 } = {}): FileContextCallbacks {
-  const { externalContexts = [], excludedTags = [] } = options;
+  const { externalContexts = [], excludedTags = [], onChipsChanged } = options;
   return {
     getExcludedTags: jest.fn(() => excludedTags),
     getExternalContexts: jest.fn(() => externalContexts),
+    onChipsChanged,
   };
 }
 
@@ -216,28 +218,28 @@ describe('FileContextManager', () => {
     manager.destroy();
   });
 
-  it('renders current note chip and removes on click', () => {
+  // Chip DOM is now Vue-owned (FileChips.vue); the manager only tracks state and
+  // fires onChipsChanged so the reactive slice re-projects.
+  it('tracks the current note and clears it via clearCurrentNotePill', () => {
     const app = createMockApp();
+    const onChipsChanged = jest.fn();
     const manager = new FileContextManager(
       app,
       containerEl as any,
       inputEl,
-      createMockCallbacks()
+      createMockCallbacks({ onChipsChanged })
     );
 
     manager.setCurrentNote('notes/chip.md');
+    expect(manager.getCurrentNotePath()).toBe('notes/chip.md');
+    expect(onChipsChanged).toHaveBeenCalled();
 
-    const indicator = findByClass(containerEl, 'specorator-file-indicator');
-    expect(indicator).toBeDefined();
-    expect(indicator?.style.display).toBe('flex');
-
-    const removeEl = findByClass(containerEl, 'specorator-file-chip-remove');
-    expect(removeEl).toBeDefined();
-
-    removeEl!.click();
+    onChipsChanged.mockClear();
+    manager.clearCurrentNotePill();
 
     expect(manager.getCurrentNotePath()).toBeNull();
-    expect(indicator?.style.display).toBe('none');
+    expect(manager.getAttachedFiles().has('notes/chip.md')).toBe(false);
+    expect(onChipsChanged).toHaveBeenCalled();
 
     manager.destroy();
   });
@@ -1106,21 +1108,4 @@ describe('FileContextManager', () => {
     });
   });
 
-  describe('onOpenFile callback', () => {
-    it('should show Notice when file not found in vault', async () => {
-      const { Notice: NoticeMock } = jest.requireMock('obsidian');
-      const app = createMockApp();
-      const manager = new FileContextManager(
-        app, containerEl as any, inputEl, createMockCallbacks()
-      );
-
-      const chipsView = (manager as any).chipsView;
-      const openCallback = chipsView.callbacks.onOpenFile;
-      expect(openCallback).toBeDefined();
-
-      await openCallback('notes/missing.md');
-      expect(NoticeMock).toHaveBeenCalledWith(expect.stringContaining('Could not open file'));
-      manager.destroy();
-    });
-  });
 });

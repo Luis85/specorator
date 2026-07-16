@@ -41,8 +41,7 @@ function bootTab(opts: { externalContexts?: string[] } = {}) {
   const imageContext = new ImageContextManager(
     inputContainerEl,
     inputEl,
-    { onImagesChanged: jest.fn() },
-    contextRowEl
+    { onImagesChanged: jest.fn() }
   );
   const dragManagerRef: { draggable: any } = { draggable: null };
 
