@@ -52,6 +52,12 @@ export class ResumeSessionDropdownCoordinator {
       return;
     }
 
+    // The composer always mounts the dropdown coordinator before the resume
+    // dropdown is built, so in production this is non-null; the type is nullable
+    // only for prototype/test paths, which this guard tolerates without a throw.
+    const coordinator = this.deps.getDropdownCoordinator?.();
+    if (!coordinator) return;
+
     this.active = new ResumeSessionDropdown(
       this.deps.getInputContainerEl(),
       this.deps.getInputEl(),
@@ -69,7 +75,7 @@ export class ResumeSessionDropdownCoordinator {
           this.destroy();
         },
       },
-      { coordinator: this.deps.getDropdownCoordinator?.() ?? undefined },
+      { coordinator },
     );
   }
 }
