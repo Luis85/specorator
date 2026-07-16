@@ -24,6 +24,8 @@ const mockCreateChatRuntime = jest.fn();
 const mockGetProviderSettingsSnapshot = jest.fn().mockImplementation(() => ({}));
 const commandWarmupPolicy = { resolveMode: jest.fn().mockReturnValue('commands') };
 
+const mockMountTabComposer = jest.fn();
+
 jest.mock('@/features/chat/tabs/Tab', () => ({
   createTab: (...args: any[]) => mockCreateTab(...args),
   destroyTab: (...args: any[]) => mockDestroyTab(...args),
@@ -34,6 +36,12 @@ jest.mock('@/features/chat/tabs/Tab', () => ({
   initializeTabService: (...args: any[]) => mockInitializeTabService(...args),
   wireTabInputEvents: (...args: any[]) => mockWireTabInputEvents(...args),
   getTabTitle: (...args: any[]) => mockGetTabTitle(...args),
+}));
+
+// The Vue composer mount receives the { getProviderCatalogConfig, onProviderChanged }
+// toolbar wiring (the provider-change callback the Vue model picker fires).
+jest.mock('@/features/chat/tabs/tabComposerMount', () => ({
+  mountTabComposer: (...args: any[]) => mockMountTabComposer(...args),
 }));
 
 const mockChooseForkTarget = jest.fn();
@@ -2012,7 +2020,8 @@ describe('TabManager - Provider Command Catalog', () => {
   it('starts blank-tab provider warmup in the background from the provider-change callback', async () => {
     const manager = createManager();
     const tab = await manager.createTab();
-    const options = mockInitializeTabUI.mock.calls[0][2];
+    // onProviderChanged now flows through the Vue composer toolbar wiring.
+    const wiring = mockMountTabComposer.mock.calls[0][3];
 
     let releaseWarmup!: () => void;
     // prewarmProviderTab moved to TabProviderCommandCoordinator; the lazy getter
@@ -2024,7 +2033,7 @@ describe('TabManager - Provider Command Catalog', () => {
     );
 
     let settled = false;
-    const callbackPromise = Promise.resolve(options.onProviderChanged('opencode')).then(() => {
+    const callbackPromise = Promise.resolve(wiring.onProviderChanged('opencode')).then(() => {
       settled = true;
     });
 

@@ -13,7 +13,7 @@ function makePlugin(): SpecoratorPlugin {
 function makeCallbacks(): { callbacks: ComposerCallbacks; registered: Record<string, HTMLElement | null> } {
   const registered: Record<string, HTMLElement | null> = {
     container: null, navRow: null, wrapper: null, contextRow: null,
-    queueRow: null, editedFilesRow: null, toolbarHost: null, textareaHost: null,
+    queueRow: null, editedFilesRow: null, textareaHost: null,
   };
   const callbacks: ComposerCallbacks = {
     subscribe: (onChange) => {
@@ -37,7 +37,6 @@ function makeCallbacks(): { callbacks: ComposerCallbacks; registered: Record<str
     registerContextRow: (el) => { registered.contextRow = el; },
     registerQueueRow: (el) => { registered.queueRow = el; },
     registerEditedFilesRow: (el) => { registered.editedFilesRow = el; },
-    registerToolbarHost: (el) => { registered.toolbarHost = el; },
     registerTextareaHost: (el) => { registered.textareaHost = el; },
   };
   return { callbacks, registered };
@@ -60,8 +59,9 @@ describe('mountComposer', () => {
     expect(registered.contextRow).toBe(container.querySelector('.specorator-context-row'));
     expect(registered.queueRow).toBe(container.querySelector('.specorator-input-queue-row'));
     expect(registered.editedFilesRow).toBe(container.querySelector('.specorator-edited-files-row'));
-    expect(registered.toolbarHost).toBe(container.querySelector('.specorator-input-toolbar'));
     expect(registered.textareaHost).toBe(container.querySelector('.specorator-vue-composer-textarea-host'));
+    // The toolbar is now rendered directly by ComposerToolbar.vue (no host handle).
+    expect(container.querySelector('.specorator-input-toolbar')).not.toBeNull();
 
     // Baseline token scope + drop-query target present.
     expect(container.querySelector('.specorator-input-container')!.classList.contains('specorator-vue')).toBe(true);

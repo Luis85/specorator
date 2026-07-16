@@ -315,21 +315,18 @@ export class TabManager implements TabManagerInterface {
         },
       });
 
-      // Mount the Vue composer island so its element handles are registered to
-      // tab.dom.* BEFORE initializeTabUI builds the toolbar + context managers
-      // into them. `this.view` is the tab component (mirrors the transcript mount).
-      mountTabComposer(tab, this.plugin, this.view);
+      // Provider-switch wiring shared by the Vue toolbar model picker and the
+      // slash-command catalog refresh.
+      const getProviderCatalogConfig = () => this.commandCoordinator.getProviderCatalogConfig(tab);
+      const onProviderChanged = (providerId: ProviderId) => {
+        this.callbacks.onTabProviderChanged?.(tab.id, providerId);
+        void this.commandCoordinator.prewarmProviderTab(tab).catch(() => {});
+      };
 
-      // Initialize UI components with provider catalog
-      initializeTabUI(tab, this.plugin, {
-        getProviderCatalogConfig: () => this.commandCoordinator.getProviderCatalogConfig(tab),
-        onProviderChanged: (providerId) => {
-          this.callbacks.onTabProviderChanged?.(tab.id, providerId);
-          void this.commandCoordinator.prewarmProviderTab(tab).catch(() => {
-            // Keep provider switching non-blocking even if command warmup fails.
-          });
-        },
-      });
+      // Mount the Vue composer island so its element handles are registered to
+      // tab.dom.* BEFORE initializeTabUI builds the context managers into them.
+      mountTabComposer(tab, this.plugin, this.view, { getProviderCatalogConfig, onProviderChanged });
+      initializeTabUI(tab, this.plugin, { getProviderCatalogConfig });
 
       initializeTabControllers(
         tab,

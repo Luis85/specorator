@@ -24,6 +24,7 @@ export {
 export { onProviderAvailabilityChanged } from './tabProviderSync';
 export { updatePlanModeUI } from './tabShared';
 export {
+  buildToolbarActionCallbacks,
   initializeTabUI,
   type InitializeTabUIOptions,
   maybeWarnYoloMode,

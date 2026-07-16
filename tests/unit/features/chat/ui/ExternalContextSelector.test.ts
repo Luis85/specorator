@@ -1,9 +1,8 @@
-import { createMockEl } from '@test/helpers/mockElement';
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
 
-import { ExternalContextSelector } from '@/features/chat/ui/InputToolbar';
+import { ExternalContextSelector } from '@/features/chat/ui/toolbar/ExternalContextSelector';
 
 // Mock obsidian
 jest.mock('obsidian', () => ({
@@ -14,65 +13,14 @@ jest.mock('obsidian', () => ({
 // Mock fs
 jest.mock('fs');
 
-// Mock callbacks
-function createMockCallbacks() {
-  return {
-    onModelChange: jest.fn(),
-    onModeChange: jest.fn().mockResolvedValue(undefined),
-    onThinkingBudgetChange: jest.fn(),
-    onEffortLevelChange: jest.fn().mockResolvedValue(undefined),
-    onServiceTierChange: jest.fn().mockResolvedValue(undefined),
-    onPermissionModeChange: jest.fn(),
-    getSettings: jest.fn().mockReturnValue({
-      model: 'haiku',
-      thinkingBudget: 'off',
-      effortLevel: 'high',
-      serviceTier: 'default',
-      permissionMode: 'yolo',
-    }),
-    getEnvironmentVariables: jest.fn().mockReturnValue(''),
-    getUIConfig: jest.fn().mockReturnValue({
-      getModelOptions: jest.fn().mockReturnValue([
-        { value: 'sonnet', label: 'Sonnet' },
-        { value: 'opus', label: 'Opus' },
-      ]),
-      isAdaptiveReasoningModel: jest.fn().mockReturnValue(true),
-      getReasoningOptions: jest.fn().mockReturnValue([
-        { value: 'low', label: 'Low' },
-        { value: 'medium', label: 'Med' },
-        { value: 'high', label: 'High' },
-      ]),
-      getDefaultReasoningValue: jest.fn().mockReturnValue('high'),
-      getContextWindowSize: jest.fn().mockReturnValue(200000),
-      isDefaultModel: jest.fn().mockReturnValue(true),
-      applyModelDefaults: jest.fn(),
-      normalizeModelVariant: jest.fn((model: string) => model),
-    }),
-    getCapabilities: jest.fn().mockReturnValue({
-      providerId: 'claude',
-      supportsPersistentRuntime: true,
-      supportsNativeHistory: true,
-      supportsPlanMode: true,
-      supportsRewind: true,
-      supportsFork: true,
-      supportsProviderCommands: true,
-      reasoningControl: 'effort',
-    }),
-  };
-}
-
 describe('ExternalContextSelector', () => {
-  let parentEl: any;
   let selector: ExternalContextSelector;
-  let callbacks: ReturnType<typeof createMockCallbacks>;
 
   beforeEach(() => {
     jest.clearAllMocks();
     // By default, all paths are valid (exist on filesystem)
     (fs.statSync as jest.Mock).mockReturnValue({ isDirectory: () => true });
-    parentEl = createMockEl();
-    callbacks = createMockCallbacks();
-    selector = new ExternalContextSelector(parentEl, callbacks);
+    selector = new ExternalContextSelector();
   });
 
   describe('Persistent Paths Management', () => {

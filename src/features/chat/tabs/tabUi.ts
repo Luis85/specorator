@@ -20,11 +20,13 @@ import { BangBashModeManager as BangBashModeManagerClass } from '../ui/BangBashM
 import { EditedFilesView } from '../ui/EditedFilesView';
 import { FileContextManager } from '../ui/FileContext';
 import { ImageContextManager } from '../ui/ImageContext';
-import { createInputToolbar, type ToolbarCallbacks, type ToolbarSettings } from '../ui/InputToolbar';
 import { InstructionModeManager as InstructionModeManagerClass } from '../ui/InstructionModeManager';
 import { NavigationSidebar } from '../ui/NavigationSidebar';
 import { StatusPanel } from '../ui/StatusPanel';
 import { autoResizeTextarea } from '../ui/textareaResize';
+import { ExternalContextSelector } from '../ui/toolbar/ExternalContextSelector';
+import { McpServerSelector } from '../ui/toolbar/McpServerSelector';
+import type { ToolbarCallbacks, ToolbarSettings } from '../ui/toolbar/shared';
 import { recalculateUsageForModel } from '../utils/usageInfo';
 import { getTabProviderId } from './providerResolution';
 import { getBlankTabModelOptions } from './tabModelPolicy';
@@ -235,12 +237,7 @@ async function applyBlankTabModelChange(
     await onProviderChanged?.(pickedProvider);
   }
   await uiConfig.prepareModelMetadata?.(model, plugin.settings, { plugin });
-  tab.ui.thinkingBudgetSelector?.updateDisplay();
-  tab.ui.serviceTierToggle?.updateDisplay();
-  tab.ui.modelSelector?.updateDisplay();
-  tab.ui.modeSelector?.updateDisplay();
-  tab.ui.modelSelector?.renderOptions();
-  tab.ui.modeSelector?.renderOptions();
+  // The toolbar is Vue; applyProviderUIGating re-projects (tab.composer.emit).
   applyProviderUIGating(tab, plugin);
 }
 
@@ -262,10 +259,9 @@ export function getComposerToolbarSettings(tab: TabData, plugin: SpecoratorPlugi
   return snapshot;
 }
 
-// Builds the imperative toolbar action callbacks. Truth + I/O stay in these
-// closures; both `createInputToolbar` and the Vue composer delegators fire the
-// SAME callbacks, so a Vue-widget and an imperative-widget mutation are
-// indistinguishable to the engine.
+// Builds the toolbar action callbacks. Truth + I/O stay in these closures; the
+// Vue toolbar widgets (via the composer delegators) fire the SAME callbacks, so
+// a widget mutation is indistinguishable from a programmatic one to the engine.
 export function buildToolbarActionCallbacks(
   tab: TabData,
   plugin: SpecoratorPlugin,
@@ -302,7 +298,8 @@ export function buildToolbarActionCallbacks(
         : getTabProviderId(tab, plugin);
       if (!isBlank && getProviderForModel(model, plugin.settings) !== pickedProvider) {
         new Notice(t('chat.tab.providerSwitchBlocked'));
-        tab.ui.modelSelector?.updateDisplay();
+        // Re-project so the Vue ModelSelector snaps back to the current model.
+        tab.composer?.emit();
         return;
       }
 
@@ -344,10 +341,6 @@ export function buildToolbarActionCallbacks(
         uiConfig.applyModelDefaults(model, settings);
       });
       await uiConfig.prepareModelMetadata?.(model, plugin.settings, { plugin });
-      tab.ui.thinkingBudgetSelector?.updateDisplay();
-      tab.ui.serviceTierToggle?.updateDisplay();
-      tab.ui.modelSelector?.updateDisplay();
-      tab.ui.modelSelector?.renderOptions();
 
       // Recalculate context usage percentage for the new model's context window
       const currentUsage = tab.state.usage;
@@ -365,8 +358,7 @@ export function buildToolbarActionCallbacks(
       await updateTabProviderSettings(tab, plugin, (settings) => {
         getTabChatUIConfig(tab, plugin).applyModeSelection?.(mode, settings);
       });
-      tab.ui.modeSelector?.updateDisplay();
-      tab.ui.modeSelector?.renderOptions();
+      tab.composer?.emit();
     },
     onThinkingBudgetChange: async (budget: string) => {
       await updateTabProviderSettings(tab, plugin, (settings) => {
@@ -384,7 +376,7 @@ export function buildToolbarActionCallbacks(
       await updateTabProviderSettings(tab, plugin, (settings) => {
         settings.serviceTier = serviceTier;
       });
-      tab.ui.serviceTierToggle?.updateDisplay();
+      tab.composer?.emit();
     },
     onPermissionModeChange: async (mode: string) => {
       await updateTabProviderSettings(tab, plugin, (settings) => {
@@ -396,9 +388,7 @@ export function buildToolbarActionCallbacks(
         }
       });
       await maybeWarnYoloMode(plugin, mode);
-      tab.ui.permissionToggle?.updateDisplay();
-      tab.ui.planModeToggle?.updateDisplay();
-      // Vue owns `.specorator-input-plan-mode`; re-project so ComposerWrapper repaints.
+      // Vue owns the permission/plan-mode widgets; re-project so they repaint.
       tab.composer?.emit();
     },
     onPlanModeToggle: async () => {
@@ -422,35 +412,20 @@ export function buildToolbarActionCallbacks(
 function initializeInputToolbar(
   tab: TabData,
   plugin: SpecoratorPlugin,
-  getProviderCatalogConfig?: () => ProviderCatalogInfo,
-  onProviderChanged?: (providerId: ProviderId) => void | Promise<void>,
 ): void {
-  const { dom } = tab;
-
-  // The Vue composer island renders `.specorator-input-toolbar`; build the
-  // imperative widgets into it (Phase 2 replaces them with Vue components).
-  const inputToolbar = dom.toolbarHostEl;
-
-  const toolbarComponents = createInputToolbar(
-    inputToolbar,
-    buildToolbarActionCallbacks(tab, plugin, getProviderCatalogConfig, onProviderChanged),
-  );
-
-  tab.ui.modelSelector = toolbarComponents.modelSelector;
-  tab.ui.modeSelector = toolbarComponents.modeSelector;
-  tab.ui.thinkingBudgetSelector = toolbarComponents.thinkingBudgetSelector;
-  tab.ui.contextUsageMeter = toolbarComponents.contextUsageMeter;
-  tab.ui.externalContextSelector = toolbarComponents.externalContextSelector;
-  tab.ui.mcpServerSelector = toolbarComponents.mcpServerSelector;
-  tab.ui.permissionToggle = toolbarComponents.permissionToggle;
-  tab.ui.planModeToggle = toolbarComponents.planModeToggle;
-  tab.ui.serviceTierToggle = toolbarComponents.serviceTierToggle;
+  // The toolbar is now fully Vue (ComposerToolbar.vue renders the nine widgets
+  // from the projected store). Only the two non-visual engine objects that own
+  // the truth the engine reads/mutates outside the toolbar are constructed here;
+  // their DOM-render layer was stripped in the Phase 2 cutover.
+  tab.ui.externalContextSelector = new ExternalContextSelector();
+  tab.ui.mcpServerSelector = new McpServerSelector();
 
   tab.ui.mcpServerSelector.setMcpManager(getProviderMcpManager(getTabProviderId(tab, plugin)));
 
   // Sync @-mentions to UI selector
   tab.ui.fileContextManager?.setOnMcpMentionChange((servers) => {
     tab.ui.mcpServerSelector?.addMentionedServers(servers);
+    tab.composer?.emit();
   });
 
   // Wire external context changes. Fires AFTER the async folder picker resolves
@@ -482,7 +457,6 @@ function initializeInputToolbar(
 
 export interface InitializeTabUIOptions {
   getProviderCatalogConfig?: () => ProviderCatalogInfo;
-  onProviderChanged?: (providerId: ProviderId) => void | Promise<void>;
 }
 
 /**
@@ -521,7 +495,7 @@ export function initializeTabUI(
   }
 
   initializeInstructionAndTodo(tab, plugin);
-  initializeInputToolbar(tab, plugin, options.getProviderCatalogConfig, options.onProviderChanged);
+  initializeInputToolbar(tab, plugin);
 
   tab.ui.editedFilesView = new EditedFilesView(dom.editedFilesRowEl, {
     onOpenFile: (rawPath) => openEditedFile(plugin.app, rawPath),
@@ -529,10 +503,9 @@ export function initializeTabUI(
 
   state.callbacks = {
     ...state.callbacks,
-    onUsageChanged: (usage) => {
-      tab.ui.contextUsageMeter?.update(usage);
-      // Keep the projected toolbar usage meter live (no-op for rendering until
-      // the Phase 2 cutover; makes the store correct + the projection testable).
+    onUsageChanged: () => {
+      // Usage truth lives in ChatState.usage; re-project so the Vue
+      // ContextUsageMeter repaints (the imperative render object is gone).
       tab.composer?.emit();
     },
     onTodosChanged: (todos) => tab.ui.statusPanel?.updateTodos(todos),

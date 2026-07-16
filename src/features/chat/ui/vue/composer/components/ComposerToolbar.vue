@@ -1,21 +1,31 @@
 <script setup lang="ts">
-import { inject, onMounted, ref } from 'vue';
+import ContextUsageMeter from './toolbar/ContextUsageMeter.vue';
+import ExternalContextSelector from './toolbar/ExternalContextSelector.vue';
+import McpServerSelector from './toolbar/McpServerSelector.vue';
+import ModelSelector from './toolbar/ModelSelector.vue';
+import ModeSelector from './toolbar/ModeSelector.vue';
+import PermissionToggle from './toolbar/PermissionToggle.vue';
+import PlanModeToggle from './toolbar/PlanModeToggle.vue';
+import ServiceTierToggle from './toolbar/ServiceTierToggle.vue';
+import ThinkingBudgetSelector from './toolbar/ThinkingBudgetSelector.vue';
 
-import { TOOLBAR_HOST_KEY } from '../composerKeys';
-
-// Phase 1 host: createInputToolbar builds the nine `.specorator-*-selector` /
-// `.specorator-*-toggle` widgets into this element. Phase 2 replaces this with
-// reactive child components (no send button — send is keyboard-only).
-const el = ref<HTMLElement | null>(null);
-const register = inject(TOOLBAR_HOST_KEY, undefined);
-onMounted(() => {
-  if (el.value && el.value.nodeType === 1 && register) register(el.value);
-});
+// Widget order mirrors the imperative `createInputToolbar` build (Model,
+// Thinking, ServiceTier, ContextUsage, ExternalContext, Mcp, Permission,
+// PlanMode, Mode). There is NO send button — send is keyboard-only (strict
+// parity). Each widget reads its own slice from the projected composer store
+// and fires callbacks back through the engine seam.
 </script>
 
 <template>
-  <div
-    ref="el"
-    class="specorator-input-toolbar"
-  />
+  <div class="specorator-input-toolbar">
+    <ModelSelector />
+    <ThinkingBudgetSelector />
+    <ServiceTierToggle />
+    <ContextUsageMeter />
+    <ExternalContextSelector />
+    <McpServerSelector />
+    <PermissionToggle />
+    <PlanModeToggle />
+    <ModeSelector />
+  </div>
 </template>

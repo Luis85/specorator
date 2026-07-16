@@ -5,6 +5,7 @@ import { Notice } from 'obsidian';
 import { ProviderRegistry } from '@/core/providers/ProviderRegistry';
 import { ProviderWorkspaceRegistry } from '@/core/providers/ProviderWorkspaceRegistry';
 import {
+  buildToolbarActionCallbacks,
   createTab,
   getBlankTabModelOptions,
   getTabTitle,
@@ -20,23 +21,17 @@ import {
   createMockBrowserSelectionController,
   createMockCanvasSelectionController,
   createMockClaudeChatRuntime,
-  createMockContextUsageMeter,
   createMockExternalContextSelector,
   createMockFileContextManager,
   createMockImageContextManager,
   createMockInputController,
   createMockInstructionModeManager,
   createMockMcpServerSelector,
-  createMockModelSelector,
-  createMockModeSelector,
   createMockOptions,
-  createMockPermissionToggle,
   createMockPlugin,
   createMockSelectionController,
-  createMockServiceTierToggle,
   createMockSlashCommandDropdown,
   createMockStatusPanel,
-  createMockThinkingBudgetSelector,
   installMockResizeObserver,
 } from './tabTestKit';
 
@@ -62,14 +57,8 @@ let mockImageContextManager: ReturnType<typeof createMockImageContextManager>;
 let mockSlashCommandDropdown: ReturnType<typeof createMockSlashCommandDropdown>;
 let mockInstructionModeManager: ReturnType<typeof createMockInstructionModeManager>;
 let mockStatusPanel: ReturnType<typeof createMockStatusPanel>;
-let mockModelSelector: ReturnType<typeof createMockModelSelector>;
-let mockModeSelector: ReturnType<typeof createMockModeSelector>;
-let mockThinkingBudgetSelector: ReturnType<typeof createMockThinkingBudgetSelector>;
-let mockContextUsageMeter: ReturnType<typeof createMockContextUsageMeter>;
 let mockExternalContextSelector: ReturnType<typeof createMockExternalContextSelector>;
 let mockMcpServerSelector: ReturnType<typeof createMockMcpServerSelector>;
-let mockPermissionToggle: ReturnType<typeof createMockPermissionToggle>;
-let mockServiceTierToggle: ReturnType<typeof createMockServiceTierToggle>;
 let mockSelectionController: ReturnType<typeof createMockSelectionController>;
 let mockBrowserSelectionController: ReturnType<typeof createMockBrowserSelectionController>;
 let mockCanvasSelectionController: ReturnType<typeof createMockCanvasSelectionController>;
@@ -106,27 +95,17 @@ jest.mock('@/features/chat/ui/StatusPanel', () => ({
   }),
 }));
 
-jest.mock('@/features/chat/ui/InputToolbar', () => ({
-  createInputToolbar: jest.fn().mockImplementation(() => {
-    mockModelSelector = createMockModelSelector();
-    mockModeSelector = createMockModeSelector();
-    mockThinkingBudgetSelector = createMockThinkingBudgetSelector();
-    mockContextUsageMeter = createMockContextUsageMeter();
+jest.mock('@/features/chat/ui/toolbar/ExternalContextSelector', () => ({
+  ExternalContextSelector: jest.fn().mockImplementation(() => {
     mockExternalContextSelector = createMockExternalContextSelector();
+    return mockExternalContextSelector;
+  }),
+}));
+
+jest.mock('@/features/chat/ui/toolbar/McpServerSelector', () => ({
+  McpServerSelector: jest.fn().mockImplementation(() => {
     mockMcpServerSelector = createMockMcpServerSelector();
-    mockPermissionToggle = createMockPermissionToggle();
-    mockServiceTierToggle = createMockServiceTierToggle();
-    return {
-      modelSelector: mockModelSelector,
-      modeSelector: mockModeSelector,
-      thinkingBudgetSelector: mockThinkingBudgetSelector,
-      contextUsageMeter: mockContextUsageMeter,
-      externalContextSelector: mockExternalContextSelector,
-      mcpServerSelector: mockMcpServerSelector,
-      permissionToggle: mockPermissionToggle,
-      serviceTierToggle: mockServiceTierToggle,
-      gitActionButton: null,
-    };
+    return mockMcpServerSelector;
   }),
 }));
 
@@ -373,10 +352,7 @@ describe('Tab - Cross-Provider Model Rejection', () => {
     plugin.saveSettings.mockClear();
 
     // Get the onModelChange callback from toolbar
-    const toolbarModule = jest.requireMock('@/features/chat/ui/InputToolbar') as {
-      createInputToolbar: jest.Mock;
-    };
-    const toolbarCallbacks = toolbarModule.createInputToolbar.mock.calls.at(-1)?.[1];
+    const toolbarCallbacks = buildToolbarActionCallbacks(tab, plugin);
     expect(toolbarCallbacks).toBeDefined();
 
     // Attempt cross-provider model change (Claude -> Codex)
@@ -418,10 +394,7 @@ describe('Tab - Cross-Provider Model Rejection', () => {
     tab.providerId = 'claude';
     tab.conversationId = 'conv-1';
 
-    const toolbarModule = jest.requireMock('@/features/chat/ui/InputToolbar') as {
-      createInputToolbar: jest.Mock;
-    };
-    const toolbarCallbacks = toolbarModule.createInputToolbar.mock.calls.at(-1)?.[1];
+    const toolbarCallbacks = buildToolbarActionCallbacks(tab, plugin);
 
     // Same-provider model change (Claude -> Claude)
     await toolbarCallbacks.onModelChange('opus');
@@ -448,10 +421,7 @@ describe('Tab - Bound Agent Display Model', () => {
     tab.pinnedModel = null;
     tab.displayModel = { conversationId: 'conv-x', model: 'opus' };
 
-    const toolbarModule = jest.requireMock('@/features/chat/ui/InputToolbar') as {
-      createInputToolbar: jest.Mock;
-    };
-    const toolbarCallbacks = toolbarModule.createInputToolbar.mock.calls.at(-1)?.[1];
+    const toolbarCallbacks = buildToolbarActionCallbacks(tab, plugin);
 
     // Display-only seed shows in the selector, but it is NOT a pin: the per-turn
     // override (getTabModelOverride) ignores displayModel, so the model stays live.
@@ -490,10 +460,7 @@ describe('Tab - Bound Agent Display Model', () => {
     tab.conversationId = 'conv-1';
     tab.displayModel = { conversationId: 'conv-1', model: 'sonnet' };
 
-    const toolbarModule = jest.requireMock('@/features/chat/ui/InputToolbar') as {
-      createInputToolbar: jest.Mock;
-    };
-    const toolbarCallbacks = toolbarModule.createInputToolbar.mock.calls.at(-1)?.[1];
+    const toolbarCallbacks = buildToolbarActionCallbacks(tab, plugin);
 
     await toolbarCallbacks.onModelChange('opus'); // same provider (Claude)
 
@@ -538,10 +505,7 @@ describe('Tab - Bound Agent Display Model', () => {
     tab.pinnedModel = null;
     tab.displayModel = { conversationId: 'conv-1', model: 'sonnet' };
 
-    const toolbarModule = jest.requireMock('@/features/chat/ui/InputToolbar') as {
-      createInputToolbar: jest.Mock;
-    };
-    const toolbarCallbacks = toolbarModule.createInputToolbar.mock.calls.at(-1)?.[1];
+    const toolbarCallbacks = buildToolbarActionCallbacks(tab, plugin);
 
     await toolbarCallbacks.onModelChange('opus'); // same provider (Claude)
 
@@ -581,10 +545,7 @@ describe('Tab - Blank Tab Draft Model Change', () => {
     expect(tab.lifecycleState).toBe('blank');
     expect(tab.service).toBeNull();
 
-    const toolbarModule = jest.requireMock('@/features/chat/ui/InputToolbar') as {
-      createInputToolbar: jest.Mock;
-    };
-    const toolbarCallbacks = toolbarModule.createInputToolbar.mock.calls.at(-1)?.[1];
+    const toolbarCallbacks = buildToolbarActionCallbacks(tab, plugin);
 
     // Switch to Codex model on blank tab
     await toolbarCallbacks.onModelChange(DEFAULT_CODEX_PRIMARY_MODEL);
@@ -618,16 +579,14 @@ describe('Tab - Blank Tab Draft Model Change', () => {
     const tab = createTab(createMockOptions({ plugin }));
     initializeTabUI(tab, plugin);
 
-    const toolbarModule = jest.requireMock('@/features/chat/ui/InputToolbar') as {
-      createInputToolbar: jest.Mock;
-    };
-    const toolbarCallbacks = toolbarModule.createInputToolbar.mock.calls.at(-1)?.[1];
+    const toolbarCallbacks = buildToolbarActionCallbacks(tab, plugin);
 
-    mockServiceTierToggle.updateDisplay.mockClear();
+    const emit = jest.fn();
+    tab.composer = { emit } as any;
 
     await toolbarCallbacks.onModelChange(DEFAULT_CODEX_PRIMARY_MODEL);
 
-    expect(mockServiceTierToggle.updateDisplay).toHaveBeenCalled();
+    expect(emit).toHaveBeenCalled();
   });
 
   it('awaits async provider warmup callbacks before resolving blank-tab provider changes', async () => {
@@ -641,12 +600,9 @@ describe('Tab - Blank Tab Draft Model Change', () => {
     const onProviderChanged = jest.fn().mockImplementation(() => new Promise<void>((resolve) => {
       releaseWarmup = resolve;
     }));
-    initializeTabUI(tab, plugin, { onProviderChanged });
+    initializeTabUI(tab, plugin);
 
-    const toolbarModule = jest.requireMock('@/features/chat/ui/InputToolbar') as {
-      createInputToolbar: jest.Mock;
-    };
-    const toolbarCallbacks = toolbarModule.createInputToolbar.mock.calls.at(-1)?.[1];
+    const toolbarCallbacks = buildToolbarActionCallbacks(tab, plugin, undefined, onProviderChanged);
 
     let settled = false;
     const changePromise = toolbarCallbacks.onModelChange('gpt-5.4')
@@ -698,12 +654,9 @@ describe('Tab - Blank Tab Draft Model Change', () => {
     const onProviderChanged = jest.fn().mockImplementation(() => new Promise<void>((resolve) => {
       releaseWarmup = resolve;
     }));
-    initializeTabUI(tab, plugin, { onProviderChanged });
+    initializeTabUI(tab, plugin);
 
-    const toolbarModule = jest.requireMock('@/features/chat/ui/InputToolbar') as {
-      createInputToolbar: jest.Mock;
-    };
-    const toolbarCallbacks = toolbarModule.createInputToolbar.mock.calls.at(-1)?.[1];
+    const toolbarCallbacks = buildToolbarActionCallbacks(tab, plugin, undefined, onProviderChanged);
 
     let settled = false;
     const changePromise = toolbarCallbacks.onModelChange('opencode:anthropic/claude-sonnet-4')
@@ -754,10 +707,7 @@ describe('Tab - Blank Tab Draft Model Change', () => {
     const tab = createTab(createMockOptions({ plugin }));
     initializeTabUI(tab, plugin);
 
-    const toolbarModule = jest.requireMock('@/features/chat/ui/InputToolbar') as {
-      createInputToolbar: jest.Mock;
-    };
-    const toolbarCallbacks = toolbarModule.createInputToolbar.mock.calls.at(-1)?.[1];
+    const toolbarCallbacks = buildToolbarActionCallbacks(tab, plugin);
 
     await toolbarCallbacks.onModelChange('gpt-5.4-mini');
     expect(plugin.settings.savedProviderServiceTier.codex).toBe('fast');
@@ -817,25 +767,21 @@ describe('Tab - Blank Tab Draft Model Change', () => {
 
     const plugin = createMockPlugin();
     const tab = createTab(createMockOptions({ plugin }));
-    initializeTabUI(tab, plugin, {
-      getProviderCatalogConfig: () => (
-        tab.providerId === 'codex'
-          ? {
-            config: codexCatalog.getDropdownConfig(),
-            getEntries: managerGetEntries,
-          }
-          : null
-      ),
-    });
+    const getProviderCatalogConfig = () => (
+      tab.providerId === 'codex'
+        ? {
+          config: codexCatalog.getDropdownConfig(),
+          getEntries: managerGetEntries,
+        }
+        : null
+    );
+    initializeTabUI(tab, plugin, { getProviderCatalogConfig });
 
     // Mock setProviderCatalog on the dropdown
     const setProviderCatalogSpy = jest.fn();
     tab.ui.slashCommandDropdown!.setProviderCatalog = setProviderCatalogSpy;
 
-    const toolbarModule = jest.requireMock('@/features/chat/ui/InputToolbar') as {
-      createInputToolbar: jest.Mock;
-    };
-    const toolbarCallbacks = toolbarModule.createInputToolbar.mock.calls.at(-1)?.[1];
+    const toolbarCallbacks = buildToolbarActionCallbacks(tab, plugin, getProviderCatalogConfig);
 
     // Switch to Codex model → should swap catalog
     await toolbarCallbacks.onModelChange(DEFAULT_CODEX_PRIMARY_MODEL);
@@ -925,10 +871,7 @@ describe('Tab - Blank Tab Draft Model Change', () => {
     tab.ui.slashCommandDropdown!.setProviderCatalog = setProviderCatalogSpy;
     tab.ui.slashCommandDropdown!.setHiddenCommands = setHiddenCommandsSpy;
 
-    const toolbarModule = jest.requireMock('@/features/chat/ui/InputToolbar') as {
-      createInputToolbar: jest.Mock;
-    };
-    const toolbarCallbacks = toolbarModule.createInputToolbar.mock.calls.at(-1)?.[1];
+    const toolbarCallbacks = buildToolbarActionCallbacks(tab, plugin);
 
     await toolbarCallbacks.onModelChange(DEFAULT_CODEX_PRIMARY_MODEL);
 
@@ -962,10 +905,7 @@ describe('Tab - Blank Tab Draft Model Change', () => {
     tab.service = staleService as any;
     tab.serviceInitialized = false;
 
-    const toolbarModule = jest.requireMock('@/features/chat/ui/InputToolbar') as {
-      createInputToolbar: jest.Mock;
-    };
-    const toolbarCallbacks = toolbarModule.createInputToolbar.mock.calls.at(-1)?.[1];
+    const toolbarCallbacks = buildToolbarActionCallbacks(tab, plugin);
 
     const initialInstructionCalls = createInstructionRefineServiceSpy.mock.calls.length;
     const initialTitleCalls = createTitleGenerationServiceSpy.mock.calls.length;

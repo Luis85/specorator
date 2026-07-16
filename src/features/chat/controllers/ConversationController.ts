@@ -14,8 +14,8 @@ import type { ChatState } from '../state/ChatState';
 import { ConversationHistoryView, type HistoryRenderOptions } from '../ui/ConversationHistoryView';
 import type { FileContextManager } from '../ui/FileContext';
 import type { ImageContextManager } from '../ui/ImageContext';
-import type { ExternalContextSelector, McpServerSelector } from '../ui/InputToolbar';
 import type { StatusPanel } from '../ui/StatusPanel';
+import type { ExternalContextSelector, McpServerSelector } from '../ui/toolbar/shared';
 import { deriveEditedFilesFromMessages } from '../utils/editedFiles';
 import {
   captureComposerSwitchDraft,

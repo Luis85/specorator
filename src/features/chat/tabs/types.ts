@@ -18,20 +18,11 @@ import type { BangBashModeManager } from '../ui/BangBashModeManager';
 import type { EditedFilesView } from '../ui/EditedFilesView';
 import type { FileContextManager } from '../ui/FileContext';
 import type { ImageContextManager } from '../ui/ImageContext';
-import type {
-  ContextUsageMeter,
-  ExternalContextSelector,
-  McpServerSelector,
-  ModelSelector,
-  ModeSelector,
-  PermissionToggle,
-  PlanModeToggle,
-  ServiceTierToggle,
-  ThinkingBudgetSelector,
-} from '../ui/InputToolbar';
 import type { InstructionModeManager } from '../ui/InstructionModeManager';
 import type { NavigationSidebar } from '../ui/NavigationSidebar';
 import type { StatusPanel } from '../ui/StatusPanel';
+import type { ExternalContextSelector } from '../ui/toolbar/ExternalContextSelector';
+import type { McpServerSelector } from '../ui/toolbar/McpServerSelector';
 import type { MountedComposer } from '../ui/vue/composer/mountComposer';
 import type { MountedTranscript } from '../ui/vue/transcript/mountTranscript';
 import type { TabComposerProjection } from './tabComposer';
@@ -152,18 +143,13 @@ export interface TabUIComponents {
   imageContextManager: ImageContextManager | null;
   editedFilesView: EditedFilesView | null;
   chatDropController?: ChatDropController;
-  modelSelector: ModelSelector | null;
-  modeSelector: ModeSelector | null;
-  thinkingBudgetSelector: ThinkingBudgetSelector | null;
+  // Retained engine objects (DOM-render layer removed in the Phase 2 toolbar
+  // cutover); the toolbar widgets themselves are now Vue (ComposerToolbar.vue).
   externalContextSelector: ExternalContextSelector | null;
   mcpServerSelector: McpServerSelector | null;
-  permissionToggle: PermissionToggle | null;
-  planModeToggle: PlanModeToggle | null;
-  serviceTierToggle: ServiceTierToggle | null;
   slashCommandDropdown: SlashCommandDropdown | null;
   instructionModeManager: InstructionModeManager | null;
   bangBashModeManager: BangBashModeManager | null;
-  contextUsageMeter: ContextUsageMeter | null;
   statusPanel: StatusPanel | null;
   navigationSidebar: NavigationSidebar | null;
 }
@@ -196,10 +182,6 @@ export interface TabDOMElements {
 
   /** Context row for file chips and selection indicator (inside input wrapper). */
   contextRowEl: HTMLElement;
-
-  /** Toolbar host the Vue island renders (`.specorator-input-toolbar`); the
-   *  imperative `createInputToolbar` builds into it until Phase 2. */
-  toolbarHostEl: HTMLElement;
 
   selectionIndicatorEl: HTMLElement | null;
   browserIndicatorEl: HTMLElement | null;

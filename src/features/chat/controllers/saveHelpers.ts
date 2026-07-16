@@ -11,7 +11,7 @@ import type { Conversation } from '../../../core/types';
 import type SpecoratorPlugin from '../../../main';
 import type { ChatState } from '../state/ChatState';
 import type { FileContextManager } from '../ui/FileContext';
-import type { ExternalContextSelector, McpServerSelector } from '../ui/InputToolbar';
+import type { ExternalContextSelector, McpServerSelector } from '../ui/toolbar/shared';
 
 /**
  * Lazily creates a conversation for an entry-point tab that now has messages,

@@ -58,7 +58,6 @@ export interface ComposerCallbacks {
   registerContextRow: (el: HTMLElement) => void;
   registerQueueRow: (el: HTMLElement) => void;
   registerEditedFilesRow: (el: HTMLElement) => void;
-  registerToolbarHost: (el: HTMLElement) => void;
   registerTextareaHost: (el: HTMLElement) => void;
 }
 // NOTE: there are no `onSend`/`onCancel` delegators — send is keyboard-only

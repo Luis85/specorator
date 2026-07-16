@@ -1,11 +1,10 @@
-import { Notice, setIcon } from 'obsidian';
+import { Notice } from 'obsidian';
 import * as os from 'os';
 import * as path from 'path';
 
 import { t } from '../../../../i18n/i18n';
 import { filterValidPaths, findConflictingPath, isDuplicatePath, isValidDirectoryPath, validateDirectoryPath } from '../../../../utils/externalContext';
 import { expandHomePath, normalizePathForFilesystem } from '../../../../utils/path';
-import { type ToolbarCallbacks, updateCountBadgeDisplay } from './shared';
 
 interface ElectronOpenDialogResult {
   canceled: boolean;
@@ -22,12 +21,15 @@ export type AddExternalContextResult =
   | { success: true; normalizedPath: string }
   | { success: false; error: string };
 
+/**
+ * Engine object owning the external-context path list + persistent set. The
+ * Vue `ExternalContextSelector.vue` renders from the projected store and fires
+ * callbacks back into this object; the imperative DOM-render layer was removed
+ * in the Phase 2 toolbar cutover. Every public method the engine calls
+ * (`InputController` `/add-dir`, `ConversationController` history restore,
+ * folder picker, remove, persistence toggle) stays intact.
+ */
 export class ExternalContextSelector {
-  private container: HTMLElement;
-  private iconEl: HTMLElement | null = null;
-  private badgeEl: HTMLElement | null = null;
-  private dropdownEl: HTMLElement | null = null;
-  private callbacks: ToolbarCallbacks;
   /**
    * Current external context paths. May contain:
    * - Persistent paths only (new sessions via clearExternalContexts)
@@ -39,12 +41,6 @@ export class ExternalContextSelector {
   private persistentPaths: Set<string> = new Set();
   private onChangeCallback: ((paths: string[]) => void) | null = null;
   private onPersistenceChangeCallback: ((paths: string[]) => void) | null = null;
-
-  constructor(parentEl: HTMLElement, callbacks: ToolbarCallbacks) {
-    this.callbacks = callbacks;
-    this.container = parentEl.createDiv({ cls: 'specorator-external-context-selector' });
-    this.render();
-  }
 
   setOnChange(callback: (paths: string[]) => void): void {
     this.onChangeCallback = callback;
@@ -70,8 +66,6 @@ export class ExternalContextSelector {
     this.persistentPaths = new Set(validPaths);
     // Merge persistent paths into external context paths
     this.mergePersistentPaths();
-    this.updateDisplay();
-    this.renderDropdown();
 
     // If invalid paths were removed, notify user and save updated list
     if (invalidPaths.length > 0) {
@@ -93,7 +87,6 @@ export class ExternalContextSelector {
       this.persistentPaths.add(path);
     }
     this.onPersistenceChangeCallback?.([...this.persistentPaths]);
-    this.renderDropdown();
   }
 
   private mergePersistentPaths(): void {
@@ -111,8 +104,6 @@ export class ExternalContextSelector {
    */
   setExternalContexts(paths: string[]): void {
     this.externalContextPaths = [...paths];
-    this.updateDisplay();
-    this.renderDropdown();
   }
 
   /**
@@ -127,8 +118,6 @@ export class ExternalContextSelector {
       this.onPersistenceChangeCallback?.([...this.persistentPaths]);
     }
     this.onChangeCallback?.(this.externalContextPaths);
-    this.updateDisplay();
-    this.renderDropdown();
   }
 
   /**
@@ -178,8 +167,6 @@ export class ExternalContextSelector {
     // Add the path
     this.externalContextPaths = [...this.externalContextPaths, normalizedPath];
     this.onChangeCallback?.(this.externalContextPaths);
-    this.updateDisplay();
-    this.renderDropdown();
 
     return { success: true, normalizedPath };
   }
@@ -197,30 +184,6 @@ export class ExternalContextSelector {
       this.persistentPaths = new Set(validPaths);
     }
     this.externalContextPaths = [...this.persistentPaths];
-    this.updateDisplay();
-    this.renderDropdown();
-  }
-
-  private render() {
-    this.container.empty();
-
-    const iconWrapper = this.container.createDiv({ cls: 'specorator-external-context-icon-wrapper' });
-
-    this.iconEl = iconWrapper.createDiv({ cls: 'specorator-external-context-icon' });
-    setIcon(this.iconEl, 'folder');
-
-    this.badgeEl = iconWrapper.createDiv({ cls: 'specorator-external-context-badge' });
-
-    this.updateDisplay();
-
-    // Click to open native folder picker
-    iconWrapper.addEventListener('click', (e) => {
-      e.stopPropagation();
-      void this.openFolderPicker();
-    });
-
-    this.dropdownEl = this.container.createDiv({ cls: 'specorator-external-context-dropdown' });
-    this.renderDropdown();
   }
 
   async openFolderPicker(): Promise<void> {
@@ -254,8 +217,6 @@ export class ExternalContextSelector {
 
         this.externalContextPaths = [...this.externalContextPaths, selectedPath];
         this.onChangeCallback?.(this.externalContextPaths);
-        this.updateDisplay();
-        this.renderDropdown();
       }
     } catch {
       new Notice(t('chat.externalContext.pickerFailed'), 5000);
@@ -269,55 +230,6 @@ export class ExternalContextSelector {
     return conflict.type === 'parent'
       ? `Cannot add "${shortNew}" - it's inside existing path "${shortExisting}"`
       : `Cannot add "${shortNew}" - it contains existing path "${shortExisting}"`;
-  }
-
-  private renderDropdown() {
-    if (!this.dropdownEl) return;
-
-    this.dropdownEl.empty();
-
-    // Header
-    const headerEl = this.dropdownEl.createDiv({ cls: 'specorator-external-context-header' });
-    headerEl.setText('External contexts');
-
-    // Path list
-    const listEl = this.dropdownEl.createDiv({ cls: 'specorator-external-context-list' });
-
-    if (this.externalContextPaths.length === 0) {
-      const emptyEl = listEl.createDiv({ cls: 'specorator-external-context-empty' });
-      emptyEl.setText('Click folder icon to add');
-    } else {
-      for (const pathStr of this.externalContextPaths) {
-        const itemEl = listEl.createDiv({ cls: 'specorator-external-context-item' });
-
-        const pathTextEl = itemEl.createSpan({ cls: 'specorator-external-context-text' });
-        // Show shortened path for display
-        const displayPath = this.shortenPath(pathStr);
-        pathTextEl.setText(displayPath);
-        pathTextEl.setAttribute('title', pathStr);
-
-        // Lock toggle button
-        const isPersistent = this.persistentPaths.has(pathStr);
-        const lockBtn = itemEl.createSpan({ cls: 'specorator-external-context-lock' });
-        if (isPersistent) {
-          lockBtn.addClass('locked');
-        }
-        setIcon(lockBtn, isPersistent ? 'lock' : 'unlock');
-        lockBtn.setAttribute('title', isPersistent ? 'Persistent (click to make session-only)' : 'Session-only (click to persist)');
-        lockBtn.addEventListener('click', (e) => {
-          e.stopPropagation();
-          this.togglePersistence(pathStr);
-        });
-
-        const removeBtn = itemEl.createSpan({ cls: 'specorator-external-context-remove' });
-        setIcon(removeBtn, 'x');
-        removeBtn.setAttribute('title', 'Remove path');
-        removeBtn.addEventListener('click', (e) => {
-          e.stopPropagation();
-          this.removePath(pathStr);
-        });
-      }
-    }
   }
 
   /** Shorten path for display (replace home dir with ~) */
@@ -342,18 +254,5 @@ export class ExternalContextSelector {
       // Fall through to return full path
     }
     return fullPath;
-  }
-
-  updateDisplay() {
-    if (!this.iconEl || !this.badgeEl) return;
-
-    const count = this.externalContextPaths.length;
-    updateCountBadgeDisplay({
-      iconEl: this.iconEl,
-      badgeEl: this.badgeEl,
-      count,
-      activeTitle: `${count} external context${count > 1 ? 's' : ''} (click to add more)`,
-      inactiveTitle: 'Add external contexts (click)',
-    });
   }
 }

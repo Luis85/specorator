@@ -1,18 +1,32 @@
 import type { Component } from 'obsidian';
 
+import type { ProviderId } from '../../../core/providers/types';
 import type SpecoratorPlugin from '../../../main';
 import type { ComposerCallbacks } from '../ui/vue/composer/composerCallbacks';
 import { mountComposer } from '../ui/vue/composer/mountComposer';
 import { TabComposerProjection } from './tabComposer';
+import type { ProviderCatalogInfo } from './tabShared';
 import { buildToolbarActionCallbacks } from './tabUi';
 import type { TabData } from './types';
+
+/**
+ * Toolbar-action wiring the model-picker needs on a blank-tab provider switch:
+ * the provider's command catalog (for slash-command refresh) and the
+ * provider-changed notification (header indicator + command prewarm). Threaded
+ * from `TabManager` so the Vue toolbar path is behaviorally identical to the
+ * former imperative `createInputToolbar` path.
+ */
+export interface ComposerToolbarWiring {
+  getProviderCatalogConfig?: () => ProviderCatalogInfo;
+  onProviderChanged?: (providerId: ProviderId) => void | Promise<void>;
+}
 
 /**
  * Mounts the Vue composer island for one tab and wires the engine↔island seam.
  * Called by `TabManager` BETWEEN `createTab` and `initializeTabUI`, so the
  * element handles (container/navRow/wrapper/contextRow/queueRow/edited-files/
- * toolbar-host/textarea-host) are registered to `tab.dom.*` before
- * `initializeTabUI` builds the imperative toolbar + context managers into them.
+ * textarea-host) are registered to `tab.dom.*` before `initializeTabUI` builds
+ * the context managers. The toolbar is now fully Vue (ComposerToolbar.vue).
  *
  * Mirrors `initializeTabControllers`' transcript mount. The projection reads the
  * tab lazily at emit time, so it is safe to construct before the controllers.
@@ -21,12 +35,19 @@ export function mountTabComposer(
   tab: TabData,
   plugin: SpecoratorPlugin,
   component: Component,
+  toolbarWiring: ComposerToolbarWiring = {},
 ): void {
   tab.composer = new TabComposerProjection(tab, plugin);
 
-  // Build the imperative toolbar action callbacks once; the Vue delegators fire
-  // the SAME closures the imperative widgets do (truth + I/O stay in the engine).
-  const toolbarActions = buildToolbarActionCallbacks(tab, plugin);
+  // Build the toolbar action callbacks once; the Vue widgets fire these SAME
+  // closures (truth + I/O stay in the engine). The catalog/provider-changed
+  // wiring keeps a blank-tab provider switch identical to the old path.
+  const toolbarActions = buildToolbarActionCallbacks(
+    tab,
+    plugin,
+    toolbarWiring.getProviderCatalogConfig,
+    toolbarWiring.onProviderChanged,
+  );
 
   const callbacks: ComposerCallbacks = {
     subscribe: tab.composer.subscribe,
@@ -61,7 +82,6 @@ export function mountTabComposer(
       tab.state.queueIndicatorEl = el;
     },
     registerEditedFilesRow: (el) => { tab.dom.editedFilesRowEl = el; },
-    registerToolbarHost: (el) => { tab.dom.toolbarHostEl = el; },
     // Phase 1–3: host the engine-created textarea. Phase 4 deletes this and
     // ComposerTextarea.vue registers INPUT_EL_KEY instead.
     registerTextareaHost: (el) => { el.appendChild(tab.dom.inputEl); },

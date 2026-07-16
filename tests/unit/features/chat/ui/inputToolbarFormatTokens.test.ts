@@ -1,4 +1,4 @@
-import { formatTokens } from '../../../../../src/features/chat/ui/InputToolbar';
+import { formatTokens } from '../../../../../src/features/chat/ui/toolbar/shared';
 
 describe('formatTokens', () => {
   it('shows 0 for zero, negative, and non-finite values', () => {

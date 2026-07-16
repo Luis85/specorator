@@ -184,15 +184,7 @@ export class SpecoratorView extends ItemView {
         tab.state.usage = recalculateUsageForModel(tab.state.usage, model, contextWindow);
       }
 
-      tab.ui.modelSelector?.updateDisplay();
-      tab.ui.modelSelector?.renderOptions();
-      tab.ui.modeSelector?.updateDisplay();
-      tab.ui.modeSelector?.renderOptions();
-      tab.ui.thinkingBudgetSelector?.updateDisplay();
-      tab.ui.permissionToggle?.updateDisplay();
-      tab.ui.planModeToggle?.updateDisplay();
-      tab.ui.serviceTierToggle?.updateDisplay();
-      // Vue owns `.specorator-input-plan-mode`; re-project so ComposerWrapper repaints.
+      // The toolbar widgets are Vue; re-project so they repaint from the store.
       tab.composer?.emit();
     }
 
