@@ -21,3 +21,23 @@ export function anchorFromInput(inputEl: HTMLTextAreaElement): ComposerDropdownA
   const r = inputEl.getBoundingClientRect();
   return { top: r.top, left: r.left, width: Math.max(r.width, 280) };
 }
+
+/**
+ * Fixed-position CSS vars for the slash + mention dropup, anchored to the
+ * textarea rect. Reproduces the imperative `positionFixed` exactly: the dropdown
+ * is a drop-UP, so its BOTTOM edge sits `4px` above the input top
+ * (`window.innerHeight - top + 4`). `window` matches the imperative code's global
+ * reference; `width` is already floored at 280 in `anchorFromInput`. Returns an
+ * empty object (no vars) when there is no anchor. Resume does NOT use this — it
+ * is a CSS-flow dropup positioned by `bottom: 100%`.
+ */
+export function fixedDropdownStyleVars(
+  anchor: ComposerDropdownAnchor | null,
+): Record<string, string> {
+  if (!anchor) return {};
+  return {
+    '--specorator-fixed-dropdown-bottom': `${window.innerHeight - anchor.top + 4}px`,
+    '--specorator-fixed-dropdown-left': `${anchor.left}px`,
+    '--specorator-fixed-dropdown-width': `${anchor.width}px`,
+  };
+}

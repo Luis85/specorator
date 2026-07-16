@@ -2,6 +2,9 @@
 import { inject, onMounted, ref } from 'vue';
 
 import { INPUT_EL_KEY } from '../composerKeys';
+import MentionDropdown from '../dropdowns/MentionDropdown.vue';
+import ResumeSessionDropdown from '../dropdowns/ResumeSessionDropdown.vue';
+import SlashCommandDropdown from '../dropdowns/SlashCommandDropdown.vue';
 
 // Vue RENDERS the element but the engine OWNS its behavior. We register the raw
 // node once and NEVER bind v-model, NEVER re-render it, and bind NO reactive
@@ -31,4 +34,11 @@ onMounted(() => {
     rows="3"
     placeholder="How can i help you today?"
   />
+  <!-- Caret-anchored dropdown overlays. Each renders only when
+       `store.dropdown.kind` matches; keyboard navigation still flows through
+       `tabInputWiring` → the detectors → the coordinator (NO listeners here).
+       The textarea above stays engine-owned — these are ADDED siblings only. -->
+  <SlashCommandDropdown />
+  <MentionDropdown />
+  <ResumeSessionDropdown />
 </template>
