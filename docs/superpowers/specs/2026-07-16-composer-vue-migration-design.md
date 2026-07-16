@@ -134,24 +134,46 @@ Context managers: `FileContextManager` (`ui/FileContext.ts` +
     add-only; it lists active paths, removes them (`removePath()`), and toggles
     session-only vs persistent (`togglePersistence()`, saving
     `persistentExternalContextPaths`).
-  - `planMode`: `boolean` — projected from the same plan-mode source the engine
-    toggles (`updatePlanModeUI()` / `refreshTabProviderUI()` / provider refresh).
-    `ComposerWrapper.vue` binds `:class="{ 'specorator-input-plan-mode': planMode }"`
-    so Vue owns the class; the engine paths set the store flag instead of calling
-    `classList.toggle` on `.specorator-input-wrapper` (imperative DOM write →
-    reactive-data mutation — otherwise Vue's next patch would clobber the
-    engine-toggled class and drop the plan-mode border).
+  - `wrapperMode`: the dynamic classes the engine currently toggles on
+    `.specorator-input-wrapper` — `planMode` (`.specorator-input-plan-mode`, from
+    `updatePlanModeUI()` / `refreshTabProviderUI()` / provider refresh),
+    `instructionMode` (`.specorator-input-instruction-mode`) and `bangBashMode`
+    (`.specorator-input-bang-bash-mode`, both from `TriggerInputMode.enter/exit`).
+    `ComposerWrapper.vue` binds all three via `:class` so Vue owns the wrapper
+    class list; the engine paths set the store flags instead of `classList.toggle`
+    on the wrapper (imperative DOM write → reactive-data mutation — otherwise Vue's
+    next patch clobbers the engine-toggled class and drops the plan-mode /
+    instruction / bang-bash border). The active-mode **placeholder** stays
+    engine-owned: `TriggerInputMode` keeps setting `inputEl.placeholder` directly
+    on the engine-driven textarea (Vue never binds the textarea's attributes — see
+    Textarea).
   - `inputMode`: `'none' | 'instruction' | 'bang-bash'` (from
-    `InstructionModeManager` / `BangBashModeManager`) plus derived chrome flags.
-  - `chips`: `files[]`, `folders[]`, `images[]` (projected from `FileContextState`
-    / image state — reactive `v-for`; folders are stored separately via
-    `attachFolderAsPill()` / `getAttachedFolders()` and render as
-    `.specorator-file-chip--folder`, so they must be projected and removable too).
+    `InstructionModeManager` / `BangBashModeManager`) — drives the `wrapperMode`
+    flags above.
+  - `chips`: `currentNote` (the active-note pill, projected separately),
+    `files[]`, `folders[]`, `images[]` (from `FileContextState` / image state —
+    reactive `v-for`). `FileChipsView` receives `currentNote` apart from `files`
+    and renders it as a `current` pill; folders are stored separately
+    (`attachFolderAsPill()` / `getAttachedFolders()`) and render as
+    `.specorator-file-chip--folder`. All chips **open the file on click**
+    (`onOpenFile`) and are removable; removing the current-note pill must clear
+    `currentNotePath` (so `shouldSendCurrentNote()` stops sending it) — the
+    remove callback carries the pill kind so the engine clears the right state.
     The editor/browser/canvas **selection indicators**
     are NOT in the store: they are engine-driven element handles (the selection
     controllers mutate their `textContent`/`.specorator-hidden` directly — see
     Element-handle keys).
-  - `editedFiles`: the edited-files bar projection.
+  - `mcp`: the enabled-server set the `McpServerSelector` owns — a list of
+    `{ name, enabled }` plus visibility. It is not just an opener: it toggles
+    per-server enablement, syncs `@server` mentions (`addMentionedServers()`), is
+    restored via `setEnabledServers()`, and `InputController` sends
+    `getEnabledServers()` with the turn. Project the list + enabled state; the Vue
+    dropdown toggles via `onToggleMcpServer(name)`. Truth stays in the engine.
+  - `editedFiles`: the edited-files projection (the kind-split counts **and** the
+    grouped file list). `EditedFilesView` is interactive: the badge toggles a
+    grouped popover, rows activate by click/keyboard, and `onOpenFile` re-resolves
+    the created/edited file — so `EditedFilesBar.vue` is a popover with row
+    activation, not a read-only count.
   - `streaming`: `isStreaming` — drives streaming-state chrome only (there is no
     send button; send/cancel stay keyboard-driven through `tabInputWiring`).
   - `dropdown`: `{ kind: 'slash' | 'mention' | 'resume' | null, items, activeIndex, anchorRect }`.
@@ -171,11 +193,13 @@ Context managers: `FileContextManager` (`ui/FileContext.ts` +
 - **Callbacks** (`ui/vue/composer/composerCallbacks.ts`, `ComposerCallbacks`):
   thin Vue→engine delegators — `onSend`, `onCancel`, `onSetModel`, `onSetMode`,
   `onSetThinkingBudget`, `onSetServiceTier`, `onSetPermission`, `onTogglePlanMode`,
-  `onOpenMcpSelector`, `onAddExternalContext`, `onRemoveExternalContext(path)`,
-  `onToggleExternalContextPersistence(path)`, `onRemoveFileChip`,
-  `onRemoveFolderChip`, `onRemoveImageChip`, `onDropdownNavigate`,
-  `onDropdownSelect`, `onDropdownDismiss`, and the element-handle registration
-  hooks.
+  `onToggleMcpServer(name)`, `onAddExternalContext`,
+  `onRemoveExternalContext(path)`, `onToggleExternalContextPersistence(path)`,
+  `onRemoveChip(path, kind)` (kind `'current' | 'file' | 'folder' | 'image'`, so
+  the engine clears `currentNotePath` for the active-note pill),
+  `onOpenFile(path)` (open the clicked file/current/folder chip and edited-files
+  row), `onDropdownNavigate`, `onDropdownSelect`, `onDropdownDismiss`, and the
+  element-handle registration hooks.
 - **Element-handle keys** — Vue owns the composer DOM but hands the engine live
   nodes exactly as `SCROLL_HOST_KEY` did. The full set: `INPUT_EL_KEY` (the
   textarea), `NAV_ROW_KEY`, `CONTEXT_ROW_KEY`, `INPUT_CONTAINER_KEY`,
@@ -232,15 +256,22 @@ ComposerRoot.vue                    (.specorator-input-container host; registers
   **not** add-only: its dropdown renders the active-path list from
   `store.externalContext`, removes a path (`onRemoveExternalContext`), and toggles
   session-only vs persistent per path (`onToggleExternalContextPersistence`) — full
-  parity with the imperative selector.
+  parity with the imperative selector. `McpServerSelector.vue` is likewise **not**
+  just an opener: its dropdown lists `store.mcp` servers and toggles per-server
+  enablement (`onToggleMcpServer`); the engine keeps the enabled-server truth
+  (`addMentionedServers()` / `setEnabledServers()` / `getEnabledServers()` sent
+  with the turn).
 - **File/image chips** are reactive `v-for` over store arrays: `FileChipsView` /
   `ImageContextManager` are already view-over-state layers (they rebuild pills
   from `FileContextState` / image state), so the render moves to Vue while the
   underlying context *state* and all vault I/O stay in the engine and are
-  projected into the store. `FileChips.vue` renders attached **files and folders**
-  (folders as `.specorator-file-chip--folder`, projected from
-  `store.chips.folders` / `getAttachedFolders()`), each removable via
-  `onRemoveFileChip` / `onRemoveFolderChip`. **Contract**: `FileChips.vue` must
+  projected into the store. `FileChips.vue` renders the **current-note pill**
+  (`store.chips.currentNote`, a `current`-kind chip distinct from files), attached
+  **files and folders** (folders as `.specorator-file-chip--folder`), and image
+  previews. Every chip opens its file on click (`onOpenFile`) and is removable via
+  `onRemoveChip(path, kind)`; removing the current-note pill clears
+  `currentNotePath` (engine-side, keyed on `kind === 'current'`), so it is no
+  longer sent by `shouldSendCurrentNote()`. **Contract**: `FileChips.vue` must
   render its chips inside a `.specorator-file-indicator` wrapper and
   `ImageChips.vue` inside a
   `.specorator-image-preview` wrapper, each toggling `.specorator-visible-flex`
@@ -254,8 +285,11 @@ ComposerRoot.vue                    (.specorator-input-container host; registers
   `browserIndicatorEl` / `canvasIndicatorEl`; the `SelectionController` /
   `BrowserSelectionController` / `CanvasSelectionController` keep mutating their
   `textContent` + `.specorator-hidden` directly, untouched.
-- **`EditedFilesBar`, `ContextUsageMeter`** are read-only projections
-  (`EditedFilesView.render()` is already a rebuild-from-`entries` view).
+- **`EditedFilesBar`** is an interactive popover (not read-only): a kind-split
+  count badge that toggles a grouped popover (outside-click / Escape to close),
+  with rows activatable by click/keyboard that call `onOpenFile(path)` to open the
+  created/edited file — the only path to reach agent-changed files. **`ContextUsageMeter`**
+  is a read-only projection.
 
 ### Textarea ownership (the one Vue-hostile surface)
 
@@ -279,9 +313,13 @@ and caret-anchored dropdowns require one stable engine-driven element.
   `document.activeElement === inputEl`, `isComposing`, and `defaultPrevented`
   guards. Zero behavior change — the element is Vue-rendered rather than
   `createEl`'d.
-- **Vue drives only surrounding chrome** from the store: placeholder,
-  streaming-disabled state, and the active-input-mode class on the container —
-  never the text content.
+- **Vue drives only the wrapper's surrounding chrome** from the store: the
+  `wrapperMode` classes (plan / instruction / bang-bash) on `.specorator-input-wrapper`
+  and streaming-state chrome — never the textarea's text, and **never its
+  attributes**. The textarea `placeholder` is engine-owned (`TriggerInputMode` /
+  `InputController` set `inputEl.placeholder` directly on the engine-driven node),
+  and there is no `:disabled` binding — typing while streaming is allowed (queued
+  follow-ups), so Vue touches the node only to register it via `INPUT_EL_KEY`.
 - **Draft persistence** (`seedComposerDraft`, blank-tab drafts) stays entirely in
   `InputController`, which writes `.value` directly. The store projects only
   derived metadata (`isEmpty`, active mode) for chrome.
@@ -389,9 +427,17 @@ fix):
 - **Dropdowns**: open/close/navigate/select driven by store state; keyboard
   parity with `dropdownNavigation`; caret-anchored positioning.
 - **Textarea**: the element is handed to the engine on mount; Vue never clobbers
-  `.value` / selection / IME state; Mod+Enter still routes through
-  `tabInputWiring`; placeholder/disabled chrome reacts to the store.
-- **File/image chips**: reactive `v-for` parity; remove callbacks fire.
+  `.value` / selection / IME state / `placeholder` (all engine-owned) and binds no
+  `:disabled`; Mod+Enter still routes through `tabInputWiring`; the `wrapperMode`
+  classes (plan / instruction / bang-bash) on `.specorator-input-wrapper` react to
+  the store and survive an unrelated re-patch.
+- **File/image chips**: reactive `v-for` parity; current-note pill rendered as
+  `current` kind and opens on click; `onOpenFile` fires on chip click; remove
+  callbacks fire with the right `kind` (current-note removal clears
+  `currentNotePath`).
+- **MCP + external-context + edited-files**: `onToggleMcpServer` toggles a
+  server; `onRemoveExternalContext` / `onToggleExternalContextPersistence` act on
+  a path; the edited-files popover opens and a row calls `onOpenFile`.
 - **Selection indicators**: the three host elements are registered to
   `tab.dom.*`; a selection controller driving its registered indicator updates
   `textContent` + toggles `.specorator-hidden` (engine-driven, not reactive).
