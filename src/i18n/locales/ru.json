@@ -855,8 +855,22 @@
           "heartbeatFresh": "Fresh heartbeat ({age} ago)",
           "heartbeatStale": "Stale heartbeat ({age} ago)",
           "heartbeatVeryStale": "Very stale heartbeat ({age} ago)"
-        }
+        },
+        "updatedAgo": "{ago} назад",
+        "ariaLabel": "{title} — {status}"
       },
+      "attention": {
+        "waitingOne": "1 ждёт вас",
+        "waitingMany": "{n} ждут вас",
+        "jump": "Перейти к следующему рабочему заданию, ожидающему вас"
+      },
+      "emptyBoard": {
+        "title": "Рабочих заданий пока нет",
+        "body": "Рабочие задания — это Markdown-заметки в \"{folder}\". Создайте одно, и доска проведёт его по своим дорожкам."
+      },
+      "emptyLane": "Нет рабочих заданий",
+      "laneCriteriaShow": "Показать критерии дорожки",
+      "laneCriteriaHide": "Скрыть критерии дорожки",
       "notRunnable": "Mark \"{title}\" ready before running.",
       "noFreeSlots": "Нет свободных слотов для рабочих заданий. Для запуска нужен свободный слот — закройте вкладку рабочего задания на панели чата или увеличьте «Concurrent work-order runs» в настройках Agent Board.",
       "collapseLane": "Свернуть дорожку",
@@ -869,7 +883,8 @@
       "queueHalted": "Очередь остановлена: {reason}",
       "failureOne": "{n} сбой",
       "failureMany": "{n} сбоев",
-      "queueSkipped": "⊘ Очередь пропущена: {reason}"
+      "queueSkipped": "⊘ Очередь пропущена: {reason}",
+      "queueSkippedDismiss": "Скрыть"
     },
     "template": {
       "nameRequired": "Template name is required.",

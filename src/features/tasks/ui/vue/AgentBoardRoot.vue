@@ -1,11 +1,13 @@
 <script setup lang="ts">
-import { computed, inject, onMounted, onUnmounted } from 'vue';
+import { type ComponentPublicInstance, computed, inject, onMounted, onUnmounted, provide, ref } from 'vue';
 
 import { t } from '../../../../i18n/i18n';
+import { boardWorkOrderFolder } from '../../config/boardWorkOrderFolder';
 import type { InvalidTaskNote } from '../../model/taskTypes';
-import { PLUGIN_KEY } from './boardKeys';
+import { CALLBACKS_KEY, FOCUS_CARD_KEY, PLUGIN_KEY } from './boardKeys';
 import BoardLane from './components/BoardLane.vue';
 import BoardToolbar from './components/BoardToolbar.vue';
+import { mountLucide } from './mountLucide';
 import { useAgentBoardStore } from './stores/agentBoardStore';
 import { useBoardEventRouting } from './useBoardEventRouting';
 
@@ -13,6 +15,10 @@ import { useBoardEventRouting } from './useBoardEventRouting';
 // the EventBus→store routing lifecycle via useBoardEventRouting.
 const plugin = inject(PLUGIN_KEY);
 if (!plugin) throw new Error('AgentBoardRoot mounted without PLUGIN_KEY');
+
+const callbacks = inject(CALLBACKS_KEY);
+if (!callbacks) throw new Error('AgentBoardRoot mounted without CALLBACKS_KEY');
+const cb = callbacks;
 
 // Owns the EventBus → store routing for this leaf (its own onMounted/onUnmounted).
 useBoardEventRouting(plugin);
@@ -46,6 +52,8 @@ onMounted(() => {
 onUnmounted(() => {
   if (clockId !== null) window.clearInterval(clockId);
   clockId = null;
+  for (const timer of flashTimers.values()) window.clearTimeout(timer);
+  flashTimers.clear();
 });
 
 // "No free slots" hint. Shown at the board root when the chat-tab slot count is
@@ -59,6 +67,55 @@ onUnmounted(() => {
 const noFreeSlots = computed(
   () => store.slots.max > 0 && Math.max(0, store.slots.max - store.slots.used) <= 0,
 );
+
+// First-run hero: a LOADED layout (lanes exist — the pre-load EMPTY_LAYOUT has
+// none) with zero tasks anywhere. Suppressed while loading and on a load error
+// (the red errors panel owns that story). Lanes keep rendering below so the
+// pipeline stays visible.
+const boardEmpty = computed(
+  () =>
+    !store.loading &&
+    !store.error &&
+    store.layout.lanes.length > 0 &&
+    store.layout.lanes.every((lane) => lane.tasks.length === 0),
+);
+
+const workOrderFolder = computed(() => boardWorkOrderFolder(plugin.settings));
+
+function mountEmptyIcon(el: Element | ComponentPublicInstance | null): void {
+  mountLucide(el, 'clipboard-list');
+}
+
+// ---- attention jump (provided to the toolbar chip) --------------------------
+// Scroll a card into view, focus it, and flash an accent ring. DOM-based on
+// purpose: the cards live under this root, keyed by data-task-id; smooth scroll
+// and the pulse honor prefers-reduced-motion (the CSS side gates the pulse, the
+// scroll falls back to an instant jump).
+const rootEl = ref<HTMLElement | null>(null);
+const ATTENTION_FLASH_MS = 1300;
+const flashTimers = new Map<HTMLElement, number>();
+
+function focusCard(taskId: string): void {
+  const host = rootEl.value;
+  if (!host) return;
+  const escaped = taskId.replace(/["\\]/g, '\\$&');
+  const card = host.querySelector<HTMLElement>(`.specorator-agent-board-card[data-task-id="${escaped}"]`);
+  if (!card) return;
+  const reduceMotion = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false;
+  card.scrollIntoView?.({ behavior: reduceMotion ? 'auto' : 'smooth', block: 'nearest', inline: 'nearest' });
+  card.focus({ preventScroll: true });
+  card.classList.add('is-attention-target');
+  const pending = flashTimers.get(card);
+  if (pending !== undefined) window.clearTimeout(pending);
+  flashTimers.set(
+    card,
+    window.setTimeout(() => {
+      card.classList.remove('is-attention-target');
+      flashTimers.delete(card);
+    }, ATTENTION_FLASH_MS),
+  );
+}
+provide(FOCUS_CARD_KEY, focusCard);
 
 // Cap a long path/stack so one error line can't blow out the lane width; the
 // full text stays on the title attribute.
@@ -75,13 +132,44 @@ function invalidNoteLine(note: InvalidTaskNote): string {
 </script>
 
 <template>
-  <div class="specorator-agent-board">
+  <div
+    ref="rootEl"
+    class="specorator-agent-board"
+  >
     <BoardToolbar />
     <div
       v-if="noFreeSlots"
       class="specorator-agent-board-hint"
     >
-      {{ t('tasks.board.noFreeSlots') }}
+      <span
+        :ref="(el) => mountLucide(el, 'alert-triangle')"
+        class="specorator-agent-board-hint-icon"
+        aria-hidden="true"
+      />
+      <span>{{ t('tasks.board.noFreeSlots') }}</span>
+    </div>
+    <div
+      v-if="boardEmpty"
+      class="specorator-agent-board-empty"
+    >
+      <span
+        :ref="mountEmptyIcon"
+        class="specorator-agent-board-empty-icon"
+        aria-hidden="true"
+      />
+      <div class="specorator-agent-board-empty-title">
+        {{ t('tasks.board.emptyBoard.title') }}
+      </div>
+      <div class="specorator-agent-board-empty-body">
+        {{ t('tasks.board.emptyBoard.body', { folder: workOrderFolder }) }}
+      </div>
+      <button
+        type="button"
+        class="specorator-agent-board-empty-cta mod-cta"
+        @click="cb.onAddWorkOrder()"
+      >
+        {{ t('tasks.board.addWorkOrderButton') }}
+      </button>
     </div>
     <div class="specorator-agent-board-lanes">
       <BoardLane

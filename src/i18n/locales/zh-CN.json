@@ -855,8 +855,22 @@
           "heartbeatFresh": "Fresh heartbeat ({age} ago)",
           "heartbeatStale": "Stale heartbeat ({age} ago)",
           "heartbeatVeryStale": "Very stale heartbeat ({age} ago)"
-        }
+        },
+        "updatedAgo": "{ago}前",
+        "ariaLabel": "{title} — {status}"
       },
+      "attention": {
+        "waitingOne": "1 个等待您处理",
+        "waitingMany": "{n} 个等待您处理",
+        "jump": "跳转到下一个等待您处理的工单"
+      },
+      "emptyBoard": {
+        "title": "还没有工单",
+        "body": "工单是 \"{folder}\" 中的 Markdown 笔记。创建一个，看板会带它走过各条泳道。"
+      },
+      "emptyLane": "暂无工单",
+      "laneCriteriaShow": "显示泳道条件",
+      "laneCriteriaHide": "隐藏泳道条件",
       "notRunnable": "Mark \"{title}\" ready before running.",
       "noFreeSlots": "没有空闲的工单槽位。运行工单需要一个空闲槽位——在聊天面板中关闭一个工单标签页，或在 Agent Board 设置中提高 \"Concurrent work-order runs\"。",
       "collapseLane": "折叠泳道",
@@ -869,7 +883,8 @@
       "queueHalted": "队列已停止：{reason}",
       "failureOne": "{n} 个失败",
       "failureMany": "{n} 个失败",
-      "queueSkipped": "⊘ 队列已跳过：{reason}"
+      "queueSkipped": "⊘ 队列已跳过：{reason}",
+      "queueSkippedDismiss": "关闭"
     },
     "template": {
       "nameRequired": "Template name is required.",

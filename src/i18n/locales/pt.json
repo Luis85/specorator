@@ -855,8 +855,22 @@
           "heartbeatFresh": "Fresh heartbeat ({age} ago)",
           "heartbeatStale": "Stale heartbeat ({age} ago)",
           "heartbeatVeryStale": "Very stale heartbeat ({age} ago)"
-        }
+        },
+        "updatedAgo": "há {ago}",
+        "ariaLabel": "{title} — {status}"
       },
+      "attention": {
+        "waitingOne": "1 aguardando você",
+        "waitingMany": "{n} aguardando você",
+        "jump": "Ir para a próxima ordem de trabalho aguardando você"
+      },
+      "emptyBoard": {
+        "title": "Ainda não há ordens de trabalho",
+        "body": "Ordens de trabalho são notas Markdown em \"{folder}\". Crie uma e o quadro a leva pelas suas faixas."
+      },
+      "emptyLane": "Nenhuma ordem de trabalho",
+      "laneCriteriaShow": "Mostrar critérios da faixa",
+      "laneCriteriaHide": "Ocultar critérios da faixa",
       "notRunnable": "Mark \"{title}\" ready before running.",
       "noFreeSlots": "Sem espaços livres para ordens de trabalho. Uma execução precisa de um espaço livre — feche uma aba de ordem de trabalho no painel de chat, ou aumente \"Concurrent work-order runs\" nas configurações do Agent Board.",
       "collapseLane": "Recolher faixa",
@@ -869,7 +883,8 @@
       "queueHalted": "Fila interrompida: {reason}",
       "failureOne": "{n} falha",
       "failureMany": "{n} falhas",
-      "queueSkipped": "⊘ Fila ignorada: {reason}"
+      "queueSkipped": "⊘ Fila ignorada: {reason}",
+      "queueSkippedDismiss": "Dispensar"
     },
     "template": {
       "nameRequired": "Template name is required.",

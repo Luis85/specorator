@@ -193,11 +193,12 @@ describe('Agent Board reduced-motion CSS gating', () => {
   }
 
   it('locates the expected pulse animations (parser sanity check)', () => {
-    // agent-board.css: dot-pulse + live-strip pulse. work-order-modal.css:
-    // header live-dot pulse. All three are `animation:` properties (NOT the
-    // `@keyframes` definitions, which the parser flags separately).
+    // agent-board.css: dot-pulse + live-strip pulse + attention-jump flash +
+    // toolbar attention-dot pulse. work-order-modal.css: header live-dot
+    // pulse. All five are `animation:` properties (NOT the `@keyframes`
+    // definitions, which the parser flags separately).
     const propertyDecls = allDecls.filter((d) => !d.insideKeyframes);
-    expect(propertyDecls.length).toBe(3);
+    expect(propertyDecls.length).toBe(5);
   });
 
   it('gates every `animation:` property behind prefers-reduced-motion: no-preference', () => {

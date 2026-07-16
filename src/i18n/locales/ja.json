@@ -855,8 +855,22 @@
           "heartbeatFresh": "Fresh heartbeat ({age} ago)",
           "heartbeatStale": "Stale heartbeat ({age} ago)",
           "heartbeatVeryStale": "Very stale heartbeat ({age} ago)"
-        }
+        },
+        "updatedAgo": "{ago}前",
+        "ariaLabel": "{title} — {status}"
       },
+      "attention": {
+        "waitingOne": "1件が応答待ち",
+        "waitingMany": "{n}件が応答待ち",
+        "jump": "応答待ちの次の作業指示へ移動"
+      },
+      "emptyBoard": {
+        "title": "作業指示はまだありません",
+        "body": "作業指示は「{folder}」内の Markdown ノートです。作成すると、ボードがレーンに沿って進めます。"
+      },
+      "emptyLane": "作業指示なし",
+      "laneCriteriaShow": "レーンの条件を表示",
+      "laneCriteriaHide": "レーンの条件を非表示",
       "notRunnable": "Mark \"{title}\" ready before running.",
       "noFreeSlots": "空いている作業指示スロットがありません。作業指示の実行には空きスロットが必要です。チャットパネルで作業指示タブを閉じるか、Agent Board の設定で「Concurrent work-order runs」を増やしてください。",
       "collapseLane": "レーンを折りたたむ",
@@ -869,7 +883,8 @@
       "queueHalted": "キューを停止しました: {reason}",
       "failureOne": "{n} 件の失敗",
       "failureMany": "{n} 件の失敗",
-      "queueSkipped": "⊘ キューをスキップ: {reason}"
+      "queueSkipped": "⊘ キューをスキップ: {reason}",
+      "queueSkippedDismiss": "閉じる"
     },
     "template": {
       "nameRequired": "Template name is required.",

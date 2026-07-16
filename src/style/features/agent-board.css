@@ -104,6 +104,34 @@
   min-height: 24px;
 }
 
+/* Card list wrapper: role=list semantics for the focusable cards, the
+   TransitionGroup root, and the positioned ancestor leave animations need.
+   Gap mirrors the lane's own 9px so spacing is unchanged; an empty wrapper
+   collapses entirely so it doesn't double the lane gap. */
+.specorator-agent-board-lane-cards {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+  min-height: 0;
+}
+
+.specorator-agent-board-lane-cards:empty {
+  display: none;
+}
+
+/* Empty-lane ghost (suppressed on the add-row host and on a fully empty
+   board, where the first-run hero owns the message). */
+.specorator-agent-board-lane-empty {
+  padding: 10px 12px;
+  border: 1px dashed color-mix(in srgb, var(--text-normal) 8%, transparent);
+  border-radius: var(--radius-l, 8px);
+  color: var(--text-faint);
+  font-size: var(--font-ui-smaller);
+  font-style: italic;
+  text-align: center;
+}
+
 .specorator-agent-board-lane-title {
   flex: 1 1 auto;
   min-width: 0;
@@ -176,11 +204,15 @@
    these props are unset by the component rules so there's no conflict). */
 .specorator-agent-board-toolbar-btn,
 .specorator-agent-board-toolbar-autorun,
+.specorator-agent-board-toolbar-attention,
 .specorator-agent-board-card-action-primary,
 .specorator-agent-board-card-action-more,
 .specorator-agent-board-lane-add,
 .specorator-agent-board-lane-collapse-toggle,
+.specorator-agent-board-lane-criteria-toggle,
 .specorator-agent-board-card-menu-item,
+.specorator-agent-board-card-skip-chip,
+.specorator-agent-board-empty-cta,
 .specorator-agent-board-card-reply--actions button {
   box-shadow: none;
   appearance: none;
@@ -220,6 +252,62 @@
 
 .specorator-agent-board-card:active {
   transform: translateY(1px);
+}
+
+/* Ease the hover lift instead of snapping it (motion-gated). */
+@media (prefers-reduced-motion: no-preference) {
+  .specorator-agent-board-card {
+    transition: border-color 0.15s ease, background-color 0.15s ease, box-shadow 0.15s ease, opacity 0.15s ease;
+  }
+}
+
+/* Attention-jump flash: the toolbar chip's focusCard adds this class for
+   ~1.3s. The outline itself is the reduced-motion-safe cue; with motion the
+   ring fades out over the flash window. */
+.specorator-agent-board-card.is-attention-target {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .specorator-agent-board-card.is-attention-target {
+    animation: specorator-board-attention-flash 1.3s ease forwards;
+  }
+}
+
+@keyframes specorator-board-attention-flash {
+  0%, 55% { outline-color: var(--color-accent); }
+  100% { outline-color: transparent; }
+}
+
+/* Lane-change transitions (TransitionGroup name="specorator-board-card"):
+   enter rises in, leave fades out in place (absolute, so siblings FLIP up via
+   the -move transform instead of jumping). Durations live entirely inside the
+   motion gate — with reduced motion Vue sees 0s and applies states instantly. */
+.specorator-board-card-enter-from {
+  opacity: 0;
+  transform: translateY(4px);
+}
+
+.specorator-board-card-leave-to {
+  opacity: 0;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .specorator-board-card-enter-active {
+    transition: opacity 0.16s ease, transform 0.16s ease;
+  }
+
+  .specorator-board-card-leave-active {
+    transition: opacity 0.12s ease;
+    position: absolute;
+    left: 0;
+    right: 0;
+  }
+
+  .specorator-board-card-move {
+    transition: transform 0.22s ease;
+  }
 }
 
 /* ---------- Title row: status dot + title ---------- */
@@ -492,16 +580,23 @@
   }
 }
 
-/* ---------- Meta row: provider/model + priority ---------- */
+/* ---------- Meta row: provider/model + age + priority ---------- */
 .specorator-agent-board-card-meta {
   display: grid;
-  grid-template-columns: 1fr auto;
+  grid-template-columns: 1fr auto auto;
   align-items: center;
   gap: 10px;
   /* Render the monospace provider/model line at the intended ~11px rather than
      inheriting the card's 14px. */
   font-size: var(--font-ui-smaller);
   color: var(--text-muted);
+}
+
+/* Settled-card age stamp ("3h ago"); the absolute timestamp rides `title`. */
+.specorator-agent-board-card-meta-age {
+  color: var(--text-faint);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
 }
 
 /* The 1fr cell — give it the full track and truncate so it doesn't over-shrink
@@ -663,8 +758,22 @@
   border-color: var(--color-red);
 }
 
+/* Terminal cards recede so active work carries the visual weight; hover/focus
+   restores full contrast for reading. Failed stays full-strength (its red
+   border is an attention cue, not an archive state). */
+.specorator-agent-board-card--done {
+  opacity: 0.82;
+}
+
 .specorator-agent-board-card--canceled {
   opacity: 0.65;
+}
+
+.specorator-agent-board-card--done:hover,
+.specorator-agent-board-card--done:focus-within,
+.specorator-agent-board-card--canceled:hover,
+.specorator-agent-board-card--canceled:focus-within {
+  opacity: 1;
 }
 
 /* ===== Live run strip + paused reply (work-order execution) =====
@@ -850,14 +959,21 @@
   border-color: color-mix(in srgb, var(--color-green) 88%, var(--background-primary));
 }
 
+/* Notices panel. Parse warnings / skipped notes are diagnostics, not failures —
+   they read in warning amber; only a genuine board load failure (the -load
+   line) stays error red. */
 .specorator-agent-board-errors {
   flex: 0 0 auto;
   max-height: 25%;
   overflow: auto;
   border-top: 1px solid var(--background-modifier-border);
   padding-top: 12px;
-  color: var(--text-error);
+  color: var(--text-warning);
   font-size: var(--font-ui-smaller);
+}
+
+.specorator-agent-board-errors-load {
+  color: var(--text-error);
 }
 
 /* The notices/skipped sections render bare <h4>s. Obsidian's app.css styles
@@ -869,7 +985,7 @@
   font-size: var(--font-ui-small);
   font-weight: var(--font-semibold);
   line-height: 1.3;
-  color: var(--text-error);
+  color: var(--text-warning);
 }
 
 .specorator-agent-board-errors h4:not(:first-child) {
@@ -886,13 +1002,30 @@
   font-weight: var(--font-semibold);
 }
 
+/* "No free slots" is a capacity warning, not an error — amber callout with an
+   alert glyph instead of the old red alarm box. */
 .specorator-agent-board-hint {
   flex: 0 0 auto;
-  padding: 6px 8px;
-  border: 1px solid var(--text-error);
-  border-radius: 6px;
-  color: var(--text-error);
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 7px 10px;
+  border: 1px solid color-mix(in srgb, var(--color-yellow) 45%, transparent);
+  border-radius: var(--radius-m);
+  background: color-mix(in srgb, var(--color-yellow) 8%, transparent);
+  color: var(--text-warning);
   font-size: var(--font-ui-smaller);
+}
+
+.specorator-agent-board-hint-icon {
+  display: inline-flex;
+  flex: 0 0 auto;
+  margin-top: 1px;
+}
+
+.specorator-agent-board-hint-icon svg {
+  width: 13px;
+  height: 13px;
 }
 
 .specorator-agent-board-lane-criteria {
@@ -902,9 +1035,100 @@
   padding-bottom: 6px;
 }
 
+/* ⓘ toggle that expands the (default-collapsed) DoR/DoD criteria. Borderless
+   glyph button, same language as the lane collapse chevron. */
+.specorator-agent-board-lane-criteria-toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  margin: 0;
+  background: transparent;
+  border: none;
+  color: var(--text-faint);
+  cursor: pointer;
+  line-height: 1;
+  box-shadow: none;
+}
+
+.specorator-agent-board-lane-criteria-toggle svg {
+  width: 13px;
+  height: 13px;
+}
+
+.specorator-agent-board-lane-criteria-toggle:hover,
+.specorator-agent-board-lane-criteria-toggle.is-open {
+  color: var(--text-normal);
+  background: transparent;
+  box-shadow: none;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .specorator-agent-board-lane-criteria-toggle {
+    transition: color 0.15s ease;
+  }
+}
+
 .specorator-agent-board-lane-criteria-label {
   font-weight: var(--font-semibold);
   margin-top: 4px;
+}
+
+/* ===== First-run empty-board hero (zero work orders anywhere) ===== */
+.specorator-agent-board-empty {
+  flex: 0 0 auto;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding: 28px 20px;
+  border: 1px dashed color-mix(in srgb, var(--text-normal) 12%, transparent);
+  border-radius: var(--radius-l, 8px);
+  text-align: center;
+}
+
+.specorator-agent-board-empty-icon {
+  display: inline-flex;
+  color: var(--text-faint);
+  margin-bottom: 2px;
+}
+
+.specorator-agent-board-empty-icon svg {
+  width: 28px;
+  height: 28px;
+}
+
+.specorator-agent-board-empty-title {
+  font-size: var(--font-ui-medium);
+  font-weight: var(--font-semibold);
+  color: var(--text-normal);
+}
+
+.specorator-agent-board-empty-body {
+  font-size: var(--font-ui-small);
+  color: var(--text-muted);
+  max-width: 420px;
+}
+
+/* Same deliberate green CTA as the toolbar Add button. */
+.specorator-agent-board-empty-cta {
+  margin-top: 8px;
+  display: inline-flex;
+  align-items: center;
+  padding: 6px 14px;
+  border-radius: var(--radius-m);
+  font-size: var(--font-ui-small);
+  font-weight: var(--font-medium);
+  cursor: pointer;
+  background-color: var(--color-green);
+  border: 1px solid var(--color-green);
+  color: var(--text-on-accent);
+}
+
+.specorator-agent-board-empty-cta:hover {
+  background-color: color-mix(in srgb, var(--color-green) 88%, var(--background-primary));
 }
 
 .specorator-agent-board-lane-criteria ul {
@@ -1119,6 +1343,43 @@
   transform: translateX(12px);
 }
 
+/* "Waiting on you" attention chip: amber pill counting the paused
+   (needs_input / needs_approval) cards; a click jumps to the next one. */
+.specorator-agent-board-toolbar-attention {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 4px 10px;
+  border: 1px solid color-mix(in srgb, var(--color-yellow) 45%, transparent);
+  border-radius: var(--radius-full, 999px);
+  background: color-mix(in srgb, var(--color-yellow) 12%, transparent);
+  color: var(--text-normal);
+  font-size: var(--font-ui-smaller);
+  font-weight: var(--font-medium);
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.specorator-agent-board-toolbar-attention:hover {
+  border-color: color-mix(in srgb, var(--color-yellow) 70%, transparent);
+  background: color-mix(in srgb, var(--color-yellow) 20%, transparent);
+}
+
+.specorator-agent-board-toolbar-attention-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background-color: var(--color-yellow);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-yellow) 16%, transparent);
+  flex-shrink: 0;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .specorator-agent-board-toolbar-attention-dot {
+    animation: specorator-pulse-dot 1.2s ease-in-out infinite;
+  }
+}
+
 .specorator-agent-board-toolbar--queue-active-count,
 .specorator-agent-board-toolbar--queue-failure-count {
   display: inline-flex;
@@ -1142,16 +1403,35 @@
   color: var(--text-error);
 }
 
-/* Per-card queue skip chip */
+/* Per-card queue skip chip — a real button: hover lift + trailing × make the
+   click-to-dismiss affordance visible. */
 .specorator-agent-board-card-skip-chip {
-  display: inline-block;
-  padding: 2px 6px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 8px;
   margin-top: 6px;
   background-color: var(--background-modifier-border);
-  border-radius: 3px;
+  border: none;
+  border-radius: var(--radius-full, 999px);
   font-size: var(--font-ui-smaller);
   color: var(--text-muted);
   cursor: pointer;
+}
+
+.specorator-agent-board-card-skip-chip:hover {
+  background-color: var(--background-modifier-border-hover, var(--background-modifier-hover));
+  color: var(--text-normal);
+}
+
+.specorator-agent-board-card-skip-chip-x {
+  color: var(--text-faint);
+  font-weight: var(--font-semibold);
+  line-height: 1;
+}
+
+.specorator-agent-board-card-skip-chip:hover .specorator-agent-board-card-skip-chip-x {
+  color: var(--text-normal);
 }
 
 /* Collapsed lane: a 44px vertical strip. The borderless expanded lane drops the

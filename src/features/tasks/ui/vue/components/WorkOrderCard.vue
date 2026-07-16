@@ -2,12 +2,13 @@
 import { computed, inject } from 'vue';
 
 import { t } from '../../../../../i18n/i18n';
+import { formatRelativeTime } from '../../../../../utils/date';
 import { resolvePersona } from '../../../../agents/personaRegistry';
 import { DEFAULT_LANE_TITLES } from '../../../config/boardConfigTypes';
 import { parseAcceptanceProgress } from '../../../model/acceptanceProgress';
 import type { TaskSpec } from '../../../model/taskTypes';
 import { CALLBACKS_KEY } from '../boardKeys';
-import { LIVE_STATUSES, priorityBars, statusDotClass } from '../statusDot';
+import { ATTENTION_STATUSES, LIVE_STATUSES, priorityBars, statusDotClass } from '../statusDot';
 import { useAgentBoardStore } from '../stores/agentBoardStore';
 import AgentAvatar from './AgentAvatar.vue';
 import CardActionCluster from './CardActionCluster.vue';
@@ -52,7 +53,50 @@ const statusDotCls = computed(() => statusDotClass(status.value));
 // Parity with renderCard's `showReply`: the reply surface + hidden footer are
 // driven by STATUS alone (needs_input / needs_approval), NOT by the presence of a
 // live pause overlay — so a reloaded paused card is still answerable.
-const showReply = computed(() => status.value === 'needs_input' || status.value === 'needs_approval');
+const showReply = computed(() => ATTENTION_STATUSES.has(status.value));
+
+// Accessible name for the focusable card: title + the same status label the
+// dot's tooltip shows, so keyboard/SR users hear both without entering the card.
+const cardAriaLabel = computed(() =>
+  t('tasks.board.card.ariaLabel', { title: props.task.frontmatter.title, status: statusLabel.value }),
+);
+
+// Keyboard access for the card itself. Enter/Space open the detail modal only
+// when the CARD is the focused element — inner controls (action cluster, reply
+// field) keep their own key semantics and bubble here with target ≠
+// currentTarget. ContextMenu / Shift+F10 open the right-click menu positioned
+// on the card's rect (the menu API takes a MouseEvent for placement).
+function onCardKeydown(event: KeyboardEvent): void {
+  const card = event.currentTarget as HTMLElement;
+  if (event.key === 'Enter' || event.key === ' ') {
+    if (event.target !== card) return;
+    event.preventDefault();
+    cb.onOpenDetail(props.task);
+    return;
+  }
+  if (event.key === 'ContextMenu' || (event.key === 'F10' && event.shiftKey)) {
+    event.preventDefault();
+    const rect = card.getBoundingClientRect();
+    cb.onContextMenu(
+      props.task,
+      new MouseEvent('contextmenu', { clientX: rect.left + rect.width / 2, clientY: rect.top + rect.height / 2 }),
+    );
+  }
+}
+
+// Settled-card age stamp ("3h ago") off frontmatter.updated. Live cards skip it
+// (the live strip already shows elapsed). Reads the store's MINUTE clock, not
+// nowMs — so the 1s tick keeps re-rendering only live strips, and settled cards
+// refresh their age once per minute.
+const updatedAgo = computed(() =>
+  live.value ? undefined : formatRelativeTime(props.task.frontmatter.updated, store.nowMinuteMs),
+);
+
+// Absolute local timestamp for the age stamp's tooltip.
+const updatedTitle = computed(() => {
+  const ms = Date.parse(props.task.frontmatter.updated);
+  return Number.isNaN(ms) ? props.task.frontmatter.updated : new Date(ms).toLocaleString();
+});
 
 const engineText = computed(
   () => `${props.task.frontmatter.provider ?? '—'} / ${props.task.frontmatter.model ?? '—'}`,
@@ -82,7 +126,12 @@ const persona = computed(() => {
   <div
     class="specorator-agent-board-card"
     :class="[`specorator-agent-board-card--${status}`, { 'specorator-agent-board-card--live-actions': live }]"
+    role="listitem"
+    tabindex="0"
+    :aria-label="cardAriaLabel"
+    :data-task-id="props.task.frontmatter.id"
     @click="cb.onOpenDetail(props.task)"
+    @keydown="onCardKeydown"
     @contextmenu.prevent="cb.onContextMenu(props.task, $event)"
   >
     <div class="specorator-agent-board-card-title-row">
@@ -103,6 +152,11 @@ const persona = computed(() => {
 
     <div class="specorator-agent-board-card-meta">
       <span class="specorator-agent-board-card-meta-engine">{{ engineText }}</span>
+      <span
+        v-if="updatedAgo"
+        class="specorator-agent-board-card-meta-age"
+        :title="updatedTitle"
+      >{{ t('tasks.board.card.updatedAgo', { ago: updatedAgo }) }}</span>
       <span
         class="specorator-agent-board-card-priority"
         :class="`specorator-agent-board-card-priority--${priority.modifier}`"
@@ -173,12 +227,20 @@ const persona = computed(() => {
       v-if="skipReason"
       class="specorator-agent-board-card-skip-host"
     >
-      <div
+      <!-- A real button (keyboard + focus ring for free); the × glyph signals
+        the click-to-dismiss affordance the old static-looking div hid. -->
+      <button
+        type="button"
         class="specorator-agent-board-card-skip-chip"
+        :title="t('tasks.board.queueSkippedDismiss')"
         @click.stop="ackSkip"
       >
-        {{ t('tasks.board.queueSkipped', { reason: skipReason }) }}
-      </div>
+        <span>{{ t('tasks.board.queueSkipped', { reason: skipReason }) }}</span>
+        <span
+          class="specorator-agent-board-card-skip-chip-x"
+          aria-hidden="true"
+        >×</span>
+      </button>
     </div>
   </div>
 </template>

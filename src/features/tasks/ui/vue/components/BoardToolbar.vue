@@ -3,7 +3,7 @@ import { type ComponentPublicInstance, computed, inject } from 'vue';
 
 import { t } from '../../../../../i18n/i18n';
 import { isRunnableTaskStatus } from '../../../model/taskStateMachine';
-import { CALLBACKS_KEY } from '../boardKeys';
+import { CALLBACKS_KEY, FOCUS_CARD_KEY } from '../boardKeys';
 import { mountLucide } from '../mountLucide';
 import { useAgentBoardStore } from '../stores/agentBoardStore';
 
@@ -58,6 +58,27 @@ const slotsFull = computed(() => freeSlots.value <= 0);
 const tabCountText = computed(() =>
   t('tasks.board.tabCount', { n: store.slots.used, m: store.slots.max, k: freeSlots.value }),
 );
+
+// "Waiting on you" chip: paused (needs_input / needs_approval) cards can sit
+// outside the horizontal scroll viewport on a wide board, so the chip both
+// counts them and jumps to them. Clicks cycle round-robin through the store's
+// layout-ordered attention list via the root's focusCard (optional inject — a
+// toolbar mounted without the board root just renders the count).
+const focusCard = inject(FOCUS_CARD_KEY, null);
+const attentionCount = computed(() => store.attentionTasks.length);
+const attentionLabel = computed(() =>
+  attentionCount.value === 1
+    ? t('tasks.board.attention.waitingOne')
+    : t('tasks.board.attention.waitingMany', { n: attentionCount.value }),
+);
+let attentionCursor = 0;
+function jumpAttention(): void {
+  const ids = store.attentionTasks;
+  if (ids.length === 0 || !focusCard) return;
+  attentionCursor %= ids.length;
+  focusCard(ids[attentionCursor]);
+  attentionCursor += 1;
+}
 
 function mountPlay(el: Element | ComponentPublicInstance | null): void {
   mountLucide(el, 'play');
@@ -115,6 +136,19 @@ function mountPlay(el: Element | ComponentPublicInstance | null): void {
       </template>
     </div>
     <div class="specorator-agent-board-toolbar-info">
+      <button
+        v-if="attentionCount > 0"
+        type="button"
+        class="specorator-agent-board-toolbar-attention"
+        :title="t('tasks.board.attention.jump')"
+        @click="jumpAttention"
+      >
+        <span
+          class="specorator-agent-board-toolbar-attention-dot"
+          aria-hidden="true"
+        />
+        <span>{{ attentionLabel }}</span>
+      </button>
       <template v-if="queue">
         <span class="specorator-agent-board-toolbar--queue-active-count">
           <!-- Soft-ring dot precedes the accessible "N/M active" caption. -->

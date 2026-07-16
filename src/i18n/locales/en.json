@@ -777,8 +777,22 @@
           "heartbeatFresh": "Fresh heartbeat ({age} ago)",
           "heartbeatStale": "Stale heartbeat ({age} ago)",
           "heartbeatVeryStale": "Very stale heartbeat ({age} ago)"
-        }
+        },
+        "updatedAgo": "{ago} ago",
+        "ariaLabel": "{title} — {status}"
       },
+      "attention": {
+        "waitingOne": "1 waiting on you",
+        "waitingMany": "{n} waiting on you",
+        "jump": "Jump to the next work order waiting on you"
+      },
+      "emptyBoard": {
+        "title": "No work orders yet",
+        "body": "Work orders are Markdown notes in \"{folder}\". Create one and the board runs it through its lanes."
+      },
+      "emptyLane": "No work orders",
+      "laneCriteriaShow": "Show lane criteria",
+      "laneCriteriaHide": "Hide lane criteria",
       "notRunnable": "Mark \"{title}\" ready before running.",
       "noFreeSlots": "No free work-order slots. A work-order run needs a free slot — close a work-order tab in the chat panel, or raise \"Concurrent work-order runs\" in Agent Board settings.",
       "collapseLane": "Collapse lane",
@@ -791,7 +805,8 @@
       "queueHalted": "Queue halted: {reason}",
       "failureOne": "{n} failure",
       "failureMany": "{n} failures",
-      "queueSkipped": "⊘ Queue skipped: {reason}"
+      "queueSkipped": "⊘ Queue skipped: {reason}",
+      "queueSkippedDismiss": "Dismiss"
     },
     "template": {
       "nameRequired": "Template name is required.",

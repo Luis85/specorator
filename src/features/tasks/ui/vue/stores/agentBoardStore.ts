@@ -1,5 +1,5 @@
 import { defineStore } from 'pinia';
-import { ref, shallowRef } from 'vue';
+import { computed, ref, shallowRef } from 'vue';
 
 import type SpecoratorPlugin from '../../../../../main';
 import { mergeById } from '../../../../library/vue/mergeById';
@@ -13,7 +13,7 @@ import { isRunnableTaskStatus } from '../../../model/taskStateMachine';
 import type { InvalidTaskNote, TaskSpec, TaskStatus } from '../../../model/taskTypes';
 import { TaskNoteStore } from '../../../storage/TaskNoteStore';
 import type { AgentBoardPauseState } from '../../cardActions';
-import { LIVE_STATUSES } from '../statusDot';
+import { ATTENTION_STATUSES, LIVE_STATUSES } from '../statusDot';
 
 /**
  * Loader seam over the vault-reading services the view drives in `refresh()`.
@@ -130,9 +130,31 @@ export const useAgentBoardStore = defineStore('agent-board', () => {
   // preserving the per-strip O(1) heartbeat boundary; the 1s tick re-renders the
   // (bounded) set of live strips, which is the correct, separate axis.
   const nowMs = ref(Date.now());
+  // Minute-granular clock for the settled cards' age stamps. Assigned only when
+  // the floored minute changes, so cards re-render once per minute — a coarser,
+  // separate axis from the 1s nowMs tick (live strips only) and the O(1)
+  // heartbeat path (one strip).
+  const nowMinuteMs = ref(Date.now());
   function tick(): void {
-    nowMs.value = Date.now();
+    const now = Date.now();
+    nowMs.value = now;
+    if (Math.floor(now / 60_000) !== Math.floor(nowMinuteMs.value / 60_000)) {
+      nowMinuteMs.value = now;
+    }
   }
+
+  // Cards paused on a human (needs_input / needs_approval) in layout order —
+  // the toolbar attention chip's count and its jump-cycle list. Derived from
+  // `layout` (not the live overlays): a pause/resume re-buckets the card
+  // through the guarded load(), which replaces `layout.value` wholesale and
+  // re-evaluates this.
+  const attentionTasks = computed<string[]>(() =>
+    layout.value.lanes.flatMap((lane) =>
+      lane.tasks
+        .filter((task) => ATTENTION_STATUSES.has(task.frontmatter.status))
+        .map((task) => task.frontmatter.id),
+    ),
+  );
 
   // Reactive roster-change counter. A card's assignee persona resolves through
   // `callbacks.resolvePersona`, which reads the view's NON-reactive rosterAgents
@@ -368,7 +390,7 @@ export const useAgentBoardStore = defineStore('agent-board', () => {
   }
 
   return {
-    layout, liveHeartbeats, liveLedger, pauseState, skipReasons, invalidNotes, slots, queueState, nowMs, rosterVersion, loading, error,
+    layout, liveHeartbeats, liveLedger, pauseState, skipReasons, invalidNotes, slots, queueState, nowMs, nowMinuteMs, attentionTasks, rosterVersion, loading, error,
     init, load, refreshToolbar, tick, bumpRoster, recordHeartbeat, recordLedger, evictLive, setPause, clearPause, setSkip, clearSkip,
   };
 });
