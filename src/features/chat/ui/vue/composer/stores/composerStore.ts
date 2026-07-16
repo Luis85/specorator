@@ -37,6 +37,7 @@ export interface ComposerServiceTierState { active: boolean; activeValue: string
 
 export interface ComposerPermissionState {
   visible: boolean; label: string; active: boolean; planActive: boolean; switchVisible: boolean;
+  activeValue: string; inactiveValue: string;
 }
 export interface ComposerPlanModeState { visible: boolean; active: boolean; }
 

@@ -247,6 +247,7 @@ function buildPermissionState(
     visible: true,
     label: inPlan ? (permConfig.planLabel ?? '') : (active ? permConfig.activeLabel : permConfig.inactiveLabel),
     active, planActive: inPlan, switchVisible: !inPlan,
+    activeValue: permConfig.activeValue, inactiveValue: permConfig.inactiveValue,
   };
 }
 

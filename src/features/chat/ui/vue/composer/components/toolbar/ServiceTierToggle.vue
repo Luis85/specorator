@@ -1,14 +1,13 @@
 <script setup lang="ts">
-import { setIcon } from 'obsidian';
-import { inject, onMounted, ref } from 'vue';
+import { inject } from 'vue';
 
 import { CALLBACKS_KEY } from '../../composerKeys';
 import { useComposerStore } from '../../stores/composerStore';
+import { useToolbarIcon } from './useToolbarIcon';
 
 const store = useComposerStore();
 const cb = inject(CALLBACKS_KEY);
-const iconEl = ref<HTMLElement | null>(null);
-onMounted(() => { if (iconEl.value) setIcon(iconEl.value, 'zap'); });
+const iconEl = useToolbarIcon('zap');
 function toggle(): void {
   const t = store.toolbar.serviceTier;
   if (!t) return;
