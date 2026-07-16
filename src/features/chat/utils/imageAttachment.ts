@@ -15,6 +15,17 @@ import { openImageModal } from '../ui/imageModal';
  */
 
 /**
+ * Formats an attachment byte size for a chip label (B / KB / MB, one decimal).
+ * Single source shared by the composer chip projection and the imperative
+ * image-preview widget so both render identical size text.
+ */
+export function formatImageSize(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+/**
  * Returns the best `<img src>` for an attachment: the vault resource path when
  * the referenced file exists, the base64 data URI otherwise, or null when
  * neither is usable. Vault file is preferred over the inline base64 blob.

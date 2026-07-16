@@ -51,6 +51,20 @@ export interface ComposerCallbacks {
   onRemoveExternalContext: (path: string) => void;
   onToggleExternalContextPersistence: (path: string) => void;
 
+  // Chip removal + open (Phase 3). `onRemoveChip` `key` is a vault path for
+  // 'current'/'file'/'folder', the image id for 'image'. Removing 'current'
+  // clears the tracked current-note path so `shouldSendCurrentNote()` stops
+  // re-attaching it next turn.
+  onRemoveChip: (key: string, kind: 'current' | 'file' | 'folder' | 'image') => void;
+  /** Open the full-size preview for an image chip (by attachment id) — mirrors the
+   *  imperative thumbnail click → showFullImage → openImageModal. */
+  onOpenImage: (id: string) => void;
+  /** Open a current/file/folder chip's path in a new tab. */
+  onOpenFile: (path: string) => void;
+  /** Open an agent-edited file — RE-RESOLVES the created/edited path at click
+   *  time (a file deleted after listing surfaces a Notice). */
+  onOpenEditedFile: (path: string) => void;
+
   // Element-handle registration (Vue owns the node; the engine keeps the handle).
   registerInputContainer: (el: HTMLElement) => void;
   registerNavRow: (el: HTMLElement) => void;

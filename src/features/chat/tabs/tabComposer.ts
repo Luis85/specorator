@@ -16,6 +16,9 @@ import type {
   ComposerDropdownState,
   ComposerEditedFile,
   ComposerExternalContextState,
+  ComposerFileChip,
+  ComposerFolderChip,
+  ComposerImageChip,
   ComposerInputMode,
   ComposerMcpState,
   ComposerModelGroup,
@@ -29,12 +32,13 @@ import type {
   ComposerUsageState,
   ComposerWrapperMode,
 } from '../ui/vue/composer/stores/composerStore';
+import { formatImageSize, resolveImageAttachmentSrc } from '../utils/imageAttachment';
+import { basename, parentDir } from '../utils/pathLabel';
 import { getBlankTabModelOptions } from './tabModelPolicy';
 import { getProviderMcpManager, getTabCapabilities, getTabChatUIConfig, getTabPermissionMode } from './tabShared';
 import { getComposerToolbarSettings } from './tabUi';
 import type { TabData } from './types';
 
-const EMPTY_CHIPS: ComposerChips = { currentNote: null, files: [], folders: [], images: [] };
 const EMPTY_DROPDOWN: ComposerDropdownState = { kind: null, items: [], activeIndex: 0, anchorRect: null };
 
 /**
@@ -148,8 +152,43 @@ export class TabComposerProjection {
 
   // --- Deferred slices (return empties until their phase fills them) ---------
 
-  private buildChips(): ComposerChips { return EMPTY_CHIPS; }
-  private buildEditedFiles(): ComposerEditedFile[] { return []; }
+  // The current note is projected as its OWN `currentNote` field and de-duped OUT
+  // of `files` (mirrors FileChipsView). Images are keyed by generated `id`
+  // (Map<id, …>) and `ImageAttachment.path` is optional (stamped on send), so an
+  // image chip carries `id` and is removable ONLY by id — never by path.
+  private buildChips(): ComposerChips {
+    const fc = this.tab.ui.fileContextManager;
+    const currentPath = fc?.getCurrentNotePath() ?? null;
+    const currentNote: ComposerFileChip | null = currentPath
+      ? { path: currentPath, label: basename(currentPath), kind: 'current' }
+      : null;
+    const files: ComposerFileChip[] = [];
+    for (const p of fc?.getAttachedFiles() ?? new Set<string>()) {
+      if (p === currentPath) continue; // the current note renders once, as currentNote
+      files.push({ path: p, label: basename(p), kind: 'file' });
+    }
+    const folders: ComposerFolderChip[] = [];
+    for (const p of fc?.getAttachedFolders() ?? new Set<string>()) {
+      folders.push({ path: p, label: `${basename(p)}/` });
+    }
+    const images: ComposerImageChip[] = (this.tab.ui.imageContextManager?.getAttachedImages() ?? []).map((img) => ({
+      id: img.id,
+      name: img.name,
+      sizeLabel: formatImageSize(img.size),
+      src: resolveImageAttachmentSrc(this.plugin.app, img) ?? `data:${img.mediaType};base64,${img.data}`,
+    }));
+    return { currentNote, files, folders, images };
+  }
+
+  private buildEditedFiles(): ComposerEditedFile[] {
+    return (this.tab.state.editedFiles ?? []).map((e) => ({
+      path: e.path,
+      changeKind: e.changeKind,
+      name: basename(e.path),
+      dir: parentDir(e.path),
+    }));
+  }
+
   private buildDropdown(): ComposerDropdownState { return EMPTY_DROPDOWN; }
 }
 

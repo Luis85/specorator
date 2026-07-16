@@ -130,6 +130,28 @@ export class FileContextManager {
     return this.state.getAttachedFiles();
   }
 
+  /** Removes an attached-file pill (Vue chip remove). */
+  detachFilePill(path: string): void {
+    this.state.detachFile(path);
+    this.refreshChips();
+  }
+
+  /** Removes an attached-folder pill (Vue chip remove). */
+  detachFolderPill(path: string): void {
+    this.state.detachFolder(path);
+    this.refreshChips();
+  }
+
+  // Removing the current-note pill must clear the tracked path (and detach it
+  // from state, since the active note is also an attached file), else
+  // `shouldSendCurrentNote()` keeps attaching it to the next turn. Mirrors the
+  // imperative FileChipsView `onRemove(path, 'current')` handler.
+  clearCurrentNotePill(): void {
+    if (this.currentNotePath) this.state.detachFile(this.currentNotePath);
+    this.currentNotePath = null;
+    this.refreshChips();
+  }
+
   setAttachedFiles(files: string[]): void {
     this.state.setAttachedFiles(files);
     this.refreshChips();

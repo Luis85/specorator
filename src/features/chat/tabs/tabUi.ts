@@ -55,6 +55,16 @@ function initializeContextManagers(tab: TabData, plugin: SpecoratorPlugin): void
   const { dom } = tab;
   const app = plugin.app;
 
+  // Chip/image mutations happen through the engine (mention selection, drop,
+  // paste); re-project so the Vue composer's chip slice stays live.
+  const onContextChanged = (): void => {
+    tab.controllers.selectionController?.updateContextRowVisibility();
+    tab.controllers.browserSelectionController?.updateContextRowVisibility();
+    tab.controllers.canvasSelectionController?.updateContextRowVisibility();
+    autoResizeTextarea(dom.inputEl);
+    tab.composer?.emit();
+  };
+
   // File context manager - chips in contextRowEl, dropdown in inputContainerEl
   tab.ui.fileContextManager = new FileContextManager(
     app,
@@ -62,12 +72,7 @@ function initializeContextManagers(tab: TabData, plugin: SpecoratorPlugin): void
     dom.inputEl,
     {
       getExcludedTags: () => plugin.settings.excludedTags,
-      onChipsChanged: () => {
-        tab.controllers.selectionController?.updateContextRowVisibility();
-        tab.controllers.browserSelectionController?.updateContextRowVisibility();
-        tab.controllers.canvasSelectionController?.updateContextRowVisibility();
-        autoResizeTextarea(dom.inputEl);
-      },
+      onChipsChanged: onContextChanged,
       getExternalContexts: () => tab.ui.externalContextSelector?.getExternalContexts() || [],
     },
     dom.inputContainerEl
@@ -78,14 +83,7 @@ function initializeContextManagers(tab: TabData, plugin: SpecoratorPlugin): void
   tab.ui.imageContextManager = new ImageContextManager(
     dom.inputContainerEl,
     dom.inputEl,
-    {
-      onImagesChanged: () => {
-        tab.controllers.selectionController?.updateContextRowVisibility();
-        tab.controllers.browserSelectionController?.updateContextRowVisibility();
-        tab.controllers.canvasSelectionController?.updateContextRowVisibility();
-        autoResizeTextarea(dom.inputEl);
-      },
-    },
+    { onImagesChanged: onContextChanged },
     dom.contextRowEl
   );
 
@@ -513,6 +511,7 @@ export function initializeTabUI(
     onEditedFilesChanged: (files) => {
       tab.ui.editedFilesView?.render(files);
       autoResizeTextarea(dom.inputEl);
+      tab.composer?.emit();
     },
   };
   tab.ui.editedFilesView.render(state.editedFiles);
@@ -527,7 +526,7 @@ export function initializeTabUI(
 
 // Opens a file from the agent-edited-files strip. Re-resolves at click time so a
 // file deleted after it was listed surfaces a Notice instead of opening nothing.
-function openEditedFile(app: App, rawPath: string): void {
+export function openEditedFile(app: App, rawPath: string): void {
   const openPath = resolveOpenableVaultPath(app, rawPath);
   if (!openPath) {
     new Notice(t('chat.fileOpen.notFound', { path: rawPath }));

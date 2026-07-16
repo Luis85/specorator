@@ -6,7 +6,7 @@ import type { ComposerCallbacks } from '../ui/vue/composer/composerCallbacks';
 import { mountComposer } from '../ui/vue/composer/mountComposer';
 import { TabComposerProjection } from './tabComposer';
 import type { ProviderCatalogInfo } from './tabShared';
-import { buildToolbarActionCallbacks } from './tabUi';
+import { buildToolbarActionCallbacks, openEditedFile } from './tabUi';
 import type { TabData } from './types';
 
 /**
@@ -73,6 +73,17 @@ export function mountTabComposer(
     onAddExternalContext: () => { void tab.ui.externalContextSelector?.openFolderPicker(); },
     onRemoveExternalContext: (path) => { tab.ui.externalContextSelector?.removePath(path); },
     onToggleExternalContextPersistence: (path) => { tab.ui.externalContextSelector?.togglePersistence(path); },
+    onRemoveChip: (key, kind) => {
+      const fc = tab.ui.fileContextManager;
+      if (kind === 'image') tab.ui.imageContextManager?.removeImageById(key);
+      else if (kind === 'folder') fc?.detachFolderPill(key);
+      else if (kind === 'current') fc?.clearCurrentNotePill();
+      else fc?.detachFilePill(key);
+      tab.composer?.emit();
+    },
+    onOpenImage: (id) => { tab.ui.imageContextManager?.openImageById(id); },
+    onOpenFile: (path) => { void plugin.app.workspace.openLinkText(path, '', 'tab'); },
+    onOpenEditedFile: (path) => { openEditedFile(plugin.app, path); },
     registerInputContainer: (el) => { tab.dom.inputContainerEl = el; },
     registerNavRow: (el) => { tab.dom.navRowEl = el; },
     registerInputWrapper: (el) => { tab.dom.inputWrapper = el; },

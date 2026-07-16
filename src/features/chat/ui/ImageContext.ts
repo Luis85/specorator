@@ -3,6 +3,7 @@ import * as path from 'path';
 
 import type { ImageAttachment, ImageMediaType } from '../../../core/types';
 import { t } from '../../../i18n/i18n';
+import { formatImageSize } from '../utils/imageAttachment';
 import { openImageModal } from './imageModal';
 
 const MAX_IMAGE_SIZE = 5 * 1024 * 1024;
@@ -64,6 +65,20 @@ export class ImageContextManager {
 
   hasImages(): boolean {
     return this.attachedImages.size > 0;
+  }
+
+  /** Removes an image attachment by its generated id (Vue chip remove). */
+  removeImageById(id: string): void {
+    if (this.attachedImages.delete(id)) {
+      this.updateImagePreview();
+      this.callbacks.onImagesChanged();
+    }
+  }
+
+  /** Opens the full-size preview for an attachment — reuses the existing modal opener. */
+  openImageById(id: string): void {
+    const image = this.attachedImages.get(id);
+    if (image) this.showFullImage(image);
   }
 
   clearImages() {
@@ -247,9 +262,7 @@ export class ImageContextManager {
   }
 
   private formatSize(bytes: number): string {
-    if (bytes < 1024) return `${bytes} B`;
-    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
-    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+    return formatImageSize(bytes);
   }
 
   private notifyImageError(message: string, error?: unknown) {

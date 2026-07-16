@@ -31,6 +31,7 @@ function makeCallbacks(): { callbacks: ComposerCallbacks; registered: Record<str
     onSetThinkingBudget: () => {}, onSetServiceTier: () => {}, onSetPermission: () => {},
     onTogglePlanMode: () => {}, onToggleMcpServer: () => {}, onAddExternalContext: () => {},
     onRemoveExternalContext: () => {}, onToggleExternalContextPersistence: () => {},
+    onRemoveChip: () => {}, onOpenImage: () => {}, onOpenFile: () => {}, onOpenEditedFile: () => {},
     registerInputContainer: (el) => { registered.container = el; },
     registerNavRow: (el) => { registered.navRow = el; },
     registerInputWrapper: (el) => { registered.wrapper = el; },
