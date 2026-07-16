@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, inject, onMounted, ref, watch } from 'vue';
 
+import { t } from '../../../../../../i18n/i18n';
 import { mountIcon } from '../../mountIcon';
 import { CALLBACKS_KEY, COMPONENT_KEY } from '../composerKeys';
 import { useComposerStore } from '../stores/composerStore';
@@ -67,6 +68,7 @@ onMounted(() => {
         role="button"
         tabindex="0"
         aria-haspopup="menu"
+        :aria-label="t('chat.editedFiles.label')"
         :aria-expanded="open"
         @click="open = !open"
         @keydown.enter.prevent="open = !open"
@@ -107,7 +109,10 @@ onMounted(() => {
             class="specorator-edited-files-item-name"
             :title="entry.path"
           >{{ entry.name }}</span>
-          <span class="specorator-edited-files-item-dir">{{ entry.dir }}</span>
+          <span
+            v-if="entry.dir"
+            class="specorator-edited-files-item-dir"
+          >{{ entry.dir }}</span>
         </div>
       </div>
     </div>

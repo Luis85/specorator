@@ -153,7 +153,9 @@ describe('ImageChips.vue', () => {
     expect(cb.onOpenImage).toHaveBeenCalledWith('img-1');
   });
 
-  it('the remove × fires onRemoveChip(id, "image") and NOT onOpenImage (click.stop)', async () => {
+  // onOpenImage stays unfired because the remove × is a SIBLING of the thumbnail
+  // (not nested inside it); the @click.stop is defensive parity only.
+  it('the remove × fires onRemoveChip(id, "image") and NOT onOpenImage', async () => {
     const cb = stubCallbacks();
     const { wrapper, store } = mountChips(ImageChips, cb);
     store.setChips({ ...CHIPS, currentNote: null, files: [], folders: [] });

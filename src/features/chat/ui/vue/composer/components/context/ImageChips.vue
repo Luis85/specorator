@@ -34,7 +34,10 @@ const images = computed(() => store.chips.images);
         >{{ img.name }}</span>
         <span class="specorator-image-size">{{ img.sizeLabel }}</span>
       </span>
-      <!-- .stop so removing does NOT also fire the thumbnail's open-preview click. -->
+      <!-- Remove is a SIBLING of the thumbnail (both direct children of the
+           handler-less .specorator-image-chip), so .stop is a defensive no-op —
+           kept for parity with the old view's stopPropagation, not what prevents
+           the open. -->
       <span
         class="specorator-image-remove"
         aria-label="Remove image"

@@ -59,7 +59,7 @@ export interface ComposerCallbacks {
   /** Open the full-size preview for an image chip (by attachment id) — mirrors the
    *  imperative thumbnail click → showFullImage → openImageModal. */
   onOpenImage: (id: string) => void;
-  /** Open a current/file/folder chip's path in a new tab. */
+  /** Open a current/file chip's path in a new tab (folders are non-openable). */
   onOpenFile: (path: string) => void;
   /** Open an agent-edited file — RE-RESOLVES the created/edited path at click
    *  time (a file deleted after listing surfaces a Notice). */

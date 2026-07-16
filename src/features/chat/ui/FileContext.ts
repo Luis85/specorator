@@ -111,8 +111,7 @@ export class FileContextManager {
 
   // Removing the current-note pill must clear the tracked path (and detach it
   // from state, since the active note is also an attached file), else
-  // `shouldSendCurrentNote()` keeps attaching it to the next turn. Mirrors the
-  // imperative FileChipsView `onRemove(path, 'current')` handler.
+  // `shouldSendCurrentNote()` keeps attaching it to the next turn.
   clearCurrentNotePill(): void {
     if (this.currentNotePath) this.state.detachFile(this.currentNotePath);
     this.currentNotePath = null;

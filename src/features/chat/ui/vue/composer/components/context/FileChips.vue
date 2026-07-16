@@ -10,11 +10,11 @@ type Pill = { path: string; label: string; kind: 'current' | 'file' | 'folder' }
 const store = useComposerStore();
 const cb = inject(CALLBACKS_KEY);
 // One flat pill list: current note first, then attached files, then folders.
-// All pills are removable; only current/file names open on click (folders are
-// non-openable — matching the imperative FileChipsView, since openLinkText on a
-// folder path would create a stray note). Removing 'current' clears the tracked
-// current-note path (engine); files/folders detach their pill. The store slice
-// already de-dupes the current note out of `files`.
+// All pills are removable; only current/file names open on click. Folders are
+// non-openable because `openLinkText` on a folder path would create a stray
+// note. Removing 'current' clears the tracked current-note path (engine);
+// files/folders detach their pill. The store slice already de-dupes the current
+// note out of `files`.
 const pills = computed<Pill[]>(() => {
   const out: Pill[] = [];
   const c = store.chips.currentNote;
@@ -24,9 +24,8 @@ const pills = computed<Pill[]>(() => {
   return out;
 });
 
-// Icon ids match the imperative FileChipsView exactly: folders get `folder`,
-// current + file both get `file-text`. Painted through mountIcon (nodeType
-// guard) so popout leaves stay safe.
+// Icon ids: folders get `folder`, current + file both get `file-text`. Painted
+// through mountIcon (nodeType guard) so popout leaves stay safe.
 function paintIcon(el: HTMLElement | null, kind: string): void {
   mountIcon(el, kind === 'folder' ? 'folder' : 'file-text');
 }
