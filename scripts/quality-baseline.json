@@ -1,15 +1,15 @@
 {
-  "description": "Fallow quality baseline. Counters may shrink but not grow; averageMaintainability may rise but not drop. Regenerate with `npm run check:quality -- --update` (commit the diff in the same PR that moves the metric). 2026-07-16 (composer island, sub-project 3): cloneGroups 38->39 and duplicatedLines 961->990 — the new composer island seam (composerCallbacks.ts / tabs/tabComposer.ts / useComposerEventRouting.ts) intentionally mirrors the already-shipped transcript island's callbacks/projection/event-routing scaffolding (transcriptCallbacks / tabTranscript / useTranscriptEventRouting), so fallow scores the parallel structure as duplication. This is intermediate-build state; Task 19 of the composer plan re-locks the ratchets (net shrink expected once the imperative ui/toolbar/* + InputToolbar + FileContext/ImageContext view layers are deleted). Cross-island seam extraction is tracked as future work, not in this sub-project's scope. 2026-07-16 (Task 3): cloneGroups 39->40 and duplicatedLines 990->1002 — mountComposer.ts's Vue-island bootstrap (createApp + app.use(pinia) + the four app.provide(...) lines) mirrors mountTranscript.ts's identical bootstrap; same intermediate island-seam mirroring, Task 19 re-locks.",
+  "description": "Fallow quality baseline. Counters may shrink but not grow; averageMaintainability may rise but not drop. Regenerate with `npm run check:quality -- --update` (commit the diff in the same PR that moves the metric). 2026-07-16 (composer Vue migration, ADR 0005 sub-project 3, Task 19 re-lock): net shrink to cloneGroups 39, duplicatedLines 994, complexFunctions 246, averageMaintainability 90.2 — the intermediate island-seam mirroring that temporarily raised these during the build (composerCallbacks/tabComposer/useComposerEventRouting/mountComposer paralleling the transcript island) was reclaimed once the imperative InputToolbar, ui/toolbar/* pure-render widgets, FileChipsView, EditedFilesView, and the ResumeSessionDropdown DOM render were deleted.",
   "fallowVersion": "2.91.0",
   "metrics": {
     "deadCodeIssues": 0,
     "circularDependencies": 0,
     "reExportCycles": 0,
     "boundaryViolations": 0,
-    "cloneGroups": 40,
-    "duplicatedLines": 1002,
-    "complexFunctions": 247,
+    "cloneGroups": 39,
+    "duplicatedLines": 994,
+    "complexFunctions": 246,
     "criticalComplexity": 5,
-    "averageMaintainability": 90.1
+    "averageMaintainability": 90.2
   }
 }
