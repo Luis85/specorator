@@ -1755,12 +1755,17 @@ and the delegators:
       tab.ui.mcpServerSelector?.setEnabledServers([...next]);
       tab.composer?.emit();
     },
-    onAddExternalContext: () => { /* Phase 2: open the folder picker as the imperative icon did */ tab.ui.externalContextSelector?.promptAddExternalContext?.(); tab.composer?.emit(); },
-    onRemoveExternalContext: (path) => { tab.ui.externalContextSelector?.removePath(path); tab.composer?.emit(); },
-    onToggleExternalContextPersistence: (path) => { tab.ui.externalContextSelector?.togglePersistence(path); tab.composer?.emit(); },
+    // External-context re-projection is driven by ExternalContextSelector's
+    // `onChange` (Step 5), NOT synchronously here: `openFolderPicker()` is ASYNC
+    // (`await remote.dialog.showOpenDialog`) and appends + fires onChange only
+    // AFTER the dialog resolves; remove + persistence also route through onChange.
+    // A synchronous `tab.composer?.emit()` here would project the OLD list.
+    onAddExternalContext: () => { void tab.ui.externalContextSelector?.openFolderPicker(); },
+    onRemoveExternalContext: (path) => { tab.ui.externalContextSelector?.removePath(path); },
+    onToggleExternalContextPersistence: (path) => { tab.ui.externalContextSelector?.togglePersistence(path); },
 ```
 
-Import `buildToolbarActionCallbacks` from `./tabUi`. (If `ExternalContextSelector` has no public folder-picker entry point, the imperative icon-click opened an Electron folder picker inside the widget; for the Vue path, extract that picker into a public `promptAddExternalContext(): Promise<void>` on `ExternalContextSelector` in this step, and call it — it stays the single source of the picker logic.)
+Import `buildToolbarActionCallbacks` from `./tabUi`. `ExternalContextSelector.openFolderPicker()` is the existing ASYNC picker entry point (`await remote.dialog.showOpenDialog`); the Vue path fires it and the widget's `onChange` (wired in Step 5) drives the re-projection once it resolves. If the picker is not already a public method, expose it as `openFolderPicker(): Promise<void>` (single source of the picker logic).
 
 - [ ] **Step 5: Emit on every imperative toolbar repaint**
 
@@ -1772,11 +1777,15 @@ In `src/features/chat/tabs/tabShared.ts`, at the END of `refreshTabProviderUI`, 
 
 Also add `tab.composer?.emit();` to the `onUsageChanged` callback in `tabUi.ts` (`initializeTabUI`'s `state.callbacks.onUsageChanged`, after `tab.ui.contextUsageMeter?.update(usage)`). This keeps the projected toolbar slice live for the (still-imperative in Phase 2) widgets — a no-op for rendering until the cutover, but it makes the store correct and the projection testable now.
 
+**External-context list is re-projected from the selector's `onChange` (async-safe).** In `tabUi.ts`'s `initializeInputToolbar`, the existing `tab.ui.externalContextSelector.setOnChange(() => { tab.ui.fileContextManager?.preScanExternalContexts(); })` fires AFTER `openFolderPicker()` resolves and on every remove/persistence change — add `tab.composer?.emit();` inside it so the projected `toolbar.externalContext` list updates when the real change lands, never before. (Also add `tab.composer?.emit();` to the `setOnPersistenceChange` handler so the lock state re-projects on a persistence toggle.) This is the ONLY driver for the external-context slice — the Vue delegators (Step 4) never emit synchronously.
+
 **Wrapper-mode classes stay store-owned.** Phase 1 Task 5b already removed every imperative wrapper-class toggle and gave Vue's `:class` binding sole ownership (projected by `buildWrapperMode`). When you move the `onPermissionModeChange` handler into `buildToolbarActionCallbacks` (Step 1), confirm it does NOT re-introduce a `dom.inputWrapper.toggleClass('specorator-input-plan-mode', ...)` line — it must only mutate settings + `tab.composer?.emit()`. Re-grep the three `specorator-input-*-mode` class strings to confirm zero imperative writes remain.
 
 - [ ] **Step 6: Write the projection test**
 
 `tests/vue/chat/composer/toolbarProjection.test.ts` — construct a `TabComposerProjection` over a stub `tab` whose `getComposerToolbarSettings`/capabilities/uiConfig produce a known model list, mode config, reasoning options, permission toggle, and usage; assert `snapshot.toolbar.modelLabel`, `.mode` (null when options ≠ 2), `.reasoning.budget` (non-null) + `.reasoning.effort` (non-null for an adaptive-model stub, null for a non-adaptive stub), `.permission.planActive`, `.planMode.visible`, `.mcp.visible`, `.usage.warning`. (Follow the `tabComposer.test.ts` stub pattern; mock the `tabShared`/`tabUi` helpers via `vi.mock` to return deterministic config.)
+
+**Async external-context timing test:** subscribe an observer to the projection; give the stub `externalContextSelector` a fake `openFolderPicker()` that appends a path to its list and fires its `onChange` on a resolved microtask (not synchronously); wire that `onChange` to `projection.emit()` (mirroring the Step 5 wiring). Assert that invoking `onAddExternalContext` does NOT include the new path in the snapshot emitted synchronously, and that AFTER the picker's promise resolves the next emitted snapshot's `toolbar.externalContext.items` DOES include it (same channel covers remove + persistence toggle — flip `persistent` via a fake `togglePersistence` firing `onChange`).
 
 - [ ] **Step 7: Run + commit**
 
@@ -2288,9 +2297,9 @@ EOF
 
 **Files:**
 - Modify: `src/features/chat/tabs/tabComposer.ts` (`buildChips`, `buildEditedFiles`)
-- Modify: `src/features/chat/ui/vue/composer/composerCallbacks.ts` (add `onRemoveChip`, `onOpenFile`, `onOpenEditedFile`)
+- Modify: `src/features/chat/ui/vue/composer/composerCallbacks.ts` (add `onRemoveChip`, `onOpenFile`, `onOpenEditedFile`, `onOpenImage`)
 - Modify: `src/features/chat/ui/FileContext.ts` (add public `detachFilePill(path)`, `detachFolderPill(path)`, `clearCurrentNotePill()`)
-- Modify: `src/features/chat/ui/ImageContext.ts` (add public `removeImageById(id)`)
+- Modify: `src/features/chat/ui/ImageContext.ts` (add public `removeImageById(id)`, `openImageById(id)`)
 - Modify: `src/features/chat/tabs/tabComposerMount.ts` (wire chip/edited callbacks)
 - Modify: `src/features/chat/tabs/tabUi.ts` (emit on `onChipsChanged`/`onImagesChanged`/`onEditedFilesChanged`)
 - Test: `tests/vue/chat/composer/chipsProjection.test.ts`
@@ -2344,6 +2353,9 @@ Add `ComposerFileChip`, `ComposerFolderChip`, `ComposerImageChip` to the `compos
    *  id for 'image'. Removing 'current' clears FileContextState.currentNotePath so
    *  `shouldSendCurrentNote()` stops sending it. */
   onRemoveChip: (key: string, kind: 'current' | 'file' | 'folder' | 'image') => void;
+  /** Open the full-size preview for an image chip (by attachment id) — mirrors the
+   *  imperative thumbnail click → showFullImage → openImageModal. */
+  onOpenImage: (id: string) => void;
   /** Open a current/file/folder chip's path in a new tab. */
   onOpenFile: (path: string) => void;
   /** Open an agent-edited file — RE-RESOLVES the created/edited path at click time
@@ -2368,6 +2380,13 @@ Add `ComposerFileChip`, `ComposerFolderChip`, `ComposerImageChip` to the `compos
   removeImageById(id: string): void {
     if (this.attachedImages.delete(id)) { this.updateImagePreview(); this.callbacks.onImagesChanged(); }
   }
+  // Opens the full-size preview — reuses the EXISTING modal opener (showFullImage →
+  // openImageModal), which is RETAINED in Task 12 (only the preview-thumbnail DOM
+  // rendering is deleted). Verify the exact private method name in ImageContext.ts.
+  openImageById(id: string): void {
+    const image = this.attachedImages.get(id);
+    if (image) this.showFullImage(image);
+  }
 ```
 
 - [ ] **Step 4: Wire callbacks + emit** in `tabComposerMount.ts` (reuse the re-resolving `openEditedFile` helper from `tabUi.ts` — export it):
@@ -2381,6 +2400,7 @@ Add `ComposerFileChip`, `ComposerFolderChip`, `ComposerImageChip` to the `compos
       else fc?.detachFilePill(key);
       tab.composer?.emit();
     },
+    onOpenImage: (id) => { tab.ui.imageContextManager?.openImageById(id); },
     onOpenFile: (path) => { void plugin.app.workspace.openLinkText(path, '', 'tab'); },
     onOpenEditedFile: (path) => { openEditedFile(plugin.app, path); },
 ```
@@ -2466,12 +2486,13 @@ const images = computed(() => store.chips.images);
 <template>
   <div class="specorator-image-preview" :class="{ 'specorator-visible-flex': images.length > 0, 'specorator-hidden': images.length === 0 }">
     <div v-for="img in images" :key="img.id" class="specorator-image-chip">
-      <span class="specorator-image-thumb"><img :src="img.src" :alt="img.name"></span>
+      <span class="specorator-image-thumb" role="button" @click="cb?.onOpenImage(img.id)"><img :src="img.src" :alt="img.name"></span>
       <span class="specorator-image-info">
         <span class="specorator-image-name" :title="img.name">{{ img.name }}</span>
         <span class="specorator-image-size">{{ img.sizeLabel }}</span>
       </span>
-      <span class="specorator-image-remove" aria-label="Remove image" @click="cb?.onRemoveChip(img.id, 'image')">×</span>
+      <!-- .stop so removing does NOT also fire the thumbnail's open-preview click. -->
+      <span class="specorator-image-remove" aria-label="Remove image" @click.stop="cb?.onRemoveChip(img.id, 'image')">×</span>
     </div>
   </div>
 </template>
@@ -2491,11 +2512,11 @@ const images = computed(() => store.chips.images);
 
 (Keep the `CONTEXT_ROW_KEY` registration script from Phase 1 unchanged; add the `ImageChips`/`FileChips` imports.)
 
-- [ ] **Step 4: Delete imperative chip rendering** — in `FileContext.ts` remove the `FileChipsView` construction + `refreshChips` DOM calls (keep `state` + `refreshChips`'s `onChipsChanged` fire; it now only emits). In `ImageContext.ts` remove `previewContainerEl.createDiv('specorator-image-preview')` + `updateImagePreview`'s DOM building (keep the `Map` + `onImagesChanged` fire). Delete `src/features/chat/ui/file-context/view/FileChipsView.ts`. The managers become state + mention-dropdown owners only.
+- [ ] **Step 4: Delete imperative chip rendering** — in `FileContext.ts` remove the `FileChipsView` construction + `refreshChips` DOM calls (keep `state` + `refreshChips`'s `onChipsChanged` fire; it now only emits). In `ImageContext.ts` remove `renderImagePreview()`/`updateImagePreview`'s thumbnail DOM building + the `previewContainerEl.createDiv('specorator-image-preview')` (keep the `Map` + `onImagesChanged` fire). **RETAIN `showFullImage`/`openImageModal`** — the full-size preview opener is still used by `openImageById` (Task 11) for the Vue thumbnail click; only the preview-STRIP rendering is deleted. Delete `src/features/chat/ui/file-context/view/FileChipsView.ts`. The managers become state + mention-dropdown + image-modal owners only.
 
 > `FileChipsView` also owned the open path; that is now `onOpenFile`. Verify no other caller of `FileChipsView`.
 
-- [ ] **Step 5: Test + commit** — mount `FileChips`/`ImageChips` over stub slices; assert: the current note renders as a `.specorator-file-chip--current` pill alongside files/folders; `.specorator-visible-flex` toggles with the pill/image count; clicking a pill fires `onOpenFile(path)`; the remove × fires `onRemoveChip(path, kind)` — and removing the current pill fires `onRemoveChip(currentPath, 'current')`; image remove fires `onRemoveChip(img.id, 'image')`. Commit.
+- [ ] **Step 5: Test + commit** — mount `FileChips`/`ImageChips` over stub slices; assert: the current note renders as a `.specorator-file-chip--current` pill alongside files/folders; `.specorator-visible-flex` toggles with the pill/image count; clicking a pill fires `onOpenFile(path)`; the remove × fires `onRemoveChip(path, kind)` — and removing the current pill fires `onRemoveChip(currentPath, 'current')`. For images: clicking the `.specorator-image-thumb` fires `onOpenImage(img.id)` (click-to-open preserved); the remove × fires `onRemoveChip(img.id, 'image')` and — because of `@click.stop` — does NOT also fire `onOpenImage` (no double-fire). Commit.
 
 ```bash
 git add -A && git commit -m "$(cat <<'EOF'
