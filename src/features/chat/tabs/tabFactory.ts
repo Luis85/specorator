@@ -160,15 +160,12 @@ function buildTabDOM(contentEl: HTMLElement): TabDOMElements {
   // consumer reads them before the mount registers the real Vue nodes.
   const composerHostEl = contentEl.createDiv({ cls: 'specorator-composer-host' });
 
-  // The composer textarea is created detached here (so InputController/history
-  // restore/seedComposerDraft keep a stable engine-owned node) and appended into
-  // the Vue `ComposerTextarea` host on mount (registerTextareaHost). Phase 4
-  // moves its rendering into Vue and deletes this line.
+  // Detached placeholder overwritten by registerInputEl on mount, before any
+  // consumer reads it. ComposerTextarea.vue renders the real `<textarea>` (with
+  // its class/dir/rows/placeholder) and hands the raw node back; this bare node
+  // only satisfies the non-null `HTMLTextAreaElement` type between `createTab`
+  // and mount, and is GC'd once the register repoints `tab.dom.inputEl`.
   const inputEl = contentEl.ownerDocument.createElement('textarea');
-  inputEl.className = 'specorator-input';
-  inputEl.setAttribute('placeholder', 'How can i help you today?');
-  inputEl.setAttribute('rows', '3');
-  inputEl.setAttribute('dir', 'auto');
 
   return {
     contentEl,

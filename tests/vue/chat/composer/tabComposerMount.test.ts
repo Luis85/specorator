@@ -1,12 +1,12 @@
 import '@/providers';
 
 import { flushPromises } from '@vue/test-utils';
-import { App, Component } from 'obsidian';
+import { Component } from 'obsidian';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { mountTabComposer } from '@/features/chat/tabs/tabComposerMount';
-import type { TabData } from '@/features/chat/tabs/types';
-import type SpecoratorPlugin from '@/main';
+
+import { makePlugin, makeTab } from './_kit';
 
 // The projection derives its wrapper-mode + toolbar slices from these; stub so
 // the mount needs no real provider wiring.
@@ -18,37 +18,10 @@ vi.mock('@/features/chat/tabs/tabShared', () => ({
   getProviderMcpManager: () => null,
 }));
 
-function makeTab(): TabData {
-  const doc = document;
-  const contentEl = doc.createElement('div');
-  doc.body.appendChild(contentEl);
-  const composerHostEl = contentEl.appendChild(doc.createElement('div'));
-  const inputEl = doc.createElement('textarea');
-  inputEl.className = 'specorator-input';
-  return {
-    dom: {
-      contentEl, composerHostEl,
-      inputContainerEl: composerHostEl, queueIndicatorEl: composerHostEl,
-      inputWrapper: composerHostEl, inputEl, navRowEl: composerHostEl,
-      contextRowEl: composerHostEl,
-      selectionIndicatorEl: null, browserIndicatorEl: null, canvasIndicatorEl: null,
-    },
-    state: { isStreaming: false, queueIndicatorEl: null },
-    ui: { instructionModeManager: null, bangBashModeManager: null },
-    controllers: { inputController: null },
-    composer: null,
-    mountedComposer: null,
-  } as unknown as TabData;
-}
-
-function makePlugin(): SpecoratorPlugin {
-  return { app: new App(), settings: {}, getActiveEnvironmentVariables: () => '' } as unknown as SpecoratorPlugin;
-}
-
 describe('mountTabComposer', () => {
   beforeEach(() => vi.clearAllMocks());
 
-  it('registers every element handle to tab.dom.* and hosts the engine textarea', async () => {
+  it('registers every element handle to tab.dom.*, including the Vue-rendered textarea', async () => {
     const tab = makeTab();
     mountTabComposer(tab, makePlugin(), new Component());
     await flushPromises();
@@ -72,9 +45,9 @@ describe('mountTabComposer', () => {
     expect(tab.dom.queueIndicatorEl).toBe(queueRow);
     expect(tab.state.queueIndicatorEl).toBe(queueRow);
 
-    // The engine textarea is hosted inside the Vue textarea host.
-    const host = container.querySelector('.specorator-vue-composer-textarea-host') as HTMLElement;
-    expect(host.querySelector('textarea.specorator-input')).toBe(tab.dom.inputEl);
+    // ComposerTextarea.vue renders the <textarea> directly (Phase 4 deleted the
+    // host div); its raw node is registered as tab.dom.inputEl.
+    expect(container.querySelector('textarea.specorator-input')).toBe(tab.dom.inputEl);
 
     tab.mountedComposer!.unmount();
   });

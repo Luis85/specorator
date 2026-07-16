@@ -13,7 +13,7 @@ function makePlugin(): SpecoratorPlugin {
 function makeCallbacks(): { callbacks: ComposerCallbacks; registered: Record<string, HTMLElement | null> } {
   const registered: Record<string, HTMLElement | null> = {
     container: null, navRow: null, wrapper: null, contextRow: null,
-    queueRow: null, textareaHost: null,
+    queueRow: null, inputEl: null,
     selectionIndicator: null, browserIndicator: null, canvasIndicator: null,
   };
   const callbacks: ComposerCallbacks = {
@@ -38,7 +38,7 @@ function makeCallbacks(): { callbacks: ComposerCallbacks; registered: Record<str
     registerInputWrapper: (el) => { registered.wrapper = el; },
     registerContextRow: (el) => { registered.contextRow = el; },
     registerQueueRow: (el) => { registered.queueRow = el; },
-    registerTextareaHost: (el) => { registered.textareaHost = el; },
+    registerInputEl: (el) => { registered.inputEl = el; },
     registerSelectionIndicator: (el) => { registered.selectionIndicator = el; },
     registerBrowserIndicator: (el) => { registered.browserIndicator = el; },
     registerCanvasIndicator: (el) => { registered.canvasIndicator = el; },
@@ -62,7 +62,7 @@ describe('mountComposer', () => {
     expect(registered.wrapper).toBe(container.querySelector('.specorator-input-wrapper'));
     expect(registered.contextRow).toBe(container.querySelector('.specorator-context-row'));
     expect(registered.queueRow).toBe(container.querySelector('.specorator-input-queue-row'));
-    expect(registered.textareaHost).toBe(container.querySelector('.specorator-vue-composer-textarea-host'));
+    expect(registered.inputEl).toBe(container.querySelector('textarea.specorator-input'));
     expect(registered.selectionIndicator).toBe(container.querySelector('.specorator-selection-indicator'));
     expect(registered.browserIndicator).toBe(container.querySelector('.specorator-browser-selection-indicator'));
     expect(registered.canvasIndicator).toBe(container.querySelector('.specorator-canvas-indicator'));

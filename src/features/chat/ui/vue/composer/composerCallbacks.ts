@@ -71,7 +71,10 @@ export interface ComposerCallbacks {
   registerInputWrapper: (el: HTMLElement) => void;
   registerContextRow: (el: HTMLElement) => void;
   registerQueueRow: (el: HTMLElement) => void;
-  registerTextareaHost: (el: HTMLElement) => void;
+  /** Vue renders the `<textarea>` (ComposerTextarea.vue) and hands the raw node
+   *  back; the engine owns its `.value`/caret/IME/placeholder/height forever
+   *  after — Vue never touches it again (no v-model, no reactive attrs). */
+  registerInputEl: (el: HTMLTextAreaElement) => void;
   // Selection-indicator hosts (Phase 3). Vue renders the three engine-driven
   // <div>s (SelectionIndicators.vue); the engine keeps the raw nodes so the
   // out-of-scope selection controllers mutate them directly.

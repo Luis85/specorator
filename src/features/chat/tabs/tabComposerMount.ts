@@ -25,9 +25,10 @@ export interface ComposerToolbarWiring {
 /**
  * Mounts the Vue composer island for one tab and wires the engine↔island seam.
  * Called by `TabManager` BETWEEN `createTab` and `initializeTabUI`, so the
- * element handles (container/navRow/wrapper/contextRow/queueRow/edited-files/
- * textarea-host) are registered to `tab.dom.*` before `initializeTabUI` builds
- * the context managers. The toolbar is now fully Vue (ComposerToolbar.vue).
+ * element handles (container/navRow/wrapper/contextRow/queueRow/inputEl) are
+ * registered to `tab.dom.*` before `initializeTabUI` builds the context
+ * managers. The toolbar and textarea are now fully Vue (ComposerToolbar.vue /
+ * ComposerTextarea.vue renders the `<textarea>` and hands back the raw node).
  *
  * Mirrors `initializeTabControllers`' transcript mount. The projection reads the
  * tab lazily at emit time, so it is safe to construct before the controllers.
@@ -108,9 +109,11 @@ export function mountTabComposer(
       tab.dom.queueIndicatorEl = el;
       tab.state.queueIndicatorEl = el;
     },
-    // Phase 1–3: host the engine-created textarea. Phase 4 deletes this and
-    // ComposerTextarea.vue registers INPUT_EL_KEY instead.
-    registerTextareaHost: (el) => { el.appendChild(tab.dom.inputEl); },
+    // Phase 4: ComposerTextarea.vue renders the `<textarea>` itself; re-point the
+    // engine at the Vue node. This runs (mount) BEFORE initializeTabUI /
+    // initializeTabControllers / wireTabInputEvents read tab.dom.inputEl, so the
+    // buildTabDOM placeholder is overwritten by the real node before any consumer.
+    registerInputEl: (el) => { tab.dom.inputEl = el; },
     // Phase 3: Vue renders the three engine-driven selection indicators; keep
     // the raw nodes so buildTabSelectionControllers (initializeTabControllers,
     // which runs AFTER this mount) reads them off tab.dom.*.
