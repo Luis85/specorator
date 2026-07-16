@@ -30,6 +30,7 @@ const show = computed(() => store.dropdown.kind === 'resume');
       empty-text="No conversations"
       content-class="specorator-resume-item-content"
       content-tag="div"
+      icon-class="specorator-resume-item-icon"
       primary-class="specorator-resume-item-title"
       primary-tag="div"
       secondary-class="specorator-resume-item-date"

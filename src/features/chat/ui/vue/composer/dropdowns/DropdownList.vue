@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { appendMcpIcon } from '../../../../../../shared/icons';
+import { mountIcon } from '../../mountIcon';
 import type { ComposerDropdownItem } from '../stores/composerStore';
 
 // ONE list renderer, three skins via props. The three chat dropdowns
@@ -24,6 +26,8 @@ withDefaults(defineProps<{
   /** Optional wrapper around primary+secondary (mention-text / resume-item-content). */
   contentClass?: string;
   contentTag?: string;
+  /** Per-skin class for the leading `item.iconId` glyph (mention / resume). */
+  iconClass?: string;
 }>(), {
   primaryTag: 'span',
   secondaryTag: 'span',
@@ -31,6 +35,17 @@ withDefaults(defineProps<{
 });
 
 const emit = defineEmits<{ (e: 'select', index: number): void }>();
+
+// Function ref per row: the imperative dropdowns painted their leading glyph
+// with `setIcon` / `appendMcpIcon` on a span, and the repo bans markup strings,
+// so paint the icon onto the real element rather than emitting an SVG string.
+// Re-invoked on every render (keyed rows), which repaints on `iconId` change;
+// both painters replace the element's content, so repainting is idempotent.
+function paintIcon(el: unknown, iconId: string | undefined): void {
+  if (el == null || (el as Partial<Node>).nodeType !== 1 || !iconId) return;
+  if (iconId === 'mcp') { appendMcpIcon(el as HTMLElement); return; }
+  mountIcon(el, iconId);
+}
 </script>
 
 <template>
@@ -48,6 +63,11 @@ const emit = defineEmits<{ (e: 'select', index: number): void }>();
       :class="[itemClass, item.variant, { selected: i === activeIndex }]"
       @mousedown.prevent="emit('select', i)"
     >
+      <span
+        v-if="item.iconId"
+        :ref="(el) => paintIcon(el, item.iconId)"
+        :class="iconClass"
+      />
       <component
         :is="contentTag"
         v-if="contentClass"
@@ -74,13 +94,12 @@ const emit = defineEmits<{ (e: 'select', index: number): void }>();
         >
           {{ item.primary }}
         </component>
-        <component
-          :is="'span'"
+        <span
           v-if="item.hint"
           :class="hintClass"
         >
           {{ item.hint }}
-        </component>
+        </span>
         <component
           :is="secondaryTag"
           v-if="item.secondary"

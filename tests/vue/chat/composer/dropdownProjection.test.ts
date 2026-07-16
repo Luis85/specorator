@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import type { ConversationMeta } from '@/core/types';
 import { ComposerDropdownCoordinator } from '@/features/chat/controllers/ComposerDropdownCoordinator';
 import type { DropdownItem } from '@/shared/components/SlashCommandDropdown';
 import type { MentionItem } from '@/shared/mention/types';
@@ -112,10 +113,39 @@ describe('ComposerDropdownCoordinator projection', () => {
     expect(state.kind).toBe('mention');
     expect(state.activeIndex).toBe(2);
     expect(state.items).toEqual([
-      { id: 'agent-folder', primary: '@Agents/', variant: 'agent-folder' },
-      { id: 'folder:notes', primary: '@notes/', variant: 'vault-folder' },
-      { id: 'file:c.md', primary: 'c.md' },
+      { id: 'agent-folder', primary: '@Agents/', variant: 'agent-folder', iconId: 'bot' },
+      { id: 'folder:notes', primary: '@notes/', variant: 'vault-folder', iconId: 'folder' },
+      { id: 'file:c.md', primary: 'c.md', iconId: 'file-text' },
     ]);
+  });
+
+  it('projects the imperative per-type mention icon (mcp uses the appendMcpIcon sentinel)', () => {
+    const items: MentionItem[] = [
+      { type: 'mcp-server', name: 'ctx7' },
+      { type: 'agent', id: 'plugin:reviewer', name: 'reviewer', description: 'reviews code', source: 'plugin' },
+      { type: 'agent-folder', name: 'Agents' },
+      { type: 'context-file', name: 'notes.md', absolutePath: '/v/notes.md', contextRoot: '/v', folderName: 'notes' },
+      { type: 'context-folder', name: 'notes', contextRoot: '/v', folderName: 'notes' },
+      { type: 'folder', name: 'notes', path: 'notes' },
+      { type: 'file', name: 'c.md', path: 'c.md', file: {} as never },
+    ];
+    coordinator.showMention(items, makeInput(), { select: vi.fn(), dismiss: vi.fn() });
+    expect(coordinator.getState().items.map((i) => i.iconId)).toEqual([
+      'mcp', 'bot', 'bot', 'folder-open', 'folder', 'folder', 'file-text',
+    ]);
+  });
+
+  it('showResume projects message-square-dot for the current session, message-square otherwise', () => {
+    const conversations: ConversationMeta[] = [
+      { id: 'c1', title: 'Current', createdAt: 1, lastResponseAt: 2 } as ConversationMeta,
+      { id: 'c2', title: 'Older', createdAt: 1, lastResponseAt: 1 } as ConversationMeta,
+    ];
+    coordinator.showResume(conversations, makeInput(), { select: vi.fn(), dismiss: vi.fn() }, 'c1');
+    const state = coordinator.getState();
+    expect(state.kind).toBe('resume');
+    expect(state.items[0]).toMatchObject({ id: 'c1', variant: 'current', iconId: 'message-square-dot' });
+    expect(state.items[1]).toMatchObject({ id: 'c2', iconId: 'message-square' });
+    expect(state.items[1].variant).toBeUndefined();
   });
 
   describe('keyboard bridge', () => {

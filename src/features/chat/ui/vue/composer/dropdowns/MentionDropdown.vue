@@ -28,6 +28,7 @@ const style = computed(() => fixedDropdownStyleVars(store.dropdown.anchorRect));
       empty-class="specorator-mention-empty"
       empty-text="No matches"
       content-class="specorator-mention-text"
+      icon-class="specorator-mention-icon"
       primary-class="specorator-mention-name"
       secondary-class="specorator-mention-agent-desc"
       @select="(i: number) => cb?.onDropdownSelect(i)"

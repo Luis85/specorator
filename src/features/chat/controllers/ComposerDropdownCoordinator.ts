@@ -175,19 +175,22 @@ export function toComposerMentionItems(items: MentionItem[]): ComposerDropdownIt
   return items.map((item) => {
     switch (item.type) {
       case 'mcp-server':
-        return { id: `mcp:${item.name}`, primary: `@${item.name}`, variant: 'mcp-server' };
+        return { id: `mcp:${item.name}`, primary: `@${item.name}`, variant: 'mcp-server', iconId: 'mcp' };
       case 'agent-folder':
-        return { id: 'agent-folder', primary: `@${item.name}/`, variant: 'agent-folder' };
+        return { id: 'agent-folder', primary: `@${item.name}/`, variant: 'agent-folder', iconId: 'bot' };
       case 'agent':
-        return { id: `agent:${item.id}`, primary: `@${item.id}`, secondary: item.description, variant: 'agent' };
+        return {
+          id: `agent:${item.id}`, primary: `@${item.id}`, secondary: item.description,
+          variant: 'agent', iconId: 'bot',
+        };
       case 'context-folder':
-        return { id: `context-folder:${item.name}`, primary: `@${item.name}/`, variant: 'context-folder' };
+        return { id: `context-folder:${item.name}`, primary: `@${item.name}/`, variant: 'context-folder', iconId: 'folder' };
       case 'context-file':
-        return { id: `context-file:${item.absolutePath}`, primary: item.name, variant: 'context-file' };
+        return { id: `context-file:${item.absolutePath}`, primary: item.name, variant: 'context-file', iconId: 'folder-open' };
       case 'folder':
-        return { id: `folder:${item.path}`, primary: `@${item.path}/`, variant: 'vault-folder' };
+        return { id: `folder:${item.path}`, primary: `@${item.path}/`, variant: 'vault-folder', iconId: 'folder' };
       default:
-        return { id: `file:${item.path}`, primary: item.path || item.name };
+        return { id: `file:${item.path}`, primary: item.path || item.name, iconId: 'file-text' };
     }
   });
 }
@@ -203,6 +206,7 @@ export function toComposerResumeItems(
       primary: conv.title,
       secondary: isCurrent ? 'Current session' : formatResumeDate(conv.lastResponseAt ?? conv.createdAt),
       variant: isCurrent ? 'current' : undefined,
+      iconId: isCurrent ? 'message-square-dot' : 'message-square',
     };
   });
 }

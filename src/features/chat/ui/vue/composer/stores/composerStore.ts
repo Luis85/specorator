@@ -93,9 +93,12 @@ export interface ComposerStreamingState { isStreaming: boolean; }
 
 export type ComposerDropdownKind = 'slash' | 'mention' | 'resume' | null;
 export interface ComposerDropdownItem {
-  id: string; primary: string; secondary?: string; hint?: string; modifier?: string;
-  /** Per-type modifier class for mention items (e.g. 'agent', 'vault-folder'); optional. */
+  id: string; primary: string; secondary?: string; hint?: string;
+  /** Per-type CSS class for mention/resume items (e.g. 'agent', 'vault-folder', 'current'); optional. */
   variant?: string;
+  /** Leading glyph: a lucide icon id painted via `setIcon`, or the `'mcp'` sentinel
+   *  painted via `appendMcpIcon`. Set on mention + resume items; slash items omit it. */
+  iconId?: string;
 }
 export interface ComposerDropdownAnchor { top: number; left: number; width: number; }
 export interface ComposerDropdownState {
