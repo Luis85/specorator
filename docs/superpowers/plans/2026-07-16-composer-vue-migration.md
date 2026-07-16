@@ -2125,24 +2125,32 @@ EOF
 
 **Files:** Create the three SFCs under `.../toolbar/`; Test each. (No `SendButton.vue` — send is keyboard-only, strict parity.)
 
+> These Vue components are **render-only**: they read the projected store and fire callbacks. The underlying `ExternalContextSelector` / `McpServerSelector` **engine objects are RETAINED** (they own the path-list / enabled-set truth and are called by `InputController` / `ConversationController` / `tabShared`); Task 10 strips only their imperative DOM-render layer, never their public API. See Task 10 Step 2 for the exact methods that must remain callable.
+
 - [ ] **Step 1: `McpServerSelector.vue`**
 
 ```vue
 <script setup lang="ts">
-import { inject, ref } from 'vue';
+import { computed, inject, ref } from 'vue';
 import { CALLBACKS_KEY } from '../../composerKeys';
 import { useComposerStore } from '../../stores/composerStore';
 
 const store = useComposerStore();
 const cb = inject(CALLBACKS_KEY);
 const open = ref(false);
+const count = computed(() => store.toolbar.mcp.count);
+// Matches updateCountBadgeDisplay (ui/toolbar/shared.ts): the ICON goes `.active`
+// with an active title whenever count > 0 (so ONE enabled server shows via the
+// active icon, not the badge); the numeric badge appears ONLY past 1. Use the
+// exact active/inactive title strings the imperative McpServerSelector passed.
+const iconTitle = computed(() => count.value > 0 ? `${count.value} MCP server(s) enabled` : 'MCP servers');
 </script>
 
 <template>
   <div v-if="store.toolbar.mcp.visible" class="specorator-mcp-selector">
     <div class="specorator-mcp-selector-icon-wrapper" @click="open = !open">
-      <span class="specorator-mcp-selector-icon" />
-      <span class="specorator-mcp-selector-badge" :class="{ visible: store.toolbar.mcp.count > 1 }">{{ store.toolbar.mcp.count > 1 ? store.toolbar.mcp.count : '' }}</span>
+      <span class="specorator-mcp-selector-icon" :class="{ active: count > 0 }" :title="iconTitle" />
+      <span class="specorator-mcp-selector-badge" :class="{ visible: count > 1 }">{{ count > 1 ? count : '' }}</span>
     </div>
     <div v-if="open" class="specorator-mcp-selector-dropdown">
       <div class="specorator-mcp-selector-header">Mcp servers</div>
@@ -2167,13 +2175,13 @@ const open = ref(false);
 </template>
 ```
 
-> The icon/check glyphs used `appendMcpIcon`/`appendCheckIcon` (imperative SVG helpers). Populate `.specorator-mcp-selector-icon` / `.specorator-mcp-selector-check` via those same helpers in `onMounted` (reuse them — do not re-draw). Badge shows the number only past 1, matching `updateCountBadgeDisplay`.
+> The icon/check glyphs used `appendMcpIcon`/`appendCheckIcon` (imperative SVG helpers). Populate `.specorator-mcp-selector-icon` / `.specorator-mcp-selector-check` via those same helpers in `onMounted` (reuse them — do not re-draw). Exactly matching `updateCountBadgeDisplay` (ui/toolbar/shared.ts): the icon carries `.active` + the active title for count > 0 (one enabled server shows via the active icon alone), and the numeric badge appears ONLY for count > 1. Confirm the exact active/inactive title strings in the imperative widget.
 
 - [ ] **Step 2: `ExternalContextSelector.vue`**
 
 ```vue
 <script setup lang="ts">
-import { inject, onMounted, ref } from 'vue';
+import { computed, inject, onMounted, ref } from 'vue';
 import { setIcon } from 'obsidian';
 import { CALLBACKS_KEY } from '../../composerKeys';
 import { useComposerStore } from '../../stores/composerStore';
@@ -2182,6 +2190,11 @@ const store = useComposerStore();
 const cb = inject(CALLBACKS_KEY);
 const iconEl = ref<HTMLElement | null>(null);
 onMounted(() => { if (iconEl.value) setIcon(iconEl.value, 'folder'); });
+const count = computed(() => store.toolbar.externalContext.count);
+// Matches updateCountBadgeDisplay: icon `.active` + active title for count > 0
+// (one external folder shows via the active icon, not the badge); numeric badge
+// only past 1. Use the exact active/inactive title strings the imperative widget passed.
+const iconTitle = computed(() => count.value > 0 ? `${count.value} external context(s)` : 'Add external context folder');
 </script>
 
 <template>
@@ -2189,8 +2202,8 @@ onMounted(() => { if (iconEl.value) setIcon(iconEl.value, 'folder'); });
     <!-- The VISIBLE folder icon is the single hit target: click opens the native
          picker via onAddExternalContext (which calls openFolderPicker). -->
     <div class="specorator-external-context-icon-wrapper" @click="cb?.onAddExternalContext()">
-      <span ref="iconEl" class="specorator-external-context-icon" />
-      <span class="specorator-external-context-badge" :class="{ visible: store.toolbar.externalContext.count > 1 }">{{ store.toolbar.externalContext.count > 1 ? store.toolbar.externalContext.count : '' }}</span>
+      <span ref="iconEl" class="specorator-external-context-icon" :class="{ active: count > 0 }" :title="iconTitle" />
+      <span class="specorator-external-context-badge" :class="{ visible: count > 1 }">{{ count > 1 ? count : '' }}</span>
     </div>
     <!-- ALWAYS in the DOM; revealed by the existing
          `.specorator-external-context-selector:hover .specorator-external-context-dropdown`
@@ -2241,7 +2254,7 @@ function dashOffset(pct: number): number { return CIRCUMFERENCE - (pct / 100) * 
 
 > Copy the exact arc `d` path + gauge geometry from `ui/toolbar/ContextUsageMeter.ts` so the fill matches pixel-for-pixel; the values above are illustrative of the mechanism (`stroke-dashoffset = circumference − pct/100 · circumference`).
 
-- [ ] **Step 4: Tests + commit** — visibility gating for each (MCP hidden when `!visible`; usage meter hidden when `usage === null`); MCP toggle fires `onToggleMcpServer`. External-context: the `.specorator-external-context-dropdown` is present in the DOM with NO open toggle (no `open` flag, no second wrapper); clicking `.specorator-external-context-icon-wrapper` fires `onAddExternalContext`; the empty state shows "Click the folder icon to add"; each item's path renders with the lock reflecting `item.persistent`; clicking the lock fires `onToggleExternalContextPersistence(path)` and the × fires `onRemoveExternalContext(path)`.
+- [ ] **Step 4: Tests + commit** — visibility gating for each (MCP hidden when `!visible`; usage meter hidden when `usage === null`); MCP toggle fires `onToggleMcpServer`. **One-item active-icon parity (both widgets):** with `count === 1`, the icon (`.specorator-mcp-selector-icon` / `.specorator-external-context-icon`) carries `.active` (+ a non-empty `title`) and the numeric badge is NOT `.visible` (renders no number); with `count === 2`, the badge IS `.visible` and shows `2`; with `count === 0`, the icon is not `.active`. External-context: the `.specorator-external-context-dropdown` is present in the DOM with NO open toggle (no `open` flag, no second wrapper); clicking `.specorator-external-context-icon-wrapper` fires `onAddExternalContext`; the empty state shows "Click the folder icon to add"; each item's path renders with the lock reflecting `item.persistent`; clicking the lock fires `onToggleExternalContextPersistence(path)` and the × fires `onRemoveExternalContext(path)`.
 
 ```bash
 git add src/features/chat/ui/vue/composer/components/toolbar/ tests/vue/chat/composer/toolbar/
@@ -2297,9 +2310,16 @@ Preserve the exact widget ORDER `createInputToolbar` used (Model, Thinking, Serv
 
 - [ ] **Step 2: Strip the imperative toolbar build**
 
-In `initializeInputToolbar`, delete the `createInputToolbar` call and the widget-instance assignments. **BUT** several engine paths still call methods on the selector instances (`tab.ui.mcpServerSelector.setMcpManager/getEnabledServers/setEnabledServers/addMentionedServers` — the `@server` mention sync via `fileContextManager.setOnMcpMentionChange` must keep working, and `InputController` sends `getEnabledServers()` with each turn; `tab.ui.externalContextSelector.getExternalContexts/getPersistentPaths/setPersistentPaths/setOnChange/setOnPersistenceChange/removePath/togglePersistence`; `tab.ui.contextUsageMeter.update`; `tab.ui.modelSelector?.updateDisplay`, etc.), and the projection reads `tab.ui.mcpServerSelector`/`externalContextSelector`. Resolve this cleanly: replace the DOM-rendering selector classes with **headless state holders** — small non-DOM classes exposing the same public methods the engine + projection call (`McpServerSelectionState`, `ExternalContextState`) — and keep constructing them in `initializeInputToolbar` (no `parentEl`). Delete `ModelSelector`/`ModeSelector`/`ThinkingBudgetSelector`/`ServiceTierToggle`/`PermissionToggle`/`PlanModeToggle`/`ContextUsageMeter` instances entirely (their `updateDisplay`/`renderOptions` calls in `refreshTabProviderUI`/`applyProviderUIGating`/`onModelChange` become `tab.composer?.emit()` — already added in Task 5, so just delete the imperative calls). This is the bulk of the LOC net-shrink.
+In `initializeInputToolbar`, delete the `createInputToolbar` call and the widget-instance assignments **for the seven pure-render widgets** — `ModelSelector`/`ModeSelector`/`ThinkingBudgetSelector`/`ServiceTierToggle`/`PermissionToggle`/`PlanModeToggle`/`ContextUsageMeter`. Their `updateDisplay`/`renderOptions` calls in `refreshTabProviderUI`/`applyProviderUIGating`/`onModelChange` become `tab.composer?.emit()` (already added in Task 5), so just delete the imperative calls. This is the bulk of the LOC net-shrink.
 
-> This step is the largest single edit. Work method-by-method: for each `tab.ui.<widget>?.<method>()` call site in `tabShared.ts`/`tabUi.ts`/`ConversationController`, either (a) it drove DOM → delete it and rely on `emit()`, or (b) it read/held state (mcp enabled set, external paths, usage) → keep it on the headless state holder. Run `npm run test -- --selectProjects unit` continuously; the existing `Tab.*` tests pin much of this behavior.
+**RETAIN the `ExternalContextSelector` and `McpServerSelector` engine objects** — they own the truth (the external-context path list + persistent set; the enabled-server set) AND out-of-scope engine code still calls their public API. Do NOT delete them and do NOT rename them to new `*State` classes. Instead **strip only their imperative DOM-render layer** (the `createEl`/dropdown/badge rendering that the Vue components now replace — pass no `parentEl`, or make the render a no-op) while keeping every public method the engine calls. The Vue `McpServerSelector.vue` / `ExternalContextSelector.vue` render from the projected store and fire callbacks into these SAME retained objects (Task 5 wiring). The methods that MUST remain callable after the cutover:
+
+- `ExternalContextSelector`: `addExternalContext(path)` (InputController `/add-dir`, ~L1360), `clearExternalContexts(...)` + `setExternalContexts(paths)` (ConversationController history reload / new-session restore, ~L264/304/773/778), `openFolderPicker()`, `removePath(path)`, `togglePersistence(path)`, `getExternalContexts()`, `getPersistentPaths()`, `setPersistentPaths(paths)`, `setOnChange(fn)`, `setOnPersistenceChange(fn)`.
+- `McpServerSelector`: `clearEnabled()` + `setEnabledServers(names)` (ConversationController MCP restore/gating, ~L262/308/732/734), `setVisible(v)` (tabShared provider gating, ~L246-248), `getEnabledServers()` (sent with each turn), `addMentionedServers(names)` (`@server` mention sync via `fileContextManager.setOnMcpMentionChange`), `setMcpManager(mgr)`, `getServers()`.
+
+`tab.ui.contextUsageMeter` (usage truth lives in `ChatState.usage`, projected) can be dropped — its `update(usage)` was pure render; the `onUsageChanged` callback now just `emit()`s.
+
+- [ ] **Step 2b: Verify the retained selector API** — after stripping the DOM layer, grep every call site and confirm each of the methods above still resolves on `tab.ui.externalContextSelector` / `tab.ui.mcpServerSelector`. Add/keep a unit test (or extend `Tab.wiring.test.ts`) asserting `addExternalContext` / `clearExternalContexts` / `setExternalContexts` / `getExternalContexts` and `clearEnabled` / `setEnabledServers` / `setVisible` / `getEnabledServers` / `addMentionedServers` are callable and mutate the held state (so a `/add-dir`, a history reload, and an MCP restore still work). Run `npm run test -- --selectProjects unit` continuously; the existing `Tab.*` tests pin much of this behavior.
 
 - [ ] **Step 3: Remove the toolbar host handle** — delete `TOOLBAR_HOST_KEY` (composerKeys.ts), its `app.provide` (mountComposer.ts), `registerToolbarHost` (composerCallbacks.ts + tabComposerMount.ts), and `toolbarHostEl` (types.ts + tabFactory.ts + ComposerToolbar's old host ref). `ComposerToolbar.vue` now renders `.specorator-input-toolbar` directly.
 
@@ -2320,7 +2340,7 @@ EOF
 )"
 ```
 
-**Phase 2 complete.** The toolbar is fully Vue; `InputToolbar.ts` + `ui/toolbar/*` DOM widgets are deleted (headless state holders remain for MCP/external-context/usage).
+**Phase 2 complete.** The toolbar is fully Vue; `InputToolbar.ts` + the seven pure-render `ui/toolbar/*` widgets are deleted. The `ExternalContextSelector` / `McpServerSelector` engine objects are RETAINED with their full public API (only their DOM-render layer stripped) since `InputController`/`ConversationController`/`tabShared` still call them; the `ContextUsageMeter` render object is deleted (usage truth lives in `ChatState.usage`, projected).
 
 # Phase 3 — Context chips + selection indicators + edited-files bar
 
