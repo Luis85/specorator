@@ -130,7 +130,11 @@ Context managers: `FileContextManager` (`ui/FileContext.ts` +
     and the context-usage meter value.
   - `inputMode`: `'none' | 'instruction' | 'bang-bash'` (from
     `InstructionModeManager` / `BangBashModeManager`) plus derived chrome flags.
-  - `chips`: `files[]`, `images[]`, `selectionIndicators` (editor/browser/canvas).
+  - `chips`: `files[]`, `images[]` (projected from `FileContextState` / image
+    state — reactive `v-for`). The editor/browser/canvas **selection indicators**
+    are NOT in the store: they are engine-driven element handles (the selection
+    controllers mutate their `textContent`/`.specorator-hidden` directly — see
+    Element-handle keys).
   - `editedFiles`: the edited-files bar projection.
   - `send`: `canSend`, `isStreaming`, `sendLabel`.
   - `dropdown`: `{ kind: 'slash' | 'mention' | 'resume' | null, items, activeIndex, anchorRect }`.
@@ -154,18 +158,25 @@ Context managers: `FileContextManager` (`ui/FileContext.ts` +
   `onRemoveImageChip`, `onDropdownNavigate`, `onDropdownSelect`,
   `onDropdownDismiss`, and the element-handle registration hooks.
 - **Element-handle keys** — Vue owns the composer DOM but hands the engine live
-  nodes exactly as `SCROLL_HOST_KEY` did: `INPUT_EL_KEY` (the textarea),
-  `NAV_ROW_KEY`, `CONTEXT_ROW_KEY`, `INPUT_CONTAINER_KEY`, `INPUT_WRAPPER_KEY`,
-  and `QUEUE_ROW_KEY` (the queued-follow-up row). Captured synchronously on mount
-  and written to `tab.dom.*` (and `state.queueIndicatorEl` for the queue row) so
-  every existing consumer (`InputController`, `SelectionController`,
-  `ChatDropController`, `InlinePromptController`, `QueuedMessageController`,
-  `tabInputWiring`, the shell's `resolveNavRowEl` teleport) keeps its direct
-  handle. The queued row is engine-built DOM (like the textarea):
-  `QueuedMessageController.updateQueueIndicator()` keeps mutating the handed
-  element, so the controller is untouched — Vue renders the `.specorator-input-queue-row`
-  host and registers it, nothing more. (Reactive-ifying the queued row is a
-  possible later follow-up, out of scope here.)
+  nodes exactly as `SCROLL_HOST_KEY` did. The full set: `INPUT_EL_KEY` (the
+  textarea), `NAV_ROW_KEY`, `CONTEXT_ROW_KEY`, `INPUT_CONTAINER_KEY`,
+  `INPUT_WRAPPER_KEY`, `QUEUE_ROW_KEY` (the queued-follow-up row), and the three
+  selection-indicator handles `SELECTION_INDICATOR_KEY`, `BROWSER_INDICATOR_KEY`,
+  `CANVAS_INDICATOR_KEY`. Captured synchronously on mount and written to
+  `tab.dom.*` (plus `state.queueIndicatorEl` for the queue row) so every existing
+  consumer (`InputController`, `SelectionController` /
+  `BrowserSelectionController` / `CanvasSelectionController`, `ChatDropController`,
+  `InlinePromptController`, `QueuedMessageController`, `tabInputWiring`, the
+  shell's `resolveNavRowEl` teleport) keeps its direct handle.
+  - The **queued row** and the **selection indicators** are engine-built DOM
+    (like the textarea): the controllers keep mutating the handed elements
+    directly — `QueuedMessageController.updateQueueIndicator()` builds the queue
+    row's contents, and the three selection controllers set each indicator's
+    `textContent` + `.specorator-hidden`. Vue renders the host elements
+    (`.specorator-input-queue-row`, `.specorator-selection-indicator`,
+    `.specorator-browser-selection-indicator`, `.specorator-canvas-indicator`)
+    and registers them; the controllers are **untouched**. (Reactive-ifying these
+    is a possible later follow-up, out of scope here.)
 
 ### Component tree
 
@@ -175,9 +186,10 @@ ComposerRoot.vue                    (.specorator-input-container host; registers
 ├── ComposerQueueRow.vue            (.specorator-input-queue-row — engine-driven host; QueuedMessageController builds its DOM)
 └── ComposerWrapper.vue             (.specorator-input-wrapper — ChatDropController overlay anchor)
     ├── ContextRow.vue              (.specorator-context-row)
-    │   ├── FileChips.vue           (v-for file chips + remove)
-    │   ├── ImageChips.vue          (v-for image previews + remove)
-    │   └── SelectionIndicators.vue (editor/browser/canvas pills)
+    │   ├── FileChips.vue           (reactive v-for file chips + remove)
+    │   ├── ImageChips.vue          (reactive v-for image previews + remove)
+    │   └── SelectionIndicators.vue (engine-driven HOST: renders + registers the three
+    │                                indicator elements; the selection controllers mutate them)
     ├── ComposerTextarea.vue        (<textarea class="specorator-input"> host — engine-driven)
     │   └── dropdowns/              (SlashCommandDropdown.vue, MentionDropdown.vue, ResumeSessionDropdown.vue — caret-anchored overlays)
     ├── EditedFilesBar.vue          (EditedFilesView port)
@@ -194,10 +206,20 @@ ComposerRoot.vue                    (.specorator-input-container host; registers
   flag (from `applyProviderUIGating`/capabilities), so components render
   conditionally rather than re-deriving gating. Dropdown-driven widgets reuse the
   shell's Vue dropdown atoms + `--sp-*` tokens.
-- **Chips + indicators** are reactive `v-for` over store arrays. The underlying
-  context *state* (`FileContextState`, image state) and all vault I/O stay in the
-  engine and are projected into the store.
-- **`EditedFilesBar`, `ContextUsageMeter`** are read-only projections.
+- **File/image chips** are reactive `v-for` over store arrays: `FileChipsView` /
+  `ImageContextManager` are already view-over-state layers (they rebuild pills
+  from `FileContextState` / image state), so the render moves to Vue while the
+  underlying context *state* and all vault I/O stay in the engine and are
+  projected into the store.
+- **Selection indicators** are NOT reactive: the three editor/browser/canvas
+  indicator elements are engine-driven element handles. `SelectionIndicators.vue`
+  renders the three host `<div>`s (with the legacy classes + initial
+  `.specorator-hidden`) and registers them to `tab.dom.selectionIndicatorEl` /
+  `browserIndicatorEl` / `canvasIndicatorEl`; the `SelectionController` /
+  `BrowserSelectionController` / `CanvasSelectionController` keep mutating their
+  `textContent` + `.specorator-hidden` directly, untouched.
+- **`EditedFilesBar`, `ContextUsageMeter`** are read-only projections
+  (`EditedFilesView.render()` is already a rebuild-from-`entries` view).
 
 ### Textarea ownership (the one Vue-hostile surface)
 
@@ -273,7 +295,13 @@ register the exact elements:
 - `ChatDropController` — queries `.specorator-input-wrapper`; attaches the
   overlay to `.specorator-input-container`; focuses `inputEl`.
 - `SelectionController` / `BrowserSelectionController` / `CanvasSelectionController`
-  — attach to `inputEl` + `contextRowEl` + indicator elements.
+  — receive `inputEl` + `contextRowEl` + their indicator element
+  (`dom.selectionIndicatorEl` / `browserIndicatorEl` / `canvasIndicatorEl`,
+  classes `.specorator-selection-indicator` / `.specorator-browser-selection-indicator`
+  / `.specorator-canvas-indicator`) via `buildTabSelectionControllers`, and mutate
+  each indicator's `textContent` + `.specorator-hidden` directly. The composer
+  must render + register those three elements as engine-driven handles so the
+  controllers (untouched) never hold a null or stale node.
 - `InlinePromptController` — ref-counted toggle of `.specorator-hidden` on
   `.specorator-input-container` (the composer-hide during blocking prompts).
 - `QueuedMessageController` — `updateQueueIndicator()` builds/clears the
@@ -288,12 +316,15 @@ register the exact elements:
   `inputEl`.
 
 `composerDomContract.test.ts` mounts the real `ComposerRoot` and asserts every
-consumer-queried class + that `inputEl` / `navRowEl` / `queueIndicatorEl` /
-`contextRowEl` / `inputContainerEl` / `inputWrapperEl` are registered to
-`tab.dom.*` (and `queueIndicatorEl` to `state.queueIndicatorEl`), then drives
+consumer-queried class + that all element handles — `inputEl` / `navRowEl` /
+`queueIndicatorEl` / `contextRowEl` / `inputContainerEl` / `inputWrapperEl` /
+`selectionIndicatorEl` / `browserIndicatorEl` / `canvasIndicatorEl` — are
+registered to `tab.dom.*` (and `queueIndicatorEl` also to
+`state.queueIndicatorEl`) as live nodes. It then drives
 `QueuedMessageController.updateQueueIndicator()` against the Vue-rendered queue
-row to confirm the queued-follow-up UI still renders. It is the regression
-backstop until the side-panels sub-project migrates those consumers.
+row, and a selection controller against its registered indicator, to confirm the
+queued-follow-up UI and the selection pills still render/update. It is the
+regression backstop until the side-panels sub-project migrates those consumers.
 
 ## Testing
 
@@ -309,7 +340,10 @@ fix):
 - **Textarea**: the element is handed to the engine on mount; Vue never clobbers
   `.value` / selection / IME state; Mod+Enter still routes through
   `tabInputWiring`; placeholder/disabled chrome reacts to the store.
-- **Chips/indicators**: reactive `v-for` parity; remove callbacks fire.
+- **File/image chips**: reactive `v-for` parity; remove callbacks fire.
+- **Selection indicators**: the three host elements are registered to
+  `tab.dom.*`; a selection controller driving its registered indicator updates
+  `textContent` + toggles `.specorator-hidden` (engine-driven, not reactive).
 - **`composerDomContract.test.ts`**: the cross-surface lock described above.
 
 Quality gates watched throughout: `check:loc` (net shrink as imperative widgets
@@ -324,13 +358,19 @@ migrates one component (or a small cohesive group) and deletes the imperative
 widget it replaces, staying shippable. Ordering, lowest-risk first:
 
 1. **Island scaffold**: `mountComposer`, Pinia, store, projection, callbacks,
-   element-handle keys (including `QUEUE_ROW_KEY`, registered to both
-   `tab.dom.queueIndicatorEl` and `state.queueIndicatorEl` so
-   `QueuedMessageController` keeps working untouched) — mounted but rendering the
+   element-handle keys — including `QUEUE_ROW_KEY` (registered to both
+   `tab.dom.queueIndicatorEl` and `state.queueIndicatorEl`) and the three
+   selection-indicator keys (`SELECTION_INDICATOR_KEY` / `BROWSER_INDICATOR_KEY` /
+   `CANVAS_INDICATOR_KEY`, registered to `tab.dom.selectionIndicatorEl` /
+   `browserIndicatorEl` / `canvasIndicatorEl`) so `QueuedMessageController` and the
+   selection controllers keep working untouched — mounted but rendering the
    still-imperative composer through the host, no widget migrated yet (proves the
    seam).
 2. **Toolbar widgets** (nine leaf components + send) — chat-only, cleanest.
-3. **Context chips + selection indicators + edited-files bar.**
+3. **Context chips + edited-files bar** (reactive, projected from context state).
+   The **selection indicators** are host elements registered in Phase 1 (engine
+   controllers mutate them); this task only renders/registers their host `<div>`s,
+   it does not reactive-ify them.
 4. **Textarea host** — the hard cutover (element handed to the engine; keyboard
    wiring re-pointed at the Vue-rendered node).
 5. **Dropdowns** (slash / mention / resume) — rendering migrated, engine trigger
