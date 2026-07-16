@@ -1,4 +1,5 @@
 import { type App, Notice } from 'obsidian';
+import { nextTick } from 'vue';
 
 import type { ProviderCommandDropdownConfig } from '../../../core/providers/commands/ProviderCommandCatalog';
 import type { ProviderCommandEntry } from '../../../core/providers/commands/ProviderCommandEntry';
@@ -55,13 +56,18 @@ function initializeContextManagers(tab: TabData, plugin: SpecoratorPlugin): void
   const app = plugin.app;
 
   // Chip/image mutations happen through the engine (mention selection, drop,
-  // paste); re-project so the Vue composer's chip slice stays live.
+  // paste); re-project so the Vue composer's chip slice stays live. Emit FIRST,
+  // then recompute context-row visibility (+ resize) on Vue's NEXT tick, where
+  // the chip visibility classes land — a synchronous read would toggle
+  // .has-content off STALE pre-patch DOM (first chip hidden, last-chip left empty).
   const onContextChanged = (): void => {
-    tab.controllers.selectionController?.updateContextRowVisibility();
-    tab.controllers.browserSelectionController?.updateContextRowVisibility();
-    tab.controllers.canvasSelectionController?.updateContextRowVisibility();
-    autoResizeTextarea(dom.inputEl);
     tab.composer?.emit();
+    void nextTick(() => {
+      tab.controllers.selectionController?.updateContextRowVisibility();
+      tab.controllers.browserSelectionController?.updateContextRowVisibility();
+      tab.controllers.canvasSelectionController?.updateContextRowVisibility();
+      autoResizeTextarea(dom.inputEl);
+    });
   };
 
   // File context manager - chips in contextRowEl, dropdown in inputContainerEl

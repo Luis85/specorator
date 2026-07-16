@@ -2,6 +2,7 @@ import '@/providers';
 
 import { createMockEl } from '@test/helpers/mockElement';
 import { Platform } from 'obsidian';
+import { nextTick } from 'vue';
 
 import { ProviderRegistry } from '@/core/providers/ProviderRegistry';
 import { ProviderWorkspaceRegistry } from '@/core/providers/ProviderWorkspaceRegistry';
@@ -14,6 +15,7 @@ import {
   wireTabInputEvents,
 } from '@/features/chat/tabs/Tab';
 import { createTabRuntimeHost } from '@/features/chat/tabs/tabRuntimeHost';
+import { ImageContextManager } from '@/features/chat/ui/ImageContext';
 import { mountTranscript } from '@/features/chat/ui/vue/transcript/mountTranscript';
 import {
   DEFAULT_CODEX_PRIMARY_MODEL,
@@ -530,6 +532,50 @@ describe('Tab - UI Initialization', () => {
       // Verify callbacks are set by checking the state
       expect(tab.state.callbacks.onUsageChanged).toBeDefined();
       expect(tab.state.callbacks.onTodosChanged).toBeDefined();
+    });
+
+    // Regression (Codex P2): the context-manager onContextChanged hook must EMIT
+    // first (so the Vue chip slice re-projects) and recompute the context-row
+    // visibility only on Vue's NEXT tick — after the async chip classes are
+    // patched. A synchronous pre-emit read (the old order) saw stale DOM: the
+    // first chip left the row hidden and the last-chip removal left it visible.
+    it('onContextChanged emits first, then recomputes visibility on nextTick', async () => {
+      const options = createMockOptions();
+      const tab = createTab(options);
+
+      initializeTabUI(tab, options.plugin);
+
+      // The SAME onContextChanged closure is wired as onImagesChanged; pull it
+      // straight off the (mocked) ImageContextManager constructor call.
+      const imageCtorArgs = (ImageContextManager as unknown as jest.Mock).mock.calls[0];
+      const onContextChanged = (imageCtorArgs[2] as { onImagesChanged: () => void }).onImagesChanged;
+
+      // autoResizeTextarea also moved into the nextTick block; stub inputEl so it
+      // is a no-op (setCssProps isn't polyfilled in the unit jsdom setup).
+      tab.dom.inputEl = { closest: () => null, setCssProps: jest.fn(), offsetHeight: 0, scrollHeight: 0 } as unknown as HTMLTextAreaElement;
+
+      const order: string[] = [];
+      const emit = jest.fn(() => order.push('emit'));
+      const visibility = jest.fn(() => order.push('visibility'));
+      tab.composer = { emit } as unknown as typeof tab.composer;
+      const controller = { updateContextRowVisibility: visibility };
+      tab.controllers.selectionController = controller as unknown as typeof tab.controllers.selectionController;
+      tab.controllers.browserSelectionController = controller as unknown as typeof tab.controllers.browserSelectionController;
+      tab.controllers.canvasSelectionController = controller as unknown as typeof tab.controllers.canvasSelectionController;
+
+      onContextChanged();
+
+      // Synchronous: emit ran; visibility is deferred (not yet run against the
+      // still-stale DOM).
+      expect(emit).toHaveBeenCalledTimes(1);
+      expect(visibility).not.toHaveBeenCalled();
+
+      await nextTick();
+
+      // After the flush the three selection controllers each recompute once, and
+      // they run strictly AFTER the emit that patched the chip DOM.
+      expect(visibility).toHaveBeenCalledTimes(3);
+      expect(order).toEqual(['emit', 'visibility', 'visibility', 'visibility']);
     });
   });
 });
