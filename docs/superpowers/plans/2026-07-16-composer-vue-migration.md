@@ -114,8 +114,15 @@ export function createComposerPinia(): Pinia {
 import { defineStore } from 'pinia';
 import { shallowRef } from 'vue';
 
-/** Toolbar model-picker option (mirrors the imperative `.specorator-model-option`). */
-export interface ComposerModelOption { value: string; label: string; providerIcon?: string; }
+// Same relative depth as transcriptStore.ts → core (stores/ is one level below the
+// island root). Adjust if the path resolver disagrees.
+import type { ProviderIconSvg } from '../../../../../../core/providers/types';
+
+/** Toolbar model-picker option (mirrors the imperative `.specorator-model-option`).
+ *  `providerIcon` is a `ProviderIconSvg` DESCRIPTOR (a `ProviderPathIconSvg |
+ *  ProviderCompositeIconSvg` object), NOT an SVG string — rendered via
+ *  `createProviderIconSvg` (never v-html). */
+export interface ComposerModelOption { value: string; label: string; providerIcon?: ProviderIconSvg; }
 /** A separator-labelled group of model options. */
 export interface ComposerModelGroup { label: string | null; options: ComposerModelOption[]; }
 
@@ -129,12 +136,14 @@ export interface ComposerModeState {
 export interface ComposerReasoningOption { value: string; label: string; title?: string; }
 /** One gear control: a label + current label + selectable options. */
 export interface ComposerReasoningControl { label: string; current: string; options: ComposerReasoningOption[]; }
-/** Reasoning controls. `budget` is the thinking-budget gears (fire
- *  `onSetThinkingBudget` → `thinkingBudget`); `effort` is the effort gears
- *  (fire `onSetEffortLevel` → `effortLevel`) shown ONLY for adaptive-reasoning
- *  models (`isAdaptiveReasoningModel`). Either may be null; an adaptive model
- *  renders BOTH. A `reasoning` of `null` on the toolbar hides the widget entirely
- *  (reasoningControl 'none'). */
+/** Reasoning: EXACTLY ONE of `budget`/`effort` is non-null (NEVER both), mirroring
+ *  the imperative `ThinkingBudgetSelector.render` which shows a single control.
+ *  BOTH are fed by the same `getReasoningOptions`; `isAdaptiveReasoningModel`
+ *  picks which — adaptive models show `effort` (current = `effortLevel`; select →
+ *  `onSetEffortLevel`), non-adaptive show `budget` (current = `thinkingBudget`;
+ *  select → `onSetThinkingBudget`). A `reasoning` of `null` on the toolbar hides
+ *  the widget entirely (reasoningControl 'none', empty options, or a lone
+ *  default-valued option). */
 export interface ComposerReasoningState {
   budget: ComposerReasoningControl | null;
   effort: ComposerReasoningControl | null;
@@ -1631,7 +1640,7 @@ Replace the deferred `buildToolbar()` stub with the real implementation. `snapsh
 Add the module-level helper functions `groupModelOptions`, `buildReasoningState`, `buildPermissionState`, `buildMcpState`, `buildExternalContextState`, `buildUsageTooltip` at the bottom of `tabComposer.ts`. Implement them to mirror the imperative widgets' render logic exactly (see the widget contracts in `src/features/chat/ui/toolbar/*`):
 
 ```ts
-import type { ProviderCapabilities, ProviderChatUIConfig } from '../../../core/providers/types';
+import type { ProviderCapabilities, ProviderChatUIConfig, ProviderIconSvg } from '../../../core/providers/types';
 import type { ComposerModelGroup, ComposerReasoningControl, ComposerReasoningState, ComposerPermissionState, ComposerMcpState, ComposerExternalContextState } from '../ui/vue/composer/stores/composerStore';
 import type { ToolbarSettings } from '../ui/toolbar/shared';
 import { formatTokens } from '../ui/toolbar/shared';
@@ -1639,7 +1648,7 @@ import { getProviderMcpManager } from './tabShared';
 import type { UsageInfo } from '../utils/usageInfo';
 
 function groupModelOptions(
-  options: Array<{ value: string; label: string; group?: string; providerIcon?: string }>,
+  options: Array<{ value: string; label: string; group?: string; providerIcon?: ProviderIconSvg }>,
   uiConfig: ProviderChatUIConfig,
 ): ComposerModelGroup[] {
   const groups: ComposerModelGroup[] = [];
@@ -1656,35 +1665,39 @@ function groupModelOptions(
 function buildReasoningState(
   caps: ProviderCapabilities, uiConfig: ProviderChatUIConfig, settings: ToolbarSettings,
 ): ComposerReasoningState | null {
+  // Mirrors ThinkingBudgetSelector.render: hide entirely, else show EXACTLY ONE
+  // control (effort for adaptive models, budget otherwise) — both fed by the SAME
+  // getReasoningOptions. There is NO separate effort-options source.
   if (caps.reasoningControl === 'none') return null;
   const model = settings.model;
+  const options = uiConfig.getReasoningOptions?.(model, settings) ?? [];
+  if (options.length === 0) return null;
+  const def = uiConfig.getDefaultReasoningValue?.(model, settings);
+  if (options.length === 1 && options[0].value === def) return null;
+
+  const mapped = options.map((o) => ({ value: o.value, label: o.label, title: o.title }));
   const adaptive = uiConfig.isAdaptiveReasoningModel?.(model, settings) ?? false;
 
-  // Thinking-BUDGET gears (persist `thinkingBudget` via onSetThinkingBudget).
-  const budgetOptions = uiConfig.getReasoningOptions?.(model, settings) ?? [];
-  const budgetDefault = uiConfig.getDefaultReasoningValue?.(model, settings);
-  const budget: ComposerReasoningControl | null =
-    budgetOptions.length > 1 || (budgetOptions.length === 1 && budgetOptions[0].value !== budgetDefault)
-      ? {
-          label: 'Thinking:',
-          current: budgetOptions.find((o) => o.value === settings.thinkingBudget)?.label ?? settings.thinkingBudget,
-          options: budgetOptions.map((o) => ({ value: o.value, label: o.label, title: o.title })),
-        }
-      : null;
-
-  // EFFORT gears — adaptive-reasoning models ONLY (persist `effortLevel` via
-  // onSetEffortLevel). Rendered ALONGSIDE the budget control, never instead of it.
-  const effortOptions = adaptive ? (uiConfig.getEffortOptions?.(model, settings) ?? []) : [];
-  const effort: ComposerReasoningControl | null = effortOptions.length > 1
-    ? {
+  if (adaptive) {
+    // EFFORT gears (persist `effortLevel` via onSetEffortLevel).
+    return {
+      effort: {
         label: 'Effort:',
-        current: effortOptions.find((o) => o.value === settings.effortLevel)?.label ?? settings.effortLevel,
-        options: effortOptions.map((o) => ({ value: o.value, label: o.label, title: o.title })),
-      }
-    : null;
-
-  if (!budget && !effort) return null;
-  return { budget, effort };
+        current: options.find((o) => o.value === settings.effortLevel)?.label ?? settings.effortLevel,
+        options: mapped,
+      },
+      budget: null,
+    };
+  }
+  // Thinking-BUDGET gears (persist `thinkingBudget` via onSetThinkingBudget).
+  return {
+    budget: {
+      label: 'Thinking:',
+      current: options.find((o) => o.value === settings.thinkingBudget)?.label ?? settings.thinkingBudget,
+      options: mapped,
+    },
+    effort: null,
+  };
 }
 
 function buildPermissionState(
@@ -1728,7 +1741,7 @@ function buildUsageTooltip(usage: UsageInfo): string {
 }
 ```
 
-> If a `uiConfig` method name here differs from the real signature, use the exact name from `src/core/providers/types.ts` `ProviderChatUIConfig` — the projection must call the SAME methods the imperative widgets call (verify against `ui/toolbar/ModelSelector.ts` etc.). Keep the model-option `group` field mapping consistent with `getModelOptions`' real return shape. **Reasoning specifically:** confirm the DISTINCT option sources the imperative `ThinkingBudgetSelector` reads for the budget gears vs the effort gears (the effort list is separate from `getReasoningOptions` and shown only for `isAdaptiveReasoningModel`) — `getEffortOptions` above is a placeholder for that real method name; the budget control persists `thinkingBudget`, the effort control persists `effortLevel`.
+> If a `uiConfig` method name here differs from the real signature, use the exact name from `src/core/providers/types.ts` `ProviderChatUIConfig` — the projection must call the SAME methods the imperative widgets call (verify against `ui/toolbar/ModelSelector.ts` etc.). Keep the model-option `group` field mapping consistent with `getModelOptions`' real return shape. **Reasoning specifically:** the imperative `ThinkingBudgetSelector.render` shows EXACTLY ONE control, both fed by `getReasoningOptions` — there is NO `getEffortOptions`. `isAdaptiveReasoningModel` selects which: adaptive → effort control (persists `effortLevel`), non-adaptive → budget control (persists `thinkingBudget`).
 
 - [ ] **Step 4: Wire the toolbar delegators + emit points in `tabComposerMount.ts`**
 
@@ -1783,7 +1796,7 @@ Also add `tab.composer?.emit();` to the `onUsageChanged` callback in `tabUi.ts` 
 
 - [ ] **Step 6: Write the projection test**
 
-`tests/vue/chat/composer/toolbarProjection.test.ts` — construct a `TabComposerProjection` over a stub `tab` whose `getComposerToolbarSettings`/capabilities/uiConfig produce a known model list, mode config, reasoning options, permission toggle, and usage; assert `snapshot.toolbar.modelLabel`, `.mode` (null when options ≠ 2), `.reasoning.budget` (non-null) + `.reasoning.effort` (non-null for an adaptive-model stub, null for a non-adaptive stub), `.permission.planActive`, `.planMode.visible`, `.mcp.visible`, `.usage.warning`. (Follow the `tabComposer.test.ts` stub pattern; mock the `tabShared`/`tabUi` helpers via `vi.mock` to return deterministic config.)
+`tests/vue/chat/composer/toolbarProjection.test.ts` — construct a `TabComposerProjection` over a stub `tab` whose `getComposerToolbarSettings`/capabilities/uiConfig produce a known model list, mode config, reasoning options, permission toggle, and usage; assert `snapshot.toolbar.modelLabel`, `.mode` (null when options ≠ 2), `.reasoning` (EXACTLY ONE of `.budget`/`.effort` non-null: `.effort` non-null + `.budget` null for an adaptive-model stub, `.budget` non-null + `.effort` null for a non-adaptive stub; `null` when options are empty/lone-default), `.permission.planActive`, `.planMode.visible`, `.mcp.visible`, `.usage.warning`. (Follow the `tabComposer.test.ts` stub pattern; mock the `tabShared`/`tabUi` helpers via `vi.mock` to return deterministic config.)
 
 **Async external-context timing test:** subscribe an observer to the projection; give the stub `externalContextSelector` a fake `openFolderPicker()` that appends a path to its list and fires its `onChange` on a resolved microtask (not synchronously); wire that `onChange` to `projection.emit()` (mirroring the Step 5 wiring). Assert that invoking `onAddExternalContext` does NOT include the new path in the snapshot emitted synchronously, and that AFTER the picker's promise resolves the next emitted snapshot's `toolbar.externalContext.items` DOES include it (same channel covers remove + persistence toggle — flip `persistent` via a fake `togglePersistence` firing `onChange`).
 
@@ -1819,6 +1832,9 @@ Each widget reads `useComposerStore().toolbar.<slice>` and injects `CALLBACKS_KE
 import { inject, ref } from 'vue';
 import { CALLBACKS_KEY } from '../../composerKeys';
 import { useComposerStore } from '../../stores/composerStore';
+// Verify relative depth reaches src/shared/icons and src/core/providers/types.
+import { createProviderIconSvg } from '../../../../../../../shared/icons';
+import type { ProviderIconSvg } from '../../../../../../../core/providers/types';
 
 const store = useComposerStore();
 const cb = inject(CALLBACKS_KEY);
@@ -1826,6 +1842,15 @@ const open = ref(false);
 function pick(value: string): void {
   open.value = false;
   cb?.onSetModel(value);
+}
+// providerIcon is a ProviderIconSvg DESCRIPTOR (not a string). Render it as a REAL
+// SVG element built by createProviderIconSvg (the same helper the imperative
+// ModelSelector used) — NO v-html / innerHTML (repo no-innerHTML rule). A function
+// ref appends the SVG node into the host span on mount/patch.
+function renderProviderIcon(el: HTMLElement | null, icon: ProviderIconSvg | undefined): void {
+  if (!el) return;
+  el.replaceChildren();
+  if (icon) el.appendChild(createProviderIconSvg(icon, { size: 14 }));
 }
 </script>
 
@@ -1844,7 +1869,11 @@ function pick(value: string): void {
           :class="{ selected: opt.value === store.toolbar.modelLabel || opt.label === store.toolbar.modelLabel }"
           @click="pick(opt.value)"
         >
-          <span v-if="opt.providerIcon" class="specorator-model-provider-icon" v-html="opt.providerIcon" />
+          <span
+            v-if="opt.providerIcon"
+            class="specorator-model-provider-icon"
+            :ref="(el) => renderProviderIcon(el as HTMLElement, opt.providerIcon)"
+          />
           <span>{{ opt.label }}</span>
         </div>
       </template>
@@ -1853,7 +1882,7 @@ function pick(value: string): void {
 </template>
 ```
 
-> `v-html` for `opt.providerIcon`: the provider icon is a trusted first-party SVG string produced by `uiConfig.getProviderIcon()` (same source the imperative `ModelSelector` used via `createEl`/`setIcon`). It is NOT user content. If the project's lint bars `v-html` outright, render the SVG by injecting it in `onMounted` into a `ref`'d span via `el.append(...)` of a parsed node, matching the transcript island's icon handling (`mountIcon.ts`) — reuse that helper rather than `v-html`.
+> **No `v-html`.** `opt.providerIcon` is a `ProviderIconSvg` descriptor object, not a string — `createProviderIconSvg(icon, {...})` returns a real `<svg>` node (verify the exact option shape, e.g. `{ size }`, against `src/shared/icons`). Building the DOM node and appending it satisfies the repo's no-`innerHTML`/no-`v-html` rule; the function ref re-renders when the option's icon changes.
 
 - [ ] **Step 2: `ModeSelector.vue`**
 
@@ -1881,7 +1910,7 @@ function toggle(): void {
 </template>
 ```
 
-- [ ] **Step 3: Tests** — mount each with a stubbed store slice; assert (a) it renders the contract root class, (b) picking/toggling fires the right callback with the right value, (c) `ModeSelector` renders nothing when `store.toolbar.mode === null`. Use `createComposerPinia()` + `setActivePinia` + `provide(CALLBACKS_KEY, stub)` via `@vue/test-utils` `mount(..., { global: { provide, plugins: [pinia] } })`.
+- [ ] **Step 3: Tests** — mount each with a stubbed store slice; assert (a) it renders the contract root class, (b) picking/toggling fires the right callback with the right value, (c) `ModeSelector` renders nothing when `store.toolbar.mode === null`, (d) for `ModelSelector` given an option whose `providerIcon` is a `ProviderIconSvg` descriptor stub, opening the dropdown renders a REAL `.specorator-model-provider-icon svg` element (query `svg` under the icon span) — NOT the literal text `[object Object]` and no `innerHTML` string. Use `createComposerPinia()` + `setActivePinia` + `provide(CALLBACKS_KEY, stub)` via `@vue/test-utils` `mount(..., { global: { provide, plugins: [pinia] } })`.
 
 - [ ] **Step 4: Run + commit** (`npm run test:vue -- modelSelector modeSelector`).
 
@@ -1916,9 +1945,10 @@ const reasoning = computed(() => store.toolbar.reasoning);
 </script>
 
 <template>
-  <!-- Adaptive-reasoning models render BOTH the budget gears (persist
-       thinkingBudget) AND the effort gears (persist effortLevel); non-adaptive
-       render only budget. Each control fires its OWN callback. -->
+  <!-- The projection provides EXACTLY ONE of budget/effort (never both, per
+       ThinkingBudgetSelector.render): adaptive models → effort gears (persist
+       effortLevel via onSetEffortLevel), non-adaptive → budget gears (persist
+       thinkingBudget via onSetThinkingBudget). Render whichever is non-null. -->
   <div v-if="reasoning && (reasoning.budget || reasoning.effort)" class="specorator-thinking-selector">
     <div v-if="reasoning.budget" class="specorator-thinking-budget">
       <span class="specorator-thinking-label-text">{{ reasoning.budget.label }}</span>
@@ -1985,7 +2015,7 @@ function toggle(): void {
 </template>
 ```
 
-- [ ] **Step 3–4: Tests + commit** — assert: `reasoning: null` renders nothing; a non-adaptive projection (`budget` set, `effort: null`) renders ONLY `.specorator-thinking-budget` and a budget click fires `onSetThinkingBudget(value)`; an adaptive projection (`budget` AND `effort` set) renders BOTH `.specorator-thinking-budget` and `.specorator-thinking-effort`, a budget click fires `onSetThinkingBudget`, and an effort click fires `onSetEffortLevel(value)` (the round-6 inert-effort regression guard). `ServiceTierToggle` gating + toggle callback as before.
+- [ ] **Step 3–4: Tests + commit** — assert: `reasoning: null` renders nothing; a non-adaptive projection (`budget` set, `effort: null`) renders ONLY `.specorator-thinking-budget` (no `.specorator-thinking-effort`) and a gear click fires `onSetThinkingBudget(value)`; an adaptive projection (`effort` set, `budget: null`) renders ONLY `.specorator-thinking-effort` (no `.specorator-thinking-budget`) and a gear click fires `onSetEffortLevel(value)` (the inert-effort regression guard). Exactly one control renders, never both. `ServiceTierToggle` gating + toggle callback as before.
 
 ```bash
 git add src/features/chat/ui/vue/composer/components/toolbar/ThinkingBudgetSelector.vue \
@@ -2150,22 +2180,25 @@ import { useComposerStore } from '../../stores/composerStore';
 
 const store = useComposerStore();
 const cb = inject(CALLBACKS_KEY);
-const open = ref(false);
 const iconEl = ref<HTMLElement | null>(null);
 onMounted(() => { if (iconEl.value) setIcon(iconEl.value, 'folder'); });
 </script>
 
 <template>
   <div class="specorator-external-context-selector">
+    <!-- The VISIBLE folder icon is the single hit target: click opens the native
+         picker via onAddExternalContext (which calls openFolderPicker). -->
     <div class="specorator-external-context-icon-wrapper" @click="cb?.onAddExternalContext()">
       <span ref="iconEl" class="specorator-external-context-icon" />
       <span class="specorator-external-context-badge" :class="{ visible: store.toolbar.externalContext.count > 1 }">{{ store.toolbar.externalContext.count > 1 ? store.toolbar.externalContext.count : '' }}</span>
     </div>
-    <div class="specorator-external-context-icon-wrapper" @click="open = !open" />
-    <div v-if="open" class="specorator-external-context-dropdown">
+    <!-- ALWAYS in the DOM; revealed by the existing
+         `.specorator-external-context-selector:hover .specorator-external-context-dropdown`
+         CSS. NO `open` flag, NO second (empty) wrapper. -->
+    <div class="specorator-external-context-dropdown">
       <div class="specorator-external-context-header">External contexts</div>
       <div class="specorator-external-context-list">
-        <div v-if="store.toolbar.externalContext.items.length === 0" class="specorator-external-context-empty">None</div>
+        <div v-if="store.toolbar.externalContext.items.length === 0" class="specorator-external-context-empty">Click the folder icon to add</div>
         <div v-for="item in store.toolbar.externalContext.items" :key="item.path" class="specorator-external-context-item">
           <span class="specorator-external-context-text" :title="item.path">{{ item.path }}</span>
           <span class="specorator-external-context-lock" :class="{ locked: item.persistent }" :title="item.persistent ? 'Persistent (saved)' : 'Session only'" @click="cb?.onToggleExternalContextPersistence(item.path)" />
@@ -2177,7 +2210,7 @@ onMounted(() => { if (iconEl.value) setIcon(iconEl.value, 'folder'); });
 </template>
 ```
 
-> Populate the lock/unlock/x glyphs with `setIcon(..., item.persistent ? 'lock' : 'unlock')` / `setIcon(..., 'x')` in a small child or `onMounted` ref loop, matching the imperative widget. The imperative widget opened its dropdown from the same icon-wrapper that also triggered the folder picker; if that dual-purpose click needs preserving, mirror it (icon opens picker; a caret opens the list) — verify against `ui/toolbar/ExternalContextSelector.ts` and keep parity.
+> Populate the lock/unlock/x glyphs with `setIcon(..., item.persistent ? 'lock' : 'unlock')` / `setIcon(..., 'x')` in a small child or `onMounted` ref loop, matching the imperative widget. Mirror the imperative DOM exactly (`ExternalContextSelector.ts:207-222`): one `.specorator-external-context-icon-wrapper` (visible folder icon + badge, click → picker) and the `.specorator-external-context-dropdown` ALWAYS present, hover-revealed by the existing CSS. Do NOT invent an `open` flag or an empty second wrapper — keep the exact `.specorator-external-context-*` classes so the stylesheet applies unchanged.
 
 - [ ] **Step 3: `ContextUsageMeter.vue`** (read-only projection)
 
@@ -2208,7 +2241,7 @@ function dashOffset(pct: number): number { return CIRCUMFERENCE - (pct / 100) * 
 
 > Copy the exact arc `d` path + gauge geometry from `ui/toolbar/ContextUsageMeter.ts` so the fill matches pixel-for-pixel; the values above are illustrative of the mechanism (`stroke-dashoffset = circumference − pct/100 · circumference`).
 
-- [ ] **Step 4: Tests + commit** — visibility gating for each (MCP hidden when `!visible`; usage meter hidden when `usage === null`); MCP toggle fires `onToggleMcpServer`; external-context add/remove/persistence-toggle fire `onAddExternalContext` / `onRemoveExternalContext` / `onToggleExternalContextPersistence`; the external list renders each item's path with the persistence-lock reflecting `item.persistent`.
+- [ ] **Step 4: Tests + commit** — visibility gating for each (MCP hidden when `!visible`; usage meter hidden when `usage === null`); MCP toggle fires `onToggleMcpServer`. External-context: the `.specorator-external-context-dropdown` is present in the DOM with NO open toggle (no `open` flag, no second wrapper); clicking `.specorator-external-context-icon-wrapper` fires `onAddExternalContext`; the empty state shows "Click the folder icon to add"; each item's path renders with the lock reflecting `item.persistent`; clicking the lock fires `onToggleExternalContextPersistence(path)` and the × fires `onRemoveExternalContext(path)`.
 
 ```bash
 git add src/features/chat/ui/vue/composer/components/toolbar/ tests/vue/chat/composer/toolbar/
