@@ -58,7 +58,8 @@ deeper into the composer:
 
 - Migrate the composer's rendering — textarea host, the nine toolbar widgets,
   file/image chips + selection indicators, edited-files bar, the
-  slash/mention/resume dropdowns, and the send button — to a Vue 3 + Pinia
+  slash/mention/resume dropdowns (send stays keyboard-only — no send button
+  exists today) — to a Vue 3 + Pinia
   island under `ui/vue/composer/`.
 - Preserve **strict behavior parity** with the imperative composer, including
   IME composition, Mod+Enter dual-send, caret-anchored dropdowns, provider
@@ -128,15 +129,31 @@ Context managers: `FileContextManager` (`ui/FileContext.ts` +
   - `toolbar`: projected settings + per-widget `visible` gating for model, mode,
     thinking budget, service tier, permission, plan-mode, MCP, external-context,
     and the context-usage meter value.
+  - `externalContext`: the active external-context path list, each entry
+    `{ path, persistent }` — the `ExternalContextSelector` dropdown is not
+    add-only; it lists active paths, removes them (`removePath()`), and toggles
+    session-only vs persistent (`togglePersistence()`, saving
+    `persistentExternalContextPaths`).
+  - `planMode`: `boolean` — projected from the same plan-mode source the engine
+    toggles (`updatePlanModeUI()` / `refreshTabProviderUI()` / provider refresh).
+    `ComposerWrapper.vue` binds `:class="{ 'specorator-input-plan-mode': planMode }"`
+    so Vue owns the class; the engine paths set the store flag instead of calling
+    `classList.toggle` on `.specorator-input-wrapper` (imperative DOM write →
+    reactive-data mutation — otherwise Vue's next patch would clobber the
+    engine-toggled class and drop the plan-mode border).
   - `inputMode`: `'none' | 'instruction' | 'bang-bash'` (from
     `InstructionModeManager` / `BangBashModeManager`) plus derived chrome flags.
-  - `chips`: `files[]`, `images[]` (projected from `FileContextState` / image
-    state — reactive `v-for`). The editor/browser/canvas **selection indicators**
+  - `chips`: `files[]`, `folders[]`, `images[]` (projected from `FileContextState`
+    / image state — reactive `v-for`; folders are stored separately via
+    `attachFolderAsPill()` / `getAttachedFolders()` and render as
+    `.specorator-file-chip--folder`, so they must be projected and removable too).
+    The editor/browser/canvas **selection indicators**
     are NOT in the store: they are engine-driven element handles (the selection
     controllers mutate their `textContent`/`.specorator-hidden` directly — see
     Element-handle keys).
   - `editedFiles`: the edited-files bar projection.
-  - `send`: `canSend`, `isStreaming`, `sendLabel`.
+  - `streaming`: `isStreaming` — drives streaming-state chrome only (there is no
+    send button; send/cancel stay keyboard-driven through `tabInputWiring`).
   - `dropdown`: `{ kind: 'slash' | 'mention' | 'resume' | null, items, activeIndex, anchorRect }`.
   - `draftMeta`: `isEmpty` + active mode only — **never the draft string** (the
     textarea's `.value` is engine-owned; see Textarea).
@@ -154,9 +171,11 @@ Context managers: `FileContextManager` (`ui/FileContext.ts` +
 - **Callbacks** (`ui/vue/composer/composerCallbacks.ts`, `ComposerCallbacks`):
   thin Vue→engine delegators — `onSend`, `onCancel`, `onSetModel`, `onSetMode`,
   `onSetThinkingBudget`, `onSetServiceTier`, `onSetPermission`, `onTogglePlanMode`,
-  `onOpenMcpSelector`, `onAddExternalContext`, `onRemoveFileChip`,
-  `onRemoveImageChip`, `onDropdownNavigate`, `onDropdownSelect`,
-  `onDropdownDismiss`, and the element-handle registration hooks.
+  `onOpenMcpSelector`, `onAddExternalContext`, `onRemoveExternalContext(path)`,
+  `onToggleExternalContextPersistence(path)`, `onRemoveFileChip`,
+  `onRemoveFolderChip`, `onRemoveImageChip`, `onDropdownNavigate`,
+  `onDropdownSelect`, `onDropdownDismiss`, and the element-handle registration
+  hooks.
 - **Element-handle keys** — Vue owns the composer DOM but hands the engine live
   nodes exactly as `SCROLL_HOST_KEY` did. The full set: `INPUT_EL_KEY` (the
   textarea), `NAV_ROW_KEY`, `CONTEXT_ROW_KEY`, `INPUT_CONTAINER_KEY`,
@@ -197,21 +216,33 @@ ComposerRoot.vue                    (.specorator-input-container host; registers
         ├── ModelSelector.vue  ModeSelector.vue  ThinkingBudgetSelector.vue
         ├── ServiceTierToggle.vue  PermissionToggle.vue  PlanModeToggle.vue
         ├── McpServerSelector.vue  ExternalContextSelector.vue
-        ├── ContextUsageMeter.vue
-        └── SendButton.vue
+        └── ContextUsageMeter.vue
 ```
+
+> **No `SendButton.vue`.** The imperative composer has no send button today —
+> sending is keyboard-only (`Enter` / `Mod+Enter` via `tabInputWiring`). Adding a
+> visible send affordance would be new UX, not parity, so it is out of scope;
+> send stays keyboard-driven and Escape-cancels during streaming as today.
 
 - **Toolbar widgets** are leaf components: each reads its store slice and calls a
   callback on change. Provider gating is projected as a per-widget `visible`
   flag (from `applyProviderUIGating`/capabilities), so components render
   conditionally rather than re-deriving gating. Dropdown-driven widgets reuse the
-  shell's Vue dropdown atoms + `--sp-*` tokens.
+  shell's Vue dropdown atoms + `--sp-*` tokens. `ExternalContextSelector.vue` is
+  **not** add-only: its dropdown renders the active-path list from
+  `store.externalContext`, removes a path (`onRemoveExternalContext`), and toggles
+  session-only vs persistent per path (`onToggleExternalContextPersistence`) — full
+  parity with the imperative selector.
 - **File/image chips** are reactive `v-for` over store arrays: `FileChipsView` /
   `ImageContextManager` are already view-over-state layers (they rebuild pills
   from `FileContextState` / image state), so the render moves to Vue while the
   underlying context *state* and all vault I/O stay in the engine and are
-  projected into the store. **Contract**: `FileChips.vue` must render its chips
-  inside a `.specorator-file-indicator` wrapper and `ImageChips.vue` inside a
+  projected into the store. `FileChips.vue` renders attached **files and folders**
+  (folders as `.specorator-file-chip--folder`, projected from
+  `store.chips.folders` / `getAttachedFolders()`), each removable via
+  `onRemoveFileChip` / `onRemoveFolderChip`. **Contract**: `FileChips.vue` must
+  render its chips inside a `.specorator-file-indicator` wrapper and
+  `ImageChips.vue` inside a
   `.specorator-image-preview` wrapper, each toggling `.specorator-visible-flex`
   when non-empty (mirroring the legacy views) — the still-imperative
   `updateContextRowHasContent()` reads exactly those wrappers + that class to
