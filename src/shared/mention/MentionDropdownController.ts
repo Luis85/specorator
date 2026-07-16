@@ -96,7 +96,10 @@ export class MentionDropdownController {
   }
 
   setAgentService(service: AgentMentionProvider | null): void {
-    if (this.agentService !== service && this.dropdown.isVisible()) {
+    // Coordinator-aware visibility: in chat/coordinator mode `this.dropdown` is
+    // never rendered, so gating on `this.dropdown.isVisible()` would always skip
+    // the hide and leave stale agent entries selectable after a provider swap.
+    if (this.agentService !== service && this.isVisible()) {
       this.hide();
     }
     this.agentService = service;

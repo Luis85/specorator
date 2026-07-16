@@ -177,6 +177,46 @@ describe('MentionDropdownController', () => {
       expect(dropdownInstance.hide).toHaveBeenCalledTimes(1);
       expect(controller.isVisible()).toBe(false);
     });
+
+    it('hides via the coordinator when the agent service changes in coordinator mode', () => {
+      // In chat/coordinator mode `this.dropdown` is never rendered, so the hide
+      // must gate on the coordinator-aware isVisible() (getState().kind), not
+      // `this.dropdown.isVisible()` (always false) — else a provider swap leaves
+      // stale agent entries selectable.
+      let mockKind: 'mention' | null = null;
+      const coordinator = {
+        getState: jest.fn(() => ({ kind: mockKind, items: [], activeIndex: 0, anchorRect: null })),
+        showSlash: jest.fn(),
+        showMention: jest.fn(),
+        showResume: jest.fn(),
+        setActiveIndex: jest.fn(),
+        move: jest.fn(),
+        selectActive: jest.fn(),
+        handleKeydown: jest.fn(() => false),
+        hide: jest.fn(),
+      };
+      const coordController = new MentionDropdownController(containerEl, inputEl, callbacks, {
+        coordinator: coordinator as never,
+      });
+      const initialService = createMockAgentService([
+        { id: 'Explore', name: 'Explore', source: 'builtin' },
+      ]);
+      const replacementService = createMockAgentService([
+        { id: 'worker', name: 'worker', source: 'vault' },
+      ]);
+
+      // Menu not open yet (kind null) — swapping the service must NOT hide.
+      coordController.setAgentService(initialService);
+      expect(coordinator.hide).not.toHaveBeenCalled();
+
+      // Menu open (coordinator reports 'mention') — swapping the service hides it
+      // through the owner-scoped coordinator path, not the dead imperative dropdown.
+      mockKind = 'mention';
+      coordController.setAgentService(replacementService);
+      expect(coordinator.hide).toHaveBeenCalledWith('mention');
+
+      coordController.destroy();
+    });
   });
 
   describe('agent folder entry', () => {
