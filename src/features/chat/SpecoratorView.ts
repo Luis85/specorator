@@ -173,7 +173,6 @@ export class SpecoratorView extends ItemView {
       );
       const model = providerSettings.model;
       const uiConfig = ProviderRegistry.getChatUIConfig(providerId);
-      const capabilities = ProviderRegistry.getCapabilities(providerId);
       const contextWindow = resolveModelContextWindow(
         uiConfig,
         providerSettings,
@@ -193,10 +192,8 @@ export class SpecoratorView extends ItemView {
       tab.ui.permissionToggle?.updateDisplay();
       tab.ui.planModeToggle?.updateDisplay();
       tab.ui.serviceTierToggle?.updateDisplay();
-      tab.dom.inputWrapper.toggleClass(
-        'specorator-input-plan-mode',
-        providerSettings.permissionMode === 'plan' && capabilities.supportsPlanMode,
-      );
+      // Vue owns `.specorator-input-plan-mode`; re-project so ComposerWrapper repaints.
+      tab.composer?.emit();
     }
 
     this.gitActionButton?.updateDisplay();

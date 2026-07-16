@@ -32,7 +32,9 @@ import type {
 import type { InstructionModeManager } from '../ui/InstructionModeManager';
 import type { NavigationSidebar } from '../ui/NavigationSidebar';
 import type { StatusPanel } from '../ui/StatusPanel';
+import type { MountedComposer } from '../ui/vue/composer/mountComposer';
 import type { MountedTranscript } from '../ui/vue/transcript/mountTranscript';
+import type { TabComposerProjection } from './tabComposer';
 import type { TabTranscriptProjection } from './tabTranscript';
 
 /**
@@ -173,6 +175,11 @@ export interface TabDOMElements {
   contentEl: HTMLElement;
   messagesEl: HTMLElement;
 
+  /** Vue composer island mount target (a bare child of contentEl). The island
+   *  renders the composer structural DOM into it and hands the real elements
+   *  back through element-handle keys. */
+  composerHostEl: HTMLElement;
+
   /** Container for status panel (fixed between messages and input). */
   statusPanelContainerEl: HTMLElement;
 
@@ -189,6 +196,10 @@ export interface TabDOMElements {
 
   /** Context row for file chips and selection indicator (inside input wrapper). */
   contextRowEl: HTMLElement;
+
+  /** Toolbar host the Vue island renders (`.specorator-input-toolbar`); the
+   *  imperative `createInputToolbar` builds into it until Phase 2. */
+  toolbarHostEl: HTMLElement;
 
   selectionIndicatorEl: HTMLElement | null;
   browserIndicatorEl: HTMLElement | null;
@@ -318,6 +329,12 @@ export interface TabData {
 
   /** Handle to the mounted Vue transcript island (unmounted on tab destroy). */
   mountedTranscript: MountedTranscript | null;
+
+  /** Per-tab Vue composer projection source (engine → store snapshot fan-out). */
+  composer: TabComposerProjection | null;
+
+  /** Handle to the mounted Vue composer island (unmounted on tab destroy). */
+  mountedComposer: MountedComposer | null;
 }
 
 export type TabProviderContext = Pick<TabData, 'conversationId' | 'service' | 'providerId' | 'lifecycleState' | 'draftModel'>;

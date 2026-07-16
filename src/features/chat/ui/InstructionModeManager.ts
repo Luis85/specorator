@@ -4,6 +4,8 @@ export interface InstructionModeCallbacks {
   onSubmit: (rawInstruction: string) => Promise<void>;
   getInputWrapper: () => HTMLElement | null;
   resetInputHeight?: () => void;
+  /** Re-projects the composer store so Vue repaints the wrapper-mode class. */
+  onModeChanged?: () => void;
 }
 
 const INSTRUCTION_MODE_PLACEHOLDER = '# Save in custom system prompt';
@@ -24,7 +26,7 @@ export class InstructionModeManager {
       triggerKey: '#',
       wrapperClass: 'specorator-input-instruction-mode',
       activePlaceholder: INSTRUCTION_MODE_PLACEHOLDER,
-    });
+    }, callbacks.onModeChanged);
   }
 
   /**

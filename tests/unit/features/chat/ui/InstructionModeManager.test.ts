@@ -19,9 +19,11 @@ describe('InstructionModeManager', () => {
   it('should enter instruction mode on # keystroke when input is empty', () => {
     const wrapper = createWrapper();
     const inputEl = { value: '', placeholder: 'Ask...' } as any;
+    const onModeChanged = jest.fn();
     const callbacks = {
       onSubmit: jest.fn().mockResolvedValue(undefined),
       getInputWrapper: () => wrapper,
+      onModeChanged,
     };
 
     const manager = new InstructionModeManager(inputEl, callbacks);
@@ -32,7 +34,9 @@ describe('InstructionModeManager', () => {
     expect(e.preventDefault).toHaveBeenCalled();
     expect(manager.isActive()).toBe(true);
     expect(inputEl.placeholder).toBe('# Save in custom system prompt');
-    expect(wrapper.addClass).toHaveBeenCalledWith('specorator-input-instruction-mode');
+    // Vue owns the wrapper-mode class now; the manager re-projects instead of toggling.
+    expect(wrapper.addClass).not.toHaveBeenCalled();
+    expect(onModeChanged).toHaveBeenCalled();
   });
 
   it('should NOT enter instruction mode on # keystroke when input has content', () => {
@@ -74,9 +78,11 @@ describe('InstructionModeManager', () => {
   it('should exit instruction mode when input is cleared', () => {
     const wrapper = createWrapper();
     const inputEl = { value: '', placeholder: 'Ask...' } as any;
+    const onModeChanged = jest.fn();
     const callbacks = {
       onSubmit: jest.fn().mockResolvedValue(undefined),
       getInputWrapper: () => wrapper,
+      onModeChanged,
     };
 
     const manager = new InstructionModeManager(inputEl, callbacks);
@@ -88,7 +94,9 @@ describe('InstructionModeManager', () => {
 
     expect(manager.isActive()).toBe(false);
     expect(inputEl.placeholder).toBe('Ask...');
-    expect(wrapper.removeClass).toHaveBeenCalledWith('specorator-input-instruction-mode');
+    // Vue owns the wrapper-mode class now; the manager re-projects instead of toggling.
+    expect(wrapper.removeClass).not.toHaveBeenCalled();
+    expect(onModeChanged).toHaveBeenCalled();
   });
 
   it('should submit instruction on Enter (without Shift) and trim whitespace', async () => {
@@ -222,7 +230,7 @@ describe('InstructionModeManager', () => {
     expect(resetInputHeight).toHaveBeenCalled();
   });
 
-  it('should remove instruction mode class and restore placeholder on destroy()', () => {
+  it('should restore placeholder on destroy()', () => {
     const wrapper = createWrapper();
     const inputEl = { value: '', placeholder: 'Ask...' } as any;
     const callbacks = {
@@ -237,7 +245,8 @@ describe('InstructionModeManager', () => {
 
     manager.destroy();
 
-    expect(wrapper.removeClass).toHaveBeenCalledWith('specorator-input-instruction-mode');
+    // Vue owns the wrapper-mode class now; the manager no longer toggles it.
+    expect(wrapper.removeClass).not.toHaveBeenCalled();
     expect(inputEl.placeholder).toBe('Ask...');
   });
 });

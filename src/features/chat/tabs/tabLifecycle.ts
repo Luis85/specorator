@@ -229,6 +229,11 @@ export async function destroyTab(tab: TabData): Promise<void> {
   tab.mountedTranscript = null;
   tab.transcript = null;
 
+  // Unmount the Vue composer island before the host DOM is removed.
+  tab.mountedComposer?.unmount();
+  tab.mountedComposer = null;
+  tab.composer = null;
+
   // Clean up runtime before removing DOM. Await so the provider subprocess is
   // actually killed before teardown completes (prevents orphaned CLI processes).
   if (tab.pendingRuntimeCleanup) {

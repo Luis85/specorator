@@ -214,8 +214,6 @@ export function commitModelPickToProviderSettings(
 }
 
 export function refreshTabProviderUI(tab: TabData, plugin: SpecoratorPlugin): void {
-  const capabilities = getTabCapabilities(tab, plugin);
-  const permissionMode = getTabPermissionMode(tab, plugin);
   tab.ui.modelSelector?.updateDisplay();
   tab.ui.modelSelector?.renderOptions();
   tab.ui.modeSelector?.updateDisplay();
@@ -224,10 +222,8 @@ export function refreshTabProviderUI(tab: TabData, plugin: SpecoratorPlugin): vo
   tab.ui.permissionToggle?.updateDisplay();
   tab.ui.planModeToggle?.updateDisplay();
   tab.ui.serviceTierToggle?.updateDisplay();
-  tab.dom.inputWrapper.toggleClass(
-    'specorator-input-plan-mode',
-    permissionMode === 'plan' && capabilities.supportsPlanMode,
-  );
+  // Vue owns `.specorator-input-plan-mode`; re-project so ComposerWrapper repaints.
+  tab.composer?.emit();
 }
 
 /**
@@ -332,8 +328,6 @@ export function updatePlanModeUI(tab: TabData, plugin: SpecoratorPlugin, mode: s
   void plugin.saveSettings();
   tab.ui.permissionToggle?.updateDisplay();
   tab.ui.planModeToggle?.updateDisplay();
-  tab.dom.inputWrapper.toggleClass(
-    'specorator-input-plan-mode',
-    mode === 'plan' && getTabCapabilities(tab, plugin).supportsPlanMode,
-  );
+  // Vue owns `.specorator-input-plan-mode`; re-project so ComposerWrapper repaints.
+  tab.composer?.emit();
 }

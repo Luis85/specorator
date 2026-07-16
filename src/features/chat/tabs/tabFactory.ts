@@ -145,6 +145,8 @@ export function createTab(options: TabCreateOptions): TabData {
     dom,
     transcript: null,
     mountedTranscript: null,
+    composer: null,
+    mountedComposer: null,
   };
 
   return tab;
@@ -155,40 +157,40 @@ export function createTab(options: TabCreateOptions): TabData {
  */
 function buildTabDOM(contentEl: HTMLElement): TabDOMElements {
   const messagesWrapperEl = contentEl.createDiv({ cls: 'specorator-messages-wrapper' });
-  // The Vue transcript island (mounted into `messagesWrapperEl` by
-  // `initializeTabControllers`) renders the real `.specorator-messages` scroll
-  // container itself and hands it back via `SCROLL_HOST_KEY`, which overwrites
-  // `dom.messagesEl`. Until then `messagesEl` points at the wrapper as a
-  // non-null placeholder; no controller reads it before the mount. The Vue
-  // `WelcomeBanner` owns the welcome block now.
+  // The Vue transcript island renders `.specorator-messages` into this wrapper.
   const messagesEl = messagesWrapperEl;
   const statusPanelContainerEl = contentEl.createDiv({ cls: 'specorator-status-panel-container' });
-  const inputContainerEl = contentEl.createDiv({ cls: 'specorator-input-container' });
-  const queueIndicatorEl = inputContainerEl.createDiv({ cls: 'specorator-input-queue-row' });
-  const navRowEl = inputContainerEl.createDiv({ cls: 'specorator-input-nav-row' });
-  const inputWrapper = inputContainerEl.createDiv({ cls: 'specorator-input-wrapper' });
-  const editedFilesRowEl = inputWrapper.createDiv({ cls: 'specorator-edited-files-row specorator-hidden' });
-  const contextRowEl = inputWrapper.createDiv({ cls: 'specorator-context-row' });
-  const inputEl = inputWrapper.createEl('textarea', {
-    cls: 'specorator-input',
-    attr: {
-      placeholder: 'How can i help you today?',
-      rows: '3',
-      dir: 'auto',
-    },
-  });
+
+  // The Vue composer island mounts into this host and renders the composer
+  // structural DOM (`.specorator-input-container` and its children), handing the
+  // real elements back through element-handle keys (mountTabComposer). Until then
+  // the composer element fields point at this host as non-null placeholders; no
+  // consumer reads them before the mount registers the real Vue nodes.
+  const composerHostEl = contentEl.createDiv({ cls: 'specorator-composer-host' });
+
+  // The composer textarea is created detached here (so InputController/history
+  // restore/seedComposerDraft keep a stable engine-owned node) and appended into
+  // the Vue `ComposerTextarea` host on mount (registerTextareaHost). Phase 4
+  // moves its rendering into Vue and deletes this line.
+  const inputEl = contentEl.ownerDocument.createElement('textarea');
+  inputEl.className = 'specorator-input';
+  inputEl.setAttribute('placeholder', 'How can i help you today?');
+  inputEl.setAttribute('rows', '3');
+  inputEl.setAttribute('dir', 'auto');
 
   return {
     contentEl,
     messagesEl,
     statusPanelContainerEl,
-    inputContainerEl,
-    queueIndicatorEl,
-    inputWrapper,
+    composerHostEl,
+    inputContainerEl: composerHostEl,
+    queueIndicatorEl: composerHostEl,
+    inputWrapper: composerHostEl,
     inputEl,
-    navRowEl,
-    editedFilesRowEl,
-    contextRowEl,
+    navRowEl: composerHostEl,
+    editedFilesRowEl: composerHostEl,
+    contextRowEl: composerHostEl,
+    toolbarHostEl: composerHostEl,
     selectionIndicatorEl: null,
     browserIndicatorEl: null,
     canvasIndicatorEl: null,

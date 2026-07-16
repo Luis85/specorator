@@ -20,9 +20,11 @@ describe('BangBashModeManager', () => {
   it('should enter bash mode on ! keystroke when input is empty', () => {
     const wrapper = createWrapper();
     const inputEl = { value: '', placeholder: 'Ask...' } as any;
+    const onModeChanged = jest.fn();
     const callbacks = {
       onSubmit: jest.fn().mockResolvedValue(undefined),
       getInputWrapper: () => wrapper,
+      onModeChanged,
     };
 
     const manager = new BangBashModeManager(inputEl, callbacks);
@@ -32,7 +34,9 @@ describe('BangBashModeManager', () => {
     expect(handled).toBe(true);
     expect(e.preventDefault).toHaveBeenCalled();
     expect(manager.isActive()).toBe(true);
-    expect(wrapper.addClass).toHaveBeenCalledWith('specorator-input-bang-bash-mode');
+    // Vue owns the wrapper-mode class now; the manager re-projects instead of toggling.
+    expect(wrapper.addClass).not.toHaveBeenCalled();
+    expect(onModeChanged).toHaveBeenCalled();
   });
 
   it('should NOT enter bash mode on ! keystroke when input has content', () => {
@@ -226,7 +230,7 @@ describe('BangBashModeManager', () => {
     expect(resetInputHeight).toHaveBeenCalled();
   });
 
-  it('should remove bash mode class and restore placeholder on destroy()', () => {
+  it('should restore placeholder on destroy()', () => {
     const wrapper = createWrapper();
     const inputEl = { value: '', placeholder: 'Ask...' } as any;
     const callbacks = {
@@ -240,7 +244,8 @@ describe('BangBashModeManager', () => {
 
     manager.destroy();
 
-    expect(wrapper.removeClass).toHaveBeenCalledWith('specorator-input-bang-bash-mode');
+    // Vue owns the wrapper-mode class now; the manager no longer toggles it.
+    expect(wrapper.removeClass).not.toHaveBeenCalled();
     expect(inputEl.placeholder).toBe('Ask...');
   });
 

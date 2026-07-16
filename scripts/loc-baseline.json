@@ -35,8 +35,8 @@
       "reason": "Grandfathered hotspot. Track the split in docs/tech-debt/2026-06-07-oversized-modules-and-test-files.md; shrink only. Pure result-parsing heuristics (status classification, JSON-record coercion, agent-id extraction) extracted to subagentResultParsing.ts."
     },
     "src/features/chat/tabs/TabManager.ts": {
-      "loc": 854,
-      "reason": "Grandfathered hotspot. Track the split in docs/tech-debt/2026-06-07-oversized-modules-and-test-files.md; shrink only. +3 from the isAgentBound tab-bar-item field (agent-bound badge glyph). Library-views-overhaul: createTab gained bound-agent provider/model seeding; that branching was extracted into resolveDefaultProviderId/resolvePinnedModel helpers to clear the createTab critical-complexity finding (criticalComplexity stays 0), trading a small net LOC rise for lower per-function complexity."
+      "loc": 859,
+      "reason": "Grandfathered hotspot. Track the split in docs/tech-debt/2026-06-07-oversized-modules-and-test-files.md; shrink only. +3 from the isAgentBound tab-bar-item field (agent-bound badge glyph). Library-views-overhaul: createTab gained bound-agent provider/model seeding; that branching was extracted into resolveDefaultProviderId/resolvePinnedModel helpers to clear the createTab critical-complexity finding (criticalComplexity stays 0), trading a small net LOC rise for lower per-function complexity. +5 from the composer Vue island mount wiring (mountTabComposer between createTab and initializeTabUI, ADR 0005 sub-project 3)."
     },
     "src/features/inline-edit/ui/InlineEditModal.ts": {
       "loc": 785,
@@ -83,8 +83,8 @@
       "reason": "Grandfathered hotspot. Track the split in docs/tech-debt/2026-06-07-oversized-modules-and-test-files.md; shrink only."
     },
     "src/features/chat/tabs/tabUi.ts": {
-      "loc": 509,
-      "reason": "Grandfathered hotspot. Track the split in docs/tech-debt/2026-06-07-oversized-modules-and-test-files.md; shrink only."
+      "loc": 511,
+      "reason": "Grandfathered hotspot. Track the split in docs/tech-debt/2026-06-07-oversized-modules-and-test-files.md; shrink only. +2 from the composer Vue island seam (toolbar-host retarget comment + onModeChanged re-projection wiring on the trigger-mode managers, ADR 0005 sub-project 3)."
     }
   }
 }

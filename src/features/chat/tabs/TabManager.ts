@@ -21,6 +21,7 @@ import {
   initializeTabUI,
   wireTabInputEvents,
 } from './Tab';
+import { mountTabComposer } from './tabComposerMount';
 import { TabProviderCommandCoordinator } from './TabProviderCommandCoordinator';
 import { activateOpenConversationTab, applyPostActivateAction, deactivatePreviousTab } from './tabSwitchHelpers';
 import {
@@ -313,6 +314,11 @@ export class TabManager implements TabManagerInterface {
           this.callbacks.onTabConversationChanged?.(tab.id, changedConversationId);
         },
       });
+
+      // Mount the Vue composer island so its element handles are registered to
+      // tab.dom.* BEFORE initializeTabUI builds the toolbar + context managers
+      // into them. `this.view` is the tab component (mirrors the transcript mount).
+      mountTabComposer(tab, this.plugin, this.view);
 
       // Initialize UI components with provider catalog
       initializeTabUI(tab, this.plugin, {

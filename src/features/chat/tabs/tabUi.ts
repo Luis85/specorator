@@ -138,6 +138,7 @@ function initializeInstructionAndTodo(tab: TabData, plugin: SpecoratorPlugin): v
         await tab.controllers.inputController?.handleInstructionSubmit(rawInstruction);
       },
       getInputWrapper: () => dom.inputWrapper,
+      onModeChanged: () => tab.composer?.emit(),
     }
   );
 
@@ -164,6 +165,7 @@ function initializeInstructionAndTodo(tab: TabData, plugin: SpecoratorPlugin): v
             statusPanel.updateBashOutput(id, { status, output, exitCode: result.exitCode });
           },
           getInputWrapper: () => dom.inputWrapper,
+          onModeChanged: () => tab.composer?.emit(),
         }
       );
     }
@@ -250,7 +252,9 @@ function initializeInputToolbar(
 ): void {
   const { dom } = tab;
 
-  const inputToolbar = dom.inputWrapper.createDiv({ cls: 'specorator-input-toolbar' });
+  // The Vue composer island renders `.specorator-input-toolbar`; build the
+  // imperative widgets into it (Phase 2 replaces them with Vue components).
+  const inputToolbar = dom.toolbarHostEl;
 
   // Blank-tab UI config wrapper that returns mixed model options
   const blankTabUIConfigProxy = (): ProviderChatUIConfig => {
@@ -405,10 +409,8 @@ function initializeInputToolbar(
       await maybeWarnYoloMode(plugin, mode);
       tab.ui.permissionToggle?.updateDisplay();
       tab.ui.planModeToggle?.updateDisplay();
-      dom.inputWrapper.toggleClass(
-        'specorator-input-plan-mode',
-        mode === 'plan' && getTabCapabilities(tab, plugin).supportsPlanMode,
-      );
+      // Vue owns `.specorator-input-plan-mode`; re-project so ComposerWrapper repaints.
+      tab.composer?.emit();
     },
     onPlanModeToggle: async () => {
       const planValue = getTabChatUIConfig(tab, plugin).getPermissionModeToggle?.()?.planValue;
