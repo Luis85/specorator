@@ -7,6 +7,7 @@ import { ProviderWorkspaceRegistry } from '@/core/providers/ProviderWorkspaceReg
 import { ChatState } from '@/features/chat/state/ChatState';
 import {
   activateTab,
+  buildToolbarActionCallbacks,
   createTab,
   deactivateTab,
   destroyTab,
@@ -23,7 +24,6 @@ import {
   createMockBrowserSelectionController,
   createMockCanvasSelectionController,
   createMockClaudeChatRuntime,
-  createMockContextUsageMeter,
   createMockExternalContextSelector,
   createMockFileContextManager,
   createMockImageContextManager,
@@ -31,16 +31,11 @@ import {
   createMockInstructionModeManager,
   createMockMcpManager,
   createMockMcpServerSelector,
-  createMockModelSelector,
-  createMockModeSelector,
   createMockOptions,
-  createMockPermissionToggle,
   createMockPlugin,
   createMockSelectionController,
-  createMockServiceTierToggle,
   createMockSlashCommandDropdown,
   createMockStatusPanel,
-  createMockThinkingBudgetSelector,
   installMockResizeObserver,
 } from './tabTestKit';
 
@@ -66,14 +61,8 @@ let mockImageContextManager: ReturnType<typeof createMockImageContextManager>;
 let mockSlashCommandDropdown: ReturnType<typeof createMockSlashCommandDropdown>;
 let mockInstructionModeManager: ReturnType<typeof createMockInstructionModeManager>;
 let mockStatusPanel: ReturnType<typeof createMockStatusPanel>;
-let mockModelSelector: ReturnType<typeof createMockModelSelector>;
-let mockModeSelector: ReturnType<typeof createMockModeSelector>;
-let mockThinkingBudgetSelector: ReturnType<typeof createMockThinkingBudgetSelector>;
-let mockContextUsageMeter: ReturnType<typeof createMockContextUsageMeter>;
 let mockExternalContextSelector: ReturnType<typeof createMockExternalContextSelector>;
 let mockMcpServerSelector: ReturnType<typeof createMockMcpServerSelector>;
-let mockPermissionToggle: ReturnType<typeof createMockPermissionToggle>;
-let mockServiceTierToggle: ReturnType<typeof createMockServiceTierToggle>;
 let mockSelectionController: ReturnType<typeof createMockSelectionController>;
 let mockBrowserSelectionController: ReturnType<typeof createMockBrowserSelectionController>;
 let mockCanvasSelectionController: ReturnType<typeof createMockCanvasSelectionController>;
@@ -110,27 +99,17 @@ jest.mock('@/features/chat/ui/StatusPanel', () => ({
   }),
 }));
 
-jest.mock('@/features/chat/ui/InputToolbar', () => ({
-  createInputToolbar: jest.fn().mockImplementation(() => {
-    mockModelSelector = createMockModelSelector();
-    mockModeSelector = createMockModeSelector();
-    mockThinkingBudgetSelector = createMockThinkingBudgetSelector();
-    mockContextUsageMeter = createMockContextUsageMeter();
+jest.mock('@/features/chat/ui/toolbar/ExternalContextSelector', () => ({
+  ExternalContextSelector: jest.fn().mockImplementation(() => {
     mockExternalContextSelector = createMockExternalContextSelector();
+    return mockExternalContextSelector;
+  }),
+}));
+
+jest.mock('@/features/chat/ui/toolbar/McpServerSelector', () => ({
+  McpServerSelector: jest.fn().mockImplementation(() => {
     mockMcpServerSelector = createMockMcpServerSelector();
-    mockPermissionToggle = createMockPermissionToggle();
-    mockServiceTierToggle = createMockServiceTierToggle();
-    return {
-      modelSelector: mockModelSelector,
-      modeSelector: mockModeSelector,
-      thinkingBudgetSelector: mockThinkingBudgetSelector,
-      contextUsageMeter: mockContextUsageMeter,
-      externalContextSelector: mockExternalContextSelector,
-      mcpServerSelector: mockMcpServerSelector,
-      permissionToggle: mockPermissionToggle,
-      serviceTierToggle: mockServiceTierToggle,
-      gitActionButton: null,
-    };
+    return mockMcpServerSelector;
   }),
 }));
 
@@ -717,10 +696,7 @@ describe('Tab - Service Initialization', () => {
 
       initializeTabUI(tab, options.plugin);
 
-      const toolbarModule = jest.requireMock('@/features/chat/ui/InputToolbar') as {
-        createInputToolbar: jest.Mock;
-      };
-      const toolbarCallbacks = toolbarModule.createInputToolbar.mock.calls.at(-1)?.[1];
+      const toolbarCallbacks = buildToolbarActionCallbacks(tab, options.plugin);
       expect(toolbarCallbacks).toBeDefined();
 
       toolbarCallbacks.getUIConfig();
@@ -878,10 +854,7 @@ describe('Tab - Service Initialization', () => {
 
       initializeTabUI(tab, plugin);
 
-      const toolbarModule = jest.requireMock('@/features/chat/ui/InputToolbar') as {
-        createInputToolbar: jest.Mock;
-      };
-      const toolbarCallbacks = toolbarModule.createInputToolbar.mock.calls.at(-1)?.[1];
+      const toolbarCallbacks = buildToolbarActionCallbacks(tab, plugin);
 
       expect(toolbarCallbacks.getSettings()).toEqual(expect.objectContaining({
         model: DEFAULT_CODEX_PRIMARY_MODEL,
@@ -953,12 +926,11 @@ describe('Tab - Service Initialization', () => {
       }));
 
       initializeTabUI(tab, plugin);
-      expect(mockPermissionToggle.setVisible).toHaveBeenLastCalledWith(true);
 
-      const toolbarModule = jest.requireMock('@/features/chat/ui/InputToolbar') as {
-        createInputToolbar: jest.Mock;
-      };
-      const toolbarCallbacks = toolbarModule.createInputToolbar.mock.calls.at(-1)?.[1];
+      const toolbarCallbacks = buildToolbarActionCallbacks(tab, plugin);
+
+      const emit = jest.fn();
+      tab.composer = { emit } as any;
 
       await toolbarCallbacks.onPermissionModeChange('normal');
 
@@ -969,7 +941,7 @@ describe('Tab - Service Initialization', () => {
       }));
       expect(plugin.settings.permissionMode).toBe('yolo');
       expect(plugin.saveSettings).toHaveBeenCalled();
-      expect(mockPermissionToggle.updateDisplay).toHaveBeenCalled();
+      expect(emit).toHaveBeenCalled();
     });
 
     it('resets to blank state when the new-conversation callback fires', () => {

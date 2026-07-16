@@ -79,7 +79,13 @@ module.exports = {
     // not here. Removing that above-average-covered code from the Jest global
     // bucket dropped its ratio ~1pt; these floors sit just under the post-migration
     // actuals (78.50 / 73.60 / 79.58). Branches (68) was unaffected and holds.
-    global: { statements: 78, branches: 68, functions: 73, lines: 79 },
+    //
+    // global stmt/branch/func/lines lowered 78/68/73/79 -> 77/67/72/78
+    // (2026-07-16): the composer toolbar migration (Task 10, PR #489) deleted the
+    // well-covered imperative toolbar widgets and moved that behavior into the
+    // Vitest lane (tests/vue/chat/composer/), dropping each Jest global ratio ~1pt.
+    // Floors sit just under the post-migration actuals (77.62 / 67.41 / 72.85 / 78.74).
+    global: { statements: 77, branches: 67, functions: 72, lines: 78 },
     'src/utils/': { statements: 88, branches: 80, functions: 92, lines: 90 },
     'src/core/security/': { statements: 96, branches: 95, functions: 98, lines: 97 },
     'src/core/logging/': { statements: 93, branches: 94, functions: 91, lines: 95 },

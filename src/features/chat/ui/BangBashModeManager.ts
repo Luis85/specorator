@@ -7,6 +7,8 @@ export interface BangBashModeCallbacks {
   onSubmit: (command: string) => Promise<void>;
   getInputWrapper: () => HTMLElement | null;
   resetInputHeight?: () => void;
+  /** Re-projects the composer store so Vue repaints the wrapper-mode class. */
+  onModeChanged?: () => void;
 }
 
 export class BangBashModeManager {
@@ -25,7 +27,7 @@ export class BangBashModeManager {
       triggerKey: '!',
       wrapperClass: 'specorator-input-bang-bash-mode',
       activePlaceholder: t('chat.bangBash.placeholder'),
-    });
+    }, callbacks.onModeChanged);
   }
 
   handleTriggerKey(e: KeyboardEvent): boolean {

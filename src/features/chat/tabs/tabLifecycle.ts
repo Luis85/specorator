@@ -180,8 +180,6 @@ function destroyTabUi(tab: TabData): void {
   tab.controllers.inputController?.dismissPendingApproval();
   tab.controllers.inputController?.destroyResumeDropdown();
   tab.ui.fileContextManager?.destroy();
-  tab.ui.editedFilesView?.destroy();
-  tab.ui.editedFilesView = null;
   tab.ui.chatDropController?.destroy();
   tab.ui.chatDropController = undefined;
   tab.ui.slashCommandDropdown?.destroy();
@@ -228,6 +226,11 @@ export async function destroyTab(tab: TabData): Promise<void> {
   tab.mountedTranscript?.unmount();
   tab.mountedTranscript = null;
   tab.transcript = null;
+
+  // Unmount the Vue composer island before the host DOM is removed.
+  tab.mountedComposer?.unmount();
+  tab.mountedComposer = null;
+  tab.composer = null;
 
   // Clean up runtime before removing DOM. Await so the provider subprocess is
   // actually killed before teardown completes (prevents orphaned CLI processes).

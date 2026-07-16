@@ -44,6 +44,9 @@ describe('ResumeSessionDropdownCoordinator', () => {
       getConversations: () => [makeConversation('a'), makeConversation('b')],
       getCurrentConversationId: () => 'a',
       openConversation,
+      // Chat always injects the dropdown coordinator; the resume dropdown is
+      // built only when it is present (there is no DOM-render fallback).
+      getDropdownCoordinator: () => ({}) as never,
       ...overrides,
     };
     return { coordinator: new ResumeSessionDropdownCoordinator(deps), openConversation, deps };

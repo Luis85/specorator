@@ -72,6 +72,7 @@ function createMockDeps(overrides: Partial<ConversationControllerDeps> = {}): Co
     setTranscriptLoading: jest.fn(),
     setTranscriptHydrationError: jest.fn(),
     emitTranscript: jest.fn(),
+    emitComposer: jest.fn(),
     subagentManager: {
       orphanAllActive: jest.fn(),
       clear: jest.fn(),
@@ -566,6 +567,52 @@ describe('ConversationController', () => {
         // Post-hydrate the transcript spinner clears and the greeting is seeded.
         expect(deps.setTranscriptLoading).toHaveBeenCalledWith(null);
         expect(deps.setTranscriptGreeting).toHaveBeenCalled();
+      });
+    });
+
+    describe('composer re-projection on restore', () => {
+      it('re-projects the composer toolbar after restoring MCP + external selections', async () => {
+        const setEnabledServers = jest.fn();
+        const setExternalContexts = jest.fn();
+        const emitComposer = jest.fn();
+        const mcpSelector = {
+          setEnabledServers,
+          clearEnabled: jest.fn(),
+          getEnabledServers: jest.fn().mockResolvedValue(new Set()),
+        };
+        const externalSelector = {
+          setExternalContexts,
+          clearExternalContexts: jest.fn(),
+          getExternalContexts: jest.fn().mockReturnValue([]),
+        };
+        deps = createMockDeps({
+          emitComposer,
+          getMcpServerSelector: () => mcpSelector as any,
+          getExternalContextSelector: () => externalSelector as any,
+        });
+        controller = new ConversationController(deps);
+        deps.state.currentConversationId = 'old-conv';
+        (deps.plugin.switchConversation as jest.Mock).mockResolvedValue(asSwitchResult({
+          id: 'new-conv',
+          messages: [{ id: 'm1', role: 'user', content: 'hi', timestamp: Date.now() }],
+          sessionId: null,
+          enabledMcpServers: ['server-a'],
+          externalContextPaths: ['ctx/a.md'],
+        }));
+
+        await controller.switchTo('new-conv');
+        await controller.whenHydrated();
+
+        // The restored engine selectors are re-applied...
+        expect(setEnabledServers).toHaveBeenCalledWith(['server-a']);
+        expect(setExternalContexts).toHaveBeenCalledWith(['ctx/a.md']);
+        // ...and the composer toolbar is re-projected AFTER both restores so its
+        // badge/dropdown reflect the new conversation (the retained selectors'
+        // setters fire no onChange, so emitTranscript alone would leave it stale).
+        expect(emitComposer).toHaveBeenCalled();
+        const lastEmit = emitComposer.mock.invocationCallOrder.at(-1)!;
+        expect(setEnabledServers.mock.invocationCallOrder[0]).toBeLessThan(lastEmit);
+        expect(setExternalContexts.mock.invocationCallOrder[0]).toBeLessThan(lastEmit);
       });
     });
   });

@@ -13,23 +13,17 @@ import { mountTranscript } from '@/features/chat/ui/vue/transcript/mountTranscri
 import {
   createMockBrowserSelectionController,
   createMockCanvasSelectionController,
-  createMockContextUsageMeter,
   createMockExternalContextSelector,
   createMockFileContextManager,
   createMockImageContextManager,
   createMockInputController,
   createMockInstructionModeManager,
   createMockMcpServerSelector,
-  createMockModelSelector,
-  createMockModeSelector,
   createMockOptions,
-  createMockPermissionToggle,
   createMockPlugin,
   createMockSelectionController,
-  createMockServiceTierToggle,
   createMockSlashCommandDropdown,
   createMockStatusPanel,
-  createMockThinkingBudgetSelector,
   installMockResizeObserver,
 } from './tabTestKit';
 
@@ -65,18 +59,12 @@ jest.mock('@/features/chat/ui/StatusPanel', () => ({
   StatusPanel: jest.fn().mockImplementation(() => createMockStatusPanel()),
 }));
 
-jest.mock('@/features/chat/ui/InputToolbar', () => ({
-  createInputToolbar: jest.fn().mockImplementation(() => ({
-    modelSelector: createMockModelSelector(),
-    modeSelector: createMockModeSelector(),
-    thinkingBudgetSelector: createMockThinkingBudgetSelector(),
-    contextUsageMeter: createMockContextUsageMeter(),
-    externalContextSelector: createMockExternalContextSelector(),
-    mcpServerSelector: createMockMcpServerSelector(),
-    permissionToggle: createMockPermissionToggle(),
-    serviceTierToggle: createMockServiceTierToggle(),
-    gitActionButton: null,
-  })),
+jest.mock('@/features/chat/ui/toolbar/ExternalContextSelector', () => ({
+  ExternalContextSelector: jest.fn().mockImplementation(() => createMockExternalContextSelector()),
+}));
+
+jest.mock('@/features/chat/ui/toolbar/McpServerSelector', () => ({
+  McpServerSelector: jest.fn().mockImplementation(() => createMockMcpServerSelector()),
 }));
 
 jest.mock('@/shared/components/SlashCommandDropdown', () => ({

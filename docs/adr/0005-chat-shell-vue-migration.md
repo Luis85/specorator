@@ -15,7 +15,8 @@ method: accrete-then-swap (unwired Vue behind characterization/parity tests, one
 **Accepted and implemented.** Sub-project 1 (chat shell) landed 2026-07-11
 across commits `2f98016`..`b506de1` plus the Task 7 sweep. Sub-project 2
 (transcript rendering) landed 2026-07-12 — see "Sub-project 2 — Transcript
-rendering" below.
+rendering" below. Sub-project 3 (composer) landed 2026-07-16 — see
+"Sub-project 3 — Composer" below.
 
 ## Context
 
@@ -233,10 +234,79 @@ reactive-data mutation.
 - Provider-lifecycle spawn tools render as a plain `ToolCall`; the consolidated
   spawn+wait+close card is unbuilt.
 
+## Sub-project 3 — Composer (2026-07-16)
+
+The island seam pushed into each tab's `composerHostEl`: the input toolbar (nine
+widgets), file/image/current-note chips, the edited-files bar, the wrapper-mode
+classes, the textarea, and the caret-anchored slash/mention/resume dropdowns
+became a Vue 3 + Pinia island (`ui/vue/composer/`) mounted by
+`mountTabComposer`. The imperative `InputToolbar`, the `ui/toolbar/*` pure-render
+widgets, `FileChipsView`, `EditedFilesView`, and the composer's imperative DOM
+assembly were deleted or reduced to state-only; `InputController`,
+`tabInputWiring`, every controller, `ChatState`, and the provider/runtime
+boundary are unchanged. The primary chat loop (input → transcript) is now fully
+Vue.
+
+1. **Per-component cutover (Approach A), not one big-bang swap.** Unlike
+   sub-project 2's single hard cut, the composer migrated widget-by-widget:
+   structural shell first (`ComposerRoot` / `ComposerWrapper` / nav-row / queue
+   row / context row as empty hosts), then each toolbar widget, chip row, and
+   dropdown ported behind its own parity test, each additive and green before
+   the next. The projection (`TabComposerProjection`) filled one slice per phase
+   (streaming/inputMode/draftMeta → toolbar → chips/editedFiles → dropdown),
+   returning empties until each slice's phase wired it.
+2. **Structural-shell-first + the engine-driven-host seam.** The novel part
+   this sub-project leaned on hardest: several composer elements are Vue-rendered
+   but engine-owned. Vue emits the node (legacy `.specorator-*` class + initial
+   state) and hands the raw handle back through a `register*` callback; the
+   engine then mutates it directly and Vue never re-renders its children — the
+   same "leave-me-alone host" contract as the shell's `CONTENT_HOST_KEY` and the
+   transcript's `SCROLL_HOST_KEY`, applied five times over.
+3. **The textarea hard cutover (the contained risk).** `ComposerTextarea.vue`
+   renders the `<textarea class="specorator-input">` and registers the raw node
+   as `tab.dom.inputEl` exactly once; the engine owns `.value` / caret / IME
+   composition / height AND `placeholder` forever after (no v-model, no reactive
+   attrs). This is the entire cutover risk, contained to "Vue touches this node
+   exactly once (to register it)" — `TriggerInputMode` still sets `placeholder`
+   directly, `InputController` writes `.value`, `SelectionController` /
+   `ChatDropController` attach listeners, all unchanged.
+4. **Selection-indicator + queue-row engine-driven hosts.** The three selection
+   indicators (`SelectionIndicators.vue`) are handed to the untouched selection
+   controllers, which mutate `textContent` + `.specorator-hidden` by class. The
+   `.specorator-input-queue-row` is handed to `QueuedMessageController`, which
+   builds the `.specorator-queue-indicator-*` DOM into it and toggles visibility.
+   The queue row is registered to BOTH `tab.dom.queueIndicatorEl` and
+   `ChatState.queueIndicatorEl`.
+5. **Wrapper-mode classes moved to Vue (a round-5 regression).** The three
+   `.specorator-input-*-mode` classes on `.specorator-input-wrapper` used to be
+   imperative `classList.toggle` calls in the plan / instruction / bang-bash
+   paths. Those sites were removed; the store's `wrapperMode` slice now OWNS the
+   classes (`ComposerWrapper` binds them), projected from permission mode + the
+   mode managers. A stray imperative `toggle` would be dropped by Vue's next
+   patch, so the DOM-contract test asserts the classes survive a re-projection.
+6. **Dropdowns: Vue render, coordinator-driven.** The slash/mention/resume
+   overlays are Vue (`dropdowns/`), gated on `store.dropdown.kind`; keyboard
+   navigation still flows through `tabInputWiring` → the detectors →
+   `ComposerDropdownCoordinator`, which owns the active dropdown state and
+   re-projects. The chat composer delegates entirely to the coordinator; the
+   imperative `shared/components/SlashCommandDropdown.ts` is retained ONLY for
+   the inline-edit flow, which keeps its own shared DOM widget.
+7. **The `.specorator-*` DOM contract.** Vue took over the composer DOM, but
+   several still-imperative consumers read it by class or hold raw handles and
+   are OUT of scope (`ChatDropController`, `InlinePromptController`, the shell
+   nav-row Teleport, the three selection controllers, `QueuedMessageController`,
+   `updateContextRowHasContent`, `tabInputWiring`). The components therefore keep
+   emitting the exact legacy classes + registering every handle.
+   `tests/vue/chat/composer/composerDomContract.test.ts` mounts the real
+   `mountTabComposer` over a rich projection and asserts every consumer-read
+   class, every element handle, and the three engine-driven-host drives — the
+   regression backstop that keeps the side-panels sub-project unblocked while
+   those consumers stay imperative.
+
 ## Deferred / known items
 
-- Sub-projects 3–4 (composer/input toolbar, side panels) are unscheduled
-  follow-ups; each gets its own spec/plan/PR under the same
+- Sub-project 4 (side panels — status panel, navigation sidebar) is the last
+  unscheduled follow-up; it gets its own spec/plan/PR under the same
   island-over-untouched-engine pattern.
 - `InlineAskUserQuestion.renderTabBar`'s consistency with the Vue `TabStrip`
   projection is unaudited (see above); tracked for a later sub-project rather

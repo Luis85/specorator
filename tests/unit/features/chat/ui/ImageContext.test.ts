@@ -161,34 +161,43 @@ describe('ImageContextManager', () => {
     });
   });
 
-  describe('constructor with previewContainerEl', () => {
-    it('should use previewContainerEl when provided', () => {
-      const previewContainer = createMockEl();
-      const { container: c } = createContainerWithInputWrapper();
-      const input = createMockTextArea();
-      const cb = createMockCallbacks();
+  describe('removeImageById', () => {
+    it('removes the matching image by id and fires onImagesChanged', () => {
+      manager.setImages([
+        createImageAttachment({ id: 'img-1', name: 'a.png' }),
+        createImageAttachment({ id: 'img-2', name: 'b.png' }),
+      ]);
+      callbacks.onImagesChanged.mockClear();
 
-      const mgr = new ImageContextManager(c, input, cb, previewContainer);
-      expect(mgr).toBeDefined();
-      const previewEl = previewContainer.querySelector('.specorator-image-preview');
-      expect(previewEl).not.toBeNull();
+      manager.removeImageById('img-1');
+
+      expect(manager.getAttachedImages()).toHaveLength(1);
+      expect(manager.getAttachedImages()[0].id).toBe('img-2');
+      expect(callbacks.onImagesChanged).toHaveBeenCalledTimes(1);
     });
 
-    it('should insert image preview before file indicator if present', () => {
-      const previewContainer = createMockEl();
-      const fileIndicator = previewContainer.createDiv({ cls: 'specorator-file-indicator' });
-      // Patch parentElement to match check in constructor
-      Object.defineProperty(fileIndicator, 'parentElement', { get: () => previewContainer });
+    it('is a no-op for an unknown id', () => {
+      manager.setImages([createImageAttachment({ id: 'img-1' })]);
+      callbacks.onImagesChanged.mockClear();
 
-      const { container: c } = createContainerWithInputWrapper();
-      const input = createMockTextArea();
-      const cb = createMockCallbacks();
+      manager.removeImageById('missing');
 
-      new ImageContextManager(c, input, cb, previewContainer);
-      const children = previewContainer.children;
-      const fileIndicatorIdx = children.indexOf(fileIndicator);
-      const previewIdx = children.findIndex((el: any) => el.hasClass?.('specorator-image-preview'));
-      expect(previewIdx).toBeLessThan(fileIndicatorIdx);
+      expect(manager.getAttachedImages()).toHaveLength(1);
+      expect(callbacks.onImagesChanged).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('openImageById', () => {
+    it('opens the full-size modal for a known id', () => {
+      const showFullImage = jest.spyOn(manager as any, 'showFullImage').mockImplementation(() => {});
+      manager.setImages([createImageAttachment({ id: 'img-1' })]);
+
+      manager.openImageById('img-1');
+      expect(showFullImage).toHaveBeenCalledTimes(1);
+
+      manager.openImageById('missing');
+      expect(showFullImage).toHaveBeenCalledTimes(1);
+      showFullImage.mockRestore();
     });
   });
 });
@@ -204,25 +213,6 @@ describe('ImageContextManager - Private Helpers', () => {
     const inputEl = createMockTextArea();
     const callbacks = createMockCallbacks();
     manager = new ImageContextManager(container, inputEl, callbacks);
-  });
-
-  describe('truncateName', () => {
-    it('should return name unchanged when short enough', () => {
-      expect(manager['truncateName']('test.png', 20)).toBe('test.png');
-    });
-
-    it('should truncate long names preserving extension', () => {
-      const longName = 'this-is-a-very-long-filename.png';
-      const result = manager['truncateName'](longName, 20);
-      expect(result.endsWith('.png')).toBe(true);
-      expect(result).toContain('...');
-      expect(result.length).toBeLessThanOrEqual(20);
-    });
-
-    it('should handle name exactly at max length', () => {
-      const name = '12345678901234567890'; // 20 chars, no extension
-      expect(manager['truncateName'](name, 20)).toBe(name);
-    });
   });
 
   describe('formatSize', () => {
@@ -569,60 +559,6 @@ describe('ImageContextManager - Private Helpers', () => {
 
       expect(addImageSpy).not.toHaveBeenCalled();
       addImageSpy.mockRestore();
-    });
-  });
-
-  describe('Image preview rendering', () => {
-    it('updateImagePreview should hide preview when no images', () => {
-      manager['updateImagePreview']();
-      expect(manager['imagePreviewEl'].style.display).toBe('none');
-    });
-
-    it('updateImagePreview should show preview when images exist', () => {
-      manager.setImages([createImageAttachment()]);
-      expect(manager['imagePreviewEl'].style.display).toBe('flex');
-    });
-
-    it('renderImagePreview should create chip with thumbnail, info, and remove button', () => {
-      manager.setImages([createImageAttachment({ id: 'img-1', name: 'photo.png', size: 2048 })]);
-
-      const previewEl = manager['imagePreviewEl'];
-      expect(previewEl.children.length).toBe(1);
-
-      const chipEl = previewEl.children[0];
-      expect(chipEl.hasClass('specorator-image-chip')).toBe(true);
-
-      const thumbEl = chipEl.querySelector('.specorator-image-thumb');
-      expect(thumbEl).not.toBeNull();
-
-      const infoEl = chipEl.querySelector('.specorator-image-info');
-      expect(infoEl).not.toBeNull();
-
-      const removeEl = chipEl.querySelector('.specorator-image-remove');
-      expect(removeEl).not.toBeNull();
-    });
-
-    it('remove button should delete the image and update preview', () => {
-      const cb = createMockCallbacks();
-      const { container } = createContainerWithInputWrapper();
-      const input = createMockTextArea();
-      const mgr: any = new ImageContextManager(container, input, cb);
-
-      mgr.setImages([
-        createImageAttachment({ id: 'img-1', name: 'a.png' }),
-        createImageAttachment({ id: 'img-2', name: 'b.png' }),
-      ]);
-      expect(mgr.getAttachedImages()).toHaveLength(2);
-
-      cb.onImagesChanged.mockClear();
-
-      const firstChip = mgr['imagePreviewEl'].children[0];
-      const removeEl = firstChip.querySelector('.specorator-image-remove');
-      removeEl.dispatchEvent({ type: 'click', stopPropagation: jest.fn() });
-
-      expect(mgr.getAttachedImages()).toHaveLength(1);
-      expect(mgr.getAttachedImages()[0].id).toBe('img-2');
-      expect(cb.onImagesChanged).toHaveBeenCalled();
     });
   });
 

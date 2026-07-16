@@ -4,6 +4,7 @@ import { setIcon } from 'obsidian';
 import { buildExternalContextDisplayEntries } from '../../utils/externalContext';
 import { type ExternalContextFile, externalContextScanner } from '../../utils/externalContextScanner';
 import { extractMcpMentions } from '../../utils/mcp';
+import type { ComposerDropdownDelegate } from '../components/composerDropdownDelegate';
 import { SelectableDropdown } from '../components/SelectableDropdown';
 import { appendMcpIcon } from '../icons';
 import {
@@ -26,6 +27,11 @@ export type { AgentMentionProvider };
 
 export interface MentionDropdownOptions {
   fixed?: boolean;
+  /**
+   * Chat-only: when present, render + keyboard + visibility DELEGATE to the
+   * coordinator (no DOM built). Inline-edit omits it and keeps the DOM render.
+   */
+  coordinator?: ComposerDropdownDelegate;
 }
 
 export interface MentionDropdownCallbacks {
@@ -62,6 +68,7 @@ export class MentionDropdownController {
   private agentService: AgentMentionProvider | null = null;
   private fixed: boolean;
   private debounceTimer: number | null = null;
+  private readonly coordinator: ComposerDropdownDelegate | null;
 
   constructor(
     containerEl: HTMLElement,
@@ -73,6 +80,7 @@ export class MentionDropdownController {
     this.inputEl = inputEl;
     this.callbacks = callbacks;
     this.fixed = options.fixed ?? false;
+    this.coordinator = options.coordinator ?? null;
 
     this.dropdown = new SelectableDropdown<MentionItem>(this.containerEl, {
       listClassName: 'specorator-mention-dropdown',
@@ -88,7 +96,7 @@ export class MentionDropdownController {
   }
 
   setAgentService(service: AgentMentionProvider | null): void {
-    if (this.agentService !== service && this.dropdown.isVisible()) {
+    if (this.agentService !== service && this.isVisible()) {
       this.hide();
     }
     this.agentService = service;
@@ -108,10 +116,18 @@ export class MentionDropdownController {
   }
 
   isVisible(): boolean {
+    if (this.coordinator) {
+      return this.coordinator.getState().kind === 'mention';
+    }
     return this.dropdown.isVisible();
   }
 
   hide(): void {
+    if (this.coordinator) {
+      this.mentionStartIndex = -1;
+      this.coordinator.hide('mention'); // owner-scoped: the debounced no-`@` pass can't drop another detector's menu
+      return;
+    }
     this.dropdown.hide();
     this.mentionStartIndex = -1;
   }
@@ -175,7 +191,23 @@ export class MentionDropdownController {
     }, 200);
   }
 
+  // Coordinator (chat) mention keydown: delegates to the shared navigation helper.
+  private handleCoordinatorKeydown(coordinator: ComposerDropdownDelegate, e: KeyboardEvent): boolean {
+    if (coordinator.getState().kind !== 'mention') return false;
+    // IME guard: Enter/Tab/Escape are ignored mid-composition (CJK); arrows navigate.
+    const isEnterOrTab = e.key === 'Enter' || e.key === 'Tab';
+    if (e.isComposing && (isEnterOrTab || e.key === 'Escape')) return false;
+    if (coordinator.handleKeydown(e)) return true;
+    if (!isEnterOrTab) return false;
+    // Swallow mid-mention Enter/Tab even on a 0-item submenu ("no matches"), where the
+    // shared helper returns false, so it never falls through and SENDS the half-typed @mention.
+    e.preventDefault();
+    return true;
+  }
+
   handleKeydown(e: KeyboardEvent): boolean {
+    if (this.coordinator) return this.handleCoordinatorKeydown(this.coordinator, e);
+
     if (!this.dropdown.isVisible()) return false;
 
     if (e.key === 'ArrowDown') {
@@ -314,6 +346,28 @@ export class MentionDropdownController {
   }
 
   private renderMentionDropdown(): void {
+    if (this.coordinator) {
+      this.coordinator.showMention(
+        this.filteredMentionItems,
+        this.inputEl as HTMLTextAreaElement,
+        {
+          select: (index) => this.selectMentionItem(index),
+          dismiss: () => {
+            // Escape in a submenu returns to the first level; otherwise the
+            // coordinator has already cleared its state, so only the local
+            // mention-start index needs resetting (no coordinator re-entry).
+            if (this.activeContextFilter || this.activeAgentFilter) {
+              this.returnToFirstLevel();
+            } else {
+              this.mentionStartIndex = -1;
+            }
+          },
+        },
+        this.selectedMentionIndex,
+      );
+      return;
+    }
+
     this.dropdown.render({
       items: this.filteredMentionItems,
       selectedIndex: this.selectedMentionIndex,
@@ -441,10 +495,10 @@ export class MentionDropdownController {
     this.showMentionDropdown('');
   }
 
-  private selectMentionItem(): void {
+  private selectMentionItem(index: number = this.dropdown.getSelectedIndex()): void {
     if (this.filteredMentionItems.length === 0) return;
 
-    const selectedIndex = this.dropdown.getSelectedIndex();
+    const selectedIndex = index;
     this.selectedMentionIndex = selectedIndex;
     const selectedItem = this.filteredMentionItems[selectedIndex];
     if (!selectedItem) return;

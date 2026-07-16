@@ -23,7 +23,7 @@
       "reason": "Grandfathered hotspot. Track the split in docs/tech-debt/2026-06-07-oversized-modules-and-test-files.md; shrink only. Host⇆target session-path translation (toHostSessionPath/toTargetSessionPath/mapHostPathToTarget/mapRequiredHostPathsToTarget) extracted to codexSessionPathMapping.ts."
     },
     "src/features/chat/SpecoratorView.ts": {
-      "loc": 974,
+      "loc": 963,
       "reason": "Grandfathered hotspot. Track the split in docs/tech-debt/2026-06-07-oversized-modules-and-test-files.md; shrink only. Re-locked down from 1112 (2026-07-11): the chat-shell Vue migration (ADR 0005) deleted the imperative header/tab-badge-strip build methods (buildHeader, buildNavRowContent, updateTabBar, updateHeaderMetaRow) in favor of the Vue island mounted via ChatShellRoot; the view now assembles ChatShellCallbacks and hosts the still-imperative history/work-order dropdowns and git button into Vue refs instead of building the frame DOM itself."
     },
     "src/features/tasks/ui/AgentBoardView.ts": {
@@ -35,8 +35,12 @@
       "reason": "Grandfathered hotspot. Track the split in docs/tech-debt/2026-06-07-oversized-modules-and-test-files.md; shrink only. Pure result-parsing heuristics (status classification, JSON-record coercion, agent-id extraction) extracted to subagentResultParsing.ts."
     },
     "src/features/chat/tabs/TabManager.ts": {
-      "loc": 854,
-      "reason": "Grandfathered hotspot. Track the split in docs/tech-debt/2026-06-07-oversized-modules-and-test-files.md; shrink only. +3 from the isAgentBound tab-bar-item field (agent-bound badge glyph). Library-views-overhaul: createTab gained bound-agent provider/model seeding; that branching was extracted into resolveDefaultProviderId/resolvePinnedModel helpers to clear the createTab critical-complexity finding (criticalComplexity stays 0), trading a small net LOC rise for lower per-function complexity."
+      "loc": 856,
+      "reason": "Grandfathered hotspot. Track the split in docs/tech-debt/2026-06-07-oversized-modules-and-test-files.md; shrink only. +3 from the isAgentBound tab-bar-item field (agent-bound badge glyph). Library-views-overhaul: createTab gained bound-agent provider/model seeding; that branching was extracted into resolveDefaultProviderId/resolvePinnedModel helpers to clear the createTab critical-complexity finding (criticalComplexity stays 0), trading a small net LOC rise for lower per-function complexity. +5 from the composer Vue island mount wiring (mountTabComposer between createTab and initializeTabUI, ADR 0005 sub-project 3)."
+    },
+    "src/features/chat/controllers/ConversationController.ts": {
+      "loc": 795,
+      "reason": "Grandfathered hotspot. Track the split in docs/tech-debt/2026-06-07-oversized-modules-and-test-files.md; shrink only. Re-locked down from 677 (2026-07-12): the transcript Vue cutover (ADR 0005 sub-project 2) replaced the renderer.renderMessages/renderLoading DOM calls on switch/load with transcript-projection store pushes. +7 (Codex PR#486 round-4 fix): thread clearRetryableTurn through the createNew/loadActive/switchTo (re)bind paths. +5 (Codex P2): guard pendingSwitchDraft so a rapid re-switch doesn't clobber the saved composer draft with the already-cleared textarea. +7 (Codex P2): extract cancelPendingHydration and call it from createNew so New Chat aborts an in-flight switchTo hydration instead of letting a late restoreConversation rebind the tab to the superseded conversation. +3 (Codex P2): clear pendingSwitchDraft in createNew so an abandoned switch's draft isn't restored into the blank New Chat (and doesn't make the next switchTo skip capturing). +3 (Codex P2): clear the transcript loading spinner in createNew so an aborted switchTo hydration's overlay doesn't stay stuck over the blank New Chat."
     },
     "src/features/inline-edit/ui/InlineEditModal.ts": {
       "loc": 785,
@@ -45,10 +49,6 @@
     "src/main.ts": {
       "loc": 781,
       "reason": "Grandfathered orchestrator. Track the split in docs/tech-debt/2026-06-07-oversized-modules-and-test-files.md; shrink only. Extracted to dedicated modules: roster-agent resolution + provider projection (app/agents/RosterAgentService.ts), workspace view/ribbon/view-command registration (app/views/registerPluginViews.ts), and chat message toolbar actions (app/commands/registerChatMessageActions.ts); the plugin keeps thin delegators. Remaining clusters earmarked for follow-up services: HTTP tool server wiring (SpecoratorHttpToolServer + getHttpToolServerConfig) and the tool-scope staleness fingerprint (getScopedSpecoratorTools + getSpecoratorToolKey)."
-    },
-    "src/features/chat/controllers/ConversationController.ts": {
-      "loc": 795,
-      "reason": "Grandfathered hotspot. Track the split in docs/tech-debt/2026-06-07-oversized-modules-and-test-files.md; shrink only. Re-locked down from 677 (2026-07-12): the transcript Vue cutover (ADR 0005 sub-project 2) replaced the renderer.renderMessages/renderLoading DOM calls on switch/load with transcript-projection store pushes. +7 (Codex PR#486 round-4 fix): thread clearRetryableTurn through the createNew/loadActive/switchTo (re)bind paths. +5 (Codex P2): guard pendingSwitchDraft so a rapid re-switch doesn't clobber the saved composer draft with the already-cleared textarea. +7 (Codex P2): extract cancelPendingHydration and call it from createNew so New Chat aborts an in-flight switchTo hydration instead of letting a late restoreConversation rebind the tab to the superseded conversation. +3 (Codex P2): clear pendingSwitchDraft in createNew so an abandoned switch's draft isn't restored into the blank New Chat (and doesn't make the next switchTo skip capturing). +3 (Codex P2): clear the transcript loading spinner in createNew so an aborted switchTo hydration's overlay doesn't stay stuck over the blank New Chat."
     },
     "src/providers/codex/runtime/CodexNotificationRouter.ts": {
       "loc": 761,
@@ -80,10 +80,6 @@
     },
     "src/providers/codex/runtime/codexAppServerTypes.ts": {
       "loc": 535,
-      "reason": "Grandfathered hotspot. Track the split in docs/tech-debt/2026-06-07-oversized-modules-and-test-files.md; shrink only."
-    },
-    "src/features/chat/tabs/tabUi.ts": {
-      "loc": 509,
       "reason": "Grandfathered hotspot. Track the split in docs/tech-debt/2026-06-07-oversized-modules-and-test-files.md; shrink only."
     }
   }

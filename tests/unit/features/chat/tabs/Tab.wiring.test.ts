@@ -2,6 +2,7 @@ import '@/providers';
 
 import { createMockEl } from '@test/helpers/mockElement';
 import { Platform } from 'obsidian';
+import { nextTick } from 'vue';
 
 import { ProviderRegistry } from '@/core/providers/ProviderRegistry';
 import { ProviderWorkspaceRegistry } from '@/core/providers/ProviderWorkspaceRegistry';
@@ -14,6 +15,7 @@ import {
   wireTabInputEvents,
 } from '@/features/chat/tabs/Tab';
 import { createTabRuntimeHost } from '@/features/chat/tabs/tabRuntimeHost';
+import { ImageContextManager } from '@/features/chat/ui/ImageContext';
 import { mountTranscript } from '@/features/chat/ui/vue/transcript/mountTranscript';
 import {
   DEFAULT_CODEX_PRIMARY_MODEL,
@@ -25,7 +27,6 @@ import {
   createMockBrowserSelectionController,
   createMockCanvasSelectionController,
   createMockClaudeChatRuntime,
-  createMockContextUsageMeter,
   createMockExternalContextSelector,
   createMockFileContextManager,
   createMockImageContextManager,
@@ -33,16 +34,11 @@ import {
   createMockInstructionModeManager,
   createMockMcpManager,
   createMockMcpServerSelector,
-  createMockModelSelector,
-  createMockModeSelector,
   createMockOptions,
-  createMockPermissionToggle,
   createMockPlugin,
   createMockSelectionController,
-  createMockServiceTierToggle,
   createMockSlashCommandDropdown,
   createMockStatusPanel,
-  createMockThinkingBudgetSelector,
   installMockResizeObserver,
 } from './tabTestKit';
 
@@ -69,14 +65,8 @@ let mockSlashCommandDropdown: ReturnType<typeof createMockSlashCommandDropdown>;
 let mockInstructionModeManager: ReturnType<typeof createMockInstructionModeManager>;
 let mockBangBashModeManager: ReturnType<typeof createMockBangBashModeManager>;
 let mockStatusPanel: ReturnType<typeof createMockStatusPanel>;
-let mockModelSelector: ReturnType<typeof createMockModelSelector>;
-let mockModeSelector: ReturnType<typeof createMockModeSelector>;
-let mockThinkingBudgetSelector: ReturnType<typeof createMockThinkingBudgetSelector>;
-let mockContextUsageMeter: ReturnType<typeof createMockContextUsageMeter>;
 let mockExternalContextSelector: ReturnType<typeof createMockExternalContextSelector>;
 let mockMcpServerSelector: ReturnType<typeof createMockMcpServerSelector>;
-let mockPermissionToggle: ReturnType<typeof createMockPermissionToggle>;
-let mockServiceTierToggle: ReturnType<typeof createMockServiceTierToggle>;
 let mockSelectionController: ReturnType<typeof createMockSelectionController>;
 let mockBrowserSelectionController: ReturnType<typeof createMockBrowserSelectionController>;
 let mockCanvasSelectionController: ReturnType<typeof createMockCanvasSelectionController>;
@@ -113,27 +103,17 @@ jest.mock('@/features/chat/ui/StatusPanel', () => ({
   }),
 }));
 
-jest.mock('@/features/chat/ui/InputToolbar', () => ({
-  createInputToolbar: jest.fn().mockImplementation(() => {
-    mockModelSelector = createMockModelSelector();
-    mockModeSelector = createMockModeSelector();
-    mockThinkingBudgetSelector = createMockThinkingBudgetSelector();
-    mockContextUsageMeter = createMockContextUsageMeter();
+jest.mock('@/features/chat/ui/toolbar/ExternalContextSelector', () => ({
+  ExternalContextSelector: jest.fn().mockImplementation(() => {
     mockExternalContextSelector = createMockExternalContextSelector();
+    return mockExternalContextSelector;
+  }),
+}));
+
+jest.mock('@/features/chat/ui/toolbar/McpServerSelector', () => ({
+  McpServerSelector: jest.fn().mockImplementation(() => {
     mockMcpServerSelector = createMockMcpServerSelector();
-    mockPermissionToggle = createMockPermissionToggle();
-    mockServiceTierToggle = createMockServiceTierToggle();
-    return {
-      modelSelector: mockModelSelector,
-      modeSelector: mockModeSelector,
-      thinkingBudgetSelector: mockThinkingBudgetSelector,
-      contextUsageMeter: mockContextUsageMeter,
-      externalContextSelector: mockExternalContextSelector,
-      mcpServerSelector: mockMcpServerSelector,
-      permissionToggle: mockPermissionToggle,
-      serviceTierToggle: mockServiceTierToggle,
-      gitActionButton: null,
-    };
+    return mockMcpServerSelector;
   }),
 }));
 
@@ -431,16 +411,6 @@ describe('Tab - UI Initialization', () => {
       expect(tab.ui.imageContextManager).toBeDefined();
     });
 
-    it('should create selection indicator element', () => {
-      const options = createMockOptions();
-      const tab = createTab(options);
-
-      initializeTabUI(tab, options.plugin);
-
-      expect(tab.dom.selectionIndicatorEl).toBeDefined();
-      expect(tab.dom.selectionIndicatorEl!.style.display).toBe('none');
-    });
-
     it('should create SlashCommandDropdown', () => {
       const options = createMockOptions();
       const tab = createTab(options);
@@ -487,18 +457,14 @@ describe('Tab - UI Initialization', () => {
       expect(mockStatusPanel.mount).toHaveBeenCalledWith(tab.dom.statusPanelContainerEl);
     });
 
-    it('should create input toolbar components', () => {
+    it('should create the retained toolbar selector objects', () => {
       const options = createMockOptions();
       const tab = createTab(options);
 
       initializeTabUI(tab, options.plugin);
 
-      expect(tab.ui.modelSelector).toBeDefined();
-      expect(tab.ui.thinkingBudgetSelector).toBeDefined();
-      expect(tab.ui.contextUsageMeter).toBeDefined();
       expect(tab.ui.externalContextSelector).toBeDefined();
       expect(tab.ui.mcpServerSelector).toBeDefined();
-      expect(tab.ui.permissionToggle).toBeDefined();
     });
 
     it('should create bang-bash mode from provider UI config', () => {
@@ -566,6 +532,50 @@ describe('Tab - UI Initialization', () => {
       // Verify callbacks are set by checking the state
       expect(tab.state.callbacks.onUsageChanged).toBeDefined();
       expect(tab.state.callbacks.onTodosChanged).toBeDefined();
+    });
+
+    // Regression (Codex P2): the context-manager onContextChanged hook must EMIT
+    // first (so the Vue chip slice re-projects) and recompute the context-row
+    // visibility only on Vue's NEXT tick — after the async chip classes are
+    // patched. A synchronous pre-emit read (the old order) saw stale DOM: the
+    // first chip left the row hidden and the last-chip removal left it visible.
+    it('onContextChanged emits first, then recomputes visibility on nextTick', async () => {
+      const options = createMockOptions();
+      const tab = createTab(options);
+
+      initializeTabUI(tab, options.plugin);
+
+      // The SAME onContextChanged closure is wired as onImagesChanged; pull it
+      // straight off the (mocked) ImageContextManager constructor call.
+      const imageCtorArgs = (ImageContextManager as unknown as jest.Mock).mock.calls[0];
+      const onContextChanged = (imageCtorArgs[2] as { onImagesChanged: () => void }).onImagesChanged;
+
+      // autoResizeTextarea also moved into the nextTick block; stub inputEl so it
+      // is a no-op (setCssProps isn't polyfilled in the unit jsdom setup).
+      tab.dom.inputEl = { closest: () => null, setCssProps: jest.fn(), offsetHeight: 0, scrollHeight: 0 } as unknown as HTMLTextAreaElement;
+
+      const order: string[] = [];
+      const emit = jest.fn(() => order.push('emit'));
+      const visibility = jest.fn(() => order.push('visibility'));
+      tab.composer = { emit } as unknown as typeof tab.composer;
+      const controller = { updateContextRowVisibility: visibility };
+      tab.controllers.selectionController = controller as unknown as typeof tab.controllers.selectionController;
+      tab.controllers.browserSelectionController = controller as unknown as typeof tab.controllers.browserSelectionController;
+      tab.controllers.canvasSelectionController = controller as unknown as typeof tab.controllers.canvasSelectionController;
+
+      onContextChanged();
+
+      // Synchronous: emit ran; visibility is deferred (not yet run against the
+      // still-stale DOM).
+      expect(emit).toHaveBeenCalledTimes(1);
+      expect(visibility).not.toHaveBeenCalled();
+
+      await nextTick();
+
+      // After the flush the three selection controllers each recompute once, and
+      // they run strictly AFTER the emit that patched the chip DOM.
+      expect(visibility).toHaveBeenCalledTimes(3);
+      expect(order).toEqual(['emit', 'visibility', 'visibility', 'visibility']);
     });
   });
 });
@@ -1280,11 +1290,14 @@ describe('Tab - UI Callback Wiring', () => {
       expect(contexts).toEqual(['/path/1', '/path/2']);
     });
 
-    it('should wire MCP mention change to add servers to selector', () => {
+    it('should wire MCP mention change to add servers to selector and re-project the composer', () => {
       const options = createMockOptions();
       const tab = createTab(options);
 
       initializeTabUI(tab, options.plugin);
+
+      const emit = jest.fn();
+      tab.composer = { emit } as any;
 
       // Get the setOnMcpMentionChange callback
       const onMcpMentionChange = mockFileContextManager.setOnMcpMentionChange.mock.calls[0][0];
@@ -1293,6 +1306,8 @@ describe('Tab - UI Callback Wiring', () => {
       onMcpMentionChange(['server1', 'server2']);
 
       expect(mockMcpServerSelector.addMentionedServers).toHaveBeenCalledWith(['server1', 'server2']);
+      // The Vue toolbar's MCP count badge/checkmark must re-project.
+      expect(emit).toHaveBeenCalled();
     });
 
     it('should wire external context onChange to pre-scan contexts', () => {
@@ -1328,20 +1343,23 @@ describe('Tab - UI Callback Wiring', () => {
       expect(saveSettings).toHaveBeenCalled();
     });
 
-    it('should wire onUsageChanged callback to update context meter', () => {
+    it('should wire onUsageChanged callback to re-project the composer', () => {
       const options = createMockOptions();
       const tab = createTab(options);
 
       initializeTabUI(tab, options.plugin);
 
+      const emit = jest.fn();
+      tab.composer = { emit } as any;
+
       // Verify callback is wired
       const usage = { inputTokens: 1000, outputTokens: 500 };
       tab.state.callbacks.onUsageChanged?.(usage as any);
 
-      expect(mockContextUsageMeter.update).toHaveBeenCalledWith(usage);
+      expect(emit).toHaveBeenCalled();
     });
 
-    it('should update context meter for Codex tabs on usage change', () => {
+    it('should re-project the composer for Codex tabs on usage change', () => {
       const getCapabilitiesSpy = jest.spyOn(ProviderRegistry, 'getCapabilities');
       getCapabilitiesSpy.mockReturnValue({
         providerId: 'codex',
@@ -1371,7 +1389,8 @@ describe('Tab - UI Callback Wiring', () => {
       const tab = createTab(options);
       initializeTabUI(tab, options.plugin);
 
-      mockContextUsageMeter.update.mockClear();
+      const emit = jest.fn();
+      tab.composer = { emit } as any;
 
       const usage = {
         inputTokens: 5000,
@@ -1383,7 +1402,7 @@ describe('Tab - UI Callback Wiring', () => {
       };
       tab.state.callbacks.onUsageChanged?.(usage as any);
 
-      expect(mockContextUsageMeter.update).toHaveBeenCalledWith(usage);
+      expect(emit).toHaveBeenCalled();
 
       getCapabilitiesSpy.mockRestore();
     });

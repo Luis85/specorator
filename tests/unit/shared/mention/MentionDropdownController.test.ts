@@ -1,5 +1,6 @@
 import { createMockEl } from '@test/helpers/mockElement';
 
+import { ComposerDropdownCoordinator } from '@/features/chat/controllers/ComposerDropdownCoordinator';
 import {
   type AgentMentionProvider,
   type McpMentionProvider,
@@ -175,6 +176,46 @@ describe('MentionDropdownController', () => {
 
       expect(dropdownInstance.hide).toHaveBeenCalledTimes(1);
       expect(controller.isVisible()).toBe(false);
+    });
+
+    it('hides via the coordinator when the agent service changes in coordinator mode', () => {
+      // In chat/coordinator mode `this.dropdown` is never rendered, so the hide
+      // must gate on the coordinator-aware isVisible() (getState().kind), not
+      // `this.dropdown.isVisible()` (always false) — else a provider swap leaves
+      // stale agent entries selectable.
+      let mockKind: 'mention' | null = null;
+      const coordinator = {
+        getState: jest.fn(() => ({ kind: mockKind, items: [], activeIndex: 0, anchorRect: null })),
+        showSlash: jest.fn(),
+        showMention: jest.fn(),
+        showResume: jest.fn(),
+        setActiveIndex: jest.fn(),
+        move: jest.fn(),
+        selectActive: jest.fn(),
+        handleKeydown: jest.fn(() => false),
+        hide: jest.fn(),
+      };
+      const coordController = new MentionDropdownController(containerEl, inputEl, callbacks, {
+        coordinator: coordinator as never,
+      });
+      const initialService = createMockAgentService([
+        { id: 'Explore', name: 'Explore', source: 'builtin' },
+      ]);
+      const replacementService = createMockAgentService([
+        { id: 'worker', name: 'worker', source: 'vault' },
+      ]);
+
+      // Menu not open yet (kind null) — swapping the service must NOT hide.
+      coordController.setAgentService(initialService);
+      expect(coordinator.hide).not.toHaveBeenCalled();
+
+      // Menu open (coordinator reports 'mention') — swapping the service hides it
+      // through the owner-scoped coordinator path, not the dead imperative dropdown.
+      mockKind = 'mention';
+      coordController.setAgentService(replacementService);
+      expect(coordinator.hide).toHaveBeenCalledWith('mention');
+
+      coordController.destroy();
     });
   });
 
@@ -446,6 +487,77 @@ describe('MentionDropdownController', () => {
       const handled = controller.handleKeydown(event);
 
       expect(handled).toBe(false);
+    });
+  });
+
+  // Regression: Task 15 rewired the chat mention dropdown to delegate keyboard
+  // handling to ComposerDropdownCoordinator via the shared navigation helper,
+  // which returns false on 0 items. A mention submenu ("no matches") shows 0
+  // items without hiding, so mid-mention Enter fell through and SENT the
+  // half-typed `@agents/xyz`. The mention branch must keep swallowing Enter/Tab.
+  describe('coordinator branch: mid-mention Enter must not send', () => {
+    function coordinatedInput() {
+      return {
+        value: '',
+        selectionStart: 0,
+        selectionEnd: 0,
+        focus: jest.fn(),
+        addEventListener: jest.fn(),
+        removeEventListener: jest.fn(),
+        getBoundingClientRect: () => ({ top: 0, left: 0, width: 0, height: 0 }),
+      } as any;
+    }
+
+    it('consumes Enter (returns true, no select) while a 0-item mention submenu is visible', () => {
+      const localInput = coordinatedInput();
+      const localCallbacks = createMockCallbacks();
+      const coordinator = new ComposerDropdownCoordinator(() => {});
+      const localController = new MentionDropdownController(
+        createMockEl(),
+        localInput,
+        localCallbacks,
+        { coordinator },
+      );
+      // Agent service that matches nothing -> submenu renders empty (0 items).
+      localController.setAgentService(createMockAgentService([]));
+
+      localInput.value = '@agents/xyz';
+      localInput.selectionStart = localInput.value.length;
+      localController.handleInputChange();
+      jest.advanceTimersByTime(200);
+
+      // Submenu is open with an empty item list.
+      expect(coordinator.getState().kind).toBe('mention');
+      expect(coordinator.getState().items).toHaveLength(0);
+
+      const selectSpy = jest.spyOn(coordinator, 'selectActive');
+      const enter = { key: 'Enter', isComposing: false, preventDefault: jest.fn() } as any;
+      const handled = localController.handleKeydown(enter);
+
+      // Swallowed: consumed, prevented, and NOT sent/inserted.
+      expect(handled).toBe(true);
+      expect(enter.preventDefault).toHaveBeenCalled();
+      expect(selectSpy).not.toHaveBeenCalled();
+      expect(localCallbacks.onAddContextPill).not.toHaveBeenCalled();
+      expect(localCallbacks.onAgentMentionSelect).not.toHaveBeenCalled();
+      expect(localInput.value).toBe('@agents/xyz');
+
+      localController.destroy();
+    });
+
+    it('returns false when the mention dropdown is closed (send path works)', () => {
+      const coordinator = new ComposerDropdownCoordinator(() => {});
+      const localController = new MentionDropdownController(
+        createMockEl(),
+        coordinatedInput(),
+        createMockCallbacks(),
+        { coordinator },
+      );
+
+      const enter = { key: 'Enter', isComposing: false, preventDefault: jest.fn() } as any;
+      expect(localController.handleKeydown(enter)).toBe(false);
+
+      localController.destroy();
     });
   });
 

@@ -7,6 +7,7 @@ import type { SlashCommandDropdown } from '../../../shared/components/SlashComma
 import type { BrowserSelectionController } from '../controllers/BrowserSelectionController';
 import type { CanvasSelectionController } from '../controllers/CanvasSelectionController';
 import type { ChatDropController } from '../controllers/ChatDropController';
+import type { ComposerDropdownCoordinator } from '../controllers/ComposerDropdownCoordinator';
 import type { ConversationController } from '../controllers/ConversationController';
 import type { InputController } from '../controllers/InputController';
 import type { NavigationController } from '../controllers/NavigationController';
@@ -15,24 +16,16 @@ import type { StreamController } from '../controllers/StreamController';
 import type { SubagentManager } from '../services/SubagentManager';
 import type { ChatState } from '../state/ChatState';
 import type { BangBashModeManager } from '../ui/BangBashModeManager';
-import type { EditedFilesView } from '../ui/EditedFilesView';
 import type { FileContextManager } from '../ui/FileContext';
 import type { ImageContextManager } from '../ui/ImageContext';
-import type {
-  ContextUsageMeter,
-  ExternalContextSelector,
-  McpServerSelector,
-  ModelSelector,
-  ModeSelector,
-  PermissionToggle,
-  PlanModeToggle,
-  ServiceTierToggle,
-  ThinkingBudgetSelector,
-} from '../ui/InputToolbar';
 import type { InstructionModeManager } from '../ui/InstructionModeManager';
 import type { NavigationSidebar } from '../ui/NavigationSidebar';
 import type { StatusPanel } from '../ui/StatusPanel';
+import type { ExternalContextSelector } from '../ui/toolbar/ExternalContextSelector';
+import type { McpServerSelector } from '../ui/toolbar/McpServerSelector';
+import type { MountedComposer } from '../ui/vue/composer/mountComposer';
 import type { MountedTranscript } from '../ui/vue/transcript/mountTranscript';
+import type { TabComposerProjection } from './tabComposer';
 import type { TabTranscriptProjection } from './tabTranscript';
 
 /**
@@ -131,6 +124,8 @@ export interface TabControllers {
   streamController: StreamController | null;
   inputController: InputController | null;
   navigationController: NavigationController | null;
+  /** Owns the active composer dropdown state; `buildDropdown` projects it. */
+  composerDropdownCoordinator: ComposerDropdownCoordinator | null;
 }
 
 /**
@@ -148,20 +143,14 @@ export interface TabServices {
 export interface TabUIComponents {
   fileContextManager: FileContextManager | null;
   imageContextManager: ImageContextManager | null;
-  editedFilesView: EditedFilesView | null;
   chatDropController?: ChatDropController;
-  modelSelector: ModelSelector | null;
-  modeSelector: ModeSelector | null;
-  thinkingBudgetSelector: ThinkingBudgetSelector | null;
+  // Retained engine objects (DOM-render layer removed in the Phase 2 toolbar
+  // cutover); the toolbar widgets themselves are now Vue (ComposerToolbar.vue).
   externalContextSelector: ExternalContextSelector | null;
   mcpServerSelector: McpServerSelector | null;
-  permissionToggle: PermissionToggle | null;
-  planModeToggle: PlanModeToggle | null;
-  serviceTierToggle: ServiceTierToggle | null;
   slashCommandDropdown: SlashCommandDropdown | null;
   instructionModeManager: InstructionModeManager | null;
   bangBashModeManager: BangBashModeManager | null;
-  contextUsageMeter: ContextUsageMeter | null;
   statusPanel: StatusPanel | null;
   navigationSidebar: NavigationSidebar | null;
 }
@@ -173,6 +162,11 @@ export interface TabDOMElements {
   contentEl: HTMLElement;
   messagesEl: HTMLElement;
 
+  /** Vue composer island mount target (a bare child of contentEl). The island
+   *  renders the composer structural DOM into it and hands the real elements
+   *  back through element-handle keys. */
+  composerHostEl: HTMLElement;
+
   /** Container for status panel (fixed between messages and input). */
   statusPanelContainerEl: HTMLElement;
 
@@ -183,9 +177,6 @@ export interface TabDOMElements {
 
   /** Nav row for tab badges and header icons (above input wrapper). */
   navRowEl: HTMLElement;
-
-  /** Row of agent-changed file chips (top of the input wrapper, above the context row). */
-  editedFilesRowEl: HTMLElement;
 
   /** Context row for file chips and selection indicator (inside input wrapper). */
   contextRowEl: HTMLElement;
@@ -318,6 +309,12 @@ export interface TabData {
 
   /** Handle to the mounted Vue transcript island (unmounted on tab destroy). */
   mountedTranscript: MountedTranscript | null;
+
+  /** Per-tab Vue composer projection source (engine → store snapshot fan-out). */
+  composer: TabComposerProjection | null;
+
+  /** Handle to the mounted Vue composer island (unmounted on tab destroy). */
+  mountedComposer: MountedComposer | null;
 }
 
 export type TabProviderContext = Pick<TabData, 'conversationId' | 'service' | 'providerId' | 'lifecycleState' | 'draftModel'>;

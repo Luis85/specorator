@@ -2,6 +2,7 @@ import { Notice } from 'obsidian';
 
 import type { ConversationMeta } from '../../../core/types';
 import { t } from '../../../i18n/i18n';
+import type { ComposerDropdownDelegate } from '../../../shared/components/composerDropdownDelegate';
 import { ResumeSessionDropdown } from '../../../shared/components/ResumeSessionDropdown';
 
 export interface ResumeSessionDropdownDeps {
@@ -10,6 +11,8 @@ export interface ResumeSessionDropdownDeps {
   getConversations: () => ConversationMeta[];
   getCurrentConversationId: () => string | null;
   openConversation: (conversationId: string) => Promise<void>;
+  /** Chat dropdown coordinator (the resume dropdown delegates render/keyboard to it). */
+  getDropdownCoordinator?: () => ComposerDropdownDelegate | null;
 }
 
 /**
@@ -49,6 +52,12 @@ export class ResumeSessionDropdownCoordinator {
       return;
     }
 
+    // The composer always mounts the dropdown coordinator before the resume
+    // dropdown is built, so in production this is non-null; the type is nullable
+    // only for prototype/test paths, which this guard tolerates without a throw.
+    const coordinator = this.deps.getDropdownCoordinator?.();
+    if (!coordinator) return;
+
     this.active = new ResumeSessionDropdown(
       this.deps.getInputContainerEl(),
       this.deps.getInputEl(),
@@ -66,6 +75,7 @@ export class ResumeSessionDropdownCoordinator {
           this.destroy();
         },
       },
+      { coordinator },
     );
   }
 }

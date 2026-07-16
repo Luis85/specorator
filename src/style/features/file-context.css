@@ -124,7 +124,21 @@
 .specorator-mention-name {
   font-size: 13px;
   font-weight: 500;
+  color: var(--text-normal);
+}
+
+/* The Vue dropdown renders every mention name through .specorator-mention-name
+   (the imperative controller used a per-type -name-* class instead), so restore
+   the imperative per-type name colors via the item-level variant class. Only
+   mcp-server keeps the accent; agent-folder is link-color/600; every other type
+   is text-normal (the base above). */
+.specorator-mention-item.mcp-server .specorator-mention-name {
   color: var(--interactive-accent);
+}
+
+.specorator-mention-item.agent-folder .specorator-mention-name {
+  color: var(--link-color);
+  font-weight: 600;
 }
 
 .specorator-mention-desc {

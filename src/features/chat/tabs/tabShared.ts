@@ -213,21 +213,9 @@ export function commitModelPickToProviderSettings(
   );
 }
 
-export function refreshTabProviderUI(tab: TabData, plugin: SpecoratorPlugin): void {
-  const capabilities = getTabCapabilities(tab, plugin);
-  const permissionMode = getTabPermissionMode(tab, plugin);
-  tab.ui.modelSelector?.updateDisplay();
-  tab.ui.modelSelector?.renderOptions();
-  tab.ui.modeSelector?.updateDisplay();
-  tab.ui.modeSelector?.renderOptions();
-  tab.ui.thinkingBudgetSelector?.updateDisplay();
-  tab.ui.permissionToggle?.updateDisplay();
-  tab.ui.planModeToggle?.updateDisplay();
-  tab.ui.serviceTierToggle?.updateDisplay();
-  tab.dom.inputWrapper.toggleClass(
-    'specorator-input-plan-mode',
-    permissionMode === 'plan' && capabilities.supportsPlanMode,
-  );
+export function refreshTabProviderUI(tab: TabData, _plugin: SpecoratorPlugin): void {
+  // The toolbar widgets are Vue; re-project so they all repaint from the store.
+  tab.composer?.emit();
 }
 
 /**
@@ -236,21 +224,17 @@ export function refreshTabProviderUI(tab: TabData, plugin: SpecoratorPlugin): vo
  */
 export function applyProviderUIGating(tab: TabData, plugin: SpecoratorPlugin): void {
   const capabilities = getTabCapabilities(tab, plugin);
-  const uiConfig = getTabChatUIConfig(tab, plugin);
   const mcpManager = capabilities.supportsMcpTools
     ? getProviderMcpManager(capabilities.providerId)
     : null;
-  const hasPermissionToggle = Boolean(uiConfig.getPermissionModeToggle?.());
 
+  // The MCP enabled-set is engine truth the retained selector owns; clear it
+  // when the provider has no MCP support (the Vue widget's visibility is derived
+  // by the projection, so setVisible is a no-op kept for API compatibility).
   if (!capabilities.supportsMcpTools) {
     tab.ui.mcpServerSelector?.clearEnabled();
   }
   tab.ui.mcpServerSelector?.setVisible(capabilities.supportsMcpTools);
-  tab.ui.permissionToggle?.setVisible(hasPermissionToggle);
-  const planValue = uiConfig.getPermissionModeToggle?.()?.planValue;
-  tab.ui.planModeToggle?.setVisible(
-    capabilities.supportsPlanMode && Boolean(planValue),
-  );
   tab.ui.fileContextManager?.setMcpManager(mcpManager);
 
   tab.ui.fileContextManager?.setAgentService(
@@ -258,7 +242,8 @@ export function applyProviderUIGating(tab: TabData, plugin: SpecoratorPlugin): v
   );
 
   tab.ui.imageContextManager?.setEnabled(capabilities.supportsImageAttachments);
-  tab.ui.contextUsageMeter?.update(tab.state.usage);
+  // Vue owns the gated toolbar visibility flags; re-project so the composer repaints.
+  tab.composer?.emit();
 }
 
 export function syncTabProviderServices(
@@ -330,10 +315,6 @@ export function updatePlanModeUI(tab: TabData, plugin: SpecoratorPlugin, mode: s
     snapshot,
   );
   void plugin.saveSettings();
-  tab.ui.permissionToggle?.updateDisplay();
-  tab.ui.planModeToggle?.updateDisplay();
-  tab.dom.inputWrapper.toggleClass(
-    'specorator-input-plan-mode',
-    mode === 'plan' && getTabCapabilities(tab, plugin).supportsPlanMode,
-  );
+  // Vue owns the permission/plan-mode widgets; re-project so they repaint.
+  tab.composer?.emit();
 }

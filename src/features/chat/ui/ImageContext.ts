@@ -3,6 +3,7 @@ import * as path from 'path';
 
 import type { ImageAttachment, ImageMediaType } from '../../../core/types';
 import { t } from '../../../i18n/i18n';
+import { formatImageSize } from '../utils/imageAttachment';
 import { openImageModal } from './imageModal';
 
 const MAX_IMAGE_SIZE = 5 * 1024 * 1024;
@@ -22,31 +23,23 @@ export interface ImageContextCallbacks {
 export class ImageContextManager {
   private callbacks: ImageContextCallbacks;
   private containerEl: HTMLElement;
-  private previewContainerEl: HTMLElement;
-  private imagePreviewEl: HTMLElement;
   private inputEl: HTMLTextAreaElement;
   private attachedImages: Map<string, ImageAttachment> = new Map();
   private enabled = true;
   /** Monotonic token — stale async conversions are dropped after clear/reset. */
   private attachGeneration = 0;
 
+  // Vue owns the preview strip (`.specorator-image-preview`); this manager keeps
+  // the image Map + async conversion + full-size modal only. It still fires
+  // onImagesChanged so the reactive chip slice re-projects.
   constructor(
     containerEl: HTMLElement,
     inputEl: HTMLTextAreaElement,
-    callbacks: ImageContextCallbacks,
-    previewContainerEl?: HTMLElement
+    callbacks: ImageContextCallbacks
   ) {
     this.containerEl = containerEl;
-    this.previewContainerEl = previewContainerEl ?? containerEl;
     this.inputEl = inputEl;
     this.callbacks = callbacks;
-
-    // Create image preview in previewContainerEl, before file indicator if present
-    const fileIndicator = this.previewContainerEl.querySelector('.specorator-file-indicator');
-    this.imagePreviewEl = this.previewContainerEl.createDiv({ cls: 'specorator-image-preview' });
-    if (fileIndicator && fileIndicator.parentElement === this.previewContainerEl) {
-      this.previewContainerEl.insertBefore(this.imagePreviewEl, fileIndicator);
-    }
 
     this.setupPasteHandler();
   }
@@ -66,10 +59,22 @@ export class ImageContextManager {
     return this.attachedImages.size > 0;
   }
 
+  /** Removes an image attachment by its generated id (Vue chip remove). */
+  removeImageById(id: string): void {
+    if (this.attachedImages.delete(id)) {
+      this.callbacks.onImagesChanged();
+    }
+  }
+
+  /** Opens the full-size preview for an attachment — reuses the existing modal opener. */
+  openImageById(id: string): void {
+    const image = this.attachedImages.get(id);
+    if (image) this.showFullImage(image);
+  }
+
   clearImages() {
     this.attachGeneration += 1;
     this.attachedImages.clear();
-    this.updateImagePreview();
     this.callbacks.onImagesChanged();
   }
 
@@ -80,7 +85,6 @@ export class ImageContextManager {
     for (const image of images) {
       this.attachedImages.set(image.id, image);
     }
-    this.updateImagePreview();
     this.callbacks.onImagesChanged();
   }
 
@@ -154,7 +158,6 @@ export class ImageContextManager {
       };
 
       this.attachedImages.set(attachment.id, attachment);
-      this.updateImagePreview();
       this.callbacks.onImagesChanged();
       return true;
     } catch (error) {
@@ -170,60 +173,8 @@ export class ImageContextManager {
   }
 
   // ============================================
-  // Private: Image Preview
+  // Private: Full-size Image Modal
   // ============================================
-
-  private updateImagePreview() {
-    this.imagePreviewEl.empty();
-
-    if (this.attachedImages.size === 0) {
-      this.imagePreviewEl.removeClass('specorator-visible-flex');
-      this.imagePreviewEl.addClass('specorator-hidden');
-      return;
-    }
-
-    this.imagePreviewEl.addClass('specorator-visible-flex');
-    this.imagePreviewEl.removeClass('specorator-hidden');
-
-    for (const [id, image] of this.attachedImages) {
-      this.renderImagePreview(id, image);
-    }
-  }
-
-  private renderImagePreview(id: string, image: ImageAttachment) {
-    const previewEl = this.imagePreviewEl.createDiv({ cls: 'specorator-image-chip' });
-
-    const thumbEl = previewEl.createDiv({ cls: 'specorator-image-thumb' });
-    thumbEl.createEl('img', {
-      attr: {
-        src: `data:${image.mediaType};base64,${image.data}`,
-        alt: image.name,
-      },
-    });
-
-    const infoEl = previewEl.createDiv({ cls: 'specorator-image-info' });
-    const nameEl = infoEl.createSpan({ cls: 'specorator-image-name' });
-    nameEl.setText(this.truncateName(image.name, 20));
-    nameEl.setAttribute('title', image.name);
-
-    const sizeEl = infoEl.createSpan({ cls: 'specorator-image-size' });
-    sizeEl.setText(this.formatSize(image.size));
-
-    const removeEl = previewEl.createSpan({ cls: 'specorator-image-remove' });
-    removeEl.setText('\u00D7');
-    removeEl.setAttribute('aria-label', 'Remove image');
-
-    removeEl.addEventListener('click', (e) => {
-      e.stopPropagation();
-      this.attachedImages.delete(id);
-      this.updateImagePreview();
-      this.callbacks.onImagesChanged();
-    });
-
-    thumbEl.addEventListener('click', () => {
-      this.showFullImage(image);
-    });
-  }
 
   private showFullImage(image: ImageAttachment) {
     const ownerDocument = this.containerEl.ownerDocument ?? window.document;
@@ -238,18 +189,8 @@ export class ImageContextManager {
     return `img-${Date.now()}-${Math.random().toString(36).substring(2, 11)}`;
   }
 
-  private truncateName(name: string, maxLen: number): string {
-    if (name.length <= maxLen) return name;
-    const ext = path.extname(name);
-    const base = name.slice(0, name.length - ext.length);
-    const truncatedBase = base.slice(0, maxLen - ext.length - 3);
-    return `${truncatedBase}...${ext}`;
-  }
-
   private formatSize(bytes: number): string {
-    if (bytes < 1024) return `${bytes} B`;
-    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
-    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+    return formatImageSize(bytes);
   }
 
   private notifyImageError(message: string, error?: unknown) {

@@ -14,8 +14,8 @@ import type { ChatState } from '../state/ChatState';
 import { ConversationHistoryView, type HistoryRenderOptions } from '../ui/ConversationHistoryView';
 import type { FileContextManager } from '../ui/FileContext';
 import type { ImageContextManager } from '../ui/ImageContext';
-import type { ExternalContextSelector, McpServerSelector } from '../ui/InputToolbar';
 import type { StatusPanel } from '../ui/StatusPanel';
+import type { ExternalContextSelector, McpServerSelector } from '../ui/toolbar/shared';
 import { deriveEditedFilesFromMessages } from '../utils/editedFiles';
 import {
   captureComposerSwitchDraft,
@@ -56,6 +56,8 @@ export interface ConversationControllerDeps {
   setTranscriptHydrationError: (error: { code: string; message: string } | null) => void;
   /** Re-projects the Vue transcript from the current ChatState snapshot. */
   emitTranscript?: () => void;
+  /** Re-projects the Vue composer toolbar (retained MCP/external selectors fire no onChange). */
+  emitComposer?: () => void;
   getHistoryDropdown: () => HTMLElement | null;
   getMessagesEl: () => HTMLElement;
   getInputEl: () => HTMLTextAreaElement;
@@ -203,18 +205,14 @@ export class ConversationController {
     if (state.isCreatingConversation) return;
     if (state.isSwitchingConversation) return;
 
-    // Set flag to block message sending during reset
     state.isCreatingConversation = true;
 
     try {
       this.deps.dismissPendingInlinePrompts?.();
 
-      // Abort an in-flight switchTo hydration so its late restoreConversation
-      // can't rebind this tab over the blank New Chat we're building. Drop the
-      // abandoned switch's draft too: New Chat blanks the composer, so leaving it
-      // would make the next switchTo skip capturing and restore a stale draft.
-      // Clear the hydration spinner as well — the aborted hydrateAndRender's
-      // finally skips setTranscriptLoading(null) once hydrationAbort is nulled.
+      // Abort the in-flight switchTo hydration (its late restore must not rebind
+      // this blank tab), drop its orphaned draft (else the next switch restores a
+      // stale one), and clear the spinner below (the aborted finally skips it).
       this.cancelPendingHydration();
       this.pendingSwitchDraft = null;
       this.deps.setTranscriptLoading(null);
@@ -306,6 +304,8 @@ export class ConversationController {
       );
 
       this.deps.getMcpServerSelector()?.clearEnabled();
+      // Blank entry returns before restoreConversation; clear the toolbar badge.
+      this.deps.emitComposer?.();
 
       // Entry point: empty transcript + welcome greeting (Vue-owned).
       this.deps.setTranscriptLoading(null);
@@ -435,12 +435,9 @@ export class ConversationController {
     const lifecycleGeneration = this.lifecycleGeneration;
     let restored = false;
     try {
-      // Yield to a macrotask so the browser commits the Phase A spinner
-      // DOM before sync work in `restoreConversation` (DOM rebuild for the
-      // 80-message window) starts. Microtask awaits alone do NOT trigger
-      // paint — the cached-hydration path (active tab pre-warmed via
-      // `restoreState`) resolves through microtasks only, so without this
-      // yield the spinner stays invisible and the user only sees a freeze.
+      // Yield to a macrotask so the browser paints the Phase A spinner before
+      // `restoreConversation`'s sync DOM rebuild. Microtask awaits never paint,
+      // so the cached-hydration path (pre-warmed tab) would otherwise just freeze.
       await new Promise<void>((resolve) => window.setTimeout(resolve, 0));
       if (abort.signal.aborted || lifecycleGeneration !== this.lifecycleGeneration) return;
 
@@ -733,6 +730,9 @@ export class ConversationController {
     } else {
       mcpServerSelector?.clearEnabled();
     }
+    // The MCP/external restore setters above fire no onChange (warm same-provider
+    // switch also skips applyProviderUIGating), so re-project the composer toolbar.
+    this.deps.emitComposer?.();
 
     // The `state.messages` assignment above already re-projected the transcript
     // (the Vue MessageList windows to the trailing 80 itself — no imperative

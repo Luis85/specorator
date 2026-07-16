@@ -117,6 +117,7 @@ export function createTab(options: TabCreateOptions): TabData {
       streamController: null,
       inputController: null,
       navigationController: null,
+      composerDropdownCoordinator: null,
     },
     services: {
       subagentManager,
@@ -126,25 +127,19 @@ export function createTab(options: TabCreateOptions): TabData {
     ui: {
       fileContextManager: null,
       imageContextManager: null,
-      editedFilesView: null,
-      modelSelector: null,
-      modeSelector: null,
-      thinkingBudgetSelector: null,
       externalContextSelector: null,
       mcpServerSelector: null,
-      permissionToggle: null,
-      planModeToggle: null,
-      serviceTierToggle: null,
       slashCommandDropdown: null,
       instructionModeManager: null,
       bangBashModeManager: null,
-      contextUsageMeter: null,
       statusPanel: null,
       navigationSidebar: null,
     },
     dom,
     transcript: null,
     mountedTranscript: null,
+    composer: null,
+    mountedComposer: null,
   };
 
   return tab;
@@ -155,40 +150,35 @@ export function createTab(options: TabCreateOptions): TabData {
  */
 function buildTabDOM(contentEl: HTMLElement): TabDOMElements {
   const messagesWrapperEl = contentEl.createDiv({ cls: 'specorator-messages-wrapper' });
-  // The Vue transcript island (mounted into `messagesWrapperEl` by
-  // `initializeTabControllers`) renders the real `.specorator-messages` scroll
-  // container itself and hands it back via `SCROLL_HOST_KEY`, which overwrites
-  // `dom.messagesEl`. Until then `messagesEl` points at the wrapper as a
-  // non-null placeholder; no controller reads it before the mount. The Vue
-  // `WelcomeBanner` owns the welcome block now.
+  // The Vue transcript island renders `.specorator-messages` into this wrapper.
   const messagesEl = messagesWrapperEl;
   const statusPanelContainerEl = contentEl.createDiv({ cls: 'specorator-status-panel-container' });
-  const inputContainerEl = contentEl.createDiv({ cls: 'specorator-input-container' });
-  const queueIndicatorEl = inputContainerEl.createDiv({ cls: 'specorator-input-queue-row' });
-  const navRowEl = inputContainerEl.createDiv({ cls: 'specorator-input-nav-row' });
-  const inputWrapper = inputContainerEl.createDiv({ cls: 'specorator-input-wrapper' });
-  const editedFilesRowEl = inputWrapper.createDiv({ cls: 'specorator-edited-files-row specorator-hidden' });
-  const contextRowEl = inputWrapper.createDiv({ cls: 'specorator-context-row' });
-  const inputEl = inputWrapper.createEl('textarea', {
-    cls: 'specorator-input',
-    attr: {
-      placeholder: 'How can i help you today?',
-      rows: '3',
-      dir: 'auto',
-    },
-  });
+
+  // The Vue composer island mounts into this host and renders the composer
+  // structural DOM (`.specorator-input-container` and its children), handing the
+  // real elements back through element-handle keys (mountTabComposer). Until then
+  // the composer element fields point at this host as non-null placeholders; no
+  // consumer reads them before the mount registers the real Vue nodes.
+  const composerHostEl = contentEl.createDiv({ cls: 'specorator-composer-host' });
+
+  // Detached placeholder overwritten by registerInputEl on mount, before any
+  // consumer reads it. ComposerTextarea.vue renders the real `<textarea>` (with
+  // its class/dir/rows/placeholder) and hands the raw node back; this bare node
+  // only satisfies the non-null `HTMLTextAreaElement` type between `createTab`
+  // and mount, and is GC'd once the register repoints `tab.dom.inputEl`.
+  const inputEl = contentEl.ownerDocument.createElement('textarea');
 
   return {
     contentEl,
     messagesEl,
     statusPanelContainerEl,
-    inputContainerEl,
-    queueIndicatorEl,
-    inputWrapper,
+    composerHostEl,
+    inputContainerEl: composerHostEl,
+    queueIndicatorEl: composerHostEl,
+    inputWrapper: composerHostEl,
     inputEl,
-    navRowEl,
-    editedFilesRowEl,
-    contextRowEl,
+    navRowEl: composerHostEl,
+    contextRowEl: composerHostEl,
     selectionIndicatorEl: null,
     browserIndicatorEl: null,
     canvasIndicatorEl: null,

@@ -135,6 +135,7 @@ export function buildTabConversationController(
       setTranscriptLoading: (loadingText) => tab.transcript?.setLoadingText(loadingText),
       setTranscriptHydrationError: (error) => tab.transcript?.setHydrationError(error),
       emitTranscript: () => tab.transcript?.emit(),
+      emitComposer: () => tab.composer?.emit(),
       getHistoryDropdown: () => null, // Tab doesn't have its own history dropdown
       getMessagesEl: () => dom.messagesEl,
       getInputEl: () => dom.inputEl,
@@ -274,6 +275,7 @@ export function buildTabInputController(
     getInstructionRefineService: () => services.instructionRefineService,
     getTitleGenerationService: () => services.titleGenerationService,
     getStatusPanel: () => ui.statusPanel,
+    getDropdownCoordinator: () => tab.controllers.composerDropdownCoordinator,
     generateId: generateMessageId,
     resetInputHeight: () => {
       // Per-tab input height is managed by CSS, no dynamic adjustment needed

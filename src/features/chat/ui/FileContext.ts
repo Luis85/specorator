@@ -1,8 +1,8 @@
 import type { App, EventRef } from 'obsidian';
-import { Notice, TFile, TFolder } from 'obsidian';
+import { TFile, TFolder } from 'obsidian';
 
 import type { McpServerManager } from '../../../core/mcp/McpServerManager';
-import { t } from '../../../i18n/i18n';
+import type { ComposerDropdownDelegate } from '../../../shared/components/composerDropdownDelegate';
 import type { AgentMentionProvider } from '../../../shared/mention/MentionDropdownController';
 import { MentionDropdownController } from '../../../shared/mention/MentionDropdownController';
 import { VaultMentionDataProvider } from '../../../shared/mention/VaultMentionDataProvider';
@@ -15,7 +15,6 @@ import { buildExternalContextDisplayEntries, normalizePathForComparison } from '
 import { externalContextScanner } from '../../../utils/externalContextScanner';
 import { getVaultPath, normalizePathForVault as normalizePathForVaultUtil } from '../../../utils/path';
 import { FileContextState } from './file-context/state/FileContextState';
-import { FileChipsView } from './file-context/view/FileChipsView';
 
 export interface FileContextCallbacks {
   getExcludedTags: () => string[];
@@ -28,12 +27,10 @@ export interface FileContextCallbacks {
 export class FileContextManager {
   private app: App;
   private callbacks: FileContextCallbacks;
-  private chipsContainerEl: HTMLElement;
   private dropdownContainerEl: HTMLElement;
   private inputEl: HTMLTextAreaElement;
   private state: FileContextState;
   private mentionDataProvider: VaultMentionDataProvider;
-  private chipsView: FileChipsView;
   private mentionDropdown: MentionDropdownController;
   private deleteEventRef: EventRef | null = null;
   private renameEventRef: EventRef | null = null;
@@ -49,10 +46,10 @@ export class FileContextManager {
     chipsContainerEl: HTMLElement,
     inputEl: HTMLTextAreaElement,
     callbacks: FileContextCallbacks,
-    dropdownContainerEl?: HTMLElement
+    dropdownContainerEl?: HTMLElement,
+    dropdownCoordinator?: ComposerDropdownDelegate,
   ) {
     this.app = app;
-    this.chipsContainerEl = chipsContainerEl;
     this.dropdownContainerEl = dropdownContainerEl ?? chipsContainerEl;
     this.inputEl = inputEl;
     this.callbacks = callbacks;
@@ -60,34 +57,6 @@ export class FileContextManager {
     this.state = new FileContextState();
     this.mentionDataProvider = new VaultMentionDataProvider(this.app);
     this.mentionDataProvider.initializeInBackground();
-
-    this.chipsView = new FileChipsView(this.chipsContainerEl, {
-      onRemove: (path, kind) => {
-        if (kind === 'current') {
-          if (path === this.currentNotePath) this.currentNotePath = null;
-          this.state.detachFile(path);
-        } else if (kind === 'folder') {
-          this.state.detachFolder(path);
-        } else {
-          this.state.detachFile(path);
-        }
-        this.refreshChips();
-      },
-      onOpenFile: (filePath) => {
-        void (async (): Promise<void> => {
-          const file = this.app.vault.getAbstractFileByPath(filePath);
-          if (!(file instanceof TFile)) {
-            new Notice(t('chat.fileOpen.notFound', { path: filePath }));
-            return;
-          }
-          try {
-            await this.app.workspace.getLeaf().openFile(file);
-          } catch (error) {
-            new Notice(t('chat.fileOpen.failed', { error: error instanceof Error ? error.message : String(error) }));
-          }
-        })();
-      },
-    });
 
     this.mentionDropdown = new MentionDropdownController(
       this.dropdownContainerEl,
@@ -107,7 +76,8 @@ export class FileContextManager {
         getCachedVaultFolders: () => this.mentionDataProvider.getCachedVaultFolders(),
         getCachedVaultFiles: () => this.mentionDataProvider.getCachedVaultFiles(),
         normalizePathForVault: (rawPath) => this.normalizePathForVault(rawPath),
-      }
+      },
+      { coordinator: dropdownCoordinator }
     );
 
     this.deleteEventRef = this.app.vault.on('delete', (file) => {
@@ -128,6 +98,27 @@ export class FileContextManager {
 
   getAttachedFiles(): Set<string> {
     return this.state.getAttachedFiles();
+  }
+
+  /** Removes an attached-file pill (Vue chip remove). */
+  detachFilePill(path: string): void {
+    this.state.detachFile(path);
+    this.refreshChips();
+  }
+
+  /** Removes an attached-folder pill (Vue chip remove). */
+  detachFolderPill(path: string): void {
+    this.state.detachFolder(path);
+    this.refreshChips();
+  }
+
+  // Removing the current-note pill must clear the tracked path (and detach it
+  // from state, since the active note is also an attached file), else
+  // `shouldSendCurrentNote()` keeps attaching it to the next turn.
+  clearCurrentNotePill(): void {
+    if (this.currentNotePath) this.state.detachFile(this.currentNotePath);
+    this.currentNotePath = null;
+    this.refreshChips();
   }
 
   setAttachedFiles(files: string[]): void {
@@ -371,7 +362,6 @@ export class FileContextManager {
     if (this.deleteEventRef) this.app.vault.offref(this.deleteEventRef);
     if (this.renameEventRef) this.app.vault.offref(this.renameEventRef);
     this.mentionDropdown.destroy();
-    this.chipsView.destroy();
   }
 
   /** Normalizes a file path to be vault-relative with forward slashes. */
@@ -380,12 +370,9 @@ export class FileContextManager {
     return normalizePathForVaultUtil(rawPath, vaultPath);
   }
 
+  // Vue owns the chip DOM now (`.specorator-file-indicator`); refreshing chips
+  // only re-projects through onChipsChanged, which drives the reactive slice.
   private refreshChips(): void {
-    this.chipsView.renderPills({
-      currentNote: this.currentNotePath,
-      files: [...this.state.getAttachedFiles()],
-      folders: [...this.state.getAttachedFolders()],
-    });
     this.callbacks.onChipsChanged?.();
   }
 

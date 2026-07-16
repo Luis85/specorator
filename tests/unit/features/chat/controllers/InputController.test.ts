@@ -225,6 +225,9 @@ function createMockDeps(overrides: Partial<InputControllerDeps> = {}): InputCont
     getInstructionRefineService: () => null,
     getTitleGenerationService: () => null,
     getStatusPanel: () => null,
+    // Chat always injects the composer dropdown coordinator; the resume dropdown
+    // delegates render to it (no DOM-render fallback), so it must be present.
+    getDropdownCoordinator: () => ({}) as any,
     generateId: () => `msg-${Date.now()}-${Math.random().toString(36).substring(2, 11)}`,
     resetInputHeight: jest.fn(),
     getAgentService: () => mockAgentService as any,
@@ -2071,6 +2074,7 @@ describe('InputController - Message Queue', () => {
         mockConversations,
         deps.state.currentConversationId,
         expect.objectContaining({ onSelect: expect.any(Function), onDismiss: expect.any(Function) }),
+        expect.objectContaining({ coordinator: expect.anything() }),
       );
       expect(controller.isResumeDropdownVisible()).toBe(true);
     });

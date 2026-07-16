@@ -77,9 +77,10 @@
   text-overflow: ellipsis;
 }
 
-/* Textarea always lives inside .specorator-input-wrapper (see tabFactory).
-   The 2-class descendant selector (0,2,0) beats Obsidian's host textarea
-   resets (`.theme-dark textarea`, 0,1,1) by specificity, so these resets win
+/* Textarea always lives inside .specorator-input-wrapper (rendered by
+   ComposerWrapper.vue, which mounts ComposerTextarea.vue). The 2-class
+   descendant selector (0,2,0) beats Obsidian's host textarea resets
+   (`.theme-dark textarea`, 0,1,1) by specificity, so these resets win
    without !important. */
 .specorator-input-wrapper .specorator-input {
   width: 100%;
@@ -255,14 +256,6 @@
   border: 1px solid var(--background-modifier-border);
   border-radius: 8px;
   box-shadow: 0 4px 16px rgba(0, 0, 0, 0.25);
-}
-
-.specorator-edited-files-group-label {
-  padding: 6px 8px 2px 8px;
-  font-size: 11px;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-  color: var(--text-muted);
 }
 
 .specorator-edited-files-item {

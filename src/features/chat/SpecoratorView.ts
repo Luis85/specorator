@@ -173,7 +173,6 @@ export class SpecoratorView extends ItemView {
       );
       const model = providerSettings.model;
       const uiConfig = ProviderRegistry.getChatUIConfig(providerId);
-      const capabilities = ProviderRegistry.getCapabilities(providerId);
       const contextWindow = resolveModelContextWindow(
         uiConfig,
         providerSettings,
@@ -185,18 +184,8 @@ export class SpecoratorView extends ItemView {
         tab.state.usage = recalculateUsageForModel(tab.state.usage, model, contextWindow);
       }
 
-      tab.ui.modelSelector?.updateDisplay();
-      tab.ui.modelSelector?.renderOptions();
-      tab.ui.modeSelector?.updateDisplay();
-      tab.ui.modeSelector?.renderOptions();
-      tab.ui.thinkingBudgetSelector?.updateDisplay();
-      tab.ui.permissionToggle?.updateDisplay();
-      tab.ui.planModeToggle?.updateDisplay();
-      tab.ui.serviceTierToggle?.updateDisplay();
-      tab.dom.inputWrapper.toggleClass(
-        'specorator-input-plan-mode',
-        providerSettings.permissionMode === 'plan' && capabilities.supportsPlanMode,
-      );
+      // The toolbar widgets are Vue; re-project so they repaint from the store.
+      tab.composer?.emit();
     }
 
     this.gitActionButton?.updateDisplay();

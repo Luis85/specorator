@@ -1,6 +1,11 @@
-import { createMockEl } from '@test/helpers/mockElement';
-
+/**
+ * @jest-environment jsdom
+ */
 import type { ConversationMeta } from '@/core/types';
+import type {
+  ComposerDropdownDelegate,
+  ComposerDropdownSource,
+} from '@/shared/components/composerDropdownDelegate';
 import {
   ResumeSessionDropdown,
   type ResumeSessionDropdownCallbacks,
@@ -27,6 +32,48 @@ function createMockCallbacks(
   };
 }
 
+/**
+ * Records the render/keyboard delegation. The resume dropdown owns detection +
+ * insert logic and hands the coordinator its sorted items + a `source`; every
+ * render/visibility/keyboard call goes through this stub (there is no DOM path).
+ */
+function createDelegateStub() {
+  let kind: 'slash' | 'mention' | 'resume' | null = null;
+  const captured: {
+    items: ConversationMeta[] | null;
+    source: ComposerDropdownSource | null;
+    currentConversationId: string | null;
+  } = { items: null, source: null, currentConversationId: null };
+
+  const delegate: ComposerDropdownDelegate = {
+    showSlash: jest.fn(),
+    showMention: jest.fn(),
+    showResume: jest.fn((items, _inputEl, source, currentConversationId) => {
+      kind = 'resume';
+      captured.items = items;
+      captured.source = source;
+      captured.currentConversationId = currentConversationId;
+    }),
+    setActiveIndex: jest.fn(),
+    move: jest.fn(),
+    // Owner-scoped clear: mirrors the real coordinator — only drops the state
+    // when `owner` is omitted or matches the current kind.
+    hide: jest.fn((owner?: 'slash' | 'mention' | 'resume') => {
+      if (owner !== undefined && kind !== owner) return;
+      kind = null;
+    }),
+    selectActive: jest.fn(),
+    handleKeydown: jest.fn(() => true),
+    getState: jest.fn(() => ({ kind })),
+  };
+
+  return {
+    delegate,
+    captured,
+    setKind: (next: typeof kind) => { kind = next; },
+  };
+}
+
 function createConversation(
   id: string,
   title: string,
@@ -44,34 +91,10 @@ function createConversation(
   };
 }
 
-function getRenderedItems(containerEl: any): { title: string; isCurrent: boolean }[] {
-  const dropdownEl = containerEl.children.find(
-    (c: any) => c.hasClass('specorator-resume-dropdown')
-  );
-  if (!dropdownEl) return [];
-  const items = dropdownEl.querySelectorAll('.specorator-resume-item');
-  return items.map((item: any) => {
-    // Check direct children for content div, then find title inside
-    let title = '';
-    for (const child of item.children) {
-      const found = child.querySelector?.('.specorator-resume-item-title');
-      if (found) {
-        title = found.textContent ?? '';
-        break;
-      }
-    }
-
-    return {
-      title,
-      isCurrent: item.hasClass('current'),
-    };
-  });
-}
-
 describe('ResumeSessionDropdown', () => {
-  let containerEl: any;
   let inputEl: any;
   let callbacks: ResumeSessionDropdownCallbacks;
+  let stub: ReturnType<typeof createDelegateStub>;
 
   const conversations: ConversationMeta[] = [
     createConversation('conv-1', 'First Chat', { lastResponseAt: 1000 }),
@@ -79,74 +102,63 @@ describe('ResumeSessionDropdown', () => {
     createConversation('conv-3', 'Third Chat', { lastResponseAt: 2000 }),
   ];
 
+  function makeDropdown(
+    convs: ConversationMeta[] = conversations,
+    currentId: string | null = null,
+  ): ResumeSessionDropdown {
+    return new ResumeSessionDropdown(
+      document.createElement('div') as unknown as HTMLElement,
+      inputEl,
+      convs,
+      currentId,
+      callbacks,
+      { coordinator: stub.delegate },
+    );
+  }
+
   beforeEach(() => {
-    containerEl = createMockEl();
     inputEl = createMockInput();
     callbacks = createMockCallbacks();
+    stub = createDelegateStub();
   });
 
-  describe('constructor', () => {
-    it('creates dropdown with visible class', () => {
-      const dropdown = new ResumeSessionDropdown(
-        containerEl, inputEl, conversations, null, callbacks
-      );
+  describe('render delegation', () => {
+    it('delegates render to the coordinator with sorted conversations', () => {
+      const dropdown = makeDropdown();
 
-      const dropdownEl = containerEl.children.find(
-        (c: any) => c.hasClass('specorator-resume-dropdown')
-      );
-      expect(dropdownEl).toBeDefined();
-      expect(dropdownEl.hasClass('visible')).toBe(true);
+      expect(stub.delegate.showResume).toHaveBeenCalledTimes(1);
+      const sortedTitles = (stub.captured.items ?? []).map((c) => c.title);
+      expect(sortedTitles).toEqual(['Second Chat', 'Third Chat', 'First Chat']);
 
       dropdown.destroy();
     });
 
-    it('sorts conversations by lastResponseAt descending', () => {
-      const dropdown = new ResumeSessionDropdown(
-        containerEl, inputEl, conversations, null, callbacks
-      );
+    it('projects the current conversation id to the coordinator', () => {
+      const dropdown = makeDropdown(conversations, 'conv-2');
 
-      const items = getRenderedItems(containerEl);
-      expect(items[0].title).toBe('Second Chat');  // lastResponseAt: 3000
-      expect(items[1].title).toBe('Third Chat');   // lastResponseAt: 2000
-      expect(items[2].title).toBe('First Chat');   // lastResponseAt: 1000
+      expect(stub.captured.currentConversationId).toBe('conv-2');
 
       dropdown.destroy();
     });
 
-    it('marks current conversation', () => {
+    it('never builds resume DOM in the container', () => {
+      const containerEl = document.createElement('div');
       const dropdown = new ResumeSessionDropdown(
-        containerEl, inputEl, conversations, 'conv-2', callbacks
+        containerEl,
+        inputEl,
+        conversations,
+        null,
+        callbacks,
+        { coordinator: stub.delegate },
       );
 
-      const items = getRenderedItems(containerEl);
-      const currentItem = items.find(i => i.title === 'Second Chat');
-      expect(currentItem?.isCurrent).toBe(true);
-
-      const otherItem = items.find(i => i.title === 'First Chat');
-      expect(otherItem?.isCurrent).toBe(false);
-
-      dropdown.destroy();
-    });
-
-    it('renders empty state when no conversations', () => {
-      const dropdown = new ResumeSessionDropdown(
-        containerEl, inputEl, [], null, callbacks
-      );
-
-      const dropdownEl = containerEl.children.find(
-        (c: any) => c.hasClass('specorator-resume-dropdown')
-      );
-      const emptyEl = dropdownEl?.querySelector('.specorator-resume-empty');
-      expect(emptyEl).toBeDefined();
-      expect(emptyEl?.textContent).toBe('No conversations');
+      expect(containerEl.querySelector('.specorator-resume-dropdown')).toBeNull();
 
       dropdown.destroy();
     });
 
     it('adds input event listener for auto-dismiss', () => {
-      const dropdown = new ResumeSessionDropdown(
-        containerEl, inputEl, conversations, null, callbacks
-      );
+      const dropdown = makeDropdown();
 
       expect(inputEl.addEventListener).toHaveBeenCalledWith('input', expect.any(Function));
 
@@ -155,124 +167,64 @@ describe('ResumeSessionDropdown', () => {
   });
 
   describe('handleKeydown', () => {
-    it('returns false when dropdown is not visible', () => {
-      const dropdown = new ResumeSessionDropdown(
-        containerEl, inputEl, conversations, null, callbacks
-      );
-
-      // Hide it first
-      const dropdownEl = containerEl.children.find(
-        (c: any) => c.hasClass('specorator-resume-dropdown')
-      );
-      dropdownEl.removeClass('visible');
+    it('returns false without delegating when not visible', () => {
+      const dropdown = makeDropdown();
+      stub.setKind(null);
 
       const event = { key: 'ArrowDown', preventDefault: jest.fn() } as any;
       expect(dropdown.handleKeydown(event)).toBe(false);
-      expect(event.preventDefault).not.toHaveBeenCalled();
+      expect(stub.delegate.handleKeydown).not.toHaveBeenCalled();
 
       dropdown.destroy();
     });
 
-    it('navigates down with ArrowDown', () => {
-      const dropdown = new ResumeSessionDropdown(
-        containerEl, inputEl, conversations, null, callbacks
-      );
+    it('delegates the keyboard event to the coordinator when visible', () => {
+      const dropdown = makeDropdown();
 
       const event = { key: 'ArrowDown', preventDefault: jest.fn() } as any;
-      const result = dropdown.handleKeydown(event);
-
-      expect(result).toBe(true);
-      expect(event.preventDefault).toHaveBeenCalled();
+      expect(dropdown.handleKeydown(event)).toBe(true);
+      expect(stub.delegate.handleKeydown).toHaveBeenCalledWith(event);
 
       dropdown.destroy();
     });
+  });
 
-    it('navigates up with ArrowUp', () => {
-      const dropdown = new ResumeSessionDropdown(
-        containerEl, inputEl, conversations, null, callbacks
-      );
+  describe('select (insert logic)', () => {
+    it('calls onSelect with the id at the coordinator-provided index', () => {
+      const dropdown = makeDropdown();
 
-      // Go down first, then up
-      dropdown.handleKeydown({ key: 'ArrowDown', preventDefault: jest.fn() } as any);
-      const event = { key: 'ArrowUp', preventDefault: jest.fn() } as any;
-      const result = dropdown.handleKeydown(event);
-
-      expect(result).toBe(true);
-      expect(event.preventDefault).toHaveBeenCalled();
-
-      dropdown.destroy();
-    });
-
-    it('selects with Enter', () => {
-      const dropdown = new ResumeSessionDropdown(
-        containerEl, inputEl, conversations, null, callbacks
-      );
-
-      const event = { key: 'Enter', preventDefault: jest.fn() } as any;
-      const result = dropdown.handleKeydown(event);
-
-      expect(result).toBe(true);
-      expect(event.preventDefault).toHaveBeenCalled();
-      // First item after sorting is conv-2 (highest lastResponseAt)
+      // Sorted order: conv-2, conv-3, conv-1
+      stub.captured.source?.select(0);
       expect(callbacks.onSelect).toHaveBeenCalledWith('conv-2');
 
       dropdown.destroy();
     });
 
-    it('selects with Tab', () => {
-      const dropdown = new ResumeSessionDropdown(
-        containerEl, inputEl, conversations, null, callbacks
-      );
+    it('dismisses instead of selecting the current conversation', () => {
+      const dropdown = makeDropdown(conversations, 'conv-2');
 
-      const event = { key: 'Tab', preventDefault: jest.fn() } as any;
-      const result = dropdown.handleKeydown(event);
-
-      expect(result).toBe(true);
-      expect(callbacks.onSelect).toHaveBeenCalledWith('conv-2');
-
-      dropdown.destroy();
-    });
-
-    it('dismisses with Escape', () => {
-      const dropdown = new ResumeSessionDropdown(
-        containerEl, inputEl, conversations, null, callbacks
-      );
-
-      const event = { key: 'Escape', preventDefault: jest.fn() } as any;
-      const result = dropdown.handleKeydown(event);
-
-      expect(result).toBe(true);
-      expect(event.preventDefault).toHaveBeenCalled();
+      // conv-2 sorts first and is current
+      stub.captured.source?.select(0);
+      expect(callbacks.onSelect).not.toHaveBeenCalled();
       expect(callbacks.onDismiss).toHaveBeenCalled();
 
       dropdown.destroy();
     });
 
-    it('returns false for unhandled keys', () => {
-      const dropdown = new ResumeSessionDropdown(
-        containerEl, inputEl, conversations, null, callbacks
-      );
+    it('ignores an out-of-range index', () => {
+      const dropdown = makeDropdown();
 
-      const event = { key: 'a', preventDefault: jest.fn() } as any;
-      const result = dropdown.handleKeydown(event);
-
-      expect(result).toBe(false);
-      expect(event.preventDefault).not.toHaveBeenCalled();
+      stub.captured.source?.select(99);
+      expect(callbacks.onSelect).not.toHaveBeenCalled();
+      expect(callbacks.onDismiss).not.toHaveBeenCalled();
 
       dropdown.destroy();
     });
 
-    it('dismisses when selecting current conversation', () => {
-      const dropdown = new ResumeSessionDropdown(
-        containerEl, inputEl, conversations, 'conv-2', callbacks
-      );
+    it('routes the coordinator dismiss source through onDismiss', () => {
+      const dropdown = makeDropdown();
 
-      // conv-2 is first after sorting (highest lastResponseAt), so Enter selects it
-      const event = { key: 'Enter', preventDefault: jest.fn() } as any;
-      dropdown.handleKeydown(event);
-
-      // Should dismiss, not call onSelect
-      expect(callbacks.onSelect).not.toHaveBeenCalled();
+      stub.captured.source?.dismiss();
       expect(callbacks.onDismiss).toHaveBeenCalled();
 
       dropdown.destroy();
@@ -280,23 +232,11 @@ describe('ResumeSessionDropdown', () => {
   });
 
   describe('isVisible', () => {
-    it('returns true after construction', () => {
-      const dropdown = new ResumeSessionDropdown(
-        containerEl, inputEl, conversations, null, callbacks
-      );
-
+    it('reflects the coordinator resume state', () => {
+      const dropdown = makeDropdown();
       expect(dropdown.isVisible()).toBe(true);
 
-      dropdown.destroy();
-    });
-
-    it('returns false after Escape', () => {
-      const dropdown = new ResumeSessionDropdown(
-        containerEl, inputEl, conversations, null, callbacks
-      );
-
-      dropdown.handleKeydown({ key: 'Escape', preventDefault: jest.fn() } as any);
-
+      stub.setKind(null);
       expect(dropdown.isVisible()).toBe(false);
 
       dropdown.destroy();
@@ -304,53 +244,29 @@ describe('ResumeSessionDropdown', () => {
   });
 
   describe('destroy', () => {
-    it('removes input event listener', () => {
-      const dropdown = new ResumeSessionDropdown(
-        containerEl, inputEl, conversations, null, callbacks
-      );
+    it('removes the input listener and hides the owned coordinator state', () => {
+      const dropdown = makeDropdown();
 
       dropdown.destroy();
 
       expect(inputEl.removeEventListener).toHaveBeenCalledWith('input', expect.any(Function));
-    });
-  });
-
-  describe('click selection', () => {
-    it('calls onSelect when clicking a non-current item', () => {
-      const dropdown = new ResumeSessionDropdown(
-        containerEl, inputEl, conversations, 'conv-1', callbacks
-      );
-
-      const dropdownEl = containerEl.children.find(
-        (c: any) => c.hasClass('specorator-resume-dropdown')
-      );
-      const items = dropdownEl.querySelectorAll('.specorator-resume-item');
-      // Find a non-current item (conv-2 is first, conv-1 is current)
-      const nonCurrentItem = items.find((i: any) => !i.hasClass('current'));
-      nonCurrentItem?.dispatchEvent('click');
-
-      expect(callbacks.onSelect).toHaveBeenCalled();
-
-      dropdown.destroy();
+      // Owner-scoped clear: passes its own 'resume' kind so it only drops the
+      // state it owns.
+      expect(stub.delegate.hide).toHaveBeenCalledTimes(1);
+      expect(stub.delegate.hide).toHaveBeenCalledWith('resume');
+      expect(stub.delegate.getState().kind).toBeNull();
     });
 
-    it('dismisses when clicking current item', () => {
-      const dropdown = new ResumeSessionDropdown(
-        containerEl, inputEl, conversations, 'conv-2', callbacks
-      );
-
-      const dropdownEl = containerEl.children.find(
-        (c: any) => c.hasClass('specorator-resume-dropdown')
-      );
-      const items = dropdownEl.querySelectorAll('.specorator-resume-item');
-      // conv-2 is first after sorting and is current
-      const currentItem = items.find((i: any) => i.hasClass('current'));
-      currentItem?.dispatchEvent('click');
-
-      expect(callbacks.onSelect).not.toHaveBeenCalled();
-      expect(callbacks.onDismiss).toHaveBeenCalled();
+    it('does not clear the coordinator when it no longer owns the resume state', () => {
+      const dropdown = makeDropdown();
+      stub.setKind('slash');
 
       dropdown.destroy();
+
+      // The scoped hide('resume') is a no-op against a non-resume owner, so the
+      // menu another detector opened survives.
+      expect(stub.delegate.hide).toHaveBeenCalledWith('resume');
+      expect(stub.delegate.getState().kind).toBe('slash');
     });
   });
 });

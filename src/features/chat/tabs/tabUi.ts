@@ -1,4 +1,5 @@
 import { type App, Notice } from 'obsidian';
+import { nextTick } from 'vue';
 
 import type { ProviderCommandDropdownConfig } from '../../../core/providers/commands/ProviderCommandCatalog';
 import type { ProviderCommandEntry } from '../../../core/providers/commands/ProviderCommandEntry';
@@ -17,14 +18,15 @@ import { ChatDropController } from '../controllers/ChatDropController';
 import type { DragManagerLike } from '../controllers/dropPayloadDetection';
 import { BangBashService } from '../services/BangBashService';
 import { BangBashModeManager as BangBashModeManagerClass } from '../ui/BangBashModeManager';
-import { EditedFilesView } from '../ui/EditedFilesView';
 import { FileContextManager } from '../ui/FileContext';
 import { ImageContextManager } from '../ui/ImageContext';
-import { createInputToolbar } from '../ui/InputToolbar';
 import { InstructionModeManager as InstructionModeManagerClass } from '../ui/InstructionModeManager';
 import { NavigationSidebar } from '../ui/NavigationSidebar';
 import { StatusPanel } from '../ui/StatusPanel';
 import { autoResizeTextarea } from '../ui/textareaResize';
+import { ExternalContextSelector } from '../ui/toolbar/ExternalContextSelector';
+import { McpServerSelector } from '../ui/toolbar/McpServerSelector';
+import type { ToolbarCallbacks, ToolbarSettings } from '../ui/toolbar/shared';
 import { recalculateUsageForModel } from '../utils/usageInfo';
 import { getTabProviderId } from './providerResolution';
 import { getBlankTabModelOptions } from './tabModelPolicy';
@@ -53,6 +55,21 @@ function initializeContextManagers(tab: TabData, plugin: SpecoratorPlugin): void
   const { dom } = tab;
   const app = plugin.app;
 
+  // Chip/image mutations happen through the engine (mention selection, drop,
+  // paste); re-project so the Vue composer's chip slice stays live. Emit FIRST,
+  // then recompute context-row visibility (+ resize) on Vue's NEXT tick, where
+  // the chip visibility classes land — a synchronous read would toggle
+  // .has-content off STALE pre-patch DOM (first chip hidden, last-chip left empty).
+  const onContextChanged = (): void => {
+    tab.composer?.emit();
+    void nextTick(() => {
+      tab.controllers.selectionController?.updateContextRowVisibility();
+      tab.controllers.browserSelectionController?.updateContextRowVisibility();
+      tab.controllers.canvasSelectionController?.updateContextRowVisibility();
+      autoResizeTextarea(dom.inputEl);
+    });
+  };
+
   // File context manager - chips in contextRowEl, dropdown in inputContainerEl
   tab.ui.fileContextManager = new FileContextManager(
     app,
@@ -60,31 +77,19 @@ function initializeContextManagers(tab: TabData, plugin: SpecoratorPlugin): void
     dom.inputEl,
     {
       getExcludedTags: () => plugin.settings.excludedTags,
-      onChipsChanged: () => {
-        tab.controllers.selectionController?.updateContextRowVisibility();
-        tab.controllers.browserSelectionController?.updateContextRowVisibility();
-        tab.controllers.canvasSelectionController?.updateContextRowVisibility();
-        autoResizeTextarea(dom.inputEl);
-      },
+      onChipsChanged: onContextChanged,
       getExternalContexts: () => tab.ui.externalContextSelector?.getExternalContexts() || [],
     },
-    dom.inputContainerEl
+    dom.inputContainerEl, tab.controllers.composerDropdownCoordinator ?? undefined,
   );
   tab.ui.fileContextManager.setMcpManager(getProviderMcpManager(getTabProviderId(tab, plugin)));
 
-  // Image context manager - drag/drop uses inputContainerEl, preview in contextRowEl
+  // Image context manager - drag/drop uses inputContainerEl; the preview strip is
+  // now Vue-owned (ImageChips.vue in the context row), so no preview container.
   tab.ui.imageContextManager = new ImageContextManager(
     dom.inputContainerEl,
     dom.inputEl,
-    {
-      onImagesChanged: () => {
-        tab.controllers.selectionController?.updateContextRowVisibility();
-        tab.controllers.browserSelectionController?.updateContextRowVisibility();
-        tab.controllers.canvasSelectionController?.updateContextRowVisibility();
-        autoResizeTextarea(dom.inputEl);
-      },
-    },
-    dom.contextRowEl
+    { onImagesChanged: onContextChanged }
   );
 
   tab.ui.chatDropController = new ChatDropController(dom.inputContainerEl, {
@@ -118,7 +123,7 @@ function initializeSlashCommands(
     {
       hiddenCommands: getHiddenCommands?.() ?? new Set(),
       providerConfig: catalogInfo?.config,
-      getProviderEntries: catalogInfo?.getEntries,
+      getProviderEntries: catalogInfo?.getEntries, coordinator: tab.controllers.composerDropdownCoordinator ?? undefined,
     }
   );
 }
@@ -138,6 +143,7 @@ function initializeInstructionAndTodo(tab: TabData, plugin: SpecoratorPlugin): v
         await tab.controllers.inputController?.handleInstructionSubmit(rawInstruction);
       },
       getInputWrapper: () => dom.inputWrapper,
+      onModeChanged: () => tab.composer?.emit(),
     }
   );
 
@@ -164,6 +170,7 @@ function initializeInstructionAndTodo(tab: TabData, plugin: SpecoratorPlugin): v
             statusPanel.updateBashOutput(id, { status, output, exitCode: result.exitCode });
           },
           getInputWrapper: () => dom.inputWrapper,
+          onModeChanged: () => tab.composer?.emit(),
         }
       );
     }
@@ -233,25 +240,37 @@ async function applyBlankTabModelChange(
     await onProviderChanged?.(pickedProvider);
   }
   await uiConfig.prepareModelMetadata?.(model, plugin.settings, { plugin });
-  tab.ui.thinkingBudgetSelector?.updateDisplay();
-  tab.ui.serviceTierToggle?.updateDisplay();
-  tab.ui.modelSelector?.updateDisplay();
-  tab.ui.modeSelector?.updateDisplay();
-  tab.ui.modelSelector?.renderOptions();
-  tab.ui.modeSelector?.renderOptions();
+  // The toolbar is Vue; applyProviderUIGating re-projects (tab.composer.emit).
   applyProviderUIGating(tab, plugin);
 }
 
-function initializeInputToolbar(
+// Resolves the ToolbarSettings the model selector displays: pinned model >
+// blank-tab draft > conversation-keyed bound-agent display seed > provider
+// snapshot. Shared by the imperative toolbar callbacks and the Vue composer
+// toolbar projection so both surfaces read the SAME model.
+export function getComposerToolbarSettings(tab: TabData, plugin: SpecoratorPlugin): ToolbarSettings {
+  const snapshot = getTabSettingsSnapshot(tab, plugin);
+  if (typeof tab.pinnedModel === 'string' && tab.pinnedModel.trim()) {
+    return { ...snapshot, model: tab.pinnedModel.trim() };
+  }
+  if (tab.lifecycleState === 'blank' && typeof tab.draftModel === 'string' && tab.draftModel.trim()) {
+    return { ...snapshot, model: tab.draftModel.trim() };
+  }
+  if (tab.displayModel && tab.displayModel.conversationId === tab.conversationId && tab.displayModel.model.trim()) {
+    return { ...snapshot, model: tab.displayModel.model.trim() };
+  }
+  return snapshot;
+}
+
+// Builds the toolbar action callbacks. Truth + I/O stay in these closures; the
+// Vue toolbar widgets (via the composer delegators) fire the SAME callbacks, so
+// a widget mutation is indistinguishable from a programmatic one to the engine.
+export function buildToolbarActionCallbacks(
   tab: TabData,
   plugin: SpecoratorPlugin,
   getProviderCatalogConfig?: () => ProviderCatalogInfo,
   onProviderChanged?: (providerId: ProviderId) => void | Promise<void>,
-): void {
-  const { dom } = tab;
-
-  const inputToolbar = dom.inputWrapper.createDiv({ cls: 'specorator-input-toolbar' });
-
+): ToolbarCallbacks {
   // Blank-tab UI config wrapper that returns mixed model options
   const blankTabUIConfigProxy = (): ProviderChatUIConfig => {
     const draftProvider = tab.draftModel
@@ -265,7 +284,7 @@ function initializeInputToolbar(
     };
   };
 
-  const toolbarComponents = createInputToolbar(inputToolbar, {
+  return {
     getUIConfig: () => {
       if (tab.lifecycleState === 'blank') {
         return blankTabUIConfigProxy();
@@ -273,34 +292,7 @@ function initializeInputToolbar(
       return getTabChatUIConfig(tab, plugin);
     },
     getCapabilities: () => getTabCapabilities(tab, plugin),
-    getSettings: () => {
-      const snapshot = getTabSettingsSnapshot(tab, plugin);
-      // Surface the tab-pinned model (e.g. Agent Board work-order model) so
-      // the ModelSelector displays it for the life of the tab rather than
-      // falling back to the provider's global `settings.model` once
-      // `tab.draftModel` is cleared during runtime init.
-      if (typeof tab.pinnedModel === 'string' && tab.pinnedModel.trim()) {
-        return { ...snapshot, model: tab.pinnedModel.trim() };
-      }
-      // Blank tabs that haven't sent yet still surface `draftModel` so the
-      // selector reflects the user's pending pick even before `settings.model`
-      // is updated on the next send.
-      if (tab.lifecycleState === 'blank' && typeof tab.draftModel === 'string' && tab.draftModel.trim()) {
-        return { ...snapshot, model: tab.draftModel.trim() };
-      }
-      // Bound-agent tabs surface the agent's model as a display-only seed so the
-      // selector shows it from the first render. Unlike `pinnedModel` this never
-      // reaches `getTabModelOverride`, so the per-turn model stays live (resolved
-      // from the bound agent each send). The seed is KEYED to its conversation:
-      // trusting it only while `conversationId` still matches means any
-      // conversation change auto-invalidates a stale seed (no per-path clearing
-      // needed), and `onModelChange` clears it outright on a manual pick.
-      if (tab.displayModel && tab.displayModel.conversationId === tab.conversationId
-          && tab.displayModel.model.trim()) {
-        return { ...snapshot, model: tab.displayModel.model.trim() };
-      }
-      return snapshot;
-    },
+    getSettings: () => getComposerToolbarSettings(tab, plugin),
     getEnvironmentVariables: () => plugin.getActiveEnvironmentVariables(),
     onModelChange: async (model: string) => {
       const isBlank = tab.lifecycleState === 'blank';
@@ -309,7 +301,8 @@ function initializeInputToolbar(
         : getTabProviderId(tab, plugin);
       if (!isBlank && getProviderForModel(model, plugin.settings) !== pickedProvider) {
         new Notice(t('chat.tab.providerSwitchBlocked'));
-        tab.ui.modelSelector?.updateDisplay();
+        // Re-project so the Vue ModelSelector snaps back to the current model.
+        tab.composer?.emit();
         return;
       }
 
@@ -351,10 +344,6 @@ function initializeInputToolbar(
         uiConfig.applyModelDefaults(model, settings);
       });
       await uiConfig.prepareModelMetadata?.(model, plugin.settings, { plugin });
-      tab.ui.thinkingBudgetSelector?.updateDisplay();
-      tab.ui.serviceTierToggle?.updateDisplay();
-      tab.ui.modelSelector?.updateDisplay();
-      tab.ui.modelSelector?.renderOptions();
 
       // Recalculate context usage percentage for the new model's context window
       const currentUsage = tab.state.usage;
@@ -372,8 +361,7 @@ function initializeInputToolbar(
       await updateTabProviderSettings(tab, plugin, (settings) => {
         getTabChatUIConfig(tab, plugin).applyModeSelection?.(mode, settings);
       });
-      tab.ui.modeSelector?.updateDisplay();
-      tab.ui.modeSelector?.renderOptions();
+      tab.composer?.emit();
     },
     onThinkingBudgetChange: async (budget: string) => {
       await updateTabProviderSettings(tab, plugin, (settings) => {
@@ -391,7 +379,7 @@ function initializeInputToolbar(
       await updateTabProviderSettings(tab, plugin, (settings) => {
         settings.serviceTier = serviceTier;
       });
-      tab.ui.serviceTierToggle?.updateDisplay();
+      tab.composer?.emit();
     },
     onPermissionModeChange: async (mode: string) => {
       await updateTabProviderSettings(tab, plugin, (settings) => {
@@ -403,12 +391,8 @@ function initializeInputToolbar(
         }
       });
       await maybeWarnYoloMode(plugin, mode);
-      tab.ui.permissionToggle?.updateDisplay();
-      tab.ui.planModeToggle?.updateDisplay();
-      dom.inputWrapper.toggleClass(
-        'specorator-input-plan-mode',
-        mode === 'plan' && getTabCapabilities(tab, plugin).supportsPlanMode,
-      );
+      // Vue owns the permission/plan-mode widgets; re-project so they repaint.
+      tab.composer?.emit();
     },
     onPlanModeToggle: async () => {
       const planValue = getTabChatUIConfig(tab, plugin).getPermissionModeToggle?.()?.planValue;
@@ -425,28 +409,34 @@ function initializeInputToolbar(
         updatePlanModeUI(tab, plugin, planValue);
       }
     },
-  });
+  };
+}
 
-  tab.ui.modelSelector = toolbarComponents.modelSelector;
-  tab.ui.modeSelector = toolbarComponents.modeSelector;
-  tab.ui.thinkingBudgetSelector = toolbarComponents.thinkingBudgetSelector;
-  tab.ui.contextUsageMeter = toolbarComponents.contextUsageMeter;
-  tab.ui.externalContextSelector = toolbarComponents.externalContextSelector;
-  tab.ui.mcpServerSelector = toolbarComponents.mcpServerSelector;
-  tab.ui.permissionToggle = toolbarComponents.permissionToggle;
-  tab.ui.planModeToggle = toolbarComponents.planModeToggle;
-  tab.ui.serviceTierToggle = toolbarComponents.serviceTierToggle;
+function initializeInputToolbar(
+  tab: TabData,
+  plugin: SpecoratorPlugin,
+): void {
+  // The toolbar is now fully Vue (ComposerToolbar.vue renders the nine widgets
+  // from the projected store). Only the two non-visual engine objects that own
+  // the truth the engine reads/mutates outside the toolbar are constructed here;
+  // their DOM-render layer was stripped in the Phase 2 cutover.
+  tab.ui.externalContextSelector = new ExternalContextSelector();
+  tab.ui.mcpServerSelector = new McpServerSelector();
 
   tab.ui.mcpServerSelector.setMcpManager(getProviderMcpManager(getTabProviderId(tab, plugin)));
 
   // Sync @-mentions to UI selector
   tab.ui.fileContextManager?.setOnMcpMentionChange((servers) => {
     tab.ui.mcpServerSelector?.addMentionedServers(servers);
+    tab.composer?.emit();
   });
 
-  // Wire external context changes
+  // Wire external context changes. Fires AFTER the async folder picker resolves
+  // and on every remove/persistence change, so it is the async-safe re-projection
+  // driver for the composer's external-context slice (never emits the stale list).
   tab.ui.externalContextSelector.setOnChange(() => {
     tab.ui.fileContextManager?.preScanExternalContexts();
+    tab.composer?.emit();
   });
 
   // Initialize persistent paths
@@ -458,6 +448,8 @@ function initializeInputToolbar(
   tab.ui.externalContextSelector.setOnPersistenceChange((paths) => {
     plugin.settings.persistentExternalContextPaths = paths;
     void plugin.saveSettings();
+    // Re-project so the composer's external-context lock state repaints.
+    tab.composer?.emit();
   });
 
   refreshTabProviderUI(tab, plugin);
@@ -468,7 +460,6 @@ function initializeInputToolbar(
 
 export interface InitializeTabUIOptions {
   getProviderCatalogConfig?: () => ProviderCatalogInfo;
-  onProviderChanged?: (providerId: ProviderId) => void | Promise<void>;
 }
 
 /**
@@ -485,12 +476,9 @@ export function initializeTabUI(
   // Initialize context managers (file/image)
   initializeContextManagers(tab, plugin);
 
-  // Selection indicator - add to contextRowEl
-  dom.selectionIndicatorEl = dom.contextRowEl.createDiv({ cls: 'specorator-selection-indicator specorator-hidden' });
-
-  dom.browserIndicatorEl = dom.contextRowEl.createDiv({ cls: 'specorator-browser-selection-indicator specorator-hidden' });
-
-  dom.canvasIndicatorEl = dom.contextRowEl.createDiv({ cls: 'specorator-canvas-indicator specorator-hidden' });
+  // The editor/browser/canvas selection indicators are now Vue-rendered
+  // (SelectionIndicators.vue) and their raw nodes are registered to `dom.*`
+  // by mountTabComposer, which runs before this. The engine only reads them.
 
   const catalogInfo = options.getProviderCatalogConfig?.() ?? null;
   initializeSlashCommands(
@@ -507,25 +495,24 @@ export function initializeTabUI(
   }
 
   initializeInstructionAndTodo(tab, plugin);
-  initializeInputToolbar(tab, plugin, options.getProviderCatalogConfig, options.onProviderChanged);
-
-  tab.ui.editedFilesView = new EditedFilesView(dom.editedFilesRowEl, {
-    onOpenFile: (rawPath) => openEditedFile(plugin.app, rawPath),
-  });
+  initializeInputToolbar(tab, plugin);
 
   state.callbacks = {
     ...state.callbacks,
-    onUsageChanged: (usage) => {
-      tab.ui.contextUsageMeter?.update(usage);
+    onUsageChanged: () => {
+      // Usage truth lives in ChatState.usage; re-project so the Vue
+      // ContextUsageMeter repaints (the imperative render object is gone).
+      tab.composer?.emit();
     },
     onTodosChanged: (todos) => tab.ui.statusPanel?.updateTodos(todos),
     onAutoScrollChanged: () => tab.ui.navigationSidebar?.updateVisibility(),
-    onEditedFilesChanged: (files) => {
-      tab.ui.editedFilesView?.render(files);
+    // Edited-files truth lives in ChatState.editedFiles; the Vue EditedFilesBar
+    // renders it off the projected store slice, so this only re-projects.
+    onEditedFilesChanged: () => {
       autoResizeTextarea(dom.inputEl);
+      tab.composer?.emit();
     },
   };
-  tab.ui.editedFilesView.render(state.editedFiles);
 
   // ResizeObserver to detect overflow changes (e.g., content growth)
   const resizeObserver = new ResizeObserver(() => {
@@ -537,7 +524,7 @@ export function initializeTabUI(
 
 // Opens a file from the agent-edited-files strip. Re-resolves at click time so a
 // file deleted after it was listed surfaces a Notice instead of opening nothing.
-function openEditedFile(app: App, rawPath: string): void {
+export function openEditedFile(app: App, rawPath: string): void {
   const openPath = resolveOpenableVaultPath(app, rawPath);
   if (!openPath) {
     new Notice(t('chat.fileOpen.notFound', { path: rawPath }));
