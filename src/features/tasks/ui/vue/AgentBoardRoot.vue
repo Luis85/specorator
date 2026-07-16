@@ -173,9 +173,12 @@ function invalidNoteLine(note: InvalidTaskNote): string {
     class="specorator-agent-board"
   >
     <BoardToolbar />
+    <!-- Floating overlay (absolute, bottom-center): appearing must not reflow
+      the lanes. role=status announces the capacity warning politely. -->
     <div
       v-if="noFreeSlots"
       class="specorator-agent-board-hint"
+      role="status"
     >
       <span
         :ref="(el) => mountLucide(el, 'alert-triangle')"

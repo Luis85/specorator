@@ -22,6 +22,9 @@
 }
 
 .specorator-agent-board {
+  /* Positioning context for the floating no-free-slots hint (and any future
+     overlay chrome) so it can layer over the lanes without reflowing them. */
+  position: relative;
   display: flex;
   flex-direction: column;
   flex: 1 1 auto;
@@ -430,9 +433,13 @@
   background: var(--background-modifier-hover);
 }
 
+/* Danger (Stop) reads as an OUTLINE at rest — red text on the card surface.
+   The old --background-modifier-error fill put red text on a red-tinted plate,
+   which is unreadable on several themes; the destructive fill now arrives only
+   on hover (red bg + on-accent text). */
 .specorator-agent-board-card-action-primary--danger {
-  background: var(--background-modifier-error);
-  border-color: color-mix(in srgb, var(--color-red) 40%, transparent);
+  background: transparent;
+  border-color: color-mix(in srgb, var(--color-red) 50%, transparent);
   color: var(--color-red);
 }
 
@@ -1003,18 +1010,28 @@
 }
 
 /* "No free slots" is a capacity warning, not an error — amber callout with an
-   alert glyph instead of the old red alarm box. */
+   alert glyph. Floats bottom-center OVER the lanes (absolute, out of flow):
+   appearing/disappearing must never reflow the board downward. The background
+   mixes into --background-primary (opaque), not transparent — cards would
+   ghost through a wash. */
 .specorator-agent-board-hint {
-  flex: 0 0 auto;
+  position: absolute;
+  left: 50%;
+  bottom: 18px;
+  transform: translateX(-50%);
+  z-index: 50;
+  width: max-content;
+  max-width: min(560px, calc(100% - 32px));
   display: flex;
   align-items: flex-start;
   gap: 8px;
-  padding: 7px 10px;
+  padding: 8px 12px;
   border: 1px solid color-mix(in srgb, var(--color-yellow) 45%, transparent);
   border-radius: var(--radius-m);
-  background: color-mix(in srgb, var(--color-yellow) 8%, transparent);
+  background: color-mix(in srgb, var(--color-yellow) 10%, var(--background-primary));
   color: var(--text-warning);
   font-size: var(--font-ui-smaller);
+  box-shadow: var(--shadow-l);
 }
 
 .specorator-agent-board-hint-icon {

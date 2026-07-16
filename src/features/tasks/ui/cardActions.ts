@@ -147,26 +147,31 @@ const MENU_MARK_FAILED: CardAction = {
  * back to an Open-note-only menu so every card stays actionable.
  */
 export const CARD_ACTIONS: Partial<Record<TaskStatus, CardActionModel>> = {
+  // Every status menu carries MENU_OPEN_CONVERSATION right after Open note: a
+  // work order that has run keeps its conversation reachable from the ⋯ menu in
+  // ANY state (user feedback, PR #488). The `available` guard hides the entry
+  // when no conversation_id exists or it no longer resolves, so pristine inbox
+  // cards show nothing extra.
   inbox: {
     primary: { labelKey: 'tasks.workOrderModal.actionMarkReady', icon: 'check', variant: 'cta', run: (cb, task) => cb.onMarkReady(task) },
     // No "Run now": inbox items aren't runnable (must transition to ready first).
-    menu: [MENU_OPEN_NOTE, MENU_ARCHIVE],
+    menu: [MENU_OPEN_NOTE, MENU_OPEN_CONVERSATION, MENU_ARCHIVE],
   },
   ready: {
     primary: { labelKey: 'tasks.board.cardAction.run', icon: 'play', variant: 'cta', run: (cb, task) => cb.onRun(task) },
     // No Archive: ready/needs_fix are actionable, not archivable (ARCHIVABLE_STATUSES).
-    menu: [MENU_OPEN_NOTE, MENU_BACK_TO_INBOX],
+    menu: [MENU_OPEN_NOTE, MENU_OPEN_CONVERSATION, MENU_BACK_TO_INBOX],
   },
   needs_fix: {
     primary: { labelKey: 'tasks.board.cardAction.run', icon: 'play', variant: 'cta', run: (cb, task) => cb.onRun(task) },
-    menu: [MENU_OPEN_NOTE, MENU_BACK_TO_INBOX],
+    menu: [MENU_OPEN_NOTE, MENU_OPEN_CONVERSATION, MENU_BACK_TO_INBOX],
   },
   running: {
     primary: { labelKey: 'tasks.workOrderModal.actionStop', icon: 'square', variant: 'danger', run: (cb, task) => cb.onStop(task) },
-    // "Go to conversation" is a visible button on the live card; the ⋯ menu drops
-    // the duplicate Open-conversation entry it used to carry.
+    // "Go to conversation" stays a visible button on the live card AND in the ⋯
+    // menu — the menu is the one place users expect to always find it.
     secondary: GO_TO_CONVERSATION,
-    menu: [MENU_OPEN_NOTE],
+    menu: [MENU_OPEN_NOTE, MENU_OPEN_CONVERSATION],
   },
   needs_input: {
     primary: null,
@@ -182,20 +187,20 @@ export const CARD_ACTIONS: Partial<Record<TaskStatus, CardActionModel>> = {
   },
   needs_handoff: {
     primary: { labelKey: 'tasks.workOrderModal.actionSendToReview', icon: 'check', variant: 'cta', run: (cb, task) => cb.onSendToReview?.(task) },
-    menu: [MENU_MARK_FAILED, MENU_OPEN_NOTE],
+    menu: [MENU_MARK_FAILED, MENU_OPEN_NOTE, MENU_OPEN_CONVERSATION],
   },
   done: {
     primary: { labelKey: 'tasks.workOrderModal.actionReopen', icon: 'rotate-ccw', variant: 'ghost', run: (cb, task) => cb.onReopen(task) },
-    menu: [MENU_OPEN_NOTE, MENU_ARCHIVE],
+    menu: [MENU_OPEN_NOTE, MENU_OPEN_CONVERSATION, MENU_ARCHIVE],
   },
   failed: {
     primary: { labelKey: 'tasks.board.cardAction.retry', icon: 'rotate-ccw', variant: 'cta', run: (cb, task) => cb.onMarkReady(task) },
-    menu: [MENU_OPEN_NOTE, MENU_ARCHIVE],
+    menu: [MENU_OPEN_NOTE, MENU_OPEN_CONVERSATION, MENU_ARCHIVE],
   },
   canceled: {
     primary: { labelKey: 'tasks.board.cardAction.retry', icon: 'rotate-ccw', variant: 'cta', run: (cb, task) => cb.onMarkReady(task) },
-    menu: [MENU_OPEN_NOTE, MENU_ARCHIVE],
+    menu: [MENU_OPEN_NOTE, MENU_OPEN_CONVERSATION, MENU_ARCHIVE],
   },
 };
 
-export const FALLBACK_CARD_ACTIONS: CardActionModel = { primary: null, menu: [MENU_OPEN_NOTE] };
+export const FALLBACK_CARD_ACTIONS: CardActionModel = { primary: null, menu: [MENU_OPEN_NOTE, MENU_OPEN_CONVERSATION] };
