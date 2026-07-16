@@ -207,9 +207,16 @@ Context managers: `FileContextManager` (`ui/FileContext.ts` +
   optional until send, so a pasted/dropped image can only be removed by id; the
   engine clears `currentNotePath` for the active-note pill),
   `onOpenFile(path)` (open the clicked file/current/folder chip and edited-files
-  row), `onDropdownNavigate`, `onDropdownSelect`, `onDropdownDismiss`, and the
-  element-handle registration hooks. (There is no `onSend`/`onCancel` — send and
-  Escape-cancel stay keyboard-driven through `tabInputWiring`.)
+  row), `onOpenImage(id)` (the image thumbnail `.specorator-image-thumb` is
+  click-to-open today — it opens the full-size preview via `openImageModal`, not
+  just a remove target), `onDropdownNavigate`, `onDropdownSelect`,
+  `onDropdownDismiss`, and the element-handle registration hooks. (There is no
+  `onSend`/`onCancel` — send and Escape-cancel stay keyboard-driven through
+  `tabInputWiring`.) **Emit timing**: adding an external context opens a native
+  folder picker (`ExternalContextSelector.openFolderPicker` is async, awaiting
+  `showOpenDialog`), so the composer re-projection hangs off the selector's
+  `onChange` callback (fired after the dialog resolves and the path list mutates),
+  never the click — else the new path stays invisible until an unrelated emit.
 - **Element-handle keys** — Vue owns the composer DOM but hands the engine live
   nodes exactly as `SCROLL_HOST_KEY` did. The full set: `INPUT_EL_KEY` (the
   textarea), `NAV_ROW_KEY`, `CONTEXT_ROW_KEY`, `INPUT_CONTAINER_KEY`,
