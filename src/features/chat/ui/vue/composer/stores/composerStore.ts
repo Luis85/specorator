@@ -1,8 +1,13 @@
 import { defineStore } from 'pinia';
 import { shallowRef } from 'vue';
 
-/** Toolbar model-picker option (mirrors the imperative `.specorator-model-option`). */
-export interface ComposerModelOption { value: string; label: string; providerIcon?: string; }
+import type { ProviderIconSvg } from '../../../../../../core/providers/types';
+
+/** Toolbar model-picker option (mirrors the imperative `.specorator-model-option`).
+ *  `providerIcon` is a `ProviderIconSvg` DESCRIPTOR (a `ProviderPathIconSvg |
+ *  ProviderCompositeIconSvg` object), NOT an SVG string — rendered via
+ *  `createProviderIconSvg` (never v-html). */
+export interface ComposerModelOption { value: string; label: string; providerIcon?: ProviderIconSvg; }
 /** A separator-labelled group of model options. */
 export interface ComposerModelGroup { label: string | null; options: ComposerModelOption[]; }
 
@@ -16,12 +21,13 @@ export interface ComposerModeState {
 export interface ComposerReasoningOption { value: string; label: string; title?: string; }
 /** One gear control: a label + current label + selectable options. */
 export interface ComposerReasoningControl { label: string; current: string; options: ComposerReasoningOption[]; }
-/** Reasoning controls. `budget` is the thinking-budget gears (fire
- *  `onSetThinkingBudget` → `thinkingBudget`); `effort` is the effort gears
- *  (fire `onSetEffortLevel` → `effortLevel`) shown ONLY for adaptive-reasoning
- *  models (`isAdaptiveReasoningModel`). Either may be null; an adaptive model
- *  renders BOTH. A `reasoning` of `null` on the toolbar hides the widget entirely
- *  (reasoningControl 'none'). */
+/** Reasoning controls. EXACTLY ONE of `budget`/`effort` is non-null (never both) —
+ *  both are fed by `getReasoningOptions`, and `isAdaptiveReasoningModel` decides
+ *  which: adaptive models render the `effort` gears (select → `onSetEffortLevel`
+ *  → `effortLevel`), non-adaptive render the `budget` gears (select →
+ *  `onSetThinkingBudget` → `thinkingBudget`). There is no `getEffortOptions`. A
+ *  `reasoning` of `null` on the toolbar hides the widget entirely (reasoningControl
+ *  'none' / empty options / lone-default). */
 export interface ComposerReasoningState {
   budget: ComposerReasoningControl | null;
   effort: ComposerReasoningControl | null;
