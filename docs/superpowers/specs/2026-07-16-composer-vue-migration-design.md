@@ -210,7 +210,12 @@ ComposerRoot.vue                    (.specorator-input-container host; registers
   `ImageContextManager` are already view-over-state layers (they rebuild pills
   from `FileContextState` / image state), so the render moves to Vue while the
   underlying context *state* and all vault I/O stay in the engine and are
-  projected into the store.
+  projected into the store. **Contract**: `FileChips.vue` must render its chips
+  inside a `.specorator-file-indicator` wrapper and `ImageChips.vue` inside a
+  `.specorator-image-preview` wrapper, each toggling `.specorator-visible-flex`
+  when non-empty (mirroring the legacy views) — the still-imperative
+  `updateContextRowHasContent()` reads exactly those wrappers + that class to
+  decide `.specorator-context-row.has-content` (see DOM contract).
 - **Selection indicators** are NOT reactive: the three editor/browser/canvas
   indicator elements are engine-driven element handles. `SelectionIndicators.vue`
   renders the three host `<div>`s (with the legacy classes + initial
@@ -312,6 +317,17 @@ register the exact elements:
 - **Shell tab-strip teleport** — `resolveNavRowEl` returns `tab.dom.navRowEl`;
   the composer must keep a real `.specorator-input-nav-row` element registered
   there so `ChatHeader.vue`'s `'input'`-mode `<Teleport>` still targets it.
+- `contextRowVisibility.updateContextRowHasContent()` (called from
+  `selectionPollingBase` by the selection controllers on every poll) queries
+  `.specorator-context-row` for `.specorator-selection-indicator` /
+  `.specorator-browser-selection-indicator` / `.specorator-canvas-indicator`
+  (checking `.specorator-hidden`) **and** `.specorator-file-indicator` /
+  `.specorator-image-preview` (checking `.specorator-visible-flex`), then toggles
+  `.has-content` on the context row. The reactive `FileChips.vue` /
+  `ImageChips.vue` must therefore keep their `.specorator-file-indicator` /
+  `.specorator-image-preview` wrappers and toggle `.specorator-visible-flex` when
+  populated, or a selection poll can clear `has-content` and hide populated
+  chips.
 - `tabInputWiring` Mod+Enter textarea handler + vault scope — operate on the same
   `inputEl`.
 
@@ -322,9 +338,13 @@ consumer-queried class + that all element handles — `inputEl` / `navRowEl` /
 registered to `tab.dom.*` (and `queueIndicatorEl` also to
 `state.queueIndicatorEl`) as live nodes. It then drives
 `QueuedMessageController.updateQueueIndicator()` against the Vue-rendered queue
-row, and a selection controller against its registered indicator, to confirm the
-queued-follow-up UI and the selection pills still render/update. It is the
-regression backstop until the side-panels sub-project migrates those consumers.
+row, a selection controller against its registered indicator, and
+`updateContextRowHasContent()` against a populated `FileChips.vue` /
+`ImageChips.vue` (asserting `.specorator-file-indicator` /
+`.specorator-image-preview` carry `.specorator-visible-flex` and the context row
+gains `.has-content`), to confirm the queued-follow-up UI, the selection pills,
+and the context-row visibility all still work. It is the regression backstop
+until the side-panels sub-project migrates those consumers.
 
 ## Testing
 
