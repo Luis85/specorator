@@ -123,15 +123,18 @@ describe('CardActionCluster', () => {
     secondary?: string;
     menu: string[];
   }> = [
-    { status: 'inbox', primary: { label: 'Mark ready', variant: 'cta' }, menu: ['Open note', 'Archive'] },
-    { status: 'ready', primary: { label: 'Run', variant: 'cta' }, menu: ['Open note', 'Back to inbox'] },
+    // Every menu carries the conversation-gated "Open conversation" (these
+    // fixtures set conversation_id): a work order that has run keeps its
+    // conversation reachable from the ⋯ menu in ANY state.
+    { status: 'inbox', primary: { label: 'Mark ready', variant: 'cta' }, menu: ['Open note', 'Open conversation', 'Archive'] },
+    { status: 'ready', primary: { label: 'Run', variant: 'cta' }, menu: ['Open note', 'Open conversation', 'Back to inbox'] },
     // needs_fix mirrors ready (both restored from the pre-cluster recovery actions).
-    { status: 'needs_fix', primary: { label: 'Run', variant: 'cta' }, menu: ['Open note', 'Back to inbox'] },
+    { status: 'needs_fix', primary: { label: 'Run', variant: 'cta' }, menu: ['Open note', 'Open conversation', 'Back to inbox'] },
     {
       status: 'running',
       primary: { label: 'Stop', variant: 'danger' },
       secondary: 'Go to conversation',
-      menu: ['Open note'],
+      menu: ['Open note', 'Open conversation'],
     },
     { status: 'needs_input', primary: null, menu: ['Open note', 'Open conversation', 'Stop'] },
     // needs_approval mirrors needs_input.
@@ -141,11 +144,11 @@ describe('CardActionCluster', () => {
       primary: { label: 'Accept', variant: 'cta' },
       menu: ['Rework', 'Open note', 'Open conversation', 'Back to inbox'],
     },
-    { status: 'needs_handoff', primary: { label: 'Send to review', variant: 'cta' }, menu: ['Mark failed', 'Open note'] },
-    { status: 'done', primary: { label: 'Reopen', variant: 'ghost' }, menu: ['Open note', 'Archive'] },
-    { status: 'failed', primary: { label: 'Retry', variant: 'cta' }, menu: ['Open note', 'Archive'] },
+    { status: 'needs_handoff', primary: { label: 'Send to review', variant: 'cta' }, menu: ['Mark failed', 'Open note', 'Open conversation'] },
+    { status: 'done', primary: { label: 'Reopen', variant: 'ghost' }, menu: ['Open note', 'Open conversation', 'Archive'] },
+    { status: 'failed', primary: { label: 'Retry', variant: 'cta' }, menu: ['Open note', 'Open conversation', 'Archive'] },
     // canceled mirrors failed.
-    { status: 'canceled', primary: { label: 'Retry', variant: 'cta' }, menu: ['Open note', 'Archive'] },
+    { status: 'canceled', primary: { label: 'Retry', variant: 'cta' }, menu: ['Open note', 'Open conversation', 'Archive'] },
   ];
 
   it.each(STATUS_CASES)(

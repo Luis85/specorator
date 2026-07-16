@@ -310,7 +310,10 @@ describe('WorkOrderCard reply surface + skip chip', () => {
     const host = container.querySelector('.specorator-agent-board-card-skip-host');
     expect(host).toBeTruthy();
     const chip = host?.querySelector('.specorator-agent-board-card-skip-chip');
-    expect(chip?.textContent?.trim()).toBe('⊘ Queue skipped: skipped: cap');
+    // The chip is a real <button> (keyboard for free); the label span carries
+    // the reason text and the aria-hidden × carries the dismiss affordance.
+    expect(chip?.tagName).toBe('BUTTON');
+    expect(chip?.querySelector('span')?.textContent?.trim()).toBe('⊘ Queue skipped: skipped: cap');
 
     await fireEvent.click(chip as Element);
     // Ack clears the runner's shared skip map via the callback...
@@ -336,7 +339,7 @@ describe('WorkOrderCard reply surface + skip chip', () => {
     store.setSkip('c-r', 'no free slot');
     await nextTick();
     const chip = container.querySelector('.specorator-agent-board-card-skip-chip');
-    expect(chip?.textContent?.trim()).toBe('⊘ Queue skipped: no free slot');
+    expect(chip?.querySelector('span')?.textContent?.trim()).toBe('⊘ Queue skipped: no free slot');
 
     // The card starting (attempt-started → clearSkip) removes the chip.
     store.clearSkip('c-r');

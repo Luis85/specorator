@@ -855,8 +855,22 @@
           "heartbeatFresh": "Fresh heartbeat ({age} ago)",
           "heartbeatStale": "Stale heartbeat ({age} ago)",
           "heartbeatVeryStale": "Very stale heartbeat ({age} ago)"
-        }
+        },
+        "updatedAgo": "vor {ago}",
+        "ariaLabel": "{title} — {status}"
       },
+      "attention": {
+        "waitingOne": "1 wartet auf dich",
+        "waitingMany": "{n} warten auf dich",
+        "jump": "Zum nächsten wartenden Arbeitsauftrag springen"
+      },
+      "emptyBoard": {
+        "title": "Noch keine Arbeitsaufträge",
+        "body": "Arbeitsaufträge sind Markdown-Notizen in „{folder}“. Erstelle einen und das Board führt ihn durch seine Spuren."
+      },
+      "emptyLane": "Keine Arbeitsaufträge",
+      "laneCriteriaShow": "Spurkriterien anzeigen",
+      "laneCriteriaHide": "Spurkriterien ausblenden",
       "notRunnable": "Mark \"{title}\" ready before running.",
       "noFreeSlots": "Keine freien Arbeitsauftrags-Slots. Ein Arbeitsauftrag braucht einen freien Slot – schließe einen Arbeitsauftrags-Tab im Chat-Bereich oder erhöhe „Concurrent work-order runs“ in den Agent-Board-Einstellungen.",
       "collapseLane": "Spur einklappen",
@@ -869,7 +883,8 @@
       "queueHalted": "Warteschlange angehalten: {reason}",
       "failureOne": "{n} Fehler",
       "failureMany": "{n} Fehler",
-      "queueSkipped": "⊘ Warteschlange übersprungen: {reason}"
+      "queueSkipped": "⊘ Warteschlange übersprungen: {reason}",
+      "queueSkippedDismiss": "Ausblenden"
     },
     "template": {
       "nameRequired": "Template name is required.",

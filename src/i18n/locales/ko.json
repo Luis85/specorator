@@ -855,8 +855,22 @@
           "heartbeatFresh": "Fresh heartbeat ({age} ago)",
           "heartbeatStale": "Stale heartbeat ({age} ago)",
           "heartbeatVeryStale": "Very stale heartbeat ({age} ago)"
-        }
+        },
+        "updatedAgo": "{ago} 전",
+        "ariaLabel": "{title} — {status}"
       },
+      "attention": {
+        "waitingOne": "1건이 응답 대기 중",
+        "waitingMany": "{n}건이 응답 대기 중",
+        "jump": "응답을 기다리는 다음 작업 지시로 이동"
+      },
+      "emptyBoard": {
+        "title": "아직 작업 지시가 없습니다",
+        "body": "작업 지시는 \"{folder}\"의 Markdown 노트입니다. 하나 만들면 보드가 레인을 따라 진행합니다."
+      },
+      "emptyLane": "작업 지시 없음",
+      "laneCriteriaShow": "레인 조건 표시",
+      "laneCriteriaHide": "레인 조건 숨기기",
       "notRunnable": "Mark \"{title}\" ready before running.",
       "noFreeSlots": "사용 가능한 작업 지시 슬롯이 없습니다. 작업 지시 실행에는 빈 슬롯이 필요합니다. 채팅 패널에서 작업 지시 탭을 닫거나 Agent Board 설정에서 \"Concurrent work-order runs\"를 늘리세요.",
       "collapseLane": "레인 접기",
@@ -869,7 +883,8 @@
       "queueHalted": "대기열 중지됨: {reason}",
       "failureOne": "실패 {n}건",
       "failureMany": "실패 {n}건",
-      "queueSkipped": "⊘ 대기열 건너뜀: {reason}"
+      "queueSkipped": "⊘ 대기열 건너뜀: {reason}",
+      "queueSkippedDismiss": "닫기"
     },
     "template": {
       "nameRequired": "Template name is required.",

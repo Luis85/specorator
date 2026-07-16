@@ -855,8 +855,22 @@
           "heartbeatFresh": "Fresh heartbeat ({age} ago)",
           "heartbeatStale": "Stale heartbeat ({age} ago)",
           "heartbeatVeryStale": "Very stale heartbeat ({age} ago)"
-        }
+        },
+        "updatedAgo": "il y a {ago}",
+        "ariaLabel": "{title} — {status}"
       },
+      "attention": {
+        "waitingOne": "1 en attente de vous",
+        "waitingMany": "{n} en attente de vous",
+        "jump": "Aller au prochain ordre de travail en attente de vous"
+      },
+      "emptyBoard": {
+        "title": "Aucun ordre de travail pour l’instant",
+        "body": "Les ordres de travail sont des notes Markdown dans « {folder} ». Créez-en un et le tableau le fait avancer dans ses couloirs."
+      },
+      "emptyLane": "Aucun ordre de travail",
+      "laneCriteriaShow": "Afficher les critères du couloir",
+      "laneCriteriaHide": "Masquer les critères du couloir",
       "notRunnable": "Mark \"{title}\" ready before running.",
       "noFreeSlots": "Aucun emplacement libre pour les ordres de travail. Une exécution nécessite un emplacement libre — fermez un onglet d’ordre de travail dans le panneau de discussion, ou augmentez « Concurrent work-order runs » dans les paramètres de l’Agent Board.",
       "collapseLane": "Réduire le couloir",
@@ -869,7 +883,8 @@
       "queueHalted": "File d’attente arrêtée : {reason}",
       "failureOne": "{n} échec",
       "failureMany": "{n} échecs",
-      "queueSkipped": "⊘ File d’attente ignorée : {reason}"
+      "queueSkipped": "⊘ File d’attente ignorée : {reason}",
+      "queueSkippedDismiss": "Fermer"
     },
     "template": {
       "nameRequired": "Template name is required.",

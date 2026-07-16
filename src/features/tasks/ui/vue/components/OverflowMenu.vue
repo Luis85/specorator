@@ -108,10 +108,39 @@ function onPointerDown(event: MouseEvent): void {
 function onReflow(): void {
   requestClose();
 }
+// Roving focus across the item buttons (role="menu" convention): arrows wrap,
+// Home/End jump. Focus starts on the container (mount), so the first ArrowDown
+// lands on the first item.
+function menuItemEls(): HTMLElement[] {
+  return [...(menuEl.value?.querySelectorAll<HTMLElement>('.specorator-agent-board-card-menu-item') ?? [])];
+}
+
+function moveFocus(target: number | 'home' | 'end'): void {
+  const items = menuItemEls();
+  if (items.length === 0) return;
+  if (target === 'home') return items[0].focus();
+  if (target === 'end') return items[items.length - 1].focus();
+  const active = menuEl.value?.ownerDocument.activeElement;
+  const current = items.indexOf(active as HTMLElement);
+  const next = current === -1 ? (target > 0 ? 0 : items.length - 1) : (current + target + items.length) % items.length;
+  items[next].focus();
+}
+
 function onKeyDown(event: KeyboardEvent): void {
   if (event.key === 'Escape') {
     event.stopPropagation();
     requestClose();
+    return;
+  }
+  if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+    event.preventDefault();
+    event.stopPropagation();
+    moveFocus(event.key === 'ArrowDown' ? 1 : -1);
+    return;
+  }
+  if (event.key === 'Home' || event.key === 'End') {
+    event.preventDefault();
+    moveFocus(event.key === 'Home' ? 'home' : 'end');
   }
 }
 

@@ -58,6 +58,19 @@ export type TasksTranslationKey =
   | 'tasks.board.failureOne'
   | 'tasks.board.failureMany'
   | 'tasks.board.queueSkipped'
+  | 'tasks.board.queueSkippedDismiss'
+
+  // Tasks - Board UX pass (attention chip, age stamps, empty states, criteria toggle)
+  | 'tasks.board.attention.waitingOne'
+  | 'tasks.board.attention.waitingMany'
+  | 'tasks.board.attention.jump'
+  | 'tasks.board.card.updatedAgo'
+  | 'tasks.board.card.ariaLabel'
+  | 'tasks.board.emptyBoard.title'
+  | 'tasks.board.emptyBoard.body'
+  | 'tasks.board.emptyLane'
+  | 'tasks.board.laneCriteriaShow'
+  | 'tasks.board.laneCriteriaHide'
 
   // Tasks - Templates / create / fromChat / run (Q-1 chunk 14)
   | 'tasks.template.nameRequired'

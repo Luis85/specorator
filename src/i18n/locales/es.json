@@ -855,8 +855,22 @@
           "heartbeatFresh": "Fresh heartbeat ({age} ago)",
           "heartbeatStale": "Stale heartbeat ({age} ago)",
           "heartbeatVeryStale": "Very stale heartbeat ({age} ago)"
-        }
+        },
+        "updatedAgo": "hace {ago}",
+        "ariaLabel": "{title} — {status}"
       },
+      "attention": {
+        "waitingOne": "1 espera tu respuesta",
+        "waitingMany": "{n} esperan tu respuesta",
+        "jump": "Ir a la siguiente orden de trabajo en espera"
+      },
+      "emptyBoard": {
+        "title": "Aún no hay órdenes de trabajo",
+        "body": "Las órdenes de trabajo son notas Markdown en \"{folder}\". Crea una y el tablero la lleva por sus carriles."
+      },
+      "emptyLane": "Sin órdenes de trabajo",
+      "laneCriteriaShow": "Mostrar criterios del carril",
+      "laneCriteriaHide": "Ocultar criterios del carril",
       "notRunnable": "Mark \"{title}\" ready before running.",
       "noFreeSlots": "No hay espacios libres para órdenes de trabajo. Una ejecución necesita un espacio libre: cierra una pestaña de orden de trabajo en el panel de chat, o aumenta \"Concurrent work-order runs\" en los ajustes del Agent Board.",
       "collapseLane": "Contraer carril",
@@ -869,7 +883,8 @@
       "queueHalted": "Cola detenida: {reason}",
       "failureOne": "{n} fallo",
       "failureMany": "{n} fallos",
-      "queueSkipped": "⊘ Cola omitida: {reason}"
+      "queueSkipped": "⊘ Cola omitida: {reason}",
+      "queueSkippedDismiss": "Descartar"
     },
     "template": {
       "nameRequired": "Template name is required.",

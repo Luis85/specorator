@@ -13,6 +13,10 @@ export {
 
 export const LIVE_STATUSES: ReadonlySet<TaskStatus> = new Set(['running', 'needs_input', 'needs_approval']);
 
+/** Statuses where a live run is paused on a human — the reply surface pair and
+ *  the toolbar attention chip's "waiting on you" set. */
+export const ATTENTION_STATUSES: ReadonlySet<TaskStatus> = new Set(['needs_input', 'needs_approval']);
+
 /** Status-dot class list the board CSS keys the per-status color + live pulse off. */
 export function statusDotClass(status: TaskStatus): string {
   const live = LIVE_STATUSES.has(status) ? ' specorator-agent-board-card-status-dot--live' : '';

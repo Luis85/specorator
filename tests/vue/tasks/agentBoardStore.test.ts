@@ -215,6 +215,42 @@ describe('useAgentBoardStore', () => {
     spy.mockRestore();
   });
 
+  it('tick() advances nowMinuteMs only across a minute boundary (the bounded card-age axis)', () => {
+    // Card age stamps read nowMinuteMs, NOT nowMs — a 1s tick inside the same
+    // minute must not re-render every settled card on the board.
+    const { store } = initStore([{ lanes: [], errors: [] }]);
+    const spy = vi.spyOn(Date, 'now');
+
+    spy.mockReturnValue(1_700_000_040_000); // exactly on a minute boundary
+    store.tick();
+    const seeded = store.nowMinuteMs;
+    expect(seeded).toBe(1_700_000_040_000);
+
+    spy.mockReturnValue(1_700_000_059_000); // +19s, same minute
+    store.tick();
+    expect(store.nowMs).toBe(1_700_000_059_000); // the 1s clock still advances
+    expect(store.nowMinuteMs).toBe(seeded); // the minute clock does not
+
+    spy.mockReturnValue(1_700_000_100_000); // next minute
+    store.tick();
+    expect(store.nowMinuteMs).toBe(1_700_000_100_000);
+    spy.mockRestore();
+  });
+
+  it('attentionTasks projects needs_input/needs_approval ids in layout order (toolbar chip + jump list)', async () => {
+    const lanes = [
+      makeLane('running', [makeTask('t1', 'running'), makeTask('t2', 'needs_input')]),
+      makeLane('paused', [makeTask('t3', 'needs_approval'), makeTask('t4', 'ready')]),
+    ];
+    const { store } = initStore([{ lanes, errors: [] }]);
+
+    expect(store.attentionTasks).toEqual([]); // pre-load: empty layout
+
+    await store.load();
+
+    expect(store.attentionTasks).toEqual(['t2', 't3']);
+  });
+
   it('recordHeartbeat replaces the map with a NEW reference and sets the value', () => {
     const { store } = initStore([{ lanes: [], errors: [] }]);
     const before = store.liveHeartbeats;
