@@ -1,9 +1,9 @@
 <script setup lang="ts">
-import { computed, inject, onMounted, ref, watch } from 'vue';
+import { computed, inject, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 
 import { t } from '../../../../../../i18n/i18n';
 import { mountIcon } from '../../mountIcon';
-import { CALLBACKS_KEY, COMPONENT_KEY } from '../composerKeys';
+import { CALLBACKS_KEY } from '../composerKeys';
 import { useComposerStore } from '../stores/composerStore';
 
 // Reactive reproduction of the imperative EditedFilesView: a single-line badge
@@ -11,7 +11,6 @@ import { useComposerStore } from '../stores/composerStore';
 // every agent-created/edited file. Self-hides when `store.editedFiles` is empty.
 const store = useComposerStore();
 const cb = inject(CALLBACKS_KEY);
-const component = inject(COMPONENT_KEY);
 const open = ref(false);
 const entries = computed(() => store.editedFiles);
 const createdCount = computed(() => entries.value.filter((e) => e.changeKind === 'created').length);
@@ -34,21 +33,36 @@ const rootEl = ref<HTMLElement | null>(null);
 // re-opens stale when new entries arrive.
 watch(() => entries.value.length, (count) => { if (count === 0) open.value = false; });
 
-// Reproduce EditedFilesView's outside-click / Escape dismissal. Registered
-// through the injected Obsidian Component's `registerDomEvent` so it is
-// auto-cleaned on unmount (no raw document listener leak). The handlers no-op
-// while closed, matching the imperative attach-only-when-open behaviour.
+// Reproduce EditedFilesView's outside-click / Escape dismissal. Bound to this
+// SFC's own lifecycle (add on mount / remove on unmount) rather than the injected
+// Obsidian Component: that component is the long-lived per-leaf SpecoratorView, so
+// its `registerDomEvent` listeners would outlive `mountedComposer.unmount()` on tab
+// close and accumulate stale global handlers. Scoped to `rowEl.ownerDocument` so
+// popout leaves target the right document; the handlers no-op while closed,
+// matching the imperative attach-only-when-open behaviour.
+let listenerDoc: Document | null = null;
+
+function onDocMousedown(event: MouseEvent): void {
+  if (!open.value) return;
+  const target = event.target as Node | null;
+  if (rootEl.value && target && rootEl.value.contains(target)) return;
+  open.value = false;
+}
+
+function onDocKeydown(event: KeyboardEvent): void {
+  if (event.key === 'Escape') open.value = false;
+}
+
 onMounted(() => {
-  const doc = rowEl.value?.ownerDocument ?? document;
-  component?.registerDomEvent(doc, 'mousedown', (event: MouseEvent) => {
-    if (!open.value) return;
-    const target = event.target as Node | null;
-    if (rootEl.value && target && rootEl.value.contains(target)) return;
-    open.value = false;
-  });
-  component?.registerDomEvent(doc, 'keydown', (event: KeyboardEvent) => {
-    if (event.key === 'Escape') open.value = false;
-  });
+  listenerDoc = rowEl.value?.ownerDocument ?? document;
+  listenerDoc.addEventListener('mousedown', onDocMousedown);
+  listenerDoc.addEventListener('keydown', onDocKeydown);
+});
+
+onBeforeUnmount(() => {
+  listenerDoc?.removeEventListener('mousedown', onDocMousedown);
+  listenerDoc?.removeEventListener('keydown', onDocKeydown);
+  listenerDoc = null;
 });
 </script>
 

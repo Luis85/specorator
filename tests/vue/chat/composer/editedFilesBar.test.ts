@@ -1,11 +1,10 @@
 import { mount } from '@vue/test-utils';
-import { Component } from 'obsidian';
 import { setActivePinia } from 'pinia';
-import { beforeEach, describe, expect, it, type Mock, vi } from 'vitest';
+import { beforeEach, describe, expect, it, type MockInstance, vi } from 'vitest';
 
 import EditedFilesBar from '@/features/chat/ui/vue/composer/components/EditedFilesBar.vue';
 import type { ComposerCallbacks } from '@/features/chat/ui/vue/composer/composerCallbacks';
-import { CALLBACKS_KEY, COMPONENT_KEY } from '@/features/chat/ui/vue/composer/composerKeys';
+import { CALLBACKS_KEY } from '@/features/chat/ui/vue/composer/composerKeys';
 import { createComposerPinia } from '@/features/chat/ui/vue/composer/composerPinia';
 import { type ComposerEditedFile, useComposerStore } from '@/features/chat/ui/vue/composer/stores/composerStore';
 
@@ -21,24 +20,27 @@ function stubCallbacks(): ComposerCallbacks {
 function mountBar(cb: ComposerCallbacks) {
   const pinia = createComposerPinia();
   setActivePinia(pinia);
-  const component = new Component();
+  // The dismissal listeners are bound to the SFC's own lifecycle on the
+  // element's ownerDocument (the global document in jsdom), NOT the injected
+  // long-lived component; spy the document so we can invoke handlers and assert
+  // they are torn down on unmount.
+  const addSpy = vi.spyOn(document, 'addEventListener');
+  const removeSpy = vi.spyOn(document, 'removeEventListener');
   const wrapper = mount(EditedFilesBar, {
     global: {
       plugins: [pinia],
       provide: {
         [CALLBACKS_KEY as symbol]: cb,
-        [COMPONENT_KEY as symbol]: component,
       },
     },
   });
-  return { wrapper, store: useComposerStore(), component };
+  return { wrapper, store: useComposerStore(), addSpy, removeSpy };
 }
 
-function docHandler(component: Component, type: string): (event: unknown) => void {
-  const calls = (component.registerDomEvent as unknown as Mock).mock.calls;
-  const call = calls.find((c) => c[1] === type);
-  if (!call) throw new Error(`no registerDomEvent for ${type}`);
-  return call[2] as (event: unknown) => void;
+function docHandler(addSpy: MockInstance, type: string): (event: unknown) => void {
+  const call = addSpy.mock.calls.find((c) => c[0] === type);
+  if (!call) throw new Error(`no document addEventListener for ${type}`);
+  return call[1] as (event: unknown) => void;
 }
 
 describe('EditedFilesBar.vue', () => {
@@ -84,23 +86,23 @@ describe('EditedFilesBar.vue', () => {
   });
 
   it('closes the popover on Escape (document keydown)', async () => {
-    const { wrapper, store, component } = mountBar(stubCallbacks());
+    const { wrapper, store, addSpy } = mountBar(stubCallbacks());
     store.setEditedFiles(ENTRIES);
     await wrapper.vm.$nextTick();
     await wrapper.find('.specorator-edited-files-badge').trigger('click');
     expect(wrapper.find('.specorator-edited-files-menu').exists()).toBe(true);
 
-    docHandler(component, 'keydown')({ key: 'Escape' });
+    docHandler(addSpy, 'keydown')({ key: 'Escape' });
     await wrapper.vm.$nextTick();
     expect(wrapper.find('.specorator-edited-files-menu').exists()).toBe(false);
   });
 
   it('closes the popover on an outside mousedown but not on an inside one', async () => {
-    const { wrapper, store, component } = mountBar(stubCallbacks());
+    const { wrapper, store, addSpy } = mountBar(stubCallbacks());
     store.setEditedFiles(ENTRIES);
     await wrapper.vm.$nextTick();
     await wrapper.find('.specorator-edited-files-badge').trigger('click');
-    const mousedown = docHandler(component, 'mousedown');
+    const mousedown = docHandler(addSpy, 'mousedown');
 
     // Inside the popover root: stays open.
     const badgeEl = wrapper.find('.specorator-edited-files-badge').element;
@@ -156,5 +158,16 @@ describe('EditedFilesBar.vue', () => {
     store.setEditedFiles(ENTRIES);
     await wrapper.vm.$nextTick();
     expect(wrapper.find('.specorator-edited-files-menu').exists()).toBe(false);
+  });
+
+  it('removes its document listeners on unmount so a closed tab leaves no dangling handler', () => {
+    const { wrapper, addSpy, removeSpy } = mountBar(stubCallbacks());
+    const mousedown = docHandler(addSpy, 'mousedown');
+    const keydown = docHandler(addSpy, 'keydown');
+
+    wrapper.unmount();
+
+    expect(removeSpy).toHaveBeenCalledWith('mousedown', mousedown);
+    expect(removeSpy).toHaveBeenCalledWith('keydown', keydown);
   });
 });
