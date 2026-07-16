@@ -30,6 +30,7 @@ function makeCallbacks(): { callbacks: ComposerCallbacks; registered: Record<str
     onTogglePlanMode: () => {}, onToggleMcpServer: () => {}, onAddExternalContext: () => {},
     onRemoveExternalContext: () => {}, onToggleExternalContextPersistence: () => {},
     onRemoveChip: () => {}, onOpenImage: () => {}, onOpenFile: () => {}, onOpenEditedFile: () => {},
+    onDropdownNavigate: () => {}, onDropdownSelect: () => {}, onDropdownDismiss: () => {},
     registerInputContainer: (el) => { registered.container = el; },
     registerNavRow: (el) => { registered.navRow = el; },
     registerInputWrapper: (el) => { registered.wrapper = el; },

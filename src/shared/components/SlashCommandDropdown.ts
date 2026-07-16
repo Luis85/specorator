@@ -3,13 +3,14 @@ import type { ProviderCommandDropdownConfig } from '../../core/providers/command
 import type { ProviderCommandEntry } from '../../core/providers/commands/ProviderCommandEntry';
 import type { SlashCommand } from '../../core/types';
 import { normalizeArgumentHint } from '../../utils/slashCommand';
+import type { ComposerDropdownDelegate } from './composerDropdownDelegate';
 import {
   applySelectionClass,
   clampSelectionIndex,
   handleDropdownNavigationKey,
 } from './dropdownNavigation';
 
-interface DropdownItem {
+export interface DropdownItem {
   name: string;
   description?: string;
   argumentHint?: string;
@@ -31,6 +32,11 @@ export interface SlashCommandDropdownOptions {
   hiddenCommands?: Set<string>;
   providerConfig?: ProviderCommandDropdownConfig;
   getProviderEntries?: () => Promise<ProviderCommandEntry[]>;
+  /**
+   * Chat-only: when present, render + keyboard + visibility DELEGATE to the
+   * coordinator (no DOM built). Inline-edit omits it and keeps the DOM render.
+   */
+  coordinator?: ComposerDropdownDelegate;
 }
 
 export class SlashCommandDropdown {
@@ -46,6 +52,7 @@ export class SlashCommandDropdown {
   private filteredItems: DropdownItem[] = [];
   private isFixed: boolean;
   private hiddenCommands: Set<string>;
+  private readonly coordinator: ComposerDropdownDelegate | null;
 
   private providerConfig: ProviderCommandDropdownConfig | null;
   private getProviderEntries: (() => Promise<ProviderCommandEntry[]>) | null;
@@ -67,6 +74,7 @@ export class SlashCommandDropdown {
     this.hiddenCommands = options.hiddenCommands ?? new Set();
     this.providerConfig = options.providerConfig ?? null;
     this.getProviderEntries = options.getProviderEntries ?? null;
+    this.coordinator = options.coordinator ?? null;
 
     this.onInput = () => this.handleInputChange();
     this.inputEl.addEventListener('input', this.onInput);
@@ -140,6 +148,10 @@ export class SlashCommandDropdown {
   handleKeydown(e: KeyboardEvent): boolean {
     if (!this.enabled || !this.isVisible()) return false;
 
+    if (this.coordinator) {
+      return this.coordinator.handleKeydown(e);
+    }
+
     return handleDropdownNavigationKey(e, {
       itemCount: this.filteredItems.length,
       navigate: (direction) => this.navigate(direction),
@@ -149,13 +161,26 @@ export class SlashCommandDropdown {
   }
 
   isVisible(): boolean {
+    if (this.coordinator) {
+      return this.coordinator.getState().kind === 'slash';
+    }
     return this.dropdownEl?.hasClass('visible') ?? false;
   }
 
   hide(): void {
+    if (this.coordinator) {
+      this.localReset();
+      this.coordinator.hide();
+      return;
+    }
     if (this.dropdownEl) {
       this.dropdownEl.removeClass('visible');
     }
+    this.localReset();
+  }
+
+  /** Detector-local reset shared by both the DOM `hide` and the coordinator dismiss. */
+  private localReset(): void {
     this.triggerStartIndex = -1;
     this.callbacks.onHide();
   }
@@ -297,6 +322,21 @@ export class SlashCommandDropdown {
   }
 
   private render(): void {
+    if (this.coordinator) {
+      this.coordinator.showSlash(
+        this.filteredItems,
+        this.inputEl as HTMLTextAreaElement,
+        {
+          select: (index) => {
+            this.selectedIndex = index;
+            this.selectItem();
+          },
+          dismiss: () => this.localReset(),
+        },
+      );
+      return;
+    }
+
     if (!this.dropdownEl) {
       this.dropdownEl = this.createDropdownElement();
     }

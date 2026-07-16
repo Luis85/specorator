@@ -7,6 +7,7 @@ import type { SlashCommandDropdown } from '../../../shared/components/SlashComma
 import type { BrowserSelectionController } from '../controllers/BrowserSelectionController';
 import type { CanvasSelectionController } from '../controllers/CanvasSelectionController';
 import type { ChatDropController } from '../controllers/ChatDropController';
+import type { ComposerDropdownCoordinator } from '../controllers/ComposerDropdownCoordinator';
 import type { ConversationController } from '../controllers/ConversationController';
 import type { InputController } from '../controllers/InputController';
 import type { NavigationController } from '../controllers/NavigationController';
@@ -123,6 +124,8 @@ export interface TabControllers {
   streamController: StreamController | null;
   inputController: InputController | null;
   navigationController: NavigationController | null;
+  /** Owns the active composer dropdown state; `buildDropdown` projects it. */
+  composerDropdownCoordinator: ComposerDropdownCoordinator | null;
 }
 
 /**

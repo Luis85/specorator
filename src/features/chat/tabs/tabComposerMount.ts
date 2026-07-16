@@ -3,6 +3,7 @@ import { type Component, Notice } from 'obsidian';
 import type { ProviderId } from '../../../core/providers/types';
 import { t } from '../../../i18n/i18n';
 import type SpecoratorPlugin from '../../../main';
+import { ComposerDropdownCoordinator } from '../controllers/ComposerDropdownCoordinator';
 import type { ComposerCallbacks } from '../ui/vue/composer/composerCallbacks';
 import { mountComposer } from '../ui/vue/composer/mountComposer';
 import { TabComposerProjection } from './tabComposer';
@@ -40,6 +41,14 @@ export function mountTabComposer(
   toolbarWiring: ComposerToolbarWiring = {},
 ): void {
   tab.composer = new TabComposerProjection(tab, plugin);
+
+  // Owns the active composer dropdown state. Constructed here (BEFORE
+  // initializeTabUI / initializeTabControllers) so the slash/mention/resume
+  // detectors those build receive it; the emit closure re-projects the dropdown
+  // slice through the same subscribe channel as every other composer slice.
+  tab.controllers.composerDropdownCoordinator = new ComposerDropdownCoordinator(
+    () => tab.composer?.emit(),
+  );
 
   // Build the toolbar action callbacks once; the Vue widgets fire these SAME
   // closures (truth + I/O stay in the engine). The catalog/provider-changed
@@ -101,6 +110,12 @@ export function mountTabComposer(
     onOpenImage: (id) => { tab.ui.imageContextManager?.openImageById(id); },
     onOpenFile: (path) => { openEditedFile(plugin.app, path); },
     onOpenEditedFile: (path) => { openEditedFile(plugin.app, path); },
+    onDropdownNavigate: (d) => { tab.controllers.composerDropdownCoordinator?.move(d); },
+    onDropdownSelect: (i) => {
+      tab.controllers.composerDropdownCoordinator?.setActiveIndex(i);
+      tab.controllers.composerDropdownCoordinator?.selectActive();
+    },
+    onDropdownDismiss: () => { tab.controllers.composerDropdownCoordinator?.hide(); },
     registerInputContainer: (el) => { tab.dom.inputContainerEl = el; },
     registerNavRow: (el) => { tab.dom.navRowEl = el; },
     registerInputWrapper: (el) => { tab.dom.inputWrapper = el; },

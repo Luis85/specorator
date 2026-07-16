@@ -189,7 +189,9 @@ export class TabComposerProjection {
     }));
   }
 
-  private buildDropdown(): ComposerDropdownState { return EMPTY_DROPDOWN; }
+  private buildDropdown(): ComposerDropdownState {
+    return this.tab.controllers?.composerDropdownCoordinator?.getState() ?? EMPTY_DROPDOWN;
+  }
 }
 
 function groupModelOptions(

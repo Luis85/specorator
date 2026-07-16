@@ -2,6 +2,7 @@ import type { App, EventRef } from 'obsidian';
 import { TFile, TFolder } from 'obsidian';
 
 import type { McpServerManager } from '../../../core/mcp/McpServerManager';
+import type { ComposerDropdownDelegate } from '../../../shared/components/composerDropdownDelegate';
 import type { AgentMentionProvider } from '../../../shared/mention/MentionDropdownController';
 import { MentionDropdownController } from '../../../shared/mention/MentionDropdownController';
 import { VaultMentionDataProvider } from '../../../shared/mention/VaultMentionDataProvider';
@@ -45,7 +46,8 @@ export class FileContextManager {
     chipsContainerEl: HTMLElement,
     inputEl: HTMLTextAreaElement,
     callbacks: FileContextCallbacks,
-    dropdownContainerEl?: HTMLElement
+    dropdownContainerEl?: HTMLElement,
+    dropdownCoordinator?: ComposerDropdownDelegate,
   ) {
     this.app = app;
     this.dropdownContainerEl = dropdownContainerEl ?? chipsContainerEl;
@@ -74,7 +76,8 @@ export class FileContextManager {
         getCachedVaultFolders: () => this.mentionDataProvider.getCachedVaultFolders(),
         getCachedVaultFiles: () => this.mentionDataProvider.getCachedVaultFiles(),
         normalizePathForVault: (rawPath) => this.normalizePathForVault(rawPath),
-      }
+      },
+      { coordinator: dropdownCoordinator }
     );
 
     this.deleteEventRef = this.app.vault.on('delete', (file) => {

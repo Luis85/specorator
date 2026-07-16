@@ -2,6 +2,7 @@ import { Notice } from 'obsidian';
 
 import type { ConversationMeta } from '../../../core/types';
 import { t } from '../../../i18n/i18n';
+import type { ComposerDropdownDelegate } from '../../../shared/components/composerDropdownDelegate';
 import { ResumeSessionDropdown } from '../../../shared/components/ResumeSessionDropdown';
 
 export interface ResumeSessionDropdownDeps {
@@ -10,6 +11,8 @@ export interface ResumeSessionDropdownDeps {
   getConversations: () => ConversationMeta[];
   getCurrentConversationId: () => string | null;
   openConversation: (conversationId: string) => Promise<void>;
+  /** Chat dropdown coordinator (the resume dropdown delegates render/keyboard to it). */
+  getDropdownCoordinator?: () => ComposerDropdownDelegate | null;
 }
 
 /**
@@ -66,6 +69,7 @@ export class ResumeSessionDropdownCoordinator {
           this.destroy();
         },
       },
+      { coordinator: this.deps.getDropdownCoordinator?.() ?? undefined },
     );
   }
 }

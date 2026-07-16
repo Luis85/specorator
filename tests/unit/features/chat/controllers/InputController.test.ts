@@ -2071,6 +2071,7 @@ describe('InputController - Message Queue', () => {
         mockConversations,
         deps.state.currentConversationId,
         expect.objectContaining({ onSelect: expect.any(Function), onDismiss: expect.any(Function) }),
+        expect.objectContaining({ coordinator: undefined }),
       );
       expect(controller.isResumeDropdownVisible()).toBe(true);
     });

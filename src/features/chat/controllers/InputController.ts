@@ -69,7 +69,7 @@ import type { ConversationController } from './ConversationController';
 import type { InlineCardMounter } from './inlineCardMount';
 import { InlinePromptController } from './InlinePromptController';
 import { QueuedMessageController } from './QueuedMessageController';
-import { ResumeSessionDropdownCoordinator } from './ResumeSessionDropdownCoordinator';
+import { ResumeSessionDropdownCoordinator, type ResumeSessionDropdownDeps } from './ResumeSessionDropdownCoordinator';
 import type { SelectionController } from './SelectionController';
 import type { StreamController } from './StreamController';
 import { activateStreamingAssistantMessage, discardStreamingAssistantMessage } from './streamingMessageLifecycle';
@@ -102,6 +102,8 @@ export interface InputControllerDeps {
   getTitleGenerationService: () => TitleGenerationService | null;
   getStatusPanel: () => StatusPanel | null;
   getInputContainerEl: () => HTMLElement;
+  /** Chat dropdown coordinator the resume dropdown delegates render/keyboard to. */
+  getDropdownCoordinator?: ResumeSessionDropdownDeps['getDropdownCoordinator'];
   generateId: () => string;
   resetInputHeight: () => void;
   getAuxiliaryModel?: () => string | null;
@@ -176,8 +178,8 @@ export class InputController {
       getInputEl: () => this.deps.getInputEl(),
       getConversations: () => this.deps.plugin.getConversationList(),
       getCurrentConversationId: () => this.deps.state.currentConversationId,
-      openConversation: (id) =>
-        this.deps.openConversation?.(id) ?? this.deps.conversationController.switchTo(id),
+      openConversation: (id) => this.deps.openConversation?.(id) ?? this.deps.conversationController.switchTo(id),
+      getDropdownCoordinator: () => this.deps.getDropdownCoordinator?.() ?? null,
     });
     this.queuedMessages = new QueuedMessageController({
       state: deps.state,
@@ -213,9 +215,7 @@ export class InputController {
   }
 
   private getAuxiliaryModel(): string | null {
-    return this.deps.getAuxiliaryModel?.()
-      ?? this.getAgentService()?.getAuxiliaryModel?.()
-      ?? null;
+    return this.deps.getAuxiliaryModel?.() ?? this.getAgentService()?.getAuxiliaryModel?.() ?? null;
   }
 
   private syncInstructionRefineModelOverride(

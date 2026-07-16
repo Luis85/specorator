@@ -117,6 +117,7 @@ export function createTab(options: TabCreateOptions): TabData {
       streamController: null,
       inputController: null,
       navigationController: null,
+      composerDropdownCoordinator: null,
     },
     services: {
       subagentManager,

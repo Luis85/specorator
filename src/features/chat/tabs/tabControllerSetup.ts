@@ -275,6 +275,7 @@ export function buildTabInputController(
     getInstructionRefineService: () => services.instructionRefineService,
     getTitleGenerationService: () => services.titleGenerationService,
     getStatusPanel: () => ui.statusPanel,
+    getDropdownCoordinator: () => tab.controllers.composerDropdownCoordinator,
     generateId: generateMessageId,
     resetInputHeight: () => {
       // Per-tab input height is managed by CSS, no dynamic adjustment needed

@@ -80,7 +80,7 @@ function initializeContextManagers(tab: TabData, plugin: SpecoratorPlugin): void
       onChipsChanged: onContextChanged,
       getExternalContexts: () => tab.ui.externalContextSelector?.getExternalContexts() || [],
     },
-    dom.inputContainerEl
+    dom.inputContainerEl, tab.controllers.composerDropdownCoordinator ?? undefined,
   );
   tab.ui.fileContextManager.setMcpManager(getProviderMcpManager(getTabProviderId(tab, plugin)));
 
@@ -123,7 +123,7 @@ function initializeSlashCommands(
     {
       hiddenCommands: getHiddenCommands?.() ?? new Set(),
       providerConfig: catalogInfo?.config,
-      getProviderEntries: catalogInfo?.getEntries,
+      getProviderEntries: catalogInfo?.getEntries, coordinator: tab.controllers.composerDropdownCoordinator ?? undefined,
     }
   );
 }

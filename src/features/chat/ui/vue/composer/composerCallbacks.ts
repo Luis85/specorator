@@ -65,6 +65,16 @@ export interface ComposerCallbacks {
    *  time (a file deleted after listing surfaces a Notice). */
   onOpenEditedFile: (path: string) => void;
 
+  // Dropdown navigation (Phase 5). The Vue dropdown render (later task) drives
+  // these; they delegate to the chat dropdown coordinator, which owns the active
+  // `{ kind, items, activeIndex, anchorRect }` and re-projects on each mutation.
+  /** Arrow navigation: move the highlighted item by `direction` (+1 down / -1 up). */
+  onDropdownNavigate: (direction: 1 | -1) => void;
+  /** Commit the item at `index` (hover-to-index then select). */
+  onDropdownSelect: (index: number) => void;
+  /** Dismiss the active dropdown. */
+  onDropdownDismiss: () => void;
+
   // Element-handle registration (Vue owns the node; the engine keeps the handle).
   registerInputContainer: (el: HTMLElement) => void;
   registerNavRow: (el: HTMLElement) => void;
