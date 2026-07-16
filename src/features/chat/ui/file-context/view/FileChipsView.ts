@@ -1,5 +1,7 @@
 import { setIcon } from 'obsidian';
 
+import { basename } from '../../../utils/pathLabel';
+
 export type PillKind = 'current' | 'file' | 'folder';
 
 export interface FileChipsViewCallbacks {
@@ -11,10 +13,6 @@ export interface PillData {
   currentNote: string | null;
   files: string[];
   folders: string[];
-}
-
-function basename(path: string): string {
-  return path.replace(/\\/g, '/').split('/').pop() || path;
 }
 
 export class FileChipsView {

@@ -175,7 +175,7 @@ export class TabComposerProjection {
       id: img.id,
       name: img.name,
       sizeLabel: formatImageSize(img.size),
-      src: resolveImageAttachmentSrc(this.plugin.app, img) ?? `data:${img.mediaType};base64,${img.data}`,
+      src: resolveImageAttachmentSrc(this.plugin.app, img) ?? '',
     }));
     return { currentNote, files, folders, images };
   }

@@ -2,20 +2,11 @@ import { setIcon } from 'obsidian';
 
 import { t } from '../../../i18n/i18n';
 import type { EditedFileChangeKind, EditedFileEntry } from '../utils/editedFiles';
+import { basename, parentDir } from '../utils/pathLabel';
 
 export interface EditedFilesViewCallbacks {
   /** Opens the clicked file (resolution + error handling owned by the caller). */
   onOpenFile: (path: string) => void;
-}
-
-function basename(path: string): string {
-  return path.replace(/\\/g, '/').split('/').pop() || path;
-}
-
-function parentDir(path: string): string {
-  const normalized = path.replace(/\\/g, '/');
-  const slash = normalized.lastIndexOf('/');
-  return slash === -1 ? '' : normalized.slice(0, slash);
 }
 
 /**

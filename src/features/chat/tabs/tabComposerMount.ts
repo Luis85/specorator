@@ -75,11 +75,13 @@ export function mountTabComposer(
     onToggleExternalContextPersistence: (path) => { tab.ui.externalContextSelector?.togglePersistence(path); },
     onRemoveChip: (key, kind) => {
       const fc = tab.ui.fileContextManager;
+      // Each manager mutation routes through onChipsChanged/onImagesChanged
+      // (tabUi.ts `onContextChanged`), which already re-projects — no explicit
+      // emit here or the chip slice would project twice per removal.
       if (kind === 'image') tab.ui.imageContextManager?.removeImageById(key);
       else if (kind === 'folder') fc?.detachFolderPill(key);
       else if (kind === 'current') fc?.clearCurrentNotePill();
       else fc?.detachFilePill(key);
-      tab.composer?.emit();
     },
     onOpenImage: (id) => { tab.ui.imageContextManager?.openImageById(id); },
     onOpenFile: (path) => { void plugin.app.workspace.openLinkText(path, '', 'tab'); },

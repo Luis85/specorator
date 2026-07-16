@@ -75,8 +75,8 @@ export interface ComposerImageChip { id: string; name: string; sizeLabel: string
 // the raw nodes to the untouched selection controllers, which mutate textContent
 // + `.specorator-hidden` directly). Only current-note/file/folder + image chips
 // are reactive. `currentNote` is projected + removed SEPARATELY from `files`:
-// removing it clears `FileContextState.currentNotePath` so `shouldSendCurrentNote()`
-// stops sending it.
+// removing it nulls the `FileContextManager.currentNotePath` field (FileContext.ts)
+// and detaches the note from state so `shouldSendCurrentNote()` stops sending it.
 export interface ComposerChips {
   currentNote: ComposerFileChip | null;
   files: ComposerFileChip[];
