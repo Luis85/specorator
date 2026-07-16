@@ -83,8 +83,8 @@
       "reason": "Grandfathered hotspot. Track the split in docs/tech-debt/2026-06-07-oversized-modules-and-test-files.md; shrink only."
     },
     "src/features/chat/tabs/tabUi.ts": {
-      "loc": 511,
-      "reason": "Grandfathered hotspot. Track the split in docs/tech-debt/2026-06-07-oversized-modules-and-test-files.md; shrink only. +2 from the composer Vue island seam (toolbar-host retarget comment + onModeChanged re-projection wiring on the trigger-mode managers, ADR 0005 sub-project 3)."
+      "loc": 524,
+      "reason": "Grandfathered hotspot. Track the split in docs/tech-debt/2026-06-07-oversized-modules-and-test-files.md; shrink only. +2 from the composer Vue island seam (toolbar-host retarget comment + onModeChanged re-projection wiring on the trigger-mode managers, ADR 0005 sub-project 3). +13 (composer Task 5) from extracting the exported getComposerToolbarSettings + buildToolbarActionCallbacks toolbar-projection helpers (the prep that feeds the Vue toolbar slice); net shrinks again when the imperative createInputToolbar assembly is deleted in Task 10."
     }
   }
 }
