@@ -13,7 +13,8 @@ function makePlugin(): SpecoratorPlugin {
 function makeCallbacks(): { callbacks: ComposerCallbacks; registered: Record<string, HTMLElement | null> } {
   const registered: Record<string, HTMLElement | null> = {
     container: null, navRow: null, wrapper: null, contextRow: null,
-    queueRow: null, editedFilesRow: null, textareaHost: null,
+    queueRow: null, textareaHost: null,
+    selectionIndicator: null, browserIndicator: null, canvasIndicator: null,
   };
   const callbacks: ComposerCallbacks = {
     subscribe: (onChange) => {
@@ -37,8 +38,10 @@ function makeCallbacks(): { callbacks: ComposerCallbacks; registered: Record<str
     registerInputWrapper: (el) => { registered.wrapper = el; },
     registerContextRow: (el) => { registered.contextRow = el; },
     registerQueueRow: (el) => { registered.queueRow = el; },
-    registerEditedFilesRow: (el) => { registered.editedFilesRow = el; },
     registerTextareaHost: (el) => { registered.textareaHost = el; },
+    registerSelectionIndicator: (el) => { registered.selectionIndicator = el; },
+    registerBrowserIndicator: (el) => { registered.browserIndicator = el; },
+    registerCanvasIndicator: (el) => { registered.canvasIndicator = el; },
   };
   return { callbacks, registered };
 }
@@ -59,8 +62,10 @@ describe('mountComposer', () => {
     expect(registered.wrapper).toBe(container.querySelector('.specorator-input-wrapper'));
     expect(registered.contextRow).toBe(container.querySelector('.specorator-context-row'));
     expect(registered.queueRow).toBe(container.querySelector('.specorator-input-queue-row'));
-    expect(registered.editedFilesRow).toBe(container.querySelector('.specorator-edited-files-row'));
     expect(registered.textareaHost).toBe(container.querySelector('.specorator-vue-composer-textarea-host'));
+    expect(registered.selectionIndicator).toBe(container.querySelector('.specorator-selection-indicator'));
+    expect(registered.browserIndicator).toBe(container.querySelector('.specorator-browser-selection-indicator'));
+    expect(registered.canvasIndicator).toBe(container.querySelector('.specorator-canvas-indicator'));
     // The toolbar is now rendered directly by ComposerToolbar.vue (no host handle).
     expect(container.querySelector('.specorator-input-toolbar')).not.toBeNull();
 

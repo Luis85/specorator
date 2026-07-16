@@ -126,7 +126,6 @@ export function createTab(options: TabCreateOptions): TabData {
     ui: {
       fileContextManager: null,
       imageContextManager: null,
-      editedFilesView: null,
       externalContextSelector: null,
       mcpServerSelector: null,
       slashCommandDropdown: null,
@@ -181,7 +180,6 @@ function buildTabDOM(contentEl: HTMLElement): TabDOMElements {
     inputWrapper: composerHostEl,
     inputEl,
     navRowEl: composerHostEl,
-    editedFilesRowEl: composerHostEl,
     contextRowEl: composerHostEl,
     selectionIndicatorEl: null,
     browserIndicatorEl: null,

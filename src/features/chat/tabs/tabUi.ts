@@ -17,7 +17,6 @@ import { ChatDropController } from '../controllers/ChatDropController';
 import type { DragManagerLike } from '../controllers/dropPayloadDetection';
 import { BangBashService } from '../services/BangBashService';
 import { BangBashModeManager as BangBashModeManagerClass } from '../ui/BangBashModeManager';
-import { EditedFilesView } from '../ui/EditedFilesView';
 import { FileContextManager } from '../ui/FileContext';
 import { ImageContextManager } from '../ui/ImageContext';
 import { InstructionModeManager as InstructionModeManagerClass } from '../ui/InstructionModeManager';
@@ -471,12 +470,9 @@ export function initializeTabUI(
   // Initialize context managers (file/image)
   initializeContextManagers(tab, plugin);
 
-  // Selection indicator - add to contextRowEl
-  dom.selectionIndicatorEl = dom.contextRowEl.createDiv({ cls: 'specorator-selection-indicator specorator-hidden' });
-
-  dom.browserIndicatorEl = dom.contextRowEl.createDiv({ cls: 'specorator-browser-selection-indicator specorator-hidden' });
-
-  dom.canvasIndicatorEl = dom.contextRowEl.createDiv({ cls: 'specorator-canvas-indicator specorator-hidden' });
+  // The editor/browser/canvas selection indicators are now Vue-rendered
+  // (SelectionIndicators.vue) and their raw nodes are registered to `dom.*`
+  // by mountTabComposer, which runs before this. The engine only reads them.
 
   const catalogInfo = options.getProviderCatalogConfig?.() ?? null;
   initializeSlashCommands(
@@ -495,10 +491,6 @@ export function initializeTabUI(
   initializeInstructionAndTodo(tab, plugin);
   initializeInputToolbar(tab, plugin);
 
-  tab.ui.editedFilesView = new EditedFilesView(dom.editedFilesRowEl, {
-    onOpenFile: (rawPath) => openEditedFile(plugin.app, rawPath),
-  });
-
   state.callbacks = {
     ...state.callbacks,
     onUsageChanged: () => {
@@ -508,13 +500,13 @@ export function initializeTabUI(
     },
     onTodosChanged: (todos) => tab.ui.statusPanel?.updateTodos(todos),
     onAutoScrollChanged: () => tab.ui.navigationSidebar?.updateVisibility(),
-    onEditedFilesChanged: (files) => {
-      tab.ui.editedFilesView?.render(files);
+    // Edited-files truth lives in ChatState.editedFiles; the Vue EditedFilesBar
+    // renders it off the projected store slice, so this only re-projects.
+    onEditedFilesChanged: () => {
       autoResizeTextarea(dom.inputEl);
       tab.composer?.emit();
     },
   };
-  tab.ui.editedFilesView.render(state.editedFiles);
 
   // ResizeObserver to detect overflow changes (e.g., content growth)
   const resizeObserver = new ResizeObserver(() => {

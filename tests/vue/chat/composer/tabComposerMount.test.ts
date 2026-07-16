@@ -30,7 +30,8 @@ function makeTab(): TabData {
       contentEl, composerHostEl,
       inputContainerEl: composerHostEl, queueIndicatorEl: composerHostEl,
       inputWrapper: composerHostEl, inputEl, navRowEl: composerHostEl,
-      editedFilesRowEl: composerHostEl, contextRowEl: composerHostEl,
+      contextRowEl: composerHostEl,
+      selectionIndicatorEl: null, browserIndicatorEl: null, canvasIndicatorEl: null,
     },
     state: { isStreaming: false, queueIndicatorEl: null },
     ui: { instructionModeManager: null, bangBashModeManager: null },
@@ -59,6 +60,12 @@ describe('mountTabComposer', () => {
     expect(tab.dom.contextRowEl).toBe(container.querySelector('.specorator-context-row'));
     // The toolbar is rendered directly by ComposerToolbar.vue (no host handle).
     expect(container.querySelector('.specorator-input-toolbar')).not.toBeNull();
+
+    // The three engine-driven selection indicators are Vue-rendered and their
+    // raw nodes registered to tab.dom.* for the out-of-scope controllers.
+    expect(tab.dom.selectionIndicatorEl).toBe(container.querySelector('.specorator-selection-indicator'));
+    expect(tab.dom.browserIndicatorEl).toBe(container.querySelector('.specorator-browser-selection-indicator'));
+    expect(tab.dom.canvasIndicatorEl).toBe(container.querySelector('.specorator-canvas-indicator'));
 
     // Queue row registered to BOTH tab.dom and ChatState.
     const queueRow = container.querySelector('.specorator-input-queue-row');

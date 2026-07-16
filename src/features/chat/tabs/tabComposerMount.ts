@@ -108,10 +108,15 @@ export function mountTabComposer(
       tab.dom.queueIndicatorEl = el;
       tab.state.queueIndicatorEl = el;
     },
-    registerEditedFilesRow: (el) => { tab.dom.editedFilesRowEl = el; },
     // Phase 1–3: host the engine-created textarea. Phase 4 deletes this and
     // ComposerTextarea.vue registers INPUT_EL_KEY instead.
     registerTextareaHost: (el) => { el.appendChild(tab.dom.inputEl); },
+    // Phase 3: Vue renders the three engine-driven selection indicators; keep
+    // the raw nodes so buildTabSelectionControllers (initializeTabControllers,
+    // which runs AFTER this mount) reads them off tab.dom.*.
+    registerSelectionIndicator: (el) => { tab.dom.selectionIndicatorEl = el; },
+    registerBrowserIndicator: (el) => { tab.dom.browserIndicatorEl = el; },
+    registerCanvasIndicator: (el) => { tab.dom.canvasIndicatorEl = el; },
   };
 
   tab.mountedComposer = mountComposer(tab.dom.composerHostEl, plugin, component, callbacks);

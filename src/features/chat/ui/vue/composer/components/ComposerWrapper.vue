@@ -4,9 +4,9 @@ import { inject, onMounted, ref } from 'vue';
 import { INPUT_WRAPPER_KEY } from '../composerKeys';
 import { useComposerStore } from '../stores/composerStore';
 import ComposerContextRow from './ComposerContextRow.vue';
-import ComposerEditedFilesRow from './ComposerEditedFilesRow.vue';
 import ComposerTextarea from './ComposerTextarea.vue';
 import ComposerToolbar from './ComposerToolbar.vue';
+import EditedFilesBar from './EditedFilesBar.vue';
 
 const store = useComposerStore();
 
@@ -31,7 +31,7 @@ onMounted(() => {
       'specorator-input-bang-bash-mode': store.wrapperMode.bangBashMode,
     }"
   >
-    <ComposerEditedFilesRow />
+    <EditedFilesBar />
     <ComposerContextRow />
     <ComposerTextarea />
     <ComposerToolbar />

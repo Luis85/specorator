@@ -4,9 +4,9 @@ import { type App as VueApp, createApp, markRaw } from 'vue';
 import type SpecoratorPlugin from '../../../../../main';
 import type { ComposerCallbacks } from './composerCallbacks';
 import {
-  APP_KEY, CALLBACKS_KEY, COMPONENT_KEY, CONTEXT_ROW_KEY,
-  EDITED_FILES_ROW_KEY, INPUT_CONTAINER_KEY, INPUT_WRAPPER_KEY, NAV_ROW_KEY,
-  PLUGIN_KEY, QUEUE_ROW_KEY, TEXTAREA_HOST_KEY,
+  APP_KEY, BROWSER_INDICATOR_KEY, CALLBACKS_KEY, CANVAS_INDICATOR_KEY, COMPONENT_KEY,
+  CONTEXT_ROW_KEY, INPUT_CONTAINER_KEY, INPUT_WRAPPER_KEY, NAV_ROW_KEY,
+  PLUGIN_KEY, QUEUE_ROW_KEY, SELECTION_INDICATOR_KEY, TEXTAREA_HOST_KEY,
 } from './composerKeys';
 import { createComposerPinia } from './composerPinia';
 import ComposerRoot from './ComposerRoot.vue';
@@ -44,8 +44,10 @@ export function mountComposer(
   app.provide(INPUT_WRAPPER_KEY, callbacks.registerInputWrapper);
   app.provide(CONTEXT_ROW_KEY, callbacks.registerContextRow);
   app.provide(QUEUE_ROW_KEY, callbacks.registerQueueRow);
-  app.provide(EDITED_FILES_ROW_KEY, callbacks.registerEditedFilesRow);
   app.provide(TEXTAREA_HOST_KEY, callbacks.registerTextareaHost);
+  app.provide(SELECTION_INDICATOR_KEY, callbacks.registerSelectionIndicator);
+  app.provide(BROWSER_INDICATOR_KEY, callbacks.registerBrowserIndicator);
+  app.provide(CANVAS_INDICATOR_KEY, callbacks.registerCanvasIndicator);
   app.mount(containerEl);
 
   return { app, unmount: () => app.unmount() };

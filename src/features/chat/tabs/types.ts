@@ -15,7 +15,6 @@ import type { StreamController } from '../controllers/StreamController';
 import type { SubagentManager } from '../services/SubagentManager';
 import type { ChatState } from '../state/ChatState';
 import type { BangBashModeManager } from '../ui/BangBashModeManager';
-import type { EditedFilesView } from '../ui/EditedFilesView';
 import type { FileContextManager } from '../ui/FileContext';
 import type { ImageContextManager } from '../ui/ImageContext';
 import type { InstructionModeManager } from '../ui/InstructionModeManager';
@@ -141,7 +140,6 @@ export interface TabServices {
 export interface TabUIComponents {
   fileContextManager: FileContextManager | null;
   imageContextManager: ImageContextManager | null;
-  editedFilesView: EditedFilesView | null;
   chatDropController?: ChatDropController;
   // Retained engine objects (DOM-render layer removed in the Phase 2 toolbar
   // cutover); the toolbar widgets themselves are now Vue (ComposerToolbar.vue).
@@ -176,9 +174,6 @@ export interface TabDOMElements {
 
   /** Nav row for tab badges and header icons (above input wrapper). */
   navRowEl: HTMLElement;
-
-  /** Row of agent-changed file chips (top of the input wrapper, above the context row). */
-  editedFilesRowEl: HTMLElement;
 
   /** Context row for file chips and selection indicator (inside input wrapper). */
   contextRowEl: HTMLElement;

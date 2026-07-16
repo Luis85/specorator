@@ -71,8 +71,13 @@ export interface ComposerCallbacks {
   registerInputWrapper: (el: HTMLElement) => void;
   registerContextRow: (el: HTMLElement) => void;
   registerQueueRow: (el: HTMLElement) => void;
-  registerEditedFilesRow: (el: HTMLElement) => void;
   registerTextareaHost: (el: HTMLElement) => void;
+  // Selection-indicator hosts (Phase 3). Vue renders the three engine-driven
+  // <div>s (SelectionIndicators.vue); the engine keeps the raw nodes so the
+  // out-of-scope selection controllers mutate them directly.
+  registerSelectionIndicator: (el: HTMLElement) => void;
+  registerBrowserIndicator: (el: HTMLElement) => void;
+  registerCanvasIndicator: (el: HTMLElement) => void;
 }
 // NOTE: there are no `onSend`/`onCancel` delegators — send is keyboard-only
 // (Enter / Mod+Enter via tabInputWiring); no send button exists. Streaming is

@@ -409,16 +409,6 @@ describe('Tab - UI Initialization', () => {
       expect(tab.ui.imageContextManager).toBeDefined();
     });
 
-    it('should create selection indicator element', () => {
-      const options = createMockOptions();
-      const tab = createTab(options);
-
-      initializeTabUI(tab, options.plugin);
-
-      expect(tab.dom.selectionIndicatorEl).toBeDefined();
-      expect(tab.dom.selectionIndicatorEl!.style.display).toBe('none');
-    });
-
     it('should create SlashCommandDropdown', () => {
       const options = createMockOptions();
       const tab = createTab(options);

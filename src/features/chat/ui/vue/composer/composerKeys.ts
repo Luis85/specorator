@@ -24,11 +24,10 @@ export const QUEUE_ROW_KEY: InjectionKey<(el: HTMLElement) => void> = Symbol('sp
 
 // Internal wrapper-host keys for the leaves the engine still populates during
 // migration. Removed as each leaf becomes a Vue component:
-//   EDITED_FILES_ROW_KEY — removed in Phase 3 (EditedFilesBar.vue)
-//   TEXTAREA_HOST_KEY     — removed in Phase 4, replaced by INPUT_EL_KEY
+//   TEXTAREA_HOST_KEY — removed in Phase 4, replaced by INPUT_EL_KEY
 // (TOOLBAR_HOST_KEY was removed in Phase 2 — ComposerToolbar.vue now renders
-//  the nine toolbar widgets directly.)
-export const EDITED_FILES_ROW_KEY: InjectionKey<(el: HTMLElement) => void> = Symbol('specorator.composer.editedFilesRow');
+//  the nine toolbar widgets directly. EDITED_FILES_ROW_KEY was removed in
+//  Phase 3 — EditedFilesBar.vue renders the edited-files bar reactively.)
 export const TEXTAREA_HOST_KEY: InjectionKey<(el: HTMLElement) => void> = Symbol('specorator.composer.textareaHost');
 // Wired in Phase 4 when ComposerTextarea.vue renders the <textarea> itself.
 export const INPUT_EL_KEY: InjectionKey<(el: HTMLTextAreaElement) => void> = Symbol('specorator.composer.inputEl');

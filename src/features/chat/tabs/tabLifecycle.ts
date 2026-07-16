@@ -180,8 +180,6 @@ function destroyTabUi(tab: TabData): void {
   tab.controllers.inputController?.dismissPendingApproval();
   tab.controllers.inputController?.destroyResumeDropdown();
   tab.ui.fileContextManager?.destroy();
-  tab.ui.editedFilesView?.destroy();
-  tab.ui.editedFilesView = null;
   tab.ui.chatDropController?.destroy();
   tab.ui.chatDropController = undefined;
   tab.ui.slashCommandDropdown?.destroy();
