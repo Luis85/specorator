@@ -93,9 +93,18 @@ export class ComposerDropdownCoordinator implements ComposerDropdownDelegate {
   /**
    * State-clear primitive. The imperative detector calls this AFTER running its
    * own local reset; it never re-invokes `source.dismiss` (no re-entry).
+   *
+   * The slash + mention + resume detectors share ONE coordinator, so an
+   * OWNER-SCOPED hide is required: a detector's no-trigger `handleInputChange`
+   * (e.g. the mention detector's debounced no-`@` pass) must clear the shared
+   * state only when IT is the current owner, or it would clobber another
+   * detector's open menu. Pass `owner` to make the clear conditional on
+   * `kind === owner`; omit it (Vue dismiss / keyboard Escape) to clear whatever
+   * is currently open.
    */
-  hide(): void {
+  hide(owner?: ComposerDropdownKind): void {
     if (this.kind === null) return;
+    if (owner !== undefined && this.kind !== owner) return;
     this.clear();
     this.emit();
   }

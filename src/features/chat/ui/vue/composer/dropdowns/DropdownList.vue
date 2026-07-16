@@ -62,6 +62,7 @@ function paintIcon(el: unknown, iconId: string | undefined): void {
       :key="item.id"
       :class="[itemClass, item.variant, { selected: i === activeIndex }]"
       @mousedown.prevent="emit('select', i)"
+      @click.stop
     >
       <span
         v-if="item.iconId"

@@ -83,11 +83,11 @@ export class ResumeSessionDropdown {
 
   destroy(): void {
     this.inputEl.removeEventListener('input', this.onInput);
-    // Clear the projected state only if this dropdown still owns it (hide is the
-    // state-clear primitive — it never re-enters the dismiss callback).
-    if (this.coordinator.getState().kind === 'resume') {
-      this.coordinator.hide();
-    }
+    // Owner-scoped clear: only drops the projected state when resume still owns
+    // it (hide is the state-clear primitive — it never re-enters the dismiss
+    // callback), so tearing this instance down can't clobber a menu another
+    // detector opened in the meantime.
+    this.coordinator.hide('resume');
   }
 
   private dismiss(): void {

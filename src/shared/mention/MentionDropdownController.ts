@@ -125,7 +125,7 @@ export class MentionDropdownController {
   hide(): void {
     if (this.coordinator) {
       this.mentionStartIndex = -1;
-      this.coordinator.hide();
+      this.coordinator.hide('mention'); // owner-scoped: the debounced no-`@` pass can't drop another detector's menu
       return;
     }
     this.dropdown.hide();

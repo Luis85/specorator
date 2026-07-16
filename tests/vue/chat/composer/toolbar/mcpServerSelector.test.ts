@@ -78,6 +78,21 @@ describe('McpServerSelector.vue', () => {
     expect(wrapper.find('.specorator-mcp-selector-icon').classes()).not.toContain('active');
   });
 
+  it('paints the branded MCP glyph when visibility flips false→true after mount (v-if repaint)', async () => {
+    const { wrapper, store } = mountSelector(stubCallbacks());
+    // Mounted hidden (root v-if false): the icon element does not exist yet, so
+    // the onMounted-era paint had nothing to write to.
+    expect(wrapper.find('.specorator-mcp-selector-icon').exists()).toBe(false);
+
+    setMcp(store, 0, []);
+    await wrapper.vm.$nextTick();
+
+    const icon = wrapper.find('.specorator-mcp-selector-icon');
+    expect(icon.exists()).toBe(true);
+    // The branded SVG must land on the newly-inserted element, not stay blank.
+    expect(icon.element.querySelector('svg')).not.toBeNull();
+  });
+
   it('clicking a server item fires onToggleMcpServer with its name', async () => {
     const cb = stubCallbacks();
     const { wrapper, store } = mountSelector(cb);

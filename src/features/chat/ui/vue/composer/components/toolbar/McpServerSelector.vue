@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, inject, onMounted, ref } from 'vue';
+import { computed, inject, ref, watch } from 'vue';
 
 import { appendCheckIcon, appendMcpIcon } from '../../../../../../../shared/icons';
 import { CALLBACKS_KEY } from '../../composerKeys';
@@ -9,11 +9,13 @@ const store = useComposerStore();
 const cb = inject(CALLBACKS_KEY);
 
 // The MCP glyph is a branded SVG (appendMcpIcon), not an Obsidian lucide icon,
-// so it cannot go through useToolbarIcon/setIcon; paint it once on mount.
+// so it cannot go through useToolbarIcon/setIcon. Watch the element ref (immediate)
+// rather than onMounted: the root `v-if="store.toolbar.mcp.visible"` gates the icon
+// element, and visibility can flip false→true AFTER mount (provider/model change),
+// so the glyph must paint when the element actually appears — onMounted painted
+// once while the ref was still null.
 const iconEl = ref<HTMLElement | null>(null);
-onMounted(() => {
-  if (iconEl.value) appendMcpIcon(iconEl.value);
-});
+watch(iconEl, (el) => { if (el) appendMcpIcon(el); }, { immediate: true });
 
 const count = computed(() => store.toolbar.mcp.count);
 // Mirrors updateCountBadgeDisplay (ui/toolbar/shared.ts): the icon goes `.active`

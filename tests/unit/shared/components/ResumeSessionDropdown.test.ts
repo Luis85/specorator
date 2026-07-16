@@ -56,7 +56,12 @@ function createDelegateStub() {
     }),
     setActiveIndex: jest.fn(),
     move: jest.fn(),
-    hide: jest.fn(() => { kind = null; }),
+    // Owner-scoped clear: mirrors the real coordinator — only drops the state
+    // when `owner` is omitted or matches the current kind.
+    hide: jest.fn((owner?: 'slash' | 'mention' | 'resume') => {
+      if (owner !== undefined && kind !== owner) return;
+      kind = null;
+    }),
     selectActive: jest.fn(),
     handleKeydown: jest.fn(() => true),
     getState: jest.fn(() => ({ kind })),
@@ -245,16 +250,23 @@ describe('ResumeSessionDropdown', () => {
       dropdown.destroy();
 
       expect(inputEl.removeEventListener).toHaveBeenCalledWith('input', expect.any(Function));
+      // Owner-scoped clear: passes its own 'resume' kind so it only drops the
+      // state it owns.
       expect(stub.delegate.hide).toHaveBeenCalledTimes(1);
+      expect(stub.delegate.hide).toHaveBeenCalledWith('resume');
+      expect(stub.delegate.getState().kind).toBeNull();
     });
 
-    it('does not hide the coordinator when it no longer owns the resume state', () => {
+    it('does not clear the coordinator when it no longer owns the resume state', () => {
       const dropdown = makeDropdown();
       stub.setKind('slash');
 
       dropdown.destroy();
 
-      expect(stub.delegate.hide).not.toHaveBeenCalled();
+      // The scoped hide('resume') is a no-op against a non-resume owner, so the
+      // menu another detector opened survives.
+      expect(stub.delegate.hide).toHaveBeenCalledWith('resume');
+      expect(stub.delegate.getState().kind).toBe('slash');
     });
   });
 });

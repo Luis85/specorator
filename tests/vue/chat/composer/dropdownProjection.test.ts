@@ -102,6 +102,50 @@ describe('ComposerDropdownCoordinator projection', () => {
     expect(emitCount).toBe(1);
   });
 
+  describe('owner-scoped hide (shared-coordinator regression)', () => {
+    it('hide("mention") while slash is showing leaves slash intact', () => {
+      coordinator.showSlash(SLASH_ITEMS, makeInput(), { select: vi.fn(), dismiss: vi.fn() });
+      emitCount = 0;
+
+      // Mirrors the mention detector's debounced no-`@` `handleInputChange`
+      // clearing the SHARED coordinator: it must not drop the open slash menu.
+      coordinator.hide('mention');
+
+      expect(coordinator.getState().kind).toBe('slash');
+      expect(emitCount).toBe(0);
+    });
+
+    it('hide("slash") while mention is showing leaves mention intact', () => {
+      const items: MentionItem[] = [{ type: 'folder', name: 'notes', path: 'notes' }];
+      coordinator.showMention(items, makeInput(), { select: vi.fn(), dismiss: vi.fn() });
+      emitCount = 0;
+
+      coordinator.hide('slash');
+
+      expect(coordinator.getState().kind).toBe('mention');
+      expect(emitCount).toBe(0);
+    });
+
+    it('hide("slash") while slash IS showing clears it', () => {
+      coordinator.showSlash(SLASH_ITEMS, makeInput(), { select: vi.fn(), dismiss: vi.fn() });
+      emitCount = 0;
+
+      coordinator.hide('slash');
+
+      expect(coordinator.getState().kind).toBeNull();
+      expect(emitCount).toBe(1);
+    });
+
+    it('unscoped hide() clears whichever kind is open (Escape / Vue dismiss path)', () => {
+      const items: MentionItem[] = [{ type: 'folder', name: 'notes', path: 'notes' }];
+      coordinator.showMention(items, makeInput(), { select: vi.fn(), dismiss: vi.fn() });
+
+      coordinator.hide();
+
+      expect(coordinator.getState().kind).toBeNull();
+    });
+  });
+
   it('showMention projects raw items and pre-highlights the provided initial index', () => {
     const items: MentionItem[] = [
       { type: 'agent-folder', name: 'Agents' },

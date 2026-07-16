@@ -44,7 +44,14 @@ export interface ComposerDropdownDelegate {
   ): void;
   setActiveIndex(index: number): void;
   move(delta: number): void;
-  hide(): void;
+  /**
+   * Owner-scoped state clear: pass the caller's own kind so a detector only
+   * clears the shared coordinator state when IT is the current owner (a
+   * no-trigger `handleInputChange` must not clobber another detector's open
+   * menu). Omit `owner` on the active-dropdown dismiss (Escape / Vue dismiss)
+   * to clear whatever is open.
+   */
+  hide(owner?: 'slash' | 'mention' | 'resume'): void;
   selectActive(): void;
   handleKeydown(e: KeyboardEvent): boolean;
   getState(): { kind: 'slash' | 'mention' | 'resume' | null };

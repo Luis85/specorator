@@ -170,7 +170,10 @@ export class SlashCommandDropdown {
   hide(): void {
     if (this.coordinator) {
       this.localReset();
-      this.coordinator.hide();
+      // Owner-scoped: only clear the shared coordinator when slash owns it, so a
+      // no-`/` `handleInputChange` (or bang-bash `setEnabled(false)`) can't drop
+      // an open mention/resume menu.
+      this.coordinator.hide('slash');
       return;
     }
     if (this.dropdownEl) {

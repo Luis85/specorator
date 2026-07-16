@@ -127,6 +127,60 @@ describe('composer dropdown components', () => {
     expect(wrapper.find('.specorator-mention-item.mcp-server .specorator-mention-icon svg').exists()).toBe(true);
   });
 
+  it('contains a submenu-opening folder click so it never reaches the document outside-closer', async () => {
+    const docClick = vi.fn();
+    document.addEventListener('click', docClick);
+    const pinia = createComposerPinia();
+    setActivePinia(pinia);
+    const wrapper = mount(MentionDropdown, {
+      attachTo: document.body,
+      global: { plugins: [pinia], provide: { [CALLBACKS_KEY as symbol]: { onDropdownSelect } } },
+    });
+    const store = useComposerStore();
+    setDropdown(store, 'mention', [
+      { id: 'context-folder:notes', primary: '@notes/', variant: 'context-folder', iconId: 'folder' },
+    ]);
+    await flushPromises();
+
+    const item = wrapper.find('.specorator-mention-item.context-folder');
+    expect(item.exists()).toBe(true);
+    await item.trigger('click');
+
+    // `@click.stop` keeps the select-click from bubbling to SpecoratorView's
+    // document `click` outside-closer, which (its imperative element is null in
+    // Vue mode) would otherwise hide the just-opened submenu.
+    expect(docClick).not.toHaveBeenCalled();
+
+    document.removeEventListener('click', docClick);
+    wrapper.unmount();
+  });
+
+  it('a terminal (file) item still selects on mousedown with the click contained', async () => {
+    const docClick = vi.fn();
+    document.addEventListener('click', docClick);
+    const pinia = createComposerPinia();
+    setActivePinia(pinia);
+    const wrapper = mount(MentionDropdown, {
+      attachTo: document.body,
+      global: { plugins: [pinia], provide: { [CALLBACKS_KEY as symbol]: { onDropdownSelect } } },
+    });
+    const store = useComposerStore();
+    setDropdown(store, 'mention', [{ id: 'file:y', primary: 'y.md', iconId: 'file-text' }]);
+    await flushPromises();
+
+    const item = wrapper.find('.specorator-mention-item');
+    // Terminal select still fires on mousedown (the detector closes the dropdown).
+    await item.trigger('mousedown');
+    expect(onDropdownSelect).toHaveBeenCalledWith(0);
+    // The follow-up click is contained too — harmless, since the dropdown is
+    // already closed by the detector, not by the outside-closer.
+    await item.trigger('click');
+    expect(docClick).not.toHaveBeenCalled();
+
+    document.removeEventListener('click', docClick);
+    wrapper.unmount();
+  });
+
   it('ResumeSessionDropdown renders a header + CSS-flow dropup (no fixed vars) with title/date children', async () => {
     const { wrapper, store } = mountDropdown(ResumeSessionDropdown);
     expect(wrapper.find('.specorator-resume-dropdown').exists()).toBe(false);

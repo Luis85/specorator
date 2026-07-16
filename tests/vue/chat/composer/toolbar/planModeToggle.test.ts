@@ -1,4 +1,5 @@
 import { mount } from '@vue/test-utils';
+import { setIcon } from 'obsidian';
 import { setActivePinia } from 'pinia';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -50,6 +51,22 @@ describe('PlanModeToggle.vue', () => {
     expect(button.classes()).toContain('active');
     expect(button.attributes('aria-pressed')).toBe('true');
     expect(button.attributes('title')).toBe(t('chat.planMode.titleActive'));
+  });
+
+  it('paints the toolbar icon when visibility flips false→true after mount (v-if repaint)', async () => {
+    const { wrapper, store } = mountToggle(stubCallbacks());
+    (setIcon as ReturnType<typeof vi.fn>).mockClear();
+    // Mounted hidden (root v-if false): the icon element does not exist yet, so
+    // useToolbarIcon's onMounted-era paint had nothing to write to.
+    expect(wrapper.find('.specorator-plan-mode-icon').exists()).toBe(false);
+
+    store.setToolbar({ ...store.toolbar, planMode: { visible: true, active: false } });
+    await wrapper.vm.$nextTick();
+
+    const icon = wrapper.find('.specorator-plan-mode-icon');
+    expect(icon.exists()).toBe(true);
+    // Watching the element ref repaints on the null→element transition.
+    expect(setIcon).toHaveBeenCalledWith(icon.element, 'map');
   });
 
   it('clicking the button fires onTogglePlanMode', async () => {
