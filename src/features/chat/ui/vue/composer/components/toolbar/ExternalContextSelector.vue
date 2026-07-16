@@ -1,7 +1,7 @@
 <script setup lang="ts">
-import { setIcon } from 'obsidian';
 import { computed, inject } from 'vue';
 
+import { mountIcon } from '../../../mountIcon';
 import { CALLBACKS_KEY } from '../../composerKeys';
 import { useComposerStore } from '../../stores/composerStore';
 import { useToolbarIcon } from './useToolbarIcon';
@@ -21,11 +21,14 @@ const iconTitle = computed(() =>
     : 'Add external contexts (click)',
 );
 
+// mountIcon guards on nodeType === 1 (not instanceof HTMLElement): in an
+// Obsidian popout the element belongs to the popout window whose HTMLElement is
+// a different constructor, so instanceof would leave these glyphs unpainted.
 function paintLock(el: unknown, persistent: boolean): void {
-  if (el instanceof HTMLElement) setIcon(el, persistent ? 'lock' : 'unlock');
+  mountIcon(el, persistent ? 'lock' : 'unlock');
 }
 function paintRemove(el: unknown): void {
-  if (el instanceof HTMLElement) setIcon(el, 'x');
+  mountIcon(el, 'x');
 }
 </script>
 

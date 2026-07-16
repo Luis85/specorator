@@ -27,7 +27,10 @@ const iconTitle = computed(() =>
 );
 
 function paintCheck(el: unknown): void {
-  if (el instanceof HTMLElement) appendCheckIcon(el);
+  // Guard on nodeType === 1, not instanceof HTMLElement: in an Obsidian popout
+  // the element belongs to the popout window whose HTMLElement is a different
+  // constructor, so instanceof would leave the check glyph unpainted.
+  if (el && (el as Partial<Node>).nodeType === 1) appendCheckIcon(el as HTMLElement);
 }
 </script>
 

@@ -1,6 +1,7 @@
-import type { Component } from 'obsidian';
+import { type Component, Notice } from 'obsidian';
 
 import type { ProviderId } from '../../../core/providers/types';
+import { t } from '../../../i18n/i18n';
 import type SpecoratorPlugin from '../../../main';
 import type { ComposerCallbacks } from '../ui/vue/composer/composerCallbacks';
 import { mountComposer } from '../ui/vue/composer/mountComposer';
@@ -49,15 +50,28 @@ export function mountTabComposer(
     toolbarWiring.onProviderChanged,
   );
 
+  // A rejected toolbar action (settings write, model-metadata prep, …) used to
+  // vanish silently under `void … .finally()`; the deleted imperative widgets
+  // surfaced it via a Notice (ui/toolbar/shared.ts `runToolbarAction`). Restore
+  // that: catch + Notice, still emit so the widget snaps back to engine truth.
+  const runToolbarAction = (action: Promise<void>, failureMessage: string): void => {
+    void action.catch(() => { new Notice(failureMessage); }).finally(() => tab.composer?.emit());
+  };
+
   const callbacks: ComposerCallbacks = {
     subscribe: tab.composer.subscribe,
-    onSetModel: (model) => { void toolbarActions.onModelChange(model).finally(() => tab.composer?.emit()); },
-    onSetMode: (mode) => { void toolbarActions.onModeChange(mode).finally(() => tab.composer?.emit()); },
-    onSetEffortLevel: (effort) => { void toolbarActions.onEffortLevelChange(effort).finally(() => tab.composer?.emit()); },
-    onSetThinkingBudget: (budget) => { void toolbarActions.onThinkingBudgetChange(budget).finally(() => tab.composer?.emit()); },
-    onSetServiceTier: (tier) => { void toolbarActions.onServiceTierChange(tier).finally(() => tab.composer?.emit()); },
-    onSetPermission: (mode) => { void toolbarActions.onPermissionModeChange(mode).finally(() => tab.composer?.emit()); },
-    onTogglePlanMode: () => { void toolbarActions.onPlanModeToggle?.().finally(() => tab.composer?.emit()); },
+    onSetModel: (model) => { runToolbarAction(toolbarActions.onModelChange(model), 'Failed to change model'); },
+    onSetMode: (mode) => { runToolbarAction(toolbarActions.onModeChange(mode), 'Failed to change mode'); },
+    onSetEffortLevel: (effort) => { runToolbarAction(toolbarActions.onEffortLevelChange(effort), 'Failed to change effort level'); },
+    onSetThinkingBudget: (budget) => { runToolbarAction(toolbarActions.onThinkingBudgetChange(budget), 'Failed to change thinking budget'); },
+    onSetServiceTier: (tier) => { runToolbarAction(toolbarActions.onServiceTierChange(tier), 'Failed to change service tier'); },
+    onSetPermission: (mode) => { runToolbarAction(toolbarActions.onPermissionModeChange(mode), 'Failed to change permission mode'); },
+    // Preserve the optional-call semantics: if the provider exposes no plan
+    // toggle, do nothing (and do not emit), matching the old `?.()` short-circuit.
+    onTogglePlanMode: () => {
+      const action = toolbarActions.onPlanModeToggle?.();
+      if (action) runToolbarAction(action, t('chat.planMode.toggleFailed'));
+    },
     onToggleMcpServer: (name) => {
       const enabled = tab.ui.mcpServerSelector?.getEnabledServers() ?? new Set<string>();
       const next = new Set(enabled);
