@@ -90,12 +90,20 @@ Built imperatively in `tabFactory.ts` (elements) + `tabUi.ts` (widgets):
 
 ```
 inputContainerEl (.specorator-input-container)      [InlinePromptController ref-counted hide; drop overlay host]
-├── navRowEl      (.specorator-input-nav-row)        [SHELL teleports the tab strip here in 'input' tabBarPosition mode]
-└── inputWrapper  (.specorator-input-wrapper)        [ChatDropController queries this for the drop overlay]
+├── navRowEl        (.specorator-input-nav-row)      [SHELL teleports the tab strip here in 'input' tabBarPosition mode]
+├── queueIndicatorEl (.specorator-input-queue-row)   [QueuedMessageController builds the queued-follow-up edit/discard/Steer-Now UI here]
+└── inputWrapper    (.specorator-input-wrapper)      [ChatDropController queries this for the drop overlay]
     ├── contextRowEl (.specorator-context-row)       [file/image chips + selection/browser/canvas indicators]
     ├── inputEl      (<textarea class="specorator-input">)   [the composer textarea]
     └── inputToolbar (.specorator-input-toolbar)      [the nine widgets, created in tabUi.ts]
 ```
+
+`queueIndicatorEl` is created under `inputContainerEl` in `tabFactory.ts` and
+registered to **both** `tab.dom.queueIndicatorEl` and `state.queueIndicatorEl`.
+`QueuedMessageController.updateQueueIndicator()` mutates that element directly to
+render the queued-follow-up row (message text + edit / discard / Steer-Now
+actions) during streaming sends, called from `InputController`, `StreamController`,
+and `streamingIndicator`.
 
 The nine toolbar widgets (`ui/toolbar/`): `ModelSelector`, `ModeSelector`,
 `ThinkingBudgetSelector`, `ServiceTierToggle`, `PermissionToggle`,
@@ -147,17 +155,24 @@ Context managers: `FileContextManager` (`ui/FileContext.ts` +
   `onDropdownDismiss`, and the element-handle registration hooks.
 - **Element-handle keys** — Vue owns the composer DOM but hands the engine live
   nodes exactly as `SCROLL_HOST_KEY` did: `INPUT_EL_KEY` (the textarea),
-  `NAV_ROW_KEY`, `CONTEXT_ROW_KEY`, `INPUT_CONTAINER_KEY`, `INPUT_WRAPPER_KEY`.
-  Captured synchronously on mount and written to `tab.dom.*` so every existing
-  consumer (`InputController`, `SelectionController`, `ChatDropController`,
-  `InlinePromptController`, `tabInputWiring`, the shell's `resolveNavRowEl`
-  teleport) keeps its direct handle.
+  `NAV_ROW_KEY`, `CONTEXT_ROW_KEY`, `INPUT_CONTAINER_KEY`, `INPUT_WRAPPER_KEY`,
+  and `QUEUE_ROW_KEY` (the queued-follow-up row). Captured synchronously on mount
+  and written to `tab.dom.*` (and `state.queueIndicatorEl` for the queue row) so
+  every existing consumer (`InputController`, `SelectionController`,
+  `ChatDropController`, `InlinePromptController`, `QueuedMessageController`,
+  `tabInputWiring`, the shell's `resolveNavRowEl` teleport) keeps its direct
+  handle. The queued row is engine-built DOM (like the textarea):
+  `QueuedMessageController.updateQueueIndicator()` keeps mutating the handed
+  element, so the controller is untouched — Vue renders the `.specorator-input-queue-row`
+  host and registers it, nothing more. (Reactive-ifying the queued row is a
+  possible later follow-up, out of scope here.)
 
 ### Component tree
 
 ```
 ComposerRoot.vue                    (.specorator-input-container host; registers element handles; .specorator-vue baseline)
 ├── ComposerNavRow.vue              (.specorator-input-nav-row — teleport target the shell fills in 'input' mode; empty host otherwise)
+├── ComposerQueueRow.vue            (.specorator-input-queue-row — engine-driven host; QueuedMessageController builds its DOM)
 └── ComposerWrapper.vue             (.specorator-input-wrapper — ChatDropController overlay anchor)
     ├── ContextRow.vue              (.specorator-context-row)
     │   ├── FileChips.vue           (v-for file chips + remove)
@@ -261,6 +276,11 @@ register the exact elements:
   — attach to `inputEl` + `contextRowEl` + indicator elements.
 - `InlinePromptController` — ref-counted toggle of `.specorator-hidden` on
   `.specorator-input-container` (the composer-hide during blocking prompts).
+- `QueuedMessageController` — `updateQueueIndicator()` builds/clears the
+  queued-follow-up UI inside `state.queueIndicatorEl` (the
+  `.specorator-input-queue-row` element), rendering `.specorator-queue-indicator-text`
+  / `.specorator-queue-indicator-actions` / `.specorator-queue-indicator-action`
+  and the Steer-Now / edit / discard affordances during streaming sends.
 - **Shell tab-strip teleport** — `resolveNavRowEl` returns `tab.dom.navRowEl`;
   the composer must keep a real `.specorator-input-nav-row` element registered
   there so `ChatHeader.vue`'s `'input'`-mode `<Teleport>` still targets it.
@@ -268,9 +288,12 @@ register the exact elements:
   `inputEl`.
 
 `composerDomContract.test.ts` mounts the real `ComposerRoot` and asserts every
-consumer-queried class + that `inputEl` / `navRowEl` / `contextRowEl` /
-`inputContainerEl` / `inputWrapperEl` are registered to `tab.dom.*`. It is the
-regression backstop until the side-panels sub-project migrates those consumers.
+consumer-queried class + that `inputEl` / `navRowEl` / `queueIndicatorEl` /
+`contextRowEl` / `inputContainerEl` / `inputWrapperEl` are registered to
+`tab.dom.*` (and `queueIndicatorEl` to `state.queueIndicatorEl`), then drives
+`QueuedMessageController.updateQueueIndicator()` against the Vue-rendered queue
+row to confirm the queued-follow-up UI still renders. It is the regression
+backstop until the side-panels sub-project migrates those consumers.
 
 ## Testing
 
@@ -301,8 +324,11 @@ migrates one component (or a small cohesive group) and deletes the imperative
 widget it replaces, staying shippable. Ordering, lowest-risk first:
 
 1. **Island scaffold**: `mountComposer`, Pinia, store, projection, callbacks,
-   element-handle keys — mounted but rendering the still-imperative composer
-   through the host, no widget migrated yet (proves the seam).
+   element-handle keys (including `QUEUE_ROW_KEY`, registered to both
+   `tab.dom.queueIndicatorEl` and `state.queueIndicatorEl` so
+   `QueuedMessageController` keeps working untouched) — mounted but rendering the
+   still-imperative composer through the host, no widget migrated yet (proves the
+   seam).
 2. **Toolbar widgets** (nine leaf components + send) — chat-only, cleanest.
 3. **Context chips + selection indicators + edited-files bar.**
 4. **Textarea host** — the hard cutover (element handed to the engine; keyboard
