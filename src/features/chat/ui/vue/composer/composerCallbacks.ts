@@ -1,26 +1,20 @@
 import type {
   ComposerChips,
-  ComposerDraftMeta,
   ComposerDropdownState,
   ComposerEditedFile,
-  ComposerInputMode,
-  ComposerStreamingState,
   ComposerToolbarState,
   ComposerWrapperMode,
 } from './stores/composerStore';
 
 /** One projected snapshot the projection pushes on every composer-relevant
- *  engine change (settings, chips, streaming, mode, dropdown, edited files).
+ *  engine change (settings, chips, mode, dropdown, edited files).
  *  Carries the whole read-model so every store field flows through the single
  *  `subscribe` channel — the engine has no direct handle to the store. */
 export interface ComposerSnapshot {
   toolbar: ComposerToolbarState;
   chips: ComposerChips;
   editedFiles: ComposerEditedFile[];
-  streaming: ComposerStreamingState;
   dropdown: ComposerDropdownState;
-  inputMode: ComposerInputMode;
-  draftMeta: ComposerDraftMeta;
   wrapperMode: ComposerWrapperMode;
 }
 

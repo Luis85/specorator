@@ -17,10 +17,7 @@ export function useComposerEventRouting(subscribe: ComposerSubscribe): void {
     store.setToolbar(snapshot.toolbar);
     store.setChips(snapshot.chips);
     store.setEditedFiles(snapshot.editedFiles);
-    store.setStreaming(snapshot.streaming);
     store.setDropdown(snapshot.dropdown);
-    store.setInputMode(snapshot.inputMode);
-    store.setDraftMeta(snapshot.draftMeta);
     store.setWrapperMode(snapshot.wrapperMode);
   });
 

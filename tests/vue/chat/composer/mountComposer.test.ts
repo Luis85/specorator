@@ -18,9 +18,8 @@ function makeCallbacks(): { callbacks: ComposerCallbacks; registered: Record<str
       onChange({
         toolbar: { modelLabel: '', modelGroups: [], mode: null, reasoning: null, serviceTier: null, permission: null, planMode: { visible: false, active: false }, mcp: { visible: false, count: 0, servers: [] }, externalContext: { count: 0, items: [] }, usage: null },
         chips: { currentNote: null, files: [], folders: [], images: [] },
-        editedFiles: [], streaming: { isStreaming: false },
+        editedFiles: [],
         dropdown: { kind: null, items: [], activeIndex: 0, anchorRect: null },
-        inputMode: 'none', draftMeta: { isEmpty: true, activeMode: 'none' },
         wrapperMode: { planMode: false, instructionMode: false, bangBashMode: false },
       });
       return () => {};

@@ -86,11 +86,6 @@ export interface ComposerChips {
 
 export interface ComposerEditedFile { path: string; changeKind: 'created' | 'edited'; name: string; dir: string; }
 
-// Send is keyboard-only (Enter / Mod+Enter via tabInputWiring) — there is NO
-// send button (strict parity). This slice carries ONLY the streaming flag, for
-// streaming-state chrome. It never drives a button.
-export interface ComposerStreamingState { isStreaming: boolean; }
-
 export type ComposerDropdownKind = 'slash' | 'mention' | 'resume' | null;
 export interface ComposerDropdownItem {
   id: string; primary: string; secondary?: string; hint?: string;
@@ -105,9 +100,6 @@ export interface ComposerDropdownState {
   kind: ComposerDropdownKind; items: ComposerDropdownItem[];
   activeIndex: number; anchorRect: ComposerDropdownAnchor | null;
 }
-
-export type ComposerInputMode = 'none' | 'instruction' | 'bang-bash';
-export interface ComposerDraftMeta { isEmpty: boolean; activeMode: ComposerInputMode; }
 
 /** The three (composable) wrapper-mode classes toggled on `.specorator-input-wrapper`:
  *  `.specorator-input-plan-mode` / `.specorator-input-instruction-mode` /
@@ -125,9 +117,7 @@ const EMPTY_TOOLBAR: ComposerToolbarState = Object.freeze({
   externalContext: { count: 0, items: [] }, usage: null,
 });
 const EMPTY_CHIPS: ComposerChips = Object.freeze({ currentNote: null, files: [], folders: [], images: [] });
-const EMPTY_STREAMING: ComposerStreamingState = Object.freeze({ isStreaming: false });
 const EMPTY_DROPDOWN: ComposerDropdownState = Object.freeze({ kind: null, items: [], activeIndex: 0, anchorRect: null });
-const EMPTY_DRAFT: ComposerDraftMeta = Object.freeze({ isEmpty: true, activeMode: 'none' });
 const EMPTY_WRAPPER_MODE: ComposerWrapperMode = Object.freeze({ planMode: false, instructionMode: false, bangBashMode: false });
 
 /**
@@ -141,10 +131,7 @@ export const useComposerStore = defineStore('composer', () => {
   const toolbar = shallowRef<ComposerToolbarState>(EMPTY_TOOLBAR);
   const chips = shallowRef<ComposerChips>(EMPTY_CHIPS);
   const editedFiles = shallowRef<ComposerEditedFile[]>([]);
-  const streaming = shallowRef<ComposerStreamingState>(EMPTY_STREAMING);
   const dropdown = shallowRef<ComposerDropdownState>(EMPTY_DROPDOWN);
-  const inputMode = shallowRef<ComposerInputMode>('none');
-  const draftMeta = shallowRef<ComposerDraftMeta>(EMPTY_DRAFT);
   // Vue owns the three wrapper-mode classes on `.specorator-input-wrapper`
   // (ComposerWrapper binds them). Projected from permission mode + the mode
   // managers; the engine's former imperative `classList.toggle` calls are
@@ -154,14 +141,11 @@ export const useComposerStore = defineStore('composer', () => {
   function setToolbar(next: ComposerToolbarState): void { toolbar.value = next; }
   function setChips(next: ComposerChips): void { chips.value = next; }
   function setEditedFiles(next: ComposerEditedFile[]): void { editedFiles.value = next; }
-  function setStreaming(next: ComposerStreamingState): void { streaming.value = next; }
   function setDropdown(next: ComposerDropdownState): void { dropdown.value = next; }
-  function setInputMode(next: ComposerInputMode): void { inputMode.value = next; }
-  function setDraftMeta(next: ComposerDraftMeta): void { draftMeta.value = next; }
   function setWrapperMode(next: ComposerWrapperMode): void { wrapperMode.value = next; }
 
   return {
-    toolbar, chips, editedFiles, streaming, dropdown, inputMode, draftMeta, wrapperMode,
-    setToolbar, setChips, setEditedFiles, setStreaming, setDropdown, setInputMode, setDraftMeta, setWrapperMode,
+    toolbar, chips, editedFiles, dropdown, wrapperMode,
+    setToolbar, setChips, setEditedFiles, setDropdown, setWrapperMode,
   };
 });

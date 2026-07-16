@@ -12,14 +12,12 @@ import { formatTokens } from '../ui/toolbar/shared';
 import type { ComposerSnapshot, ComposerSubscribe } from '../ui/vue/composer/composerCallbacks';
 import type {
   ComposerChips,
-  ComposerDraftMeta,
   ComposerDropdownState,
   ComposerEditedFile,
   ComposerExternalContextState,
   ComposerFileChip,
   ComposerFolderChip,
   ComposerImageChip,
-  ComposerInputMode,
   ComposerMcpState,
   ComposerModelGroup,
   ComposerModeState,
@@ -27,7 +25,6 @@ import type {
   ComposerPlanModeState,
   ComposerReasoningState,
   ComposerServiceTierState,
-  ComposerStreamingState,
   ComposerToolbarState,
   ComposerUsageState,
   ComposerWrapperMode,
@@ -47,8 +44,8 @@ const EMPTY_DROPDOWN: ComposerDropdownState = { kind: null, items: [], activeInd
  * ChatState, the toolbar-setting owners, the mode managers); this pushes a
  * fully-projected {@link ComposerSnapshot} to every observer registered through
  * {@link subscribe}. Slice builders are filled in per migration phase — Phase 1
- * projects send/inputMode/draftMeta; toolbar/chips/editedFiles/dropdown are
- * empty until their phases wire them.
+ * projects the wrapper-mode classes; toolbar/chips/editedFiles/dropdown are
+ * wired in their later phases.
  */
 export class TabComposerProjection {
   private readonly observers = new Set<(s: ComposerSnapshot) => void>();
@@ -78,19 +75,12 @@ export class TabComposerProjection {
       toolbar: this.buildToolbar(),              // Phase 2
       chips: this.buildChips(),                  // Phase 3
       editedFiles: this.buildEditedFiles(),      // Phase 3
-      streaming: this.buildStreaming(),          // Phase 1
       dropdown: this.buildDropdown(),            // Phase 5
-      inputMode: this.buildInputMode(),          // Phase 1
-      draftMeta: this.buildDraftMeta(),          // Phase 1
       wrapperMode: this.buildWrapperMode(),      // Phase 1 (wrapper mode classes)
     };
   }
 
   // --- Phase 1 slices -------------------------------------------------------
-
-  private buildStreaming(): ComposerStreamingState {
-    return { isStreaming: this.tab.state.isStreaming };
-  }
 
   // Vue owns the three wrapper-mode classes; the engine no longer toggles them
   // (Task 4 / Task 5b remove the imperative classList.toggle sites). planMode
@@ -103,17 +93,6 @@ export class TabComposerProjection {
       instructionMode: this.tab.ui.instructionModeManager?.isActive() ?? false,
       bangBashMode: this.tab.ui.bangBashModeManager?.isActive() ?? false,
     };
-  }
-
-  private buildInputMode(): ComposerInputMode {
-    if (this.tab.ui.instructionModeManager?.isActive()) return 'instruction';
-    if (this.tab.ui.bangBashModeManager?.isActive()) return 'bang-bash';
-    return 'none';
-  }
-
-  private buildDraftMeta(): ComposerDraftMeta {
-    const isEmpty = (this.tab.dom.inputEl?.value ?? '').trim().length === 0;
-    return { isEmpty, activeMode: this.buildInputMode() };
   }
 
   // --- Phase 2 slice --------------------------------------------------------

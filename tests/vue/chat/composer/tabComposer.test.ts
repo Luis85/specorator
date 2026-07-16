@@ -45,21 +45,8 @@ describe('TabComposerProjection', () => {
     const seen: ComposerSnapshot[] = [];
     projection.subscribe((s) => seen.push(s));
     expect(seen).toHaveLength(1);
-    expect(seen[0].streaming.isStreaming).toBe(false);
-    expect(seen[0].draftMeta.isEmpty).toBe(false);
-    expect(seen[0].inputMode).toBe('none');
     expect(seen[0].toolbar.modelLabel).toBe('');
     expect(seen[0].chips.folders).toEqual([]);
-  });
-
-  it('projects the streaming flag and the empty-draft meta', () => {
-    const streaming = new TabComposerProjection(makeTab({ value: 'x', streaming: true }), makePlugin());
-    const empty = new TabComposerProjection(makeTab({ value: '   ' }), makePlugin());
-    let s1: ComposerSnapshot | null = null; let s2: ComposerSnapshot | null = null;
-    streaming.subscribe((s) => (s1 = s));
-    empty.subscribe((s) => (s2 = s));
-    expect(s1!.streaming.isStreaming).toBe(true);
-    expect(s2!.draftMeta.isEmpty).toBe(true);
   });
 
   it('projects wrapperMode.planMode from permission mode gated by plan support', () => {
@@ -79,14 +66,6 @@ describe('TabComposerProjection', () => {
     new TabComposerProjection(makeTab({ instruction: true }), makePlugin()).subscribe((s) => (snap = s));
     expect(snap!.wrapperMode.instructionMode).toBe(true);
     expect(snap!.wrapperMode.bangBashMode).toBe(false);
-  });
-
-  it('projects the active input mode from the mode managers', () => {
-    const projection = new TabComposerProjection(makeTab({ instruction: true }), makePlugin());
-    let snap: ComposerSnapshot | null = null;
-    projection.subscribe((s) => (snap = s));
-    expect(snap!.inputMode).toBe('instruction');
-    expect(snap!.draftMeta.activeMode).toBe('instruction');
   });
 
   it('emit fans to every observer; disposer removes it', () => {
