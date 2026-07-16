@@ -127,8 +127,11 @@ Context managers: `FileContextManager` (`ui/FileContext.ts` +
 - **Store** (`ui/vue/composer/stores/composerStore.ts`, `useComposerStore`) — a
   `shallowRef` read-model:
   - `toolbar`: projected settings + per-widget `visible` gating for model, mode,
-    thinking budget, service tier, permission, plan-mode, MCP, external-context,
-    and the context-usage meter value.
+    thinking budget, **effort level** (the `ThinkingBudgetSelector` renders an
+    Effort control for adaptive-reasoning models — `isAdaptiveReasoningModel` —
+    persisting `effortLevel` separately from `thinkingBudget`), service tier,
+    permission, plan-mode, MCP, external-context, and the context-usage meter
+    value.
   - `externalContext`: the active external-context path list, each entry
     `{ path, persistent }` — the `ExternalContextSelector` dropdown is not
     add-only; it lists active paths, removes them (`removePath()`), and toggles
@@ -191,15 +194,22 @@ Context managers: `FileContextManager` (`ui/FileContext.ts` +
   anchor rect on caret move) use a `refresh*`-style targeted emit, mirroring the
   transcript's three emit points.
 - **Callbacks** (`ui/vue/composer/composerCallbacks.ts`, `ComposerCallbacks`):
-  thin Vue→engine delegators — `onSend`, `onCancel`, `onSetModel`, `onSetMode`,
-  `onSetThinkingBudget`, `onSetServiceTier`, `onSetPermission`, `onTogglePlanMode`,
+  thin Vue→engine delegators — `onSetModel`, `onSetMode`, `onSetThinkingBudget`,
+  `onSetEffortLevel` (adaptive-reasoning models render an Effort control that
+  persists a **different** settings field, `effortLevel`, via
+  `onEffortLevelChange` — distinct from `onThinkingBudgetChange`/`thinkingBudget`),
+  `onSetServiceTier`, `onSetPermission`, `onTogglePlanMode`,
   `onToggleMcpServer(name)`, `onAddExternalContext`,
   `onRemoveExternalContext(path)`, `onToggleExternalContextPersistence(path)`,
-  `onRemoveChip(path, kind)` (kind `'current' | 'file' | 'folder' | 'image'`, so
-  the engine clears `currentNotePath` for the active-note pill),
+  `onRemoveChip(key, kind)` (kind `'current' | 'file' | 'folder' | 'image'`; `key`
+  is the path for current/file/folder and the **attachment `id`** for images —
+  `ImageContextManager` maps by generated `id` and `ImageAttachment.path` is
+  optional until send, so a pasted/dropped image can only be removed by id; the
+  engine clears `currentNotePath` for the active-note pill),
   `onOpenFile(path)` (open the clicked file/current/folder chip and edited-files
   row), `onDropdownNavigate`, `onDropdownSelect`, `onDropdownDismiss`, and the
-  element-handle registration hooks.
+  element-handle registration hooks. (There is no `onSend`/`onCancel` — send and
+  Escape-cancel stay keyboard-driven through `tabInputWiring`.)
 - **Element-handle keys** — Vue owns the composer DOM but hands the engine live
   nodes exactly as `SCROLL_HOST_KEY` did. The full set: `INPUT_EL_KEY` (the
   textarea), `NAV_ROW_KEY`, `CONTEXT_ROW_KEY`, `INPUT_CONTAINER_KEY`,
@@ -338,6 +348,21 @@ engine keeps the trigger-detection + data-fetch state machine:
   the component renders it and reports up/down/enter/escape navigation and
   click-select back through `onDropdownNavigate` / `onDropdownSelect` /
   `onDropdownDismiss`.
+- **Keyboard-routing bridge (critical).** Keeping the textarea keydown wiring
+  "unchanged" is not enough, because the objects it calls are being replaced.
+  `tabInputWiring` routes Arrow/Enter/Escape through
+  `ui.slashCommandDropdown?.handleKeydown(e)`, `ui.fileContextManager?.handleMentionKeydown(e)`,
+  and `ui.slashCommandDropdown?.setEnabled(...)`, and `NavigationController`
+  captures Escape first unless `shouldSkipEscapeHandling()` reports an active
+  dropdown. So the `ComposerDropdownCoordinator` (the headless holder that keeps
+  the trigger-detection) MUST expose the same interface those call sites expect —
+  `handleKeydown(e): boolean` (navigate/select/dismiss, driving the store),
+  `isVisible(): boolean` (so `shouldSkipEscapeHandling` still yields), and
+  `setEnabled(b)` — and `ui.slashCommandDropdown` / `ui.fileContextManager` keep
+  pointing at that headless bridge. Without it, Enter sends the message instead of
+  selecting an item and Escape blurs the input instead of dismissing the Vue
+  dropdown. The Vue components render from the store and do **not** add their own
+  keyboard listeners (avoids double-handling).
 - **Shared-component handling**: `shared/components/SlashCommandDropdown.ts` stays
   in place for `InlineEditModal`. The chat composer stops importing it and uses
   the new Vue component. To avoid a logic fork, the shared list-building /
