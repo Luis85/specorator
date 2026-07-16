@@ -35,6 +35,22 @@ export type ComposerSubscribe = (onChange: (s: ComposerSnapshot) => void) => () 
 export interface ComposerCallbacks {
   subscribe: ComposerSubscribe;
 
+  // Toolbar action delegators (Phase 2). Thin wrappers over the imperative
+  // toolbar action callbacks; truth + I/O stay in the engine widgets, and each
+  // delegator re-projects via `tab.composer?.emit()`. External-context mutations
+  // re-project async through the selector's `onChange`, never synchronously here.
+  onSetModel: (model: string) => void;
+  onSetMode: (mode: string) => void;
+  onSetEffortLevel: (effort: string) => void;
+  onSetThinkingBudget: (budget: string) => void;
+  onSetServiceTier: (serviceTier: string) => void;
+  onSetPermission: (mode: string) => void;
+  onTogglePlanMode: () => void;
+  onToggleMcpServer: (serverName: string) => void;
+  onAddExternalContext: () => void;
+  onRemoveExternalContext: (path: string) => void;
+  onToggleExternalContextPersistence: (path: string) => void;
+
   // Element-handle registration (Vue owns the node; the engine keeps the handle).
   registerInputContainer: (el: HTMLElement) => void;
   registerNavRow: (el: HTMLElement) => void;

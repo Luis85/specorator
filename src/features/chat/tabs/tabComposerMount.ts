@@ -4,6 +4,7 @@ import type SpecoratorPlugin from '../../../main';
 import type { ComposerCallbacks } from '../ui/vue/composer/composerCallbacks';
 import { mountComposer } from '../ui/vue/composer/mountComposer';
 import { TabComposerProjection } from './tabComposer';
+import { buildToolbarActionCallbacks } from './tabUi';
 import type { TabData } from './types';
 
 /**
@@ -23,8 +24,34 @@ export function mountTabComposer(
 ): void {
   tab.composer = new TabComposerProjection(tab, plugin);
 
+  // Build the imperative toolbar action callbacks once; the Vue delegators fire
+  // the SAME closures the imperative widgets do (truth + I/O stay in the engine).
+  const toolbarActions = buildToolbarActionCallbacks(tab, plugin);
+
   const callbacks: ComposerCallbacks = {
     subscribe: tab.composer.subscribe,
+    onSetModel: (model) => { void toolbarActions.onModelChange(model).finally(() => tab.composer?.emit()); },
+    onSetMode: (mode) => { void toolbarActions.onModeChange(mode).finally(() => tab.composer?.emit()); },
+    onSetEffortLevel: (effort) => { void toolbarActions.onEffortLevelChange(effort).finally(() => tab.composer?.emit()); },
+    onSetThinkingBudget: (budget) => { void toolbarActions.onThinkingBudgetChange(budget).finally(() => tab.composer?.emit()); },
+    onSetServiceTier: (tier) => { void toolbarActions.onServiceTierChange(tier).finally(() => tab.composer?.emit()); },
+    onSetPermission: (mode) => { void toolbarActions.onPermissionModeChange(mode).finally(() => tab.composer?.emit()); },
+    onTogglePlanMode: () => { void toolbarActions.onPlanModeToggle?.().finally(() => tab.composer?.emit()); },
+    onToggleMcpServer: (name) => {
+      const enabled = tab.ui.mcpServerSelector?.getEnabledServers() ?? new Set<string>();
+      const next = new Set(enabled);
+      if (next.has(name)) next.delete(name); else next.add(name);
+      tab.ui.mcpServerSelector?.setEnabledServers([...next]);
+      tab.composer?.emit();
+    },
+    // External-context re-projection is driven by ExternalContextSelector's
+    // `onChange` (Step 5), NOT synchronously here: `openFolderPicker()` is ASYNC
+    // (`await remote.dialog.showOpenDialog`) and appends + fires onChange only
+    // AFTER the dialog resolves; remove + persistence also route through onChange.
+    // A synchronous `tab.composer?.emit()` here would project the OLD list.
+    onAddExternalContext: () => { void tab.ui.externalContextSelector?.openFolderPicker(); },
+    onRemoveExternalContext: (path) => { tab.ui.externalContextSelector?.removePath(path); },
+    onToggleExternalContextPersistence: (path) => { tab.ui.externalContextSelector?.togglePersistence(path); },
     registerInputContainer: (el) => { tab.dom.inputContainerEl = el; },
     registerNavRow: (el) => { tab.dom.navRowEl = el; },
     registerInputWrapper: (el) => { tab.dom.inputWrapper = el; },

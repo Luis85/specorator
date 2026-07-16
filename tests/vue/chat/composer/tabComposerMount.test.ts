@@ -8,11 +8,14 @@ import { mountTabComposer } from '@/features/chat/tabs/tabComposerMount';
 import type { TabData } from '@/features/chat/tabs/types';
 import type SpecoratorPlugin from '@/main';
 
-// The projection derives wrapperMode.planMode from these; stub so the mount needs
-// no real provider wiring.
+// The projection derives its wrapper-mode + toolbar slices from these; stub so
+// the mount needs no real provider wiring.
 vi.mock('@/features/chat/tabs/tabShared', () => ({
   getTabPermissionMode: () => 'normal',
   getTabCapabilities: () => ({ supportsPlanMode: true }),
+  getTabSettingsSnapshot: () => ({ model: '', thinkingBudget: '', effortLevel: '', serviceTier: '', permissionMode: 'normal' }),
+  getTabChatUIConfig: () => ({ getModelOptions: () => [] }),
+  getProviderMcpManager: () => null,
 }));
 
 function makeTab(): TabData {
@@ -39,7 +42,7 @@ function makeTab(): TabData {
 }
 
 function makePlugin(): SpecoratorPlugin {
-  return { app: new App(), settings: {} } as unknown as SpecoratorPlugin;
+  return { app: new App(), settings: {}, getActiveEnvironmentVariables: () => '' } as unknown as SpecoratorPlugin;
 }
 
 describe('mountTabComposer', () => {

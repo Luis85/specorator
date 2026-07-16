@@ -27,6 +27,10 @@ function makeCallbacks(): { callbacks: ComposerCallbacks; registered: Record<str
       });
       return () => {};
     },
+    onSetModel: () => {}, onSetMode: () => {}, onSetEffortLevel: () => {},
+    onSetThinkingBudget: () => {}, onSetServiceTier: () => {}, onSetPermission: () => {},
+    onTogglePlanMode: () => {}, onToggleMcpServer: () => {}, onAddExternalContext: () => {},
+    onRemoveExternalContext: () => {}, onToggleExternalContextPersistence: () => {},
     registerInputContainer: (el) => { registered.container = el; },
     registerNavRow: (el) => { registered.navRow = el; },
     registerInputWrapper: (el) => { registered.wrapper = el; },

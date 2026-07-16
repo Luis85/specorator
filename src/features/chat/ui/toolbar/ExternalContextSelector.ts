@@ -223,7 +223,7 @@ export class ExternalContextSelector {
     this.renderDropdown();
   }
 
-  private async openFolderPicker() {
+  async openFolderPicker(): Promise<void> {
     try {
       // Access Electron's dialog through remote
       // eslint-disable-next-line @typescript-eslint/no-require-imports -- Electron remote is exposed only at runtime in Obsidian's renderer.

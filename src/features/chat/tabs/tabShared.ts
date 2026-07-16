@@ -255,6 +255,8 @@ export function applyProviderUIGating(tab: TabData, plugin: SpecoratorPlugin): v
 
   tab.ui.imageContextManager?.setEnabled(capabilities.supportsImageAttachments);
   tab.ui.contextUsageMeter?.update(tab.state.usage);
+  // Vue owns the gated toolbar visibility flags; re-project so the composer repaints.
+  tab.composer?.emit();
 }
 
 export function syncTabProviderServices(

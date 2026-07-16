@@ -20,7 +20,7 @@ import { BangBashModeManager as BangBashModeManagerClass } from '../ui/BangBashM
 import { EditedFilesView } from '../ui/EditedFilesView';
 import { FileContextManager } from '../ui/FileContext';
 import { ImageContextManager } from '../ui/ImageContext';
-import { createInputToolbar } from '../ui/InputToolbar';
+import { createInputToolbar, type ToolbarCallbacks, type ToolbarSettings } from '../ui/InputToolbar';
 import { InstructionModeManager as InstructionModeManagerClass } from '../ui/InstructionModeManager';
 import { NavigationSidebar } from '../ui/NavigationSidebar';
 import { StatusPanel } from '../ui/StatusPanel';
@@ -244,18 +244,34 @@ async function applyBlankTabModelChange(
   applyProviderUIGating(tab, plugin);
 }
 
-function initializeInputToolbar(
+// Resolves the ToolbarSettings the model selector displays: pinned model >
+// blank-tab draft > conversation-keyed bound-agent display seed > provider
+// snapshot. Shared by the imperative toolbar callbacks and the Vue composer
+// toolbar projection so both surfaces read the SAME model.
+export function getComposerToolbarSettings(tab: TabData, plugin: SpecoratorPlugin): ToolbarSettings {
+  const snapshot = getTabSettingsSnapshot(tab, plugin);
+  if (typeof tab.pinnedModel === 'string' && tab.pinnedModel.trim()) {
+    return { ...snapshot, model: tab.pinnedModel.trim() };
+  }
+  if (tab.lifecycleState === 'blank' && typeof tab.draftModel === 'string' && tab.draftModel.trim()) {
+    return { ...snapshot, model: tab.draftModel.trim() };
+  }
+  if (tab.displayModel && tab.displayModel.conversationId === tab.conversationId && tab.displayModel.model.trim()) {
+    return { ...snapshot, model: tab.displayModel.model.trim() };
+  }
+  return snapshot;
+}
+
+// Builds the imperative toolbar action callbacks. Truth + I/O stay in these
+// closures; both `createInputToolbar` and the Vue composer delegators fire the
+// SAME callbacks, so a Vue-widget and an imperative-widget mutation are
+// indistinguishable to the engine.
+export function buildToolbarActionCallbacks(
   tab: TabData,
   plugin: SpecoratorPlugin,
   getProviderCatalogConfig?: () => ProviderCatalogInfo,
   onProviderChanged?: (providerId: ProviderId) => void | Promise<void>,
-): void {
-  const { dom } = tab;
-
-  // The Vue composer island renders `.specorator-input-toolbar`; build the
-  // imperative widgets into it (Phase 2 replaces them with Vue components).
-  const inputToolbar = dom.toolbarHostEl;
-
+): ToolbarCallbacks {
   // Blank-tab UI config wrapper that returns mixed model options
   const blankTabUIConfigProxy = (): ProviderChatUIConfig => {
     const draftProvider = tab.draftModel
@@ -269,7 +285,7 @@ function initializeInputToolbar(
     };
   };
 
-  const toolbarComponents = createInputToolbar(inputToolbar, {
+  return {
     getUIConfig: () => {
       if (tab.lifecycleState === 'blank') {
         return blankTabUIConfigProxy();
@@ -277,34 +293,7 @@ function initializeInputToolbar(
       return getTabChatUIConfig(tab, plugin);
     },
     getCapabilities: () => getTabCapabilities(tab, plugin),
-    getSettings: () => {
-      const snapshot = getTabSettingsSnapshot(tab, plugin);
-      // Surface the tab-pinned model (e.g. Agent Board work-order model) so
-      // the ModelSelector displays it for the life of the tab rather than
-      // falling back to the provider's global `settings.model` once
-      // `tab.draftModel` is cleared during runtime init.
-      if (typeof tab.pinnedModel === 'string' && tab.pinnedModel.trim()) {
-        return { ...snapshot, model: tab.pinnedModel.trim() };
-      }
-      // Blank tabs that haven't sent yet still surface `draftModel` so the
-      // selector reflects the user's pending pick even before `settings.model`
-      // is updated on the next send.
-      if (tab.lifecycleState === 'blank' && typeof tab.draftModel === 'string' && tab.draftModel.trim()) {
-        return { ...snapshot, model: tab.draftModel.trim() };
-      }
-      // Bound-agent tabs surface the agent's model as a display-only seed so the
-      // selector shows it from the first render. Unlike `pinnedModel` this never
-      // reaches `getTabModelOverride`, so the per-turn model stays live (resolved
-      // from the bound agent each send). The seed is KEYED to its conversation:
-      // trusting it only while `conversationId` still matches means any
-      // conversation change auto-invalidates a stale seed (no per-path clearing
-      // needed), and `onModelChange` clears it outright on a manual pick.
-      if (tab.displayModel && tab.displayModel.conversationId === tab.conversationId
-          && tab.displayModel.model.trim()) {
-        return { ...snapshot, model: tab.displayModel.model.trim() };
-      }
-      return snapshot;
-    },
+    getSettings: () => getComposerToolbarSettings(tab, plugin),
     getEnvironmentVariables: () => plugin.getActiveEnvironmentVariables(),
     onModelChange: async (model: string) => {
       const isBlank = tab.lifecycleState === 'blank';
@@ -427,7 +416,25 @@ function initializeInputToolbar(
         updatePlanModeUI(tab, plugin, planValue);
       }
     },
-  });
+  };
+}
+
+function initializeInputToolbar(
+  tab: TabData,
+  plugin: SpecoratorPlugin,
+  getProviderCatalogConfig?: () => ProviderCatalogInfo,
+  onProviderChanged?: (providerId: ProviderId) => void | Promise<void>,
+): void {
+  const { dom } = tab;
+
+  // The Vue composer island renders `.specorator-input-toolbar`; build the
+  // imperative widgets into it (Phase 2 replaces them with Vue components).
+  const inputToolbar = dom.toolbarHostEl;
+
+  const toolbarComponents = createInputToolbar(
+    inputToolbar,
+    buildToolbarActionCallbacks(tab, plugin, getProviderCatalogConfig, onProviderChanged),
+  );
 
   tab.ui.modelSelector = toolbarComponents.modelSelector;
   tab.ui.modeSelector = toolbarComponents.modeSelector;
@@ -446,9 +453,12 @@ function initializeInputToolbar(
     tab.ui.mcpServerSelector?.addMentionedServers(servers);
   });
 
-  // Wire external context changes
+  // Wire external context changes. Fires AFTER the async folder picker resolves
+  // and on every remove/persistence change, so it is the async-safe re-projection
+  // driver for the composer's external-context slice (never emits the stale list).
   tab.ui.externalContextSelector.setOnChange(() => {
     tab.ui.fileContextManager?.preScanExternalContexts();
+    tab.composer?.emit();
   });
 
   // Initialize persistent paths
@@ -460,6 +470,8 @@ function initializeInputToolbar(
   tab.ui.externalContextSelector.setOnPersistenceChange((paths) => {
     plugin.settings.persistentExternalContextPaths = paths;
     void plugin.saveSettings();
+    // Re-project so the composer's external-context lock state repaints.
+    tab.composer?.emit();
   });
 
   refreshTabProviderUI(tab, plugin);
@@ -519,6 +531,9 @@ export function initializeTabUI(
     ...state.callbacks,
     onUsageChanged: (usage) => {
       tab.ui.contextUsageMeter?.update(usage);
+      // Keep the projected toolbar usage meter live (no-op for rendering until
+      // the Phase 2 cutover; makes the store correct + the projection testable).
+      tab.composer?.emit();
     },
     onTodosChanged: (todos) => tab.ui.statusPanel?.updateTodos(todos),
     onAutoScrollChanged: () => tab.ui.navigationSidebar?.updateVisibility(),
