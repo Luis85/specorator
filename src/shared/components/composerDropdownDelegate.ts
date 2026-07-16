@@ -46,8 +46,6 @@ export interface ComposerDropdownDelegate {
   move(delta: number): void;
   hide(): void;
   selectActive(): void;
-  isVisible(): boolean;
   handleKeydown(e: KeyboardEvent): boolean;
-  setEnabled(enabled: boolean): void;
   getState(): { kind: 'slash' | 'mention' | 'resume' | null };
 }

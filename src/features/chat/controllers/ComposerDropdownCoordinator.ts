@@ -20,22 +20,19 @@ export interface ComposerDropdownCoordinatorState {
   anchorRect: ComposerDropdownAnchor | null;
 }
 
-const EMPTY_STATE: ComposerDropdownCoordinatorState = {
-  kind: null,
-  items: [],
-  activeIndex: 0,
-  anchorRect: null,
-};
+/** Fresh closed-state literal per call so no consumer can mutate a shared sentinel. */
+function emptyState(): ComposerDropdownCoordinatorState {
+  return { kind: null, items: [], activeIndex: 0, anchorRect: null };
+}
 
 /**
  * Per-tab owner of the active composer dropdown state (`kind` + `items` +
  * `activeIndex` + `anchorRect`) and the single source `TabComposerProjection`'s
  * `buildDropdown` reads. The imperative chat detectors hand it their RAW filtered
- * items via the `showX` methods (instead of rendering DOM), and route their
- * keyboard/visibility through this coordinator's bridge (`handleKeydown` /
- * `isVisible` / `setEnabled`), so `tabInputWiring` and `NavigationController` see
- * the same behavior against the coordinator that they saw against the old DOM
- * dropdowns.
+ * items via the `showX` methods (instead of rendering DOM), and route their open
+ * dropdown's keyboard navigation through this coordinator's `handleKeydown` so
+ * `tabInputWiring` sees the same Arrow/Enter/Tab/Escape behavior it saw against
+ * the old DOM dropdowns.
  *
  * This coordinator owns the projection of the raw items into the composer's
  * `ComposerDropdownItem`, keeping the shared detector seam free of features
@@ -53,7 +50,7 @@ export class ComposerDropdownCoordinator implements ComposerDropdownDelegate {
   constructor(private readonly emit: () => void) {}
 
   getState(): ComposerDropdownCoordinatorState {
-    if (this.kind === null) return EMPTY_STATE;
+    if (this.kind === null) return emptyState();
     return { kind: this.kind, items: this.items, activeIndex: this.activeIndex, anchorRect: this.anchorRect };
   }
 
@@ -121,19 +118,6 @@ export class ComposerDropdownCoordinator implements ComposerDropdownDelegate {
       select: () => this.selectActive(),
       dismiss: () => this.dismiss(),
     });
-  }
-
-  /** True while any dropdown is open (drives `NavigationController.shouldSkipEscapeHandling`). */
-  isVisible(): boolean {
-    return this.kind !== null;
-  }
-
-  /**
-   * Trigger-handling toggle for bang-bash suppression parity. Disabling tears
-   * down any open dropdown; the owning detector still gates its own detection.
-   */
-  setEnabled(enabled: boolean): void {
-    if (!enabled) this.dismiss();
   }
 
   private show(

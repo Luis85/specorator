@@ -32,7 +32,7 @@ describe('ComposerDropdownCoordinator projection', () => {
 
   it('starts empty', () => {
     expect(coordinator.getState()).toEqual({ kind: null, items: [], activeIndex: 0, anchorRect: null });
-    expect(coordinator.isVisible()).toBe(false);
+    expect(coordinator.getState().kind).toBeNull();
   });
 
   it('showSlash projects { kind: slash, items, activeIndex: 0, anchorRect } and emits', () => {
@@ -49,7 +49,7 @@ describe('ComposerDropdownCoordinator projection', () => {
     ]);
     expect(state.activeIndex).toBe(0);
     expect(state.anchorRect).toEqual({ top: 0, left: 0, width: 280 });
-    expect(coordinator.isVisible()).toBe(true);
+    expect(state.kind).toBe('slash');
     expect(emitCount).toBe(1);
   });
 
@@ -96,7 +96,7 @@ describe('ComposerDropdownCoordinator projection', () => {
 
     coordinator.hide();
     expect(coordinator.getState()).toEqual({ kind: null, items: [], activeIndex: 0, anchorRect: null });
-    expect(coordinator.isVisible()).toBe(false);
+    expect(coordinator.getState().kind).toBeNull();
     expect(dismiss).not.toHaveBeenCalled();
     expect(emitCount).toBe(1);
   });
@@ -146,15 +146,7 @@ describe('ComposerDropdownCoordinator projection', () => {
       coordinator.showSlash(SLASH_ITEMS, makeInput(), { select, dismiss });
       expect(coordinator.handleKeydown(keydown('Escape'))).toBe(true);
       expect(dismiss).toHaveBeenCalledTimes(1);
-      expect(coordinator.isVisible()).toBe(false);
-    });
-
-    it('setEnabled(false) tears down any open dropdown', () => {
-      const dismiss = vi.fn();
-      coordinator.showSlash(SLASH_ITEMS, makeInput(), { select: vi.fn(), dismiss });
-      coordinator.setEnabled(false);
-      expect(coordinator.isVisible()).toBe(false);
-      expect(dismiss).toHaveBeenCalledTimes(1);
+      expect(coordinator.getState().kind).toBeNull();
     });
   });
 });

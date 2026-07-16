@@ -13,7 +13,7 @@ import type { ComposerDropdownAnchor } from '../stores/composerStore';
  * The dropdown is a drop-UP: it sits above the input, so the imperative CSS var
  * anchored its BOTTOM edge to the input's top (`innerHeight - top + 4`, a 4px
  * gap). This helper carries the raw input `top`/`left`/`width` (width floored at
- * 280 to match `Math.max(width, 280)`); the Vue dropdown host (Task 16) converts
+ * 280 to match `Math.max(width, 280)`); the Vue dropdown host converts
  * `top` into the same bottom-anchored placement + gap. Left and the 280 floor
  * reproduce the imperative values exactly.
  */

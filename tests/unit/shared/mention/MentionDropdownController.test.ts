@@ -487,7 +487,6 @@ describe('MentionDropdownController', () => {
       jest.advanceTimersByTime(200);
 
       // Submenu is open with an empty item list.
-      expect(coordinator.isVisible()).toBe(true);
       expect(coordinator.getState().kind).toBe('mention');
       expect(coordinator.getState().items).toHaveLength(0);
 
