@@ -313,3 +313,52 @@ describe('buildExampleTemplateMarkdown', () => {
     expect(tpl.body).toContain('{{source}}');
   });
 });
+
+describe('work-order builder — chain metadata', () => {
+  const { buildWorkOrderFromTemplate, buildWorkOrderMarkdown } = __taskCommandTestUtils;
+  const store = new TaskNoteStore();
+
+  it('buildWorkOrderMarkdown emits chain config + provenance frontmatter', () => {
+    const md = buildWorkOrderMarkdown({
+      id: 'task-2',
+      title: 'Successor',
+      provider: 'claude',
+      model: 'm',
+      timestamp: '2026-07-17T00:00:00.000Z',
+      status: 'ready',
+      chain: { template: 'Verify', trigger: 'done' },
+      chainedFrom: 'task-1',
+      chainDepth: 2,
+    });
+    const fm = store.parse('p', md).task.frontmatter;
+    expect(fm.chain_template).toBe('Verify');
+    expect(fm.chain_trigger).toBe('done');
+    expect(fm.chained_from).toBe('task-1');
+    expect(fm.chain_depth).toBe(2);
+  });
+
+  it('omits chain frontmatter when unset', () => {
+    const md = buildWorkOrderMarkdown({
+      id: 'task-3', title: 'Plain', provider: 'claude', model: 'm',
+      timestamp: '2026-07-17T00:00:00.000Z', status: 'inbox',
+    });
+    const fm = store.parse('p', md).task.frontmatter;
+    expect(fm.chain_template).toBeUndefined();
+    expect(fm.chained_from).toBeUndefined();
+    expect(fm.chain_depth).toBeUndefined();
+  });
+
+  it('buildWorkOrderFromTemplate carries provenance + inherited chain', () => {
+    const md = buildWorkOrderFromTemplate({
+      id: 'task-4', title: 'From tpl', status: 'ready', priority: '2 - normal',
+      timestamp: '2026-07-17T00:00:00.000Z', provider: 'claude', model: 'm',
+      conversationId: null, body: '# From tpl\n\n## Objective\n\nx',
+      chain: { title: 'Nxt', trigger: 'review' }, chainedFrom: 'task-1', chainDepth: 1,
+    });
+    const fm = store.parse('p', md).task.frontmatter;
+    expect(fm.chain_title).toBe('Nxt');
+    expect(fm.chain_trigger).toBe('review');
+    expect(fm.chained_from).toBe('task-1');
+    expect(fm.chain_depth).toBe(1);
+  });
+});
