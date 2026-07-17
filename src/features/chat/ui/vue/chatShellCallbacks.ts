@@ -29,6 +29,7 @@ export interface ChatShellCallbacks {
    *  newBtn handler (tabManager.createNewConversation() + history refresh), which
    *  was deleted in the chat-shell Vue cutover (ADR 0005). */
   onNewConversation: () => void;
+  /** Re-project so the history list is fresh when the dropdown opens. */
   onOpenHistory: () => void;
   onQuickActions: () => void;
   /** Hover pre-warm for the Quick Actions modal — warms the Skills-tab cache so
@@ -38,8 +39,6 @@ export interface ChatShellCallbacks {
   /** Empty-state "Open settings" CTA — thin delegator to
    *  SpecoratorView.openPluginSettings(). */
   onOpenSettings: () => void;
-  /** Hosts the imperative history dropdown into the header. */
-  mountHistoryHost: (el: HTMLElement) => void;
   /** Resolves the active tab's navRowEl for 'input' tabBarPosition mode
    *  (mirrors updateNavRowLocation's input-mode branch); null when there is
    *  no active tab yet. */

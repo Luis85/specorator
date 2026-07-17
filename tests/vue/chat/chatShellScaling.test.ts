@@ -71,7 +71,6 @@ function seededCallbacks(snapshot: ChatShellSnapshot): ChatShellCallbacks {
     onQuickActionsHover: vi.fn(),
     onRename: vi.fn(),
     onOpenSettings: vi.fn(),
-    mountHistoryHost: vi.fn(),
     resolveNavRowEl: vi.fn(() => null),
     renderProviderLogo: vi.fn(),
     onSelectConversation: vi.fn(),

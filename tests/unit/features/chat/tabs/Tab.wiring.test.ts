@@ -1741,21 +1741,6 @@ describe('Tab - Controller Configuration', () => {
   });
 
   describe('ConversationController configuration', () => {
-    it('should wire getHistoryDropdown to return null (tab has no dropdown)', () => {
-      const { ConversationController } = jest.requireMock('@/features/chat/controllers/ConversationController');
-      const options = createMockOptions();
-      const tab = createTab(options);
-      const mockComponent = {} as any;
-
-      initializeTabUI(tab, options.plugin);
-      initializeTabControllers(tab, options.plugin, mockComponent);
-
-      const constructorCall = ConversationController.mock.calls[0];
-      const config = constructorCall[0];
-
-      expect(config.getHistoryDropdown()).toBeNull();
-    });
-
     it('should reset slash-command cache across conversation lifecycle events', () => {
       const { ConversationController } = jest.requireMock('@/features/chat/controllers/ConversationController');
       const options = createMockOptions();

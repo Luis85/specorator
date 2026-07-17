@@ -23,11 +23,10 @@ export interface SidePanelCallbackHost {
  * Builds the side-panel slice of `ChatShellCallbacks` — conversation history
  * (select/rename/delete/regenerate-title/context-menu), work-order activity
  * (open/close), and the git-commit action. Extracted from `SpecoratorView` so
- * the view stays under its LOC ceiling; these are independent copies of the
- * imperative `ConversationHistoryView`'s private methods, ported to read
- * through `host` instead of `this` (Phase 2 wires them to the new Vue
- * components; `ConversationHistoryView` itself is untouched until it is
- * deleted).
+ * the view stays under its LOC ceiling; these started as independent copies of
+ * the now-deleted imperative `ConversationHistoryView`'s private methods,
+ * ported to read through `host` instead of `this` — they are now the single
+ * source of truth these behaviors, consumed by `ConversationHistoryDropdown.vue`.
  */
 export function buildSidePanelCallbacks(
   host: SidePanelCallbackHost,

@@ -1,10 +1,11 @@
 <script setup lang="ts">
-import { computed, inject, onMounted, ref } from 'vue';
+import { computed, inject } from 'vue';
 
 import { t } from '../../../../../i18n/i18n';
 import { CALLBACKS_KEY } from '../chatShellKeys';
 import { mountIcon } from '../mountIcon';
 import { useChatShellStore } from '../stores/chatShellStore';
+import ConversationHistoryDropdown from './ConversationHistoryDropdown.vue';
 import WorkOrderActivityDropdown from './WorkOrderActivityDropdown.vue';
 
 const cb = inject(CALLBACKS_KEY);
@@ -15,17 +16,11 @@ const store = useChatShellStore();
 // updateNewTabButtonVisibility: hidden + aria-disabled/aria-hidden when false).
 const canCreateTab = computed(() => store.header.canCreateTab);
 
-const historyHost = ref<HTMLElement | null>(null);
-onMounted(() => {
-  if (historyHost.value) cb.mountHistoryHost(historyHost.value);
-});
-
 // Stable named host functions per button (consistent with TabBadge.vue /
 // BoundAgentChip.vue) so each `:ref` is not a fresh closure per render.
 function quickActionsHost(el: unknown): void { mountIcon(el, 'zap'); }
 function newTabHost(el: unknown): void { mountIcon(el, 'square-plus'); }
 function newConversationHost(el: unknown): void { mountIcon(el, 'square-pen'); }
-function historyHostIcon(el: unknown): void { mountIcon(el, 'history'); }
 
 // Mirrors SpecoratorView.wireHeaderButton: click + Enter/Space both activate,
 // so each specorator-header-btn is keyboard-operable.
@@ -76,22 +71,6 @@ function onKeydown(e: KeyboardEvent, fn: () => void): void {
       @keydown="onKeydown($event, cb.onNewConversation)"
     />
 
-    <div class="specorator-history-container">
-      <div
-        :ref="historyHostIcon"
-        class="specorator-header-btn"
-        role="button"
-        tabindex="0"
-        aria-label="Chat history"
-        aria-haspopup="true"
-        aria-expanded="false"
-        @click.stop="cb.onOpenHistory()"
-        @keydown="onKeydown($event, cb.onOpenHistory)"
-      />
-      <div
-        ref="historyHost"
-        class="specorator-history-menu"
-      />
-    </div>
+    <ConversationHistoryDropdown />
   </div>
 </template>

@@ -43,7 +43,6 @@ function fakeCallbacks(overrides: Partial<ChatShellCallbacks> = {}): ChatShellCa
     onQuickActionsHover: vi.fn(),
     onRename: vi.fn(),
     onOpenSettings: vi.fn(),
-    mountHistoryHost: vi.fn(),
     // Defaulting to null preserves the pre-6a in-place render for every
     // existing test below: a null target disables the Teleport.
     resolveNavRowEl: vi.fn(() => null),
@@ -143,15 +142,20 @@ describe('ChatHeader', () => {
     expect(cb.onOpenHistory).toHaveBeenCalledTimes(1);
   });
 
-  it('Enter and Space on a header button fire its handler (wireHeaderButton keyboard parity)', async () => {
+  it('Enter and Space on the history button toggle open/close (only OPEN re-projects via onOpenHistory)', async () => {
     const store = useChatShellStore();
     store.setHeader(hdr());
     const cb = fakeCallbacks();
     const { container } = mountHeader(cb);
     const historyBtn = container.querySelector('.specorator-history-container .specorator-header-btn') as HTMLElement;
+    // Enter opens the dropdown — re-projects.
     await fireEvent.keyDown(historyBtn, { key: 'Enter' });
     expect(cb.onOpenHistory).toHaveBeenCalledTimes(1);
+    // Space closes it — no re-projection needed on close.
     await fireEvent.keyDown(historyBtn, { key: ' ' });
+    expect(cb.onOpenHistory).toHaveBeenCalledTimes(1);
+    // Enter again re-opens — re-projects again.
+    await fireEvent.keyDown(historyBtn, { key: 'Enter' });
     expect(cb.onOpenHistory).toHaveBeenCalledTimes(2);
   });
 
@@ -168,15 +172,6 @@ describe('ChatHeader', () => {
     expect(cb.onNewTab).toHaveBeenCalledTimes(1);
     await fireEvent.click(btns[2]);
     expect(cb.onNewConversation).toHaveBeenCalledTimes(1);
-  });
-
-  it('mountHistoryHost was called once with an element on mount', () => {
-    const store = useChatShellStore();
-    store.setHeader(hdr());
-    const cb = fakeCallbacks();
-    mountHeader(cb);
-    expect(cb.mountHistoryHost).toHaveBeenCalledTimes(1);
-    expect((cb.mountHistoryHost as unknown as ReturnType<typeof vi.fn>).mock.calls[0][0]).toBeInstanceOf(HTMLElement);
   });
 
   it('TabStrip is hidden (v-show) when tabBarVisible is false and shown when true', async () => {

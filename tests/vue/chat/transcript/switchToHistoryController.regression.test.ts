@@ -94,7 +94,6 @@ function makeControllerDeps(
     setTranscriptLoading: (loadingText) => projection.setLoadingText(loadingText),
     setTranscriptHydrationError: (error) => projection.setHydrationError(error),
     emitTranscript: () => projection.emit(),
-    getHistoryDropdown: () => null,
     getMessagesEl: () => document.createElement('div'),
     getInputEl: () => inputEl,
     getFileContextManager: () => null,
@@ -103,7 +102,6 @@ function makeControllerDeps(
     getExternalContextSelector: () => null,
     clearQueuedMessage: vi.fn(),
     clearRetryableTurn: vi.fn(),
-    getTitleGenerationService: () => null,
     getStatusPanel: () => null,
     getAgentService: () => null,
   };

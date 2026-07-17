@@ -19,7 +19,6 @@ import { rosterAgentToPersona } from '../agents/personaRegistry';
 import { openQuickActionsModal } from '../quickActions/openQuickActionsModal';
 import { dispatchQuickActionToTab } from '../quickActions/runQuickActionForFile';
 import { resolveModelContextWindow } from '../settings/customModels/resolveModelContextWindow';
-import type { HistoryConversationOpenState } from './controllers/ConversationController';
 import {
   type HydrationFailedBannerPayload,
   registerHydrationFailedSubscriber,
@@ -41,7 +40,7 @@ import { CALLBACKS_KEY, CONTENT_HOST_KEY, PLUGIN_KEY } from './ui/vue/chatShellK
 import ChatShellRoot from './ui/vue/ChatShellRoot.vue';
 import { createChatShellPinia } from './ui/vue/globalPinia';
 import { buildSidePanelCallbacks } from './ui/vue/sidePanelCallbacks';
-import type { ChatBoundAgent, ChatShellHeader } from './ui/vue/stores/chatShellStore';
+import type { ChatBoundAgent, ChatShellHeader, HistoryConversationOpenState } from './ui/vue/stores/chatShellStore';
 import { deriveEditedFilesFromMessages } from './utils/editedFiles';
 import { recalculateUsageForModel } from './utils/usageInfo';
 
@@ -71,10 +70,6 @@ export class SpecoratorView extends ItemView {
   // Imperative widgets hosted into the Vue header via the mount* callbacks; they
   // stay imperative and persist across the empty<->content transition.
 
-  // History dropdown host (the `.specorator-history-menu` element) + its trigger
-  // button, both supplied by the Vue HeaderActions via mountHistoryHost.
-  private historyDropdown: HTMLElement | null = null;
-  private historyBtn: HTMLElement | null = null;
   // Monotonic token so concurrent refreshBoundAgentChip calls don't race a stale
   // async agent resolution into the projection.
   private boundAgentChipGen = 0;
@@ -304,7 +299,6 @@ export class SpecoratorView extends ItemView {
         },
         onTabSwitched: () => {
           this.emitChatShellChange();
-          this.updateHistoryDropdown();
           this.persistTabState();
           void this.refreshBoundAgentChip();
         },
@@ -428,7 +422,7 @@ export class SpecoratorView extends ItemView {
           new Notice(t('chat.tab.createConversationFailed')),
         );
       },
-      onOpenHistory: () => this.toggleHistoryDropdown(),
+      onOpenHistory: () => this.emitChatShellChange(),
       onQuickActions: () => this.openQuickActionsForActiveTab(),
       // Pre-warm the Skills-tab cache on hover so the Quick Actions modal opens
       // against a hot cache (old buildNavRowContent mouseenter). Idempotent:
@@ -438,13 +432,6 @@ export class SpecoratorView extends ItemView {
       },
       onRename: (title) => this.renameActiveConversation(title),
       onOpenSettings: () => this.openPluginSettings(),
-      mountHistoryHost: (el) => {
-        this.historyDropdown = el;
-        // The trigger button is the history menu's previous sibling inside
-        // `.specorator-history-container` (see HeaderActions.vue); capture it so
-        // toggleHistoryDropdown can sync aria-expanded.
-        this.historyBtn = el.previousElementSibling as HTMLElement | null;
-      },
       resolveNavRowEl: (tabId) =>
         (tabId ? this.tabManager?.getTab(tabId)?.dom.navRowEl ?? null : null),
       renderProviderLogo: (el, providerId) => {
@@ -553,7 +540,7 @@ export class SpecoratorView extends ItemView {
   /** Starts a fresh conversation in the active tab (former square-pen handler). */
   private async newConversationInActiveTab(): Promise<void> {
     await this.tabManager?.createNewConversation();
-    this.updateHistoryDropdown();
+    this.emitChatShellChange();
   }
 
   /** Renames the active tab's conversation (header rename affordance). */
@@ -752,58 +739,6 @@ export class SpecoratorView extends ItemView {
   // History Dropdown
   // ============================================
 
-  private toggleHistoryDropdown(): void {
-    if (!this.historyDropdown) return;
-
-    const isVisible = this.historyDropdown.hasClass('visible');
-    if (isVisible) {
-      this.historyDropdown.removeClass('visible');
-    } else {
-      this.updateHistoryDropdown();
-      this.historyDropdown.addClass('visible');
-    }
-    this.historyBtn?.setAttribute('aria-expanded', String(!isVisible));
-  }
-
-  /** Closes the history dropdown and syncs the trigger's aria-expanded state. */
-  private closeHistoryDropdown(): void {
-    this.historyDropdown?.removeClass('visible');
-    this.historyBtn?.setAttribute('aria-expanded', 'false');
-  }
-
-  private updateHistoryDropdown(): void {
-    if (!this.historyDropdown) return;
-    this.historyDropdown.empty();
-
-    const activeTab = this.tabManager?.getActiveTab();
-    const conversationController = activeTab?.controllers.conversationController;
-
-    if (conversationController) {
-      conversationController.renderHistoryDropdown(this.historyDropdown, {
-        onSelectConversation: (id) => this.openHistoryConversation(id),
-        onOpenConversationInNewTab: (id, activate) =>
-          this.openHistoryConversationInNewTab(id, activate),
-        getConversationOpenState: (id) => this.getHistoryConversationOpenState(id),
-      });
-    }
-  }
-
-  private async openHistoryConversation(conversationId: string): Promise<void> {
-    await this.tabManager?.openConversation(conversationId);
-    this.closeHistoryDropdown();
-  }
-
-  private async openHistoryConversationInNewTab(
-    conversationId: string,
-    activate = true,
-  ): Promise<void> {
-    await this.tabManager?.openConversation(conversationId, {
-      requireNewTab: true,
-      activate,
-    });
-    this.closeHistoryDropdown();
-  }
-
   // Public: SidePanelCallbackHost calls it off `this`.
   getHistoryConversationOpenState(conversationId: string): HistoryConversationOpenState {
     const activeTab = this.tabManager?.getActiveTab();
@@ -834,11 +769,6 @@ export class SpecoratorView extends ItemView {
 
   private wireEventHandlers(): void {
     const activeDocument = this.containerEl.ownerDocument;
-
-    // Document-level click to close dropdowns
-    this.registerDomEvent(activeDocument, 'click', () => {
-      this.closeHistoryDropdown();
-    });
 
     // View-level Shift+Tab to toggle plan mode (works from any focused element)
     this.registerDomEvent(this.containerEl, 'keydown', (e: KeyboardEvent) => {

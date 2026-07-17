@@ -203,7 +203,6 @@ function createMockDeps(overrides: Partial<InputControllerDeps> = {}): InputCont
     conversationController: {
       save: jest.fn(),
       generateFallbackTitle: jest.fn().mockReturnValue('Test Title'),
-      updateHistoryDropdown: jest.fn(),
       clearTerminalSubagentsFromMessages: jest.fn(),
     } as any,
     getInputEl: () => inputEl,

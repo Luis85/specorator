@@ -1,6 +1,6 @@
 import { Notice } from 'obsidian';
 
-import type { ConversationSwitchResult, TitleGenerationService } from '../../../core/providers/types';
+import type { ConversationSwitchResult } from '../../../core/providers/types';
 import { isHydrationCommitReady } from '../../../core/providers/types';
 import type { ChatRuntime } from '../../../core/runtime/ChatRuntime';
 import type { ChatRewindMode } from '../../../core/runtime/types';
@@ -11,7 +11,6 @@ import { confirm } from '../../../shared/modals/ConfirmModal';
 import { cleanupThinkingBlock } from '../rendering/ThinkingBlockRenderer';
 import type { SubagentManager } from '../services/SubagentManager';
 import type { ChatState } from '../state/ChatState';
-import { ConversationHistoryView, type HistoryRenderOptions } from '../ui/ConversationHistoryView';
 import type { FileContextManager } from '../ui/FileContext';
 import type { ImageContextManager } from '../ui/ImageContext';
 import type { StatusPanel } from '../ui/StatusPanel';
@@ -36,8 +35,6 @@ import {
   resolveSessionUpdates,
 } from './saveHelpers';
 
-export type { HistoryConversationOpenState } from '../ui/ConversationHistoryView';
-
 export interface ConversationCallbacks {
   onNewConversation?: () => void;
   onConversationLoaded?: () => void;
@@ -58,7 +55,6 @@ export interface ConversationControllerDeps {
   emitTranscript?: () => void;
   /** Re-projects the Vue composer toolbar (retained MCP/external selectors fire no onChange). */
   emitComposer?: () => void;
-  getHistoryDropdown: () => HTMLElement | null;
   getMessagesEl: () => HTMLElement;
   getInputEl: () => HTMLTextAreaElement;
   getFileContextManager: () => FileContextManager | null;
@@ -68,7 +64,6 @@ export interface ConversationControllerDeps {
   clearQueuedMessage: () => void;
   /** Drops the retained retryable turn when (re)binding/switching conversations. */
   clearRetryableTurn: () => void;
-  getTitleGenerationService: () => TitleGenerationService | null;
   getStatusPanel: () => StatusPanel | null;
   getAgentService?: () => ChatRuntime | null;
   ensureServiceForConversation?: (conversation: Conversation | null) => Promise<void>;
@@ -108,22 +103,10 @@ export class ConversationController {
   /** Outgoing composer draft held until target hydration commits or fails. */
   private pendingSwitchDraft: ComposerSwitchDraftSnapshot | null = null;
   private lifecycleGeneration = 0;
-  private historyView: ConversationHistoryView;
 
   constructor(deps: ConversationControllerDeps, callbacks: ConversationCallbacks = {}) {
     this.deps = deps;
     this.callbacks = callbacks;
-    this.historyView = new ConversationHistoryView({
-      plugin: deps.plugin,
-      state: deps.state,
-      // Read the getters live off `this.deps` so callers that swap them after
-      // construction (and tests that do) see the current value, matching the
-      // pre-extraction `this.deps.X()` reads.
-      getHistoryDropdown: () => this.deps.getHistoryDropdown(),
-      getTitleGenerationService: () => this.deps.getTitleGenerationService(),
-      onSelectConversation: (id) => this.switchTo(id),
-      onReloadAfterActiveDelete: () => this.loadActive(),
-    });
   }
 
   /** Aborts in-flight hydration and invalidates late async callbacks. */
@@ -381,7 +364,6 @@ export class ConversationController {
       this.deps.getInputEl().value = '';
       this.deps.clearQueuedMessage();
       this.deps.clearRetryableTurn();
-      this.deps.getHistoryDropdown()?.removeClass('visible');
       // Show the hydration spinner in the Vue transcript while Phase B loads.
       this.deps.setTranscriptLoading(t('chat.history.loading'));
       // Force one projection so the overlay lands even if a prior hydration
@@ -780,18 +762,6 @@ export class ConversationController {
   }
 
   // ============================================
-  // History Dropdown
-  // ============================================
-
-  toggleHistoryDropdown(): void {
-    this.historyView.toggleHistoryDropdown();
-  }
-
-  updateHistoryDropdown(): void {
-    this.historyView.updateHistoryDropdown();
-  }
-
-  // ============================================
   // Welcome & Greeting
   // ============================================
 
@@ -887,24 +857,4 @@ export class ConversationController {
     return `${autoTitle}${suffix}`;
   }
 
-  /** Regenerates AI title for a conversation. */
-  regenerateTitle(conversationId: string): Promise<void> {
-    return this.historyView.regenerateTitle(conversationId);
-  }
-
-  /** Formats a timestamp for display. */
-  formatDate(timestamp: number): string {
-    return this.historyView.formatDate(timestamp);
-  }
-
-  /**
-   * Renders the history dropdown content to a provided container.
-   * Used by SpecoratorView to render the dropdown with custom selection callback.
-   */
-  renderHistoryDropdown(
-    container: HTMLElement,
-    options: Omit<HistoryRenderOptions, 'onRerender'>,
-  ): void {
-    this.historyView.renderHistoryDropdown(container, options);
-  }
 }
