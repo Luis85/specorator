@@ -691,12 +691,12 @@ git commit -m "feat(tasks): thread chain config, provenance, and titleOverride t
 - Modify: `src/features/tasks/templates/templateTypes.ts`
 - Modify: `src/features/tasks/templates/TemplateNoteStore.ts`
 - Modify: `src/features/tasks/commands/taskCommands.ts` (copy `template.chain` into the created note)
-- Test: `tests/unit/features/tasks/templates/templateNoteStore.test.ts` (extend)
+- Test: `tests/unit/features/tasks/templates/TemplateNoteStore.test.ts` (extend)
 
 - [ ] **Step 1: Write the failing test**
 
 ```ts
-// tests/unit/features/tasks/templates/templateNoteStore.test.ts (add)
+// tests/unit/features/tasks/templates/TemplateNoteStore.test.ts (add)
 import { TemplateNoteStore } from '../../../../../src/features/tasks/templates/TemplateNoteStore';
 
 const store = new TemplateNoteStore();
@@ -728,7 +728,7 @@ it('omits chain when unset', () => {
 
 - [ ] **Step 2: Run to verify it fails**
 
-Run: `npm run test -- tests/unit/features/tasks/templates/templateNoteStore.test.ts -t "chain"`
+Run: `npm run test -- tests/unit/features/tasks/templates/TemplateNoteStore.test.ts -t "chain"`
 Expected: FAIL — `chain` not parsed/built.
 
 - [ ] **Step 3: Implement**
@@ -774,13 +774,13 @@ and pass `chain: seedChain` into `buildWorkOrderMarkdownForSeed`'s ctx (replacin
 
 - [ ] **Step 4: Run to verify it passes**
 
-Run: `npm run test -- tests/unit/features/tasks/templates/templateNoteStore.test.ts -t "chain"`
+Run: `npm run test -- tests/unit/features/tasks/templates/TemplateNoteStore.test.ts -t "chain"`
 Expected: PASS.
 
 - [ ] **Step 5: Commit**
 
 ```bash
-git add src/features/tasks/templates/templateTypes.ts src/features/tasks/templates/TemplateNoteStore.ts src/features/tasks/commands/taskCommands.ts tests/unit/features/tasks/templates/templateNoteStore.test.ts
+git add src/features/tasks/templates/templateTypes.ts src/features/tasks/templates/TemplateNoteStore.ts src/features/tasks/commands/taskCommands.ts tests/unit/features/tasks/templates/TemplateNoteStore.test.ts
 git commit -m "feat(tasks): templates declare a default successor, inherited on instantiation"
 ```
 
