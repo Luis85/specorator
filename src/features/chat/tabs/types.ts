@@ -14,6 +14,7 @@ import type { NavigationController } from '../controllers/NavigationController';
 import type { SelectionController } from '../controllers/SelectionController';
 import type { StreamController } from '../controllers/StreamController';
 import type { SubagentManager } from '../services/SubagentManager';
+import type { BashOutputStore } from '../state/BashOutputStore';
 import type { ChatState } from '../state/ChatState';
 import type { BangBashModeManager } from '../ui/BangBashModeManager';
 import type { FileContextManager } from '../ui/FileContext';
@@ -315,6 +316,9 @@ export interface TabData {
 
   /** Handle to the mounted Vue composer island (unmounted on tab destroy). */
   mountedComposer: MountedComposer | null;
+
+  /** Engine-side owner of this tab's bang-bash outputs (read by `TabChromeProjection`). */
+  bashOutputs?: BashOutputStore;
 }
 
 export type TabProviderContext = Pick<TabData, 'conversationId' | 'service' | 'providerId' | 'lifecycleState' | 'draftModel'>;

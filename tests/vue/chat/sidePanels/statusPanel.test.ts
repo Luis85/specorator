@@ -1,0 +1,45 @@
+import { mount } from '@vue/test-utils';
+import { createPinia,setActivePinia } from 'pinia';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+
+import StatusPanel from '@/features/chat/ui/vue/tabChrome/StatusPanel.vue';
+import { useTabChromeStore } from '@/features/chat/ui/vue/tabChrome/stores/tabChromeStore';
+import { CALLBACKS_KEY } from '@/features/chat/ui/vue/tabChrome/tabChromeKeys';
+
+vi.mock('obsidian', () => ({ setIcon: (el: HTMLElement, n: string) => el.setAttribute('data-icon', n), Notice: vi.fn() }));
+vi.mock('@/i18n/i18n', () => ({ t: (k: string) => k }));
+
+function mountPanel(cb: Record<string, unknown> = {}) {
+  return mount(StatusPanel, { global: { provide: { [CALLBACKS_KEY as symbol]: { onCopyBashOutput: vi.fn(), onClearBashOutputs: vi.fn(), resolveNavHost: () => null, ...cb } } } });
+}
+
+describe('StatusPanel.vue', () => {
+  beforeEach(() => setActivePinia(createPinia()));
+
+  it('renders todos with legacy classes', async () => {
+    const store = useTabChromeStore();
+    store.setTodos([{ content: 'Do it', status: 'pending', activeForm: 'Doing it' }] as never);
+    const w = mountPanel();
+    await w.vm.$nextTick();
+    expect(w.find('.specorator-status-panel-todos').classes()).not.toContain('specorator-hidden');
+    expect(w.find('.specorator-todo-item').exists()).toBe(true);
+  });
+
+  it('renders bash outputs and fires clear', async () => {
+    const store = useTabChromeStore();
+    store.setBashOutputs([{ id: 'a', command: 'ls', status: 'completed', output: 'files' }] as never);
+    const onClearBashOutputs = vi.fn();
+    const w = mountPanel({ onClearBashOutputs });
+    await w.vm.$nextTick();
+    expect(w.find('.specorator-status-panel-bash').classes()).not.toContain('specorator-hidden');
+    expect(w.find('.specorator-status-panel-bash-entry').exists()).toBe(true);
+    await w.find('.specorator-status-panel-bash-action-clear').trigger('click');
+    expect(onClearBashOutputs).toHaveBeenCalled();
+  });
+
+  it('hides both sections when empty', () => {
+    const w = mountPanel();
+    expect(w.find('.specorator-status-panel-todos').classes()).toContain('specorator-hidden');
+    expect(w.find('.specorator-status-panel-bash').classes()).toContain('specorator-hidden');
+  });
+});
