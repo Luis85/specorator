@@ -24,7 +24,8 @@ scope: features/tasks (model/workOrderChain, execution/WorkOrderChainCoordinator
 - Run a single test file: `npm run test -- --selectProjects unit -t "<describe/it substring>"` or by path `npm run test -- <testfile>`.
 - Commit after each task with the message shown. Committer identity is already `Claude <noreply@anthropic.com>`.
 - After any task that adds or edits functions under `src/`, also run `npm run check:quality` — the fallow complexity / duplication / dead-code ratchet is a **blocking CI gate** (`quality` job). A newly-complex function must be simplified (extract helpers), not ratcheted, unless the trade-off is deliberate and justified in the PR. Prefer extracting a small private helper over inlining branch-heavy logic into an already-large method.
-- After the final task run the full gate: `npm run typecheck && npm run lint && npm run test && npm run build && npm run check:quality`.
+- If a task **grows an existing file** — especially `src/main.ts`, an allowlisted LOC hotspot — also run `npm run check:loc` (the CI `lint` job runs it right after `npm run lint`, so a green `npm run lint` alone is NOT sufficient). The LOC ratchet is **shrink-only**: a hotspot that grew past its ceiling must be reduced by **extracting a helper/module**, not by bumping the ceiling. Concretely: put new plugin-level wiring in its own module (e.g. `createWorkOrderChainCoordinator(plugin, noteStore)`) and call it from `main.ts` in a few lines, rather than inlining a big deps block. Run `npm run check:css` too for any task touching `src/style/`.
+- After the final task run the full gate: `npm run typecheck && npm run lint && npm run test && npm run build && npm run check:quality && npm run check:loc`.
 - Do NOT put `console.*` in `src/`. Do NOT use `innerHTML`/`v-html`; build DOM via Obsidian `createEl`/`setIcon` and render markdown via `MarkdownRenderer`.
 
 ---
