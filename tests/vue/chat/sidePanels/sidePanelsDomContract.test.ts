@@ -13,15 +13,12 @@ import StatusPanel from '@/features/chat/ui/vue/tabChrome/StatusPanel.vue';
 import { useTabChromeStore } from '@/features/chat/ui/vue/tabChrome/stores/tabChromeStore';
 import { CALLBACKS_KEY as CHROME_CB, NAV_HOST_KEY, SCROLL_HOST_KEY } from '@/features/chat/ui/vue/tabChrome/tabChromeKeys';
 
+import { chromeCallbacks, shellCallbacks } from './helpers';
+
 vi.mock('obsidian', () => ({ setIcon: (el: HTMLElement, n: string) => el.setAttribute('data-icon', n), Notice: vi.fn() }));
 vi.mock('@/i18n/i18n', () => ({ t: (k: string) => k }));
 
-const shellCb = () => ({
-  onGitCommit: vi.fn(), onOpenWorkOrderItem: vi.fn(), onCloseWorkOrderTab: vi.fn(),
-  onOpenHistory: vi.fn(), onOpenConversationInNewTab: vi.fn(),
-  onRenameConversation: vi.fn(), onDeleteConversation: vi.fn(), onRegenerateConversationTitle: vi.fn(),
-  onConversationContextMenu: vi.fn(),
-});
+const shellCb = shellCallbacks;
 
 describe('side panels DOM contract', () => {
   beforeEach(() => setActivePinia(createPinia()));
@@ -59,7 +56,7 @@ describe('side panels DOM contract', () => {
     const store = useTabChromeStore();
     store.setTodos([{ content: 'x', status: 'pending', activeForm: 'X' }, { content: 'y', status: 'in_progress', activeForm: 'Y' }] as never);
     store.setBashOutputs([{ id: 'a', command: 'ls', status: 'completed', output: 'o' }] as never);
-    const w = mount(StatusPanel, { global: { provide: { [CHROME_CB as symbol]: { onCopyBashOutput: vi.fn(), onClearBashOutputs: vi.fn(), resolveNavHost: () => null } } } });
+    const w = mount(StatusPanel, { global: { provide: { [CHROME_CB as symbol]: chromeCallbacks() } } });
     await w.vm.$nextTick();
     for (const c of ['specorator-status-panel', 'specorator-status-panel-bash', 'specorator-status-panel-bash-entry', 'specorator-status-panel-todos', 'specorator-status-panel-header', 'specorator-status-panel-current', 'specorator-todo-item']) {
       expect(w.find(`.${c}`).exists()).toBe(true);

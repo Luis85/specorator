@@ -6,6 +6,8 @@ import { CALLBACKS_KEY } from '@/features/chat/ui/vue/chatShellKeys';
 import WorkOrderActivityDropdown from '@/features/chat/ui/vue/components/WorkOrderActivityDropdown.vue';
 import { useChatShellStore } from '@/features/chat/ui/vue/stores/chatShellStore';
 
+import { shellCallbacks } from './helpers';
+
 vi.mock('obsidian', () => ({ setIcon: (el: HTMLElement, n: string) => el.setAttribute('data-icon', n) }));
 vi.mock('@/i18n/i18n', () => ({ t: (k: string) => k }));
 
@@ -17,7 +19,7 @@ const SUMMARY = {
 
 function mountDd(cb: Record<string, unknown> = {}) {
   return mount(WorkOrderActivityDropdown, {
-    global: { provide: { [CALLBACKS_KEY as symbol]: { onOpenWorkOrderItem: vi.fn(), onCloseWorkOrderTab: vi.fn(), ...cb } } },
+    global: { provide: { [CALLBACKS_KEY as symbol]: shellCallbacks(cb) } },
   });
 }
 

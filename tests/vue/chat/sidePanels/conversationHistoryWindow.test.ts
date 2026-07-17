@@ -6,6 +6,8 @@ import { CALLBACKS_KEY } from '@/features/chat/ui/vue/chatShellKeys';
 import ConversationHistoryDropdown from '@/features/chat/ui/vue/components/ConversationHistoryDropdown.vue';
 import { useChatShellStore } from '@/features/chat/ui/vue/stores/chatShellStore';
 
+import { shellCallbacks } from './helpers';
+
 vi.mock('obsidian', () => ({ setIcon: (el: HTMLElement, n: string) => el.setAttribute('data-icon', n) }));
 vi.mock('@/i18n/i18n', () => ({ t: (k: string) => k }));
 
@@ -21,11 +23,7 @@ function metas(n: number, currentId: string | null = null) {
 
 function mountOpen(store: ReturnType<typeof useChatShellStore>) {
   const w = mount(ConversationHistoryDropdown, {
-    global: { provide: { [CALLBACKS_KEY as symbol]: {
-      onOpenHistory: vi.fn(), onSelectConversation: vi.fn(), onOpenConversationInNewTab: vi.fn(),
-      onRenameConversation: vi.fn(), onDeleteConversation: vi.fn(), onRegenerateConversationTitle: vi.fn(),
-      onConversationContextMenu: vi.fn(),
-    } } },
+    global: { provide: { [CALLBACKS_KEY as symbol]: shellCallbacks() } },
   });
   return w.find('.specorator-header-btn').trigger('click').then(() => w);
 }

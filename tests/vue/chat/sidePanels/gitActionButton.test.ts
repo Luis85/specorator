@@ -6,10 +6,12 @@ import { CALLBACKS_KEY } from '@/features/chat/ui/vue/chatShellKeys';
 import GitActionButton from '@/features/chat/ui/vue/components/GitActionButton.vue';
 import { useChatShellStore } from '@/features/chat/ui/vue/stores/chatShellStore';
 
+import { shellCallbacks } from './helpers';
+
 vi.mock('obsidian', () => ({ setIcon: (el: HTMLElement, name: string) => el.setAttribute('data-icon', name) }));
 
 function mountBtn(cb: Record<string, unknown> = {}) {
-  return mount(GitActionButton, { global: { provide: { [CALLBACKS_KEY as symbol]: { onGitCommit: vi.fn(), ...cb } } } });
+  return mount(GitActionButton, { global: { provide: { [CALLBACKS_KEY as symbol]: shellCallbacks(cb) } } });
 }
 
 describe('GitActionButton.vue', () => {

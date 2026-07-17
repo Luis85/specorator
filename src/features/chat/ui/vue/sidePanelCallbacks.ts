@@ -2,6 +2,7 @@ import { Menu, Notice } from 'obsidian';
 
 import { t } from '../../../../i18n/i18n';
 import type SpecoratorPlugin from '../../../../main';
+import { applyTitleGenerationResult } from '../../services/titleGenerationResult';
 import type { TabManager } from '../../tabs/TabManager';
 import type { ChatShellCallbacks } from './chatShellCallbacks';
 import type { HistoryConversationOpenState } from './stores/chatShellStore';
@@ -103,20 +104,8 @@ async function regenerateHistoryTitle(host: SidePanelCallbackHost, conversationI
   // subscribes and re-projects, keeping a second leaf's open dropdown in sync —
   // a direct emitChatShellChange() would refresh only the initiating view.
   host.plugin.events.emit('conversation:title-status-changed', { conversationId });
-  await titleService.generateTitle(conversationId, userContent, async (convId, result) => {
-    const currentConv = await host.plugin.getConversationById(convId);
-    if (!currentConv) return;
-    const userManuallyRenamed = currentConv.title !== expectedTitle;
-    if (result.success && !userManuallyRenamed) {
-      await host.plugin.renameConversation(convId, result.title);
-      await host.plugin.updateConversation(convId, { titleGenerationStatus: 'success' });
-    } else if (!userManuallyRenamed) {
-      await host.plugin.updateConversation(convId, { titleGenerationStatus: 'failed' });
-    } else {
-      await host.plugin.updateConversation(convId, { titleGenerationStatus: undefined });
-    }
-    host.plugin.events.emit('conversation:title-status-changed', { conversationId: convId });
-  });
+  await titleService.generateTitle(conversationId, userContent, (convId, result) =>
+    applyTitleGenerationResult(host.plugin, convId, expectedTitle, result));
 }
 
 function showHistoryContextMenu(

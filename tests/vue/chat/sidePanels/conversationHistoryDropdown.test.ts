@@ -6,20 +6,16 @@ import { CALLBACKS_KEY } from '@/features/chat/ui/vue/chatShellKeys';
 import ConversationHistoryDropdown from '@/features/chat/ui/vue/components/ConversationHistoryDropdown.vue';
 import { useChatShellStore } from '@/features/chat/ui/vue/stores/chatShellStore';
 
+import { conversationMeta, shellCallbacks } from './helpers';
+
 vi.mock('obsidian', () => ({ setIcon: (el: HTMLElement, n: string) => el.setAttribute('data-icon', n) }));
 vi.mock('@/i18n/i18n', () => ({ t: (k: string) => k }));
 
-function conv(id: string, extra: Record<string, unknown> = {}) {
-  return { id, providerId: 'claude', title: `Title ${id}`, createdAt: 1, updatedAt: 1, lastResponseAt: 1, messageCount: 2, preview: '', ...extra };
-}
+const conv = conversationMeta;
 
 function mountDd(cb: Record<string, unknown> = {}) {
   return mount(ConversationHistoryDropdown, {
-    global: { provide: { [CALLBACKS_KEY as symbol]: {
-      onOpenHistory: vi.fn(), onSelectConversation: vi.fn(), onOpenConversationInNewTab: vi.fn(),
-      onRenameConversation: vi.fn(), onDeleteConversation: vi.fn(), onRegenerateConversationTitle: vi.fn(),
-      onConversationContextMenu: vi.fn(), ...cb,
-    } } },
+    global: { provide: { [CALLBACKS_KEY as symbol]: shellCallbacks(cb) } },
   });
 }
 
@@ -69,6 +65,24 @@ describe('ConversationHistoryDropdown.vue', () => {
     await input.setValue('New name');
     await input.trigger('keydown', { key: 'Enter' });
     expect(onRenameConversation).toHaveBeenCalledWith('a', 'New name');
+  });
+
+  it('swaps the row icon when the current conversation changes (memoized refs stay live)', async () => {
+    const store = useChatShellStore();
+    store.setConversations({ items: [conv('a'), conv('b')], currentConversationId: 'b' });
+    const w = mountDd();
+    await w.find('.specorator-header-btn').trigger('click');
+    const iconByTitle = (title: string) => w.findAll('.specorator-history-item')
+      .find((row) => row.find('.specorator-history-item-title').text() === title)!
+      .find('.specorator-history-item-icon').attributes('data-icon');
+    expect(iconByTitle('Title b')).toBe('message-square-dot');
+    expect(iconByTitle('Title a')).toBe('message-square');
+    // Current flips to 'a': both rows' cached refs change identity, so Vue
+    // rebinds and setIcon swaps the glyphs (the cache keys include is-current).
+    store.setConversations({ items: [conv('a'), conv('b')], currentConversationId: 'a' });
+    await w.vm.$nextTick();
+    expect(iconByTitle('Title a')).toBe('message-square-dot');
+    expect(iconByTitle('Title b')).toBe('message-square');
   });
 
   it('closes on an outside click but stays open for inside clicks', async () => {

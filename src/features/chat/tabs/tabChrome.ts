@@ -10,14 +10,14 @@ import type { TabData } from './types';
  * emit time.
  */
 export class TabChromeProjection {
-  private readonly observerSet = new ProjectionObserverSet<TabChromeSnapshot>();
+  private readonly observerSet = new ProjectionObserverSet<TabChromeSnapshot>(() => this.snapshot());
 
   constructor(private readonly tab: TabData) {}
 
-  readonly subscribe: TabChromeSubscribe = (onChange) => this.observerSet.subscribe(() => this.snapshot(), onChange);
+  readonly subscribe: TabChromeSubscribe = this.observerSet.subscribe;
 
   emit(): void {
-    this.observerSet.emit(() => this.snapshot());
+    this.observerSet.emit();
   }
 
   private snapshot(): TabChromeSnapshot {

@@ -9,18 +9,20 @@
 export class ProjectionObserverSet<TSnapshot> {
   private readonly observers = new Set<(snapshot: TSnapshot) => void>();
 
+  constructor(private readonly buildSnapshot: () => TSnapshot) {}
+
   /** Registers `onChange`, pushes the current snapshot immediately (mirrors
    *  `mountChatShell`'s subscribe), and returns a disposer that unregisters it. */
-  subscribe(buildSnapshot: () => TSnapshot, onChange: (snapshot: TSnapshot) => void): () => void {
+  readonly subscribe = (onChange: (snapshot: TSnapshot) => void): (() => void) => {
     this.observers.add(onChange);
-    onChange(buildSnapshot());
+    onChange(this.buildSnapshot());
     return () => { this.observers.delete(onChange); };
-  }
+  };
 
   /** Builds a fresh snapshot and fans it to every observer. No-op when nothing is mounted. */
-  emit(buildSnapshot: () => TSnapshot): void {
+  emit(): void {
     if (this.observers.size === 0) return;
-    const snapshot = buildSnapshot();
+    const snapshot = this.buildSnapshot();
     for (const observer of this.observers) observer(snapshot);
   }
 }

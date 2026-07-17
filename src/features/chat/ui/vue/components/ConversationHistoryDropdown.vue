@@ -38,8 +38,24 @@ const visible = computed(() => ordered.value.slice(0, visibleCount.value));
 const hasMore = computed(() => visibleCount.value < ordered.value.length);
 
 function isCurrent(id: string): boolean { return id === store.conversations.currentConversationId; }
-function itemIcon(id: string) { return (el: unknown) => mountIcon(el, isCurrent(id) ? 'message-square-dot' : 'message-square'); }
-function actionIcon(name: string) { return (el: unknown) => mountIcon(el, name); }
+// Memoized function refs: a fresh closure per render would make Vue
+// unbind+rebind (and setIcon-rebuild) EVERY visible icon on every patch —
+// ~2×window-size SVG rebuilds per keystroke while renaming. The cache key
+// includes the is-current flag deliberately: when the current conversation
+// changes, the row's ref identity changes, so Vue rebinds and setIcon swaps
+// message-square ↔ message-square-dot (that swap rides the ref change).
+// Bounded: 2 entries per conversation id seen + one per action icon name.
+const iconRefCache = new Map<string, (el: unknown) => void>();
+function cachedIconRef(key: string, icon: string): (el: unknown) => void {
+  let fn = iconRefCache.get(key);
+  if (!fn) { fn = (el: unknown) => mountIcon(el, icon); iconRefCache.set(key, fn); }
+  return fn;
+}
+function itemIcon(id: string) {
+  const current = isCurrent(id);
+  return cachedIconRef(`item:${id}:${current}`, current ? 'message-square-dot' : 'message-square');
+}
+function actionIcon(name: string) { return cachedIconRef(`action:${name}`, name); }
 // Function ref (not a bare `ref="..."` string): a plain ref inside `v-for`
 // auto-collects into an array in Vue 3, which would make `renameInputEl.value`
 // an array instead of the single input element.

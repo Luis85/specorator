@@ -6,11 +6,13 @@ import StatusPanel from '@/features/chat/ui/vue/tabChrome/StatusPanel.vue';
 import { useTabChromeStore } from '@/features/chat/ui/vue/tabChrome/stores/tabChromeStore';
 import { CALLBACKS_KEY } from '@/features/chat/ui/vue/tabChrome/tabChromeKeys';
 
+import { chromeCallbacks } from './helpers';
+
 vi.mock('obsidian', () => ({ setIcon: (el: HTMLElement, n: string) => el.setAttribute('data-icon', n), Notice: vi.fn() }));
 vi.mock('@/i18n/i18n', () => ({ t: (k: string) => k }));
 
 function mountPanel(cb: Record<string, unknown> = {}) {
-  return mount(StatusPanel, { global: { provide: { [CALLBACKS_KEY as symbol]: { onCopyBashOutput: vi.fn(), onClearBashOutputs: vi.fn(), resolveNavHost: () => null, ...cb } } } });
+  return mount(StatusPanel, { global: { provide: { [CALLBACKS_KEY as symbol]: chromeCallbacks(cb) } } });
 }
 
 describe('StatusPanel.vue', () => {
