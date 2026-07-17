@@ -1,12 +1,16 @@
 import type { ProviderId } from '../../../../core/providers/types';
+import type { WorkOrderActivitySummary } from '../../../../core/types/workOrderActivity';
 import type { TabBarItem, TabId } from '../../tabs/types';
-import type { ChatShellHeader } from './stores/chatShellStore';
+import type { ChatShellConversations, ChatShellGit, ChatShellHeader } from './stores/chatShellStore';
 
 /** A single projected snapshot the view pushes on every TabManager change. */
 export interface ChatShellSnapshot {
   tabs: TabBarItem[];
   header: ChatShellHeader;
   activeTabId: TabId | null;
+  conversations: ChatShellConversations;
+  workOrder: WorkOrderActivitySummary;
+  git: ChatShellGit;
 }
 
 /** The view-owned subscription seam: fires `onChange` on every relevant

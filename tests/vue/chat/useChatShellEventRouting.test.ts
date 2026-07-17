@@ -14,6 +14,9 @@ function snap(overrides: Partial<ChatShellSnapshot> = {}): ChatShellSnapshot {
       title: 'Specorator', boundAgent: null, activeProviderId: null, tabBarVisible: false, metaRowVisible: false,
       tabBarPosition: 'input', logoProviderId: null, logoVisible: false, titleVisible: true, canCreateTab: true,
     },
+    conversations: { items: [], currentConversationId: null, perItem: {} },
+    workOrder: { items: [], closableTabs: [], runningCount: 0, attentionCount: 0 },
+    git: { isRepo: false, dirtyCount: 0, visible: false },
     ...overrides,
   };
 }

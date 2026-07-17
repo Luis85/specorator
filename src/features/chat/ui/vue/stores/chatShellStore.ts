@@ -118,3 +118,6 @@ export const useChatShellStore = defineStore('chat-shell', () => {
     setTabs, setHeader, setActiveTabId, setConversations, setWorkOrder, setGit,
   };
 });
+
+/** Test-only re-export of the default header (private DEFAULT_HEADER stays frozen). */
+export const DEFAULT_HEADER_FOR_TEST: ChatShellHeader = DEFAULT_HEADER;

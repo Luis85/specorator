@@ -11,6 +11,7 @@ import { ProviderSettingsCoordinator } from '../../core/providers/ProviderSettin
 import { DEFAULT_CHAT_PROVIDER_ID, type ProviderId } from '../../core/providers/types';
 import { asSettingsBag, VIEW_TYPE_SPECORATOR } from '../../core/types';
 import type { TabBarPosition } from '../../core/types/settings';
+import { EMPTY_WORK_ORDER_ACTIVITY_SUMMARY } from '../../core/types/workOrderActivity';
 import { t } from '../../i18n/i18n';
 import type SpecoratorPlugin from '../../main';
 import { createProviderIconSvg } from '../../shared/icons';
@@ -498,6 +499,10 @@ export class SpecoratorView extends ItemView {
       tabs: this.tabManager?.getTabBarItems() ?? [],
       activeTabId: activeTab?.id ?? null,
       header: this.projectChatShellHeader(),
+      // TODO(SP-Task 3): project real values
+      conversations: { items: [], currentConversationId: null, perItem: {} },
+      workOrder: EMPTY_WORK_ORDER_ACTIVITY_SUMMARY,
+      git: { isRepo: false, dirtyCount: 0, visible: false },
     };
   }
 
@@ -507,9 +512,7 @@ export class SpecoratorView extends ItemView {
     const activeTab = tm?.getActiveTab() ?? null;
     const tabBarPosition: TabBarPosition =
       this.plugin.settings.tabBarPosition === 'header' ? 'header' : 'input';
-    const activeProviderId = activeTab
-      ? getTabProviderId(activeTab, this.plugin)
-      : DEFAULT_CHAT_PROVIDER_ID;
+    const activeProviderId = activeTab ? getTabProviderId(activeTab, this.plugin) : DEFAULT_CHAT_PROVIDER_ID;
 
     // tabBarVisible mirrors updateTabBarVisibility: show with 2+ chat tabs, or
     // when a (badge-less) work-order tab is active with a chat tab to return to.
@@ -528,10 +531,7 @@ export class SpecoratorView extends ItemView {
     // matches the active conversation (else null until refreshBoundAgentChip
     // lands), so a stale chip never shows after a tab/conversation switch.
     const activeConversationId = activeTab?.conversationId ?? null;
-    const boundAgent =
-      this.cachedBoundAgentConversationId === activeConversationId
-        ? this.cachedBoundAgent
-        : null;
+    const boundAgent = this.cachedBoundAgentConversationId === activeConversationId ? this.cachedBoundAgent : null;
 
     // metaRowVisible mirrors updateHeaderMetaRow + updateNavRowLocation: header
     // mode shows the action cluster in the meta row once there are tabs; input

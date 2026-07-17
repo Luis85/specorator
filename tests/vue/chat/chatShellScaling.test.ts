@@ -106,6 +106,9 @@ function mountShell(tabs: TabBarItem[], log?: RenderEntry[]) {
     tabs,
     activeTabId: tabs.find((t) => t.isActive)?.id ?? null,
     header: header(),
+    conversations: { items: [], currentConversationId: null, perItem: {} },
+    workOrder: { items: [], closableTabs: [], runningCount: 0, attentionCount: 0 },
+    git: { isRepo: false, dirtyCount: 0, visible: false },
   };
   // Seed the store from the same snapshot the subscribe replays, so the badges
   // are in the initial render (the subscribe's on-mount onChange then re-sets
