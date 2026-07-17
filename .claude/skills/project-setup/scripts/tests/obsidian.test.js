@@ -30,6 +30,18 @@ function findWrite(actions, path) {
   return actions.find((a) => a.type === 'writeFile' && a.path === path);
 }
 
+// planObsidian with github integration on (release/CI sub-planners are gated on it).
+function planWithGithub(obsidian = {}, state = {}) {
+  const dir = mkdtempSync(join(tmpdir(), 'obs-gh-'));
+  const path = join(dir, 'answers.json');
+  writeFileSync(path, JSON.stringify({ obsidian: { ...BASE, ...obsidian }, github: { integrate: true } }));
+  try {
+    return planObsidian(loadOptions(path), state);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+}
+
 function mergedPackagePatch(actions) {
   // Several sub-planners patch package.json; fold them like apply() would.
   const patches = actions.filter((a) => a.type === 'mergeJson' && a.path === 'package.json');
@@ -190,13 +202,42 @@ test('VueView pushes the start route before mount (memory history has no initial
 });
 
 test('scaffold sources are skip-if-exists (brownfield-safe, never clobbers)', () => {
+  // Engine-owned files may overwrite-backup: ratchet/build scripts, and the
+  // vitest config (an unmarked USER config stands down earlier, so reaching the
+  // write means it is ours or a replaceable marked generic one). Everything else
+  // — sources, docs, other configs — must never clobber user files.
+  const engineOwned = (p) => p.startsWith('scripts/') || p === 'vitest.config.mjs';
   for (const a of actionsFor()) {
-    if (a.type !== 'writeFile') continue;
-    // Ratchet/build scripts are engine-owned (overwrite-backup); everything
-    // else — sources, configs, docs — must never clobber user files.
-    if (a.path.startsWith('scripts/')) continue;
+    if (a.type !== 'writeFile' || engineOwned(a.path)) continue;
     assert.equal(a.mode, 'skip-if-exists', `${a.path} must be skip-if-exists`);
   }
+  const vitest = findWrite(actionsFor(), 'vitest.config.mjs');
+  assert.equal(vitest.mode, 'overwrite-backup', 'vitest.config.mjs replaces a marked generic config');
+});
+
+test('brownfield seeds src/styles.css from an existing root styles.css (no first-build clobber)', () => {
+  const state = { obsidianAppPresent: true, entry: 'main.ts', entryExists: true, rootStylesheet: '.card { color: red; }\n' };
+  const actions = actionsFor({}, state);
+  const styles = findWrite(actions, 'src/styles.css');
+  assert.equal(styles.content, '.card { color: red; }\n', 'src/styles.css is seeded from the existing sheet');
+  assert.equal(styles.mode, 'skip-if-exists');
+  assert.ok(actions.some((a) => a.type === 'notice' && /migrated into src\/styles\.css/.test(a.message)));
+});
+
+test('vitest coverage include tracks the entry root, not a hardcoded src/**', () => {
+  // greenfield entry src/main.ts -> src/**
+  assert.match(findWrite(actionsFor({ vue: true }), 'vitest.config.mjs').content, /include: \['src\/\*\*\/\*\.\{ts,vue\}'\]/);
+  // brownfield root entry main.ts -> **/* (measuring src/** would false-pass on zero files)
+  const bf = findWrite(actionsFor({ vue: false }, { obsidianAppPresent: true, entry: 'main.ts', entryExists: true }), 'vitest.config.mjs').content;
+  assert.match(bf, /include: \['\*\*\/\*\.\{ts\}'\]/);
+});
+
+test('the release workflow fails a tag that disagrees with manifest.version before publishing', () => {
+  const release = findWrite(planWithGithub(), '.github/workflows/release.yml');
+  assert.ok(release, 'release workflow is written when github integration is on');
+  assert.match(release.content, /github\.ref_name/);
+  assert.match(release.content, /require\('\.\/manifest\.json'\)\.version/);
+  assert.match(release.content, /exit 1/);
 });
 
 // --- core services ----------------------------------------------------------

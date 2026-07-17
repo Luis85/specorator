@@ -21,7 +21,7 @@ export default defineConfig({
       // istanbul (not v8) so fallow's CRAP metric can read ./coverage.
       provider: 'istanbul',
       reporter: ['json-summary', 'text'],
-      include: ['src/**/*.{{coverageExt}}'],
+      include: ['{{coverageGlobs}}'],
       thresholds: {{coverageThreshold}},
     },
   },

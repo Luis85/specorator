@@ -7,7 +7,7 @@
 // Prettier, the CSS !important ratchet, an artifact smoke gate, version sync,
 // and a tag-push release workflow. Everything user-editable is skip-if-exists;
 // engine-owned ratchet/build scripts under scripts/ are overwrite-backup.
-import { CI_PM, dep, notice, scriptCollision } from './harness.mjs';
+import { CI_PM, dep, entryDir, notice, scriptCollision } from './harness.mjs';
 import { runPrefix, safePackageManager } from './packageManager.mjs';
 import { loadTemplate, renderTemplate } from './templates.mjs';
 
@@ -145,17 +145,25 @@ function planBuild(options, state) {
 
 function planSources(options, state) {
   const o = options.obsidian;
-  // The base stylesheet is harness, not app: the build reads src/styles.css to
-  // assemble styles.css, so write it in both modes (skip-if-exists keeps the
-  // user's). Without it a brownfield build emits an empty styles.css and
-  // check:artifacts fails.
-  const stylesheet = write('src/styles.css', renderTemplate(loadTemplate('obsidian/src/styles.css.tmpl'), { id: o.id, name: o.name }));
+  // The base stylesheet is harness, not app: the build reads src/styles.css and
+  // regenerates styles.css, so write it in both modes (skip-if-exists keeps the
+  // user's). A brownfield adopt whose real sheet lives at root styles.css (no
+  // src/styles.css yet) must SEED src/styles.css from it — otherwise the first
+  // build overwrites the user's styling with the scaffold base.
+  const migrateStyles = !isGreenfield(options, state) && typeof state?.rootStylesheet === 'string';
+  const stylesheet = write(
+    'src/styles.css',
+    migrateStyles ? state.rootStylesheet : renderTemplate(loadTemplate('obsidian/src/styles.css.tmpl'), { id: o.id, name: o.name }),
+  );
   // Brownfield: keep the user's app, add only the harness/docs. The sample
   // modules import each other's APIs, so dropping them beside an existing
   // main.ts would mismatch — point the user at AGENTS.md instead.
   if (!isGreenfield(options, state)) {
     return [
       stylesheet,
+      ...(migrateStyles
+        ? [notice('Existing styles.css migrated into src/styles.css as the build source; the generated build regenerates styles.css from it. Edit src/styles.css going forward.')]
+        : []),
       notice('Existing plugin detected (a manifest or src/ source is present) — the harness (build, tests, lint, ratchets, CI, docs) was added but NOT the sample app sources. Adopt the service/command/event patterns from the generated AGENTS.md into your own code.'),
     ];
   }
@@ -339,16 +347,26 @@ function planObsidianVitest(options, state) {
   // Prettier-shaped object literal (not JSON.stringify) so the generated
   // config passes format:check; applyCoverageFloor rewrites it in the same shape.
   const coverageThreshold = cov ? '{ statements: 0, branches: 0, functions: 0, lines: 0 }' : '{}';
+  // Coverage include tracks the actual entry root, not a hardcoded src/**: a
+  // brownfield adopt whose entry is a root main.ts would otherwise measure zero
+  // real source and give a false coverage pass. Mirrors the generic planner.
+  const exts = o.vue ? 'ts,vue' : 'ts';
+  const srcDir = entryDir(obsidianEntry(options, state));
+  const coverageGlobs = srcDir ? `${srcDir}/**/*.{${exts}}` : `**/*.{${exts}}`;
   const config = renderTemplate(loadTemplate('obsidian/vitest.config.mjs.tmpl'), {
     vuePluginImport: o.vue ? "import vue from '@vitejs/plugin-vue';\n" : '',
     vuePlugins: o.vue ? '  plugins: [vue()],\n' : '',
-    coverageExt: o.vue ? '{ts,vue}' : 'ts',
+    coverageGlobs,
     coverageThreshold,
   });
   return [
     ...scriptCollision(options, state, 'test', 'vitest run --passWithNoTests'),
     ...(cov ? scriptCollision(options, state, 'test:coverage', 'vitest run --coverage --passWithNoTests') : []),
-    write('vitest.config.mjs', config),
+    // overwrite-backup (not skip-if-exists): reaching here means either no config
+    // or a project-setup-MARKED generic one (an unmarked user config already stood
+    // down above). The generic config lacks the obsidian alias/jsdom/Vue plugin the
+    // generated tests need, so replace it; apply() no-ops when our content matches.
+    write('vitest.config.mjs', config, 'overwrite-backup'),
     ...actions,
     { type: 'mergeJson', path: 'package.json', patch: { scripts, devDependencies: dep(...deps) } },
   ];

@@ -47,7 +47,7 @@ const TEST_GLOB = "'**/*.{test,spec}.{ts,mts,cts,tsx,js,mjs,cjs,jsx}'";
 // untrusted repo's package.json#source and is templated into generated executables
 // (check-loc scan root, coverage globs), so reject anything that isn't a plain path
 // segment to prevent injection. Returns null for a root entry.
-function entryDir(entry) {
+export function entryDir(entry) {
   const e = entry.replace(/^\.\//, ''); // normalize a leading ./ so the root isn't '.'
   if (!e.includes('/')) return null;
   const seg = e.slice(0, e.indexOf('/'));

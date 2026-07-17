@@ -18,6 +18,17 @@ jobs:
       # package/manifest/versions trio is desynced (a manual tag or shadowed
       # `version` script), instead of shipping broken plugin metadata.
       - run: {{pmRun}} check:artifacts
+      # Obsidian's updater matches the release tag to manifest.version, so a tag
+      # that disagrees (a manual or v-prefixed tag; .npmrc pins tag-version-prefix
+      # to "" so `version` tags bare) would publish an un-updatable release. Fail
+      # here rather than ship it. check:artifacts already proved the trio agrees.
+      - name: Verify tag matches manifest version
+        run: |
+          version="$(node -p "require('./manifest.json').version")"
+          if [ "${{ github.ref_name }}" != "$version" ]; then
+            echo "::error::Release tag '${{ github.ref_name }}' does not match manifest.json version '$version' (Obsidian requires them equal)."
+            exit 1
+          fi
       # Obsidian's release convention: the three artifacts attached directly
       # (not only zipped) so the community-plugins updater can fetch them.
       - uses: softprops/action-gh-release@v2

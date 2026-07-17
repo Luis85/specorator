@@ -237,6 +237,14 @@ export function detect(cwd) {
     // An existing plugin: a manifest or any src source is present. The planner
     // writes the harness + docs but skips the sample app for these.
     obsidianAppPresent: existsSync(join(cwd, 'manifest.json')) || hasSourceFiles(cwd),
+    // Obsidian loads root styles.css, but the scaffold build treats src/styles.css
+    // as SOURCE and regenerates root styles.css. An adopt with a real root sheet
+    // but no src/styles.css must migrate it first — surface the content so the
+    // planner can seed src/styles.css from it (else the first build clobbers it).
+    rootStylesheet:
+      existsSync(join(cwd, 'styles.css')) && !existsSync(join(cwd, 'src', 'styles.css'))
+        ? readFileSync(join(cwd, 'styles.css'), 'utf8')
+        : null,
     esbuildConfig: hasUnmarkedConfig(cwd, ['esbuild.config.mjs']),
     prettierConfig: foreignPrettierConfig(cwd, pkg),
     releaseWorkflow: hasUnmarkedConfig(cwd, ['.github/workflows/release.yml']),
