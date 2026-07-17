@@ -217,6 +217,8 @@ export interface SpecoratorSettings {
   agentBoardQueueCap: number;
   /** Auto-halt the queue runner after this many consecutive auto-run failures. */
   agentBoardQueueHaltAfter: number;
+  /** Max hop depth for work-order chains; a successor at/over this is not spawned. */
+  agentBoardMaxChainDepth: number;
   // Validated and normalized by BoardConfigStore; stored as raw to keep core free of feature types.
   agentBoardConfig?: unknown;
 
