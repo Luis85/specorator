@@ -41,6 +41,23 @@ Add new wiring as its own `register*` module rather than growing `onload`.
 - **`plugin.modals` — `ModalService`** (`src/core/modals/`): async wrappers
   over Obsidian modals (`await plugin.modals.confirm(title, message)`).
   Extend it with new dialog kinds instead of scattering `Modal` subclasses.
+- **`plugin.logger` — `Logger`** (`src/core/logging/`): the only sanctioned
+  `console` user (raw `console.*` is lint-banned). `debug`/`info` are gated by
+  the `debugLogging` setting; `warn`/`error` always print. `child('name')`
+  namespaces a subsystem.
+- **`plugin.vault` — `VaultService`** (`src/core/vault/`): Vault-API wrapper
+  (preferred over the Adapter API) with `normalizePath` baked in —
+  `ensureFolder` / `read` / `write` without hand-building paths.
+- **`plugin.requests` — `RequestService`** (`src/core/http/`): wraps
+  `requestUrl` (NOT `fetch`) so calls are CORS-safe and work on mobile.
+- **Settings** are owned by `SettingsService` (`src/core/settings/`):
+  `saveSettings(patch)` persists a partial change and emits `settings:changed`.
+  Loading runs `migrateSettings` (`src/settings.ts`) so a vault on an old
+  schema is upgraded, never broken — add a branch per `schemaVersion` bump.
+
+`main.ts` is orchestration-only: it constructs these services and wraps
+`onload` in an error boundary (a thrown load reports via `logger` + `notices`
+and degrades, instead of leaving Obsidian half-registered).
 
 ## Commands (`src/commands.ts`)
 

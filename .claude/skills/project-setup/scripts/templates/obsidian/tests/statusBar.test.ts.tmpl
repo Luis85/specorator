@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 
 import type { AppEvents } from '@/core/events/AppEvents';
 import { EventBus } from '@/core/events/EventBus';
+import { DEFAULT_SETTINGS } from '@/settings';
 import { registerStatusBar } from '@/ui/statusBar';
 
 function fakePlugin(greeting: string) {
@@ -10,7 +11,7 @@ function fakePlugin(greeting: string) {
   const info = vi.fn();
   const plugin = {
     events,
-    settings: { greeting },
+    settings: { ...DEFAULT_SETTINGS, greeting },
     notices: { info },
     addStatusBarItem: () => item,
     registerDomEvent: (el: HTMLElement, type: string, cb: (e: Event) => unknown) =>
@@ -25,7 +26,7 @@ describe('registerStatusBar', () => {
     registerStatusBar(plugin as never);
     expect(item.textContent).toBe('Hi');
 
-    events.emit('settings:changed', { settings: { greeting: 'Servus' } });
+    events.emit('settings:changed', { settings: { ...DEFAULT_SETTINGS, greeting: 'Servus' } });
     expect(item.textContent).toBe('Servus');
   });
 

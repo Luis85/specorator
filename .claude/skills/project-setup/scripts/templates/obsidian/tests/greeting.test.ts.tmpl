@@ -4,6 +4,7 @@ import { nextTick } from 'vue';
 
 import type { AppEvents } from '@/core/events/AppEvents';
 import { EventBus } from '@/core/events/EventBus';
+import { DEFAULT_SETTINGS } from '@/settings';
 import { PLUGIN_KEY } from '@/ui/vue/keys';
 import AboutPage from '@/ui/vue/pages/AboutPage.vue';
 
@@ -14,7 +15,7 @@ describe('AboutPage greeting', () => {
     const events = new EventBus<AppEvents>();
     const plugin = {
       events,
-      settings: { greeting: 'Hello' },
+      settings: { ...DEFAULT_SETTINGS, greeting: 'Hello' },
       manifest: { id: 'test', version: '1.2.3' },
     };
     const wrapper = mount(AboutPage, {
@@ -22,12 +23,12 @@ describe('AboutPage greeting', () => {
     });
     expect(wrapper.get('[data-testid="greeting"]').text()).toBe('Hello');
 
-    events.emit('settings:changed', { settings: { greeting: 'Servus' } });
+    events.emit('settings:changed', { settings: { ...DEFAULT_SETTINGS, greeting: 'Servus' } });
     await nextTick();
     expect(wrapper.get('[data-testid="greeting"]').text()).toBe('Servus');
 
     wrapper.unmount();
     // Emitting after unmount must not throw — the handler set is empty again.
-    events.emit('settings:changed', { settings: { greeting: 'Gone' } });
+    events.emit('settings:changed', { settings: { ...DEFAULT_SETTINGS, greeting: 'Gone' } });
   });
 });

@@ -1,0 +1,21 @@
+import { describe, expect, it, vi } from 'vitest';
+
+import { Logger } from '@/core/logging/Logger';
+
+describe('Logger', () => {
+  it('gates debug/info behind the enabled predicate and namespaces the message', () => {
+    const debug = vi.spyOn(console, 'debug').mockImplementation(() => {});
+    new Logger('x', () => false).debug('hidden');
+    expect(debug).not.toHaveBeenCalled();
+    new Logger('x', () => true).debug('shown');
+    expect(debug).toHaveBeenCalledWith('[x] shown');
+    debug.mockRestore();
+  });
+
+  it('always logs warn/error, even when disabled, and namespaces children', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    new Logger('x', () => false).child('sub').warn('careful');
+    expect(warn).toHaveBeenCalledWith('[x:sub] careful');
+    warn.mockRestore();
+  });
+});

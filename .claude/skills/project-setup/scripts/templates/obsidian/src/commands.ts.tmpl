@@ -4,6 +4,8 @@ import type {{pluginClass}} from './main';
 // helper demonstrates one Obsidian command type; see AGENTS.md for when to use
 // which.
 export function registerCommands(plugin: {{pluginClass}}): void {
+  const log = plugin.logger.child('commands');
+
   // callback — always available.
   plugin.commands.addSimple('show-greeting', 'Show greeting', () => {
     const greeting = plugin.settings.greeting.trim();
@@ -36,12 +38,49 @@ export function registerCommands(plugin: {{pluginClass}}): void {
       void clearGreeting(plugin);
     },
   );
-{{openViewCommand}}}
+
+  // VaultService demo — read + write a note through the Vault API.
+  plugin.commands.addSimple('append-greeting-to-log', 'Append greeting to log note', () => {
+    void appendGreetingToLog(plugin);
+  });
+
+  // RequestService demo — fetch JSON over requestUrl (CORS-safe, mobile-friendly).
+  plugin.commands.addSimple('check-latest-obsidian', 'Check the latest Obsidian release', () => {
+    void checkLatestObsidian(plugin);
+  });
+{{openViewCommand}}
+  log.debug('commands registered');
+}
 
 async function clearGreeting(plugin: {{pluginClass}}): Promise<void> {
   const confirmed = await plugin.modals.confirm('Clear greeting', 'Remove the saved greeting?');
   if (!confirmed) return;
-  plugin.settings.greeting = '';
-  await plugin.saveSettings();
+  await plugin.saveSettings({ greeting: '' });
   plugin.notices.info('Greeting cleared');
+}
+
+async function appendGreetingToLog(plugin: {{pluginClass}}): Promise<void> {
+  const greeting = plugin.settings.greeting.trim();
+  if (!greeting) {
+    plugin.notices.error('Set a greeting in the plugin settings first');
+    return;
+  }
+  const path = 'logs/greeting-log.md';
+  await plugin.vault.ensureFolder('logs');
+  const previous = (await plugin.vault.read(path)) ?? '';
+  await plugin.vault.write(path, `${previous}${greeting}\n`);
+  plugin.logger.debug('appended greeting', path);
+  plugin.notices.info('Greeting appended to logs/greeting-log.md');
+}
+
+async function checkLatestObsidian(plugin: {{pluginClass}}): Promise<void> {
+  try {
+    const release = await plugin.requests.getJson<{ name: string }>(
+      'https://api.github.com/repos/obsidianmd/obsidian-releases/releases/latest',
+    );
+    plugin.notices.info(`Latest Obsidian release: ${release.name}`);
+  } catch (error) {
+    plugin.logger.warn('update check failed', error);
+    plugin.notices.error('Could not check for the latest release');
+  }
 }

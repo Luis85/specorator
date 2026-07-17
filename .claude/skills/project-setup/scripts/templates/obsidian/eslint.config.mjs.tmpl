@@ -106,6 +106,12 @@ export default [
     rules: { 'no-restricted-syntax': ['error', ...rawHtmlBans] },
   },
   {
+    // Logger is the one sanctioned console user (that is its whole purpose).
+    // obsidianmd re-reports console use through its own rule, so disable both.
+    files: ['src/core/logging/Logger.ts'],
+    rules: { 'no-console': 'off', 'obsidianmd/rule-custom-message': 'off' },
+  },
+  {
     // UI copy is sentence case; the plugin name stays a brand.
     files: ['src/**/*.ts'],
     rules: {

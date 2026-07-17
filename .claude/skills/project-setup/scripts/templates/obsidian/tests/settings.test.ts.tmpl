@@ -1,14 +1,21 @@
 import { describe, expect, it } from 'vitest';
 
-import { DEFAULT_SETTINGS, withDefaults } from '@/settings';
+import { DEFAULT_SETTINGS, migrateSettings } from '@/settings';
 
-describe('withDefaults', () => {
-  it('fills missing settings from defaults', () => {
-    expect(withDefaults(null)).toEqual(DEFAULT_SETTINGS);
-    expect(withDefaults(undefined)).toEqual(DEFAULT_SETTINGS);
+describe('migrateSettings', () => {
+  it('fills defaults from empty or null data', () => {
+    expect(migrateSettings(null)).toEqual(DEFAULT_SETTINGS);
+    expect(migrateSettings({})).toEqual(DEFAULT_SETTINGS);
   });
 
   it('keeps saved values over defaults', () => {
-    expect(withDefaults({ greeting: 'Hi' }).greeting).toBe('Hi');
+    expect(migrateSettings({ greeting: 'Hi' }).greeting).toBe('Hi');
+    expect(migrateSettings({ debugLogging: true }).debugLogging).toBe(true);
+  });
+
+  it('migrates the legacy `message` key (v0) to `greeting`', () => {
+    const migrated = migrateSettings({ message: 'from v0' });
+    expect(migrated.greeting).toBe('from v0');
+    expect(migrated.schemaVersion).toBe(DEFAULT_SETTINGS.schemaVersion);
   });
 });

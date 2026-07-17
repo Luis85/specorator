@@ -137,7 +137,8 @@ function planSources(options, state) {
   const mainVars = {
     ...shared,
     viewImport: o.vue ? "import { registerViews } from './ui/registerViews';\n" : '',
-    viewRegistration: o.vue ? '    registerViews(this);\n' : '',
+    // Six-space indent: this line sits inside onload's try block.
+    viewRegistration: o.vue ? '      registerViews(this);\n' : '',
   };
   // The open-view command is vue-only; it reveals the island view.
   const commandVars = {
@@ -157,8 +158,12 @@ function planSources(options, state) {
     write('src/core/commands/CommandsService.ts', renderTemplate(loadTemplate('obsidian/src/core/commands/CommandsService.ts.tmpl'), shared)),
     write('src/core/events/EventBus.ts', loadTemplate('obsidian/src/core/events/EventBus.ts.tmpl')),
     write('src/core/events/AppEvents.ts', renderTemplate(loadTemplate('obsidian/src/core/events/AppEvents.ts.tmpl'), shared)),
+    write('src/core/logging/Logger.ts', loadTemplate('obsidian/src/core/logging/Logger.ts.tmpl')),
+    write('src/core/settings/SettingsService.ts', loadTemplate('obsidian/src/core/settings/SettingsService.ts.tmpl')),
     write('src/core/notices/NoticeService.ts', loadTemplate('obsidian/src/core/notices/NoticeService.ts.tmpl')),
     write('src/core/modals/ModalService.ts', loadTemplate('obsidian/src/core/modals/ModalService.ts.tmpl')),
+    write('src/core/vault/VaultService.ts', loadTemplate('obsidian/src/core/vault/VaultService.ts.tmpl')),
+    write('src/core/http/RequestService.ts', loadTemplate('obsidian/src/core/http/RequestService.ts.tmpl')),
     // The status-bar item wires the event bus from the UI layer in both variants.
     write('src/ui/statusBar.ts', renderTemplate(loadTemplate('obsidian/src/ui/statusBar.ts.tmpl'), shared)),
   ];
@@ -254,9 +259,13 @@ function planObsidianVitest(options, state) {
     actions.push(
       write('tests/unit/settings.test.ts', loadTemplate('obsidian/tests/settings.test.ts.tmpl')),
       write('tests/unit/eventBus.test.ts', loadTemplate('obsidian/tests/eventBus.test.ts.tmpl')),
+      write('tests/unit/logger.test.ts', loadTemplate('obsidian/tests/logger.test.ts.tmpl')),
+      write('tests/unit/settingsService.test.ts', loadTemplate('obsidian/tests/settingsService.test.ts.tmpl')),
       write('tests/unit/noticeService.test.ts', loadTemplate('obsidian/tests/noticeService.test.ts.tmpl')),
       write('tests/unit/modalService.test.ts', loadTemplate('obsidian/tests/modalService.test.ts.tmpl')),
       write('tests/unit/commandsService.test.ts', loadTemplate('obsidian/tests/commandsService.test.ts.tmpl')),
+      write('tests/unit/vaultService.test.ts', loadTemplate('obsidian/tests/vaultService.test.ts.tmpl')),
+      write('tests/unit/requestService.test.ts', loadTemplate('obsidian/tests/requestService.test.ts.tmpl')),
       write('tests/unit/statusBar.test.ts', loadTemplate('obsidian/tests/statusBar.test.ts.tmpl')),
     );
     if (o.vue) {

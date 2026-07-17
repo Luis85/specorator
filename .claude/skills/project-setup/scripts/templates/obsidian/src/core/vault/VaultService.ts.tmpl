@@ -1,0 +1,28 @@
+import type { App } from 'obsidian';
+import { normalizePath } from 'obsidian';
+
+// Thin wrapper over the Vault API (preferred over the Adapter API for
+// performance + caching) with normalizePath baked in, so call sites never
+// hand-build cross-platform paths or juggle create-vs-modify.
+export class VaultService {
+  constructor(private readonly app: App) {}
+
+  async ensureFolder(path: string): Promise<void> {
+    const normalized = normalizePath(path);
+    if (normalized && normalized !== '/' && !this.app.vault.getFolderByPath(normalized)) {
+      await this.app.vault.createFolder(normalized);
+    }
+  }
+
+  async read(path: string): Promise<string | null> {
+    const file = this.app.vault.getFileByPath(normalizePath(path));
+    return file ? this.app.vault.read(file) : null;
+  }
+
+  async write(path: string, content: string): Promise<void> {
+    const normalized = normalizePath(path);
+    const existing = this.app.vault.getFileByPath(normalized);
+    if (existing) await this.app.vault.modify(existing, content);
+    else await this.app.vault.create(normalized, content);
+  }
+}

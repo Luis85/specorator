@@ -4,34 +4,56 @@ import { registerCommands } from './commands';
 import { CommandsService } from './core/commands/CommandsService';
 import type { AppEvents } from './core/events/AppEvents';
 import { EventBus } from './core/events/EventBus';
+import { RequestService } from './core/http/RequestService';
+import { Logger } from './core/logging/Logger';
 import { ModalService } from './core/modals/ModalService';
 import { NoticeService } from './core/notices/NoticeService';
-import type { {{settingsType}}, SettingsPatch } from './settings';
-import { DEFAULT_SETTINGS, {{settingsTab}}, withDefaults } from './settings';
+import { SettingsService } from './core/settings/SettingsService';
+import { VaultService } from './core/vault/VaultService';
+import type { {{settingsType}} } from './settings';
+import { DEFAULT_SETTINGS, migrateSettings, {{settingsTab}} } from './settings';
 {{viewImport}}import { registerStatusBar } from './ui/statusBar';
 
-// main.ts orchestrates only: it owns the services and settings, then delegates
-// every registration to a focused module (see AGENTS.md § architecture).
+// main.ts orchestrates only: it constructs the plugin-owned services, then
+// delegates load + every registration to focused modules (see AGENTS.md §
+// architecture). New behavior goes in a service or a register* module, not here.
 export default class {{pluginClass}} extends Plugin {
   settings: {{settingsType}} = { ...DEFAULT_SETTINGS };
+  readonly logger = new Logger('{{id}}', () => this.settings.debugLogging);
   readonly events = new EventBus<AppEvents>();
   readonly notices = new NoticeService();
   readonly modals = new ModalService(this.app);
   readonly commands = new CommandsService(this);
+  readonly vault = new VaultService(this.app);
+  readonly requests = new RequestService();
+  private readonly settingsService = new SettingsService<{{settingsType}}>({
+    defaults: DEFAULT_SETTINGS,
+    read: () => this.loadData(),
+    write: (data) => this.saveData(data),
+    migrate: migrateSettings,
+    onChange: (settings) => {
+      this.settings = settings;
+      this.events.emit('settings:changed', { settings });
+    },
+  });
 
   async onload(): Promise<void> {
-    await this.loadSettings();
-    this.addSettingTab(new {{settingsTab}}(this.app, this));
-    registerCommands(this);
-    registerStatusBar(this);
-{{viewRegistration}}  }
-
-  async loadSettings(): Promise<void> {
-    this.settings = withDefaults((await this.loadData()) as SettingsPatch);
+    // Error boundary: a thrown onload leaves Obsidian with a half-registered
+    // plugin and no feedback. Report it and degrade instead.
+    try {
+      await this.settingsService.load();
+      this.addSettingTab(new {{settingsTab}}(this.app, this));
+      registerCommands(this);
+      registerStatusBar(this);
+{{viewRegistration}}      this.logger.info('loaded');
+    } catch (error) {
+      this.logger.error('Failed to load', error);
+      this.notices.error('Failed to load — see the developer console.');
+    }
   }
 
-  async saveSettings(): Promise<void> {
-    await this.saveData(this.settings);
-    this.events.emit('settings:changed', { settings: this.settings });
+  // Persist a settings change and notify subscribers (through SettingsService).
+  saveSettings(patch: Partial<{{settingsType}}>): Promise<void> {
+    return this.settingsService.update(patch);
   }
 }

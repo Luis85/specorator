@@ -16,9 +16,12 @@ instead of eroding them accidentally.
   manifest.json){{mobileConsequence}}
 - **UI:** {{uiChoice}}
 - **Layers:** `main` (entry + settings + `commands.ts`) → `core` (services:
-  CommandsService, EventBus, NoticeService, ModalService) ← `ui`
-  (views/components, status bar). `main.ts` orchestrates only. Enforced by
-  fallow boundary zones (`boundaryViolations` gated at 0).
+  Commands, Events, Notices, Modals, Logger, Settings, Vault, Request) ← `ui`
+  (views/components, status bar). `main.ts` orchestrates only, behind an
+  `onload` error boundary. Enforced by fallow boundary zones
+  (`boundaryViolations` gated at 0).
+- **Settings:** owned by `SettingsService` with versioned `migrateSettings`, so
+  old vaults upgrade rather than break.
 - **Tests:** single Vitest lane (jsdom) with an `obsidian` test double;
   rise-only coverage floors.
 - **Quality gates:** ESLint (obsidianmd + type-aware, all-error), Prettier,

@@ -9,4 +9,6 @@ import 'obsidian';
 declare module 'obsidian' {
   /** Messages recorded by the mock Notice; reset with `__noticeLog.length = 0`. */
   export const __noticeLog: string[];
+  /** Sets the JSON the mock `requestUrl` returns (RequestService tests). */
+  export function __setRequestJson(json: unknown): void;
 }

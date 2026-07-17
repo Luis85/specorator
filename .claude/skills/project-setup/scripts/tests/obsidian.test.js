@@ -152,6 +152,10 @@ test('both variants scaffold the core services, command wiring, and the typed ev
       'src/core/events/AppEvents.ts',
       'src/core/notices/NoticeService.ts',
       'src/core/modals/ModalService.ts',
+      'src/core/logging/Logger.ts',
+      'src/core/settings/SettingsService.ts',
+      'src/core/vault/VaultService.ts',
+      'src/core/http/RequestService.ts',
       'src/commands.ts',
       'src/ui/statusBar.ts',
       'tests/unit/eventBus.test.ts',
@@ -159,6 +163,10 @@ test('both variants scaffold the core services, command wiring, and the typed ev
       'tests/unit/modalService.test.ts',
       'tests/unit/commandsService.test.ts',
       'tests/unit/statusBar.test.ts',
+      'tests/unit/logger.test.ts',
+      'tests/unit/settingsService.test.ts',
+      'tests/unit/vaultService.test.ts',
+      'tests/unit/requestService.test.ts',
     ]) {
       assert.ok(findWrite(actions, p), `missing ${p} (vue: ${variant.vue})`);
     }

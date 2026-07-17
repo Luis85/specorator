@@ -1,0 +1,21 @@
+import { App } from 'obsidian';
+import { describe, expect, it } from 'vitest';
+
+import { VaultService } from '@/core/vault/VaultService';
+
+describe('VaultService', () => {
+  it('creates the folder, then writes and reads a note', async () => {
+    const service = new VaultService(new App());
+    await service.ensureFolder('logs');
+    await service.write('logs/a.md', 'hello');
+    expect(await service.read('logs/a.md')).toBe('hello');
+  });
+
+  it('returns null for a missing file and overwrites an existing one', async () => {
+    const service = new VaultService(new App());
+    expect(await service.read('missing.md')).toBeNull();
+    await service.write('note.md', 'one');
+    await service.write('note.md', 'two');
+    expect(await service.read('note.md')).toBe('two');
+  });
+});

@@ -1,0 +1,45 @@
+import { describe, expect, it } from 'vitest';
+
+import { SettingsService } from '@/core/settings/SettingsService';
+
+interface Sample {
+  schemaVersion: number;
+  greeting: string;
+}
+
+const defaults: Sample = { schemaVersion: 1, greeting: 'hi' };
+
+function makeStore(raw: unknown) {
+  const writes: Sample[] = [];
+  const changes: Sample[] = [];
+  const store = {
+    defaults,
+    read: () => Promise.resolve(raw),
+    write: (data: Sample) => {
+      writes.push(data);
+      return Promise.resolve();
+    },
+    migrate: (value: unknown) => ({ ...defaults, ...(value as Partial<Sample>) }),
+    onChange: (settings: Sample) => {
+      changes.push(settings);
+    },
+  };
+  return { store, writes, changes };
+}
+
+describe('SettingsService', () => {
+  it('migrates on load and notifies', async () => {
+    const { store, changes } = makeStore({ greeting: 'loaded' });
+    await new SettingsService<Sample>(store).load();
+    expect(changes.at(-1)).toEqual({ schemaVersion: 1, greeting: 'loaded' });
+  });
+
+  it('merges a patch, persists it, and notifies on update', async () => {
+    const { store, writes, changes } = makeStore(null);
+    const service = new SettingsService<Sample>(store);
+    await service.load();
+    await service.update({ greeting: 'changed' });
+    expect(writes.at(-1)).toEqual({ schemaVersion: 1, greeting: 'changed' });
+    expect(changes.at(-1)?.greeting).toBe('changed');
+  });
+});

@@ -1,0 +1,14 @@
+// __setRequestJson is added by the mock (aliased to `obsidian`) and typed via
+// tests/obsidian-augment.d.ts.
+import { __setRequestJson } from 'obsidian';
+import { describe, expect, it } from 'vitest';
+
+import { RequestService } from '@/core/http/RequestService';
+
+describe('RequestService', () => {
+  it('returns parsed JSON from requestUrl', async () => {
+    __setRequestJson({ name: 'v1.9.0' });
+    const release = await new RequestService().getJson<{ name: string }>('https://example.test');
+    expect(release.name).toBe('v1.9.0');
+  });
+});

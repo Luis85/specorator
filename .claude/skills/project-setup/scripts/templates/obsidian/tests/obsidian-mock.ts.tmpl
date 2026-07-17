@@ -16,7 +16,48 @@ export class Notice {
   }
 }
 
-export class App {}
+// Minimal in-memory Vault so VaultService (and code that reads/writes notes)
+// runs under tests. Files/folders live in maps; getFileByPath returns a
+// TFile-shaped stub keyed by path.
+export interface TFile {
+  path: string;
+}
+
+class MockVault {
+  private readonly files = new Map<string, string>();
+  private readonly folders = new Set<string>();
+
+  getFileByPath(path: string): TFile | null {
+    return this.files.has(path) ? { path } : null;
+  }
+
+  getFolderByPath(path: string): { path: string } | null {
+    return this.folders.has(path) ? { path } : null;
+  }
+
+  createFolder(path: string): Promise<void> {
+    this.folders.add(path);
+    return Promise.resolve();
+  }
+
+  create(path: string, data: string): Promise<TFile> {
+    this.files.set(path, data);
+    return Promise.resolve({ path });
+  }
+
+  modify(file: TFile, data: string): Promise<void> {
+    this.files.set(file.path, data);
+    return Promise.resolve();
+  }
+
+  read(file: TFile): Promise<string> {
+    return Promise.resolve(this.files.get(file.path) ?? '');
+  }
+}
+
+export class App {
+  vault = new MockVault();
+}
 
 export class WorkspaceLeaf {}
 
@@ -119,6 +160,11 @@ interface ButtonComponentLike {
   onClick(callback: () => unknown): ButtonComponentLike;
 }
 
+interface ToggleComponentLike {
+  setValue(value: boolean): ToggleComponentLike;
+  onChange(callback: (value: boolean) => unknown): ToggleComponentLike;
+}
+
 export class Setting {
   settingEl: HTMLElement;
 
@@ -166,6 +212,15 @@ export class Setting {
     callback(component);
     return this;
   }
+
+  addToggle(callback: (toggle: ToggleComponentLike) => unknown): this {
+    const component: ToggleComponentLike = {
+      setValue: () => component,
+      onChange: () => component,
+    };
+    callback(component);
+    return this;
+  }
 }
 
 export const Platform = {
@@ -177,4 +232,18 @@ export const Platform = {
 
 export function normalizePath(path: string): string {
   return path.replace(/\\/g, '/');
+}
+
+// Controllable requestUrl for RequestService tests: set the JSON with
+// __setRequestJson(...) before the call. Returns the Obsidian response shape.
+let __requestJson: unknown = {};
+
+export function __setRequestJson(json: unknown): void {
+  __requestJson = json;
+}
+
+export function requestUrl(
+  _options: unknown,
+): Promise<{ json: unknown; text: string; status: number }> {
+  return Promise.resolve({ json: __requestJson, text: JSON.stringify(__requestJson), status: 200 });
 }
