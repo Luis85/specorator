@@ -942,7 +942,10 @@ export function buildSuccessorPlan(args: {
     chainedFrom: args.predecessor.frontmatter.id,
     chainDepth: depth + 1,
   };
-  // Inline (no template): inherit the predecessor's backend so the successor is runnable.
+  // Inline (no template): carry the predecessor's backend. For an agent-only predecessor
+  // (roster agent, no explicit provider/model) these are undefined and the agent is carried;
+  // the coordinator wiring (createSuccessor) resolves the agent's backend so the successor
+  // stays runnable on the assigned agent rather than the board defaults.
   if (!template) {
     seed.provider = args.predecessor.frontmatter.provider;
     seed.model = args.predecessor.frontmatter.model;
@@ -1098,6 +1101,7 @@ git commit -m "feat(tasks): WorkOrderChainCoordinator + pure buildSuccessorPlan"
 > 3. Firing the same event again creates no second successor.
 > 4. A template-based chain (`chain_template` pointing to a saved template) yields a successor whose body came from the template AND whose Context has the seed AND whose title honors a `chain_title` override.
 > 5. Single-write seeding: capture the content passed to `vault.create` (spy/fake adapter) and assert it is **already** `status: ready` AND already contains `Chained from [[...]]` — i.e. no create-then-modify window where a `ready` note lacks the seed.
+> 6. Agent-only inheritance: an inline chain from a predecessor with `agent: roster:x` and no `provider`/`model` produces a successor whose `provider`/`model` come from the resolved agent target (stub `resolveAgentRunTarget`), NOT the board defaults, and that carries `agent: roster:x`.
 
 - [ ] **Step 2: Run to verify it fails**
 
@@ -1136,14 +1140,29 @@ In `src/main.ts`, inside the existing `{ const noteStore = new TaskNoteStore(); 
             }
             return next;
           };
+          // Agent-only predecessor (roster agent, no explicit provider/model): resolve the
+          // agent's backend so the successor gets a concrete, queue-eligible provider/model
+          // matching the assigned agent — NOT the board defaults. Mirrors
+          // TaskRunCoordinator.resolveRunProviderModel; without this, an inline chain from
+          // an agent-only work order would run on board defaults (or fail creation).
+          let provider = plan.seed.provider;
+          let model = plan.seed.model;
+          const agentId = plan.seed.agent;
+          if ((!provider || !model) && agentId?.startsWith('roster:')) {
+            const target = await this.resolveAgentRunTarget(agentId);
+            if (target) {
+              provider = provider ?? target.providerId;
+              model = model ?? target.model;
+            }
+          }
           const created = await createWorkOrderFromSeed(
             this,
             {
               title: plan.seed.title,
               titleOverride: plan.seed.titleOverride,
               objective: plan.seed.objective,
-              provider: plan.seed.provider,
-              model: plan.seed.model,
+              provider,
+              model,
               agent: plan.seed.agent,
               chain: plan.seed.chain,
               chainedFrom: plan.seed.chainedFrom,

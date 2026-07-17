@@ -204,7 +204,11 @@ The coordinator computes:
   undefined (the chain ends)
 - **provider/model/agent** = the template's when template-based (via the normal
   `resolveRunTarget` path); otherwise inherited from the predecessor so a blank inline
-  successor is immediately runnable
+  successor is immediately runnable. For an **agent-only** predecessor (a `roster:` agent
+  with no explicit provider/model), the coordinator wiring resolves the agent's backend
+  (`resolveAgentRunTarget`, as `TaskRunCoordinator` does) and writes concrete provider/model
+  — so the successor runs on the assigned agent and stays queue-eligible, not on board
+  defaults
 - **status** = `'ready'`; **chainedFrom** = predecessor id;
   **chainDepth** = `(fm.chain_depth ?? 0) + 1`
 
