@@ -40,7 +40,14 @@ function projectionHarness(options: {
     getTabCount: () => options.totalCount ?? options.chatCount ?? 0,
     canCreateTab: () => options.canCreateTab ?? true,
   };
-  view.gitActionButton = options.hasGit ? {} : null;
+  // The git slot's visibility is now projected by buildGitSlice from the git
+  // watcher's live status + isActiveTabGitActionEnabled(), rather than a
+  // widget-instance null-check; stub both narrowly so `hasGit` still drives
+  // just the visibility bit these tests assert on.
+  view.plugin.gitStatusWatcher = {
+    getLastStatus: () => (options.hasGit ? { isRepo: true, dirtyCount: 3 } : null),
+  };
+  view.isActiveTabGitActionEnabled = () => true;
   view.cachedBoundAgent = null;
   view.cachedBoundAgentConversationId = null;
   return view;

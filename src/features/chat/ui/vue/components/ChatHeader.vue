@@ -1,22 +1,18 @@
 <script setup lang="ts">
-import { computed, inject, onMounted, ref } from 'vue';
+import { computed, inject } from 'vue';
 
 import { CALLBACKS_KEY } from '../chatShellKeys';
 import { useChatShellStore } from '../stores/chatShellStore';
 import BoundAgentChip from './BoundAgentChip.vue';
 import ChatLogo from './ChatLogo.vue';
 import ChatTitle from './ChatTitle.vue';
+import GitActionButton from './GitActionButton.vue';
 import HeaderActions from './HeaderActions.vue';
 import TabStrip from './TabStrip.vue';
 
 const store = useChatShellStore();
 const cb = inject(CALLBACKS_KEY);
 if (!cb) throw new Error('ChatHeader mounted without CALLBACKS_KEY');
-
-const gitActionHost = ref<HTMLElement | null>(null);
-onMounted(() => {
-  if (gitActionHost.value) cb.mountGitActionHost(gitActionHost.value);
-});
 
 // Mirrors SpecoratorView.updateNavRowLocation: 'header' mode keeps badges +
 // actions in the header chrome; 'input' mode teleports both into the active
@@ -64,7 +60,7 @@ const teleportDisabled = computed(() => navRowTarget.value == null);
         />
       </div>
       <div class="specorator-header-actions specorator-header-actions-slot">
-        <div ref="gitActionHost" />
+        <GitActionButton />
         <Teleport
           :to="navRowTarget"
           :disabled="teleportDisabled"

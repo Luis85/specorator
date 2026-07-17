@@ -21,7 +21,6 @@ function fakeCallbacks(overrides: Partial<ChatShellCallbacks> = {}): ChatShellCa
     onOpenSettings: vi.fn(),
     mountHistoryHost: vi.fn(),
     mountWorkOrderHost: vi.fn(),
-    mountGitActionHost: vi.fn(),
     resolveNavRowEl: vi.fn(() => null),
     renderProviderLogo: vi.fn(),
     onSelectConversation: vi.fn(),

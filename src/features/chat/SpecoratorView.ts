@@ -35,7 +35,6 @@ import {
 import { TabManager } from './tabs/TabManager';
 import { refreshBoundAgentDisplayModels } from './tabs/tabShared';
 import type { PersistedTabManagerState, TabData, TabId, TaskRunTabHandle } from './tabs/types';
-import { GitActionButton } from './ui/GitActionButton';
 import type { ChatShellCallbacks, ChatShellSnapshot } from './ui/vue/chatShellCallbacks';
 import { buildConversationsSlice, buildGitSlice, buildWorkOrderSlice } from './ui/vue/chatShellHeaderProjection';
 import { CALLBACKS_KEY, CONTENT_HOST_KEY, PLUGIN_KEY } from './ui/vue/chatShellKeys';
@@ -75,7 +74,6 @@ export class SpecoratorView extends ItemView {
   private workOrderActivitySlotEl: HTMLElement | null = null;
   private workOrderActivityDropdown: WorkOrderActivityDropdown | null = null;
   private disposeWorkOrderActivitySubscription: (() => void) | null = null;
-  private gitActionButton: GitActionButton | null = null;
 
   // History dropdown host (the `.specorator-history-menu` element) + its trigger
   // button, both supplied by the Vue HeaderActions via mountHistoryHost.
@@ -190,7 +188,7 @@ export class SpecoratorView extends ItemView {
       tab.composer?.emit();
     }
 
-    this.gitActionButton?.updateDisplay();
+    this.emitChatShellChange();
     this.tabManager?.primeProviderRuntime();
   }
 
@@ -306,13 +304,11 @@ export class SpecoratorView extends ItemView {
       {
         onTabCreated: () => {
           this.emitChatShellChange();
-          this.gitActionButton?.updateDisplay();
           this.persistTabState();
         },
         onTabSwitched: () => {
           this.emitChatShellChange();
           this.updateHistoryDropdown();
-          this.gitActionButton?.updateDisplay();
           this.persistTabState();
           void this.refreshBoundAgentChip();
         },
@@ -330,13 +326,11 @@ export class SpecoratorView extends ItemView {
         onTabAttentionChanged: () => this.emitChatShellChange(),
         onTabConversationChanged: () => {
           this.emitChatShellChange();
-          this.gitActionButton?.updateDisplay();
           this.persistTabState();
           void this.refreshBoundAgentChip();
         },
         onTabProviderChanged: () => {
           this.emitChatShellChange();
-          this.gitActionButton?.updateDisplay();
         },
       }
     );
@@ -355,7 +349,6 @@ export class SpecoratorView extends ItemView {
       workOrderCount: this.tabManager?.countTabsByKind('work-order') ?? 0,
     });
     this.emitChatShellChange();
-    this.gitActionButton?.updateDisplay();
     void this.refreshBoundAgentChip();
     this.tabManager?.primeProviderRuntime();
   }
@@ -401,8 +394,6 @@ export class SpecoratorView extends ItemView {
     // Component lifecycle — no manual offref sweep needed.
     await this.destroyTabRuntime();
     this.disposeWorkOrderActivityDropdown();
-    this.gitActionButton?.dispose();
-    this.gitActionButton = null;
     // unmount() runs the shell's onUnmounted hooks (routing disposers); clearing
     // the observers drops the view-side subscription set.
     this.vueApp?.unmount();
@@ -467,15 +458,6 @@ export class SpecoratorView extends ItemView {
         this.workOrderActivitySlotEl = el;
         this.mountWorkOrderActivityDropdown();
       },
-      mountGitActionHost: (el) => {
-        if (!this.plugin.gitStatusWatcher) return;
-        this.gitActionButton?.dispose();
-        this.gitActionButton = new GitActionButton(el, {
-          subscribeGitStatus: (cb) => this.plugin.gitStatusWatcher!.subscribe(cb),
-          isGitActionsEnabled: () => this.isActiveTabGitActionEnabled(),
-          onGitCommit: () => this.sendGitCommitPromptToActiveTab(),
-        });
-      },
       resolveNavRowEl: (tabId) =>
         (tabId ? this.tabManager?.getTab(tabId)?.dom.navRowEl ?? null : null),
       renderProviderLogo: (el, providerId) => {
@@ -537,7 +519,7 @@ export class SpecoratorView extends ItemView {
     // mode shows it only for a bound-agent chip or the git button. Gate the git
     // button on a live runtime so the empty state hides all tab-less controls.
     const hasTabs = (tm?.getTabCount() ?? 0) > 0;
-    const hasGitAction = this.gitActionButton != null && tm != null;
+    const hasGitAction = buildGitSlice(this.plugin.gitStatusWatcher?.getLastStatus(), this.isActiveTabGitActionEnabled()).visible && tm != null;
     const metaRowVisible = (tabBarPosition === 'header' && hasTabs) || boundAgent != null || hasGitAction;
 
     return {

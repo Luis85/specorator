@@ -42,11 +42,6 @@ export interface ChatShellCallbacks {
   /** Hosts the imperative history + work-order dropdowns into the header. */
   mountHistoryHost: (el: HTMLElement) => void;
   mountWorkOrderHost: (el: HTMLElement) => void;
-  /** Hosts the imperative GitActionButton into the meta-row actions slot —
-   *  the button only mounts when plugin.gitStatusWatcher exists (mirrors the
-   *  former SpecoratorView.buildHeader, deleted in the chat-shell Vue cutover;
-   *  see ADR 0005). */
-  mountGitActionHost: (el: HTMLElement) => void;
   /** Resolves the active tab's navRowEl for 'input' tabBarPosition mode
    *  (mirrors updateNavRowLocation's input-mode branch); null when there is
    *  no active tab yet. */

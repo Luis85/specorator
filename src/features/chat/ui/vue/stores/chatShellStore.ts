@@ -68,7 +68,7 @@ export interface ChatShellConversations {
 }
 
 /** Git-action-button projection: repo presence + dirty count drive the badge,
- *  visible gates the whole slot (mirrors GitActionButton's own show/hide). */
+ *  visible gates the whole slot (mirrors the button's own show/hide logic). */
 export interface ChatShellGit {
   isRepo: boolean;
   dirtyCount: number;
