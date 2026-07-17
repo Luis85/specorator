@@ -16,6 +16,13 @@ test('deepMerge keeps existing scalars, adds missing keys, unions arrays', () =>
   });
 });
 
+test('mergeJsonFile force makes the patch win over an existing scalar (version sync)', () => {
+  const r = mergeJsonFile('x', { version: '3.2.1', name: 'keep' }, { version: '1.0.0', name: 'mine', extra: 1 }, ['version']);
+  assert.equal(r.merged.version, '3.2.1'); // forced key -> patch wins
+  assert.equal(r.merged.name, 'mine'); // unforced scalar -> base kept
+  assert.equal(r.merged.extra, 1); // untouched
+});
+
 test('mergeJsonFile is idempotent', () => {
   const p = tmpProject({ 'package.json': { name: 'x', scripts: { build: 'tsc' } } });
   try {

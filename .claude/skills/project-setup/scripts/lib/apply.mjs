@@ -53,7 +53,7 @@ export function apply(actions, opts = {}) {
       }
       if (didChange) changed.push(action.path);
     } else if (action.type === 'mergeJson') {
-      const { text, changed: didChange } = mergeJsonFile(abs, action.patch);
+      const { text, changed: didChange } = mergeJsonFile(abs, action.patch, undefined, action.force);
       if (didChange && !dryRun) {
         mkdirSync(dirname(abs), { recursive: true });
         writeFileSync(abs, text);

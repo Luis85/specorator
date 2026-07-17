@@ -252,12 +252,13 @@ test('brownfield seeds src/styles.css from an existing root styles.css (no first
   assert.ok(actions.some((a) => a.type === 'notice' && /migrated into src\/styles\.css/.test(a.message)));
 });
 
-test('vitest coverage include tracks the entry root, not a hardcoded src/**', () => {
-  // greenfield entry src/main.ts -> src/**
-  assert.match(findWrite(actionsFor({ vue: true }), 'vitest.config.mjs').content, /include: \['src\/\*\*\/\*\.\{ts,vue\}'\]/);
+test('vitest coverage include tracks the entry root and includes JS/TS/Vue extensions', () => {
+  // greenfield entry src/main.ts -> src/** (js/jsx included so a brownfield JS
+  // plugin is measured; a greenfield TS scaffold has no .js there so it's a no-op).
+  assert.match(findWrite(actionsFor({ vue: true }), 'vitest.config.mjs').content, /include: \['src\/\*\*\/\*\.\{ts,tsx,vue,js,jsx\}'\]/);
   // brownfield root entry main.ts -> **/* (measuring src/** would false-pass on zero files)
   const bf = findWrite(actionsFor({ vue: false }, { obsidianAppPresent: true, entry: 'main.ts', entryExists: true }), 'vitest.config.mjs').content;
-  assert.match(bf, /include: \['\*\*\/\*\.\{ts\}'\]/);
+  assert.match(bf, /include: \['\*\*\/\*\.\{ts,tsx,js,jsx\}'\]/);
 });
 
 test('the release workflow fails a tag that disagrees with manifest.version before publishing', () => {
@@ -323,6 +324,29 @@ test('class names never reproduce obsidianmd sample identifiers (would fail the 
   // "sample" would collide on the settings tab (SampleSettingTab).
   const sampleSettings = findWrite(actionsFor({ id: 'sample', name: 'Sample' }), 'src/settings.ts').content;
   assert.doesNotMatch(sampleSettings, /SampleSettingTab/);
+});
+
+test('a plugin named "Plugin" avoids `class Plugin extends Plugin` (obsidian import clash)', () => {
+  // name "Plugin" -> empty base -> would shadow the imported Plugin; disambiguate.
+  const main = findWrite(actionsFor({ id: 'plugin', name: 'Plugin' }), 'src/main.ts').content;
+  assert.match(main, /class AppPlugin extends Plugin/);
+  assert.doesNotMatch(main, /class Plugin extends Plugin/);
+});
+
+test('package.json version is force-synced to the manifest-wins version (no check:artifacts desync)', () => {
+  // manifest 3.2.1 beats an existing package.json 1.0.0; force syncs package to it.
+  const actions = actionsFor({}, { obsidianManifest: { version: '3.2.1' }, packageVersion: '1.0.0' });
+  const pkg = actions.find((a) => a.type === 'mergeJson' && a.path === 'package.json');
+  assert.deepEqual(pkg.force, ['version']);
+  assert.equal(pkg.patch.version, '3.2.1');
+});
+
+test('a kept manifest whose isDesktopOnly disagrees with the mobile answer warns', () => {
+  const conflict = actionsFor({ mobile: true }, { obsidianManifest: { isDesktopOnly: true, version: '1.0.0' } });
+  assert.ok(conflict.some((a) => a.type === 'notice' && /isDesktopOnly/.test(a.message)));
+  // Agreement (desktop-only manifest + desktop-only answer) is silent.
+  const agree = actionsFor({ mobile: false }, { obsidianManifest: { isDesktopOnly: true, version: '1.0.0' } });
+  assert.ok(!agree.some((a) => a.type === 'notice' && /isDesktopOnly/.test(a.message)));
 });
 
 test('raw `new Notice()` is lint-banned in src, with the NoticeService file exempt', () => {

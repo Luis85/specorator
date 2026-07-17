@@ -122,7 +122,10 @@ function hasSourceFiles(cwd) {
     }
     for (const entry of entries) {
       if (entry.isDirectory()) stack.push(join(dir, entry.name));
-      else if (/\.(?:ts|tsx|mts|cts|vue)$/.test(entry.name)) return true;
+      // Match the extensions detectEntry accepts (incl. JS): a repo whose only
+      // source is src/main.js is brownfield, not greenfield — else setup writes
+      // the sample TS app and points the build at a nonexistent src/main.ts.
+      else if (/\.(?:ts|tsx|mts|cts|js|jsx|mjs|cjs|vue)$/.test(entry.name)) return true;
     }
   }
   return false;

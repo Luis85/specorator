@@ -89,6 +89,17 @@ test('detectEntry returns src/main.ts when it exists, falling back to src/index.
   }
 });
 
+test('detect flags a JS-only src tree as an existing app (brownfield, no manifest)', () => {
+  // A repo whose only source is src/main.js must be brownfield, or setup writes
+  // the sample TS app and points the build at a nonexistent src/main.ts.
+  const jsOnly = tmpProject({ 'src/main.js': 'module.exports = {};' });
+  try {
+    assert.equal(detect(jsOnly.dir).obsidianAppPresent, true);
+  } finally {
+    jsOnly.cleanup();
+  }
+});
+
 test('detectEntry finds a JS/JSX app entrypoint, not only the .ts variant', () => {
   const jsApp = tmpProject({ 'src/app.jsx': '' });
   try {

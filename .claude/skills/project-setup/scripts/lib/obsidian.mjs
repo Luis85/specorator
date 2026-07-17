@@ -33,18 +33,27 @@ function pascal(value) {
   return safe || 'My';
 }
 
-// eslint-plugin-obsidianmd bans the sample plugin's literal identifiers. The
-// default id "my-plugin" and a name of "sample" both pascal back into this set,
-// so a scaffold that shipped them would fail its own `lint` gate out of the box.
-const SAMPLE_NAMES = new Set(['MyPlugin', 'MyPluginSettings', 'SampleSettingTab', 'SampleModal']);
+// Identifiers a generated class must never equal:
+//  - the obsidianmd sample-names rule bans MyPlugin/MyPluginSettings/
+//    SampleSettingTab/SampleModal (the default id "my-plugin" and a name of
+//    "sample" pascal back into these), so shipping them fails `lint`.
+//  - Obsidian imports the generated classes would SHADOW: a name of "Plugin"
+//    (or "123 Plugin", stripped to empty base) yields `class Plugin extends
+//    Plugin`, and "Plugin Plugin" yields a `PluginSettingTab` clash — both fail
+//    `typecheck` on a duplicate identifier before any user edit.
+const RESERVED_NAMES = new Set([
+  'MyPlugin', 'MyPluginSettings', 'SampleSettingTab', 'SampleModal',
+  'Plugin', 'PluginSettingTab',
+]);
 
 function classNames(o) {
   const base = pascal(o.name).replace(/Plugin$/, '');
   const derive = (b) => ({ pluginClass: `${b}Plugin`, settingsType: `${b}Settings`, settingsTab: `${b}SettingTab` });
   let names = derive(base);
-  // Disambiguate rather than emit banned code. One pass suffices: no "…App…"
-  // identifier is in the banned set.
-  if (Object.values(names).some((n) => SAMPLE_NAMES.has(n))) names = derive(`${base}App`);
+  // Disambiguate rather than emit reserved code. One pass suffices: no "…App…"
+  // identifier is in the reserved set (an empty base collides on "Plugin", so it
+  // becomes "App" → AppPlugin/AppSettings/AppSettingTab).
+  if (Object.values(names).some((n) => RESERVED_NAMES.has(n))) names = derive(`${base}App`);
   return names;
 }
 
@@ -92,7 +101,14 @@ function planManifest(o, state, version) {
     isDesktopOnly: String(!o.mobile),
   });
   const versions = `{\n  ${JSON.stringify(manifestVersion)}: ${JSON.stringify(minApp)}\n}\n`;
-  return [write('manifest.json', manifest), write('versions.json', versions)];
+  // A kept manifest (skip-if-exists) can disagree with the answered mobile mode:
+  // the build/lint/docs follow o.mobile, so e.g. a manifest advertising mobile
+  // while esbuild externalizes desktop-only Electron/Node ships a broken plugin.
+  const notices = [];
+  if (existing && typeof existing.isDesktopOnly === 'boolean' && existing.isDesktopOnly === Boolean(o.mobile)) {
+    notices.push(notice(`Existing manifest.json says isDesktopOnly: ${existing.isDesktopOnly}, but you chose ${o.mobile ? 'mobile-ready' : 'desktop-only'} — the build, lint, and docs follow your answer. Set "isDesktopOnly": ${!o.mobile} in manifest.json to match (or re-run with the other mobile choice).`));
+  }
+  return [...notices, write('manifest.json', manifest), write('versions.json', versions)];
 }
 
 // The version shared by the generated manifest, versions.json, AND package.json
@@ -355,7 +371,9 @@ function planObsidianVitest(options, state) {
   // Coverage include tracks the actual entry root, not a hardcoded src/**: a
   // brownfield adopt whose entry is a root main.ts would otherwise measure zero
   // real source and give a false coverage pass. Mirrors the generic planner.
-  const exts = o.vue ? 'ts,vue' : 'ts';
+  // JS extensions are included so a brownfield JS plugin (src/main.js) is
+  // measured too; a greenfield TS scaffold has no .js under src/, so it's a no-op.
+  const exts = o.vue ? 'ts,tsx,vue,js,jsx' : 'ts,tsx,js,jsx';
   const srcDir = entryDir(obsidianEntry(options, state));
   const coverageGlobs = srcDir ? `${srcDir}/**/*.{${exts}}` : `**/*.{${exts}}`;
   const config = renderTemplate(loadTemplate('obsidian/vitest.config.mjs.tmpl'), {
@@ -550,7 +568,10 @@ function planPackageBasics(options, state, version) {
   const notices = Object.entries(scripts).flatMap(([name, desired]) =>
     scriptCollision(options, state, name, desired),
   );
-  return [...notices, { type: 'mergeJson', path: 'package.json', patch }];
+  // Force `version`: a brownfield package.json (e.g. 1.0.0) must be synced to the
+  // canonical version (the manifest wins, per initialVersion) or check:artifacts
+  // fails on a manifest/package desync after apply. Other keys stay merge-kept.
+  return [...notices, { type: 'mergeJson', path: 'package.json', patch, force: ['version'] }];
 }
 
 // Ordered composition for obsidian mode. plan() adds the shared planners

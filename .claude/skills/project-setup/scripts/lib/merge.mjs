@@ -28,9 +28,13 @@ export function deepMerge(base, patch) {
 }
 
 // `current` is optional, for tests that pass an in-memory object instead of reading disk.
-export function mergeJsonFile(path, patch, current) {
+export function mergeJsonFile(path, patch, current, force = []) {
   const base = current ?? (existsSync(path) ? JSON.parse(readFileSync(path, 'utf8')) : {});
   const merged = deepMerge(base, patch);
+  // `force` lets the patch win over an existing scalar for named top-level keys
+  // (deepMerge otherwise keeps the base). Used so package.json `version` syncs to
+  // the manifest-derived version that check:artifacts requires them to share.
+  for (const k of force) if (k in patch) merged[k] = patch[k];
   const changed = JSON.stringify(base) !== JSON.stringify(merged);
   return { merged, changed, text: JSON.stringify(merged, null, 2) + '\n' };
 }
