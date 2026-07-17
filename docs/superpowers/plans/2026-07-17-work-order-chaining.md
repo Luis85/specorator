@@ -829,7 +829,7 @@ describe('WorkOrderChainCoordinator', () => {
       loadTaskSpec: jest.fn(async () => task({ chain_title: 'Next' } as never, HANDOFF)),
       listTemplates: jest.fn(async () => []),
       createSuccessor: jest.fn(async (plan: { seed: { title: string } }) => { created.push(plan); return task({ id: 'task-2' }); }),
-      markChained: jest.fn(async (p: string, id: string) => { linked.push([p, id]); }),
+      linkSuccessor: jest.fn(async (p: string, id: string) => { linked.push([p, id]); }),
       appendLedger: jest.fn(async () => {}),
       readSettings: () => ({ agentBoardMaxChainDepth: 25 }),
       now: () => 't',
@@ -852,6 +852,18 @@ describe('WorkOrderChainCoordinator', () => {
     const h = harness();
     await h.fire('running');
     expect(h.deps.loadTaskSpec).not.toHaveBeenCalled();
+  });
+
+  it('a non-matching event does not suppress the matching one (review then done, done-trigger)', async () => {
+    // harness().loadTaskSpec returns a chain_title:'Next' task → default trigger 'done'.
+    // Fire both near-concurrently (no await between): the review event must NOT reserve
+    // the path and block the done event, which is the one that should spawn.
+    const h = harness();
+    const a = h.fire('review');
+    const b = h.fire('done');
+    await Promise.all([a, b]);
+    expect(h.created).toHaveLength(1);
+    expect(h.linked).toEqual([['Agent Board/tasks/task-1.md', 'task-2']]);
   });
 });
 ```
@@ -945,7 +957,9 @@ export interface WorkOrderChainDeps {
   listTemplates(): Promise<WorkOrderTemplate[]>;
   /** Create the successor note from the plan and return its parsed spec (id + path). */
   createSuccessor(plan: Extract<SuccessorPlan, { kind: 'create' }>): Promise<TaskSpec | null>;
-  markChained(predecessorPath: string, successorId: string): Promise<void>;
+  /** Atomic combined write on the predecessor: stamp `chained_to` AND append the ledger line in ONE vault.process transform, so it can't race RunSession's terminal finalization. */
+  linkSuccessor(predecessorPath: string, successorId: string, ledgerEntry: TaskLedgerEntry): Promise<void>;
+  /** Append one ledger line to the predecessor via vault.process (atomic). Used for the depth-skip notice. */
   appendLedger(task: TaskSpec, entry: TaskLedgerEntry): Promise<void>;
   readSettings(): { agentBoardMaxChainDepth?: number };
   now(): string;
@@ -981,19 +995,27 @@ export class WorkOrderChainCoordinator {
 
   private async handle(payload: TaskEventMap['task:status-changed']): Promise<void> {
     if (!TRIGGER_STATUSES.has(payload.status)) return;
+
+    // Load + confirm the trigger matches BEFORE reserving the in-flight path. Reserving
+    // first (keyed only by path) let a NON-matching event — e.g. a `review` event for a
+    // `done`-triggered chain — hold the path and suppress the matching `done` event that
+    // arrived while the first handler was still awaiting the load. EventBus.emit does not
+    // await handlers, so a back-to-back review→done transition hits exactly that.
+    let predecessor: TaskSpec;
+    try {
+      predecessor = await this.deps.loadTaskSpec(payload.path);
+    } catch (error) {
+      this.deps.logger.warn('chain skip: load failed', error);
+      return;
+    }
+    const config = parseChainConfig(predecessor.frontmatter as Record<string, unknown>);
+    if (!config || config.trigger !== payload.status) return;
+
+    // Only a matching event reserves the path. has()+add() is synchronous (no await
+    // between), so two concurrent MATCHING events still yield exactly one spawn.
     if (this.inFlight.has(payload.path)) return;
     this.inFlight.add(payload.path);
     try {
-      let predecessor: TaskSpec;
-      try {
-        predecessor = await this.deps.loadTaskSpec(payload.path);
-      } catch (error) {
-        this.deps.logger.warn('chain skip: load failed', error);
-        return;
-      }
-      const config = parseChainConfig(predecessor.frontmatter as Record<string, unknown>);
-      if (!config || config.trigger !== payload.status) return;
-
       const maxDepth = this.deps.readSettings().agentBoardMaxChainDepth ?? DEFAULT_MAX_DEPTH;
       let template: WorkOrderTemplate | undefined;
       if (config.template) {
@@ -1020,8 +1042,10 @@ export class WorkOrderChainCoordinator {
         this.deps.logger.warn('chain skip: successor creation returned null');
         return;
       }
-      await this.deps.markChained(predecessor.path, successor.frontmatter.id);
-      await this.deps.appendLedger(predecessor, {
+      // One atomic write on the predecessor: stamp chained_to AND append the ledger line
+      // together, so it can't race RunSession's terminal note finalization (which also
+      // writes this note for the `review` trigger).
+      await this.deps.linkSuccessor(predecessor.path, successor.frontmatter.id, {
         timestamp: this.deps.now(),
         status: payload.status,
         message: `chain: spawned successor ${successor.frontmatter.id}`,
@@ -1131,21 +1155,33 @@ In `src/main.ts`, inside the existing `{ const noteStore = new TaskNoteStore(); 
           const content = await this.app.vault.read(created);
           return noteStore.parse(created.path, content).task;
         },
-        markChained: async (predecessorPath, successorId) => {
+        linkSuccessor: async (predecessorPath, successorId, entry) => {
           const file = this.app.vault.getAbstractFileByPath(predecessorPath);
           if (!(file instanceof TFile)) return;
-          const content = await this.app.vault.read(file);
-          await this.app.vault.modify(file, noteStore.writeChainLink(content, successorId, new Date().toISOString()));
+          // ONE atomic vault.process transform: stamp chained_to AND append the ledger
+          // line together. vault.process serializes with RunSession's terminal note
+          // finalization (which also uses vault.process on the `review` trigger), so
+          // neither write is lost to a read+modify race.
+          await this.app.vault.process(file, (content) => {
+            let next = noteStore.writeChainLink(content, successorId, new Date().toISOString());
+            try {
+              next = noteStore.appendLedger(next, entry);
+            } catch {
+              // Note may lack the ledger region (hand-edited); still persist chained_to.
+            }
+            return next;
+          });
         },
         appendLedger: async (task, entry) => {
           const file = this.app.vault.getAbstractFileByPath(task.path);
           if (!(file instanceof TFile)) return;
-          const content = await this.app.vault.read(file);
-          try {
-            await this.app.vault.modify(file, noteStore.appendLedger(content, entry));
-          } catch {
-            // Note may lack the ledger region (hand-edited); best-effort.
-          }
+          await this.app.vault.process(file, (content) => {
+            try {
+              return noteStore.appendLedger(content, entry);
+            } catch {
+              return content; // hand-edited note without the ledger region; best-effort.
+            }
+          });
         },
         readSettings: () => this.settings,
         now: () => new Date().toISOString(),

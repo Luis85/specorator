@@ -144,9 +144,18 @@ Mirrors `CommitOnAcceptCoordinator`: `start()`/`stop()`, subscribes to
    Missing → `showNotice` ("template '<name>' not found; creating a blank successor")
    and proceed with a blank base (never silently drops the chain).
 9. `createSuccessor(...)` (see below) → new `TaskSpec`.
-10. `writeChainLink(predecessorPath, successorId)` stamps `chained_to` on the
-    predecessor (idempotency guard + forward link).
-11. `appendLedger` a `Chained → [[successor]]` line on the predecessor + `showNotice`.
+10. Stamp `chained_to` on the predecessor (idempotency guard + forward link) AND
+    append a `Chained → successor` ledger line, in **one atomic `vault.process`
+    transform**. `vault.process` serializes with `RunSession`'s terminal note
+    finalization (which also writes the predecessor note on the `review` trigger), so a
+    naive read-then-modify can't clobber — or be clobbered by — that finalization.
+11. `showNotice` the spawn.
+
+The in-flight reserve (step 6) happens **after** the trigger check (step 4), and only a
+matching event reserves the path — otherwise a non-matching event (a `review` event for
+a `done`-triggered chain) could hold the path and suppress the matching `done` event,
+since `EventBus.emit` does not await handlers. The `has()`+`add()` reserve is synchronous,
+so two concurrent matching events still yield exactly one spawn.
 
 The board re-indexes on the new file's vault `create` event, and the queue ticks on
 the same event; if auto-run is on, the `ready` successor launches.
