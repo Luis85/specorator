@@ -359,8 +359,11 @@ user accepts ────────────────► transitionTask 
 
 **Edited:** `commands/taskCommands.ts` (seed fields + `titleOverride` precedence in
 `createWorkOrderFromSeed` + `workOrderFrontmatter` chain/provenance lines +
-`CreateWorkOrderOptions.postProcess` applied to the markdown before `vault.create`;
-`title` is computed here and passed down, so `workOrderResolution.ts` is untouched),
+`CreateWorkOrderOptions.postProcess` applied to the markdown before `vault.create`),
+`commands/workOrderResolution.ts` (forward `chain`/`chainedFrom`/`chainDepth`/`agent`
+through `WorkOrderMarkdownContext` + the `WorkOrderMarkdownBuilders` arg shapes;
+`titleOverride` needs no change here — the final title is computed in
+`createWorkOrderFromSeed` and passed down as `ctx.title`),
 `templates/templateTypes.ts`, `templates/TemplateNoteStore.ts`,
 `ui/workOrderTemplateEditorForm.ts`, `ui/vue/WorkOrderTemplateEditorRoot.vue`,
 `storage/TaskNoteStore.ts` (`chain` in `writeFields` + `writeChainLink` +
