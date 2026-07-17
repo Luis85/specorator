@@ -1,3 +1,10 @@
+---
+title: Work-order chaining implementation plan — spawn a configured successor on completion
+date: 2026-07-17
+status: approved
+scope: features/tasks (model/workOrderChain, execution/WorkOrderChainCoordinator, storage/TaskNoteStore, commands/taskCommands, templates, ui/ChainConfigModal + ui/vue chip + card, ui/workOrderTemplateEditorForm), app/core settings, main.ts wiring, i18n (types/tasks + locales), src/features/tasks/CLAUDE.md
+---
+
 # Work-Order Chaining Implementation Plan
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
@@ -216,14 +223,14 @@ git commit -m "feat(tasks): add agentBoardMaxChainDepth setting (default 25)"
 
 **Files:**
 - Modify: `src/features/tasks/storage/TaskNoteStore.ts`
-- Test: `tests/unit/features/tasks/storage/taskNoteStore.test.ts` (add to the existing suite if present; else create)
+- Test: `tests/unit/features/tasks/storage/TaskNoteStore.test.ts` (add to the existing suite if present; else create)
 
 Adds `chain` to `WriteFieldsOptions`, and two methods: `writeChainLink` (stamps `chained_to`) and `writeChainContext` (prepends the chain seed into `## Context`).
 
 - [ ] **Step 1: Write the failing test**
 
 ```ts
-// tests/unit/features/tasks/storage/taskNoteStore.test.ts  (add these describes)
+// tests/unit/features/tasks/storage/TaskNoteStore.test.ts  (add these describes)
 import { TaskNoteStore } from '../../../../../src/features/tasks/storage/TaskNoteStore';
 
 const NOTE = `---
@@ -324,17 +331,19 @@ describe('TaskNoteStore chain writes', () => {
 
 - [ ] **Step 2: Run the test to verify it fails**
 
-Run: `npm run test -- tests/unit/features/tasks/storage/taskNoteStore.test.ts -t "chain writes"`
+Run: `npm run test -- tests/unit/features/tasks/storage/TaskNoteStore.test.ts -t "chain writes"`
 Expected: FAIL — `writeChainLink`/`writeChainContext` undefined; `chain` not accepted by `writeFields`.
 
 - [ ] **Step 3: Implement**
 
 In `src/features/tasks/storage/TaskNoteStore.ts`:
 
-Add the import at the top:
+Add the import at the top (only the type is needed — `writeFields` sets the `chain_*`
+keys directly on the frontmatter object, which is serialized via `stringifyYaml`; the
+raw-YAML `chainConfigFrontmatterLines` builder is used only by `taskCommands`):
 
 ```ts
-import { chainConfigFrontmatterLines, type WorkOrderChainConfig } from '../model/workOrderChain';
+import type { WorkOrderChainConfig } from '../model/workOrderChain';
 ```
 
 Extend `WriteFieldsOptions` (after the `loop?` field):
@@ -412,13 +421,13 @@ Add these two public methods (e.g. after `writeFields`):
 
 - [ ] **Step 4: Run the test to verify it passes**
 
-Run: `npm run test -- tests/unit/features/tasks/storage/taskNoteStore.test.ts -t "chain writes"`
+Run: `npm run test -- tests/unit/features/tasks/storage/TaskNoteStore.test.ts -t "chain writes"`
 Expected: PASS.
 
 - [ ] **Step 5: Commit**
 
 ```bash
-git add src/features/tasks/storage/TaskNoteStore.ts tests/unit/features/tasks/storage/taskNoteStore.test.ts
+git add src/features/tasks/storage/TaskNoteStore.ts tests/unit/features/tasks/storage/TaskNoteStore.test.ts
 git commit -m "feat(tasks): TaskNoteStore chain field + writeChainLink + writeChainContext"
 ```
 
