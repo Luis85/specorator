@@ -214,21 +214,28 @@ export class TaskNoteStore {
       else delete frontmatter.loop;
     }
     if (fields.chain !== undefined) {
-      delete frontmatter.chain_template;
-      delete frontmatter.chain_title;
-      delete frontmatter.chain_objective;
-      delete frontmatter.chain_trigger;
-      if (fields.chain) {
-        const config = fields.chain;
-        if (config.template) frontmatter.chain_template = config.template;
-        if (config.title) frontmatter.chain_title = config.title;
-        if (config.objective) frontmatter.chain_objective = config.objective;
-        frontmatter.chain_trigger = config.trigger;
-      }
+      this.applyChainFields(frontmatter, fields.chain);
     }
     frontmatter.updated = timestamp;
 
     return this.withFrontmatter(frontmatter, body);
+  }
+
+  /**
+   * Write or clear the `chain_*` frontmatter keys. Extracted from `writeFields` so that
+   * method stays under the fallow complexity ratchet. An explicit `null` clears the chain
+   * (all four keys); a config re-adds only the set keys plus the always-explicit trigger.
+   */
+  private applyChainFields(frontmatter: Record<string, unknown>, chain: WorkOrderChainConfig | null): void {
+    delete frontmatter.chain_template;
+    delete frontmatter.chain_title;
+    delete frontmatter.chain_objective;
+    delete frontmatter.chain_trigger;
+    if (!chain) return;
+    if (chain.template) frontmatter.chain_template = chain.template;
+    if (chain.title) frontmatter.chain_title = chain.title;
+    if (chain.objective) frontmatter.chain_objective = chain.objective;
+    frontmatter.chain_trigger = chain.trigger;
   }
 
   /**
@@ -261,7 +268,12 @@ export class TaskNoteStore {
     const lines = [`Chained from [[${wikilink}]] — see its Result / Handoff.`];
     const nextAction = args.nextAction.trim();
     if (nextAction.length > 0) {
-      lines.push('', `**Next action:** ${nextAction}`);
+      // Blockquote every line so a Markdown heading the handoff parser preserved inside
+      // nextAction (`## ...`) can't become a real `## ` section boundary inside Context —
+      // which, on the next parse, extractSection would read as the next section start,
+      // truncating the rest of the seed.
+      const quoted = nextAction.split('\n').map((line) => `> ${line}`).join('\n');
+      lines.push('', '**Next action:**', quoted);
     }
     const existing = parsed.task.sections.context.trim();
     const keep = existing && existing !== CONTEXT_PLACEHOLDER ? `\n\n${existing}` : '';

@@ -716,18 +716,20 @@ describe('TaskNoteStore chain writes', () => {
 
   it('writeFields sets chain_* keys and clears them on null', () => {
     const withChain = store.writeFields(CHAIN_NOTE, {
-      chain: { template: 'Impl', trigger: 'review', title: 'Next' },
+      chain: { template: 'Impl', trigger: 'review', title: 'Next', objective: 'obj' },
     });
     const parsed = store.parse('p', withChain).task.frontmatter;
     expect(parsed.chain_template).toBe('Impl');
     expect(parsed.chain_trigger).toBe('review');
     expect(parsed.chain_title).toBe('Next');
+    expect(parsed.chain_objective).toBe('obj');
 
     const cleared = store.writeFields(withChain, { chain: null });
     const clearedFm = store.parse('p', cleared).task.frontmatter;
     expect(clearedFm.chain_template).toBeUndefined();
     expect(clearedFm.chain_trigger).toBeUndefined();
     expect(clearedFm.chain_title).toBeUndefined();
+    expect(clearedFm.chain_objective).toBeUndefined();
   });
 
   it('writeChainLink stamps chained_to', () => {
@@ -742,8 +744,24 @@ describe('TaskNoteStore chain writes', () => {
     });
     const context = store.parse('p', out).task.sections.context;
     expect(context).toContain('Chained from [[Agent Board/tasks/task-1]]');
-    expect(context).toContain('**Next action:** Ship it');
+    expect(context).toContain('**Next action:**');
+    expect(context).toContain('> Ship it');
     expect(context).not.toContain('_Add the links');
+  });
+
+  it('writeChainContext blockquotes next_action so an embedded heading cannot split Context', () => {
+    const out = store.writeChainContext(CHAIN_NOTE, {
+      predecessorPath: 'Agent Board/tasks/task-1.md',
+      nextAction: 'Do X\n## Looks like a heading\nDo Y',
+    });
+    const parsed = store.parse('p', out).task;
+    // The whole seed stays inside Context — the embedded '## ' did not start a new section.
+    expect(parsed.sections.context).toContain('Do X');
+    expect(parsed.sections.context).toContain('## Looks like a heading');
+    expect(parsed.sections.context).toContain('Do Y');
+    // Generated regions remain intact.
+    expect(out).toContain('<!-- specorator:run-ledger-start -->');
+    expect(out).toContain('<!-- specorator:handoff-start -->');
   });
 
   it('writeChainContext omits the next-action line when empty and preserves existing context', () => {
