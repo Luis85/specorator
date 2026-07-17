@@ -57,7 +57,9 @@ export function buildSidePanelCallbacks(
         .catch(() => new Notice(t('chat.history.renameFailed')));
     },
     onDeleteConversation: (id) => { void deleteHistoryConversation(host, id); },
-    onRegenerateConversationTitle: (id) => { void regenerateHistoryTitle(host, id); },
+    onRegenerateConversationTitle: (id) => {
+      void regenerateHistoryTitle(host, id).catch(() => new Notice(t('chat.history.regenerateFailed')));
+    },
     onConversationContextMenu: (id, event, anchorEl, startRename) =>
       showHistoryContextMenu(host, id, event, anchorEl, startRename),
     onOpenWorkOrderItem: (id) => { void host.plugin.workOrderActivity?.openItem(id); },

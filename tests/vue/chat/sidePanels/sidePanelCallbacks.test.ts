@@ -1,4 +1,4 @@
-import { Menu } from 'obsidian';
+import { Menu, Notice } from 'obsidian';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { buildSidePanelCallbacks, type SidePanelCallbackHost } from '@/features/chat/ui/vue/sidePanelCallbacks';
@@ -163,6 +163,15 @@ describe('buildSidePanelCallbacks — regenerate title', () => {
       messages: overrides.messages ?? [{ role: 'user', content: 'hi' }],
     };
   }
+
+  it('swallows a rejection and surfaces a Notice when regeneration fails', async () => {
+    (Notice as unknown as { mockClear: () => void }).mockClear();
+    const getConversationById = vi.fn().mockRejectedValue(new Error('boom'));
+    const host = makeHost({ plugin: { settings: { enableAutoTitleGeneration: true }, getConversationById } });
+    buildSidePanelCallbacks(host).onRegenerateConversationTitle('c1');
+    await Promise.resolve().then(() => Promise.resolve()).then(() => Promise.resolve());
+    expect(Notice).toHaveBeenCalledTimes(1);
+  });
 
   it('no-ops when auto title generation is disabled', async () => {
     const getConversationById = vi.fn();
