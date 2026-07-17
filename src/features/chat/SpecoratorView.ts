@@ -11,7 +11,6 @@ import { ProviderSettingsCoordinator } from '../../core/providers/ProviderSettin
 import { DEFAULT_CHAT_PROVIDER_ID, type ProviderId } from '../../core/providers/types';
 import { asSettingsBag, VIEW_TYPE_SPECORATOR } from '../../core/types';
 import type { TabBarPosition } from '../../core/types/settings';
-import { EMPTY_WORK_ORDER_ACTIVITY_SUMMARY } from '../../core/types/workOrderActivity';
 import { t } from '../../i18n/i18n';
 import type SpecoratorPlugin from '../../main';
 import { createProviderIconSvg } from '../../shared/icons';
@@ -38,6 +37,7 @@ import { refreshBoundAgentDisplayModels } from './tabs/tabShared';
 import type { PersistedTabManagerState, TabData, TabId, TaskRunTabHandle } from './tabs/types';
 import { GitActionButton } from './ui/GitActionButton';
 import type { ChatShellCallbacks, ChatShellSnapshot } from './ui/vue/chatShellCallbacks';
+import { buildConversationsSlice, buildGitSlice, buildWorkOrderSlice } from './ui/vue/chatShellHeaderProjection';
 import { CALLBACKS_KEY, CONTENT_HOST_KEY, PLUGIN_KEY } from './ui/vue/chatShellKeys';
 import ChatShellRoot from './ui/vue/ChatShellRoot.vue';
 import { createChatShellPinia } from './ui/vue/globalPinia';
@@ -499,10 +499,9 @@ export class SpecoratorView extends ItemView {
       tabs: this.tabManager?.getTabBarItems() ?? [],
       activeTabId: activeTab?.id ?? null,
       header: this.projectChatShellHeader(),
-      // TODO(SP-Task 3): project real values
-      conversations: { items: [], currentConversationId: null, perItem: {} },
-      workOrder: EMPTY_WORK_ORDER_ACTIVITY_SUMMARY,
-      git: { isRepo: false, dirtyCount: 0, visible: false },
+      conversations: buildConversationsSlice(this.plugin.getConversationList(), activeTab?.conversationId ?? null, (id) => this.getHistoryConversationOpenState(id)),
+      workOrder: buildWorkOrderSlice(this.plugin.workOrderActivity?.getSummary()),
+      git: buildGitSlice(this.plugin.gitStatusWatcher?.getLastStatus(), this.isActiveTabGitActionEnabled()),
     };
   }
 
@@ -510,8 +509,7 @@ export class SpecoratorView extends ItemView {
   private projectChatShellHeader(): ChatShellHeader {
     const tm = this.tabManager;
     const activeTab = tm?.getActiveTab() ?? null;
-    const tabBarPosition: TabBarPosition =
-      this.plugin.settings.tabBarPosition === 'header' ? 'header' : 'input';
+    const tabBarPosition: TabBarPosition = this.plugin.settings.tabBarPosition === 'header' ? 'header' : 'input';
     const activeProviderId = activeTab ? getTabProviderId(activeTab, this.plugin) : DEFAULT_CHAT_PROVIDER_ID;
 
     // tabBarVisible mirrors updateTabBarVisibility: show with 2+ chat tabs, or
@@ -539,8 +537,7 @@ export class SpecoratorView extends ItemView {
     // button on a live runtime so the empty state hides all tab-less controls.
     const hasTabs = (tm?.getTabCount() ?? 0) > 0;
     const hasGitAction = this.gitActionButton != null && tm != null;
-    const metaRowVisible =
-      (tabBarPosition === 'header' && hasTabs) || boundAgent != null || hasGitAction;
+    const metaRowVisible = (tabBarPosition === 'header' && hasTabs) || boundAgent != null || hasGitAction;
 
     return {
       title: activeTab ? getTabTitle(activeTab, this.plugin) : 'Specorator',
@@ -971,6 +968,10 @@ export class SpecoratorView extends ItemView {
       void refreshBoundAgentDisplayModels(this.plugin, this.tabManager?.getAllTabs() ?? [])
         .then(() => this.refreshModelSelector());
     }));
+
+    // Re-project the git/workOrder slices when their providers change (subscribe returns an unsubscribe fn).
+    if (this.plugin.gitStatusWatcher) this.register(this.plugin.gitStatusWatcher.subscribe(() => this.emitChatShellChange()));
+    if (this.plugin.workOrderActivity) this.register(this.plugin.workOrderActivity.subscribe(() => this.emitChatShellChange()));
 
     // History Service Contract (Task 11): surface a Notice + inline banner when
     // `ConversationStore` reports a hydration / delete failure. Without this,
