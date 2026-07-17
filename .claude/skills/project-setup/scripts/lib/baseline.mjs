@@ -36,6 +36,11 @@ export function initBaselines(cwd, options, exec = defaultExec) {
   if (g.locGuard && !existsSync(join(cwd, 'scripts', 'loc-baseline.json'))) {
     runRatchet('scripts/check-loc.mjs', '--update');
   }
+  // Obsidian-only: the CSS !important ratchet baselines like LOC — greenfield
+  // snapshots an empty allowlist; brownfield grandfathers existing counts.
+  if (options.obsidian && g.cssGuard && !existsSync(join(cwd, 'scripts', 'css-important-baseline.json'))) {
+    runRatchet('scripts/check-css-important.mjs', '--update');
+  }
   if (g.coverageFloors && !isCoverageBaselined(cwd)) {
     // Delete any pre-existing coverage dir so the ratchet snapshots static-estimated
     // CRAP (matching CI, which has no coverage artifact).

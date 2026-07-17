@@ -4,6 +4,7 @@ import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 import { MARKER } from './marker.mjs';
+import { loadTemplate } from './templates.mjs';
 
 // index/main/app under src/ then root, each in ts/tsx/js/jsx/mjs. Covers JS-only
 // apps (e.g. src/app.js, src/app.jsx) — not just the TypeScript variants — so a
@@ -52,6 +53,26 @@ const FALLOW_CONFIGS = ['.fallowrc.jsonc', 'fallow.toml', '.fallow.toml', '.fall
 const JEST_CONFIGS = ['jest.config.js', 'jest.config.ts', 'jest.config.mjs', 'jest.config.cjs', 'jest.config.cts', 'jest.config.mts', 'jest.config.json'];
 const VITEST_CONFIGS = ['vitest.config.ts', 'vitest.config.js', 'vitest.config.mjs', 'vitest.config.cjs', 'vitest.config.cts', 'vitest.config.mts'];
 const VITE_CONFIGS = ['vite.config.ts', 'vite.config.js', 'vite.config.mjs', 'vite.config.cjs', 'vite.config.cts', 'vite.config.mts'];
+// Any prettier config form: writing .prettierrc.json beside one would make two
+// configs compete (prettier picks the closest/first — ambiguous either way).
+// .prettierrc.json itself is handled separately: strict-JSON configs cannot
+// carry the engine marker, so "ours" is recognized by exact template content.
+const PRETTIER_CONFIGS = [
+  '.prettierrc', '.prettierrc.yml', '.prettierrc.yaml', '.prettierrc.json5',
+  '.prettierrc.js', '.prettierrc.cjs', '.prettierrc.mjs', '.prettierrc.toml',
+  'prettier.config.js', 'prettier.config.cjs', 'prettier.config.mjs',
+];
+
+function foreignPrettierConfig(cwd, pkg) {
+  if (pkg.prettier != null || existsAny(cwd, PRETTIER_CONFIGS)) return true;
+  const p = join(cwd, '.prettierrc.json');
+  if (!existsSync(p)) return false;
+  try {
+    return readFileSync(p, 'utf8') !== loadTemplate('obsidian/prettierrc.json.tmpl');
+  } catch {
+    return true;
+  }
+}
 
 function existsAny(cwd, names) {
   return names.some((n) => existsSync(join(cwd, n)));
@@ -168,12 +189,21 @@ export function detect(cwd) {
     // The same-name config we write (skip-if-exists) — flagged only when it's the
     // user's own (no marker), so a re-apply of our generated one won't false-fire.
     eslintConfigMjs: hasUnmarkedConfig(cwd, ['eslint.config.mjs']),
-    ciWorkflow: existsSync(join(cwd, '.github', 'workflows', 'ci.yml')),
+    ciWorkflow: hasUnmarkedConfig(cwd, ['.github/workflows/ci.yml']),
     // Jest also reads a `jest` key in package.json — writing jest.config.mjs beside
     // it makes Jest 30 error "Multiple configurations found".
     jestConfig: hasUnmarkedConfig(cwd, JEST_CONFIGS) || pkg.jest != null,
     vitestConfig: hasUnmarkedConfig(cwd, VITEST_CONFIGS),
     viteConfig: existsAny(cwd, VITE_CONFIGS),
+    // Obsidian-plugin signals: an existing manifest means brownfield adoption
+    // (scaffold files stay skip-if-exists); existing USER build/format configs
+    // make their planners stand down with a notice instead of writing a
+    // competitor. Engine-written ones (marker / exact template content) don't
+    // re-fire the notice on a converged re-apply.
+    obsidianManifest: readJsonSafe(join(cwd, 'manifest.json')),
+    esbuildConfig: hasUnmarkedConfig(cwd, ['esbuild.config.mjs']),
+    prettierConfig: foreignPrettierConfig(cwd, pkg),
+    releaseWorkflow: hasUnmarkedConfig(cwd, ['.github/workflows/release.yml']),
     docs: {
       context: existsSync(join(cwd, 'CONTEXT.md')),
       dir: existsSync(join(cwd, 'docs')),

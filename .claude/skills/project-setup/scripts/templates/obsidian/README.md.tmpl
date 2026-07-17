@@ -1,0 +1,34 @@
+# {{name}}
+
+{{description}}
+
+## Development
+
+```bash
+npm install
+cp .env.example .env.local   # point OBSIDIAN_VAULT at a test vault
+npm run dev                  # watch build + deploy into the vault (hot reload)
+```
+
+Install the community **Hot Reload** plugin in the test vault once — dev builds
+write a `.hotreload` marker so every rebuild reloads the plugin in place.
+
+## Quality gates
+
+```bash
+npm run lint && npm run check:loc && npm run check:css && npm run check:quality
+npm run typecheck && npm run test
+npm run build && npm run check:artifacts
+```
+
+See `docs/quality-integration-guide.md` for how the ratchets work.
+
+## Release
+
+```bash
+npm version patch   # bumps package.json + manifest.json + versions.json
+git push --follow-tags
+```
+
+The tag push builds and attaches `main.js`, `manifest.json`, and `styles.css`
+to a GitHub release (when the release workflow is enabled).

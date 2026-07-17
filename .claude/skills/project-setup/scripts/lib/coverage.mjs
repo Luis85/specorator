@@ -49,7 +49,10 @@ export function applyCoverageFloor(cwd, framework) {
   if (!anchor.test(existing)) return { updated: false, reason: 'threshold anchor not found' };
 
   const thresholds = floorThresholds(JSON.parse(readFileSync(summaryPath, 'utf8')));
-  const json = JSON.stringify(thresholds);
+  // Prettier-shaped object literal (valid JS either way) so a formatted config
+  // stays formatted after the floor is written.
+  const t = thresholds;
+  const json = `{ statements: ${t.statements}, branches: ${t.branches}, functions: ${t.functions}, lines: ${t.lines} }`;
   // Replace ONLY the threshold object — re-rendering the whole template would
   // silently wipe any setup files / aliases / reporters the user later added to
   // the (still-marked) config. The coverage globs are likewise left untouched.

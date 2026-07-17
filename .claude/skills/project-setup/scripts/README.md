@@ -1,8 +1,11 @@
 <!-- .claude/skills/project-setup/scripts/README.md -->
 # project-setup engine
 
-Deterministic setup engine. Node ≥20 (the harness installs ESLint 9 /
-typescript-eslint 8, which require it), zero runtime deps.
+Deterministic setup engine. Node ≥20 for the generic harness; Node ≥22 for
+Obsidian mode (fallow 3 requires it). Zero runtime deps.
+
+Dependency versions are exact pins in `pins.json` (loaded by `lib/harness.mjs`
+as `PINNED`); `refresh-pins` is the only sanctioned way to bump them.
 
 ## Commands
 
@@ -11,6 +14,7 @@ typescript-eslint 8, which require it), zero runtime deps.
     node setup.mjs apply  --config a.json  # apply idempotently (--dry-run to preview)
     node setup.mjs report                  # write the advisory quality report
     node setup.mjs verify --config a.json  # run the enabled gates once
+    node setup.mjs refresh-pins            # update pins.json to latest releases (network)
 
 ## Tests
 

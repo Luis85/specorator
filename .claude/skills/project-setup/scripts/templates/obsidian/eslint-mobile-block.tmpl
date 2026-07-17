@@ -1,0 +1,18 @@
+  {
+    // Mobile-ready plugin: Node and Electron APIs do not exist on iOS/Android.
+    files: [{{vueSrcFiles}}],
+    rules: {
+      'no-restricted-imports': [
+        'error',
+        {
+          patterns: [
+            {
+              group: ['node:*', 'fs', 'path', 'os', 'child_process', 'electron'],
+              message:
+                'Mobile-ready plugin: Node/Electron modules are unavailable on mobile. Use Vault/adapter APIs, or make the plugin desktop-only (manifest isDesktopOnly).',
+            },
+          ],
+        },
+      ],
+    },
+  },

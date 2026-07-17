@@ -1,0 +1,42 @@
+import type { App } from 'obsidian';
+import { PluginSettingTab, Setting } from 'obsidian';
+
+import type {{pluginClass}} from './main';
+
+export interface {{settingsType}} {
+  greeting: string;
+}
+
+export const DEFAULT_SETTINGS: {{settingsType}} = {
+  greeting: 'Hello from {{id}}',
+};
+
+type SettingsPatch = Partial<{{settingsType}}> | null | undefined;
+
+// Saved data can predate new settings keys — always merge over defaults.
+export function withDefaults(partial: SettingsPatch): {{settingsType}} {
+  return { ...DEFAULT_SETTINGS, ...(partial ?? {}) };
+}
+
+export class {{settingsTab}} extends PluginSettingTab {
+  constructor(
+    app: App,
+    private readonly plugin: {{pluginClass}},
+  ) {
+    super(app, plugin);
+  }
+
+  display(): void {
+    this.containerEl.empty();
+
+    new Setting(this.containerEl)
+      .setName('Greeting')
+      .setDesc('Shown in the sample view.')
+      .addText((text) =>
+        text.setValue(this.plugin.settings.greeting).onChange(async (value) => {
+          this.plugin.settings.greeting = value;
+          await this.plugin.saveSettings();
+        }),
+      );
+  }
+}

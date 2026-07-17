@@ -1,0 +1,58 @@
+import type { WorkspaceLeaf } from 'obsidian';
+import { ItemView } from 'obsidian';
+import type { App as VueApp } from 'vue';
+import { createApp, markRaw } from 'vue';
+
+import type {{pluginClass}} from '../main';
+import App from './vue/App.vue';
+import { PLUGIN_KEY } from './vue/keys';
+import { createIslandPinia } from './vue/pinia';
+import { createIslandRouter } from './vue/router';
+
+export const VIEW_TYPE = '{{id}}-main';
+
+export class VueView extends ItemView {
+  private vueApp: VueApp | null = null;
+
+  constructor(
+    leaf: WorkspaceLeaf,
+    private readonly plugin: {{pluginClass}},
+  ) {
+    super(leaf);
+  }
+
+  getViewType(): string {
+    return VIEW_TYPE;
+  }
+
+  getDisplayText(): string {
+    return {{nameLiteral}};
+  }
+
+  getIcon(): string {
+    return 'layout-dashboard';
+  }
+
+  async onOpen(): Promise<void> {
+    // Popout/move flows can run onOpen twice on one view instance — drop any
+    // previous island before mounting a fresh one.
+    this.vueApp?.unmount();
+    this.contentEl.empty();
+    this.contentEl.addClass('{{id}}-view');
+    const app = createApp(App);
+    app.use(createIslandPinia());
+    app.use(createIslandRouter());
+    // markRaw: Obsidian objects are large and cyclic — never deep-proxy them.
+    app.provide(PLUGIN_KEY, markRaw(this.plugin));
+    app.mount(this.contentEl);
+    this.vueApp = app;
+  }
+
+  async onClose(): Promise<void> {
+    // unmount() runs onUnmounted hooks; empty() drops detached DOM + listeners.
+    this.vueApp?.unmount();
+    this.vueApp = null;
+    this.contentEl.removeClass('{{id}}-view');
+    this.contentEl.empty();
+  }
+}

@@ -1,0 +1,21 @@
+<script setup lang="ts">
+import { useCounterStore } from '../stores/counter';
+
+const counter = useCounterStore();
+</script>
+
+<template>
+  <section class="page">
+    <p data-testid="count">Count: {{ counter.count }} (doubled: {{ counter.double }})</p>
+    <button type="button" @click="counter.increment()">Increment</button>
+  </section>
+</template>
+
+<style scoped>
+.page {
+  display: flex;
+  flex-direction: column;
+  gap: var(--size-4-2);
+  align-items: flex-start;
+}
+</style>

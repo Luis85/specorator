@@ -1,5 +1,5 @@
 ---
-title: "ADR-NNNN: <decision>"
+title: 'ADR-NNNN: <decision>'
 date: <YYYY-MM-DD>
 status: proposed
 ---

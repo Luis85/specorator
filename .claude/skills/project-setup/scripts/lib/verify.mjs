@@ -28,7 +28,10 @@ export function runGates(cwd, options, exec = defaultExec) {
       failed.push(script);
     }
   };
-  for (const [flag, script] of GATES) {
+  const gates = [...GATES];
+  // The CSS !important ratchet only exists in obsidian mode.
+  if (options.obsidian && g.cssGuard) gates.splice(2, 0, ['cssGuard', 'check:css']);
+  for (const [flag, script] of gates) {
     if (!g[flag]) continue;
     // The fallow ratchet is defined for ./coverage ABSENT (matching CI's fresh
     // checkout); clear a stale local coverage dir first so verify is idempotent
@@ -37,5 +40,12 @@ export function runGates(cwd, options, exec = defaultExec) {
     run(script);
   }
   run(g.coverageFloors ? 'test:coverage' : 'test'); // always run a test gate, like CI
+  if (options.obsidian) {
+    // Mirror the generated CI exactly: type gate, then prove the release
+    // bundle (build + artifact smoke) — local verify must not pass while CI fails.
+    run('typecheck');
+    run('build');
+    run('check:artifacts');
+  }
   return { ok: failed.length === 0, failed };
 }

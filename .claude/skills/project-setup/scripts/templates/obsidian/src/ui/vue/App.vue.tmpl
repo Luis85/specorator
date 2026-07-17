@@ -1,0 +1,29 @@
+<template>
+  <div class="app-shell">
+    <nav class="app-nav">
+      <RouterLink to="/">Home</RouterLink>
+      <RouterLink to="/about">About</RouterLink>
+    </nav>
+    <RouterView />
+  </div>
+</template>
+
+<style scoped>
+.app-shell {
+  display: flex;
+  flex-direction: column;
+  gap: var(--size-4-2);
+}
+
+.app-nav {
+  display: flex;
+  gap: var(--size-4-2);
+  border-bottom: 1px solid var(--background-modifier-border);
+  padding-bottom: var(--size-4-1);
+}
+
+.app-nav a.router-link-active {
+  color: var(--text-accent);
+  font-weight: var(--font-semibold);
+}
+</style>

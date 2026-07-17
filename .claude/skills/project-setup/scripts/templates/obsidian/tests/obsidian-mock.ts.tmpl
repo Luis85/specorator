@@ -1,0 +1,111 @@
+// Minimal test double for the `obsidian` module, served through the
+// resolve.alias in vitest.config.mjs. Only what the scaffold exercises —
+// extend as your plugin grows. Kept dependency-free on purpose: real Obsidian
+// only exists inside the app.
+
+export class Notice {
+  constructor(public message?: string | DocumentFragment) {}
+}
+
+export class WorkspaceLeaf {}
+
+export class Plugin {
+  app: unknown;
+  manifest: { id: string; version: string };
+
+  constructor(app?: unknown, manifest?: { id: string; version: string }) {
+    this.app = app;
+    this.manifest = manifest ?? { id: 'test-plugin', version: '0.0.0' };
+  }
+
+  loadData(): Promise<unknown> {
+    return Promise.resolve(null);
+  }
+
+  saveData(_data: unknown): Promise<void> {
+    return Promise.resolve();
+  }
+
+  addCommand<T>(command: T): T {
+    return command;
+  }
+
+  addRibbonIcon(
+    _icon: string,
+    _title: string,
+    _callback: (evt: MouseEvent) => unknown,
+  ): HTMLElement {
+    return document.createElement('div');
+  }
+
+  registerView(_type: string, _factory: (leaf: WorkspaceLeaf) => unknown): void {}
+
+  addSettingTab(_tab: unknown): void {}
+
+  registerEvent(_eventRef: unknown): void {}
+}
+
+export class ItemView {
+  contentEl: HTMLElement = document.createElement('div');
+  containerEl: HTMLElement = document.createElement('div');
+
+  constructor(public leaf: WorkspaceLeaf) {}
+}
+
+export class PluginSettingTab {
+  containerEl: HTMLElement = document.createElement('div');
+
+  constructor(
+    public app: unknown,
+    public plugin: unknown,
+  ) {}
+
+  display(): void {}
+
+  hide(): void {}
+}
+
+interface TextComponentLike {
+  setValue(value: string): TextComponentLike;
+  onChange(callback: (value: string) => unknown): TextComponentLike;
+}
+
+export class Setting {
+  settingEl: HTMLElement;
+
+  constructor(containerEl: HTMLElement) {
+    this.settingEl = containerEl.createDiv();
+  }
+
+  setName(_name: string): this {
+    return this;
+  }
+
+  setDesc(_desc: string): this {
+    return this;
+  }
+
+  setHeading(): this {
+    return this;
+  }
+
+  addText(callback: (text: TextComponentLike) => unknown): this {
+    const component: TextComponentLike = {
+      setValue: () => component,
+      onChange: () => component,
+    };
+    callback(component);
+    return this;
+  }
+}
+
+export const Platform = {
+  isMobile: false,
+  isDesktop: true,
+  isDesktopApp: true,
+  isMobileApp: false,
+};
+
+export function normalizePath(path: string): string {
+  return path.replace(/\\/g, '/');
+}

@@ -1,40 +1,38 @@
 // scripts/lib/harness.mjs
+import { readFileSync } from 'node:fs';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
+
 import { runPrefix, safePackageManager } from './packageManager.mjs';
 import { loadTemplate, renderTemplate } from './templates.mjs';
 import { standsDownTestConfig, resolveFramework } from './testConfig.mjs';
 
 // EXACT pins (no caret/tilde). A first install with no lockfile must be
 // reproducible — same answers + same state => same installed versions, per the
-// spec's determinism guarantee. Refresh deliberately to current exact releases
-// (verify each with `npm view <pkg> version` when bumping).
-export const PINNED = {
-  eslint: '9.36.0',
-  'typescript-eslint': '8.45.0',
-  '@eslint/js': '9.36.0',
-  'eslint-plugin-simple-import-sort': '12.1.1',
-  fallow: '2.91.0',
-  jest: '30.3.0',
-  'ts-jest': '29.4.9',
-  '@types/jest': '30.0.0',
-  'eslint-plugin-jest': '28.14.0',
-  vitest: '2.1.9',
-  '@vitest/coverage-istanbul': '2.1.9',
-  'eslint-plugin-vitest': '0.5.4',
-  typescript: '5.9.3',
-};
+// spec's determinism guarantee. Stored in pins.json so `node setup.mjs
+// refresh-pins` can update them deliberately (it resolves each pin's latest
+// release, keeping typescript within typescript-eslint's supported peer range).
+export const PINNED = JSON.parse(
+  readFileSync(join(dirname(fileURLToPath(import.meta.url)), '..', 'pins.json'), 'utf8'),
+);
 
-function dep(...names) {
-  return Object.fromEntries(names.map((n) => [n, PINNED[n]]));
+export function dep(...names) {
+  const out = {};
+  for (const n of names) {
+    if (!PINNED[n]) throw new Error(`Dependency "${n}" is not pinned in pins.json.`);
+    out[n] = PINNED[n];
+  }
+  return out;
 }
 
 // A non-mutating action the engine surfaces to the user (collisions, skipped CI).
-const notice = (message, level = 'warn') => ({ type: 'notice', level, message });
+export const notice = (message, level = 'warn') => ({ type: 'notice', level, message });
 
 // mergeJson keeps an existing scalar on conflict, so a brownfield script that
 // shadows a gate's command means the gate silently never runs through
 // `<pm> <name>` (CI/verify/docs). Report it (with the real package manager)
 // rather than no-op.
-function scriptCollision(options, state, name, desired) {
+export function scriptCollision(options, state, name, desired) {
   const existing = state?.scripts?.[name];
   if (!existing || existing === desired) return [];
   const run = runPrefix(options?.packageManager ?? state?.packageManager ?? 'npm');
@@ -72,7 +70,8 @@ function eslintTestBlock(fw) {
     // alone leave describe/it/expect undefined, so the base `no-undef` fails lint.
     const vitestGlobals = "{ suite: 'readonly', test: 'readonly', describe: 'readonly', it: 'readonly', expect: 'readonly', beforeAll: 'readonly', afterAll: 'readonly', beforeEach: 'readonly', afterEach: 'readonly', vi: 'readonly', expectTypeOf: 'readonly', assertType: 'readonly' }";
     return {
-      testImport: "import vitestPlugin from 'eslint-plugin-vitest';",
+      // @vitest/eslint-plugin is the maintained successor of eslint-plugin-vitest.
+      testImport: "import vitestPlugin from '@vitest/eslint-plugin';",
       testConfigBlock: `  { files: [${TEST_GLOB}], languageOptions: { globals: ${vitestGlobals} }, plugins: { vitest: vitestPlugin }, rules: staged(vitestPlugin.configs.recommended.rules) },`,
     };
   }
@@ -89,13 +88,16 @@ export function planFallow(options, state) {
   // owns the analysis graph. Writing our .fallowrc.json would take PRECEDENCE and
   // shadow theirs, so the ratchet would baseline/gate the wrong graph. Stand down
   // and surface a notice — check:quality still wraps `fallow`, now reading THEIR config.
+  // The obsidian variant widens the ignore set: generated build/ratchet scripts
+  // live under scripts/, and main.js/styles.css are build artifacts.
+  const fallowTemplate = options.obsidian ? 'obsidian/fallowrc.json.tmpl' : 'fallowrc.json.tmpl';
   const fallowrc = state?.fallowConfig
     ? [notice('Existing fallow config (.fallowrc.jsonc / fallow.toml / ...) kept — the generated .fallowrc.json was NOT written (it would take precedence and shadow yours). check:quality ratchets your config; add scripts/check-*.mjs, scripts/quality-report.mjs, and test files to its ignore patterns so the ratchet doesn\'t bank them as dead code.')]
     : [{
         type: 'writeFile',
         path: '.fallowrc.json',
         mode: 'skip-if-exists',
-        content: renderTemplate(loadTemplate('fallowrc.json.tmpl'), { entry }),
+        content: renderTemplate(loadTemplate(fallowTemplate), { entry }),
       }];
   return [
     ...scriptCollision(options, state, 'check:quality', 'node scripts/check-quality.mjs'),
@@ -223,7 +225,7 @@ export function planEslint(options, state) {
   // The plugin DEP lives here (where its import is rendered), not in planTest —
   // planTest's hand-written-config path returns without deps, which would leave
   // the rendered `import eslint-plugin-{jest,vitest}` unresolved and break lint.
-  const testPlugin = fw === 'vitest' ? ['eslint-plugin-vitest'] : ['eslint-plugin-jest'];
+  const testPlugin = fw === 'vitest' ? ['@vitest/eslint-plugin'] : ['eslint-plugin-jest'];
   const deps = ts
     ? dep('eslint', 'typescript-eslint', '@eslint/js', 'eslint-plugin-simple-import-sort', ...testPlugin)
     : dep('eslint', '@eslint/js', 'eslint-plugin-simple-import-sort', ...testPlugin);
@@ -243,7 +245,8 @@ export function planEslint(options, state) {
 
 // Per-package-manager CI rendering. npm/pnpm/yarn are fully supported; an
 // unknown manager (incl. bun) falls back to npm-style so the workflow is valid.
-const CI_PM = {
+// Exported for the obsidian release-workflow planner.
+export const CI_PM = {
   npm: { setup: '', cache: 'npm', install: 'npm ci', run: 'npm run' },
   pnpm: { setup: '      - uses: pnpm/action-setup@v4\n        with: { version: 9 }\n', cache: 'pnpm', install: 'pnpm install --frozen-lockfile', run: 'pnpm' },
   // --frozen-lockfile (not Berry's --immutable): setup-node defaults to Yarn
@@ -278,12 +281,23 @@ export function planCi(options, state) {
   }
   // Emit a CI step only for a guardrail that is actually installed (its npm
   // script exists). The test step is always present; it uses the coverage
-  // variant when coverage floors are on.
+  // variant when coverage floors are on. Obsidian mode adds its extra gate
+  // surface (typecheck/format/css ratchet) and proves the release bundle:
+  // build + artifact smoke run last, mirroring `verify`.
   const steps = [];
   if (g.eslintSeverityStaging) steps.push(`      - run: ${pm.run} lint`);
   if (g.locGuard) steps.push(`      - run: ${pm.run} check:loc`);
+  if (options.obsidian && g.cssGuard) steps.push(`      - run: ${pm.run} check:css`);
   if (g.fallowRatchet) steps.push(`      - run: ${pm.run} check:quality   # runs with ./coverage absent`);
+  if (options.obsidian) {
+    steps.push(`      - run: ${pm.run} typecheck`);
+    steps.push(`      - run: ${pm.run} format:check`);
+  }
   steps.push(`      - run: ${pm.run} ${g.coverageFloors ? 'test:coverage' : 'test'}`);
+  if (options.obsidian) {
+    steps.push(`      - run: ${pm.run} build`);
+    steps.push(`      - run: ${pm.run} check:artifacts`);
+  }
   const content = renderTemplate(loadTemplate('ci.yml.tmpl'), {
     pmSetup: pm.setup, pmCache: pm.cache, pmInstall: pm.install, steps: steps.join('\n'),
     defaultBranch: state?.defaultBranch ?? 'main',
@@ -348,12 +362,21 @@ export function planDocs(options, state) {
     gates.push(`- \`${run} check:loc\` — per-file LOC ratchet (cap ${options.locCap ?? 500}).`);
     gateScripts.push('check:loc');
   }
+  if (options.obsidian && g.cssGuard) {
+    gates.push(`- \`${run} check:css\` — CSS \`!important\` ratchet (marketplace-validator parity; comments excluded).`);
+    gateScripts.push('check:css');
+  }
   if (g.fallowRatchet) {
     gates.push(`- \`${run} check:quality\` — fallow metric ratchet. **Run with ./coverage absent.**`);
     gateScripts.push('check:quality');
   }
   if (g.coverageFloors) gates.push(`- \`${run} test:coverage\` — coverage floors (rise-only; baselined to current).`);
   gateScripts.push(g.coverageFloors ? 'test:coverage' : 'test'); // always a test gate, like CI/verify
+  if (options.obsidian) {
+    gates.push(`- \`${run} typecheck\` — type gate (${options.obsidian.vue ? 'vue-tsc covers .ts + .vue' : 'tsc'}).`);
+    gates.push(`- \`${run} build\` + \`${run} check:artifacts\` — production bundle + artifact smoke (presence, version sync, size budget).`);
+    gateScripts.push('typecheck', 'build', 'check:artifacts');
+  }
   // Advisory commands (the report script is always installed; fallow's sweep only when its ratchet is on).
   const advisory = [`- \`${run} report\` — actionable quality report (quality-report.md + .json).`];
   if (g.fallowRatchet) advisory.push(`- \`${run} quality\` / \`${run} quality:audit\` — fallow full sweep / changed-files review.`);

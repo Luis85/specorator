@@ -1,0 +1,9 @@
+// Fallback module type for `.vue` imports, used by tools that run plain tsc
+// module resolution (ESLint's type-aware project service). vue-tsc resolves
+// SFCs to their real component types and ignores this wildcard.
+declare module '*.vue' {
+  import type { DefineComponent } from 'vue';
+
+  const component: DefineComponent<Record<string, never>, Record<string, never>, unknown>;
+  export default component;
+}

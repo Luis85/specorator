@@ -1,0 +1,6 @@
+import type { InjectionKey } from 'vue';
+
+import type {{pluginClass}} from '../../main';
+
+// Typed injection keys: components inject the plugin instead of prop-drilling.
+export const PLUGIN_KEY: InjectionKey<{{pluginClass}}> = Symbol('plugin');

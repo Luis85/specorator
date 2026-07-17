@@ -1,7 +1,7 @@
 // .claude/skills/project-setup/scripts/setup.mjs
 import { execFileSync } from 'node:child_process';
-import { readFileSync } from 'node:fs';
-import { join, resolve, sep } from 'node:path';
+import { readFileSync, writeFileSync } from 'node:fs';
+import { dirname, join, resolve, sep } from 'node:path';
 import process from 'node:process';
 import { fileURLToPath } from 'node:url';
 
@@ -22,6 +22,7 @@ Commands:
   apply  --config <f>    Execute the plan idempotently. --dry-run to preview.
   report                 Write the advisory quality report (quality-report.md + .json).
   verify                 Run the enabled gates once; non-zero exit on failure.
+  refresh-pins           Update pins.json to the latest npm releases (network).
 
 Options:
   --config <file>        JSON options (answers).
@@ -124,6 +125,45 @@ export async function cli(argv, io = {}) {
         out('\nNext steps:\n' + infos.map((n) => `  - ${n.message}`).join('\n') + '\n');
       }
       return 0;
+    }
+    case 'refresh-pins': {
+      // Deliberate, network-using maintenance: resolve every pin to its latest
+      // release so a fresh setup installs current dependencies. TypeScript is
+      // capped by typescript-eslint's declared peer range (TS majors routinely
+      // ship before the lint stack supports them). Commit the pins.json diff.
+      const pinsPath = join(dirname(fileURLToPath(import.meta.url)), 'pins.json');
+      const pins = JSON.parse(readFileSync(pinsPath, 'utf8'));
+      const view = (...viewArgs) =>
+        execFileSync('npm', ['view', ...viewArgs], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] }).trim();
+      const failures = [];
+      for (const name of Object.keys(pins)) {
+        if (name === 'typescript') continue; // resolved against typescript-eslint below
+        try {
+          const v = view(`${name}@latest`, 'version');
+          if (/^\d+\.\d+\.\d+$/.test(v)) pins[name] = v;
+          else failures.push(`${name}: unexpected version "${v}"`);
+        } catch {
+          failures.push(`${name}: npm view failed`);
+        }
+      }
+      try {
+        const range = view(`typescript-eslint@${pins['typescript-eslint']}`, 'peerDependencies.typescript');
+        // `npm view typescript@"<range>" version --json` returns the matching
+        // versions as a JSON array (or a bare string for a single match).
+        const matches = JSON.parse(view(`typescript@${range || 'latest'}`, 'version', '--json') || '[]');
+        const version = Array.isArray(matches) ? matches.at(-1) : matches;
+        if (typeof version === 'string' && /^\d+\.\d+\.\d+$/.test(version)) pins.typescript = version;
+        else failures.push('typescript: could not resolve within the typescript-eslint peer range');
+      } catch {
+        failures.push('typescript: could not resolve within the typescript-eslint peer range (kept current pin)');
+      }
+      writeFileSync(pinsPath, JSON.stringify(pins, null, 2) + '\n');
+      out(`Updated ${pinsPath}\n`);
+      if (failures.length) {
+        err('Kept the previous pin for:\n' + failures.map((f) => `  - ${f}`).join('\n') + '\n');
+      }
+      out('Re-run your setup (plan/apply) and smoke the result — new majors can change tool behavior.\n');
+      return failures.length ? 1 : 0;
     }
     case 'report': {
       const cwd = io.cwd ?? process.cwd();
