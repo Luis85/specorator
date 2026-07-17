@@ -838,6 +838,13 @@ export class SpecoratorView extends ItemView {
       this.emitChatShellChange();
     }));
 
+    // Title-generation status flips (pending/success/failed) don't change the
+    // title, so `conversation:renamed` never fires; re-project so an open Vue
+    // history dropdown updates its spinner / regenerate affordance in place.
+    this.register(this.plugin.events.on('conversation:title-status-changed', () => {
+      this.emitChatShellChange();
+    }));
+
     // A roster edit can change a bound agent's saved model while its tab stays
     // open; the conversation-keyed displayModel seed wouldn't invalidate (same
     // conversation), so recompute the seeds and refresh the selector to track it.

@@ -181,6 +181,7 @@ function createMockDeps(overrides: Partial<InputControllerDeps> = {}): InputCont
       getConversationSync: jest.fn().mockReturnValue(null),
       getConversationById: jest.fn().mockResolvedValue(null),
       createConversation: jest.fn().mockResolvedValue({ id: 'conv-1' }),
+      events: { emit: jest.fn(), on: jest.fn() },
     } as any,
     state,
     mountInlineCard: mountInlineCard as any,
@@ -1475,6 +1476,8 @@ describe('InputController - Message Queue', () => {
       expect(deps.plugin.createConversation).toHaveBeenCalled();
       expect(deps.plugin.updateConversation).toHaveBeenCalledWith('conv-1', { titleGenerationStatus: 'pending' });
       expect(deps.plugin.renameConversation).toHaveBeenCalledWith('conv-1', 'Test Title');
+      // Status flip must re-project the shell so an open history dropdown updates.
+      expect(deps.plugin.events.emit).toHaveBeenCalledWith('conversation:title-status-changed', { conversationId: 'conv-1' });
     });
 
     it('should find messages by role, not by index', async () => {
