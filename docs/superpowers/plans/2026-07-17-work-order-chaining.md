@@ -1155,6 +1155,8 @@ git commit -m "feat(tasks): WorkOrderChainCoordinator + pure buildSuccessorPlan"
 > 5. Single-write seeding: capture the content passed to `vault.create` (spy/fake adapter) and assert it is **already** `status: ready` AND already contains `Chained from [[...]]` — i.e. no create-then-modify window where a `ready` note lacks the seed.
 > 6. Agent-only inheritance: an inline chain from a predecessor with `agent: roster:x` and no `provider`/`model` produces a successor whose `provider`/`model` come from the resolved agent target (stub `resolveAgentRunTarget`), NOT the board defaults, and that carries `agent: roster:x`.
 > 7. `resolveSeedChain` precedence (direct `createWorkOrderFromSeed` call via the harness, no coordinator): a seed with an explicit `chain` AND a `template` whose own `chain` differs produces a note whose `chain_*` frontmatter is the SEED's chain, not the template's — locks `seed.chain ?? template.chain` against an operand flip. This closes the Task 5 review's residual coverage gap on the precedence branch (no production caller exercises the override yet).
+> 8. Depth cap (closes the Task 6 review's coordinator-level gap end-to-end): set `agentBoardMaxChainDepth` low (e.g. 2) and give the predecessor `chain_depth: 2`; a matching trigger creates NO new note — the chain stops at the cap (count the folder before/after).
+> 9. Missing template (closes the Task 6 review's coordinator-level gap end-to-end): a predecessor whose `chain_template` names a non-existent template still creates EXACTLY ONE successor (blank-based, title `"<pred> — next"`), never zero — the chain is not silently dropped when a template is missing.
 
 - [ ] **Step 2: Run to verify it fails**
 
