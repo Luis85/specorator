@@ -6,6 +6,10 @@
 `manifest.json` + `versions.json` describe the release; `main.js` and
 `styles.css` are build artifacts (never edit or commit them).
 
+**Architecture, services (EventBus/NoticeService/ModalService), boundaries,
+and the add-a-feature checklist live in [`AGENTS.md`](AGENTS.md) — read it
+before structural changes.**
+
 ## Commands
 
 ```bash
@@ -28,6 +32,10 @@ npm run check:artifacts  # post-build artifact smoke (run after npm run build)
   `setText`/`.empty()`; render markdown through `MarkdownRenderer`. Raw HTML
   sinks (`innerHTML`/`outerHTML`/`insertAdjacentHTML`) are lint-banned (XSS).
 - No `console.*` in production code (lint-enforced); UI copy is sentence case.
+- User feedback goes through `plugin.notices` / `plugin.modals` — raw
+  `new Notice()` outside NoticeService is lint-banned.
+- Register commands via `plugin.commands` in `src/commands.ts`
+  (`addSimple`/`addChecked`/`addEditor`); keep `main.ts` orchestration-only.
 - {{mobileLine}}
 - {{vueLine}}
 - Style with Obsidian CSS variables in `src/styles.css`; avoid `!important`

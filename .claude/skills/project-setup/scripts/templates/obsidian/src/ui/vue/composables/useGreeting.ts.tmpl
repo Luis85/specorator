@@ -1,0 +1,18 @@
+import type { Ref } from 'vue';
+import { onUnmounted, ref } from 'vue';
+
+import type {{pluginClass}} from '../../../main';
+
+// Live view over the greeting setting: seeds from current settings and follows
+// `settings:changed` on the plugin's event bus. The subscription is dropped on
+// unmount, so a closed leaf never leaks a handler.
+export function useGreeting(plugin: {{pluginClass}} | undefined): Ref<string> {
+  const greeting = ref(plugin?.settings.greeting ?? 'Hello');
+  if (plugin) {
+    const off = plugin.events.on('settings:changed', ({ settings }) => {
+      greeting.value = settings.greeting;
+    });
+    onUnmounted(off);
+  }
+  return greeting;
+}

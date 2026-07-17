@@ -16,29 +16,39 @@ import { DEFAULT_BRANDS } from 'eslint-plugin-obsidianmd/dist/lib/rules/ui/brand
 import simpleImportSort from 'eslint-plugin-simple-import-sort';
 {{vueImports}}import tseslint from 'typescript-eslint';
 
-// Shared safety gate for production sources (src). Raw HTML sinks are banned:
-// build DOM with createEl/createDiv/createSpan/setText/.empty(), or render
-// untrusted/markdown content through MarkdownRenderer. A provably-static site
-// takes a narrow eslint-disable-next-line with a `-- reason`, never a global off.
+// Raw HTML sinks are banned everywhere in src: build DOM with
+// createEl/createDiv/createSpan/setText/.empty(), or render untrusted/markdown
+// content through MarkdownRenderer. A provably-static site takes a narrow
+// eslint-disable-next-line with a `-- reason`, never a global off.
+const rawHtmlBans = [
+  {
+    selector: 'AssignmentExpression > MemberExpression[property.name="innerHTML"]',
+    message:
+      'Assigning to innerHTML is banned (XSS risk). Use createEl/setText/.empty(), or MarkdownRenderer for markdown.',
+  },
+  {
+    selector: 'AssignmentExpression > MemberExpression[property.name="outerHTML"]',
+    message:
+      'Assigning to outerHTML is banned (XSS risk). Use createEl/setText/.empty(), or MarkdownRenderer for markdown.',
+  },
+  {
+    selector: 'CallExpression[callee.property.name="insertAdjacentHTML"]',
+    message:
+      'insertAdjacentHTML is banned (XSS risk). Use createEl/setText, or MarkdownRenderer for markdown.',
+  },
+];
+
+// Shared safety gate for production sources (src).
 const srcSafetyRules = {
   'no-console': 'error',
   'no-new-func': 'error',
   'no-restricted-syntax': [
     'error',
+    ...rawHtmlBans,
     {
-      selector: 'AssignmentExpression > MemberExpression[property.name="innerHTML"]',
+      selector: 'NewExpression[callee.name="Notice"]',
       message:
-        'Assigning to innerHTML is banned (XSS risk). Use createEl/setText/.empty(), or MarkdownRenderer for markdown.',
-    },
-    {
-      selector: 'AssignmentExpression > MemberExpression[property.name="outerHTML"]',
-      message:
-        'Assigning to outerHTML is banned (XSS risk). Use createEl/setText/.empty(), or MarkdownRenderer for markdown.',
-    },
-    {
-      selector: 'CallExpression[callee.property.name="insertAdjacentHTML"]',
-      message:
-        'insertAdjacentHTML is banned (XSS risk). Use createEl/setText, or MarkdownRenderer for markdown.',
+        'Route user-facing notices through NoticeService (src/core/notices/NoticeService.ts) so they stay testable, consistent, and ready for i18n.',
     },
   ],
 };
@@ -87,10 +97,20 @@ export default [
   },
 {{vueConfigs}}  { files: [{{vueSrcFiles}}], rules: srcSafetyRules },
   {
+    // The one sanctioned `new Notice()` call site; the raw-HTML bans still apply.
+    files: ['src/core/notices/NoticeService.ts'],
+    rules: { 'no-restricted-syntax': ['error', ...rawHtmlBans] },
+  },
+  {
     // UI copy is sentence case; the plugin name stays a brand.
     files: ['src/**/*.ts'],
     rules: {
       'obsidianmd/ui/sentence-case': ['error', { brands: [...DEFAULT_BRANDS, {{brandLiteral}}] }],
+      // The declarative settings API (getSettingDefinitions) requires Obsidian
+      // 1.13+; this scaffold targets an earlier minAppVersion, so the
+      // imperative PluginSettingTab is correct. Turn this back on once you
+      // raise minAppVersion to 1.13+ and adopt the declarative API.
+      'obsidianmd/settings-tab/prefer-setting-definitions': 'off',
     },
   },
   {

@@ -53,6 +53,21 @@
     "minOccurrences": 2,
     "ignore": ["**/tests/**", "**/*.test.*"]
   },
+  "boundaries": {
+    "zones": [
+      {
+        "name": "main",
+        "patterns": ["src/main.ts", "src/settings.ts", "src/commands.ts", "src/vue-shims.d.ts"]
+      },
+      { "name": "core", "patterns": ["src/core/**"] },
+      { "name": "ui", "patterns": ["src/ui/**"] }
+    ],
+    "rules": [
+      { "from": "main", "allow": ["core", "ui"] },
+      { "from": "ui", "allow": ["core"], "allowTypeOnly": ["main"] },
+      { "from": "core", "allow": [], "allowTypeOnly": ["main"] }
+    ]
+  },
   "rules": {
     "unused-dependencies": "warn"
   }

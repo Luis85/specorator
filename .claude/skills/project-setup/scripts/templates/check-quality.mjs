@@ -57,6 +57,13 @@ const METRICS = {
     read: (r) => r.check.summary.circular_dependencies,
     label: 'circular dependencies (fallow dead-code)',
   },
+  // 0 without configured boundary zones; with zones (e.g. the Obsidian
+  // scaffold's main/core/ui) this gates the architecture at 0 violations.
+  boundaryViolations: {
+    direction: 'max',
+    read: (r) => r.check.summary.boundary_violations,
+    label: 'architecture boundary violations (fallow check)',
+  },
   cloneGroups: {
     direction: 'max',
     read: (r) => r.dupes.stats.clone_groups,

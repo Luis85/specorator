@@ -3,9 +3,20 @@
 // extend as your plugin grows. Kept dependency-free on purpose: real Obsidian
 // only exists inside the app.
 
+// Message log so tests can assert notices without spying on a constructor.
+// Reset it in beforeEach (`__noticeLog.length = 0`).
+export const __noticeLog: string[] = [];
+
 export class Notice {
-  constructor(public message?: string | DocumentFragment) {}
+  constructor(
+    public message?: string | DocumentFragment,
+    public timeout?: number,
+  ) {
+    if (typeof message === 'string') __noticeLog.push(message);
+  }
 }
+
+export class App {}
 
 export class WorkspaceLeaf {}
 
@@ -40,6 +51,10 @@ export class Plugin {
 
   registerView(_type: string, _factory: (leaf: WorkspaceLeaf) => unknown): void {}
 
+  addStatusBarItem(): HTMLElement {
+    return document.createElement('div');
+  }
+
   addSettingTab(_tab: unknown): void {}
 
   registerEvent(_eventRef: unknown): void {}
@@ -65,16 +80,47 @@ export class PluginSettingTab {
   hide(): void {}
 }
 
+export class Modal {
+  contentEl: HTMLElement = document.createElement('div');
+  titleEl: HTMLElement = document.createElement('div');
+
+  constructor(public app: App) {}
+
+  onOpen(): void {}
+
+  onClose(): void {}
+
+  // Attach to the document like the app does, so tests can reach the dialog's
+  // controls with plain DOM queries.
+  open(): void {
+    document.body.appendChild(this.contentEl);
+    this.onOpen();
+  }
+
+  close(): void {
+    this.onClose();
+    this.contentEl.remove();
+  }
+}
+
 interface TextComponentLike {
   setValue(value: string): TextComponentLike;
   onChange(callback: (value: string) => unknown): TextComponentLike;
+}
+
+interface ButtonComponentLike {
+  buttonEl: HTMLButtonElement;
+  setButtonText(text: string): ButtonComponentLike;
+  setCta(): ButtonComponentLike;
+  onClick(callback: () => unknown): ButtonComponentLike;
 }
 
 export class Setting {
   settingEl: HTMLElement;
 
   constructor(containerEl: HTMLElement) {
-    this.settingEl = containerEl.createDiv();
+    this.settingEl = document.createElement('div');
+    containerEl.appendChild(this.settingEl);
   }
 
   setName(_name: string): this {
@@ -93,6 +139,25 @@ export class Setting {
     const component: TextComponentLike = {
       setValue: () => component,
       onChange: () => component,
+    };
+    callback(component);
+    return this;
+  }
+
+  addButton(callback: (button: ButtonComponentLike) => unknown): this {
+    const buttonEl = document.createElement('button');
+    this.settingEl.appendChild(buttonEl);
+    const component: ButtonComponentLike = {
+      buttonEl,
+      setButtonText: (text) => {
+        buttonEl.textContent = text;
+        return component;
+      },
+      setCta: () => component,
+      onClick: (cb) => {
+        buttonEl.addEventListener('click', () => void cb());
+        return component;
+      },
     };
     callback(component);
     return this;

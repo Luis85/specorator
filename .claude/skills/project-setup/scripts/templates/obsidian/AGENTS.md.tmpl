@@ -1,0 +1,103 @@
+# AGENTS.md
+
+Architecture and working agreements for {{name}} (`{{id}}`), an Obsidian
+plugin. Read this before adding features; commands and gate details live in
+`CLAUDE.md` and `docs/quality-integration-guide.md`.
+
+## Architecture
+
+| Layer | Path                                                | Purpose                                                                                | May import                                             |
+| ----- | --------------------------------------------------- | -------------------------------------------------------------------------------------- | ------------------------------------------------------ |
+| main  | `src/main.ts`, `src/settings.ts`, `src/commands.ts` | Plugin entry + registration. `main.ts` orchestrates only; `commands.ts` wires commands | core, ui                                               |
+| core  | `src/core/`                                         | Provider-neutral services, no UI: commands, event bus, notices, modals                 | nothing app-internal (type-only edges to main allowed) |
+| ui    | `src/ui/`                                           | Views, components, status bar                                                          | core (type-only edges to main allowed)                 |
+
+These boundaries are **machine-enforced**: fallow's zone rules gate
+`boundaryViolations` at 0 in `check:quality`. Keep core leaf-ward — a core
+module that needs something from main/ui receives it as a constructor
+argument or event, never as an import.
+
+`main.ts` is orchestration-only: it constructs the services and delegates
+every registration (`registerCommands`, `registerStatusBar`, `registerViews`).
+Add new wiring as its own `register*` module rather than growing `onload`.
+
+## Services (owned by the plugin instance)
+
+- **`plugin.commands` — `CommandsService`** (`src/core/commands/`): register
+  commands through `addSimple` / `addChecked` / `addEditor` instead of calling
+  `addCommand` directly. Command ids are **bare** — Obsidian prefixes the plugin
+  id, and both the plugin id and the word "command" in an id are lint-banned;
+  names are sentence case without the plugin name. All command wiring lives in
+  `src/commands.ts`.
+- **`plugin.events` — `EventBus<AppEvents>`** (`src/core/events/`): typed
+  pub/sub scoped to the plugin. Add every event to the `AppEvents` map so
+  payloads stay typed end-to-end. `on()` returns the unsubscribe function —
+  always pair it with a lifecycle hook (`onUnmounted`, `onunload`).
+- **`plugin.notices` — `NoticeService`** (`src/core/notices/`): the single
+  seam for user-facing notices. Raw `new Notice()` is lint-banned outside the
+  service; this keeps notices testable (the test double logs them), durations
+  consistent, and gives i18n one place to land later. UI copy stays sentence
+  case.
+- **`plugin.modals` — `ModalService`** (`src/core/modals/`): async wrappers
+  over Obsidian modals (`await plugin.modals.confirm(title, message)`).
+  Extend it with new dialog kinds instead of scattering `Modal` subclasses.
+
+## Commands (`src/commands.ts`)
+
+Pick the helper by how the command should behave:
+
+| Helper       | Obsidian mechanism | Use when                                                     |
+| ------------ | ------------------ | ------------------------------------------------------------ |
+| `addSimple`  | `callback`         | The command is always runnable.                              |
+| `addChecked` | `checkCallback`    | The command only applies in some state — it hides otherwise. |
+| `addEditor`  | `editorCallback`   | The command acts on the active Markdown editor.              |
+
+`checkCallback` is called twice: with `checking: true` to ask "does this
+apply?" (return a boolean, do nothing) and `checking: false` to run it. The
+`addChecked` wrapper collapses that into one `when()` predicate plus a `run()`.
+
+## Event flow (worked example)
+
+Settings save → `saveSettings()` emits `settings:changed` on the bus → the
+status-bar item and (Vue) the `useGreeting` composable update. Follow this
+shape for new cross-cutting state: emit from the owner, subscribe where
+rendered, unsubscribe on teardown (`onUnmounted` in components; plugin-lifetime
+subscriptions like the status bar need no teardown — the bus dies on unload).
+
+{{uiSection}}
+
+## Testing strategy
+
+- One Vitest lane (jsdom). `obsidian` resolves to the test double in
+  `tests/__mocks__/obsidian.ts`; `tests/setup.ts` polyfills Obsidian's
+  `HTMLElement` helpers (`createEl`, `empty`, …). Extend both as you use more
+  API surface.
+- Services get plain unit tests. Components mount with `@vue/test-utils` and a
+  **partial plugin double provided under the real `PLUGIN_KEY`** — see
+  `tests/vue/HomePage.test.ts` for the pattern.
+- The mock `Modal` attaches to `document.body` on open, so dialog flows are
+  testable with DOM queries; the mock `Notice` logs to `__noticeLog`.
+- TDD: failing test first in the mirrored `tests/` path, then the
+  implementation, then refactor.
+
+## Adding a feature (checklist)
+
+1. Model state/events first: extend settings (`withDefaults` keeps old vaults
+   safe) and `AppEvents` if other surfaces must react.
+2. Put logic in `src/core/` (unit-tested), rendering in `src/ui/`.
+3. Register commands/views in `main.ts` — command ids never contain the plugin
+   id or the word "command"; names are sentence case without the plugin name.
+4. User feedback goes through `plugin.notices` / `plugin.modals`.
+5. Style via `src/styles.css` (Obsidian CSS variables, no `!important`) or
+   scoped SFC styles.
+6. Run the local gate set before pushing (see `CLAUDE.md`).
+
+## Constraints worth remembering
+
+- {{mobileLine}}
+- Build artifacts (`main.js`, `styles.css`) are generated — never edit or
+  commit them; `src/styles.css` is the stylesheet source.
+- `manifest.json`/`versions.json` change only through `npm version` (the
+  `sync-version` script) — `check:artifacts` fails on desync.
+- Ratchets (`check:loc`, `check:css`, `check:quality`, coverage floors) only
+  tighten: lock improvements in with each gate's `--update` in the same PR.

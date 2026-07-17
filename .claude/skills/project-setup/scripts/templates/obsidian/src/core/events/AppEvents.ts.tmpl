@@ -1,0 +1,8 @@
+import type { {{settingsType}} } from '../../settings';
+
+// The app-wide event map: one entry per event name, typed payloads end-to-end.
+// Emit and subscribe through the plugin's `events` bus. Keep this a type alias
+// (not an interface) so it satisfies EventBus's Record constraint.
+export type AppEvents = {
+  'settings:changed': { settings: {{settingsType}} };
+};

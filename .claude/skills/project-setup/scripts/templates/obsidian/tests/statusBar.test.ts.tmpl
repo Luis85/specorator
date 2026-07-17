@@ -1,0 +1,22 @@
+import { describe, expect, it } from 'vitest';
+
+import type { AppEvents } from '@/core/events/AppEvents';
+import { EventBus } from '@/core/events/EventBus';
+import { registerStatusBar } from '@/ui/statusBar';
+
+describe('registerStatusBar', () => {
+  it('mirrors the greeting and follows settings:changed', () => {
+    const item = document.createElement('div');
+    const events = new EventBus<AppEvents>();
+    const plugin = {
+      events,
+      settings: { greeting: 'Hi' },
+      addStatusBarItem: () => item,
+    };
+    registerStatusBar(plugin as never);
+    expect(item.textContent).toBe('Hi');
+
+    events.emit('settings:changed', { settings: { greeting: 'Servus' } });
+    expect(item.textContent).toBe('Servus');
+  });
+});

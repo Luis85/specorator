@@ -93,40 +93,47 @@ function planSources(options) {
     id: o.id,
     nameLiteral: jsString(o.name),
   };
-  const mainVars = o.vue
-    ? {
-        ...shared,
-        obsidianImport: "import { Plugin } from 'obsidian';",
-        viewImport: "import { VIEW_TYPE, VueView } from './ui/VueView';\n",
-        registrations:
-          '    this.registerView(VIEW_TYPE, (leaf) => new VueView(leaf, this));\n' +
-          `    this.addRibbonIcon('layout-dashboard', ${jsString(o.name)}, () => {\n` +
-          '      void this.activateView();\n    });\n' +
-          "    this.addCommand({\n      id: 'open-view',\n      name: 'Open view',\n      callback: () => {\n        void this.activateView();\n      },\n    });",
-        extraMethods: renderTemplate(loadTemplate('obsidian/src/activateView.ts.tmpl'), {}),
-      }
-    : {
-        ...shared,
-        obsidianImport: "import { Notice, Plugin } from 'obsidian';",
-        viewImport: '',
-        registrations:
-          "    this.addCommand({\n      id: 'show-greeting',\n      name: 'Show greeting',\n      callback: () => {\n        new Notice(this.settings.greeting);\n      },\n    });",
-        extraMethods: '',
-      };
+  // main.ts is orchestration-only: the vue variant adds the view registration
+  // module; command wiring lives in commands.ts for both.
+  const mainVars = {
+    ...shared,
+    viewImport: o.vue ? "import { registerViews } from './ui/registerViews';\n" : '',
+    viewRegistration: o.vue ? '    registerViews(this);\n' : '',
+  };
+  // The open-view command is vue-only; it reveals the island view.
+  const commandVars = {
+    ...shared,
+    activateViewImport: o.vue ? "import { activateView } from './ui/registerViews';\n" : '',
+    openViewCommand: o.vue
+      ? "\n  // callback — reveal the plugin view.\n  plugin.commands.addSimple('open-view', 'Open view', () => {\n    void activateView(plugin);\n  });\n"
+      : '',
+  };
   const actions = [
     write('src/main.ts', renderTemplate(loadTemplate('obsidian/src/main.ts.tmpl'), mainVars)),
     write('src/settings.ts', renderTemplate(loadTemplate('obsidian/src/settings.ts.tmpl'), shared)),
+    write('src/commands.ts', renderTemplate(loadTemplate('obsidian/src/commands.ts.tmpl'), commandVars)),
     write('src/styles.css', renderTemplate(loadTemplate('obsidian/src/styles.css.tmpl'), { id: o.id, name: o.name })),
+    // Core services: provider-neutral, UI-free, unit-tested — the seam every
+    // feature builds on (see the generated AGENTS.md).
+    write('src/core/commands/CommandsService.ts', renderTemplate(loadTemplate('obsidian/src/core/commands/CommandsService.ts.tmpl'), shared)),
+    write('src/core/events/EventBus.ts', loadTemplate('obsidian/src/core/events/EventBus.ts.tmpl')),
+    write('src/core/events/AppEvents.ts', renderTemplate(loadTemplate('obsidian/src/core/events/AppEvents.ts.tmpl'), shared)),
+    write('src/core/notices/NoticeService.ts', loadTemplate('obsidian/src/core/notices/NoticeService.ts.tmpl')),
+    write('src/core/modals/ModalService.ts', loadTemplate('obsidian/src/core/modals/ModalService.ts.tmpl')),
+    // The status-bar item wires the event bus from the UI layer in both variants.
+    write('src/ui/statusBar.ts', renderTemplate(loadTemplate('obsidian/src/ui/statusBar.ts.tmpl'), shared)),
   ];
   if (o.vue) {
     actions.push(
       write('src/vue-shims.d.ts', loadTemplate('obsidian/src/vue-shims.d.ts.tmpl')),
+      write('src/ui/registerViews.ts', renderTemplate(loadTemplate('obsidian/src/ui/registerViews.ts.tmpl'), shared)),
       write('src/ui/VueView.ts', renderTemplate(loadTemplate('obsidian/src/ui/VueView.ts.tmpl'), shared)),
       write('src/ui/vue/App.vue', loadTemplate('obsidian/src/ui/vue/App.vue.tmpl')),
       write('src/ui/vue/router.ts', loadTemplate('obsidian/src/ui/vue/router.ts.tmpl')),
       write('src/ui/vue/pinia.ts', loadTemplate('obsidian/src/ui/vue/pinia.ts.tmpl')),
       write('src/ui/vue/keys.ts', renderTemplate(loadTemplate('obsidian/src/ui/vue/keys.ts.tmpl'), shared)),
       write('src/ui/vue/stores/counter.ts', loadTemplate('obsidian/src/ui/vue/stores/counter.ts.tmpl')),
+      write('src/ui/vue/composables/useGreeting.ts', renderTemplate(loadTemplate('obsidian/src/ui/vue/composables/useGreeting.ts.tmpl'), shared)),
       write('src/ui/vue/pages/HomePage.vue', loadTemplate('obsidian/src/ui/vue/pages/HomePage.vue.tmpl')),
       write('src/ui/vue/pages/AboutPage.vue', loadTemplate('obsidian/src/ui/vue/pages/AboutPage.vue.tmpl')),
     );
@@ -195,12 +202,19 @@ function planObsidianVitest(options, state) {
   const actions = [
     write('tests/setup.ts', loadTemplate('obsidian/tests/setup.ts.tmpl')),
     write('tests/__mocks__/obsidian.ts', loadTemplate('obsidian/tests/obsidian-mock.ts.tmpl')),
+    write('tests/obsidian-augment.d.ts', loadTemplate('obsidian/tests/obsidian-augment.d.ts.tmpl')),
     write('tests/unit/settings.test.ts', loadTemplate('obsidian/tests/settings.test.ts.tmpl')),
+    write('tests/unit/eventBus.test.ts', loadTemplate('obsidian/tests/eventBus.test.ts.tmpl')),
+    write('tests/unit/noticeService.test.ts', loadTemplate('obsidian/tests/noticeService.test.ts.tmpl')),
+    write('tests/unit/modalService.test.ts', loadTemplate('obsidian/tests/modalService.test.ts.tmpl')),
+    write('tests/unit/commandsService.test.ts', loadTemplate('obsidian/tests/commandsService.test.ts.tmpl')),
+    write('tests/unit/statusBar.test.ts', loadTemplate('obsidian/tests/statusBar.test.ts.tmpl')),
   ];
   if (o.vue) {
     actions.push(
       write('tests/vue/counterStore.test.ts', loadTemplate('obsidian/tests/counterStore.test.ts.tmpl')),
       write('tests/vue/HomePage.test.ts', loadTemplate('obsidian/tests/HomePage.test.ts.tmpl')),
+      write('tests/vue/greeting.test.ts', loadTemplate('obsidian/tests/greeting.test.ts.tmpl')),
     );
   }
   // A hand-written vitest/vite config owns plugins/aliases/thresholds — never
@@ -229,6 +243,7 @@ function planObsidianVitest(options, state) {
     coverageThreshold,
   });
   return [
+    ...scriptCollision(options, state, 'test', 'vitest run'),
     ...(cov ? scriptCollision(options, state, 'test:coverage', 'vitest run --coverage') : []),
     write('vitest.config.mjs', config),
     ...actions,
@@ -237,7 +252,10 @@ function planObsidianVitest(options, state) {
 }
 
 function planFormatter(options, state) {
-  const actions = [];
+  const actions = [
+    ...scriptCollision(options, state, 'format', 'prettier --write .'),
+    ...scriptCollision(options, state, 'format:check', 'prettier --check .'),
+  ];
   if (state?.prettierConfig) {
     actions.push(notice('Existing prettier config kept — the generated .prettierrc.json was NOT written. The format/format:check scripts run against your config.'));
   } else {
@@ -272,6 +290,11 @@ function planArtifacts(options, state) {
   ];
 }
 
+function planGithubTemplates(options) {
+  if (!options.github?.integrate) return [];
+  return [write('.github/pull_request_template.md', loadTemplate('obsidian/pull_request_template.md.tmpl'))];
+}
+
 function planRelease(options, state) {
   if (!options.github?.integrate) return [];
   const pm = CI_PM[options.packageManager ?? state?.packageManager ?? 'npm'];
@@ -287,7 +310,10 @@ function planRelease(options, state) {
 
 function planProjectDocs(options) {
   const o = options.obsidian;
-  return [
+  const mobileLine = o.mobile
+    ? '**Mobile-ready** (`isDesktopOnly: false`): never import Node/Electron modules (lint-enforced and non-external in the build); test flows on iOS/Android or the mobile emulator before release.'
+    : '**Desktop-only** (`isDesktopOnly: true`): Node builtins are available, but prefer Vault/adapter APIs so a later mobile port stays possible.';
+  const actions = [
     write('README.md', renderTemplate(loadTemplate('obsidian/README.md.tmpl'), {
       name: o.name,
       description: o.description,
@@ -297,36 +323,65 @@ function planProjectDocs(options) {
       name: o.name,
       id: o.id,
       typecheckTool: o.vue ? 'vue-tsc' : 'tsc',
-      mobileLine: o.mobile
-        ? '- **Mobile-ready** (`isDesktopOnly: false`): never import Node/Electron modules (lint-enforced); test flows on iOS/Android or the mobile emulator before release.'
-        : '- **Desktop-only** (`isDesktopOnly: true`): Node builtins are available, but prefer Vault/adapter APIs so a later mobile port stays possible.',
+      mobileLine: `- ${mobileLine}`,
       vueLine: o.vue
         ? '- The sidebar view is a Vue 3 island (`src/ui/vue/`): one app per leaf, Pinia store per island, vue-router on memory history. `markRaw` Obsidian objects before providing them; unmount + `contentEl.empty()` on close.'
         : '- UI is built imperatively with Obsidian `createEl`/`createDiv` helpers.',
     })),
+    write('AGENTS.md', renderTemplate(loadTemplate('obsidian/AGENTS.md.tmpl'), {
+      name: o.name,
+      id: o.id,
+      mobileLine,
+      uiSection: o.vue
+        ? '## Vue island (`src/ui/`)\n\nOne Vue app per leaf: `VueView` mounts `App.vue` in `onOpen` with a fresh\nPinia and a memory-history router, provides the `markRaw`\'d plugin under\n`PLUGIN_KEY`, and unmounts + empties in `onClose` (Vue\'s documented leak\nclass). Components inject the plugin; composables (see `useGreeting`) wrap\nbus subscriptions with `onUnmounted` cleanup. SFC `<style>` blocks are merged\ninto `styles.css` by the build.'
+        : '## UI (`src/ui/`)\n\nUI is built imperatively with Obsidian\'s `createEl`/`createDiv` helpers.\nKeep rendering in `src/ui/` and logic in `src/core/` so components stay thin.',
+    })),
     write('.editorconfig', loadTemplate('obsidian/editorconfig.tmpl')),
     write('.env.example', loadTemplate('obsidian/env.example.tmpl')),
   ];
+  if (options.docs?.scaffold) {
+    actions.push(
+      write('docs/adr/0001-plugin-architecture-baseline.md', renderTemplate(loadTemplate('obsidian/adr-0001.md.tmpl'), {
+        name: o.name,
+        mobileChoice: o.mobile ? 'mobile-ready' : 'desktop-only',
+        isDesktopOnly: String(!o.mobile),
+        mobileConsequence: o.mobile
+          ? '; Node/Electron imports are lint-banned and non-external in the build.'
+          : '; node builtins remain importable (esbuild externals).',
+        uiChoice: o.vue
+          ? 'Vue 3 island per leaf (Pinia, vue-router on memory history), SFC styles merged into styles.css.'
+          : 'imperative Obsidian DOM helpers (no framework).',
+      })),
+    );
+  }
+  return actions;
 }
 
-function planPackageBasics(options) {
+function planPackageBasics(options, state) {
   const o = options.obsidian;
+  const scripts = {
+    dev: 'node esbuild.config.mjs',
+    build: 'node esbuild.config.mjs production',
+    typecheck: o.vue ? 'vue-tsc --noEmit' : 'tsc --noEmit',
+    version: 'node scripts/sync-version.mjs && git add manifest.json versions.json',
+  };
   const patch = {
     name: o.id,
     version: INITIAL_VERSION,
     description: o.description,
     main: 'main.js',
     engines: { node: '>=22' },
-    scripts: {
-      dev: 'node esbuild.config.mjs',
-      build: 'node esbuild.config.mjs production',
-      typecheck: o.vue ? 'vue-tsc --noEmit' : 'tsc --noEmit',
-      version: 'node scripts/sync-version.mjs && git add manifest.json versions.json',
-    },
+    scripts,
     devDependencies: dep('obsidian', 'esbuild', 'typescript', ...(o.vue ? ['unplugin-vue', 'vue-tsc'] : [])),
   };
   if (o.vue) patch.dependencies = dep('vue', 'pinia', 'vue-router');
-  return [{ type: 'mergeJson', path: 'package.json', patch }];
+  // Shadowed lifecycle scripts are load-bearing here: CI/verify assume `build`
+  // emits main.js/styles.css and `npm version` runs sync-version — surface
+  // every collision instead of silently keeping a script that does neither.
+  const notices = Object.entries(scripts).flatMap(([name, desired]) =>
+    scriptCollision(options, state, name, desired),
+  );
+  return [...notices, { type: 'mergeJson', path: 'package.json', patch }];
 }
 
 // Ordered composition for obsidian mode. plan() adds the shared planners
@@ -334,7 +389,7 @@ function planPackageBasics(options) {
 export function planObsidian(options, state = {}) {
   return [
     ...planManifest(options.obsidian),
-    ...planPackageBasics(options),
+    ...planPackageBasics(options, state),
     ...planBuild(options, state),
     ...planSources(options),
     ...planTsconfig(options),
@@ -344,6 +399,7 @@ export function planObsidian(options, state = {}) {
     ...planCssGuard(options, state),
     ...planArtifacts(options, state),
     ...planRelease(options, state),
+    ...planGithubTemplates(options),
     ...planProjectDocs(options),
   ];
 }

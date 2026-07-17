@@ -1,22 +1,37 @@
-{{obsidianImport}}
+import { Plugin } from 'obsidian';
 
+import { registerCommands } from './commands';
+import { CommandsService } from './core/commands/CommandsService';
+import type { AppEvents } from './core/events/AppEvents';
+import { EventBus } from './core/events/EventBus';
+import { ModalService } from './core/modals/ModalService';
+import { NoticeService } from './core/notices/NoticeService';
 import type { {{settingsType}} } from './settings';
 import { DEFAULT_SETTINGS, {{settingsTab}}, withDefaults } from './settings';
-{{viewImport}}
+{{viewImport}}import { registerStatusBar } from './ui/statusBar';
+
+// main.ts orchestrates only: it owns the services and settings, then delegates
+// every registration to a focused module (see AGENTS.md § architecture).
 export default class {{pluginClass}} extends Plugin {
   settings: {{settingsType}} = { ...DEFAULT_SETTINGS };
+  readonly events = new EventBus<AppEvents>();
+  readonly notices = new NoticeService();
+  readonly modals = new ModalService(this.app);
+  readonly commands = new CommandsService(this);
 
   async onload(): Promise<void> {
     await this.loadSettings();
     this.addSettingTab(new {{settingsTab}}(this.app, this));
-{{registrations}}
-  }
-{{extraMethods}}
+    registerCommands(this);
+    registerStatusBar(this);
+{{viewRegistration}}  }
+
   async loadSettings(): Promise<void> {
     this.settings = withDefaults((await this.loadData()) as Partial<{{settingsType}}> | null);
   }
 
   async saveSettings(): Promise<void> {
     await this.saveData(this.settings);
+    this.events.emit('settings:changed', { settings: this.settings });
   }
 }

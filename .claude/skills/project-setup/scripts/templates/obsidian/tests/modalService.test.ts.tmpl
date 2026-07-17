@@ -1,0 +1,31 @@
+import { App } from 'obsidian';
+import { describe, expect, it } from 'vitest';
+
+import { ModalService } from '@/core/modals/ModalService';
+
+// The mock Modal attaches contentEl to document.body on open, so the dialog's
+// buttons are reachable exactly like in the app.
+function openConfirm() {
+  const promise = new ModalService(new App()).confirm('Reset counter', 'Set the count to zero?');
+  const buttons = document.body.querySelectorAll('button');
+  expect(buttons.length).toBe(2);
+  return {
+    promise,
+    cancel: buttons[0] as HTMLButtonElement,
+    confirm: buttons[1] as HTMLButtonElement,
+  };
+}
+
+describe('ModalService.confirm', () => {
+  it('resolves true when confirmed', async () => {
+    const { promise, confirm } = openConfirm();
+    confirm.click();
+    await expect(promise).resolves.toBe(true);
+  });
+
+  it('resolves false when cancelled (close path)', async () => {
+    const { promise, cancel } = openConfirm();
+    cancel.click();
+    await expect(promise).resolves.toBe(false);
+  });
+});

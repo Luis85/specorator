@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { test } from 'node:test';
 
-import { PINNED } from '../lib/harness.mjs';
+import { PINNED, planFallow } from '../lib/harness.mjs';
 import { planObsidian } from '../lib/obsidian.mjs';
 import { loadOptions } from '../lib/options.mjs';
 
@@ -108,6 +108,60 @@ test('scaffold sources are skip-if-exists (brownfield-safe, never clobbers)', ()
   }
 });
 
+// --- core services ----------------------------------------------------------
+
+test('both variants scaffold the core services, command wiring, and the typed event map', () => {
+  for (const variant of [{ vue: true }, { vue: false }]) {
+    const actions = actionsFor(variant);
+    for (const p of [
+      'src/core/commands/CommandsService.ts',
+      'src/core/events/EventBus.ts',
+      'src/core/events/AppEvents.ts',
+      'src/core/notices/NoticeService.ts',
+      'src/core/modals/ModalService.ts',
+      'src/commands.ts',
+      'src/ui/statusBar.ts',
+      'tests/unit/eventBus.test.ts',
+      'tests/unit/noticeService.test.ts',
+      'tests/unit/modalService.test.ts',
+      'tests/unit/commandsService.test.ts',
+      'tests/unit/statusBar.test.ts',
+    ]) {
+      assert.ok(findWrite(actions, p), `missing ${p} (vue: ${variant.vue})`);
+    }
+  }
+});
+
+test('main.ts is orchestration-only: it delegates registration, no inline addCommand', () => {
+  const vue = findWrite(actionsFor({ vue: true }), 'src/main.ts').content;
+  assert.match(vue, /registerCommands\(this\)/);
+  assert.match(vue, /registerStatusBar\(this\)/);
+  assert.match(vue, /registerViews\(this\)/);
+  assert.doesNotMatch(vue, /addCommand/);
+  // The vue open-view command lives in commands.ts, not main.ts.
+  const commands = findWrite(actionsFor({ vue: true }), 'src/commands.ts').content;
+  assert.match(commands, /open-view/);
+  const noVue = findWrite(actionsFor({ vue: false }), 'src/main.ts').content;
+  assert.doesNotMatch(noVue, /registerViews/);
+});
+
+test('raw `new Notice()` is lint-banned in src, with the NoticeService file exempt', () => {
+  const eslint = findWrite(actionsFor(), 'eslint.config.mjs').content;
+  assert.match(eslint, /NewExpression\[callee\.name="Notice"\]/);
+  assert.match(eslint, /src\/core\/notices\/NoticeService\.ts/);
+});
+
+test('the fallow config declares main/core/ui boundary zones with core kept leaf-ward', () => {
+  const action = planFallow(optionsWith(BASE), { entry: 'src/main.ts' }).find(
+    (a) => a.path === '.fallowrc.json',
+  );
+  const rc = JSON.parse(action.content);
+  const zoneNames = rc.boundaries.zones.map((z) => z.name);
+  for (const z of ['main', 'core', 'ui']) assert.ok(zoneNames.includes(z), `missing zone ${z}`);
+  const core = rc.boundaries.rules.find((r) => r.from === 'core');
+  assert.deepEqual(core.allow, []);
+});
+
 // --- vue toggle ------------------------------------------------------------
 
 test('vue mode scaffolds the island (view, router, pinia store, SFCs) and runtime deps', () => {
@@ -195,13 +249,47 @@ test('every dependency the obsidian planner emits is pinned (no undefined versio
 
 // --- release + collisions --------------------------------------------------
 
-test('release workflow is written only with github.integrate', () => {
+test('release workflow and PR template are written only with github.integrate', () => {
   const withGh = planObsidian(
     { ...optionsWith(BASE), github: { integrate: true } },
     {},
   );
   assert.ok(findWrite(withGh, '.github/workflows/release.yml'));
+  assert.ok(findWrite(withGh, '.github/pull_request_template.md'));
   assert.equal(findWrite(actionsFor(), '.github/workflows/release.yml'), undefined);
+  assert.equal(findWrite(actionsFor(), '.github/pull_request_template.md'), undefined);
+});
+
+test('AGENTS.md is scaffolded and the ADR seed follows the docs.scaffold gate', () => {
+  const withDocs = planObsidian({ ...optionsWith(BASE), docs: { scaffold: true } }, {});
+  assert.ok(findWrite(withDocs, 'AGENTS.md'));
+  const adr = findWrite(withDocs, 'docs/adr/0001-plugin-architecture-baseline.md');
+  assert.ok(adr);
+  assert.match(adr.content, /status: accepted/);
+  assert.match(adr.content, /desktop-only|mobile-ready/);
+  const noDocs = planObsidian({ ...optionsWith(BASE), docs: { scaffold: false } }, {});
+  assert.ok(findWrite(noDocs, 'AGENTS.md')); // AGENTS.md is core, not docs-gated
+  assert.equal(findWrite(noDocs, 'docs/adr/0001-plugin-architecture-baseline.md'), undefined);
+});
+
+test('brownfield script shadowing surfaces a collision notice for every obsidian gate script', () => {
+  // mergeJson keeps existing scalars, so a shadowed script means the generated
+  // command silently never runs — CI/verify/release then assume the wrong tool.
+  const scripts = {
+    dev: 'old-dev',
+    build: 'tsc',
+    typecheck: 'tsc -p other',
+    version: 'my-hook',
+    test: 'jest',
+    'format:check': 'other-formatter',
+  };
+  const actions = actionsFor({}, { scripts });
+  for (const name of Object.keys(scripts)) {
+    assert.ok(
+      actions.some((a) => a.type === 'notice' && a.message.includes(`"${name}" script kept`)),
+      `missing collision notice for ${name}`,
+    );
+  }
 });
 
 test('an existing prettier config stands the formatter write down with a notice', () => {

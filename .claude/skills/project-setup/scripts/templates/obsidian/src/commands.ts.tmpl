@@ -1,0 +1,36 @@
+import type {{pluginClass}} from './main';
+{{activateViewImport}}
+// All command wiring lives here so main.ts stays orchestration-only. Each
+// helper demonstrates one Obsidian command type; see AGENTS.md for when to use
+// which.
+export function registerCommands(plugin: {{pluginClass}}): void {
+  // callback — always available.
+  plugin.commands.addSimple('show-greeting', 'Show greeting', () => {
+    const greeting = plugin.settings.greeting.trim();
+    if (greeting) plugin.notices.info(greeting);
+    else plugin.notices.error('Set a greeting in the plugin settings first');
+  });
+
+  // editorCallback — only offered with a Markdown editor focused.
+  plugin.commands.addEditor('insert-greeting', 'Insert greeting at cursor', (editor) => {
+    editor.replaceSelection(plugin.settings.greeting);
+  });
+
+  // checkCallback — hidden from the palette unless a greeting is set.
+  plugin.commands.addChecked(
+    'clear-greeting',
+    'Clear greeting',
+    () => plugin.settings.greeting.trim().length > 0,
+    () => {
+      void clearGreeting(plugin);
+    },
+  );
+{{openViewCommand}}}
+
+async function clearGreeting(plugin: {{pluginClass}}): Promise<void> {
+  const confirmed = await plugin.modals.confirm('Clear greeting', 'Remove the saved greeting?');
+  if (!confirmed) return;
+  plugin.settings.greeting = '';
+  await plugin.saveSettings();
+  plugin.notices.info('Greeting cleared');
+}

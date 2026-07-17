@@ -1,0 +1,13 @@
+import type {{pluginClass}} from '../main';
+
+// A status-bar item that mirrors the greeting and follows `settings:changed` —
+// a minimal demonstration of subscribing to the event bus from the UI layer.
+// The subscription lives for the plugin's lifetime; the bus is dropped on
+// unload, so no manual teardown is needed here.
+export function registerStatusBar(plugin: {{pluginClass}}): void {
+  const item = plugin.addStatusBarItem();
+  item.setText(plugin.settings.greeting);
+  plugin.events.on('settings:changed', ({ settings }) => {
+    item.setText(settings.greeting);
+  });
+}

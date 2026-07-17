@@ -1,13 +1,32 @@
 <script setup lang="ts">
+import { inject } from 'vue';
+
+import { PLUGIN_KEY } from '../keys';
 import { useCounterStore } from '../stores/counter';
 
 const counter = useCounterStore();
+const plugin = inject(PLUGIN_KEY);
+
+// Service wiring demo: confirm through ModalService, report through
+// NoticeService. Without a plugin (bare component test) it degrades to a
+// plain reset.
+async function resetWithConfirm(): Promise<void> {
+  const confirmed = plugin
+    ? await plugin.modals.confirm('Reset counter', 'Set the count back to zero?')
+    : true;
+  if (!confirmed) return;
+  counter.reset();
+  plugin?.notices.info('Counter reset');
+}
 </script>
 
 <template>
   <section class="page">
     <p data-testid="count">Count: {{ counter.count }} (doubled: {{ counter.double }})</p>
-    <button type="button" @click="counter.increment()">Increment</button>
+    <div class="actions">
+      <button type="button" data-testid="increment" @click="counter.increment()">Increment</button>
+      <button type="button" data-testid="reset" @click="resetWithConfirm">Reset</button>
+    </div>
   </section>
 </template>
 
@@ -17,5 +36,10 @@ const counter = useCounterStore();
   flex-direction: column;
   gap: var(--size-4-2);
   align-items: flex-start;
+}
+
+.actions {
+  display: flex;
+  gap: var(--size-4-2);
 }
 </style>

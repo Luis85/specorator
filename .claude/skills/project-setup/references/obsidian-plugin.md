@@ -50,12 +50,27 @@ review parity, ratchets, Vue islands, artifact smoke).
 |------|-------|
 | Plugin identity | `manifest.json`, `versions.json` (version ↔ minAppVersion map) |
 | Build | `esbuild.config.mjs` (CJS es2018 bundle, SFC-style merge into `styles.css`, dev deploy to `$OBSIDIAN_VAULT` + `.hotreload` marker), `scripts/sync-version.mjs` |
-| Sources | `src/main.ts`, `src/settings.ts` (+ `withDefaults` merge helper), `src/styles.css`; Vue: `src/ui/VueView.ts`, `src/ui/vue/{App.vue,router.ts,pinia.ts,keys.ts,stores/counter.ts,pages/*.vue}`, `src/vue-shims.d.ts` |
-| Tests | `vitest.config.mjs` (jsdom; `obsidian` aliased to the mock; istanbul coverage for fallow), `tests/setup.ts` (createEl/empty/addClass polyfills), `tests/__mocks__/obsidian.ts`, sample unit + component tests |
-| Lint/format | `eslint.config.mjs` (obsidianmd recommended + type-aware typescript-eslint + eslint-plugin-vue + import sort + raw-HTML bans + function-health caps + eslint-comments discipline + prettier compat), `.prettierrc.json`, `.prettierignore`, `.editorconfig` |
-| Ratchets | shared fallow/LOC harness plus `scripts/check-css-important.mjs` (+ baseline) and `scripts/check-artifacts.mjs` (presence, version sync, size budgets) |
-| Docs | `README.md`, `CLAUDE.md` (commands + Obsidian dev rules), plus the generic docs scaffold |
-| CI/CD | `.github/workflows/ci.yml` (lint → loc → css → quality → typecheck → format → coverage → build → artifact smoke), `.github/workflows/release.yml` (tag push → build → attach `main.js`/`manifest.json`/`styles.css`) — both only with `github.integrate` |
+| Entry + registration | `src/main.ts` (orchestration-only), `src/settings.ts` (+ `withDefaults` merge helper), `src/commands.ts` (`registerCommands`), `src/styles.css` |
+| Core services (`src/core/`) | `commands/CommandsService.ts` (addSimple/addChecked/addEditor over `addCommand`), `events/EventBus.ts` + `events/AppEvents.ts` (typed pub/sub), `notices/NoticeService.ts` (the only sanctioned `new Notice()` — raw use is lint-banned), `modals/ModalService.ts` (async `confirm`) |
+| UI (`src/ui/`) | `statusBar.ts` (event-bus subscriber, both variants); Vue: `registerViews.ts`, `VueView.ts`, `vue/{App.vue,router.ts,pinia.ts,keys.ts,stores/counter.ts,composables/useGreeting.ts,pages/*.vue}`, `src/vue-shims.d.ts` |
+| Tests | `vitest.config.mjs` (jsdom; `obsidian` aliased to the mock; istanbul coverage for fallow), `tests/setup.ts` (createEl/empty/addClass polyfills), `tests/__mocks__/obsidian.ts`, `tests/obsidian-augment.d.ts` (types the mock's test-only helpers), unit tests for every service + component/composable tests |
+| Lint/format | `eslint.config.mjs` (obsidianmd recommended + type-aware typescript-eslint + eslint-plugin-vue + import sort + raw-HTML + raw-`Notice` bans + function-health caps + eslint-comments discipline + prettier compat), `.prettierrc.json`, `.prettierignore`, `.editorconfig` |
+| Ratchets | shared fallow/LOC harness (fallow gates `boundaryViolations` at 0 via `main`/`core`/`ui` zones) plus `scripts/check-css-important.mjs` (+ baseline) and `scripts/check-artifacts.mjs` (presence, version sync, size budgets) |
+| Docs | `AGENTS.md` (architecture, services, command types, boundaries, add-a-feature checklist), `README.md`, `CLAUDE.md` (points at AGENTS.md), `docs/adr/0001-plugin-architecture-baseline.md` (with `docs.scaffold`), plus the generic docs scaffold |
+| CI/CD | `.github/workflows/ci.yml` (lint → loc → css → quality → typecheck → format → coverage → build → artifact smoke), `.github/workflows/release.yml`, `.github/pull_request_template.md` — all only with `github.integrate` |
+
+## Architecture the scaffold ships
+
+`main.ts` is orchestration-only: it constructs four plugin-owned services
+(`commands`, `events`, `notices`, `modals`) and delegates every registration to
+a focused `register*` module. Three layers — `main` (entry + `commands.ts`),
+`core` (UI-free services), `ui` (views, status bar) — are enforced by fallow
+boundary zones (`boundaryViolations` gated at 0): core stays leaf-ward and takes
+what it needs by constructor arg or event, never an import. `AGENTS.md` is the
+generated guide to all of this, including the command-type table
+(callback / checkCallback / editorCallback) and the settings→event→view worked
+example. A fresh scaffold is zero-debt: 0 dead-code, 0 boundary violations, all
+gates green on day one.
 
 Everything user-editable is `skip-if-exists` (brownfield adoption never
 clobbers); engine-owned ratchet/build scripts under `scripts/` are

@@ -77,11 +77,15 @@ test('greenfield apply: full scaffold lands, second apply converges to a no-op',
       'manifest.json', 'versions.json', 'esbuild.config.mjs', 'tsconfig.json',
       'src/main.ts', 'src/settings.ts', 'src/styles.css',
       'src/ui/VueView.ts', 'src/ui/vue/App.vue', 'src/ui/vue/router.ts',
-      'vitest.config.mjs', 'tests/setup.ts', 'tests/__mocks__/obsidian.ts',
+      'vitest.config.mjs', 'tests/setup.ts', 'tests/__mocks__/obsidian.ts', 'tests/obsidian-augment.d.ts',
       'tests/unit/settings.test.ts', 'tests/vue/counterStore.test.ts',
       'eslint.config.mjs', '.prettierrc.json', '.editorconfig',
       'scripts/sync-version.mjs', 'scripts/check-css-important.mjs', 'scripts/check-artifacts.mjs',
-      'CLAUDE.md', 'README.md',
+      'src/core/events/EventBus.ts', 'src/core/notices/NoticeService.ts', 'src/core/modals/ModalService.ts',
+      'src/core/commands/CommandsService.ts', 'src/commands.ts', 'src/ui/statusBar.ts', 'src/ui/registerViews.ts',
+      'tests/unit/eventBus.test.ts', 'tests/unit/modalService.test.ts', 'tests/unit/commandsService.test.ts',
+      'tests/unit/statusBar.test.ts',
+      'CLAUDE.md', 'AGENTS.md', 'README.md', 'docs/adr/0001-plugin-architecture-baseline.md',
     ]) {
       assert.ok(existsSync(join(p.dir, f)), `missing ${f}`);
     }
