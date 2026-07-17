@@ -45,9 +45,10 @@ export class VueView extends ItemView {
     app.use(router);
     // markRaw: Obsidian objects are large and cyclic — never deep-proxy them.
     app.provide(PLUGIN_KEY, markRaw(this.plugin));
-    // Memory history does not auto-resolve the initial route; wait for it so the
-    // first paint already renders the matched page instead of an empty RouterView.
-    await router.isReady();
+    // Memory history has no initial navigation — push the start route explicitly
+    // and await it, so the first paint renders the matched page rather than an
+    // empty RouterView.
+    await router.push('/');
     app.mount(this.contentEl);
     this.vueApp = app;
   }

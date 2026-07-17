@@ -11,7 +11,7 @@ export const DEFAULT_SETTINGS: {{settingsType}} = {
   greeting: 'Hello from {{id}}',
 };
 
-type SettingsPatch = Partial<{{settingsType}}> | null | undefined;
+export type SettingsPatch = Partial<{{settingsType}}> | null | undefined;
 
 // Saved data can predate new settings keys — always merge over defaults.
 export function withDefaults(partial: SettingsPatch): {{settingsType}} {

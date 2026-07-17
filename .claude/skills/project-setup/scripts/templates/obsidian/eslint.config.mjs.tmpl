@@ -38,6 +38,10 @@ const rawHtmlBans = [
   },
 ];
 
+// The plugin name is a brand exempt from sentence-case. Kept as its own const
+// so the rule line stays short whatever the name's length (prettier-stable).
+const brands = [...DEFAULT_BRANDS, {{brandLiteral}}];
+
 // Shared safety gate for production sources (src).
 const srcSafetyRules = {
   'no-console': 'error',
@@ -105,7 +109,7 @@ export default [
     // UI copy is sentence case; the plugin name stays a brand.
     files: ['src/**/*.ts'],
     rules: {
-      'obsidianmd/ui/sentence-case': ['error', { brands: [...DEFAULT_BRANDS, {{brandLiteral}}] }],
+      'obsidianmd/ui/sentence-case': ['error', { brands }],
       // The declarative settings API (getSettingDefinitions) requires Obsidian
       // 1.13+; this scaffold targets an earlier minAppVersion, so the
       // imperative PluginSettingTab is correct. Turn this back on once you

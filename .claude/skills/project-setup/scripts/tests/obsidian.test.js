@@ -98,6 +98,39 @@ test('versions.json maps the initial version to minAppVersion', () => {
   assert.equal(versions[manifest.version], '1.6.7');
 });
 
+test('manifest/versions inherit an existing package.json version (brownfield, no check:artifacts desync)', () => {
+  const brown = planObsidian(optionsWith(BASE), { packageVersion: '2.3.0' });
+  assert.equal(JSON.parse(findWrite(brown, 'manifest.json').content).version, '2.3.0');
+  assert.equal(JSON.parse(findWrite(brown, 'versions.json').content)['2.3.0'] !== undefined, true);
+  // Greenfield (no package version) falls back to the initial version.
+  const green = planObsidian(optionsWith(BASE), {});
+  assert.equal(JSON.parse(findWrite(green, 'manifest.json').content).version, '0.1.0');
+});
+
+test('brownfield (existing plugin) writes the harness + docs but skips the sample app + tests', () => {
+  const actions = planObsidian(optionsWith({ ...BASE, vue: false }), { obsidianAppPresent: true });
+  // No sample app sources or sample tests...
+  for (const p of ['src/main.ts', 'src/settings.ts', 'src/commands.ts', 'src/core/events/EventBus.ts', 'tests/unit/settings.test.ts', 'tests/unit/eventBus.test.ts']) {
+    assert.equal(findWrite(actions, p), undefined, `${p} must not be written on brownfield`);
+  }
+  // ...but the harness/infra + docs still land.
+  for (const p of ['eslint.config.mjs', 'vitest.config.mjs', 'tests/setup.ts', 'tests/__mocks__/obsidian.ts', 'AGENTS.md', '.npmrc']) {
+    assert.ok(findWrite(actions, p), `${p} must still be written on brownfield`);
+  }
+  assert.ok(actions.some((a) => a.type === 'notice' && /Existing plugin detected/.test(a.message)));
+});
+
+test('greenfield (empty) writes the full sample app + tests', () => {
+  const actions = planObsidian(optionsWith({ ...BASE, vue: false }), {});
+  assert.ok(findWrite(actions, 'src/main.ts'));
+  assert.ok(findWrite(actions, 'tests/unit/settings.test.ts'));
+});
+
+test('VueView pushes the start route before mount (memory history has no initial navigation)', () => {
+  const vueView = findWrite(actionsFor({ vue: true }), 'src/ui/VueView.ts').content;
+  assert.match(vueView, /await router\.push\('\/'\)/);
+});
+
 test('scaffold sources are skip-if-exists (brownfield-safe, never clobbers)', () => {
   for (const a of actionsFor()) {
     if (a.type !== 'writeFile') continue;

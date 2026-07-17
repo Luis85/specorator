@@ -102,6 +102,14 @@ export function freezeOptions(options, frozen, state) {
   if (options.obsidian) {
     options.testFramework = 'vitest';
     options.typescript = true;
+    // Freeze the greenfield decision at the FIRST apply: after the sample app is
+    // written its sources exist, which would flip detection to brownfield and
+    // make a re-apply skip them (and emit a spurious "harness only" notice).
+    // Prior report wins; otherwise derive from the current state.
+    options.obsidian.greenfield =
+      typeof frozen?.obsidian?.greenfield === 'boolean'
+        ? frozen.obsidian.greenfield
+        : !state?.obsidianAppPresent;
   }
   return options;
 }

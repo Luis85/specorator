@@ -6,7 +6,7 @@ import type { AppEvents } from './core/events/AppEvents';
 import { EventBus } from './core/events/EventBus';
 import { ModalService } from './core/modals/ModalService';
 import { NoticeService } from './core/notices/NoticeService';
-import type { {{settingsType}} } from './settings';
+import type { {{settingsType}}, SettingsPatch } from './settings';
 import { DEFAULT_SETTINGS, {{settingsTab}}, withDefaults } from './settings';
 {{viewImport}}import { registerStatusBar } from './ui/statusBar';
 
@@ -27,7 +27,7 @@ export default class {{pluginClass}} extends Plugin {
 {{viewRegistration}}  }
 
   async loadSettings(): Promise<void> {
-    this.settings = withDefaults((await this.loadData()) as Partial<{{settingsType}}> | null);
+    this.settings = withDefaults((await this.loadData()) as SettingsPatch);
   }
 
   async saveSettings(): Promise<void> {

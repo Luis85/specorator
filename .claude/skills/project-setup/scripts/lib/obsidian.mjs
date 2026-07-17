@@ -41,20 +41,45 @@ function classNames(o) {
 
 const write = (path, content, mode = 'skip-if-exists') => ({ type: 'writeFile', path, mode, content });
 
-function planManifest(o) {
+// Greenfield = a brand-new plugin (no manifest, no scaffold app source). The
+// sample app (sources + tests) is written only then; an existing plugin gets
+// the harness + docs and adopts the patterns from AGENTS.md. Uses the frozen
+// decision (freezeOptions) when present so a re-apply stays idempotent, else
+// derives from state (the path direct-planner tests take).
+function isGreenfield(options, state) {
+  if (typeof options.obsidian?.greenfield === 'boolean') return options.obsidian.greenfield;
+  return !state?.obsidianAppPresent;
+}
+
+function planManifest(o, state, version) {
   const authorUrlLine = o.authorUrl ? `\n  "authorUrl": ${JSON.stringify(o.authorUrl)},` : '';
+  // An existing manifest is kept (skip-if-exists). Key the freshly-written
+  // versions.json to ITS version + minAppVersion, not the scaffold defaults, so
+  // check:artifacts doesn't flag a desync against the user's manifest.
+  const existing = state?.obsidianManifest;
+  const semver = (v) => (typeof v === 'string' && /^\d+\.\d+\.\d+$/.test(v) ? v : null);
+  const manifestVersion = semver(existing?.version) ?? version;
+  const minApp = semver(existing?.minAppVersion) ?? o.minAppVersion;
   const manifest = renderTemplate(loadTemplate('obsidian/manifest.json.tmpl'), {
     idJson: JSON.stringify(o.id),
     nameJson: JSON.stringify(o.name),
-    version: INITIAL_VERSION,
-    minAppJson: JSON.stringify(o.minAppVersion),
+    version: manifestVersion,
+    minAppJson: JSON.stringify(minApp),
     descriptionJson: JSON.stringify(o.description),
     authorJson: JSON.stringify(o.author),
     authorUrlLine,
     isDesktopOnly: String(!o.mobile),
   });
-  const versions = `{\n  ${JSON.stringify(INITIAL_VERSION)}: ${JSON.stringify(o.minAppVersion)}\n}\n`;
+  const versions = `{\n  ${JSON.stringify(manifestVersion)}: ${JSON.stringify(minApp)}\n}\n`;
   return [write('manifest.json', manifest), write('versions.json', versions)];
+}
+
+// A generated manifest inherits the repo's existing package.json version (a
+// brownfield adopt) so it never desyncs; greenfield falls back to 0.1.0. Only a
+// clean semver `major.minor.patch` is templated into the JSON.
+function initialVersion(state) {
+  const v = state?.packageVersion;
+  return typeof v === 'string' && /^\d+\.\d+\.\d+$/.test(v) ? v : INITIAL_VERSION;
 }
 
 function planBuild(options, state) {
@@ -83,8 +108,22 @@ function planBuild(options, state) {
   return actions;
 }
 
-function planSources(options) {
+function planSources(options, state) {
   const o = options.obsidian;
+  // The base stylesheet is harness, not app: the build reads src/styles.css to
+  // assemble styles.css, so write it in both modes (skip-if-exists keeps the
+  // user's). Without it a brownfield build emits an empty styles.css and
+  // check:artifacts fails.
+  const stylesheet = write('src/styles.css', renderTemplate(loadTemplate('obsidian/src/styles.css.tmpl'), { id: o.id, name: o.name }));
+  // Brownfield: keep the user's app, add only the harness/docs. The sample
+  // modules import each other's APIs, so dropping them beside an existing
+  // main.ts would mismatch — point the user at AGENTS.md instead.
+  if (!isGreenfield(options, state)) {
+    return [
+      stylesheet,
+      notice('Existing plugin detected (a manifest or src/ source is present) — the harness (build, tests, lint, ratchets, CI, docs) was added but NOT the sample app sources. Adopt the service/command/event patterns from the generated AGENTS.md into your own code.'),
+    ];
+  }
   const names = classNames(o);
   const shared = {
     pluginClass: names.pluginClass,
@@ -109,10 +148,10 @@ function planSources(options) {
       : '',
   };
   const actions = [
+    stylesheet,
     write('src/main.ts', renderTemplate(loadTemplate('obsidian/src/main.ts.tmpl'), mainVars)),
     write('src/settings.ts', renderTemplate(loadTemplate('obsidian/src/settings.ts.tmpl'), shared)),
     write('src/commands.ts', renderTemplate(loadTemplate('obsidian/src/commands.ts.tmpl'), commandVars)),
-    write('src/styles.css', renderTemplate(loadTemplate('obsidian/src/styles.css.tmpl'), { id: o.id, name: o.name })),
     // Core services: provider-neutral, UI-free, unit-tested — the seam every
     // feature builds on (see the generated AGENTS.md).
     write('src/core/commands/CommandsService.ts', renderTemplate(loadTemplate('obsidian/src/core/commands/CommandsService.ts.tmpl'), shared)),
@@ -192,30 +231,42 @@ function planObsidianEslint(options, state) {
 function planObsidianVitest(options, state) {
   const o = options.obsidian;
   const cov = Boolean(options.guardrails?.coverageFloors);
-  const scripts = { test: 'vitest run', 'test:watch': 'vitest' };
+  // --passWithNoTests: a brownfield plugin (or a fresh one before its first
+  // test) has no sample tests, and `vitest run` otherwise exits non-zero on an
+  // empty suite, failing the day-one gate.
+  const scripts = { test: 'vitest run --passWithNoTests', 'test:watch': 'vitest' };
   const deps = ['vitest', 'jsdom', 'typescript'];
   if (cov) {
-    scripts['test:coverage'] = 'vitest run --coverage';
+    scripts['test:coverage'] = 'vitest run --coverage --passWithNoTests';
     deps.push('@vitest/coverage-istanbul');
   }
   if (o.vue) deps.push('@vitejs/plugin-vue', '@vue/test-utils');
+  // The test-lane infrastructure is always safe to write.
   const actions = [
     write('tests/setup.ts', loadTemplate('obsidian/tests/setup.ts.tmpl')),
     write('tests/__mocks__/obsidian.ts', loadTemplate('obsidian/tests/obsidian-mock.ts.tmpl')),
     write('tests/obsidian-augment.d.ts', loadTemplate('obsidian/tests/obsidian-augment.d.ts.tmpl')),
-    write('tests/unit/settings.test.ts', loadTemplate('obsidian/tests/settings.test.ts.tmpl')),
-    write('tests/unit/eventBus.test.ts', loadTemplate('obsidian/tests/eventBus.test.ts.tmpl')),
-    write('tests/unit/noticeService.test.ts', loadTemplate('obsidian/tests/noticeService.test.ts.tmpl')),
-    write('tests/unit/modalService.test.ts', loadTemplate('obsidian/tests/modalService.test.ts.tmpl')),
-    write('tests/unit/commandsService.test.ts', loadTemplate('obsidian/tests/commandsService.test.ts.tmpl')),
-    write('tests/unit/statusBar.test.ts', loadTemplate('obsidian/tests/statusBar.test.ts.tmpl')),
   ];
-  if (o.vue) {
+  // The sample tests import the sample app's APIs, so they ship only when the
+  // app does (greenfield). Brownfield keeps the infra above and the user tests
+  // their own modules.
+  if (isGreenfield(options, state)) {
     actions.push(
-      write('tests/vue/counterStore.test.ts', loadTemplate('obsidian/tests/counterStore.test.ts.tmpl')),
-      write('tests/vue/HomePage.test.ts', loadTemplate('obsidian/tests/HomePage.test.ts.tmpl')),
-      write('tests/vue/greeting.test.ts', loadTemplate('obsidian/tests/greeting.test.ts.tmpl')),
+      write('tests/unit/settings.test.ts', loadTemplate('obsidian/tests/settings.test.ts.tmpl')),
+      write('tests/unit/eventBus.test.ts', loadTemplate('obsidian/tests/eventBus.test.ts.tmpl')),
+      write('tests/unit/noticeService.test.ts', loadTemplate('obsidian/tests/noticeService.test.ts.tmpl')),
+      write('tests/unit/modalService.test.ts', loadTemplate('obsidian/tests/modalService.test.ts.tmpl')),
+      write('tests/unit/commandsService.test.ts', loadTemplate('obsidian/tests/commandsService.test.ts.tmpl')),
+      write('tests/unit/statusBar.test.ts', loadTemplate('obsidian/tests/statusBar.test.ts.tmpl')),
     );
+    if (o.vue) {
+      actions.push(
+        write('tests/vue/counterStore.test.ts', loadTemplate('obsidian/tests/counterStore.test.ts.tmpl')),
+        write('tests/vue/HomePage.test.ts', loadTemplate('obsidian/tests/HomePage.test.ts.tmpl')),
+        write('tests/vue/greeting.test.ts', loadTemplate('obsidian/tests/greeting.test.ts.tmpl')),
+        write('tests/vue/appRouting.test.ts', loadTemplate('obsidian/tests/appRouting.test.ts.tmpl')),
+      );
+    }
   }
   // A hand-written vitest/vite config owns plugins/aliases/thresholds — never
   // shadow it (same standdown as the generic planner; the coverage gate is
@@ -230,7 +281,7 @@ function planObsidianVitest(options, state) {
     return [
       notice('Existing test config kept — the generated vitest.config.mjs was NOT written and the coverage gate was not wired. Wire the `obsidian` alias to tests/__mocks__/obsidian.ts and jsdom yourself (see references/obsidian-plugin.md).'),
       ...actions,
-      { type: 'mergeJson', path: 'package.json', patch: { scripts: { test: 'vitest run' }, devDependencies: dep(...standdownDeps) } },
+      { type: 'mergeJson', path: 'package.json', patch: { scripts: { test: 'vitest run --passWithNoTests' }, devDependencies: dep(...standdownDeps) } },
     ];
   }
   // Prettier-shaped object literal (not JSON.stringify) so the generated
@@ -243,8 +294,8 @@ function planObsidianVitest(options, state) {
     coverageThreshold,
   });
   return [
-    ...scriptCollision(options, state, 'test', 'vitest run'),
-    ...(cov ? scriptCollision(options, state, 'test:coverage', 'vitest run --coverage') : []),
+    ...scriptCollision(options, state, 'test', 'vitest run --passWithNoTests'),
+    ...(cov ? scriptCollision(options, state, 'test:coverage', 'vitest run --coverage --passWithNoTests') : []),
     write('vitest.config.mjs', config),
     ...actions,
     { type: 'mergeJson', path: 'package.json', patch: { scripts, devDependencies: dep(...deps) } },
@@ -360,7 +411,7 @@ function planProjectDocs(options) {
   return actions;
 }
 
-function planPackageBasics(options, state) {
+function planPackageBasics(options, state, version) {
   const o = options.obsidian;
   const scripts = {
     dev: 'node esbuild.config.mjs',
@@ -370,7 +421,7 @@ function planPackageBasics(options, state) {
   };
   const patch = {
     name: o.id,
-    version: INITIAL_VERSION,
+    version,
     description: o.description,
     main: 'main.js',
     engines: { node: '>=22' },
@@ -390,11 +441,12 @@ function planPackageBasics(options, state) {
 // Ordered composition for obsidian mode. plan() adds the shared planners
 // (fallow, LOC, report, docs, CI, install) around this.
 export function planObsidian(options, state = {}) {
+  const version = initialVersion(state);
   return [
-    ...planManifest(options.obsidian),
-    ...planPackageBasics(options, state),
+    ...planManifest(options.obsidian, state, version),
+    ...planPackageBasics(options, state, version),
     ...planBuild(options, state),
-    ...planSources(options),
+    ...planSources(options, state),
     ...planTsconfig(options),
     ...planObsidianEslint(options, state),
     ...planObsidianVitest(options, state),

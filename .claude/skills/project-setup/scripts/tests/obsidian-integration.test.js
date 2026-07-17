@@ -69,14 +69,18 @@ test('greenfield apply: full scaffold lands, second apply converges to a no-op',
     const run = () => {
       const options = loadFrom(p.dir, answers);
       const state = detect(p.dir);
-      freezeOptions(options, null, state);
+      // Read the prior report as the frozen source, exactly like cli() does —
+      // so the greenfield decision survives the post-write detection flip.
+      const reportPath = join(p.dir, 'project-setup.report.json');
+      const prior = existsSync(reportPath) ? JSON.parse(readFileSync(reportPath, 'utf8')) : null;
+      freezeOptions(options, prior?.options, state);
       return apply(plan(options, state), { cwd: p.dir, exec: () => {} });
     };
     run();
     for (const f of [
       'manifest.json', 'versions.json', 'esbuild.config.mjs', 'tsconfig.json',
       'src/main.ts', 'src/settings.ts', 'src/styles.css',
-      'src/ui/VueView.ts', 'src/ui/vue/App.vue', 'src/ui/vue/router.ts',
+      'src/ui/VueView.ts', 'src/ui/vue/App.vue', 'src/ui/vue/router.ts', 'tests/vue/appRouting.test.ts',
       'vitest.config.mjs', 'tests/setup.ts', 'tests/__mocks__/obsidian.ts', 'tests/obsidian-augment.d.ts',
       'tests/unit/settings.test.ts', 'tests/vue/counterStore.test.ts',
       'eslint.config.mjs', '.prettierrc.json', '.editorconfig', '.npmrc',
