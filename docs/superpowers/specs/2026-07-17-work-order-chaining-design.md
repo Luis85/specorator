@@ -156,17 +156,25 @@ Injected deps: `events`, `loadTaskSpec`, `listTemplates`, `createSuccessor`,
 
 ### Successor creation
 
-Successor creation reuses `createWorkOrderFromSeed` for the note skeleton, then applies
-the chain-specific content in one deterministic follow-up write. Splitting it this way
-is what makes the **template branch** correct. Today `buildWorkOrderMarkdownForSeed`'s
+Successor creation reuses `createWorkOrderFromSeed`, and injects the chain-specific
+content **inside the same `vault.create`** via a `postProcess` hook, so the note is
+written fully seeded and already `ready` — it is never observable in a runnable but
+un-seeded state. That single-write property is essential: the board reacts to the
+vault `create` event by re-indexing and ticking `QueueRunner`, which reloads the fresh
+note and launches it when auto-run is on. A create-then-modify sequence would expose a
+window where the queue reloads a `ready` note **before** the seed write lands, starting
+the successor with the bare template/default body and no handoff context. Seeding in the
+create write closes that race.
+
+The seeding also fixes a **template-branch** gap: today `buildWorkOrderMarkdownForSeed`'s
 template path renders only the template body — it never forwards `contextMarkdown` or
 `objective` (those are wired only in the blank branch) — and `createWorkOrderFromSeed`
 lets `template?.name` dominate `seed.title`. So a naive "just pass a seed" reuse would
 create every template-based successor **without** the predecessor wikilink / next-action
-seed and would **ignore** the configured title/objective overrides. The two-step flow
-below injects those inputs uniformly for template and blank successors.
+seed and would **ignore** the configured title/objective overrides. The `postProcess`
+hook injects those inputs uniformly for template and blank successors.
 
-**Step 1 — base note via `createWorkOrderFromSeed`.** `WorkOrderSeed` (in
+**Step 1 — base markdown via `createWorkOrderFromSeed`.** `WorkOrderSeed` (in
 `commands/taskCommands.ts`) gains optional fields: `titleOverride`, `provider`, `model`,
 `agent` (inline inheritance), `chain` (a `WorkOrderChainConfig` to persist onto the
 successor for the next hop), `chainedFrom`, `chainDepth`. `workOrderFrontmatter()`
@@ -191,11 +199,14 @@ The coordinator computes:
 - **status** = `'ready'`; **chainedFrom** = predecessor id;
   **chainDepth** = `(fm.chain_depth ?? 0) + 1`
 
-**Step 2 — inject the chain inputs (`applyNoteChange` on the just-created note).** One
-vault write composes pure `TaskNoteStore` transforms over the new note's content (no
-race — nothing else holds the fresh file):
+**Step 2 — seed via a `postProcess` hook, applied before `vault.create`.**
+`CreateWorkOrderOptions` gains `postProcess?: (markdown: string) => string`, applied to
+the generated markdown immediately before the single `vault.create` (a no-op for every
+existing call site). Because `writeChainContext`/`writeSections` are pure content
+transforms, the coordinator composes them into `postProcess` so the note is created with
+the seed already present:
 
-- `writeChainContext(content, { predecessorPath, nextAction })` — a new store method
+- `writeChainContext(markdown, { predecessorPath, nextAction })` — a new store method
   that inserts the seed at the **top** of the `## Context` section, dropping the default
   Context placeholder when present and preserving any template-authored context below.
   The seed stays within the section (no `##` sub-heading, which `writeSections` would
@@ -207,13 +218,17 @@ race — nothing else holds the fresh file):
   ```
   When the handoff has no `next_action` (e.g. a manual send-to-review with no structured
   handoff), the `**Next action:**` line is omitted; the wikilink stays.
-- `writeSections(content, { objective: config.objective })` — **only** when an objective
+- `writeSections(markdown, { objective: config.objective })` — **only** when an objective
   override is set, so a template-based successor honors the override instead of keeping
   the template's authored objective.
 
-Because Step 2 injects context + objective for **both** branches, the blank branch no
-longer relies on `contextMarkdown`/`objective` being threaded through
-`createWorkOrderFromSeed`; the one path is uniform and directly testable.
+Because the hook injects context + objective for **both** branches inside the create
+write, the blank branch no longer relies on `contextMarkdown`/`objective` being threaded
+through `createWorkOrderFromSeed`, the one path is uniform and directly testable, and
+there is no create-then-modify window for the queue to race. The predecessor's own
+writes (`chained_to` back-link, ledger line) happen after and don't affect the
+successor's runnability; the in-flight guard covers a duplicate predecessor event during
+that window.
 
 ### Templates carry chains
 
@@ -282,8 +297,9 @@ user accepts ────────────────► transitionTask 
                      WorkOrderChainCoordinator.handle
                      (trigger match? · not already chained? · under depth cap?)
                                         │ yes
-                     resolve template → createWorkOrderFromSeed (frontmatter/
-                     provider/model/title/body) → inject chain context + objective
+                     resolve template → createWorkOrderFromSeed with postProcess
+                     (one vault.create: frontmatter/provider/model/title/body +
+                      seeded context + objective override — already `ready`)
                                         │
                      stamp chained_to on predecessor · ledger line · notice
                                         │
@@ -316,7 +332,9 @@ user accepts ────────────────► transitionTask 
 - `tests/integration/features/tasks` — full `done → spawn → ready (→ auto-run)` path
   driven through a fake event bus, for **both** a blank and a template-based chain,
   asserting one successor, correct seeded context + overrides, and no duplicate on a
-  repeated event.
+  repeated event. Asserts the created note is **already seeded and `ready` from its
+  single `vault.create`** (the `postProcess` output), so an auto-run reload can never
+  observe a runnable-but-un-seeded successor.
 
 ## Files
 
@@ -324,7 +342,8 @@ user accepts ────────────────► transitionTask 
 `ui/ChainConfigModal.ts`, plus the mirrored test files.
 
 **Edited:** `commands/taskCommands.ts` (seed fields + `titleOverride` precedence in
-`createWorkOrderFromSeed` + `workOrderFrontmatter` chain/provenance lines;
+`createWorkOrderFromSeed` + `workOrderFrontmatter` chain/provenance lines +
+`CreateWorkOrderOptions.postProcess` applied to the markdown before `vault.create`;
 `title` is computed here and passed down, so `workOrderResolution.ts` is untouched),
 `templates/templateTypes.ts`, `templates/TemplateNoteStore.ts`,
 `ui/workOrderTemplateEditorForm.ts`, `ui/vue/WorkOrderTemplateEditorRoot.vue`,
