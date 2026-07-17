@@ -19,6 +19,9 @@ export function useChatShellEventRouting(subscribe: ChatShellSubscribe): void {
       store.setTabs(snapshot.tabs);
       store.setHeader(snapshot.header);
       store.setActiveTabId(snapshot.activeTabId);
+      store.setConversations(snapshot.conversations);
+      store.setWorkOrder(snapshot.workOrder);
+      store.setGit(snapshot.git);
     });
   });
 

@@ -1,0 +1,264 @@
+<script setup lang="ts">
+import { computed, inject, nextTick, onBeforeUnmount, ref, watch } from 'vue';
+
+import type { ConversationMeta } from '../../../../../core/types';
+import { t } from '../../../../../i18n/i18n';
+import { onActivationKey } from '../activationKeys';
+import { CALLBACKS_KEY } from '../chatShellKeys';
+import { mountIcon } from '../mountIcon';
+import { useChatShellStore } from '../stores/chatShellStore';
+import { formatConversationDate } from './conversationHistoryFormat';
+
+const HISTORY_RENDER_WINDOW_SIZE = 50;
+
+const cb = inject(CALLBACKS_KEY);
+if (!cb) throw new Error('ConversationHistoryDropdown mounted without CALLBACKS_KEY');
+const store = useChatShellStore();
+
+const open = ref(false);
+const visibleCount = ref(HISTORY_RENDER_WINDOW_SIZE);
+const renamingId = ref<string | null>(null);
+const renameValue = ref('');
+const rootEl = ref<HTMLElement | null>(null);
+const renameInputEl = ref<HTMLInputElement | null>(null);
+
+const ordered = computed<ConversationMeta[]>(() => {
+  const items = [...store.conversations.items];
+  const currentId = store.conversations.currentConversationId;
+  if (currentId) {
+    const idx = items.findIndex((c) => c.id === currentId);
+    if (idx >= HISTORY_RENDER_WINDOW_SIZE) {
+      const [cur] = items.splice(idx, 1);
+      items.unshift(cur);
+    }
+  }
+  return items;
+});
+const visible = computed(() => ordered.value.slice(0, visibleCount.value));
+const hasMore = computed(() => visibleCount.value < ordered.value.length);
+
+function isCurrent(id: string): boolean { return id === store.conversations.currentConversationId; }
+// Memoized function refs: a fresh closure per render would make Vue
+// unbind+rebind (and setIcon-rebuild) EVERY visible icon on every patch —
+// ~2×window-size SVG rebuilds per keystroke while renaming. The cache key
+// includes the is-current flag deliberately: when the current conversation
+// changes, the row's ref identity changes, so Vue rebinds and setIcon swaps
+// message-square ↔ message-square-dot (that swap rides the ref change).
+// Bounded: 2 entries per conversation id seen + one per action icon name.
+const iconRefCache = new Map<string, (el: unknown) => void>();
+function cachedIconRef(key: string, icon: string): (el: unknown) => void {
+  let fn = iconRefCache.get(key);
+  if (!fn) { fn = (el: unknown) => mountIcon(el, icon); iconRefCache.set(key, fn); }
+  return fn;
+}
+function itemIcon(id: string) {
+  const current = isCurrent(id);
+  return cachedIconRef(`item:${id}:${current}`, current ? 'message-square-dot' : 'message-square');
+}
+function actionIcon(name: string) { return cachedIconRef(`action:${name}`, name); }
+// Function ref (not a bare `ref="..."` string): a plain ref inside `v-for`
+// auto-collects into an array in Vue 3, which would make `renameInputEl.value`
+// an array instead of the single input element.
+function renameInputRef(el: unknown): void {
+  renameInputEl.value = (el as HTMLInputElement | null) ?? null;
+}
+
+// Arrow-function expressions (not hoisted `function` declarations) for every
+// closure that reads `cb`: TS's narrowing of `cb` from the guard above only
+// survives closures that can't be invoked before the narrowing runs, which
+// excludes hoisted declarations (mirrors WorkOrderActivityDropdown.vue).
+const toggleOpen = (): void => {
+  open.value = !open.value;
+  if (open.value) {
+    visibleCount.value = HISTORY_RENDER_WINDOW_SIZE;
+    cb.onOpenHistory();
+  }
+};
+function close(): void { open.value = false; renamingId.value = null; }
+function showMore(): void { visibleCount.value += HISTORY_RENDER_WINDOW_SIZE; }
+
+function isNewTabModifierClick(e: MouseEvent): boolean {
+  return !e.altKey && !e.shiftKey && (e.metaKey || e.ctrlKey);
+}
+// Parity with the deleted ConversationHistoryView: a header history row always
+// opens the conversation in a (new-or-existing) tab via `onOpenConversationInNewTab`
+// — plain, modifier, and middle clicks all target the same action (the modifier
+// only suppresses the browser default), never replacing the active tab's
+// conversation. The loaded current row has no action (its list of messages is
+// already on screen); only an empty current row is re-openable.
+function isRowActionable(conv: ConversationMeta): boolean {
+  return !isCurrent(conv.id) || (conv.messageCount ?? 0) === 0;
+}
+const onRowClick = (conv: ConversationMeta, e: MouseEvent): void => {
+  if (!isRowActionable(conv)) return;
+  if (isNewTabModifierClick(e)) e.preventDefault();
+  cb.onOpenConversationInNewTab(conv.id, true); close();
+};
+const onRowAux = (conv: ConversationMeta, e: MouseEvent): void => {
+  if (e.button !== 1 || !isRowActionable(conv)) return;
+  e.preventDefault(); e.stopPropagation();
+  cb.onOpenConversationInNewTab(conv.id, true); close();
+};
+const onContextMenu = (conv: ConversationMeta, e: MouseEvent): void => {
+  e.preventDefault(); e.stopPropagation();
+  cb.onConversationContextMenu(conv.id, e, () => { void startRename(conv); }, () => close());
+};
+
+async function startRename(conv: ConversationMeta): Promise<void> {
+  renamingId.value = conv.id;
+  renameValue.value = conv.title;
+  await nextTick();
+  // Parity with the deleted view's showRenameInput: focus + select so the user
+  // can start typing immediately, and so Enter's blur() actually fires (blur()
+  // is a no-op unless the element is the current activeElement).
+  renameInputEl.value?.focus();
+  renameInputEl.value?.select();
+}
+const commitRename = (conv: ConversationMeta): void => {
+  if (renamingId.value !== conv.id) return; // Escape already cancelled
+  const next = renameValue.value.trim() || conv.title;
+  cb.onRenameConversation(conv.id, next);
+  renamingId.value = null;
+};
+function onRenameKeydown(e: KeyboardEvent, conv: ConversationMeta): void {
+  // Commit directly rather than relying on the follow-on native blur event
+  // (blur() is a no-op unless the input is the document's activeElement, which
+  // isn't guaranteed in every embedding). A real blur — e.g. clicking another
+  // row — still commits via @blur below.
+  if (e.key === 'Enter' && !e.isComposing) { commitRename(conv); (e.target as HTMLInputElement).blur(); }
+  else if (e.key === 'Escape' && !e.isComposing) { renamingId.value = null; }
+}
+
+function onDocClick(e: MouseEvent): void {
+  if (rootEl.value && !rootEl.value.contains(e.target as Node)) close();
+}
+// The click-away listener attaches when the menu OPENS, resolving the owner
+// document at that moment — so it lands on the right document even after
+// Obsidian moves the leaf into a popout window mid-life (a mount-time capture
+// would keep listening on the stale document). Detach always targets the
+// document the listener was added to.
+let listenerDoc: Document | null = null;
+function detachDocClick(): void {
+  listenerDoc?.removeEventListener('click', onDocClick);
+  listenerDoc = null;
+}
+watch(open, (isOpen) => {
+  detachDocClick();
+  if (isOpen) {
+    listenerDoc = rootEl.value?.ownerDocument ?? document;
+    listenerDoc.addEventListener('click', onDocClick);
+  }
+});
+onBeforeUnmount(detachDocClick);
+</script>
+
+<template>
+  <div
+    ref="rootEl"
+    class="specorator-history-container"
+  >
+    <div
+      :ref="actionIcon('history')"
+      class="specorator-header-btn"
+      role="button"
+      tabindex="0"
+      aria-label="Chat history"
+      aria-haspopup="true"
+      :aria-expanded="open ? 'true' : 'false'"
+      @click.stop="toggleOpen()"
+      @keydown="onActivationKey($event, toggleOpen)"
+    />
+    <div
+      class="specorator-history-menu"
+      :class="{ visible: open }"
+    >
+      <div class="specorator-history-header">
+        <span>Conversations</span>
+      </div>
+      <div class="specorator-history-list">
+        <div
+          v-if="ordered.length === 0"
+          class="specorator-history-empty"
+        >
+          No conversations
+        </div>
+        <div
+          v-for="conv in visible"
+          :key="conv.id"
+          class="specorator-history-item"
+          :class="{ active: isCurrent(conv.id) }"
+          @contextmenu="onContextMenu(conv, $event)"
+        >
+          <div
+            :ref="itemIcon(conv.id)"
+            class="specorator-history-item-icon"
+          />
+          <div
+            class="specorator-history-item-content"
+            @click.stop="onRowClick(conv, $event)"
+            @auxclick="onRowAux(conv, $event)"
+          >
+            <input
+              v-if="renamingId === conv.id"
+              :ref="renameInputRef"
+              v-model="renameValue"
+              class="specorator-rename-input"
+              type="text"
+              @blur="commitRename(conv)"
+              @keydown="onRenameKeydown($event, conv)"
+            >
+            <div
+              v-else
+              class="specorator-history-item-title"
+              :title="conv.title"
+            >
+              {{ conv.title }}
+            </div>
+            <div class="specorator-history-item-date">
+              {{ isCurrent(conv.id) ? 'Current session' : formatConversationDate(conv.lastResponseAt ?? conv.createdAt) }}
+            </div>
+          </div>
+          <div class="specorator-history-item-actions">
+            <span
+              v-if="conv.titleGenerationStatus === 'pending'"
+              :ref="actionIcon('loader-2')"
+              class="specorator-action-btn specorator-action-loading"
+              aria-label="Generating title..."
+            />
+            <button
+              v-else-if="conv.titleGenerationStatus === 'failed'"
+              :ref="actionIcon('refresh-cw')"
+              class="specorator-action-btn"
+              aria-label="Regenerate title"
+              @click.stop="cb.onRegenerateConversationTitle(conv.id)"
+            />
+            <button
+              :ref="actionIcon('pencil')"
+              class="specorator-action-btn"
+              aria-label="Rename"
+              @click.stop="startRename(conv)"
+            />
+            <button
+              :ref="actionIcon('trash-2')"
+              class="specorator-action-btn specorator-delete-btn"
+              aria-label="Delete"
+              @click.stop="cb.onDeleteConversation(conv.id)"
+            />
+          </div>
+        </div>
+        <div
+          v-if="hasMore"
+          class="specorator-history-show-more"
+        >
+          <button
+            type="button"
+            class="specorator-history-show-more-btn"
+            @click.stop="showMore()"
+          >
+            {{ t('chat.history.showMore') }}
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+</template>

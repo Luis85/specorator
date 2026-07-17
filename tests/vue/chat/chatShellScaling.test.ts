@@ -67,16 +67,20 @@ function seededCallbacks(snapshot: ChatShellSnapshot): ChatShellCallbacks {
     onNewTab: vi.fn(),
     onNewConversation: vi.fn(),
     onOpenHistory: vi.fn(),
-    onOpenWorkOrders: vi.fn(),
     onQuickActions: vi.fn(),
     onQuickActionsHover: vi.fn(),
     onRename: vi.fn(),
     onOpenSettings: vi.fn(),
-    mountHistoryHost: vi.fn(),
-    mountWorkOrderHost: vi.fn(),
-    mountGitActionHost: vi.fn(),
     resolveNavRowEl: vi.fn(() => null),
     renderProviderLogo: vi.fn(),
+    onOpenConversationInNewTab: vi.fn(),
+    onRenameConversation: vi.fn(),
+    onDeleteConversation: vi.fn(),
+    onRegenerateConversationTitle: vi.fn(),
+    onConversationContextMenu: vi.fn(),
+    onOpenWorkOrderItem: vi.fn(),
+    onCloseWorkOrderTab: vi.fn(),
+    onGitCommit: vi.fn(),
   };
 }
 
@@ -106,6 +110,9 @@ function mountShell(tabs: TabBarItem[], log?: RenderEntry[]) {
     tabs,
     activeTabId: tabs.find((t) => t.isActive)?.id ?? null,
     header: header(),
+    conversations: { items: [], currentConversationId: null },
+    workOrder: { items: [], closableTabs: [], runningCount: 0, attentionCount: 0 },
+    git: { isRepo: false, dirtyCount: 0, visible: false },
   };
   // Seed the store from the same snapshot the subscribe replays, so the badges
   // are in the initial render (the subscribe's on-mount onChange then re-sets

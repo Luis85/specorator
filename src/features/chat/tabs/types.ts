@@ -14,17 +14,18 @@ import type { NavigationController } from '../controllers/NavigationController';
 import type { SelectionController } from '../controllers/SelectionController';
 import type { StreamController } from '../controllers/StreamController';
 import type { SubagentManager } from '../services/SubagentManager';
+import type { BashOutputStore } from '../state/BashOutputStore';
 import type { ChatState } from '../state/ChatState';
 import type { BangBashModeManager } from '../ui/BangBashModeManager';
 import type { FileContextManager } from '../ui/FileContext';
 import type { ImageContextManager } from '../ui/ImageContext';
 import type { InstructionModeManager } from '../ui/InstructionModeManager';
-import type { NavigationSidebar } from '../ui/NavigationSidebar';
-import type { StatusPanel } from '../ui/StatusPanel';
 import type { ExternalContextSelector } from '../ui/toolbar/ExternalContextSelector';
 import type { McpServerSelector } from '../ui/toolbar/McpServerSelector';
 import type { MountedComposer } from '../ui/vue/composer/mountComposer';
+import type { MountedTabChrome } from '../ui/vue/tabChrome/mountTabChromeApp';
 import type { MountedTranscript } from '../ui/vue/transcript/mountTranscript';
+import type { TabChromeProjection } from './tabChrome';
 import type { TabComposerProjection } from './tabComposer';
 import type { TabTranscriptProjection } from './tabTranscript';
 
@@ -151,8 +152,6 @@ export interface TabUIComponents {
   slashCommandDropdown: SlashCommandDropdown | null;
   instructionModeManager: InstructionModeManager | null;
   bangBashModeManager: BangBashModeManager | null;
-  statusPanel: StatusPanel | null;
-  navigationSidebar: NavigationSidebar | null;
 }
 
 /**
@@ -187,6 +186,9 @@ export interface TabDOMElements {
 
   /** Cleanup functions for event listeners (prevents memory leaks). */
   eventCleanups: Array<() => void>;
+
+  /** NavOverlay teleport target. */
+  navSidebarHostEl: HTMLElement;
 }
 
 /**
@@ -315,6 +317,15 @@ export interface TabData {
 
   /** Handle to the mounted Vue composer island (unmounted on tab destroy). */
   mountedComposer: MountedComposer | null;
+
+  /** Engine-side owner of this tab's bang-bash outputs (bounded FIFO-50). */
+  bashOutputs: BashOutputStore | null;
+
+  /** Per-tab Vue tab-chrome projection source (engine → store snapshot fan-out). */
+  tabChrome: TabChromeProjection | null;
+
+  /** Handle to the mounted Vue tab-chrome island (unmounted on tab destroy). */
+  mountedTabChrome: MountedTabChrome | null;
 }
 
 export type TabProviderContext = Pick<TabData, 'conversationId' | 'service' | 'providerId' | 'lifecycleState' | 'draftModel'>;

@@ -181,6 +181,7 @@ function createMockDeps(overrides: Partial<InputControllerDeps> = {}): InputCont
       getConversationSync: jest.fn().mockReturnValue(null),
       getConversationById: jest.fn().mockResolvedValue(null),
       createConversation: jest.fn().mockResolvedValue({ id: 'conv-1' }),
+      events: { emit: jest.fn(), on: jest.fn() },
     } as any,
     state,
     mountInlineCard: mountInlineCard as any,
@@ -203,7 +204,6 @@ function createMockDeps(overrides: Partial<InputControllerDeps> = {}): InputCont
     conversationController: {
       save: jest.fn(),
       generateFallbackTitle: jest.fn().mockReturnValue('Test Title'),
-      updateHistoryDropdown: jest.fn(),
       clearTerminalSubagentsFromMessages: jest.fn(),
     } as any,
     getInputEl: () => inputEl,
@@ -224,7 +224,6 @@ function createMockDeps(overrides: Partial<InputControllerDeps> = {}): InputCont
     getInstructionModeManager: () => null,
     getInstructionRefineService: () => null,
     getTitleGenerationService: () => null,
-    getStatusPanel: () => null,
     // Chat always injects the composer dropdown coordinator; the resume dropdown
     // delegates render to it (no DOM-render fallback), so it must be present.
     getDropdownCoordinator: () => ({}) as any,
@@ -1476,6 +1475,8 @@ describe('InputController - Message Queue', () => {
       expect(deps.plugin.createConversation).toHaveBeenCalled();
       expect(deps.plugin.updateConversation).toHaveBeenCalledWith('conv-1', { titleGenerationStatus: 'pending' });
       expect(deps.plugin.renameConversation).toHaveBeenCalledWith('conv-1', 'Test Title');
+      // Status flip must re-project the shell so an open history dropdown updates.
+      expect(deps.plugin.events.emit).toHaveBeenCalledWith('conversation:title-status-changed', { conversationId: 'conv-1' });
     });
 
     it('should find messages by role, not by index', async () => {
@@ -1797,21 +1798,6 @@ describe('InputController - Message Queue', () => {
       expect(deps.state.currentTodos).toHaveLength(2);
     });
 
-    it('should handle null statusPanel gracefully', async () => {
-      deps = createSendableDeps({
-        getStatusPanel: () => null,
-      });
-
-      ((deps as any).mockAgentService.query as jest.Mock).mockReturnValue(
-        createMockStream([{ type: 'done' }])
-      );
-
-      inputEl = deps.getInputEl() as ReturnType<typeof createMockInputEl>;
-      inputEl.value = 'Test message';
-      controller = new InputController(deps);
-
-      await expect(controller.sendMessage()).resolves.not.toThrow();
-    });
   });
 
   describe('Approval inline tracking', () => {

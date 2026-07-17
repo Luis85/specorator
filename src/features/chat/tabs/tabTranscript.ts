@@ -2,6 +2,7 @@ import type { ChatMessage, SubagentInfo } from '../../../core/types';
 import type { ChatState } from '../state/ChatState';
 import type { TranscriptHydrationError } from '../ui/vue/transcript/stores/transcriptStore';
 import type { TranscriptSnapshot, TranscriptSubscribe } from '../ui/vue/transcript/transcriptCallbacks';
+import { ProjectionObserverSet } from './projectionObservers';
 
 /**
  * Per-tab projection source for the Vue transcript island. Mirrors
@@ -17,7 +18,7 @@ import type { TranscriptSnapshot, TranscriptSubscribe } from '../ui/vue/transcri
  * — the store has no other channel to the engine.
  */
 export class TabTranscriptProjection {
-  private readonly observers = new Set<(s: TranscriptSnapshot) => void>();
+  private readonly observerSet = new ProjectionObserverSet<TranscriptSnapshot>(() => this.snapshot());
   private greeting = '';
   private loadingText: string | null = null;
   private hydrationError: TranscriptHydrationError | null = null;
@@ -36,22 +37,12 @@ export class TabTranscriptProjection {
   /** The `TranscriptCallbacks.subscribe` seam: registers an observer, pushes the
    *  current snapshot immediately (like `mountChatShell`'s subscribe), returns a
    *  disposer. */
-  readonly subscribe: TranscriptSubscribe = (onChange) => {
-    this.observers.add(onChange);
-    onChange(this.snapshot());
-    return () => {
-      this.observers.delete(onChange);
-    };
-  };
+  readonly subscribe: TranscriptSubscribe = this.observerSet.subscribe;
 
   /** Builds a snapshot and fans it to every observer. Cheap: a shallow message
    *  copy + a stream snapshot. No-op when nothing is mounted. */
   emit(): void {
-    if (this.observers.size === 0) return;
-    const snapshot = this.snapshot();
-    for (const observer of this.observers) {
-      observer(snapshot);
-    }
+    this.observerSet.emit();
   }
 
   /** Stores the welcome greeting and re-emits (idempotent on an unchanged value). */

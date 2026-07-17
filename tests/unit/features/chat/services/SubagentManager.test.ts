@@ -5,61 +5,17 @@ import { tmpdir } from 'os';
 import { join } from 'path';
 
 import type { SubagentInfo, ToolCallInfo } from '@/core/types';
+import { spawnPendingTask } from '@/features/chat/services/pendingTaskSpawn';
 import { SubagentManager } from '@/features/chat/services/SubagentManager';
 import { createStopSubagentHook } from '@/providers/claude/hooks/SubagentHooks';
 
-jest.mock('@/features/chat/rendering/SubagentRenderer', () => ({
-  createSubagentBlock: jest.fn().mockImplementation((_app: any, _parentEl: any, toolId: string, input: any) => ({
-    wrapperEl: { querySelector: jest.fn().mockReturnValue(null) },
-    contentEl: {},
-    info: {
-      id: toolId,
-      description: input?.description || 'Task',
-      prompt: input?.prompt || '',
-      mode: 'sync',
-      isExpanded: false,
-      status: 'running',
-      toolCalls: [],
-    },
-    toolCallStates: new Map(),
-  })),
-  createAsyncSubagentBlock: jest.fn().mockImplementation((_app: any, _parentEl: any, toolId: string, input: any) => ({
-    wrapperEl: { querySelector: jest.fn().mockReturnValue(null) },
-    info: {
-      id: toolId,
-      description: input?.description || 'Background task',
-      prompt: input?.prompt || '',
-      mode: 'async',
-      isExpanded: false,
-      status: 'running',
-      toolCalls: [],
-      asyncStatus: 'pending',
-    },
-    statusEl: {},
-  })),
-  addSubagentToolCall: jest.fn(),
-  updateSubagentToolResult: jest.fn(),
-  finalizeSubagentBlock: jest.fn(),
-  updateAsyncSubagentRunning: jest.fn(),
-  finalizeAsyncSubagent: jest.fn(),
-  markAsyncSubagentOrphaned: jest.fn(),
-}));
-
-const mockApp = {
-  workspace: { openLinkText: jest.fn() },
-  metadataCache: { getFirstLinkpathDest: jest.fn(() => null) },
-  vault: { getAbstractFileByPath: jest.fn(() => null) },
-} as never;
-
 const createManager = () => {
   const updates: SubagentInfo[] = [];
-  const manager = new SubagentManager(mockApp, (subagent) => {
+  const manager = new SubagentManager((subagent) => {
     updates.push({ ...subagent });
   });
   return { manager, updates };
 };
-
-const createMockEl = () => ({ createDiv: jest.fn(), appendChild: jest.fn() } as any);
 
 describe('SubagentManager', () => {
   beforeEach(() => {
@@ -73,9 +29,8 @@ describe('SubagentManager', () => {
   describe('async lifecycle', () => {
     it('transitions from pending to running when agent_id is parsed', () => {
       const { manager, updates } = createManager();
-      const parentEl = createMockEl();
 
-      manager.handleTaskToolUse('task-1', { description: 'Background', run_in_background: true }, parentEl);
+      manager.handleTaskToolUse('task-1', { description: 'Background', run_in_background: true }, true);
       expect(manager.getByTaskId('task-1')?.asyncStatus).toBe('pending');
 
       manager.handleTaskToolResult('task-1', JSON.stringify({ agent_id: 'agent-123' }));
@@ -89,9 +44,8 @@ describe('SubagentManager', () => {
 
     it('transitions from pending to running when agent_id exists only in toolUseResult', () => {
       const { manager, updates } = createManager();
-      const parentEl = createMockEl();
 
-      manager.handleTaskToolUse('task-structured', { description: 'Background', run_in_background: true }, parentEl);
+      manager.handleTaskToolUse('task-structured', { description: 'Background', run_in_background: true }, true);
       manager.handleTaskToolResult(
         'task-structured',
         'Task launched',
@@ -108,9 +62,8 @@ describe('SubagentManager', () => {
 
     it('transitions from pending to running when structured content carries agent_id', () => {
       const { manager, updates } = createManager();
-      const parentEl = createMockEl();
 
-      manager.handleTaskToolUse('task-array', { description: 'Background', run_in_background: true }, parentEl);
+      manager.handleTaskToolUse('task-array', { description: 'Background', run_in_background: true }, true);
       manager.handleTaskToolResult(
         'task-array',
         [{ type: 'text', text: '{"agent_id":"agent-array-1"}' }] as any,
@@ -125,9 +78,8 @@ describe('SubagentManager', () => {
 
     it('moves to error when Task tool_result parsing fails', () => {
       const { manager, updates } = createManager();
-      const parentEl = createMockEl();
 
-      manager.handleTaskToolUse('task-parse-fail', { description: 'No id', run_in_background: true }, parentEl);
+      manager.handleTaskToolUse('task-parse-fail', { description: 'No id', run_in_background: true }, true);
       manager.handleTaskToolResult('task-parse-fail', 'no agent id present');
 
       expect(manager.getByTaskId('task-parse-fail')).toBeUndefined();
@@ -138,9 +90,8 @@ describe('SubagentManager', () => {
 
     it('moves to error when Task tool_result itself is an error', () => {
       const { manager, updates } = createManager();
-      const parentEl = createMockEl();
 
-      manager.handleTaskToolUse('task-error', { description: 'Will fail', run_in_background: true }, parentEl);
+      manager.handleTaskToolUse('task-error', { description: 'Will fail', run_in_background: true }, true);
       manager.handleTaskToolResult('task-error', 'launch failed', true);
 
       expect(manager.getByTaskId('task-error')).toBeUndefined();
@@ -151,9 +102,8 @@ describe('SubagentManager', () => {
 
     it('stays running when AgentOutputTool reports not_ready', () => {
       const { manager } = createManager();
-      const parentEl = createMockEl();
 
-      manager.handleTaskToolUse('task-running', { description: 'Background', run_in_background: true }, parentEl);
+      manager.handleTaskToolUse('task-running', { description: 'Background', run_in_background: true }, true);
       manager.handleTaskToolResult('task-running', JSON.stringify({ agent_id: 'agent-abc' }));
 
       const toolCall: ToolCallInfo = {
@@ -177,9 +127,8 @@ describe('SubagentManager', () => {
 
     it('ignores unrelated tool_result when async subagent is active', () => {
       const { manager } = createManager();
-      const parentEl = createMockEl();
 
-      manager.handleTaskToolUse('task-standalone', { description: 'Background', run_in_background: true }, parentEl);
+      manager.handleTaskToolUse('task-standalone', { description: 'Background', run_in_background: true }, true);
       manager.handleTaskToolResult('task-standalone', JSON.stringify({ agent_id: 'agent-standalone' }));
 
       const unrelated = manager.handleAgentOutputToolResult(
@@ -194,9 +143,8 @@ describe('SubagentManager', () => {
 
     it('finalizes to completed when AgentOutputTool succeeds and extracts result', () => {
       const { manager, updates } = createManager();
-      const parentEl = createMockEl();
 
-      manager.handleTaskToolUse('task-complete', { description: 'Background', run_in_background: true }, parentEl);
+      manager.handleTaskToolUse('task-complete', { description: 'Background', run_in_background: true }, true);
       manager.handleTaskToolResult('task-complete', JSON.stringify({ agent_id: 'agent-complete' }));
 
       const toolCall: ToolCallInfo = {
@@ -225,9 +173,8 @@ describe('SubagentManager', () => {
 
     it('finalizes to error when AgentOutputTool result has isError=true', () => {
       const { manager, updates } = createManager();
-      const parentEl = createMockEl();
 
-      manager.handleTaskToolUse('task-err', { description: 'Background', run_in_background: true }, parentEl);
+      manager.handleTaskToolUse('task-err', { description: 'Background', run_in_background: true }, true);
       manager.handleTaskToolResult('task-err', JSON.stringify({ agent_id: 'agent-err' }));
 
       const toolCall: ToolCallInfo = {
@@ -254,10 +201,9 @@ describe('SubagentManager', () => {
 
     it('marks pending and running async subagents as orphaned', () => {
       const { manager } = createManager();
-      const parentEl = createMockEl();
 
-      manager.handleTaskToolUse('pending-task', { description: 'Pending task', run_in_background: true }, parentEl);
-      manager.handleTaskToolUse('running-task', { description: 'Running task', run_in_background: true }, parentEl);
+      manager.handleTaskToolUse('pending-task', { description: 'Pending task', run_in_background: true }, true);
+      manager.handleTaskToolUse('running-task', { description: 'Running task', run_in_background: true }, true);
       manager.handleTaskToolResult('running-task', JSON.stringify({ agent_id: 'agent-running' }));
 
       const orphaned = manager.orphanAllActive();
@@ -309,9 +255,8 @@ describe('SubagentManager', () => {
 
     it('handles TaskOutput with task_id parameter (SDK format)', () => {
       const { manager, updates } = createManager();
-      const parentEl = createMockEl();
 
-      manager.handleTaskToolUse('task-sdk', { description: 'SDK test', run_in_background: true }, parentEl);
+      manager.handleTaskToolUse('task-sdk', { description: 'SDK test', run_in_background: true }, true);
       manager.handleTaskToolResult('task-sdk', JSON.stringify({ agent_id: 'agent-sdk-123' }));
 
       const toolCall: ToolCallInfo = {
@@ -341,9 +286,8 @@ describe('SubagentManager', () => {
 
     it('returns undefined on invalid AgentOutputTool state transition', () => {
       const { manager } = createManager();
-      const parentEl = createMockEl();
 
-      manager.handleTaskToolUse('task-done', { description: 'Background', run_in_background: true }, parentEl);
+      manager.handleTaskToolUse('task-done', { description: 'Background', run_in_background: true }, true);
       manager.handleTaskToolResult('task-done', JSON.stringify({ agent_id: 'agent-done' }));
 
       manager.handleAgentOutputToolUse({
@@ -364,9 +308,8 @@ describe('SubagentManager', () => {
 
     it('treats plain text not_ready as still running', () => {
       const { manager } = createManager();
-      const parentEl = createMockEl();
 
-      manager.handleTaskToolUse('task-plain', { description: 'Background', run_in_background: true }, parentEl);
+      manager.handleTaskToolUse('task-plain', { description: 'Background', run_in_background: true }, true);
       manager.handleTaskToolResult('task-plain', JSON.stringify({ agent_id: 'agent-plain' }));
 
       const toolCall: ToolCallInfo = {
@@ -384,9 +327,8 @@ describe('SubagentManager', () => {
 
     it('treats XML-style status running as still running', () => {
       const { manager } = createManager();
-      const parentEl = createMockEl();
 
-      manager.handleTaskToolUse('task-xml', { description: 'Background', run_in_background: true }, parentEl);
+      manager.handleTaskToolUse('task-xml', { description: 'Background', run_in_background: true }, true);
       manager.handleTaskToolResult('task-xml', JSON.stringify({ agent_id: 'agent-xml' }));
 
       const toolCall: ToolCallInfo = {
@@ -409,9 +351,8 @@ describe('SubagentManager', () => {
 
     it('extracts first agent result when agentId is missing', () => {
       const { manager } = createManager();
-      const parentEl = createMockEl();
 
-      manager.handleTaskToolUse('task-first', { description: 'Background', run_in_background: true }, parentEl);
+      manager.handleTaskToolUse('task-first', { description: 'Background', run_in_background: true }, true);
       manager.handleTaskToolResult('task-first', JSON.stringify({ agent_id: 'agent-first' }));
 
       const toolCall: ToolCallInfo = {
@@ -434,9 +375,8 @@ describe('SubagentManager', () => {
 
     it('infers agentId from AgentOutputTool result when not linked', () => {
       const { manager } = createManager();
-      const parentEl = createMockEl();
 
-      manager.handleTaskToolUse('task-infer', { description: 'Background', run_in_background: true }, parentEl);
+      manager.handleTaskToolUse('task-infer', { description: 'Background', run_in_background: true }, true);
       manager.handleTaskToolResult('task-infer', JSON.stringify({ agent_id: 'agent-infer' }));
 
       const result = JSON.stringify({
@@ -451,9 +391,8 @@ describe('SubagentManager', () => {
 
     it('gets running subagent by task id after transition', () => {
       const { manager } = createManager();
-      const parentEl = createMockEl();
 
-      manager.handleTaskToolUse('task-map', { description: 'Background', run_in_background: true }, parentEl);
+      manager.handleTaskToolUse('task-map', { description: 'Background', run_in_background: true }, true);
       manager.handleTaskToolResult('task-map', JSON.stringify({ agent_id: 'agent-map' }));
 
       expect(manager.getByTaskId('task-map')?.agentId).toBe('agent-map');
@@ -471,8 +410,7 @@ describe('SubagentManager', () => {
       agentId: string,
       outputToolId: string
     ) => {
-      const parentEl = createMockEl();
-      manager.handleTaskToolUse(taskId, { description: 'Background', run_in_background: true }, parentEl);
+      manager.handleTaskToolUse(taskId, { description: 'Background', run_in_background: true }, true);
       manager.handleTaskToolResult(taskId, JSON.stringify({ agent_id: agentId }));
       manager.handleAgentOutputToolUse({
         id: outputToolId,
@@ -850,8 +788,7 @@ Only this is the final result.
 
     it('parses camelCase agentId from task result', () => {
       const { manager } = createManager();
-      const parentEl = createMockEl();
-      manager.handleTaskToolUse('task-1', { description: 'Bg', run_in_background: true }, parentEl);
+      manager.handleTaskToolUse('task-1', { description: 'Bg', run_in_background: true }, true);
 
       manager.handleTaskToolResult('task-1', JSON.stringify({ agentId: 'camel' }));
       expect(manager.getByTaskId('task-1')).toBeDefined();
@@ -860,8 +797,7 @@ Only this is the final result.
 
     it('parses nested data.agent_id from task result', () => {
       const { manager } = createManager();
-      const parentEl = createMockEl();
-      manager.handleTaskToolUse('task-1', { description: 'Bg', run_in_background: true }, parentEl);
+      manager.handleTaskToolUse('task-1', { description: 'Bg', run_in_background: true }, true);
 
       manager.handleTaskToolResult('task-1', JSON.stringify({ data: { agent_id: 'nested' } }));
       expect(manager.getByTaskId('task-1')?.agentId).toBe('nested');
@@ -869,8 +805,7 @@ Only this is the final result.
 
     it('parses id field from task result', () => {
       const { manager } = createManager();
-      const parentEl = createMockEl();
-      manager.handleTaskToolUse('task-1', { description: 'Bg', run_in_background: true }, parentEl);
+      manager.handleTaskToolUse('task-1', { description: 'Bg', run_in_background: true }, true);
 
       manager.handleTaskToolResult('task-1', JSON.stringify({ id: 'idfield' }));
       expect(manager.getByTaskId('task-1')?.agentId).toBe('idfield');
@@ -878,8 +813,7 @@ Only this is the final result.
 
     it('parses unicode-escaped agent_id from task result', () => {
       const { manager } = createManager();
-      const parentEl = createMockEl();
-      manager.handleTaskToolUse('task-1', { description: 'Bg', run_in_background: true }, parentEl);
+      manager.handleTaskToolUse('task-1', { description: 'Bg', run_in_background: true }, true);
 
       manager.handleTaskToolResult('task-1', '{"agent\\u005fid":"escaped"}');
       expect(manager.getByTaskId('task-1')?.agentId).toBe('escaped');
@@ -887,8 +821,7 @@ Only this is the final result.
 
     it('parses nested unicode-escaped agent_id from task result', () => {
       const { manager } = createManager();
-      const parentEl = createMockEl();
-      manager.handleTaskToolUse('task-1', { description: 'Bg', run_in_background: true }, parentEl);
+      manager.handleTaskToolUse('task-1', { description: 'Bg', run_in_background: true }, true);
 
       manager.handleTaskToolResult('task-1', '{"data": {"agent\\u005fid": "nested2"}}');
       expect(manager.getByTaskId('task-1')?.agentId).toBe('nested2');
@@ -896,8 +829,7 @@ Only this is the final result.
 
     it('transitions to error when no recognizable agent ID in task result', () => {
       const { manager, updates } = createManager();
-      const parentEl = createMockEl();
-      manager.handleTaskToolUse('task-1', { description: 'Bg', run_in_background: true }, parentEl);
+      manager.handleTaskToolUse('task-1', { description: 'Bg', run_in_background: true }, true);
 
       manager.handleTaskToolResult('task-1', '{"foo": "bar"}');
       const last = updates[updates.length - 1];
@@ -914,47 +846,44 @@ Only this is the final result.
     it('buffers task in pendingTasks when currentContentEl is null', () => {
       const { manager } = createManager();
 
-      const result = manager.handleTaskToolUse('task-1', { prompt: 'test' }, null);
+      const result = manager.handleTaskToolUse('task-1', { prompt: 'test' }, false);
       expect(result.action).toBe('buffered');
       expect(manager.hasPendingTask('task-1')).toBe(true);
     });
 
     it('renders task buffered with null parentEl once contentEl becomes available', () => {
       const { manager } = createManager();
-      const parentEl = createMockEl();
 
       // First chunk: no content element
-      manager.handleTaskToolUse('task-1', { prompt: 'test' }, null);
+      manager.handleTaskToolUse('task-1', { prompt: 'test' }, false);
       expect(manager.hasPendingTask('task-1')).toBe(true);
 
       // Second chunk: content element available, run_in_background known
-      const result = manager.handleTaskToolUse('task-1', { run_in_background: false }, parentEl);
+      const result = manager.handleTaskToolUse('task-1', { run_in_background: false }, true);
       expect(result.action).toBe('created_sync');
       expect(manager.hasPendingTask('task-1')).toBe(false);
     });
 
     it('returns created_sync for run_in_background=false', () => {
       const { manager } = createManager();
-      const parentEl = createMockEl();
 
       const result = manager.handleTaskToolUse(
         'task-sync',
         { prompt: 'test', run_in_background: false },
-        parentEl
+        true
       );
 
       expect(result.action).toBe('created_sync');
-      expect((result as any).subagentState.info.id).toBe('task-sync');
+      expect((result as any).info.id).toBe('task-sync');
     });
 
     it('returns created_async for run_in_background=true', () => {
       const { manager } = createManager();
-      const parentEl = createMockEl();
 
       const result = manager.handleTaskToolUse(
         'task-async',
         { description: 'Background', run_in_background: true },
-        parentEl
+        true
       );
 
       expect(result.action).toBe('created_async');
@@ -964,12 +893,11 @@ Only this is the final result.
 
     it('buffers task when run_in_background is missing', () => {
       const { manager } = createManager();
-      const parentEl = createMockEl();
 
       const result = manager.handleTaskToolUse(
         'task-unknown',
         { prompt: 'test' },
-        parentEl
+        true
       );
 
       expect(result.action).toBe('buffered');
@@ -978,12 +906,11 @@ Only this is the final result.
 
     it('upgrades buffered task to async when run_in_background=true arrives later', () => {
       const { manager } = createManager();
-      const parentEl = createMockEl();
 
       const first = manager.handleTaskToolUse(
         'task-upgrade',
         { prompt: 'test' },
-        parentEl
+        true
       );
       expect(first.action).toBe('buffered');
       expect(manager.hasPendingTask('task-upgrade')).toBe(true);
@@ -991,7 +918,7 @@ Only this is the final result.
       const second = manager.handleTaskToolUse(
         'task-upgrade',
         { run_in_background: true, description: 'Background' },
-        parentEl
+        true
       );
 
       expect(second.action).toBe('created_async');
@@ -1001,39 +928,36 @@ Only this is the final result.
 
     it('returns label_updated for already rendered sync subagent', () => {
       const { manager } = createManager();
-      const parentEl = createMockEl();
 
       // Create sync
-      manager.handleTaskToolUse('task-1', { run_in_background: false, description: 'Initial' }, parentEl);
+      manager.handleTaskToolUse('task-1', { run_in_background: false, description: 'Initial' }, true);
 
       // Update input
-      const result = manager.handleTaskToolUse('task-1', { description: 'Updated' }, parentEl);
+      const result = manager.handleTaskToolUse('task-1', { description: 'Updated' }, true);
       expect(result.action).toBe('label_updated');
     });
 
     it('returns label_updated for already rendered async subagent', () => {
       const { manager } = createManager();
-      const parentEl = createMockEl();
 
       // Create async
-      manager.handleTaskToolUse('task-1', { run_in_background: true, description: 'Initial' }, parentEl);
+      manager.handleTaskToolUse('task-1', { run_in_background: true, description: 'Initial' }, true);
 
       // Update input
-      const result = manager.handleTaskToolUse('task-1', { description: 'Updated' }, parentEl);
+      const result = manager.handleTaskToolUse('task-1', { description: 'Updated' }, true);
       expect(result.action).toBe('label_updated');
     });
 
     it('syncs async label update to canonical SubagentInfo', () => {
       const { manager } = createManager();
-      const parentEl = createMockEl();
 
-      manager.handleTaskToolUse('task-1', { run_in_background: true, description: 'Initial' }, parentEl);
+      manager.handleTaskToolUse('task-1', { run_in_background: true, description: 'Initial' }, true);
 
       // Canonical info should have initial description
       expect(manager.getByTaskId('task-1')?.description).toBe('Initial');
 
       // Update label via streaming input
-      manager.handleTaskToolUse('task-1', { description: 'Updated description' }, parentEl);
+      manager.handleTaskToolUse('task-1', { description: 'Updated description' }, true);
 
       // Canonical info should now reflect the update
       expect(manager.getByTaskId('task-1')?.description).toBe('Updated description');
@@ -1041,12 +965,11 @@ Only this is the final result.
 
     it('propagates prompt updates in label update', () => {
       const { manager } = createManager();
-      const parentEl = createMockEl();
 
-      manager.handleTaskToolUse('task-1', { run_in_background: true, description: 'Bg', prompt: 'initial' }, parentEl);
+      manager.handleTaskToolUse('task-1', { run_in_background: true, description: 'Bg', prompt: 'initial' }, true);
 
       // Update prompt via streaming input
-      manager.handleTaskToolUse('task-1', { prompt: 'full prompt text' }, parentEl);
+      manager.handleTaskToolUse('task-1', { prompt: 'full prompt text' }, true);
 
       // Canonical info should have updated prompt
       expect(manager.getByTaskId('task-1')?.prompt).toBe('full prompt text');
@@ -1054,40 +977,37 @@ Only this is the final result.
 
     it('merges buffered input and renders once content element becomes available', () => {
       const { manager } = createManager();
-      const parentEl = createMockEl();
 
       // First chunk without content target must be buffered.
-      manager.handleTaskToolUse('task-1', { description: 'Initial description' }, null);
+      manager.handleTaskToolUse('task-1', { description: 'Initial description' }, false);
       expect(manager.hasPendingTask('task-1')).toBe(true);
 
       // Second chunk arrives with a content target, additional input, and confirmed mode.
       const result = manager.handleTaskToolUse(
         'task-1',
         { prompt: 'latest prompt', run_in_background: false },
-        parentEl
+        true
       );
 
       expect(result.action).toBe('created_sync');
-      expect((result as any).subagentState.info.description).toBe('Initial description');
-      expect((result as any).subagentState.info.prompt).toBe('latest prompt');
+      expect((result as any).info.description).toBe('Initial description');
+      expect((result as any).info.prompt).toBe('latest prompt');
       expect(manager.hasPendingTask('task-1')).toBe(false);
     });
 
     it('increments spawned count when creating sync task', () => {
       const { manager } = createManager();
-      const parentEl = createMockEl();
 
       expect(manager.subagentsSpawnedThisStream).toBe(0);
-      manager.handleTaskToolUse('task-1', { run_in_background: false }, parentEl);
+      manager.handleTaskToolUse('task-1', { run_in_background: false }, true);
       expect(manager.subagentsSpawnedThisStream).toBe(1);
     });
 
     it('increments spawned count when creating async task', () => {
       const { manager } = createManager();
-      const parentEl = createMockEl();
 
       expect(manager.subagentsSpawnedThisStream).toBe(0);
-      manager.handleTaskToolUse('task-1', { run_in_background: true }, parentEl);
+      manager.handleTaskToolUse('task-1', { run_in_background: true }, true);
       expect(manager.subagentsSpawnedThisStream).toBe(1);
     });
   });
@@ -1106,11 +1026,10 @@ Only this is the final result.
 
     it('renders buffered sync task and increments counter', () => {
       const { manager } = createManager();
-      const parentEl = createMockEl();
 
-      manager.handleTaskToolUse('task-1', { prompt: 'test' }, null);
+      manager.handleTaskToolUse('task-1', { prompt: 'test' }, false);
 
-      const result = manager.renderPendingTask('task-1', parentEl);
+      const result = manager.renderPendingTask('task-1', true);
       expect(result).not.toBeNull();
       expect(result?.mode).toBe('sync');
       expect(manager.hasPendingTask('task-1')).toBe(false);
@@ -1121,7 +1040,7 @@ Only this is the final result.
       const { manager } = createManager();
 
       // Buffer with null parentEl (no content element)
-      manager.handleTaskToolUse('task-1', { prompt: 'test' }, null);
+      manager.handleTaskToolUse('task-1', { prompt: 'test' }, false);
       expect(manager.hasPendingTask('task-1')).toBe(true);
 
       // Try to render without override — both parentEl and override are null
@@ -1133,30 +1052,27 @@ Only this is the final result.
 
     it('renders buffered async task with parentEl override', () => {
       const { manager } = createManager();
-      const overrideEl = createMockEl();
 
       // Buffer with null parentEl so the task stays pending despite run_in_background being known
-      manager.handleTaskToolUse('task-1', { prompt: 'test', run_in_background: true }, null);
+      manager.handleTaskToolUse('task-1', { prompt: 'test', run_in_background: true }, false);
       expect(manager.hasPendingTask('task-1')).toBe(true);
 
-      const result = manager.renderPendingTask('task-1', overrideEl);
+      const result = manager.renderPendingTask('task-1', true);
       expect(result).not.toBeNull();
       expect(result?.mode).toBe('async');
     });
 
-    it('does not increment spawned counter when rendering throws', () => {
-      const { createSubagentBlock } = jest.requireMock('@/features/chat/rendering/SubagentRenderer');
-      createSubagentBlock.mockImplementationOnce(() => { throw new Error('DOM error'); });
+    it('swallows creation failures without bumping the spawned counter', () => {
+      const onSpawned = jest.fn();
 
-      const { manager } = createManager();
-      const parentEl = createMockEl();
+      const result = spawnPendingTask(
+        false,
+        () => { throw new Error('creation error'); },
+        onSpawned,
+      );
 
-      manager.handleTaskToolUse('task-1', { prompt: 'test' }, null);
-      expect(manager.subagentsSpawnedThisStream).toBe(0);
-
-      const result = manager.renderPendingTask('task-1', parentEl);
       expect(result).toBeNull();
-      expect(manager.subagentsSpawnedThisStream).toBe(0);
+      expect(onSpawned).not.toHaveBeenCalled();
     });
   });
 
@@ -1169,9 +1085,8 @@ Only this is the final result.
 
     it('infers async from agent_id markers when mode is still unknown', () => {
       const { manager } = createManager();
-      const parentEl = createMockEl();
 
-      manager.handleTaskToolUse('task-1', { prompt: 'test' }, parentEl);
+      manager.handleTaskToolUse('task-1', { prompt: 'test' }, true);
       const result = manager.renderPendingTaskFromTaskResult(
         'task-1',
         '{"agent_id":"agent-123"}',
@@ -1185,9 +1100,8 @@ Only this is the final result.
 
     it('infers async from structured task-result content when mode is still unknown', () => {
       const { manager } = createManager();
-      const parentEl = createMockEl();
 
-      manager.handleTaskToolUse('task-1', { prompt: 'test' }, parentEl);
+      manager.handleTaskToolUse('task-1', { prompt: 'test' }, true);
       const result = manager.renderPendingTaskFromTaskResult(
         'task-1',
         [{ type: 'text', text: '{"agent_id":"agent-structured"}' }] as any,
@@ -1201,9 +1115,8 @@ Only this is the final result.
 
     it('falls back to sync when no async evidence is present', () => {
       const { manager } = createManager();
-      const parentEl = createMockEl();
 
-      manager.handleTaskToolUse('task-1', { prompt: 'test' }, parentEl);
+      manager.handleTaskToolUse('task-1', { prompt: 'test' }, true);
       const result = manager.renderPendingTaskFromTaskResult(
         'task-1',
         '{"foo":"bar"}',
@@ -1217,18 +1130,17 @@ Only this is the final result.
 
     it('honors explicit async mode from input even without task-result markers', () => {
       const { manager } = createManager();
-      const parentEl = createMockEl();
 
       manager.handleTaskToolUse(
         'task-1',
         { prompt: 'test', run_in_background: true },
-        null
+        false
       );
       const result = manager.renderPendingTaskFromTaskResult(
         'task-1',
         '{"foo":"bar"}',
         false,
-        parentEl
+        true
       );
 
       expect(result).not.toBeNull();
@@ -1237,14 +1149,13 @@ Only this is the final result.
 
     it('infers async from toolUseResult markers when task-result text has no agent id', () => {
       const { manager } = createManager();
-      const parentEl = createMockEl();
 
-      manager.handleTaskToolUse('task-1', { prompt: 'test' }, parentEl);
+      manager.handleTaskToolUse('task-1', { prompt: 'test' }, true);
       const result = manager.renderPendingTaskFromTaskResult(
         'task-1',
         'Launching task...',
         false,
-        parentEl,
+        true,
         {
           isAsync: true,
           status: 'async_launched',
@@ -1258,14 +1169,13 @@ Only this is the final result.
 
     it('treats completed toolUseResult metadata with agentId as sync when mode is unknown', () => {
       const { manager } = createManager();
-      const parentEl = createMockEl();
 
-      manager.handleTaskToolUse('task-1', { prompt: 'test' }, parentEl);
+      manager.handleTaskToolUse('task-1', { prompt: 'test' }, true);
       const result = manager.renderPendingTaskFromTaskResult(
         'task-1',
         '{}',
         false,
-        parentEl,
+        true,
         {
           status: 'completed',
           agentId: 'agent-sync',
@@ -1285,18 +1195,17 @@ Only this is the final result.
 
     it('treats stringified completed task metadata with agentId as sync when mode is unknown', () => {
       const { manager } = createManager();
-      const parentEl = createMockEl();
       const completedToolUseResult = {
         status: 'completed',
         agentId: 'agent-sync',
       };
 
-      manager.handleTaskToolUse('task-1', { prompt: 'test' }, parentEl);
+      manager.handleTaskToolUse('task-1', { prompt: 'test' }, true);
       const result = manager.renderPendingTaskFromTaskResult(
         'task-1',
         JSON.stringify(completedToolUseResult, null, 2),
         false,
-        parentEl,
+        true,
         completedToolUseResult,
       );
 
@@ -1309,7 +1218,6 @@ Only this is the final result.
 
     it('treats sync result text with agentId metadata as sync when mode is unknown', () => {
       const { manager } = createManager();
-      const parentEl = createMockEl();
       const completedToolUseResult = {
         status: 'completed',
         agentId: 'agent-sync',
@@ -1319,12 +1227,12 @@ Only this is the final result.
         ],
       };
 
-      manager.handleTaskToolUse('task-1', { prompt: 'test' }, parentEl);
+      manager.handleTaskToolUse('task-1', { prompt: 'test' }, true);
       const result = manager.renderPendingTaskFromTaskResult(
         'task-1',
         'Full sync result.\nagentId: agent-sync\n<usage>total_tokens: 500</usage>',
         false,
-        parentEl,
+        true,
         completedToolUseResult,
       );
 
@@ -1337,9 +1245,8 @@ Only this is the final result.
 
     it('resolves to sync on errored task result when mode is unknown', () => {
       const { manager } = createManager();
-      const parentEl = createMockEl();
 
-      manager.handleTaskToolUse('task-1', { prompt: 'test' }, parentEl);
+      manager.handleTaskToolUse('task-1', { prompt: 'test' }, true);
       const result = manager.renderPendingTaskFromTaskResult(
         'task-1',
         '{"agent_id":"agent-123"}',
@@ -1358,21 +1265,18 @@ Only this is the final result.
   describe('sync subagent operations', () => {
     it('creates and retrieves sync subagent', () => {
       const { manager } = createManager();
-      const parentEl = createMockEl();
 
-      manager.handleTaskToolUse('task-1', { run_in_background: false }, parentEl);
+      manager.handleTaskToolUse('task-1', { run_in_background: false }, true);
 
-      const state = manager.getSyncSubagent('task-1');
-      expect(state).toBeDefined();
-      expect(state?.info.id).toBe('task-1');
+      const info = manager.getSyncSubagent('task-1');
+      expect(info).toBeDefined();
+      expect(info?.id).toBe('task-1');
     });
 
     it('adds tool call to sync subagent', () => {
-      const { addSubagentToolCall } = jest.requireMock('@/features/chat/rendering/SubagentRenderer');
       const { manager } = createManager();
-      const parentEl = createMockEl();
 
-      manager.handleTaskToolUse('task-1', { run_in_background: false }, parentEl);
+      manager.handleTaskToolUse('task-1', { run_in_background: false }, true);
 
       const toolCall: ToolCallInfo = {
         id: 'read-1',
@@ -1383,15 +1287,18 @@ Only this is the final result.
       };
       manager.addSyncToolCall('task-1', toolCall);
 
-      expect(addSubagentToolCall).toHaveBeenCalled();
+      expect(manager.getSyncSubagent('task-1')?.toolCalls).toEqual([
+        expect.objectContaining({ id: 'read-1', name: 'Read' }),
+      ]);
     });
 
     it('updates tool result in sync subagent', () => {
-      const { updateSubagentToolResult } = jest.requireMock('@/features/chat/rendering/SubagentRenderer');
       const { manager } = createManager();
-      const parentEl = createMockEl();
 
-      manager.handleTaskToolUse('task-1', { run_in_background: false }, parentEl);
+      manager.handleTaskToolUse('task-1', { run_in_background: false }, true);
+      manager.addSyncToolCall('task-1', {
+        id: 'read-1', name: 'Read', input: {}, status: 'running', isExpanded: false,
+      });
 
       const toolCall: ToolCallInfo = {
         id: 'read-1',
@@ -1403,30 +1310,29 @@ Only this is the final result.
       };
       manager.updateSyncToolResult('task-1', 'read-1', toolCall);
 
-      expect(updateSubagentToolResult).toHaveBeenCalled();
+      const updated = manager.getSyncSubagent('task-1')?.toolCalls[0];
+      expect(updated?.status).toBe('completed');
+      expect(updated?.result).toBe('file content');
     });
 
     it('finalizes sync subagent and removes from map', () => {
-      const { finalizeSubagentBlock } = jest.requireMock('@/features/chat/rendering/SubagentRenderer');
       const { manager } = createManager();
-      const parentEl = createMockEl();
 
-      manager.handleTaskToolUse('task-1', { run_in_background: false }, parentEl);
+      manager.handleTaskToolUse('task-1', { run_in_background: false }, true);
 
       const info = manager.finalizeSyncSubagent('task-1', 'done', false);
 
       expect(info).not.toBeNull();
       expect(info?.id).toBe('task-1');
-      expect(finalizeSubagentBlock).toHaveBeenCalled();
+      expect(info?.status).toBe('completed');
+      expect(info?.result).toBe('done');
       expect(manager.getSyncSubagent('task-1')).toBeUndefined();
     });
 
     it('extracts result from SDK toolUseResult.content for sync subagent', () => {
-      const { finalizeSubagentBlock } = jest.requireMock('@/features/chat/rendering/SubagentRenderer');
       const { manager } = createManager();
-      const parentEl = createMockEl();
 
-      manager.handleTaskToolUse('task-sdk', { run_in_background: false }, parentEl);
+      manager.handleTaskToolUse('task-sdk', { run_in_background: false }, true);
 
       const sdkToolUseResult = {
         status: 'completed',
@@ -1440,12 +1346,8 @@ Only this is the final result.
       const info = manager.finalizeSyncSubagent('task-sdk', '{}', false, sdkToolUseResult);
 
       expect(info).not.toBeNull();
-      // Verify the extracted result (first content block) was passed to the renderer
-      expect(finalizeSubagentBlock).toHaveBeenCalledWith(
-        expect.anything(),
-        'Full sync subagent result with multiple lines.\n\nSecond paragraph.',
-        false
-      );
+      // The extracted result (first content block) lands on the finalized info
+      expect(info?.result).toBe('Full sync subagent result with multiple lines.\n\nSecond paragraph.');
     });
 
     it('returns null when finalizing nonexistent subagent', () => {
@@ -1456,7 +1358,6 @@ Only this is the final result.
     });
 
     it('ignores tool call for nonexistent subagent', () => {
-      const { addSubagentToolCall } = jest.requireMock('@/features/chat/rendering/SubagentRenderer');
       const { manager } = createManager();
 
       manager.addSyncToolCall('nonexistent', {
@@ -1467,7 +1368,7 @@ Only this is the final result.
         isExpanded: false,
       });
 
-      expect(addSubagentToolCall).not.toHaveBeenCalled();
+      expect(manager.getSyncSubagent('nonexistent')).toBeUndefined();
     });
   });
 
@@ -1477,8 +1378,7 @@ Only this is the final result.
 
   describe('resolveAsyncError via handleAgentOutputToolResult', () => {
     function setupRunningSubagent(manager: SubagentManager) {
-      const parentEl = createMockEl();
-      manager.handleTaskToolUse('task-1', { description: 'BG', run_in_background: true }, parentEl);
+      manager.handleTaskToolUse('task-1', { description: 'BG', run_in_background: true }, true);
       manager.handleTaskToolResult('task-1', JSON.stringify({ agent_id: 'agent-1' }));
       manager.handleAgentOutputToolUse({
         id: 'output-1', name: 'AgentOutput',
@@ -1560,16 +1460,14 @@ Only this is the final result.
 
       it('returns true when pending async subagents exist', () => {
         const { manager } = createManager();
-        const parentEl = createMockEl();
-        manager.handleTaskToolUse('task-1', { description: 'Background', run_in_background: true }, parentEl);
+          manager.handleTaskToolUse('task-1', { description: 'Background', run_in_background: true }, true);
 
         expect(manager.hasRunningSubagents()).toBe(true);
       });
 
       it('returns true when active running subagents exist', () => {
         const { manager } = createManager();
-        const parentEl = createMockEl();
-        manager.handleTaskToolUse('task-1', { description: 'Background', run_in_background: true }, parentEl);
+          manager.handleTaskToolUse('task-1', { description: 'Background', run_in_background: true }, true);
         manager.handleTaskToolResult('task-1', JSON.stringify({ agent_id: 'agent-123' }));
 
         expect(manager.hasRunningSubagents()).toBe(true);
@@ -1577,8 +1475,7 @@ Only this is the final result.
 
       it('returns false when all subagents have completed', () => {
         const { manager } = createManager();
-        const parentEl = createMockEl();
-        manager.handleTaskToolUse('task-1', { description: 'Task agent-123', run_in_background: true }, parentEl);
+          manager.handleTaskToolUse('task-1', { description: 'Task agent-123', run_in_background: true }, true);
         manager.handleTaskToolResult('task-1', JSON.stringify({ agent_id: 'agent-123' }));
         manager.handleAgentOutputToolUse({
           id: 'output-agent-123',
@@ -1598,8 +1495,7 @@ Only this is the final result.
 
       it('returns false after a live task notification completes an active async subagent', () => {
         const { manager, updates } = createManager();
-        const parentEl = createMockEl();
-        manager.handleTaskToolUse('task-1', { description: 'Background', run_in_background: true }, parentEl);
+          manager.handleTaskToolUse('task-1', { description: 'Background', run_in_background: true }, true);
         manager.handleTaskToolResult('task-1', JSON.stringify({ agent_id: 'agent-123' }));
 
         expect(manager.hasRunningSubagents()).toBe(true);
@@ -1625,8 +1521,7 @@ Only this is the final result.
 
       it('returns false after parallel foreground tasks resolve from completed task results', () => {
         const { manager } = createManager();
-        const parentEl = createMockEl();
-        const syncToolUseResult1 = {
+          const syncToolUseResult1 = {
           status: 'completed',
           agentId: 'agent-sync-1',
           content: [{ type: 'text', text: 'Foreground result 1.' }],
@@ -1637,21 +1532,21 @@ Only this is the final result.
           content: [{ type: 'text', text: 'Foreground result 2.' }],
         };
 
-        manager.handleTaskToolUse('task-1', { prompt: 'Foreground 1' }, parentEl);
-        manager.handleTaskToolUse('task-2', { prompt: 'Foreground 2' }, parentEl);
+        manager.handleTaskToolUse('task-1', { prompt: 'Foreground 1' }, true);
+        manager.handleTaskToolUse('task-2', { prompt: 'Foreground 2' }, true);
 
         const first = manager.renderPendingTaskFromTaskResult(
           'task-1',
           '{}',
           false,
-          parentEl,
+          true,
           syncToolUseResult1
         );
         const second = manager.renderPendingTaskFromTaskResult(
           'task-2',
           '{}',
           false,
-          parentEl,
+          true,
           syncToolUseResult2
         );
 
@@ -1666,8 +1561,7 @@ Only this is the final result.
 
       it('allows the Stop hook after a foreground task resolves from completed task metadata', async () => {
         const { manager } = createManager();
-        const parentEl = createMockEl();
-        const completedToolUseResult = {
+          const completedToolUseResult = {
           status: 'completed',
           agentId: 'agent-sync',
         };
@@ -1675,12 +1569,12 @@ Only this is the final result.
           hasRunning: manager.hasRunningSubagents(),
         }));
 
-        manager.handleTaskToolUse('task-1', { prompt: 'Foreground task' }, parentEl);
+        manager.handleTaskToolUse('task-1', { prompt: 'Foreground task' }, true);
         const rendered = manager.renderPendingTaskFromTaskResult(
           'task-1',
           JSON.stringify(completedToolUseResult, null, 2),
           false,
-          parentEl,
+          true,
           completedToolUseResult,
         );
 
@@ -1712,9 +1606,8 @@ Only this is the final result.
   describe('lifecycle', () => {
     it('resets spawned count', () => {
       const { manager } = createManager();
-      const parentEl = createMockEl();
 
-      manager.handleTaskToolUse('task-1', { run_in_background: false }, parentEl);
+      manager.handleTaskToolUse('task-1', { run_in_background: false }, true);
       expect(manager.subagentsSpawnedThisStream).toBe(1);
 
       manager.resetSpawnedCount();
@@ -1723,10 +1616,9 @@ Only this is the final result.
 
     it('resets streaming state clears sync maps and pending tasks', () => {
       const { manager } = createManager();
-      const parentEl = createMockEl();
 
-      manager.handleTaskToolUse('task-sync', { run_in_background: false }, parentEl);
-      manager.handleTaskToolUse('task-pending', { prompt: 'test' }, null);
+      manager.handleTaskToolUse('task-sync', { run_in_background: false }, true);
+      manager.handleTaskToolUse('task-pending', { prompt: 'test' }, false);
 
       expect(manager.getSyncSubagent('task-sync')).toBeDefined();
       expect(manager.hasPendingTask('task-pending')).toBe(true);
@@ -1739,9 +1631,8 @@ Only this is the final result.
 
     it('clears all state', () => {
       const { manager } = createManager();
-      const parentEl = createMockEl();
 
-      manager.handleTaskToolUse('task-async', { description: 'Background', run_in_background: true }, parentEl);
+      manager.handleTaskToolUse('task-async', { description: 'Background', run_in_background: true }, true);
 
       manager.clear();
       expect(manager.getByTaskId('task-async')).toBeUndefined();
@@ -1750,10 +1641,9 @@ Only this is the final result.
 
     it('updates callback via setCallback', () => {
       const { manager } = createManager();
-      const parentEl = createMockEl();
       const newUpdates: SubagentInfo[] = [];
 
-      manager.handleTaskToolUse('task-1', { description: 'Background', run_in_background: true }, parentEl);
+      manager.handleTaskToolUse('task-1', { description: 'Background', run_in_background: true }, true);
       manager.setCallback((subagent) => { newUpdates.push({ ...subagent }); });
 
       manager.handleTaskToolResult('task-1', JSON.stringify({ agent_id: 'agent-new' }));

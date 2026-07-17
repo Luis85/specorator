@@ -1,5 +1,4 @@
 import { existsSync, readFileSync, realpathSync } from 'fs';
-import type { App } from 'obsidian';
 import { tmpdir } from 'os';
 import { isAbsolute, sep } from 'path';
 
@@ -11,18 +10,6 @@ import type {
   ToolCallInfo,
 } from '../../../core/types';
 import { extractFinalResultFromSubagentJsonl } from '../../../utils/subagentJsonl';
-import {
-  addSubagentToolCall,
-  type AsyncSubagentState,
-  createAsyncSubagentBlock,
-  createSubagentBlock,
-  finalizeAsyncSubagent,
-  finalizeSubagentBlock,
-  markAsyncSubagentOrphaned,
-  type SubagentState,
-  updateAsyncSubagentRunning,
-  updateSubagentToolResult,
-} from '../rendering/SubagentRenderer';
 import type { PendingToolCall } from '../state/types';
 import { buildPendingTaskCall, spawnPendingTask } from './pendingTaskSpawn';
 import {
@@ -34,18 +21,25 @@ import {
   parseJsonRecord,
   plainPayloadIndicatesRunning,
 } from './subagentResultParsing';
+import {
+  createSyncSubagentInfo,
+  finalizeSyncSubagentInfo,
+  mergeSubagentToolCall,
+  setSubagentToolResult,
+} from './subagentTaskState';
 
 export type SubagentStateChangeCallback = (subagent: SubagentInfo) => void;
 
 export type HandleTaskResult =
   | { action: 'buffered' }
-  | { action: 'created_sync'; subagentState: SubagentState }
-  | { action: 'created_async'; info: SubagentInfo; domState: AsyncSubagentState }
+  | { action: 'created_sync'; info: SubagentInfo }
+  | { action: 'created_async'; info: SubagentInfo }
   | { action: 'label_updated' };
 
-export type RenderPendingResult =
-  | { mode: 'sync'; subagentState: SubagentState }
-  | { mode: 'async'; info: SubagentInfo; domState: AsyncSubagentState };
+export interface RenderPendingResult {
+  mode: 'sync' | 'async';
+  info: SubagentInfo;
+}
 
 
 function parseJsonValue(value: string): unknown {
@@ -61,7 +55,7 @@ export class SubagentManager {
   private static readonly TRUSTED_OUTPUT_EXT = '.output';
   private static readonly TRUSTED_TMP_ROOTS = SubagentManager.resolveTrustedTmpRoots();
 
-  private syncSubagents: Map<string, SubagentState> = new Map();
+  private syncSubagents: Map<string, SubagentInfo> = new Map();
   private pendingTasks: Map<string, PendingToolCall> = new Map();
   private _spawnedThisStream = 0;
 
@@ -69,18 +63,20 @@ export class SubagentManager {
   private pendingAsyncSubagents: Map<string, SubagentInfo> = new Map();
   private taskIdToAgentId: Map<string, string> = new Map();
   private outputToolIdToAgentId: Map<string, string> = new Map();
-  private asyncDomStates: Map<string, AsyncSubagentState> = new Map();
+  /**
+   * taskToolId → canonical async info, outliving `activeAsyncSubagents` (which
+   * drops entries at terminal) so late label-update tool_use replays still find
+   * their target. Cleared only by `clear()`.
+   */
+  private asyncInfos: Map<string, SubagentInfo> = new Map();
 
-  private readonly app: App;
   private onStateChange: SubagentStateChangeCallback;
   private taskResultInterpreter: ProviderTaskResultInterpreter;
 
   constructor(
-    app: App,
     onStateChange: SubagentStateChangeCallback,
     taskResultInterpreter: ProviderTaskResultInterpreter = ProviderRegistry.getTaskResultInterpreter(),
   ) {
-    this.app = app;
     this.onStateChange = onStateChange;
     this.taskResultInterpreter = taskResultInterpreter;
   }
@@ -100,37 +96,39 @@ export class SubagentManager {
   /**
    * Handles an Agent tool_use chunk with minimal buffering to determine sync vs async.
    * Returns a typed result so StreamController can update messages accordingly.
+   * `hasActiveMessage` gates creation the way the detached `currentContentEl`
+   * sentinel used to: a Task arriving outside an active assistant turn buffers
+   * until one exists.
    */
   public handleTaskToolUse(
     taskToolId: string,
     taskInput: Record<string, unknown>,
-    currentContentEl: HTMLElement | null
+    hasActiveMessage: boolean
   ): HandleTaskResult {
-    // Already rendered as sync → update label (no parentEl needed)
-    const existingSyncState = this.syncSubagents.get(taskToolId);
-    if (existingSyncState) {
-      this.updateSubagentLabel(existingSyncState.wrapperEl, existingSyncState.info, taskInput);
+    // Already created as sync → update label only
+    const existingSyncInfo = this.syncSubagents.get(taskToolId);
+    if (existingSyncInfo) {
+      this.updateSubagentLabel(existingSyncInfo, taskInput);
       return { action: 'label_updated' };
     }
 
-    // Already rendered as async → update label (no parentEl needed)
-    const existingAsyncState = this.asyncDomStates.get(taskToolId);
-    if (existingAsyncState) {
-      this.updateSubagentLabel(existingAsyncState.wrapperEl, existingAsyncState.info, taskInput);
-      this.syncCanonicalAsyncInput(taskToolId, existingAsyncState.info, taskInput);
+    // Already created as async → update label only
+    const existingAsyncInfo = this.asyncInfos.get(taskToolId);
+    if (existingAsyncInfo) {
+      this.updateSubagentLabel(existingAsyncInfo, taskInput);
       return { action: 'label_updated' };
     }
 
-    // Already buffered → merge input and try to render
+    // Already buffered → merge input and try to create
     if (this.pendingTasks.has(taskToolId)) {
-      return this.resumeBufferedTask(taskToolId, taskInput, currentContentEl);
+      return this.resumeBufferedTask(taskToolId, taskInput, hasActiveMessage);
     }
 
-    // New Task without a content element — buffer for later rendering
-    if (!currentContentEl) {
+    // New Task outside an active assistant message — buffer for later
+    if (!hasActiveMessage) {
       this.pendingTasks.set(taskToolId, {
         toolCall: buildPendingTaskCall(taskToolId, taskInput),
-        parentEl: null,
+        canRender: false,
       });
       return { action: 'buffered' };
     }
@@ -139,45 +137,28 @@ export class SubagentManager {
     if (!mode) {
       this.pendingTasks.set(taskToolId, {
         toolCall: buildPendingTaskCall(taskToolId, taskInput),
-        parentEl: currentContentEl,
+        canRender: true,
       });
       return { action: 'buffered' };
     }
 
     this._spawnedThisStream++;
     if (mode === 'async') {
-      return this.createAsyncTask(taskToolId, taskInput, currentContentEl);
+      return this.createAsyncTask(taskToolId, taskInput);
     }
-    return this.createSyncTask(taskToolId, taskInput, currentContentEl);
+    return this.createSyncTask(taskToolId, taskInput);
   }
 
   /**
-   * Mirrors label-update input onto the canonical SubagentInfo for an async task
-   * so later status transitions (which re-read canonical state) don't revert the
-   * description/prompt edits applied to the live DOM info object.
-   */
-  private syncCanonicalAsyncInput(
-    taskToolId: string,
-    asyncInfo: SubagentInfo,
-    taskInput: Record<string, unknown>,
-  ): void {
-    const canonical = this.getByTaskId(taskToolId);
-    if (canonical && canonical !== asyncInfo) {
-      if (taskInput.description) canonical.description = taskInput.description as string;
-      if (taskInput.prompt) canonical.prompt = taskInput.prompt as string;
-    }
-  }
-
-  /**
-   * Resolves an already-buffered Task: merges the latest input, adopts a content
-   * element if one just arrived, and renders only once `run_in_background` is
-   * explicitly known. Mode is never locked early — sync fallback is handled when
-   * child chunks or the tool_result confirm sync.
+   * Resolves an already-buffered Task: merges the latest input, unlocks creation
+   * if an active message just arrived, and creates only once `run_in_background`
+   * is explicitly known. Mode is never locked early — sync fallback is handled
+   * when child chunks or the tool_result confirm sync.
    */
   private resumeBufferedTask(
     taskToolId: string,
     taskInput: Record<string, unknown>,
-    currentContentEl: HTMLElement | null,
+    hasActiveMessage: boolean,
   ): HandleTaskResult {
     const pending = this.pendingTasks.get(taskToolId);
     if (!pending) return { action: 'buffered' };
@@ -186,16 +167,16 @@ export class SubagentManager {
     if (Object.keys(newInput).length > 0) {
       pending.toolCall.input = { ...pending.toolCall.input, ...newInput };
     }
-    if (currentContentEl) {
-      pending.parentEl = currentContentEl;
+    if (hasActiveMessage) {
+      pending.canRender = true;
     }
 
     if (this.resolveTaskMode(pending.toolCall.input)) {
-      const result = this.renderPendingTask(taskToolId, currentContentEl);
+      const result = this.renderPendingTask(taskToolId, hasActiveMessage);
       if (result) {
         return result.mode === 'sync'
-          ? { action: 'created_sync', subagentState: result.subagentState }
-          : { action: 'created_async', info: result.info, domState: result.domState };
+          ? { action: 'created_sync', info: result.info }
+          : { action: 'created_async', info: result.info };
       }
     }
     return { action: 'buffered' };
@@ -210,28 +191,28 @@ export class SubagentManager {
   }
 
   /**
-   * Renders a buffered pending task. Called when a child chunk or tool_result
-   * confirms the task is sync, or when run_in_background becomes known.
-   * Uses the optional parentEl override, falling back to the stored parentEl.
+   * Creates a buffered pending task's subagent. Called when a child chunk or
+   * tool_result confirms the task is sync, or when run_in_background becomes
+   * known. Creation proceeds when a message is active NOW or was active when
+   * the task was buffered/last merged (the old parentEl-override fallback).
    */
   public renderPendingTask(
     toolId: string,
-    parentElOverride?: HTMLElement | null
+    hasActiveMessage = false
   ): RenderPendingResult | null {
     const pending = this.pendingTasks.get(toolId);
     if (!pending) return null;
 
     const input = pending.toolCall.input;
-    const targetEl = parentElOverride ?? pending.parentEl;
-    if (!targetEl) return null;
+    if (!hasActiveMessage && !pending.canRender) return null;
 
     this.pendingTasks.delete(toolId);
 
     return spawnPendingTask(
       input.run_in_background === true,
       (mode) => mode === 'async'
-        ? this.createAsyncTask(pending.toolCall.id, input, targetEl)
-        : this.createSyncTask(pending.toolCall.id, input, targetEl),
+        ? this.createAsyncTask(pending.toolCall.id, input)
+        : this.createSyncTask(pending.toolCall.id, input),
       () => { this._spawnedThisStream++; },
     );
   }
@@ -245,15 +226,14 @@ export class SubagentManager {
     toolId: string,
     taskResult: unknown,
     isError: boolean,
-    parentElOverride?: HTMLElement | null,
+    hasActiveMessage = false,
     taskToolUseResult?: unknown
   ): RenderPendingResult | null {
     const pending = this.pendingTasks.get(toolId);
     if (!pending) return null;
 
     const input = pending.toolCall.input;
-    const targetEl = parentElOverride ?? pending.parentEl;
-    if (!targetEl) return null;
+    if (!hasActiveMessage && !pending.canRender) return null;
 
     const explicitMode = this.resolveTaskMode(input);
     const taskResultText = extractToolResultContent(taskResult, { fallbackIndent: 2 });
@@ -265,8 +245,8 @@ export class SubagentManager {
     return spawnPendingTask(
       inferredMode === 'async',
       (mode) => mode === 'async'
-        ? this.createAsyncTask(pending.toolCall.id, input, targetEl)
-        : this.createSyncTask(pending.toolCall.id, input, targetEl),
+        ? this.createAsyncTask(pending.toolCall.id, input)
+        : this.createSyncTask(pending.toolCall.id, input),
       () => { this._spawnedThisStream++; },
     );
   }
@@ -275,7 +255,7 @@ export class SubagentManager {
   // Sync Subagent Operations
   // ============================================
 
-  public getSyncSubagent(toolId: string): SubagentState | undefined {
+  public getSyncSubagent(toolId: string): SubagentInfo | undefined {
     return this.syncSubagents.get(toolId);
   }
 
@@ -295,20 +275,20 @@ export class SubagentManager {
       return;
     }
 
-    const subagentState = this.syncSubagents.get(taskToolId);
-    if (!subagentState) {
+    const syncInfo = this.syncSubagents.get(taskToolId);
+    if (!syncInfo) {
       return;
     }
 
     for (const toolCall of nested) {
-      addSubagentToolCall(subagentState, toolCall);
+      mergeSubagentToolCall(syncInfo, toolCall);
     }
   }
 
   public addSyncToolCall(parentToolUseId: string, toolCall: ToolCallInfo): void {
-    const subagentState = this.syncSubagents.get(parentToolUseId);
-    if (!subagentState) return;
-    addSubagentToolCall(subagentState, toolCall);
+    const syncInfo = this.syncSubagents.get(parentToolUseId);
+    if (!syncInfo) return;
+    mergeSubagentToolCall(syncInfo, toolCall);
   }
 
   public updateSyncToolResult(
@@ -316,9 +296,9 @@ export class SubagentManager {
     toolId: string,
     toolCall: ToolCallInfo
   ): void {
-    const subagentState = this.syncSubagents.get(parentToolUseId);
-    if (!subagentState) return;
-    updateSubagentToolResult(subagentState, toolId, toolCall);
+    const syncInfo = this.syncSubagents.get(parentToolUseId);
+    if (!syncInfo) return;
+    setSubagentToolResult(syncInfo, toolId, toolCall);
   }
 
   public finalizeSyncSubagent(
@@ -327,15 +307,15 @@ export class SubagentManager {
     isError: boolean,
     toolUseResult?: unknown
   ): SubagentInfo | null {
-    const subagentState = this.syncSubagents.get(toolId);
-    if (!subagentState) return null;
+    const syncInfo = this.syncSubagents.get(toolId);
+    if (!syncInfo) return null;
 
     const resultText = extractToolResultContent(result, { fallbackIndent: 2 });
     const extractedResult = this.extractAgentResult(resultText, '', toolUseResult);
-    finalizeSubagentBlock(subagentState, extractedResult, isError);
+    finalizeSyncSubagentInfo(syncInfo, extractedResult, isError);
     this.syncSubagents.delete(toolId);
 
-    return subagentState.info;
+    return syncInfo;
   }
 
   // ============================================
@@ -373,7 +353,7 @@ export class SubagentManager {
     this.activeAsyncSubagents.set(agentId, subagent);
     this.taskIdToAgentId.set(taskToolId, agentId);
 
-    this.updateAsyncDomState(subagent);
+    this.trackAsyncInfo(subagent);
     this.onStateChange(subagent);
   }
 
@@ -441,7 +421,7 @@ export class SubagentManager {
     if (agentId) this.activeAsyncSubagents.delete(agentId);
     this.outputToolIdToAgentId.delete(toolId);
 
-    this.updateAsyncDomState(subagent);
+    this.trackAsyncInfo(subagent);
     this.onStateChange(subagent);
     return subagent;
   }
@@ -469,7 +449,7 @@ export class SubagentManager {
       }
     }
 
-    this.updateAsyncDomState(subagent);
+    this.trackAsyncInfo(subagent);
     this.onStateChange(subagent);
     return subagent;
   }
@@ -499,7 +479,7 @@ export class SubagentManager {
    * hydrating tool calls from SDK sidecar files) without changing lifecycle state.
    */
   public refreshAsyncSubagent(subagent: SubagentInfo): void {
-    this.updateAsyncDomState(subagent);
+    this.trackAsyncInfo(subagent);
     this.onStateChange(subagent);
   }
 
@@ -559,7 +539,7 @@ export class SubagentManager {
     this.activeAsyncSubagents.clear();
     this.taskIdToAgentId.clear();
     this.outputToolIdToAgentId.clear();
-    this.asyncDomStates.clear();
+    this.asyncInfos.clear();
   }
 
   // ============================================
@@ -571,7 +551,7 @@ export class SubagentManager {
     subagent.status = 'error';
     subagent.result = 'Conversation ended before task completed';
     subagent.completedAt = Date.now();
-    this.updateAsyncDomState(subagent);
+    this.trackAsyncInfo(subagent);
     this.onStateChange(subagent);
   }
 
@@ -581,7 +561,7 @@ export class SubagentManager {
     subagent.result = errorResult;
     subagent.completedAt = Date.now();
     this.pendingAsyncSubagents.delete(taskToolId);
-    this.updateAsyncDomState(subagent);
+    this.trackAsyncInfo(subagent);
     this.onStateChange(subagent);
   }
 
@@ -591,18 +571,16 @@ export class SubagentManager {
 
   private createSyncTask(
     taskToolId: string,
-    taskInput: Record<string, unknown>,
-    parentEl: HTMLElement
+    taskInput: Record<string, unknown>
   ): HandleTaskResult {
-    const subagentState = createSubagentBlock(this.app, parentEl, taskToolId, taskInput);
-    this.syncSubagents.set(taskToolId, subagentState);
-    return { action: 'created_sync', subagentState };
+    const info = createSyncSubagentInfo(taskToolId, taskInput);
+    this.syncSubagents.set(taskToolId, info);
+    return { action: 'created_sync', info };
   }
 
   private createAsyncTask(
     taskToolId: string,
-    taskInput: Record<string, unknown>,
-    parentEl: HTMLElement
+    taskInput: Record<string, unknown>
   ): HandleTaskResult {
     const description = (taskInput.description as string) || 'Background task';
     const prompt = (taskInput.prompt as string) || '';
@@ -619,11 +597,9 @@ export class SubagentManager {
     };
 
     this.pendingAsyncSubagents.set(taskToolId, info);
+    this.asyncInfos.set(taskToolId, info);
 
-    const domState = createAsyncSubagentBlock(this.app, parentEl, taskToolId, taskInput);
-    this.asyncDomStates.set(taskToolId, domState);
-
-    return { action: 'created_async', info, domState };
+    return { action: 'created_async', info };
   }
 
   // ============================================
@@ -631,7 +607,6 @@ export class SubagentManager {
   // ============================================
 
   private updateSubagentLabel(
-    wrapperEl: HTMLElement,
     info: SubagentInfo,
     newInput: Record<string, unknown>
   ): void {
@@ -639,19 +614,10 @@ export class SubagentManager {
     const description = (newInput.description as string) || '';
     if (description) {
       info.description = description;
-      const labelEl = wrapperEl.querySelector('.specorator-subagent-label');
-      if (labelEl) {
-        const truncated = description.length > 40 ? description.substring(0, 40) + '...' : description;
-        labelEl.setText(truncated);
-      }
     }
     const prompt = (newInput.prompt as string) || '';
     if (prompt) {
       info.prompt = prompt;
-      const promptEl = wrapperEl.querySelector('.specorator-subagent-prompt-text');
-      if (promptEl) {
-        promptEl.setText(prompt);
-      }
     }
   }
 
@@ -719,38 +685,26 @@ export class SubagentManager {
 
 
   // ============================================
-  // Private: Async DOM State Updates
+  // Private: Async Info Registry
   // ============================================
 
-  private updateAsyncDomState(subagent: SubagentInfo): void {
-    // Find DOM state by task ID first, then by agentId
-    let asyncState = this.asyncDomStates.get(subagent.id);
-
-    if (!asyncState) {
-      for (const s of this.asyncDomStates.values()) {
-        if (s.info.agentId === subagent.agentId) {
-          asyncState = s;
-          break;
-        }
-      }
-      if (!asyncState) return;
+  /**
+   * Keeps the registry entry pointing at the canonical subagent object across
+   * status transitions, so a later label-update tool_use replay mutates the
+   * same object the message tool-call references. Matches by task id first,
+   * then by agentId (the transitions that look entries up via
+   * `activeAsyncSubagents` key on agentId).
+   */
+  private trackAsyncInfo(subagent: SubagentInfo): void {
+    if (this.asyncInfos.has(subagent.id)) {
+      this.asyncInfos.set(subagent.id, subagent);
+      return;
     }
-
-    asyncState.info = subagent;
-
-    switch (subagent.asyncStatus) {
-      case 'running':
-        updateAsyncSubagentRunning(asyncState, subagent.agentId || '');
-        break;
-
-      case 'completed':
-      case 'error':
-        finalizeAsyncSubagent(asyncState, subagent.result || '', subagent.asyncStatus === 'error');
-        break;
-
-      case 'orphaned':
-        markAsyncSubagentOrphaned(asyncState);
-        break;
+    for (const [taskToolId, info] of this.asyncInfos) {
+      if (info.agentId === subagent.agentId) {
+        this.asyncInfos.set(taskToolId, subagent);
+        return;
+      }
     }
   }
 

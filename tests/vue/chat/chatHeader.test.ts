@@ -39,18 +39,22 @@ function fakeCallbacks(overrides: Partial<ChatShellCallbacks> = {}): ChatShellCa
     onNewTab: vi.fn(),
     onNewConversation: vi.fn(),
     onOpenHistory: vi.fn(),
-    onOpenWorkOrders: vi.fn(),
     onQuickActions: vi.fn(),
     onQuickActionsHover: vi.fn(),
     onRename: vi.fn(),
     onOpenSettings: vi.fn(),
-    mountHistoryHost: vi.fn(),
-    mountWorkOrderHost: vi.fn(),
-    mountGitActionHost: vi.fn(),
     // Defaulting to null preserves the pre-6a in-place render for every
     // existing test below: a null target disables the Teleport.
     resolveNavRowEl: vi.fn(() => null),
     renderProviderLogo: vi.fn(),
+    onOpenConversationInNewTab: vi.fn(),
+    onRenameConversation: vi.fn(),
+    onDeleteConversation: vi.fn(),
+    onRegenerateConversationTitle: vi.fn(),
+    onConversationContextMenu: vi.fn(),
+    onOpenWorkOrderItem: vi.fn(),
+    onCloseWorkOrderTab: vi.fn(),
+    onGitCommit: vi.fn(),
     ...overrides,
   };
 }
@@ -137,15 +141,20 @@ describe('ChatHeader', () => {
     expect(cb.onOpenHistory).toHaveBeenCalledTimes(1);
   });
 
-  it('Enter and Space on a header button fire its handler (wireHeaderButton keyboard parity)', async () => {
+  it('Enter and Space on the history button toggle open/close (only OPEN re-projects via onOpenHistory)', async () => {
     const store = useChatShellStore();
     store.setHeader(hdr());
     const cb = fakeCallbacks();
     const { container } = mountHeader(cb);
     const historyBtn = container.querySelector('.specorator-history-container .specorator-header-btn') as HTMLElement;
+    // Enter opens the dropdown — re-projects.
     await fireEvent.keyDown(historyBtn, { key: 'Enter' });
     expect(cb.onOpenHistory).toHaveBeenCalledTimes(1);
+    // Space closes it — no re-projection needed on close.
     await fireEvent.keyDown(historyBtn, { key: ' ' });
+    expect(cb.onOpenHistory).toHaveBeenCalledTimes(1);
+    // Enter again re-opens — re-projects again.
+    await fireEvent.keyDown(historyBtn, { key: 'Enter' });
     expect(cb.onOpenHistory).toHaveBeenCalledTimes(2);
   });
 
@@ -162,19 +171,6 @@ describe('ChatHeader', () => {
     expect(cb.onNewTab).toHaveBeenCalledTimes(1);
     await fireEvent.click(btns[2]);
     expect(cb.onNewConversation).toHaveBeenCalledTimes(1);
-  });
-
-  it('mountHistoryHost, mountWorkOrderHost, and mountGitActionHost were each called once with an element on mount', () => {
-    const store = useChatShellStore();
-    store.setHeader(hdr());
-    const cb = fakeCallbacks();
-    mountHeader(cb);
-    expect(cb.mountHistoryHost).toHaveBeenCalledTimes(1);
-    expect((cb.mountHistoryHost as unknown as ReturnType<typeof vi.fn>).mock.calls[0][0]).toBeInstanceOf(HTMLElement);
-    expect(cb.mountWorkOrderHost).toHaveBeenCalledTimes(1);
-    expect((cb.mountWorkOrderHost as unknown as ReturnType<typeof vi.fn>).mock.calls[0][0]).toBeInstanceOf(HTMLElement);
-    expect(cb.mountGitActionHost).toHaveBeenCalledTimes(1);
-    expect((cb.mountGitActionHost as unknown as ReturnType<typeof vi.fn>).mock.calls[0][0]).toBeInstanceOf(HTMLElement);
   });
 
   it('TabStrip is hidden (v-show) when tabBarVisible is false and shown when true', async () => {
@@ -209,7 +205,7 @@ describe('ChatHeader', () => {
       expect(navRow.childElementCount).toBe(0);
     });
 
-    it("input mode: TabStrip + HeaderActions teleport into the resolved nav-row element, not the title slot / meta-row actions slot; the git host stays in the meta row", () => {
+    it("input mode: TabStrip + HeaderActions teleport into the resolved nav-row element, not the title slot / meta-row actions slot; the git action button stays in the meta row", () => {
       const store = useChatShellStore();
       store.setTabs([item('a', { isActive: true })]);
       store.setHeader(hdr({ tabBarPosition: 'input', tabBarVisible: true }));
@@ -226,9 +222,10 @@ describe('ChatHeader', () => {
       const actionsSlot = container.querySelector('.specorator-header-actions-slot');
       expect(actionsSlot?.querySelector('.specorator-header-btn')).toBeNull();
 
-      expect(cb.mountGitActionHost).toHaveBeenCalledTimes(1);
-      const gitHost = (cb.mountGitActionHost as unknown as ReturnType<typeof vi.fn>).mock.calls[0][0] as HTMLElement;
-      expect(actionsSlot?.contains(gitHost)).toBe(true);
+      // GitActionButton is now a native Vue component rendered directly in the
+      // actions slot (not hosted via a mount callback); it stays present even
+      // hidden (store.git.visible defaults to false).
+      expect(actionsSlot?.querySelector('.specorator-git-action')).toBeTruthy();
     });
 
     it('tab switch re-targets the Teleport: content moves from one nav row to the other', async () => {

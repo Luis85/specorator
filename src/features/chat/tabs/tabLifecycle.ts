@@ -147,8 +147,6 @@ export function activateTab(tab: TabData): void {
   tab.controllers.selectionController?.start();
   tab.controllers.browserSelectionController?.start();
   tab.controllers.canvasSelectionController?.start();
-  // Refresh navigation sidebar visibility (dimensions now available after display)
-  tab.ui.navigationSidebar?.updateVisibility();
 }
 
 /**
@@ -193,10 +191,6 @@ function destroyTabUi(tab: TabData): void {
   tab.services.instructionRefineService = null;
   tab.services.titleGenerationService?.cancel();
   tab.services.titleGenerationService = null;
-  tab.ui.statusPanel?.destroy();
-  tab.ui.statusPanel = null;
-  tab.ui.navigationSidebar?.destroy();
-  tab.ui.navigationSidebar = null;
 }
 
 /**
@@ -231,6 +225,12 @@ export async function destroyTab(tab: TabData): Promise<void> {
   tab.mountedComposer?.unmount();
   tab.mountedComposer = null;
   tab.composer = null;
+
+  // Unmount the Vue tab-chrome island before the host DOM is removed.
+  tab.mountedTabChrome?.unmount();
+  tab.mountedTabChrome = null;
+  tab.tabChrome = null;
+  tab.bashOutputs = null;
 
   // Clean up runtime before removing DOM. Await so the provider subprocess is
   // actually killed before teardown completes (prevents orphaned CLI processes).

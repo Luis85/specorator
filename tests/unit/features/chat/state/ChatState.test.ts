@@ -454,22 +454,10 @@ describe('ChatState', () => {
   });
 
   describe('autoScrollEnabled', () => {
-    it('fires onAutoScrollChanged when value changes', () => {
-      const onAutoScrollChanged = jest.fn();
-      const chatState = new ChatState({ onAutoScrollChanged });
-      // Default is true, so set to false to trigger change
+    it('stores the value', () => {
+      const chatState = new ChatState();
       chatState.autoScrollEnabled = false;
-
-      expect(onAutoScrollChanged).toHaveBeenCalledWith(false);
-    });
-
-    it('does not fire onAutoScrollChanged when value is the same', () => {
-      const onAutoScrollChanged = jest.fn();
-      const chatState = new ChatState({ onAutoScrollChanged });
-      // Default is true, set to true again
-      chatState.autoScrollEnabled = true;
-
-      expect(onAutoScrollChanged).not.toHaveBeenCalled();
+      expect(chatState.autoScrollEnabled).toBe(false);
     });
   });
 
@@ -548,12 +536,10 @@ describe('ChatState', () => {
       const onMessagesChanged = jest.fn();
       const onUsageChanged = jest.fn();
       const onTodosChanged = jest.fn();
-      const onAutoScrollChanged = jest.fn();
       const chatState = new ChatState({
         onMessagesChanged,
         onUsageChanged,
         onTodosChanged,
-        onAutoScrollChanged,
       });
 
       // Set up some state
@@ -585,7 +571,6 @@ describe('ChatState', () => {
       expect(onMessagesChanged).toHaveBeenCalled();
       expect(onUsageChanged).toHaveBeenCalledWith(null);
       expect(onTodosChanged).toHaveBeenCalledWith(null);
-      expect(onAutoScrollChanged).toHaveBeenCalledWith(true);
     });
   });
 

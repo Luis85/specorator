@@ -31,7 +31,6 @@ import {
   createMockPlugin,
   createMockSelectionController,
   createMockSlashCommandDropdown,
-  createMockStatusPanel,
   installMockResizeObserver,
 } from './tabTestKit';
 
@@ -56,7 +55,6 @@ let mockFileContextManager: ReturnType<typeof createMockFileContextManager>;
 let mockImageContextManager: ReturnType<typeof createMockImageContextManager>;
 let mockSlashCommandDropdown: ReturnType<typeof createMockSlashCommandDropdown>;
 let mockInstructionModeManager: ReturnType<typeof createMockInstructionModeManager>;
-let mockStatusPanel: ReturnType<typeof createMockStatusPanel>;
 let mockExternalContextSelector: ReturnType<typeof createMockExternalContextSelector>;
 let mockMcpServerSelector: ReturnType<typeof createMockMcpServerSelector>;
 let mockSelectionController: ReturnType<typeof createMockSelectionController>;
@@ -85,13 +83,6 @@ jest.mock('@/features/chat/ui/InstructionModeManager', () => ({
   InstructionModeManager: jest.fn().mockImplementation(() => {
     mockInstructionModeManager = createMockInstructionModeManager();
     return mockInstructionModeManager;
-  }),
-}));
-
-jest.mock('@/features/chat/ui/StatusPanel', () => ({
-  StatusPanel: jest.fn().mockImplementation(() => {
-    mockStatusPanel = createMockStatusPanel();
-    return mockStatusPanel;
   }),
 }));
 

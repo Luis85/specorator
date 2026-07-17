@@ -16,7 +16,9 @@ method: accrete-then-swap (unwired Vue behind characterization/parity tests, one
 across commits `2f98016`..`b506de1` plus the Task 7 sweep. Sub-project 2
 (transcript rendering) landed 2026-07-12 — see "Sub-project 2 — Transcript
 rendering" below. Sub-project 3 (composer) landed 2026-07-16 — see
-"Sub-project 3 — Composer" below.
+"Sub-project 3 — Composer" below. Sub-project 4 (side panels + header remnants)
+landed 2026-07-17 — see "Sub-project 4 — Side panels + header remnants" below.
+The chat feature now has no imperative rendering surface.
 
 ## Context
 
@@ -315,12 +317,57 @@ Vue.
   `TabManager` engine and therefore inherit this shell island automatically;
   no provider-specific follow-up is required.
 
+## Sub-project 4 — Side panels + header remnants (2026-07-17)
+
+The final chat rendering migration: the status panel + navigation sidebar (per-tab)
+and the conversation-history dropdown + work-order-activity dropdown + git-action
+button (per-view header) became Vue. Two homes reused the established seams:
+
+1. **Shell island extension (Home 1).** The three header widgets became native Vue
+   components (`GitActionButton.vue`, `WorkOrderActivityDropdown.vue`,
+   `ConversationHistoryDropdown.vue`) reading three new projected `chatShellStore`
+   slices (`conversations`/`workOrder`/`git`) and firing new `ChatShellCallbacks`
+   delegators. The `mountHistoryHost`/`mountWorkOrderHost`/`mountGitActionHost`
+   callbacks + host refs + `ConversationHistoryView`/`WorkOrderActivityDropdown`/
+   `GitActionButton` imperative widgets were deleted; `ConversationController` shed
+   its list-presentation role (the async title-regeneration + delete flows moved to
+   `SpecoratorView`). The perf-locked history windowing (chunk-50 + Show-more +
+   active-pin) was reproduced in the Vue component and its assertion moved from
+   `tests/perf/conversationHistory.perf.test.ts` to the Vitest lane
+   (`conversationHistoryWindow.test.ts`); the `loadConversations` activation proxy
+   stayed in the Jest perf lane.
+2. **New per-tab tab-chrome island (Home 2).** `mountTabChrome` +
+   `createTabChromePinia` + `TabChromeProjection` (`{ todos, bashOutputs }`) +
+   `useTabChromeStore`, mirroring `mountTabComposer`, mounted at
+   `statusPanelContainerEl`. `StatusPanel.vue` renders in place; `NavOverlay.vue`
+   `<Teleport>`s to a new `.specorator-nav-sidebar-host`, with imperative scroll
+   geometry in `useTabNavigation` bound to the transcript scroll host via
+   `MountedTabChrome.setScrollHost` (post-transcript-mount, popout-safe
+   `nodeType === 1`). The panel-local bounded bash-output map (FIFO-50) was lifted to an
+   engine-side `BashOutputStore` so it survives conversation switch + remount.
+   `navigationSidebar.perf`'s scan-scaling guard moved to the Vitest lane
+   (`navOverlayScaling.test.ts`).
+
+After this sub-project the chat feature has NO imperative rendering surface: shell,
+transcript, composer, side panels, and header widgets are all Vue islands. The only
+imperative code is the retained engine widgets (inline-edit's `SlashCommandDropdown`)
+and the truth-owning managers/controllers/providers behind the projection seams.
+
+This sub-project also closes the Vue migration program as a whole: ADR 0006
+decided that settings and modals stay Obsidian-native permanently, so the
+retained inline-edit widget is an end state, not a pending sub-project, and no
+fifth sub-project follows.
+
 ## References
 
 - Spec (sub-project 1): `docs/superpowers/specs/2026-07-11-chat-shell-vue-migration-design.md`
 - Plan (sub-project 1): `docs/superpowers/plans/2026-07-11-chat-shell-vue-migration.md`
 - Spec (sub-project 2): `docs/superpowers/specs/2026-07-12-transcript-rendering-vue-migration-design.md`
 - Plan (sub-project 2): `docs/superpowers/plans/2026-07-12-transcript-rendering-vue-migration.md`
+- Spec (sub-project 3): `docs/superpowers/specs/2026-07-16-composer-vue-migration-design.md`
+- Plan (sub-project 3): `docs/superpowers/plans/2026-07-16-composer-vue-migration.md`
+- Spec (sub-project 4): `docs/superpowers/specs/2026-07-17-side-panels-vue-migration-design.md`
+- Plan (sub-project 4): `docs/superpowers/plans/2026-07-17-side-panels-vue-migration.md`
 - Prior reactive-cutover precedent: `docs/adr/0004-agent-board-vue-migration.md`,
   `docs/adr/0003-retire-legacy-library-views.md`
 - Style baseline: `docs/superpowers/specs/2026-07-03-vue-style-baseline-design.md`

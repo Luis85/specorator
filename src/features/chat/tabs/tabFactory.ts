@@ -68,7 +68,7 @@ export function createTab(options: TabCreateOptions): TabData {
   // This placeholder is replaced in initializeTabControllers() with the actual
   // callback that updates the StreamController. We defer the real callback
   // because StreamController doesn't exist until controllers are initialized.
-  const subagentManager = new SubagentManager(plugin.app, () => {});
+  const subagentManager = new SubagentManager(() => {});
 
   const dom = buildTabDOM(contentEl);
   state.queueIndicatorEl = dom.queueIndicatorEl;
@@ -132,14 +132,15 @@ export function createTab(options: TabCreateOptions): TabData {
       slashCommandDropdown: null,
       instructionModeManager: null,
       bangBashModeManager: null,
-      statusPanel: null,
-      navigationSidebar: null,
     },
     dom,
     transcript: null,
     mountedTranscript: null,
     composer: null,
     mountedComposer: null,
+    bashOutputs: null,
+    tabChrome: null,
+    mountedTabChrome: null,
   };
 
   return tab;
@@ -153,6 +154,11 @@ function buildTabDOM(contentEl: HTMLElement): TabDOMElements {
   // The Vue transcript island renders `.specorator-messages` into this wrapper.
   const messagesEl = messagesWrapperEl;
   const statusPanelContainerEl = contentEl.createDiv({ cls: 'specorator-status-panel-container' });
+
+  // Floating teleport target for the Vue NavOverlay, a sibling of the messages
+  // wrapper inside contentEl (where the imperative NavigationSidebar used to
+  // createDiv its container).
+  const navSidebarHostEl = contentEl.createDiv({ cls: 'specorator-nav-sidebar-host' });
 
   // The Vue composer island mounts into this host and renders the composer
   // structural DOM (`.specorator-input-container` and its children), handing the
@@ -172,6 +178,7 @@ function buildTabDOM(contentEl: HTMLElement): TabDOMElements {
     contentEl,
     messagesEl,
     statusPanelContainerEl,
+    navSidebarHostEl,
     composerHostEl,
     inputContainerEl: composerHostEl,
     queueIndicatorEl: composerHostEl,

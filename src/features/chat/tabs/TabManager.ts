@@ -21,6 +21,7 @@ import {
   initializeTabUI,
   wireTabInputEvents,
 } from './Tab';
+import { mountTabChrome } from './tabChromeMount';
 import { mountTabComposer } from './tabComposerMount';
 import { TabProviderCommandCoordinator } from './TabProviderCommandCoordinator';
 import { activateOpenConversationTab, applyPostActivateAction, deactivatePreviousTab } from './tabSwitchHelpers';
@@ -299,15 +300,9 @@ export class TabManager implements TabManagerInterface {
         ...(typeof displayModel === 'string' ? { displayModel } : {}),
         defaultProviderId,
         kind,
-        onStreamingChanged: (isStreaming) => {
-          this.callbacks.onTabStreamingChanged?.(tab.id, isStreaming);
-        },
-        onTitleChanged: (title) => {
-          this.callbacks.onTabTitleChanged?.(tab.id, title);
-        },
-        onAttentionChanged: (needsAttention) => {
-          this.callbacks.onTabAttentionChanged?.(tab.id, needsAttention);
-        },
+        onStreamingChanged: (isStreaming) => this.callbacks.onTabStreamingChanged?.(tab.id, isStreaming),
+        onTitleChanged: (title) => this.callbacks.onTabTitleChanged?.(tab.id, title),
+        onAttentionChanged: (needsAttention) => this.callbacks.onTabAttentionChanged?.(tab.id, needsAttention),
         onConversationIdChanged: (changedConversationId) => {
           // Sync tab.conversationId when conversation is lazily created
           tab.conversationId = changedConversationId;
@@ -326,6 +321,7 @@ export class TabManager implements TabManagerInterface {
       // Mount the Vue composer island so its element handles are registered to
       // tab.dom.* BEFORE initializeTabUI builds the context managers into them.
       mountTabComposer(tab, this.plugin, this.view, { getProviderCatalogConfig, onProviderChanged });
+      mountTabChrome(tab, this.plugin, this.view);
       initializeTabUI(tab, this.plugin, { getProviderCatalogConfig });
 
       initializeTabControllers(

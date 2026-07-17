@@ -38,7 +38,6 @@ import {
   createMockPlugin,
   createMockSelectionController,
   createMockSlashCommandDropdown,
-  createMockStatusPanel,
   installMockResizeObserver,
 } from './tabTestKit';
 
@@ -64,7 +63,6 @@ let mockImageContextManager: ReturnType<typeof createMockImageContextManager>;
 let mockSlashCommandDropdown: ReturnType<typeof createMockSlashCommandDropdown>;
 let mockInstructionModeManager: ReturnType<typeof createMockInstructionModeManager>;
 let mockBangBashModeManager: ReturnType<typeof createMockBangBashModeManager>;
-let mockStatusPanel: ReturnType<typeof createMockStatusPanel>;
 let mockExternalContextSelector: ReturnType<typeof createMockExternalContextSelector>;
 let mockMcpServerSelector: ReturnType<typeof createMockMcpServerSelector>;
 let mockSelectionController: ReturnType<typeof createMockSelectionController>;
@@ -93,13 +91,6 @@ jest.mock('@/features/chat/ui/InstructionModeManager', () => ({
   InstructionModeManager: jest.fn().mockImplementation(() => {
     mockInstructionModeManager = createMockInstructionModeManager();
     return mockInstructionModeManager;
-  }),
-}));
-
-jest.mock('@/features/chat/ui/StatusPanel', () => ({
-  StatusPanel: jest.fn().mockImplementation(() => {
-    mockStatusPanel = createMockStatusPanel();
-    return mockStatusPanel;
   }),
 }));
 
@@ -447,16 +438,6 @@ describe('Tab - UI Initialization', () => {
       expect(tab.ui.instructionModeManager).toBeDefined();
     });
 
-    it('should create and mount StatusPanel', () => {
-      const options = createMockOptions();
-      const tab = createTab(options);
-
-      initializeTabUI(tab, options.plugin);
-
-      expect(tab.ui.statusPanel).toBeDefined();
-      expect(mockStatusPanel.mount).toHaveBeenCalledWith(tab.dom.statusPanelContainerEl);
-    });
-
     it('should create the retained toolbar selector objects', () => {
       const options = createMockOptions();
       const tab = createTab(options);
@@ -601,16 +582,16 @@ describe('Tab - Controller Initialization', () => {
       expect(tab.mountedTranscript).not.toBeNull();
     });
 
-    it('rebinds the NavigationSidebar and keyboard NavigationController to the Vue scroll element after mount', () => {
+    it('binds the NavOverlay scroll host and rebinds the keyboard NavigationController to the Vue scroll element after mount', () => {
       const options = createMockOptions();
       const tab = createTab(options);
       const mockComponent = {} as any;
 
       initializeTabUI(tab, options.plugin);
 
-      // The mount hands back a real Vue scroll container; the wrapper the sidebar
-      // was built against is replaced by it (getScrollEl is null in the default
-      // stub, so override it for this case).
+      // The mount hands back a real Vue scroll container; the wrapper the tab
+      // chrome island was bound against is replaced by it (getScrollEl is null
+      // in the default stub, so override it for this case).
       const scrollEl = createMockEl();
       (mountTranscript as unknown as jest.Mock).mockReturnValueOnce({
         app: { unmount: jest.fn() },
@@ -618,15 +599,15 @@ describe('Tab - Controller Initialization', () => {
         unmount: jest.fn(),
       });
 
-      const rebindScrollEl = jest.fn();
-      tab.ui.navigationSidebar = { rebindScrollEl, destroy: jest.fn() } as any;
+      const setScrollHost = jest.fn();
+      tab.mountedTabChrome = { app: {} as any, unmount: jest.fn(), setScrollHost } as any;
 
       initializeTabControllers(tab, options.plugin, mockComponent);
 
       // dom.messagesEl is repointed at the Vue element AND both nav surfaces
-      // (sidebar scroll target + keyboard controller listener) rebound to it.
+      // (tab-chrome scroll host + keyboard controller listener) rebound to it.
       expect(tab.dom.messagesEl).toBe(scrollEl);
-      expect(rebindScrollEl).toHaveBeenCalledWith(scrollEl);
+      expect(setScrollHost).toHaveBeenCalledWith(scrollEl);
       expect(mockNavigationController.rebindMessagesEl).toHaveBeenCalledWith(scrollEl);
     });
 
@@ -1407,17 +1388,20 @@ describe('Tab - UI Callback Wiring', () => {
       getCapabilitiesSpy.mockRestore();
     });
 
-    it('should wire onTodosChanged callback to update todo panel', () => {
+    it('should wire onTodosChanged callback to re-project the tab-chrome island', () => {
       const options = createMockOptions();
       const tab = createTab(options);
 
       initializeTabUI(tab, options.plugin);
 
+      const emit = jest.fn();
+      tab.tabChrome = { emit } as any;
+
       // Verify callback is wired
       const todos = [{ id: '1', content: 'Test todo', status: 'pending' }];
       tab.state.callbacks.onTodosChanged?.(todos as any);
 
-      expect(mockStatusPanel.updateTodos).toHaveBeenCalledWith(todos);
+      expect(emit).toHaveBeenCalled();
     });
 
     it('should wire instruction mode onSubmit to input controller', async () => {
@@ -1741,21 +1725,6 @@ describe('Tab - Controller Configuration', () => {
   });
 
   describe('ConversationController configuration', () => {
-    it('should wire getHistoryDropdown to return null (tab has no dropdown)', () => {
-      const { ConversationController } = jest.requireMock('@/features/chat/controllers/ConversationController');
-      const options = createMockOptions();
-      const tab = createTab(options);
-      const mockComponent = {} as any;
-
-      initializeTabUI(tab, options.plugin);
-      initializeTabControllers(tab, options.plugin, mockComponent);
-
-      const constructorCall = ConversationController.mock.calls[0];
-      const config = constructorCall[0];
-
-      expect(config.getHistoryDropdown()).toBeNull();
-    });
-
     it('should reset slash-command cache across conversation lifecycle events', () => {
       const { ConversationController } = jest.requireMock('@/features/chat/controllers/ConversationController');
       const options = createMockOptions();

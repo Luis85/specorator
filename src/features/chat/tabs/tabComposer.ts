@@ -31,6 +31,7 @@ import type {
 } from '../ui/vue/composer/stores/composerStore';
 import { formatImageSize, resolveImageAttachmentSrc } from '../utils/imageAttachment';
 import { basename, parentDir } from '../utils/pathLabel';
+import { ProjectionObserverSet } from './projectionObservers';
 import { getBlankTabModelOptions } from './tabModelPolicy';
 import { getProviderMcpManager, getTabCapabilities, getTabChatUIConfig, getTabPermissionMode } from './tabShared';
 import { getComposerToolbarSettings } from './tabUi';
@@ -48,26 +49,18 @@ const EMPTY_DROPDOWN: ComposerDropdownState = { kind: null, items: [], activeInd
  * wired in their later phases.
  */
 export class TabComposerProjection {
-  private readonly observers = new Set<(s: ComposerSnapshot) => void>();
+  private readonly observerSet = new ProjectionObserverSet<ComposerSnapshot>(() => this.snapshot());
 
   constructor(
     private readonly tab: TabData,
     private readonly plugin: SpecoratorPlugin,
   ) {}
 
-  readonly subscribe: ComposerSubscribe = (onChange) => {
-    this.observers.add(onChange);
-    onChange(this.snapshot());
-    return () => {
-      this.observers.delete(onChange);
-    };
-  };
+  readonly subscribe: ComposerSubscribe = this.observerSet.subscribe;
 
   /** Re-projects and fans to every observer. No-op when nothing is mounted. */
   emit(): void {
-    if (this.observers.size === 0) return;
-    const snapshot = this.snapshot();
-    for (const observer of this.observers) observer(snapshot);
+    this.observerSet.emit();
   }
 
   private snapshot(): ComposerSnapshot {

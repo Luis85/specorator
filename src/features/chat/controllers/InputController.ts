@@ -36,11 +36,11 @@ import { appendMarkdownSnippet } from '../../../utils/markdown';
 import type { BoundAgentProjection } from '../../agents/roster/boundAgentPersona';
 import { persistPastedImages } from '../services/persistPastedImages';
 import type { SubagentManager } from '../services/SubagentManager';
+import { applyTitleGenerationResult } from '../services/titleGenerationResult';
 import type { ChatState } from '../state/ChatState';
 import type { FileContextManager } from '../ui/FileContext';
 import type { ImageContextManager } from '../ui/ImageContext';
 import type { InstructionModeManager } from '../ui/InstructionModeManager';
-import type { StatusPanel } from '../ui/StatusPanel';
 import type { AddExternalContextResult, McpServerSelector } from '../ui/toolbar/shared';
 import type { BrowserSelectionController } from './BrowserSelectionController';
 import type { CanvasSelectionController } from './CanvasSelectionController';
@@ -100,7 +100,6 @@ export interface InputControllerDeps {
   getInstructionModeManager: () => InstructionModeManager | null;
   getInstructionRefineService: () => InstructionRefineService | null;
   getTitleGenerationService: () => TitleGenerationService | null;
-  getStatusPanel: () => StatusPanel | null;
   getInputContainerEl: () => HTMLElement;
   /** Chat dropdown coordinator the resume dropdown delegates render/keyboard to. */
   getDropdownCoordinator?: ResumeSessionDropdownDeps['getDropdownCoordinator'];
@@ -1134,7 +1133,7 @@ export class InputController {
 
     // Mark as pending only when we're actually starting generation
     await plugin.updateConversation(state.currentConversationId, { titleGenerationStatus: 'pending' });
-    conversationController.updateHistoryDropdown();
+    plugin.events.emit('conversation:title-status-changed', { conversationId: state.currentConversationId });
 
     const convId = state.currentConversationId;
     const expectedTitle = fallbackTitle; // Store to check if user renamed during generation
@@ -1143,26 +1142,7 @@ export class InputController {
       titleService.generateTitle(
         convId,
         userContent,
-        async (conversationId, result) => {
-          // Check if conversation still exists and user hasn't manually renamed
-          const currentConv = await plugin.getConversationById(conversationId);
-          if (!currentConv) return;
-
-          // Only apply AI title if user hasn't manually renamed (title still matches fallback)
-          const userManuallyRenamed = currentConv.title !== expectedTitle;
-
-          if (result.success && !userManuallyRenamed) {
-            await plugin.renameConversation(conversationId, result.title);
-            await plugin.updateConversation(conversationId, { titleGenerationStatus: 'success' });
-          } else if (!userManuallyRenamed) {
-            // Keep fallback title, mark as failed (only if user hasn't renamed)
-            await plugin.updateConversation(conversationId, { titleGenerationStatus: 'failed' });
-          } else {
-            // User manually renamed, clear the status (user's choice takes precedence)
-            await plugin.updateConversation(conversationId, { titleGenerationStatus: undefined });
-          }
-          conversationController.updateHistoryDropdown();
-        },
+        (conversationId, result) => applyTitleGenerationResult(plugin, conversationId, expectedTitle, result),
       ).catch(() => {
         // Silently ignore title generation errors
       });

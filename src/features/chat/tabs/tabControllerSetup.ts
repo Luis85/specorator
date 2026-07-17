@@ -136,7 +136,6 @@ export function buildTabConversationController(
       setTranscriptHydrationError: (error) => tab.transcript?.setHydrationError(error),
       emitTranscript: () => tab.transcript?.emit(),
       emitComposer: () => tab.composer?.emit(),
-      getHistoryDropdown: () => null, // Tab doesn't have its own history dropdown
       getMessagesEl: () => dom.messagesEl,
       getInputEl: () => dom.inputEl,
       getFileContextManager: () => ui.fileContextManager,
@@ -145,8 +144,6 @@ export function buildTabConversationController(
       getExternalContextSelector: () => ui.externalContextSelector,
       clearQueuedMessage: () => tab.controllers.inputController?.clearQueuedMessage(),
       clearRetryableTurn: () => tab.controllers.inputController?.clearRetryableTurn(),
-      getTitleGenerationService: () => services.titleGenerationService,
-      getStatusPanel: () => ui.statusPanel,
       getAgentService: () => tab.service, // Use tab's service instead of plugin's
       dismissPendingInlinePrompts: () => tab.controllers.inputController?.dismissPendingApproval(),
       consumePendingHydrationError: (conversationId: string) =>
@@ -274,7 +271,6 @@ export function buildTabInputController(
     getInstructionModeManager: () => ui.instructionModeManager,
     getInstructionRefineService: () => services.instructionRefineService,
     getTitleGenerationService: () => services.titleGenerationService,
-    getStatusPanel: () => ui.statusPanel,
     getDropdownCoordinator: () => tab.controllers.composerDropdownCoordinator,
     generateId: generateMessageId,
     resetInputHeight: () => {

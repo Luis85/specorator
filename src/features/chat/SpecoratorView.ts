@@ -19,7 +19,6 @@ import { rosterAgentToPersona } from '../agents/personaRegistry';
 import { openQuickActionsModal } from '../quickActions/openQuickActionsModal';
 import { dispatchQuickActionToTab } from '../quickActions/runQuickActionForFile';
 import { resolveModelContextWindow } from '../settings/customModels/resolveModelContextWindow';
-import type { HistoryConversationOpenState } from './controllers/ConversationController';
 import {
   type HydrationFailedBannerPayload,
   registerHydrationFailedSubscriber,
@@ -35,13 +34,13 @@ import {
 import { TabManager } from './tabs/TabManager';
 import { refreshBoundAgentDisplayModels } from './tabs/tabShared';
 import type { PersistedTabManagerState, TabData, TabId, TaskRunTabHandle } from './tabs/types';
-import { GitActionButton } from './ui/GitActionButton';
 import type { ChatShellCallbacks, ChatShellSnapshot } from './ui/vue/chatShellCallbacks';
+import { buildConversationsSlice, buildGitSlice, buildWorkOrderSlice } from './ui/vue/chatShellHeaderProjection';
 import { CALLBACKS_KEY, CONTENT_HOST_KEY, PLUGIN_KEY } from './ui/vue/chatShellKeys';
 import ChatShellRoot from './ui/vue/ChatShellRoot.vue';
 import { createChatShellPinia } from './ui/vue/globalPinia';
-import type { ChatBoundAgent, ChatShellHeader } from './ui/vue/stores/chatShellStore';
-import { WorkOrderActivityDropdown } from './ui/WorkOrderActivityDropdown';
+import { buildSidePanelCallbacks } from './ui/vue/sidePanelCallbacks';
+import type { ChatBoundAgent, ChatShellHeader, HistoryConversationOpenState } from './ui/vue/stores/chatShellStore';
 import { deriveEditedFilesFromMessages } from './utils/editedFiles';
 import { recalculateUsageForModel } from './utils/usageInfo';
 
@@ -51,11 +50,11 @@ type LoadableView = {
 };
 
 export class SpecoratorView extends ItemView {
-  private plugin: SpecoratorPlugin;
+  readonly plugin: SpecoratorPlugin;
   private _workOrderBridge: SpecoratorViewWorkOrderBridge | null = null;
 
-  // Tab management
-  private tabManager: TabManager | null = null;
+  // Tab management (public: SidePanelCallbackHost reads it off `this`)
+  tabManager: TabManager | null = null;
   // False until restoreOrCreateTabs() finishes: the tab manager is assigned
   // before the async restore runs, so the Agent Board queue must not count the
   // live tab count during that window or it can overbook the cap / drop tabs.
@@ -70,15 +69,7 @@ export class SpecoratorView extends ItemView {
   private viewContainerEl: HTMLElement | null = null;
   // Imperative widgets hosted into the Vue header via the mount* callbacks; they
   // stay imperative and persist across the empty<->content transition.
-  private workOrderActivitySlotEl: HTMLElement | null = null;
-  private workOrderActivityDropdown: WorkOrderActivityDropdown | null = null;
-  private disposeWorkOrderActivitySubscription: (() => void) | null = null;
-  private gitActionButton: GitActionButton | null = null;
 
-  // History dropdown host (the `.specorator-history-menu` element) + its trigger
-  // button, both supplied by the Vue HeaderActions via mountHistoryHost.
-  private historyDropdown: HTMLElement | null = null;
-  private historyBtn: HTMLElement | null = null;
   // Monotonic token so concurrent refreshBoundAgentChip calls don't race a stale
   // async agent resolution into the projection.
   private boundAgentChipGen = 0;
@@ -188,7 +179,7 @@ export class SpecoratorView extends ItemView {
       tab.composer?.emit();
     }
 
-    this.gitActionButton?.updateDisplay();
+    this.emitChatShellChange();
     this.tabManager?.primeProviderRuntime();
   }
 
@@ -231,8 +222,7 @@ export class SpecoratorView extends ItemView {
     // Use contentEl (standard Obsidian API) as primary target.
     // Hover Editor and other plugins may modify the DOM structure,
     // so we need fallbacks to handle non-standard scenarios.
-    let container: HTMLElement | null =
-      this.contentEl ?? (this.containerEl.children[1] as HTMLElement | null);
+    let container: HTMLElement | null = this.contentEl ?? (this.containerEl.children[1] as HTMLElement | null);
 
     if (!container) {
       // Last resort: create our own container inside containerEl
@@ -305,13 +295,10 @@ export class SpecoratorView extends ItemView {
       {
         onTabCreated: () => {
           this.emitChatShellChange();
-          this.gitActionButton?.updateDisplay();
           this.persistTabState();
         },
         onTabSwitched: () => {
           this.emitChatShellChange();
-          this.updateHistoryDropdown();
-          this.gitActionButton?.updateDisplay();
           this.persistTabState();
           void this.refreshBoundAgentChip();
         },
@@ -329,13 +316,11 @@ export class SpecoratorView extends ItemView {
         onTabAttentionChanged: () => this.emitChatShellChange(),
         onTabConversationChanged: () => {
           this.emitChatShellChange();
-          this.gitActionButton?.updateDisplay();
           this.persistTabState();
           void this.refreshBoundAgentChip();
         },
         onTabProviderChanged: () => {
           this.emitChatShellChange();
-          this.gitActionButton?.updateDisplay();
         },
       }
     );
@@ -354,7 +339,6 @@ export class SpecoratorView extends ItemView {
       workOrderCount: this.tabManager?.countTabsByKind('work-order') ?? 0,
     });
     this.emitChatShellChange();
-    this.gitActionButton?.updateDisplay();
     void this.refreshBoundAgentChip();
     this.tabManager?.primeProviderRuntime();
   }
@@ -399,9 +383,6 @@ export class SpecoratorView extends ItemView {
     // Vault events registered via registerEvent are auto-released by the
     // Component lifecycle — no manual offref sweep needed.
     await this.destroyTabRuntime();
-    this.disposeWorkOrderActivityDropdown();
-    this.gitActionButton?.dispose();
-    this.gitActionButton = null;
     // unmount() runs the shell's onUnmounted hooks (routing disposers); clearing
     // the observers drops the view-side subscription set.
     this.vueApp?.unmount();
@@ -421,6 +402,7 @@ export class SpecoratorView extends ItemView {
    *  method, so a single stable instance stays correct across projections. */
   private buildChatShellCallbacks(): ChatShellCallbacks {
     return {
+      ...buildSidePanelCallbacks(this),
       subscribe: (onChange) => {
         this.chatShellObservers.add(onChange);
         onChange(this.projectChatShell());
@@ -440,11 +422,7 @@ export class SpecoratorView extends ItemView {
           new Notice(t('chat.tab.createConversationFailed')),
         );
       },
-      onOpenHistory: () => this.toggleHistoryDropdown(),
-      // No dedicated trigger in the Vue header: the WorkOrderActivityDropdown
-      // (mounted via mountWorkOrderHost) owns its own toggle. Kept to satisfy
-      // the callbacks contract.
-      onOpenWorkOrders: () => {},
+      onOpenHistory: () => this.emitChatShellChange(),
       onQuickActions: () => this.openQuickActionsForActiveTab(),
       // Pre-warm the Skills-tab cache on hover so the Quick Actions modal opens
       // against a hot cache (old buildNavRowContent mouseenter). Idempotent:
@@ -454,26 +432,6 @@ export class SpecoratorView extends ItemView {
       },
       onRename: (title) => this.renameActiveConversation(title),
       onOpenSettings: () => this.openPluginSettings(),
-      mountHistoryHost: (el) => {
-        this.historyDropdown = el;
-        // The trigger button is the history menu's previous sibling inside
-        // `.specorator-history-container` (see HeaderActions.vue); capture it so
-        // toggleHistoryDropdown can sync aria-expanded.
-        this.historyBtn = el.previousElementSibling as HTMLElement | null;
-      },
-      mountWorkOrderHost: (el) => {
-        this.workOrderActivitySlotEl = el;
-        this.mountWorkOrderActivityDropdown();
-      },
-      mountGitActionHost: (el) => {
-        if (!this.plugin.gitStatusWatcher) return;
-        this.gitActionButton?.dispose();
-        this.gitActionButton = new GitActionButton(el, {
-          subscribeGitStatus: (cb) => this.plugin.gitStatusWatcher!.subscribe(cb),
-          isGitActionsEnabled: () => this.isActiveTabGitActionEnabled(),
-          onGitCommit: () => this.sendGitCommitPromptToActiveTab(),
-        });
-      },
       resolveNavRowEl: (tabId) =>
         (tabId ? this.tabManager?.getTab(tabId)?.dom.navRowEl ?? null : null),
       renderProviderLogo: (el, providerId) => {
@@ -498,6 +456,9 @@ export class SpecoratorView extends ItemView {
       tabs: this.tabManager?.getTabBarItems() ?? [],
       activeTabId: activeTab?.id ?? null,
       header: this.projectChatShellHeader(),
+      conversations: buildConversationsSlice(this.plugin.getConversationList(), activeTab?.conversationId ?? null),
+      workOrder: buildWorkOrderSlice(this.plugin.workOrderActivity?.getSummary()),
+      git: buildGitSlice(this.plugin.gitStatusWatcher?.getLastStatus(), this.isActiveTabGitActionEnabled()),
     };
   }
 
@@ -505,11 +466,8 @@ export class SpecoratorView extends ItemView {
   private projectChatShellHeader(): ChatShellHeader {
     const tm = this.tabManager;
     const activeTab = tm?.getActiveTab() ?? null;
-    const tabBarPosition: TabBarPosition =
-      this.plugin.settings.tabBarPosition === 'header' ? 'header' : 'input';
-    const activeProviderId = activeTab
-      ? getTabProviderId(activeTab, this.plugin)
-      : DEFAULT_CHAT_PROVIDER_ID;
+    const tabBarPosition: TabBarPosition = this.plugin.settings.tabBarPosition === 'header' ? 'header' : 'input';
+    const activeProviderId = activeTab ? getTabProviderId(activeTab, this.plugin) : DEFAULT_CHAT_PROVIDER_ID;
 
     // tabBarVisible mirrors updateTabBarVisibility: show with 2+ chat tabs, or
     // when a (badge-less) work-order tab is active with a chat tab to return to.
@@ -528,19 +486,15 @@ export class SpecoratorView extends ItemView {
     // matches the active conversation (else null until refreshBoundAgentChip
     // lands), so a stale chip never shows after a tab/conversation switch.
     const activeConversationId = activeTab?.conversationId ?? null;
-    const boundAgent =
-      this.cachedBoundAgentConversationId === activeConversationId
-        ? this.cachedBoundAgent
-        : null;
+    const boundAgent = this.cachedBoundAgentConversationId === activeConversationId ? this.cachedBoundAgent : null;
 
     // metaRowVisible mirrors updateHeaderMetaRow + updateNavRowLocation: header
     // mode shows the action cluster in the meta row once there are tabs; input
     // mode shows it only for a bound-agent chip or the git button. Gate the git
     // button on a live runtime so the empty state hides all tab-less controls.
     const hasTabs = (tm?.getTabCount() ?? 0) > 0;
-    const hasGitAction = this.gitActionButton != null && tm != null;
-    const metaRowVisible =
-      (tabBarPosition === 'header' && hasTabs) || boundAgent != null || hasGitAction;
+    const hasGitAction = buildGitSlice(this.plugin.gitStatusWatcher?.getLastStatus(), this.isActiveTabGitActionEnabled()).visible && tm != null;
+    const metaRowVisible = (tabBarPosition === 'header' && hasTabs) || boundAgent != null || hasGitAction;
 
     return {
       title: activeTab ? getTabTitle(activeTab, this.plugin) : 'Specorator',
@@ -557,8 +511,9 @@ export class SpecoratorView extends ItemView {
     };
   }
 
-  /** Builds a snapshot and pushes it to every registered shell observer. */
-  private emitChatShellChange(): void {
+  /** Builds a snapshot and pushes it to every registered shell observer.
+   *  Public: SidePanelCallbackHost calls it off `this`. */
+  emitChatShellChange(): void {
     if (this.chatShellObservers.size === 0) return;
     const snapshot = this.projectChatShell();
     for (const observer of this.chatShellObservers) {
@@ -585,7 +540,7 @@ export class SpecoratorView extends ItemView {
   /** Starts a fresh conversation in the active tab (former square-pen handler). */
   private async newConversationInActiveTab(): Promise<void> {
     await this.tabManager?.createNewConversation();
-    this.updateHistoryDropdown();
+    this.emitChatShellChange();
   }
 
   /** Renames the active tab's conversation (header rename affordance). */
@@ -600,28 +555,6 @@ export class SpecoratorView extends ItemView {
   /** Opens the Obsidian settings dialog focused on the Specorator plugin tab. */
   private openPluginSettings(): void {
     openPluginSettingsTab(this.app, this.plugin.manifest.id);
-  }
-
-  private mountWorkOrderActivityDropdown(): void {
-    if (!this.workOrderActivitySlotEl || !this.plugin.workOrderActivity) return;
-    this.disposeWorkOrderActivitySubscription?.();
-    this.workOrderActivityDropdown?.destroy();
-    this.workOrderActivityDropdown = new WorkOrderActivityDropdown(this.workOrderActivitySlotEl, {
-      summary: this.plugin.workOrderActivity.getSummary(),
-      onOpenItem: (id) => this.plugin.workOrderActivity?.openItem(id),
-      onCloseItem: (tabId) => this.plugin.workOrderActivity?.closeTab(tabId),
-    });
-    this.disposeWorkOrderActivitySubscription = this.plugin.workOrderActivity.subscribe((summary) => {
-      this.workOrderActivityDropdown?.update(summary);
-    });
-  }
-
-  private disposeWorkOrderActivityDropdown(): void {
-    this.disposeWorkOrderActivitySubscription?.();
-    this.disposeWorkOrderActivitySubscription = null;
-    this.workOrderActivityDropdown?.destroy();
-    this.workOrderActivityDropdown = null;
-    this.workOrderActivitySlotEl = null;
   }
 
   /**
@@ -658,7 +591,8 @@ export class SpecoratorView extends ItemView {
     return ProviderRegistry.getChatUIConfig(providerId).isGitActionsEnabled?.(settings) !== false;
   }
 
-  private sendGitCommitPromptToActiveTab(): void {
+  // Public: SidePanelCallbackHost calls it off `this`.
+  sendGitCommitPromptToActiveTab(): void {
     const inputController = this.tabManager?.getActiveTab()?.controllers.inputController;
     if (!inputController) {
       return;
@@ -759,12 +693,8 @@ export class SpecoratorView extends ItemView {
   private async refreshBoundAgentChip(): Promise<void> {
     const gen = ++this.boundAgentChipGen;
     const conversationId = this.tabManager?.getActiveTab()?.conversationId ?? null;
-    const conversation = conversationId
-      ? await this.plugin.getConversationById(conversationId)
-      : null;
-    const agent = conversation?.boundAgentId
-      ? await this.plugin.agentRosterStore?.get(conversation.boundAgentId)
-      : null;
+    const conversation = conversationId ? await this.plugin.getConversationById(conversationId) : null;
+    const agent = conversation?.boundAgentId ? await this.plugin.agentRosterStore?.get(conversation.boundAgentId) : null;
     if (gen !== this.boundAgentChipGen) return;
 
     this.cachedBoundAgentConversationId = conversationId;
@@ -809,59 +739,8 @@ export class SpecoratorView extends ItemView {
   // History Dropdown
   // ============================================
 
-  private toggleHistoryDropdown(): void {
-    if (!this.historyDropdown) return;
-
-    const isVisible = this.historyDropdown.hasClass('visible');
-    if (isVisible) {
-      this.historyDropdown.removeClass('visible');
-    } else {
-      this.updateHistoryDropdown();
-      this.historyDropdown.addClass('visible');
-    }
-    this.historyBtn?.setAttribute('aria-expanded', String(!isVisible));
-  }
-
-  /** Closes the history dropdown and syncs the trigger's aria-expanded state. */
-  private closeHistoryDropdown(): void {
-    this.historyDropdown?.removeClass('visible');
-    this.historyBtn?.setAttribute('aria-expanded', 'false');
-  }
-
-  private updateHistoryDropdown(): void {
-    if (!this.historyDropdown) return;
-    this.historyDropdown.empty();
-
-    const activeTab = this.tabManager?.getActiveTab();
-    const conversationController = activeTab?.controllers.conversationController;
-
-    if (conversationController) {
-      conversationController.renderHistoryDropdown(this.historyDropdown, {
-        onSelectConversation: (id) => this.openHistoryConversation(id),
-        onOpenConversationInNewTab: (id, activate) =>
-          this.openHistoryConversationInNewTab(id, activate),
-        getConversationOpenState: (id) => this.getHistoryConversationOpenState(id),
-      });
-    }
-  }
-
-  private async openHistoryConversation(conversationId: string): Promise<void> {
-    await this.tabManager?.openConversation(conversationId);
-    this.closeHistoryDropdown();
-  }
-
-  private async openHistoryConversationInNewTab(
-    conversationId: string,
-    activate = true,
-  ): Promise<void> {
-    await this.tabManager?.openConversation(conversationId, {
-      requireNewTab: true,
-      activate,
-    });
-    this.closeHistoryDropdown();
-  }
-
-  private getHistoryConversationOpenState(conversationId: string): HistoryConversationOpenState {
+  // Public: SidePanelCallbackHost calls it off `this`.
+  getHistoryConversationOpenState(conversationId: string): HistoryConversationOpenState {
     const activeTab = this.tabManager?.getActiveTab();
     if (activeTab?.conversationId === conversationId) {
       return 'current';
@@ -890,11 +769,6 @@ export class SpecoratorView extends ItemView {
 
   private wireEventHandlers(): void {
     const activeDocument = this.containerEl.ownerDocument;
-
-    // Document-level click to close dropdowns
-    this.registerDomEvent(activeDocument, 'click', () => {
-      this.closeHistoryDropdown();
-    });
 
     // View-level Shift+Tab to toggle plan mode (works from any focused element)
     this.registerDomEvent(this.containerEl, 'keydown', (e: KeyboardEvent) => {
@@ -956,13 +830,14 @@ export class SpecoratorView extends ItemView {
     this.registerEvent(this.plugin.app.vault.on('rename', () => markCacheDirty(true)));
     this.registerEvent(this.plugin.app.vault.on('modify', () => markCacheDirty(false)));
 
-    // UX-4: refresh header title + tab bar when the active tab's conversation
-    // is renamed (manual rename or auto-title generation).
-    this.register(this.plugin.events.on('conversation:renamed', () => {
-      // The projection recomputes the header title + badge titles from the live
-      // TabManager, so one emit covers both the active-tab title and the strip.
-      this.emitChatShellChange();
-    }));
+    // Cross-leaf conversation-list changes re-project the shell: renames (UX-4:
+    // header title + badge strip), title-generation status flips (spinner /
+    // regenerate affordance — no title change, so `conversation:renamed` never
+    // fires), and deletes (drop the dead row from an open history dropdown in
+    // EVERY leaf, not just the deleting one).
+    for (const event of ['conversation:renamed', 'conversation:title-status-changed', 'conversation:deleted'] as const) {
+      this.register(this.plugin.events.on(event, () => this.emitChatShellChange()));
+    }
 
     // A roster edit can change a bound agent's saved model while its tab stays
     // open; the conversation-keyed displayModel seed wouldn't invalidate (same
@@ -971,6 +846,10 @@ export class SpecoratorView extends ItemView {
       void refreshBoundAgentDisplayModels(this.plugin, this.tabManager?.getAllTabs() ?? [])
         .then(() => this.refreshModelSelector());
     }));
+
+    // Re-project the git/workOrder slices when their providers change (subscribe returns an unsubscribe fn).
+    if (this.plugin.gitStatusWatcher) this.register(this.plugin.gitStatusWatcher.subscribe(() => this.emitChatShellChange()));
+    if (this.plugin.workOrderActivity) this.register(this.plugin.workOrderActivity.subscribe(() => this.emitChatShellChange()));
 
     // History Service Contract (Task 11): surface a Notice + inline banner when
     // `ConversationStore` reports a hydration / delete failure. Without this,

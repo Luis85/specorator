@@ -1,12 +1,16 @@
 import type { ProviderId } from '../../../../core/providers/types';
+import type { WorkOrderActivitySummary } from '../../../../core/types/workOrderActivity';
 import type { TabBarItem, TabId } from '../../tabs/types';
-import type { ChatShellHeader } from './stores/chatShellStore';
+import type { ChatShellConversations, ChatShellGit, ChatShellHeader } from './stores/chatShellStore';
 
 /** A single projected snapshot the view pushes on every TabManager change. */
 export interface ChatShellSnapshot {
   tabs: TabBarItem[];
   header: ChatShellHeader;
   activeTabId: TabId | null;
+  conversations: ChatShellConversations;
+  workOrder: WorkOrderActivitySummary;
+  git: ChatShellGit;
 }
 
 /** The view-owned subscription seam: fires `onChange` on every relevant
@@ -25,8 +29,8 @@ export interface ChatShellCallbacks {
    *  newBtn handler (tabManager.createNewConversation() + history refresh), which
    *  was deleted in the chat-shell Vue cutover (ADR 0005). */
   onNewConversation: () => void;
+  /** Re-project so the history list is fresh when the dropdown opens. */
   onOpenHistory: () => void;
-  onOpenWorkOrders: () => void;
   onQuickActions: () => void;
   /** Hover pre-warm for the Quick Actions modal — warms the Skills-tab cache so
    *  the modal opens hot (mirrors the old buildNavRowContent mouseenter). */
@@ -35,14 +39,6 @@ export interface ChatShellCallbacks {
   /** Empty-state "Open settings" CTA — thin delegator to
    *  SpecoratorView.openPluginSettings(). */
   onOpenSettings: () => void;
-  /** Hosts the imperative history + work-order dropdowns into the header. */
-  mountHistoryHost: (el: HTMLElement) => void;
-  mountWorkOrderHost: (el: HTMLElement) => void;
-  /** Hosts the imperative GitActionButton into the meta-row actions slot —
-   *  the button only mounts when plugin.gitStatusWatcher exists (mirrors the
-   *  former SpecoratorView.buildHeader, deleted in the chat-shell Vue cutover;
-   *  see ADR 0005). */
-  mountGitActionHost: (el: HTMLElement) => void;
   /** Resolves the active tab's navRowEl for 'input' tabBarPosition mode
    *  (mirrors updateNavRowLocation's input-mode branch); null when there is
    *  no active tab yet. */
@@ -51,4 +47,24 @@ export interface ChatShellCallbacks {
    *  SpecoratorView.syncHeaderLogo). The host is cleared by the caller
    *  (ChatLogo) before each render, so this only appends. */
   renderProviderLogo: (el: HTMLElement, providerId: ProviderId) => void;
+  /** Open a conversation in a new-or-existing tab (history row click, middle
+   *  click, or context menu — the header history menu never replaces the active
+   *  tab's conversation, matching the deleted imperative view). */
+  onOpenConversationInNewTab: (id: string, activate: boolean) => void;
+  /** Rename a conversation (inline rename input commit). */
+  onRenameConversation: (id: string, title: string) => void;
+  /** Delete a conversation (streaming-gated; reloads active if it was current). */
+  onDeleteConversation: (id: string) => void;
+  /** Regenerate a conversation's AI title (pending/failed status flow). */
+  onRegenerateConversationTitle: (id: string) => void;
+  /** Build the Obsidian right-click Menu for a history row at the event.
+   *  `startRename` enters the Vue component's inline-rename mode for the row
+   *  (the rename `<input>` lives in the component, not the view). */
+  onConversationContextMenu: (id: string, event: MouseEvent, startRename: () => void, closeDropdown: () => void) => void;
+  /** Open a work-order activity item (then the dropdown closes). */
+  onOpenWorkOrderItem: (id: string) => void;
+  /** Close a finished work-order tab (dropdown stays open for batch dismiss). */
+  onCloseWorkOrderTab: (tabId: string) => void;
+  /** Send the commit-&-push prompt to the active tab. */
+  onGitCommit: () => void;
 }

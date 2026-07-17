@@ -2,7 +2,10 @@ import { defineStore } from 'pinia';
 import { shallowRef } from 'vue';
 
 import type { ProviderId } from '../../../../../core/providers/types';
+import type { ConversationMeta } from '../../../../../core/types';
 import type { TabBarPosition } from '../../../../../core/types/settings';
+import type { WorkOrderActivitySummary } from '../../../../../core/types/workOrderActivity';
+import { EMPTY_WORK_ORDER_ACTIVITY_SUMMARY } from '../../../../../core/types/workOrderActivity';
 import type { AgentPersona } from '../../../../agents/agentTypes';
 import type { TabBarItem, TabId } from '../../../tabs/types';
 
@@ -47,6 +50,32 @@ const DEFAULT_HEADER: ChatShellHeader = Object.freeze({
   tabBarPosition: 'input', logoProviderId: null, logoVisible: false, titleVisible: true, canCreateTab: true,
 });
 
+/** Per-conversation open state in the history dropdown — mirrors whether a
+ *  conversation is closed, open in another tab, or the current tab's session.
+ *  Resolved engine-side at context-menu time (never projected per row: scanning
+ *  tabs for every conversation on every shell emit would be O(rows × tabs)). */
+export type HistoryConversationOpenState = 'closed' | 'open' | 'current';
+
+/** History-dropdown projection: the newest-first conversation list plus the
+ *  current selection. Truth stays in ConversationStore. */
+export interface ChatShellConversations {
+  items: ConversationMeta[];
+  currentConversationId: string | null;
+}
+
+/** Git-action-button projection: repo presence + dirty count drive the badge,
+ *  visible gates the whole slot (mirrors the button's own show/hide logic). */
+export interface ChatShellGit {
+  isRepo: boolean;
+  dirtyCount: number;
+  visible: boolean;
+}
+
+const DEFAULT_CONVERSATIONS: ChatShellConversations = Object.freeze({
+  items: [], currentConversationId: null,
+});
+const DEFAULT_GIT: ChatShellGit = Object.freeze({ isRepo: false, dirtyCount: 0, visible: false });
+
 /**
  * Reactive read-model over the chat shell: the tab-badge strip + header chrome +
  * active selection. I/O and truth stay in TabManager; every setter replaces a
@@ -57,6 +86,9 @@ export const useChatShellStore = defineStore('chat-shell', () => {
   const tabs = shallowRef<TabBarItem[]>([]);
   const header = shallowRef<ChatShellHeader>(DEFAULT_HEADER);
   const activeTabId = shallowRef<TabId | null>(null);
+  const conversations = shallowRef<ChatShellConversations>(DEFAULT_CONVERSATIONS);
+  const workOrder = shallowRef<WorkOrderActivitySummary>(EMPTY_WORK_ORDER_ACTIVITY_SUMMARY);
+  const git = shallowRef<ChatShellGit>(DEFAULT_GIT);
 
   function setTabs(next: TabBarItem[]): void {
     tabs.value = next;
@@ -67,6 +99,21 @@ export const useChatShellStore = defineStore('chat-shell', () => {
   function setActiveTabId(id: TabId | null): void {
     activeTabId.value = id;
   }
+  function setConversations(next: ChatShellConversations): void {
+    conversations.value = next;
+  }
+  function setWorkOrder(next: WorkOrderActivitySummary): void {
+    workOrder.value = next;
+  }
+  function setGit(next: ChatShellGit): void {
+    git.value = next;
+  }
 
-  return { tabs, header, activeTabId, setTabs, setHeader, setActiveTabId };
+  return {
+    tabs, header, activeTabId, conversations, workOrder, git,
+    setTabs, setHeader, setActiveTabId, setConversations, setWorkOrder, setGit,
+  };
 });
+
+/** Test-only re-export of the default header (private DEFAULT_HEADER stays frozen). */
+export const DEFAULT_HEADER_FOR_TEST: ChatShellHeader = DEFAULT_HEADER;

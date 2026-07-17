@@ -12,6 +12,22 @@ export interface ChatEventMap {
    */
   'conversation:renamed': { conversationId: string; title: string };
   /**
+   * Emitted when a conversation's `titleGenerationStatus` transitions
+   * (pending → success/failed/cleared) WITHOUT the title itself changing, so a
+   * plain `conversation:renamed` never fires. The Vue history dropdown renders
+   * the pending spinner / regenerate affordance off this status, so an already
+   * open dropdown must re-project when it flips. The imperative
+   * `ConversationHistoryView` re-rendered here; this event replaces that.
+   */
+  'conversation:title-status-changed': { conversationId: string };
+  /**
+   * Emitted after a conversation is fully deleted (metadata gone, views
+   * repaired). The deleting view re-projects through its own subscription, and
+   * OTHER leaves with an open history dropdown drop the dead row instead of
+   * rendering it until their next re-projection.
+   */
+  'conversation:deleted': { conversationId: string };
+  /**
    * Emitted when a provider history service reports an `error` outcome from
    * either `hydrateConversationHistory` or `deleteConversationSession`.
    * The payload is the redacted user-safe summary from the provider; raw

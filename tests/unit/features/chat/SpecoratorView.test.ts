@@ -40,7 +40,14 @@ function projectionHarness(options: {
     getTabCount: () => options.totalCount ?? options.chatCount ?? 0,
     canCreateTab: () => options.canCreateTab ?? true,
   };
-  view.gitActionButton = options.hasGit ? {} : null;
+  // The git slot's visibility is now projected by buildGitSlice from the git
+  // watcher's live status + isActiveTabGitActionEnabled(), rather than a
+  // widget-instance null-check; stub both narrowly so `hasGit` still drives
+  // just the visibility bit these tests assert on.
+  view.plugin.gitStatusWatcher = {
+    getLastStatus: () => (options.hasGit ? { isRepo: true, dirtyCount: 3 } : null),
+  };
+  view.isActiveTabGitActionEnabled = () => true;
   view.cachedBoundAgent = null;
   view.cachedBoundAgentConversationId = null;
   return view;
@@ -125,22 +132,6 @@ describe('SpecoratorView.projectChatShellHeader', () => {
   it('gates canCreateTab on the tab manager capacity (new-tab button hide/disable)', () => {
     expect(projectionHarness({ chatCount: 1, canCreateTab: false }).projectChatShellHeader().canCreateTab).toBe(false);
     expect(projectionHarness({ chatCount: 1, canCreateTab: true }).projectChatShellHeader().canCreateTab).toBe(true);
-  });
-});
-
-describe('SpecoratorView history opening', () => {
-  it('requires a fresh tab so the tab cap never falls back to the active conversation', async () => {
-    const view = Object.create(SpecoratorView.prototype) as any;
-    const openConversation = jest.fn().mockResolvedValue(undefined);
-    view.tabManager = { openConversation };
-    view.closeHistoryDropdown = jest.fn();
-
-    await view.openHistoryConversationInNewTab('conv-history', true);
-
-    expect(openConversation).toHaveBeenCalledWith('conv-history', {
-      requireNewTab: true,
-      activate: true,
-    });
   });
 });
 
@@ -543,7 +534,6 @@ describe('SpecoratorView Escape handling', () => {
 
     view.app = { scope: parentScope };
     view.containerEl = createMockEl();
-    view.historyDropdown = createMockEl();
     view.registerDomEvent = jest.fn();
     view.registerEvent = jest.fn();
     view.register = jest.fn();
@@ -609,7 +599,6 @@ describe('SpecoratorView Escape handling', () => {
 
     view.app = { scope: parentScope };
     view.containerEl = createMockEl();
-    view.historyDropdown = createMockEl();
     view.registerDomEvent = jest.fn();
     view.registerEvent = jest.fn();
     view.register = jest.fn();
@@ -955,5 +944,26 @@ describe('SpecoratorView applyEditedFilesSetting', () => {
     view.applyEditedFilesSetting();
 
     expect(state.editedFiles).toEqual([{ path: 'derived.md', changeKind: 'created' }]);
+  });
+});
+
+describe('side-panel callback delegators', () => {
+  it('onGitCommit delegates to sendGitCommitPromptToActiveTab', () => {
+    const view = Object.create(SpecoratorView.prototype) as any;
+    view.plugin = {}; view.tabManager = null; view.chatShellObservers = new Set();
+    const spy = jest.fn();
+    view.sendGitCommitPromptToActiveTab = spy;
+    const cb = view.buildChatShellCallbacks();
+    cb.onGitCommit();
+    expect(spy).toHaveBeenCalled();
+  });
+
+  it('onOpenWorkOrderItem delegates to workOrderActivity.openItem', () => {
+    const view = Object.create(SpecoratorView.prototype) as any;
+    const openItem = jest.fn().mockResolvedValue(undefined);
+    view.plugin = { workOrderActivity: { openItem } }; view.tabManager = null; view.chatShellObservers = new Set();
+    const cb = view.buildChatShellCallbacks();
+    cb.onOpenWorkOrderItem('wo-1');
+    expect(openItem).toHaveBeenCalledWith('wo-1');
   });
 });

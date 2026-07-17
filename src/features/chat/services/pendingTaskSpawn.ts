@@ -17,14 +17,14 @@ export function buildPendingTaskCall(
 }
 
 /**
- * Resolves a buffered pending Task into its rendered subagent block.
+ * Resolves a buffered pending Task into its created subagent info.
  *
  * Both pending-resolution paths (`renderPendingTask`, `renderPendingTaskFromTaskResult`)
  * differ only in how they decide async vs sync; the create/count/map-to-result
- * tail is identical, so it lives here. `spawn` performs the provider-specific
- * block creation for the chosen mode and `onSpawned` bumps the per-stream count
- * once a block is actually created. Creation failures are swallowed so a
- * malformed task never crashes the stream — it just appears incomplete.
+ * tail is identical, so it lives here. `spawn` performs the mode-specific
+ * subagent creation and `onSpawned` bumps the per-stream count once one is
+ * actually created. Creation failures are swallowed so a malformed task never
+ * crashes the stream — it just appears incomplete.
  */
 export function spawnPendingTask(
   wantsAsync: boolean,
@@ -36,13 +36,13 @@ export function spawnPendingTask(
       const result = spawn('async');
       if (result.action === 'created_async') {
         onSpawned();
-        return { mode: 'async', info: result.info, domState: result.domState };
+        return { mode: 'async', info: result.info };
       }
     } else {
       const result = spawn('sync');
       if (result.action === 'created_sync') {
         onSpawned();
-        return { mode: 'sync', subagentState: result.subagentState };
+        return { mode: 'sync', info: result.info };
       }
     }
   } catch {
