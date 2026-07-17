@@ -1263,11 +1263,12 @@ git commit -m "i18n(tasks): keys for chain config modal, next-step chip, chained
 
 **Files:**
 - Create: `src/features/tasks/ui/ChainConfigModal.ts`
+- Create: `src/features/tasks/ui/workOrderChainSummary.ts` (shared chip-label helpers, so the two editable call sites don't duplicate the logic)
 - Modify: `src/features/tasks/ui/WorkOrderDetailModal.ts` (`WorkOrderFieldUpdate.chain`; callbacks `onConfigureChain` + `getChainSummary`)
-- Modify: `src/features/tasks/ui/vue/components/WorkOrderProperties.vue` (the chip)
+- Modify: `src/features/tasks/ui/vue/components/WorkOrderProperties.vue` (the chip, gated on `onConfigureChain`)
 - Modify: `src/features/tasks/ui/AgentBoardView.ts` (wire `onConfigureChain`/`getChainSummary` in both `buildCallbacks` and `openDetail`)
-- Modify: `src/features/tasks/ui/WorkOrderActivityProvider.ts` (provide the same two callbacks; may return `undefined`/`'None'` since it is read-only-safe)
-- Test: `tests/vue/tasks/workOrderDetail.test.ts` (extend — assert the chip renders the summary and invokes `onConfigureChain`)
+- Modify: `src/features/tasks/ui/WorkOrderActivityProvider.ts` (wire the SAME two callbacks — it opens the same editable modal and already wires `onSaveFields`)
+- Test: `tests/vue/tasks/workOrderDetail.test.ts` (extend — assert the chip renders the summary, invokes `onConfigureChain`, and is NOT a button when `onConfigureChain` is absent)
 
 - [ ] **Step 1: Build `ChainConfigModal`** (mirrors `LoopEditorModal`; Obsidian-native per ADR 0006)
 
@@ -1400,7 +1401,7 @@ Add to `WorkOrderDetailModalCallbacks`:
       :label="t('tasks.workOrderModal.fieldNextStep')"
     >
       <span
-        v-if="assignEditable"
+        v-if="assignEditable && canConfigureChain"
         class="specorator-work-order-modal-chip specorator-work-order-modal-chip--chain"
         role="button"
         tabindex="0"
@@ -1414,9 +1415,12 @@ Add to `WorkOrderDetailModalCallbacks`:
     </PropertyRow>
 ```
 
+> Gating the interactive chip on `canConfigureChain` (not just `assignEditable`) means a call site that provides no `onConfigureChain` (e.g. a read-only surface) renders the static label instead of a dead button.
+
 and in the `<script setup>`:
 
 ```ts
+const canConfigureChain = computed(() => Boolean(cb.onConfigureChain));
 const chainLabel = ref(cb.getChainSummary?.(props.task) ?? t('tasks.chainConfig.chipNone'));
 function configureChain(): void {
   void (async () => {
@@ -1435,33 +1439,47 @@ function onChainKeydown(event: KeyboardEvent): void {
 
 - [ ] **Step 4: Wire the callbacks** in `AgentBoardView.ts`
 
-Add a helper method:
+First create the shared label helpers so both editable call sites (this and the activity provider) share one source of truth:
 
 ```ts
-  private chainSummary(task: TaskSpec): string {
-    const config = parseChainConfig(task.frontmatter as Record<string, unknown>);
-    if (!config) return t('tasks.chainConfig.chipNone');
-    const label = config.title ?? config.template ?? t('tasks.chainConfig.chipNone');
-    return config.trigger === 'review' ? `${label} · on handoff` : label;
-  }
+// src/features/tasks/ui/workOrderChainSummary.ts
+import { t } from '../../../i18n/i18n';
+import type { TaskSpec } from '../model/taskTypes';
+import { parseChainConfig, type WorkOrderChainConfig } from '../model/workOrderChain';
 
+/** Chip label for a parsed config. Objective-only chains are valid (Task 1), so fall
+ *  back to the (truncated) objective before "None" — never show "None" for a
+ *  configured chain. Appends "· on handoff" for the review trigger. */
+export function chainSummaryFromConfig(config: WorkOrderChainConfig): string {
+  const objective = config.objective && config.objective.length > 40
+    ? `${config.objective.slice(0, 39)}…`
+    : config.objective;
+  const label = config.title ?? config.template ?? objective ?? t('tasks.chainConfig.chipNone');
+  return config.trigger === 'review' ? `${label} · on handoff` : label;
+}
+
+export function chainSummaryForTask(task: TaskSpec): string {
+  const config = parseChainConfig(task.frontmatter as Record<string, unknown>);
+  return config ? chainSummaryFromConfig(config) : t('tasks.chainConfig.chipNone');
+}
+```
+
+Then in `AgentBoardView.ts` add the configure handler (imports `chainSummaryForTask`, `chainSummaryFromConfig` from `'./workOrderChainSummary'`, `parseChainConfig` from `'../model/workOrderChain'`, `chooseChainConfig` from `'./ChainConfigModal'`, and `t`):
+
+```ts
   private async configureChainForTask(task: TaskSpec): Promise<string | undefined> {
     const current = parseChainConfig(task.frontmatter as Record<string, unknown>) ?? undefined;
     const result = await chooseChainConfig(this.plugin, current);
     if (result === undefined) return undefined;
     await this.saveTaskFields(task, { chain: result });
-    // Keep the in-memory snapshot in sync so a re-open reads the new value (parity with loop).
-    return this.chainSummary({ ...task, frontmatter: { ...task.frontmatter } });
+    // saveTaskFields routes { chain } through noteStore.writeFields; its vault modify
+    // event re-indexes the board. Return the just-saved summary so the chip updates
+    // in place without waiting for a reload.
+    return result ? chainSummaryFromConfig(result) : t('tasks.chainConfig.chipNone');
   }
 ```
 
-> `saveTaskFields` already routes `{ chain }` through `noteStore.writeFields`. Because the chip reads the returned summary and the note write raises a vault `modify` event that re-indexes, no explicit refresh is needed. To make the returned summary reflect the just-saved config, compute it from `result` directly:
-
-```ts
-    return result ? this.chainSummaryFromConfig(result) : t('tasks.chainConfig.chipNone');
-```
-
-(add a small `chainSummaryFromConfig(config)` mirroring `chainSummary`). Import `parseChainConfig` and `chooseChainConfig`, `t`.
+and use `getChainSummary: (task) => chainSummaryForTask(task)` in the callbacks.
 
 In `buildCallbacks()` add:
 
@@ -1472,7 +1490,26 @@ In `buildCallbacks()` add:
 
 In `openDetail()` add the same two to the `WorkOrderDetailModal` callbacks object.
 
-- [ ] **Step 5: Keep the other call site typed** — in `WorkOrderActivityProvider.ts`, its `WorkOrderDetailModalCallbacks` object: the two new callbacks are optional, so no change is required, but add `getChainSummary: (task) => this.chainSummaryReadonly(task)` returning the `parseChainConfig`-derived label if you want the chip populated there too (optional; the chip is only editable in inbox/ready/needs_fix).
+- [ ] **Step 5: Wire the callbacks in `WorkOrderActivityProvider.ts`** — it opens the SAME editable `WorkOrderDetailModal` and already wires `onSaveFields`, so leaving the chain callbacks unwired would show "None" for a chained task there and (before the Step 3 gate) render a dead chip. Wire both, reusing the shared helper and the provider's existing `saveTaskFields`:
+
+```ts
+  private async configureChain(task: TaskSpec): Promise<string | undefined> {
+    const current = parseChainConfig(task.frontmatter as Record<string, unknown>) ?? undefined;
+    const result = await chooseChainConfig(this.plugin, current);
+    if (result === undefined) return undefined;
+    await this.saveTaskFields(task, { chain: result });
+    return result ? chainSummaryFromConfig(result) : t('tasks.chainConfig.chipNone');
+  }
+```
+
+and in the modal's callbacks object add:
+
+```ts
+      onConfigureChain: (task) => this.configureChain(task),
+      getChainSummary: (task) => chainSummaryForTask(task),
+```
+
+Import `chainSummaryForTask`, `chainSummaryFromConfig` from `'./workOrderChainSummary'`, `parseChainConfig` from `'../model/workOrderChain'`, `chooseChainConfig` from `'./ChainConfigModal'`, and `t`.
 
 - [ ] **Step 6: Add minimal CSS** for `--chain` chip parity — reuse the existing `.specorator-work-order-modal-chip` styles; no new rule needed unless a distinct color is wanted (skip for v1).
 
