@@ -7,8 +7,9 @@
  * The history-dropdown render-window guard (formerly here, driven through
  * `ConversationController.updateHistoryDropdown`) moved with the dropdown's
  * Vue migration — the windowing math now lives in
- * `ConversationHistoryDropdown.vue` and is covered by the Vitest lane
- * (`tests/vue/chat/sidePanels/`), not the imperative controller.
+ * `ConversationHistoryDropdown.vue` and its scaling guard is
+ * `tests/vue/chat/sidePanels/conversationHistoryWindow.test.ts` (Vitest lane),
+ * not the imperative controller.
  */
 import { ConversationStore } from '@/app/conversations/ConversationStore';
 import type { SharedAppStorage } from '@/core/bootstrap/storage';
