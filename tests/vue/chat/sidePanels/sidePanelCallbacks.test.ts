@@ -250,7 +250,6 @@ describe('buildSidePanelCallbacks — regenerate title', () => {
 
 describe('buildSidePanelCallbacks — context menu', () => {
   const event = {} as MouseEvent;
-  const anchorEl = {} as HTMLElement;
 
   it('omits open/switch items for the current conversation, keeps rename/delete', () => {
     const host = makeHost({
@@ -258,7 +257,7 @@ describe('buildSidePanelCallbacks — context menu', () => {
       getHistoryConversationOpenState: () => 'current',
     });
     const startRename = vi.fn();
-    buildSidePanelCallbacks(host).onConversationContextMenu('c1', event, anchorEl, startRename);
+    buildSidePanelCallbacks(host).onConversationContextMenu('c1', event, startRename, vi.fn());
     const menu = MenuMock.instances[0];
     expect(menu.items.map((i) => i.title)).toEqual(['Rename', 'Delete']);
   });
@@ -268,7 +267,7 @@ describe('buildSidePanelCallbacks — context menu', () => {
       tabManager: { getActiveTab: () => ({ conversationId: 'other' }) },
       getHistoryConversationOpenState: () => 'closed',
     });
-    buildSidePanelCallbacks(host).onConversationContextMenu('c1', event, anchorEl, vi.fn());
+    buildSidePanelCallbacks(host).onConversationContextMenu('c1', event, vi.fn(), vi.fn());
     const menu = MenuMock.instances[0];
     expect(menu.items.map((i) => i.title)).toEqual([
       'Open in new tab', 'Open in background tab', 'Rename', 'Delete',
@@ -280,9 +279,27 @@ describe('buildSidePanelCallbacks — context menu', () => {
       tabManager: { getActiveTab: () => ({ conversationId: 'other' }) },
       getHistoryConversationOpenState: () => 'open',
     });
-    buildSidePanelCallbacks(host).onConversationContextMenu('c1', event, anchorEl, vi.fn());
+    buildSidePanelCallbacks(host).onConversationContextMenu('c1', event, vi.fn(), vi.fn());
     const menu = MenuMock.instances[0];
     expect(menu.items.map((i) => i.title)).toEqual(['Switch to open session', 'Rename', 'Delete']);
+  });
+
+  it('navigation items close the history panel; rename/delete leave it open', () => {
+    const openConversation = vi.fn().mockResolvedValue(undefined);
+    const closeDropdown = vi.fn();
+    const host = makeHost({
+      tabManager: { getActiveTab: () => ({ conversationId: 'other' }), openConversation },
+      getHistoryConversationOpenState: () => 'closed',
+    });
+    buildSidePanelCallbacks(host).onConversationContextMenu('c1', event, vi.fn(), closeDropdown);
+    const [openNewTab, openBackground, renameItem] = MenuMock.instances[0].items;
+    openNewTab.clickHandler?.();
+    expect(closeDropdown).toHaveBeenCalledTimes(1);
+    expect(openConversation).toHaveBeenCalledWith('c1', { requireNewTab: true, activate: true });
+    openBackground.clickHandler?.();
+    expect(closeDropdown).toHaveBeenCalledTimes(2);
+    renameItem.clickHandler?.();
+    expect(closeDropdown).toHaveBeenCalledTimes(2); // rename does not close
   });
 
   it('Rename item invokes startRename; Delete item deletes the conversation', () => {
@@ -293,7 +310,7 @@ describe('buildSidePanelCallbacks — context menu', () => {
       tabManager: { getActiveTab: () => ({ conversationId: 'c1', state: { isStreaming: false } }) },
       getHistoryConversationOpenState: () => 'current',
     });
-    buildSidePanelCallbacks(host).onConversationContextMenu('c1', event, anchorEl, startRename);
+    buildSidePanelCallbacks(host).onConversationContextMenu('c1', event, startRename, vi.fn());
     const menu = MenuMock.instances[0];
     const [renameItem, deleteItem] = menu.items;
     renameItem.clickHandler?.();

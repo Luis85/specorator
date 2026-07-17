@@ -60,7 +60,7 @@ export interface ChatShellCallbacks {
   /** Build the Obsidian right-click Menu for a history row at the event.
    *  `startRename` enters the Vue component's inline-rename mode for the row
    *  (the rename `<input>` lives in the component, not the view). */
-  onConversationContextMenu: (id: string, event: MouseEvent, anchorEl: HTMLElement, startRename: () => void) => void;
+  onConversationContextMenu: (id: string, event: MouseEvent, startRename: () => void, closeDropdown: () => void) => void;
   /** Open a work-order activity item (then the dropdown closes). */
   onOpenWorkOrderItem: (id: string) => void;
   /** Close a finished work-order tab (dropdown stays open for batch dismiss). */

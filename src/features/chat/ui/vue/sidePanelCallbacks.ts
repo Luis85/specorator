@@ -59,8 +59,8 @@ export function buildSidePanelCallbacks(
     onRegenerateConversationTitle: (id) => {
       void regenerateHistoryTitle(host, id).catch(() => new Notice(t('chat.history.regenerateFailed')));
     },
-    onConversationContextMenu: (id, event, anchorEl, startRename) =>
-      showHistoryContextMenu(host, id, event, anchorEl, startRename),
+    onConversationContextMenu: (id, event, startRename, closeDropdown) =>
+      showHistoryContextMenu(host, id, event, startRename, closeDropdown),
     onOpenWorkOrderItem: (id) => { void host.plugin.workOrderActivity?.openItem(id); },
     onCloseWorkOrderTab: (tabId) => { void host.plugin.workOrderActivity?.closeTab(tabId); },
     onGitCommit: () => host.sendGitCommitPromptToActiveTab(),
@@ -113,25 +113,31 @@ function showHistoryContextMenu(
   host: SidePanelCallbackHost,
   conversationId: string,
   event: MouseEvent,
-  anchorEl: HTMLElement,
   startRename: () => void,
+  closeDropdown: () => void,
 ): void {
   const activeTab = host.tabManager?.getActiveTab();
   const isCurrent = activeTab?.conversationId === conversationId;
   const openState = host.getHistoryConversationOpenState(conversationId);
   const menu = new Menu();
+  // The navigation items close the history panel after dispatching, matching the
+  // deleted view's openHistoryConversation*/closeHistoryDropdown pairing (the
+  // Rename/Delete items keep it open — rename edits in-place, delete re-projects).
   if (!isCurrent) {
     if (openState === 'closed') {
       menu.addItem((mi) => mi.setTitle('Open in new tab').onClick(() => {
+        closeDropdown();
         void host.tabManager?.openConversation(conversationId, { requireNewTab: true, activate: true })
           .catch(() => new Notice(t('chat.history.loadFailed')));
       }));
       menu.addItem((mi) => mi.setTitle('Open in background tab').onClick(() => {
+        closeDropdown();
         void host.tabManager?.openConversation(conversationId, { requireNewTab: true, activate: false })
           .catch(() => new Notice(t('chat.history.loadFailed')));
       }));
     } else if (openState === 'open') {
       menu.addItem((mi) => mi.setTitle('Switch to open session').onClick(() => {
+        closeDropdown();
         void host.tabManager?.openConversation(conversationId).catch(() => new Notice(t('chat.history.loadFailed')));
       }));
     }
@@ -139,5 +145,4 @@ function showHistoryContextMenu(
   menu.addItem((mi) => mi.setTitle('Rename').onClick(() => startRename()));
   menu.addItem((mi) => mi.setTitle('Delete').onClick(() => { void deleteHistoryConversation(host, conversationId); }));
   menu.showAtMouseEvent(event);
-  void anchorEl; // anchor retained for parity; menu positions at the event
 }

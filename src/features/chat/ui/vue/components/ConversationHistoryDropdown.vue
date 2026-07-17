@@ -74,7 +74,7 @@ const onRowAux = (conv: ConversationMeta, e: MouseEvent): void => {
 };
 const onContextMenu = (conv: ConversationMeta, e: MouseEvent): void => {
   e.preventDefault(); e.stopPropagation();
-  cb.onConversationContextMenu(conv.id, e, e.currentTarget as HTMLElement, () => { void startRename(conv); });
+  cb.onConversationContextMenu(conv.id, e, () => { void startRename(conv); }, () => close());
 };
 
 async function startRename(conv: ConversationMeta): Promise<void> {
