@@ -663,3 +663,98 @@ Do it.
   });
 
 });
+
+const CHAIN_NOTE = `---
+type: specorator-work-order
+schema_version: 1
+id: task-1
+title: "T"
+status: ready
+priority: 2 - normal
+created: 2026-07-17T00:00:00.000Z
+updated: 2026-07-17T00:00:00.000Z
+provider: claude
+model: m
+run_id:
+conversation_id:
+sidepanel_tab_id:
+started:
+finished:
+attempts: 0
+---
+# T
+
+## Objective
+
+Do it.
+
+## Acceptance Criteria
+
+- [ ] x
+
+## Context
+
+_Add the links, files, and scope the agent needs._
+
+## Constraints
+
+- none
+
+## Run Ledger
+
+<!-- specorator:run-ledger-start -->
+<!-- specorator:run-ledger-end -->
+
+## Result / Handoff
+
+<!-- specorator:handoff-start -->
+<!-- specorator:handoff-end -->
+`;
+
+describe('TaskNoteStore chain writes', () => {
+  const store = new TaskNoteStore();
+
+  it('writeFields sets chain_* keys and clears them on null', () => {
+    const withChain = store.writeFields(CHAIN_NOTE, {
+      chain: { template: 'Impl', trigger: 'review', title: 'Next' },
+    });
+    const parsed = store.parse('p', withChain).task.frontmatter;
+    expect(parsed.chain_template).toBe('Impl');
+    expect(parsed.chain_trigger).toBe('review');
+    expect(parsed.chain_title).toBe('Next');
+
+    const cleared = store.writeFields(withChain, { chain: null });
+    const clearedFm = store.parse('p', cleared).task.frontmatter;
+    expect(clearedFm.chain_template).toBeUndefined();
+    expect(clearedFm.chain_trigger).toBeUndefined();
+    expect(clearedFm.chain_title).toBeUndefined();
+  });
+
+  it('writeChainLink stamps chained_to', () => {
+    const out = store.writeChainLink(CHAIN_NOTE, 'task-2', '2026-07-17T01:00:00.000Z');
+    expect(store.parse('p', out).task.frontmatter.chained_to).toBe('task-2');
+  });
+
+  it('writeChainContext prepends the seed and drops the placeholder', () => {
+    const out = store.writeChainContext(CHAIN_NOTE, {
+      predecessorPath: 'Agent Board/tasks/task-1.md',
+      nextAction: 'Ship it',
+    });
+    const context = store.parse('p', out).task.sections.context;
+    expect(context).toContain('Chained from [[Agent Board/tasks/task-1]]');
+    expect(context).toContain('**Next action:** Ship it');
+    expect(context).not.toContain('_Add the links');
+  });
+
+  it('writeChainContext omits the next-action line when empty and preserves existing context', () => {
+    const seeded = CHAIN_NOTE.replace('_Add the links, files, and scope the agent needs._', '- [[ref]]');
+    const out = store.writeChainContext(seeded, {
+      predecessorPath: 'Agent Board/tasks/task-1.md',
+      nextAction: '',
+    });
+    const context = store.parse('p', out).task.sections.context;
+    expect(context).toContain('Chained from [[Agent Board/tasks/task-1]]');
+    expect(context).not.toContain('**Next action:**');
+    expect(context).toContain('- [[ref]]');
+  });
+});
