@@ -864,11 +864,10 @@ describe('buildSuccessorPlan', () => {
 
 describe('WorkOrderChainCoordinator', () => {
   function harness() {
-    let handler: ((p: { taskId: string; path: string; status: string }) => void) | undefined;
     const created: unknown[] = [];
     const linked: Array<[string, string]> = [];
     const deps = {
-      events: { on: (_e: string, h: typeof handler) => { handler = h; return () => { handler = undefined; }; } },
+      events: { on: () => () => {} },
       loadTaskSpec: jest.fn(async () => task({ chain_title: 'Next' } as never, HANDOFF)),
       listTemplates: jest.fn(async () => []),
       createSuccessor: jest.fn(async (plan: { seed: { title: string } }) => { created.push(plan); return task({ id: 'task-2' }); }),
@@ -881,7 +880,15 @@ describe('WorkOrderChainCoordinator', () => {
     };
     const coord = new WorkOrderChainCoordinator(deps as never);
     coord.start();
-    return { fire: (status: string) => handler?.({ taskId: 'task-1', path: 'Agent Board/tasks/task-1.md', status }), deps, created, linked };
+    // fire() calls the public handler DIRECTLY and returns its promise, so `await fire(...)`
+    // waits for the whole async chain (loadTaskSpec → createSuccessor → linkSuccessor)
+    // rather than racing it — the production subscription is fire-and-forget (`void`), whose
+    // returned void would let an `await` assert before the coordinator finished its work.
+    return {
+      fire: (status: string) =>
+        coord.handleStatusChanged({ taskId: 'task-1', path: 'Agent Board/tasks/task-1.md', status } as never),
+      deps, created, linked,
+    };
   }
 
   it('spawns once on a matching trigger and stamps the back-link', async () => {
@@ -1030,7 +1037,9 @@ export class WorkOrderChainCoordinator {
   start(): void {
     if (this.unsubscribe) return;
     this.unsubscribe = this.deps.events.on('task:status-changed', (payload) => {
-      void this.handle(payload);
+      // Fire-and-forget in production (EventBus does not await handlers). The method is
+      // public so tests can await it directly and avoid a microtask race on their assertions.
+      void this.handleStatusChanged(payload);
     });
   }
 
@@ -1039,7 +1048,7 @@ export class WorkOrderChainCoordinator {
     this.unsubscribe = null;
   }
 
-  private async handle(payload: TaskEventMap['task:status-changed']): Promise<void> {
+  async handleStatusChanged(payload: TaskEventMap['task:status-changed']): Promise<void> {
     if (!TRIGGER_STATUSES.has(payload.status)) return;
 
     // Load + confirm the trigger matches BEFORE reserving the in-flight path. Reserving
