@@ -1,9 +1,10 @@
 <script setup lang="ts">
-import { computed, inject, ref } from 'vue';
+import { computed, inject, nextTick, ref, watch } from 'vue';
 
 import { getToolIcon } from '../../../../../core/tools/toolIcons';
 import { TOOL_TODO_WRITE } from '../../../../../core/tools/toolNames';
 import { t } from '../../../../../i18n/i18n';
+import type { PanelBashOutput } from '../../../state/BashOutputStore';
 import { mountIcon } from '../mountIcon';
 import TodoListView from '../transcript/blocks/TodoListView.vue';
 import IconSpan from '../transcript/IconSpan.vue';
@@ -39,6 +40,41 @@ const latestBash = computed(() => bash.value.at(-1) ?? null);
 function truncate(s: string, max = 60): string { return s.length <= max ? s : s.slice(0, max) + '...'; }
 function isEntryExpanded(id: string): boolean { return entryExpanded.value[id] ?? true; }
 function toggleEntry(id: string): void { entryExpanded.value = { ...entryExpanded.value, [id]: !isEntryExpanded(id) }; }
+
+const rootEl = ref<HTMLElement | null>(null);
+const bashContentEl = ref<HTMLElement | null>(null);
+
+// Parity with the deleted StatusPanel's scroll behavior: DATA updates pin the
+// newest content into view (renderBashOutputs scrolled bashContentEl + the mount
+// host; updateTodos scrolled the host), while expand/collapse toggles never
+// scrolled (`scroll: false`). The projection fans BOTH slices with fresh array
+// identities on every emit, so each watch guards on a real content change to
+// keep that data-vs-toggle split exact.
+function bashChanged(next: PanelBashOutput[], prev: PanelBashOutput[] | undefined): boolean {
+  if (!prev || next.length !== prev.length) return true;
+  return next.some((a, i) => {
+    const b = prev[i];
+    return a.id !== b.id || a.status !== b.status || a.output !== b.output || a.exitCode !== b.exitCode;
+  });
+}
+function scrollHostToBottom(): void {
+  const host = rootEl.value?.parentElement;
+  if (host) host.scrollTop = host.scrollHeight;
+}
+watch(bash, async (next, prev) => {
+  if (!bashChanged(next, prev)) return;
+  await nextTick();
+  const content = bashContentEl.value;
+  if (content) content.scrollTop = content.scrollHeight;
+  scrollHostToBottom();
+});
+watch(todos, async (next, prev) => {
+  const changed = !prev || (next?.length ?? 0) !== (prev?.length ?? 0)
+    || (next ?? []).some((a, i) => a.content !== prev?.[i]?.content || a.status !== prev?.[i]?.status);
+  if (!changed) return;
+  await nextTick();
+  scrollHostToBottom();
+});
 function onKey(e: KeyboardEvent, fn: () => void): void {
   if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); fn(); }
 }
@@ -49,7 +85,10 @@ function clearIconRef(el: unknown): void { mountIcon(el, 'trash'); }
 </script>
 
 <template>
-  <div class="specorator-status-panel">
+  <div
+    ref="rootEl"
+    class="specorator-status-panel"
+  >
     <div
       class="specorator-status-panel-bash"
       :class="{ 'specorator-hidden': !hasBash }"
@@ -93,6 +132,7 @@ function clearIconRef(el: unknown): void { mountIcon(el, 'trash'); }
         </span>
       </div>
       <div
+        ref="bashContentEl"
         class="specorator-status-panel-bash-content"
         :class="{ 'specorator-hidden': !bashExpanded }"
       >

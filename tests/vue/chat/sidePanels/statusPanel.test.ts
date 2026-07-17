@@ -1,5 +1,5 @@
 import { mount } from '@vue/test-utils';
-import { createPinia,setActivePinia } from 'pinia';
+import { createPinia, setActivePinia } from 'pinia';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import StatusPanel from '@/features/chat/ui/vue/tabChrome/StatusPanel.vue';
@@ -41,5 +41,33 @@ describe('StatusPanel.vue', () => {
     const w = mountPanel();
     expect(w.find('.specorator-status-panel-todos').classes()).toContain('specorator-hidden');
     expect(w.find('.specorator-status-panel-bash').classes()).toContain('specorator-hidden');
+  });
+
+  it('pins bash content to the bottom on data updates but not on expand toggles', async () => {
+    const store = useTabChromeStore();
+    store.setBashOutputs([{ id: 'a', command: 'ls', status: 'running', output: '' }] as never);
+    const w = mountPanel();
+    await w.vm.$nextTick();
+    const content = w.find('.specorator-status-panel-bash-content').element as HTMLElement;
+    Object.defineProperty(content, 'scrollHeight', { value: 500, configurable: true });
+
+    // A data update (fresh array identity, changed status/output) scrolls to bottom.
+    store.setBashOutputs([{ id: 'a', command: 'ls', status: 'completed', output: 'long output' }] as never);
+    await w.vm.$nextTick();
+    await w.vm.$nextTick();
+    expect(content.scrollTop).toBe(500);
+
+    // A re-projection with identical content (fresh identity, same data) must NOT
+    // re-pin — the user's manual scroll position survives.
+    content.scrollTop = 3;
+    store.setBashOutputs([{ id: 'a', command: 'ls', status: 'completed', output: 'long output' }] as never);
+    await w.vm.$nextTick();
+    await w.vm.$nextTick();
+    expect(content.scrollTop).toBe(3);
+
+    // Collapsing/expanding the panel never scrolls.
+    await w.find('.specorator-status-panel-bash-header').trigger('click');
+    await w.find('.specorator-status-panel-bash-header').trigger('click');
+    expect(content.scrollTop).toBe(3);
   });
 });

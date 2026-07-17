@@ -1,5 +1,5 @@
 import { mount } from '@vue/test-utils';
-import { createPinia,setActivePinia } from 'pinia';
+import { createPinia, setActivePinia } from 'pinia';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { CALLBACKS_KEY } from '@/features/chat/ui/vue/chatShellKeys';
