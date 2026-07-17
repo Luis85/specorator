@@ -359,6 +359,19 @@ function applyPostProcess(markdown: string, options: CreateWorkOrderOptions | un
   return options?.postProcess ? options.postProcess(markdown) : markdown;
 }
 
+/**
+ * Resolve the chain config for the new note: an explicit seed chain (e.g. a chain
+ * successor's own configured hand-off) wins; otherwise a picked template's default
+ * successor carries forward onto the note. Extracted so `createWorkOrderFromSeed`
+ * stays under the fallow complexity ratchet.
+ */
+function resolveSeedChain(
+  seed: WorkOrderSeed,
+  template: WorkOrderTemplate | undefined,
+): WorkOrderChainConfig | undefined {
+  return seed.chain ?? template?.chain;
+}
+
 export async function createWorkOrderFromSeed(
   plugin: SpecoratorPlugin,
   seed: WorkOrderSeed,
@@ -380,6 +393,8 @@ export async function createWorkOrderFromSeed(
   const slug = slugifyTitle(title) || 'work-order';
   const id = `task-${timestampId(now)}-${slug}`;
 
+  const seedChain = resolveSeedChain(seed, template);
+
   const markdown = buildWorkOrderMarkdownForSeed(
     {
       id,
@@ -393,7 +408,7 @@ export async function createWorkOrderFromSeed(
       objective: seed.objective,
       contextMarkdown: seed.contextMarkdown,
       agent: seed.agent,
-      chain: seed.chain,
+      chain: seedChain,
       chainedFrom: seed.chainedFrom,
       chainDepth: seed.chainDepth,
     },

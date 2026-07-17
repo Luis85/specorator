@@ -1,4 +1,5 @@
 import type { TaskPriority } from '../model/taskTypes';
+import type { WorkOrderChainConfig } from '../model/workOrderChain';
 
 export interface WorkOrderTemplate {
   path: string;
@@ -11,6 +12,8 @@ export interface WorkOrderTemplate {
   loop?: string;
   /** Roster agent id (`roster:<slug>`) assigned to work orders created from this template. */
   agent?: string;
+  /** Default successor chain inherited when a work order is created from this template. */
+  chain?: WorkOrderChainConfig;
   body: string;
 }
 
