@@ -1,6 +1,6 @@
 # Chat Feature
 
-Main sidebar chat interface. `SpecoratorView` assembles tabs, controllers, provider-backed services, and three Vue 3 + Pinia islands around the shared `ChatRuntime` boundary. The outer frame — header, tab-badge strip, and tab-content host (ADR 0005 sub-project 1) — the per-tab transcript rendering (`MessageRenderer` + block renderers, ADR 0005 sub-project 2), AND the per-tab composer (toolbar, chips, textarea host, ADR 0005 sub-project 3) are now Vue islands under `ui/vue/`, mounted over the untouched imperative engine (`TabManager`, controllers, `ChatState`, stream-consumption state machines). See "Chat Shell Vue Island", "Transcript Vue Island", and "Composer Vue Island" below. Still-imperative: the remaining side panels (status panel, navigation sidebar) — the final sub-project.
+Main sidebar chat interface. `SpecoratorView` assembles tabs, controllers, provider-backed services, and four Vue 3 + Pinia islands around the shared `ChatRuntime` boundary. The outer frame — header, tab-badge strip, and tab-content host (ADR 0005 sub-project 1) — the per-tab transcript rendering (`MessageRenderer` + block renderers, ADR 0005 sub-project 2), the per-tab composer (toolbar, chips, textarea host, ADR 0005 sub-project 3), AND the per-tab side panels (status panel + navigation overlay, ADR 0005 sub-project 4) are now Vue islands under `ui/vue/`, mounted over the untouched imperative engine (`TabManager`, controllers, `ChatState`, stream-consumption state machines). See "Chat Shell Vue Island", "Transcript Vue Island", "Composer Vue Island", and "Tab-Chrome Vue Island" below. All chat *rendering* surfaces are now Vue islands (ADR 0005 sub-project 4 migrated the status panel, navigation sidebar, conversation-history dropdown, work-order-activity dropdown, and git-action button). The only remaining imperative code is the retained engine widgets (inline-edit's shared `SlashCommandDropdown`) and the truth-owning managers/controllers/providers behind the projection seams.
 
 ## Provider Boundary Status
 
@@ -57,9 +57,6 @@ SpecoratorView (lifecycle + assembly)
 └── UI Components
     ├── FileContextManager
     ├── ImageContextManager
-    ├── StatusPanel
-    ├── ConversationHistoryView
-    ├── NavigationSidebar
     ├── InstructionModeManager
     └── BangBashModeManager
 ```
@@ -114,19 +111,18 @@ Vue-provided content host.
   `cb.resolveNavRowEl(activeTabId)`), re-targeting reactively when the active
   tab changes; a null target (no active tab yet) disables the Teleport and
   falls back to in-place rendering rather than erroring on a missing target.
-- **Still imperative**: the conversation-history and work-order-activity
-  dropdowns (`ConversationHistoryView`, the work-order dropdown) and the
-  `GitActionButton` are unchanged imperative widgets — `HeaderActions.vue`
-  exposes container refs and the callbacks (`mountHistoryHost`,
-  `mountWorkOrderHost`, `mountGitActionHost`) host them into the Vue tree
-  ("island hosts imperative widget"). They migrate to Vue with a later
-  sub-project (side panels).
+- **Header widgets now native Vue**: the conversation-history dropdown
+  (`ConversationHistoryDropdown.vue`), the work-order-activity dropdown
+  (`WorkOrderActivityDropdown.vue`), and the git-action button
+  (`GitActionButton.vue`) render directly in `ChatHeader.vue`/`HeaderActions.vue`
+  off the projected `chatShellStore` `conversations`/`workOrder`/`git` slices and
+  fire the conversation/work-order/git `ChatShellCallbacks` delegators. The
+  `mount*Host` callbacks and their host refs were deleted (ADR 0005 sub-project 4).
 - **Out of scope for this island**: transcript rendering migrated separately in
-  ADR 0005 sub-project 2 (see "Transcript Vue Island" below), and the composer
-  in ADR 0005 sub-project 3 (see "Composer Vue Island" below). The remaining
-  side panels (status panel, navigation sidebar) stay imperative — the final
-  sub-project of the larger chat Vue migration (see ADR 0005 and
-  `docs/superpowers/specs/2026-07-11-chat-shell-vue-migration-design.md`).
+  ADR 0005 sub-project 2 (see "Transcript Vue Island" below), the composer
+  in ADR 0005 sub-project 3 (see "Composer Vue Island" below), and the per-tab
+  side panels (status panel + navigation overlay) in ADR 0005 sub-project 4 (see
+  "Tab-Chrome Vue Island" below).
 
 ## State Flow
 
@@ -148,7 +144,7 @@ The feature layer consumes provider-neutral `StreamChunk` values. Providers own 
 
 | Controller | Responsibility |
 |------------|----------------|
-| `ConversationController` | Session switching, history reload, save, and rewind. Delegates the history-dropdown list UI to `ConversationHistoryView` (in `ui/`), passing it the two lifecycle escapes — `switchTo` and `loadActive` — as callbacks |
+| `ConversationController` | Session switching, history reload, save, and rewind. The header conversation-history dropdown is now a Vue component (`ConversationHistoryDropdown.vue`) reading the projected `chatShellStore.conversations` slice; `SpecoratorView` owns the async title-regeneration + delete flows |
 | `StreamController` | Consume stream chunks, update streaming state, auto-scroll, abort handling. Delegates subagent chunks (`tool_use`/`tool_result`/`subagent_*`/`async_subagent_result`) to the two subagent coordinators |
 | `SubagentStreamCoordinator` | The `SubagentManager`-mediated Task subagent state machine (sync/async Task, child `subagent_*` chunks, `TaskOutput`, async hydration/retry, Task tool-call ↔ subagent linking). Reached via `StreamController`'s `dispatchToolUse`/`handleToolResult`/`handleSubagentChunk`/`handleAsyncSubagentResult` delegations; streaming primitives arrive as `deps` callbacks |
 | `ProviderLifecycleSubagentCoordinator` | Provider lifecycle subagents (spawn → wait/close) for CLI providers; owns the spawn-callId/agentId tracking maps. Distinct mechanism from the `SubagentManager` Task path above |
@@ -204,16 +200,18 @@ mutation to reactive-data mutation; `TabManager`, controllers, `ChatState`, and
   engine's live `msg` keeps growing the original. `tests/vue/chat/transcript/`
   `liveMutation.regression.test.ts` locks C1 (live growth of the streaming
   object) and C2 (async subagent completing on a non-active message).
-- **`.specorator-*` DOM contract**: Vue owns the transcript DOM but FOUR
-  still-imperative consumers read it by class/attribute and are out of scope —
-  `NavigationController`/`NavigationSidebar` (scan `.specorator-message-user` +
-  `offsetTop`), the three selection controllers, `ChatDropController` (overlay),
-  and `StreamController` auto-scroll (`.specorator-messages`). The components
-  therefore emit the exact legacy `.specorator-*` classes/attributes alongside
-  the `.specorator-vue` baseline. `domContract.test.ts` mounts the real
-  `TranscriptRoot` over a fixture exercising every block type + user/assistant +
-  streaming + chrome and asserts every consumer-queried class/attribute — the
-  regression backstop until the composer/side-panel sub-projects migrate too.
+- **`.specorator-*` DOM contract**: Vue owns the transcript DOM but several
+  consumers still read it by class/attribute and are out of scope — the Vue
+  `NavOverlay`'s `useTabNavigation` and the keyboard `NavigationController` (scan
+  `.specorator-message-user` + `offsetTop`), the three selection controllers,
+  `ChatDropController` (overlay), and `StreamController` auto-scroll
+  (`.specorator-messages`). The components therefore emit the exact legacy
+  `.specorator-*` classes/attributes alongside the `.specorator-vue` baseline.
+  `domContract.test.ts` mounts the real `TranscriptRoot` over a fixture
+  exercising every block type + user/assistant + streaming + chrome and asserts
+  every consumer-queried class/attribute; the side panels' own cross-surface
+  read of `.specorator-message-user` is locked by
+  `tests/vue/chat/sidePanels/sidePanelsDomContract.test.ts`.
 - **`MarkdownHost` async seam**: the single Vue-hostile surface. It owns one
   element, treats its children as opaque (no `v-for`, never diffed), re-renders
   through Obsidian's async `MarkdownRenderer` on text change, and drops stale
@@ -334,6 +332,34 @@ from DOM assembly to reactive-data projection.
   and re-projects on each mutation). The chat composer delegates entirely to that
   coordinator; the imperative `shared/components/SlashCommandDropdown.ts` is
   retained ONLY for the inline-edit flow, which keeps its own shared DOM widget.
+
+## Tab-Chrome Vue Island
+
+The per-tab side panels — the StatusPanel (todos + bang-bash outputs) and the
+floating NavOverlay (4-button scroll navigator) — are a Vue 3 + Pinia island
+under `ui/vue/tabChrome/` (ADR 0005 sub-project 4), mounted by `mountTabChrome`
+(`tabs/tabChromeMount.ts`) into each tab's `statusPanelContainerEl`, mirroring
+`mountTabComposer`. `StatusPanel.vue` renders in place (reusing `TodoListView.vue`
+for todos, the generic `.specorator-tool-*` classes for bash entries; collapse
+state is view-local). `NavOverlay.vue` `<Teleport>`s to `.specorator-nav-sidebar-host`
+and its scroll geometry stays imperative in `useTabNavigation`, bound to the
+transcript scroll host pushed post-mount via `MountedTabChrome.setScrollHost`.
+
+- **Store**: `ui/vue/tabChrome/stores/tabChromeStore.ts` (`useTabChromeStore`) —
+  `todos` + `bashOutputs`, both `shallowRef`. Truth stays in
+  `ChatState.currentTodos` + the engine-side `BashOutputStore` (LRU-50, the one
+  state relocation: the bang-bash `onSubmit` writes it, surviving conversation
+  switch + Vue remount).
+- **Projection seam**: `tabs/tabChrome.ts`'s `TabChromeProjection` (mirror of
+  `TabComposerProjection`, sharing the `ProjectionObserverSet` observer helper)
+  fans `{ todos, bashOutputs }` on todo change + bash start/finish; `onTodosChanged`
+  and `BashOutputStore.onChange` call `emit()`.
+- **Callbacks**: `TabChromeCallbacks` — `onCopyBashOutput` / `onClearBashOutputs`
+  (bash truth stays engine-side) and `resolveNavHost` (NavOverlay teleport target).
+- **DOM contract**: `tests/vue/chat/sidePanels/sidePanelsDomContract.test.ts` locks
+  the legacy `.specorator-status-panel-*` / `.specorator-nav-*` / `.specorator-history-*`
+  / `.specorator-work-order-activity-*` / `.specorator-git-action*` classes plus
+  NavOverlay's cross-surface read of the transcript's `.specorator-message-user`.
 
 ## Key Patterns
 
