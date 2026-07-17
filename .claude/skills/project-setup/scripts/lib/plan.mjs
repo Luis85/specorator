@@ -3,7 +3,7 @@ import {
   planCi, planDocs, planEslint, planFallow, planGithubMcp,
   planInstall, planLoc, planReport, planTest,
 } from './harness.mjs';
-import { planObsidian } from './obsidian.mjs';
+import { obsidianEntry, planObsidian } from './obsidian.mjs';
 import { standsDownTestConfig } from './testConfig.mjs';
 
 const ENGINE_VERSION = '0.2.0';
@@ -81,9 +81,10 @@ export function effectiveOptions(options, state) {
 // Ordered composition of pure sub-planners.
 export function plan(options, state) {
   const opts = effectiveOptions(options, state);
-  // The scaffold's entry is src/main.ts. On an empty dir detection falls back
-  // to src/index.ts, which would point fallow/LOC at a file that never exists.
-  const st = opts.obsidian ? { ...state, entry: 'src/main.ts' } : state;
+  // Greenfield's entry is src/main.ts (detection's src/index.ts fallback would
+  // point fallow/build at a file that never exists); a brownfield adopt keeps
+  // the user's detected entry so the build/ratchet target actually exists.
+  const st = opts.obsidian ? { ...state, entry: obsidianEntry(opts, state) } : state;
   return [
     ...planGitignore(opts, st),
     ...planRunReport(opts),

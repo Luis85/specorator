@@ -6,7 +6,7 @@ import { join } from 'node:path';
 import { test } from 'node:test';
 
 import { PINNED, planFallow } from '../lib/harness.mjs';
-import { planObsidian } from '../lib/obsidian.mjs';
+import { obsidianEntry, planObsidian } from '../lib/obsidian.mjs';
 import { loadOptions } from '../lib/options.mjs';
 
 function optionsWith(obsidian) {
@@ -124,6 +124,37 @@ test('greenfield (empty) writes the full sample app + tests', () => {
   const actions = planObsidian(optionsWith({ ...BASE, vue: false }), {});
   assert.ok(findWrite(actions, 'src/main.ts'));
   assert.ok(findWrite(actions, 'tests/unit/settings.test.ts'));
+});
+
+test('a single verify script chains the whole gate set in CI order', () => {
+  const pkg = mergedPackagePatch(actionsFor());
+  assert.match(pkg.scripts.verify, /lint .*check:quality.*typecheck.*format:check.*build.*check:artifacts/);
+});
+
+test('the i18n scaffold + SessionStart hook ship, with notice text lint-forced through t()', () => {
+  const actions = actionsFor();
+  const hook = JSON.parse(findWrite(actions, '.claude/settings.json').content);
+  assert.ok(hook.hooks.SessionStart, 'missing SessionStart hook');
+  for (const p of ['src/i18n/i18n.ts', 'src/i18n/en.json', 'tests/unit/i18n.test.ts']) {
+    assert.ok(findWrite(actions, p), `missing ${p}`);
+  }
+  assert.match(findWrite(actions, 'eslint.config.mjs').content, /Route user-facing notice text through t\(\)/);
+});
+
+test('manifest-only brownfield seeds the package version from the manifest (no check:artifacts desync)', () => {
+  const state = { obsidianAppPresent: true, obsidianManifest: { version: '3.1.0', minAppVersion: '1.5.0' } };
+  const actions = planObsidian(optionsWith(BASE), state);
+  const versionPatch = actions.find((a) => a.type === 'mergeJson' && a.path === 'package.json' && a.patch.version);
+  assert.equal(versionPatch.patch.version, '3.1.0');
+  assert.equal(JSON.parse(findWrite(actions, 'manifest.json').content).version, '3.1.0');
+});
+
+test('obsidianEntry keeps a brownfield entry (root main.ts) and forces src/main.ts on greenfield', () => {
+  assert.equal(obsidianEntry(optionsWith(BASE), {}), 'src/main.ts');
+  assert.equal(obsidianEntry(optionsWith(BASE), { obsidianAppPresent: true, entry: 'main.ts' }), 'main.ts');
+  // a non-src entry lands in the tsconfig include so the type-aware lint resolves it
+  const tsconfig = findWrite(planObsidian(optionsWith(BASE), { obsidianAppPresent: true, entry: 'main.ts' }), 'tsconfig.json').content;
+  assert.match(tsconfig, /"main\.ts"/);
 });
 
 test('VueView pushes the start route before mount (memory history has no initial navigation)', () => {

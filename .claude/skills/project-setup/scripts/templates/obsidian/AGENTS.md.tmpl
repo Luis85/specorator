@@ -59,6 +59,15 @@ Add new wiring as its own `register*` module rather than growing `onload`.
 `onload` in an error boundary (a thrown load reports via `logger` + `notices`
 and degrades, instead of leaving Obsidian half-registered).
 
+**i18n:** all user-facing text goes through `t('key')` (`src/i18n/`), backed by
+`en.json`. A literal or template string passed to `plugin.notices.info/error`
+is lint-banned — add a key and interpolate with `t('key', { name })`. Add
+locales by keying on Obsidian's `getLanguage()` with an `en` fallback.
+
+**`npm run verify`** runs the whole local gate chain in CI order — one command
+before pushing. A `.claude/` SessionStart hook installs deps so the repo is
+ready for Claude Code on the web out of the box.
+
 ## Commands (`src/commands.ts`)
 
 Pick the helper by how the command should behave:

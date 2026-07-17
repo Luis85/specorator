@@ -8,7 +8,10 @@
 // and a tag-push release workflow. Everything user-editable is skip-if-exists;
 // engine-owned ratchet/build scripts under scripts/ are overwrite-backup.
 import { CI_PM, dep, notice, scriptCollision } from './harness.mjs';
+import { runPrefix, safePackageManager } from './packageManager.mjs';
 import { loadTemplate, renderTemplate } from './templates.mjs';
+
+const PM_INSTALL = { npm: 'npm install', pnpm: 'pnpm install', yarn: 'yarn install', bun: 'bun install' };
 
 const INITIAL_VERSION = '0.1.0';
 
@@ -51,6 +54,17 @@ function isGreenfield(options, state) {
   return !state?.obsidianAppPresent;
 }
 
+// The build/fallow entry. Greenfield writes src/main.ts; a brownfield adopt
+// keeps the user's detected entry (e.g. a root main.ts), so the generated
+// esbuild build and fallow ratchet point at the file that actually exists.
+export function obsidianEntry(options, state) {
+  if (isGreenfield(options, state)) return 'src/main.ts';
+  const entry = state?.entry;
+  return typeof entry === 'string' && /^[\w./-]+\.(?:ts|tsx|mts|cts|js|jsx|mjs|cjs)$/.test(entry)
+    ? entry
+    : 'src/main.ts';
+}
+
 function planManifest(o, state, version) {
   const authorUrlLine = o.authorUrl ? `\n  "authorUrl": ${JSON.stringify(o.authorUrl)},` : '';
   // An existing manifest is kept (skip-if-exists). Key the freshly-written
@@ -74,12 +88,13 @@ function planManifest(o, state, version) {
   return [write('manifest.json', manifest), write('versions.json', versions)];
 }
 
-// A generated manifest inherits the repo's existing package.json version (a
-// brownfield adopt) so it never desyncs; greenfield falls back to 0.1.0. Only a
-// clean semver `major.minor.patch` is templated into the JSON.
+// The version shared by the generated manifest, versions.json, AND package.json
+// so check:artifacts never sees a desync. A brownfield adopt inherits the
+// existing plugin's version — the manifest wins (it is the plugin's identity),
+// then package.json; greenfield falls back to 0.1.0. Only a clean semver counts.
 function initialVersion(state) {
-  const v = state?.packageVersion;
-  return typeof v === 'string' && /^\d+\.\d+\.\d+$/.test(v) ? v : INITIAL_VERSION;
+  const semver = (v) => (typeof v === 'string' && /^\d+\.\d+\.\d+$/.test(v) ? v : null);
+  return semver(state?.obsidianManifest?.version) ?? semver(state?.packageVersion) ?? INITIAL_VERSION;
 }
 
 function planBuild(options, state) {
@@ -93,6 +108,7 @@ function planBuild(options, state) {
   // external: an accidental `import 'fs'` or `import 'electron'` then fails the
   // build loudly instead of crashing on iOS/Android at runtime.
   const content = renderTemplate(loadTemplate('obsidian/esbuild.config.mjs.tmpl'), {
+    entry: state?.entry ?? 'src/main.ts',
     nodeModuleImport: o.mobile ? '' : "import { builtinModules } from 'node:module';\n",
     nodeExternals: o.mobile
       ? ''
@@ -153,6 +169,9 @@ function planSources(options, state) {
     write('src/main.ts', renderTemplate(loadTemplate('obsidian/src/main.ts.tmpl'), mainVars)),
     write('src/settings.ts', renderTemplate(loadTemplate('obsidian/src/settings.ts.tmpl'), shared)),
     write('src/commands.ts', renderTemplate(loadTemplate('obsidian/src/commands.ts.tmpl'), commandVars)),
+    // i18n: all user-facing notice/modal text resolves through t() (lint-enforced).
+    write('src/i18n/i18n.ts', loadTemplate('obsidian/src/i18n/i18n.ts.tmpl')),
+    write('src/i18n/en.json', loadTemplate('obsidian/src/i18n/en.json.tmpl')),
     // Core services: provider-neutral, UI-free, unit-tested — the seam every
     // feature builds on (see the generated AGENTS.md).
     write('src/core/commands/CommandsService.ts', renderTemplate(loadTemplate('obsidian/src/core/commands/CommandsService.ts.tmpl'), shared)),
@@ -185,10 +204,14 @@ function planSources(options, state) {
   return actions;
 }
 
-function planTsconfig(options) {
+function planTsconfig(options, state) {
   const o = options.obsidian;
   const vueIncludes = o.vue ? ', "src/**/*.vue", "tests/**/*.vue"' : '';
-  return [write('tsconfig.json', renderTemplate(loadTemplate('obsidian/tsconfig.json.tmpl'), { vueIncludes }))];
+  // A brownfield entry outside src/ (e.g. a root main.ts) must be in the
+  // include, or the type-aware lint project service can't resolve it.
+  const entry = state?.entry ?? 'src/main.ts';
+  const entryInclude = entry.startsWith('src/') ? '' : `, ${JSON.stringify(entry)}`;
+  return [write('tsconfig.json', renderTemplate(loadTemplate('obsidian/tsconfig.json.tmpl'), { vueIncludes, entryInclude }))];
 }
 
 function planObsidianEslint(options, state) {
@@ -266,6 +289,7 @@ function planObsidianVitest(options, state) {
       write('tests/unit/commandsService.test.ts', loadTemplate('obsidian/tests/commandsService.test.ts.tmpl')),
       write('tests/unit/vaultService.test.ts', loadTemplate('obsidian/tests/vaultService.test.ts.tmpl')),
       write('tests/unit/requestService.test.ts', loadTemplate('obsidian/tests/requestService.test.ts.tmpl')),
+      write('tests/unit/i18n.test.ts', loadTemplate('obsidian/tests/i18n.test.ts.tmpl')),
       write('tests/unit/statusBar.test.ts', loadTemplate('obsidian/tests/statusBar.test.ts.tmpl')),
     );
     if (o.vue) {
@@ -353,6 +377,31 @@ function planArtifacts(options, state) {
 function planGithubTemplates(options) {
   if (!options.github?.integrate) return [];
   return [write('.github/pull_request_template.md', loadTemplate('obsidian/pull_request_template.md.tmpl'))];
+}
+
+// One `verify` script that chains the whole local gate set in CI order, so
+// agents (and humans) run one command instead of the chain. Mirrors runGates /
+// the generated CI exactly.
+function planVerifyScript(options, state) {
+  const g = options.guardrails ?? {};
+  const run = runPrefix(options.packageManager ?? state?.packageManager ?? 'npm');
+  const steps = [];
+  if (g.eslintSeverityStaging) steps.push('lint');
+  if (g.locGuard) steps.push('check:loc');
+  if (g.cssGuard) steps.push('check:css');
+  if (g.fallowRatchet) steps.push('check:quality');
+  steps.push('typecheck', 'format:check', g.coverageFloors ? 'test:coverage' : 'test', 'build', 'check:artifacts');
+  const verify = steps.map((s) => `${run} ${s}`).join(' && ');
+  return [{ type: 'mergeJson', path: 'package.json', patch: { scripts: { verify } } }];
+}
+
+// A SessionStart hook so Claude Code on the web installs deps before working —
+// the generated repo is agent-ready out of the box.
+function planClaudeSettings(options, state) {
+  const pm = safePackageManager(options.packageManager ?? state?.packageManager ?? 'npm');
+  return [
+    write('.claude/settings.json', renderTemplate(loadTemplate('obsidian/claude-settings.json.tmpl'), { pmInstall: PM_INSTALL[pm] })),
+  ];
 }
 
 function planRelease(options, state) {
@@ -456,7 +505,7 @@ export function planObsidian(options, state = {}) {
     ...planPackageBasics(options, state, version),
     ...planBuild(options, state),
     ...planSources(options, state),
-    ...planTsconfig(options),
+    ...planTsconfig(options, state),
     ...planObsidianEslint(options, state),
     ...planObsidianVitest(options, state),
     ...planFormatter(options, state),
@@ -464,6 +513,8 @@ export function planObsidian(options, state = {}) {
     ...planArtifacts(options, state),
     ...planRelease(options, state),
     ...planGithubTemplates(options),
+    ...planVerifyScript(options, state),
+    ...planClaudeSettings(options, state),
     ...planProjectDocs(options),
   ];
 }

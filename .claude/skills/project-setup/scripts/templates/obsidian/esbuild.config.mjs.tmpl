@@ -68,7 +68,7 @@ const deployToVault = {
 };
 
 const context = await esbuild.context({
-  entryPoints: ['src/main.ts'],
+  entryPoints: ['{{entry}}'],
   outfile: 'main.js',
   bundle: true,
   format: 'cjs',

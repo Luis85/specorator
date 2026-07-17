@@ -1,8 +1,9 @@
+import { t } from './i18n/i18n';
 import type {{pluginClass}} from './main';
 {{activateViewImport}}
 // All command wiring lives here so main.ts stays orchestration-only. Each
 // helper demonstrates one Obsidian command type; see AGENTS.md for when to use
-// which.
+// which. User-facing text goes through t() (src/i18n).
 export function registerCommands(plugin: {{pluginClass}}): void {
   const log = plugin.logger.child('commands');
 
@@ -10,7 +11,7 @@ export function registerCommands(plugin: {{pluginClass}}): void {
   plugin.commands.addSimple('show-greeting', 'Show greeting', () => {
     const greeting = plugin.settings.greeting.trim();
     if (greeting) plugin.notices.info(greeting);
-    else plugin.notices.error('Set a greeting in the plugin settings first');
+    else plugin.notices.error(t('notice.setGreetingFirst'));
   });
 
   // editorCallback — only offered with a Markdown editor focused.
@@ -53,16 +54,19 @@ export function registerCommands(plugin: {{pluginClass}}): void {
 }
 
 async function clearGreeting(plugin: {{pluginClass}}): Promise<void> {
-  const confirmed = await plugin.modals.confirm('Clear greeting', 'Remove the saved greeting?');
+  const confirmed = await plugin.modals.confirm(
+    t('modal.clearGreeting.title'),
+    t('modal.clearGreeting.body'),
+  );
   if (!confirmed) return;
   await plugin.saveSettings({ greeting: '' });
-  plugin.notices.info('Greeting cleared');
+  plugin.notices.info(t('notice.greetingCleared'));
 }
 
 async function appendGreetingToLog(plugin: {{pluginClass}}): Promise<void> {
   const greeting = plugin.settings.greeting.trim();
   if (!greeting) {
-    plugin.notices.error('Set a greeting in the plugin settings first');
+    plugin.notices.error(t('notice.setGreetingFirst'));
     return;
   }
   const path = 'logs/greeting-log.md';
@@ -70,7 +74,7 @@ async function appendGreetingToLog(plugin: {{pluginClass}}): Promise<void> {
   const previous = (await plugin.vault.read(path)) ?? '';
   await plugin.vault.write(path, `${previous}${greeting}\n`);
   plugin.logger.debug('appended greeting', path);
-  plugin.notices.info('Greeting appended to logs/greeting-log.md');
+  plugin.notices.info(t('notice.greetingAppended'));
 }
 
 async function checkLatestObsidian(plugin: {{pluginClass}}): Promise<void> {
@@ -78,9 +82,9 @@ async function checkLatestObsidian(plugin: {{pluginClass}}): Promise<void> {
     const release = await plugin.requests.getJson<{ name: string }>(
       'https://api.github.com/repos/obsidianmd/obsidian-releases/releases/latest',
     );
-    plugin.notices.info(`Latest Obsidian release: ${release.name}`);
+    plugin.notices.info(t('notice.latestRelease', { name: release.name }));
   } catch (error) {
     plugin.logger.warn('update check failed', error);
-    plugin.notices.error('Could not check for the latest release');
+    plugin.notices.error(t('notice.updateFailed'));
   }
 }

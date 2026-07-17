@@ -56,7 +56,9 @@ review parity, ratchets, Vue islands, artifact smoke).
 | Tests | `vitest.config.mjs` (jsdom; `obsidian` aliased to the mock; istanbul coverage for fallow), `tests/setup.ts` (createEl/empty/addClass polyfills), `tests/__mocks__/obsidian.ts`, `tests/obsidian-augment.d.ts` (types the mock's test-only helpers), unit tests for every service + component/composable tests |
 | Lint/format | `eslint.config.mjs` (obsidianmd recommended + type-aware typescript-eslint + eslint-plugin-vue + import sort + raw-HTML + raw-`Notice` bans + function-health caps + eslint-comments discipline + prettier compat), `.prettierrc.json`, `.prettierignore`, `.editorconfig` |
 | Ratchets | shared fallow/LOC harness (fallow gates `boundaryViolations` at 0 via `main`/`core`/`ui` zones) plus `scripts/check-css-important.mjs` (+ baseline) and `scripts/check-artifacts.mjs` (presence, version sync, size budgets) |
-| Docs | `AGENTS.md` (architecture, services, command types, boundaries, add-a-feature checklist), `README.md`, `CLAUDE.md` (points at AGENTS.md), `docs/adr/0001-plugin-architecture-baseline.md` (with `docs.scaffold`), plus the generic docs scaffold |
+| i18n (`src/i18n/`) | `i18n.ts` (`t(key, params)`) + `en.json`; literal/template text in `plugin.notices.info/error` is lint-banned (forced through `t()`) |
+| Agent workflow | `verify` script (chains the whole gate set in CI order), `.claude/settings.json` (SessionStart hook installs deps for Claude Code on the web) |
+| Docs | `AGENTS.md` (architecture, services, command types, boundaries, i18n, add-a-feature checklist), `README.md`, `CLAUDE.md` (points at AGENTS.md), `docs/adr/0001-plugin-architecture-baseline.md` (with `docs.scaffold`), plus the generic docs scaffold |
 | CI/CD | `.github/workflows/ci.yml` (lint → loc → css → quality → typecheck → format → coverage → build → artifact smoke), `.github/workflows/release.yml`, `.github/pull_request_template.md` — all only with `github.integrate` |
 
 ## Architecture the scaffold ships

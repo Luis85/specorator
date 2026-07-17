@@ -42,6 +42,22 @@ const rawHtmlBans = [
 // so the rule line stays short whatever the name's length (prettier-stable).
 const brands = [...DEFAULT_BRANDS, {{brandLiteral}}];
 
+// Hardcoded user-facing text in notices must go through t() (src/i18n) so it
+// can be localized — a literal or template string as the first argument to
+// plugin.notices.info/error is banned.
+const i18nNoticeBans = [
+  {
+    selector:
+      "CallExpression[callee.object.property.name='notices'][callee.property.name=/^(info|error)$/][arguments.0.type='Literal']",
+    message: 'Route user-facing notice text through t() (src/i18n/i18n.ts) so it can be localized.',
+  },
+  {
+    selector:
+      "CallExpression[callee.object.property.name='notices'][callee.property.name=/^(info|error)$/][arguments.0.type='TemplateLiteral']",
+    message: 'Route user-facing notice text through t() (src/i18n/i18n.ts) so it can be localized.',
+  },
+];
+
 // Shared safety gate for production sources (src).
 const srcSafetyRules = {
   'no-console': 'error',
@@ -49,6 +65,7 @@ const srcSafetyRules = {
   'no-restricted-syntax': [
     'error',
     ...rawHtmlBans,
+    ...i18nNoticeBans,
     {
       selector: 'NewExpression[callee.name="Notice"]',
       message:

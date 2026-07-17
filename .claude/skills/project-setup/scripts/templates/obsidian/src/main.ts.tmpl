@@ -10,6 +10,7 @@ import { ModalService } from './core/modals/ModalService';
 import { NoticeService } from './core/notices/NoticeService';
 import { SettingsService } from './core/settings/SettingsService';
 import { VaultService } from './core/vault/VaultService';
+import { t } from './i18n/i18n';
 import type { {{settingsType}} } from './settings';
 import { DEFAULT_SETTINGS, migrateSettings, {{settingsTab}} } from './settings';
 {{viewImport}}import { registerStatusBar } from './ui/statusBar';
@@ -48,7 +49,7 @@ export default class {{pluginClass}} extends Plugin {
 {{viewRegistration}}      this.logger.info('loaded');
     } catch (error) {
       this.logger.error('Failed to load', error);
-      this.notices.error('Failed to load — see the developer console.');
+      this.notices.error(t('notice.loadFailed'));
     }
   }
 

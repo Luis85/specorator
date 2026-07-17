@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { inject } from 'vue';
 
+import { t } from '../../../i18n/i18n';
 import { PLUGIN_KEY } from '../keys';
 import { useCounterStore } from '../stores/counter';
 
@@ -8,15 +9,15 @@ const counter = useCounterStore();
 const plugin = inject(PLUGIN_KEY);
 
 // Service wiring demo: confirm through ModalService, report through
-// NoticeService. Without a plugin (bare component test) it degrades to a
-// plain reset.
+// NoticeService (text via t()). Without a plugin (bare component test) it
+// degrades to a plain reset.
 async function resetWithConfirm(): Promise<void> {
   const confirmed = plugin
-    ? await plugin.modals.confirm('Reset counter', 'Set the count back to zero?')
+    ? await plugin.modals.confirm(t('modal.resetCounter.title'), t('modal.resetCounter.body'))
     : true;
   if (!confirmed) return;
   counter.reset();
-  plugin?.notices.info('Counter reset');
+  plugin?.notices.info(t('notice.counterReset'));
 }
 </script>
 
