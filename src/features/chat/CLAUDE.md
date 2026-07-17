@@ -1,6 +1,6 @@
 # Chat Feature
 
-Main sidebar chat interface. `SpecoratorView` assembles tabs, controllers, provider-backed services, and four Vue 3 + Pinia islands around the shared `ChatRuntime` boundary. The outer frame — header, tab-badge strip, and tab-content host (ADR 0005 sub-project 1) — the per-tab transcript rendering (`MessageRenderer` + block renderers, ADR 0005 sub-project 2), the per-tab composer (toolbar, chips, textarea host, ADR 0005 sub-project 3), AND the per-tab side panels (status panel + navigation overlay, ADR 0005 sub-project 4) are now Vue islands under `ui/vue/`, mounted over the untouched imperative engine (`TabManager`, controllers, `ChatState`, stream-consumption state machines). See "Chat Shell Vue Island", "Transcript Vue Island", "Composer Vue Island", and "Tab-Chrome Vue Island" below. All chat *rendering* surfaces are now Vue islands (ADR 0005 sub-project 4 migrated the status panel, navigation sidebar, conversation-history dropdown, work-order-activity dropdown, and git-action button). The only remaining imperative code is the retained engine widgets (inline-edit's shared `SlashCommandDropdown`) and the truth-owning managers/controllers/providers behind the projection seams.
+Main sidebar chat interface. `SpecoratorView` assembles tabs, controllers, provider-backed services, and four Vue 3 + Pinia islands around the shared `ChatRuntime` boundary. The outer frame — header, tab-badge strip, and tab-content host (ADR 0005 sub-project 1) — the per-tab transcript rendering (`MessageRenderer` + block renderers, ADR 0005 sub-project 2), the per-tab composer (toolbar, chips, textarea host, ADR 0005 sub-project 3), AND the per-tab side panels (status panel + navigation overlay, ADR 0005 sub-project 4) are now Vue islands under `ui/vue/`, mounted over the untouched imperative engine (`TabManager`, controllers, `ChatState`, stream-consumption state machines). See "Chat Shell Vue Island", "Transcript Vue Island", "Composer Vue Island", and "Tab-Chrome Vue Island" below. All chat *rendering* surfaces are now Vue islands (ADR 0005 sub-project 4 migrated the status panel, navigation sidebar, conversation-history dropdown, work-order-activity dropdown, and git-action button). The only remaining imperative code is the retained engine widgets (inline-edit's shared `SlashCommandDropdown` — permanent, since inline-edit stays Obsidian-native per ADR 0006) and the truth-owning managers/controllers/providers behind the projection seams.
 
 ## Provider Boundary Status
 
@@ -338,7 +338,8 @@ from DOM assembly to reactive-data projection.
   `ComposerDropdownCoordinator` (which owns `{ kind, items, activeIndex, anchorRect }`
   and re-projects on each mutation). The chat composer delegates entirely to that
   coordinator; the imperative `shared/components/SlashCommandDropdown.ts` is
-  retained ONLY for the inline-edit flow, which keeps its own shared DOM widget.
+  retained ONLY for the inline-edit flow, which keeps its own shared DOM widget
+  permanently (inline-edit stays Obsidian-native, ADR 0006).
 
 ## Tab-Chrome Vue Island
 

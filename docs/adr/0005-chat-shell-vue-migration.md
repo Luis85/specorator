@@ -353,6 +353,11 @@ transcript, composer, side panels, and header widgets are all Vue islands. The o
 imperative code is the retained engine widgets (inline-edit's `SlashCommandDropdown`)
 and the truth-owning managers/controllers/providers behind the projection seams.
 
+This sub-project also closes the Vue migration program as a whole: ADR 0006
+decided that settings and modals stay Obsidian-native permanently, so the
+retained inline-edit widget is an end state, not a pending sub-project, and no
+fifth sub-project follows.
+
 ## References
 
 - Spec (sub-project 1): `docs/superpowers/specs/2026-07-11-chat-shell-vue-migration-design.md`
