@@ -157,9 +157,12 @@ test('manifest-only brownfield seeds the package version from the manifest (no c
 test('obsidianEntry keeps a brownfield entry (root main.ts) and forces src/main.ts on greenfield', () => {
   assert.equal(obsidianEntry(optionsWith(BASE), {}), 'src/main.ts');
   assert.equal(obsidianEntry(optionsWith(BASE), { obsidianAppPresent: true, entry: 'main.ts' }), 'main.ts');
+  const brown = planObsidian(optionsWith(BASE), { obsidianAppPresent: true, entry: 'main.ts' });
   // a non-src entry lands in the tsconfig include so the type-aware lint resolves it
-  const tsconfig = findWrite(planObsidian(optionsWith(BASE), { obsidianAppPresent: true, entry: 'main.ts' }), 'tsconfig.json').content;
-  assert.match(tsconfig, /"main\.ts"/);
+  assert.match(findWrite(brown, 'tsconfig.json').content, /"main\.ts"/);
+  // esbuild gets an explicitly-relative entry (a bare specifier is ambiguous)
+  assert.match(findWrite(brown, 'esbuild.config.mjs').content, /entryPoints: \['\.\/main\.ts'\]/);
+  assert.match(findWrite(actionsFor(), 'esbuild.config.mjs').content, /entryPoints: \['\.\/src\/main\.ts'\]/);
 });
 
 test('VueView pushes the start route before mount (memory history has no initial navigation)', () => {

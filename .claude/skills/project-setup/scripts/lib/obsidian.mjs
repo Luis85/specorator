@@ -107,8 +107,14 @@ function planBuild(options, state) {
   // Electron), so those are externals. A mobile-ready plugin must NOT mark them
   // external: an accidental `import 'fs'` or `import 'electron'` then fails the
   // build loudly instead of crashing on iOS/Android at runtime.
+  // esbuild entry points are unambiguous only as explicitly-relative paths; a
+  // bare `main.ts` reads as a package specifier in some esbuild versions. `./`
+  // a non-relative entry (a root brownfield main.ts); src/main.ts becomes
+  // ./src/main.ts (equivalent, just explicit).
+  const rawEntry = state?.entry ?? 'src/main.ts';
+  const buildEntry = /^(?:\.|\/)/.test(rawEntry) ? rawEntry : `./${rawEntry}`;
   const content = renderTemplate(loadTemplate('obsidian/esbuild.config.mjs.tmpl'), {
-    entry: state?.entry ?? 'src/main.ts',
+    entry: buildEntry,
     nodeModuleImport: o.mobile ? '' : "import { builtinModules } from 'node:module';\n",
     nodeExternals: o.mobile
       ? ''
