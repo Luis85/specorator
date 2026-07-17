@@ -333,11 +333,14 @@ function planProjectDocs(options) {
       id: o.id,
       mobileLine,
       uiSection: o.vue
-        ? '## Vue island (`src/ui/`)\n\nOne Vue app per leaf: `VueView` mounts `App.vue` in `onOpen` with a fresh\nPinia and a memory-history router, provides the `markRaw`\'d plugin under\n`PLUGIN_KEY`, and unmounts + empties in `onClose` (Vue\'s documented leak\nclass). Components inject the plugin; composables (see `useGreeting`) wrap\nbus subscriptions with `onUnmounted` cleanup. SFC `<style>` blocks are merged\ninto `styles.css` by the build.'
-        : '## UI (`src/ui/`)\n\nUI is built imperatively with Obsidian\'s `createEl`/`createDiv` helpers.\nKeep rendering in `src/ui/` and logic in `src/core/` so components stay thin.',
+        ? loadTemplate('obsidian/agents-vue-section.md.tmpl').trimEnd()
+        : loadTemplate('obsidian/agents-novue-section.md.tmpl').trimEnd(),
     })),
     write('.editorconfig', loadTemplate('obsidian/editorconfig.tmpl')),
     write('.env.example', loadTemplate('obsidian/env.example.tmpl')),
+    // Tag releases WITHOUT npm's default "v" prefix — Obsidian matches a
+    // release by tag === manifest version.
+    write('.npmrc', loadTemplate('obsidian/npmrc.tmpl')),
   ];
   if (options.docs?.scaffold) {
     actions.push(

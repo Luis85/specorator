@@ -1,22 +1,38 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
 import type { AppEvents } from '@/core/events/AppEvents';
 import { EventBus } from '@/core/events/EventBus';
 import { registerStatusBar } from '@/ui/statusBar';
 
+function fakePlugin(greeting: string) {
+  const item = document.createElement('div');
+  const events = new EventBus<AppEvents>();
+  const info = vi.fn();
+  const plugin = {
+    events,
+    settings: { greeting },
+    notices: { info },
+    addStatusBarItem: () => item,
+    registerDomEvent: (el: HTMLElement, type: string, cb: (e: Event) => unknown) =>
+      el.addEventListener(type, cb),
+  };
+  return { plugin, item, events, info };
+}
+
 describe('registerStatusBar', () => {
   it('mirrors the greeting and follows settings:changed', () => {
-    const item = document.createElement('div');
-    const events = new EventBus<AppEvents>();
-    const plugin = {
-      events,
-      settings: { greeting: 'Hi' },
-      addStatusBarItem: () => item,
-    };
+    const { plugin, item, events } = fakePlugin('Hi');
     registerStatusBar(plugin as never);
     expect(item.textContent).toBe('Hi');
 
     events.emit('settings:changed', { settings: { greeting: 'Servus' } });
     expect(item.textContent).toBe('Servus');
+  });
+
+  it('shows the greeting when the item is clicked (registerDomEvent)', () => {
+    const { plugin, item, info } = fakePlugin('Hi');
+    registerStatusBar(plugin as never);
+    item.dispatchEvent(new Event('click'));
+    expect(info).toHaveBeenCalledWith('Hi');
   });
 });

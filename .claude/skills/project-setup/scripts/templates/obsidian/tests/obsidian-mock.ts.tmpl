@@ -51,6 +51,10 @@ export class Plugin {
 
   registerView(_type: string, _factory: (leaf: WorkspaceLeaf) => unknown): void {}
 
+  registerDomEvent(el: HTMLElement, type: string, callback: (evt: Event) => unknown): void {
+    el.addEventListener(type, callback);
+  }
+
   addStatusBarItem(): HTMLElement {
     return document.createElement('div');
   }

@@ -374,8 +374,11 @@ export function planDocs(options, state) {
   gateScripts.push(g.coverageFloors ? 'test:coverage' : 'test'); // always a test gate, like CI/verify
   if (options.obsidian) {
     gates.push(`- \`${run} typecheck\` — type gate (${options.obsidian.vue ? 'vue-tsc covers .ts + .vue' : 'tsc'}).`);
+    gates.push(`- \`${run} format:check\` — Prettier formatting gate (CI and \`verify\` run it too).`);
     gates.push(`- \`${run} build\` + \`${run} check:artifacts\` — production bundle + artifact smoke (presence, version sync, size budget).`);
-    gateScripts.push('typecheck', 'build', 'check:artifacts');
+    // Mirror the CI/verify order exactly so the guide's verify command can't
+    // pass locally while CI fails on formatting drift.
+    gateScripts.push('typecheck', 'format:check', 'build', 'check:artifacts');
   }
   // Advisory commands (the report script is always installed; fallow's sweep only when its ratchet is on).
   const advisory = [`- \`${run} report\` — actionable quality report (quality-report.md + .json).`];

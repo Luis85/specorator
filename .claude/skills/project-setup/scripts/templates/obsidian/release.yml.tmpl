@@ -14,6 +14,10 @@ jobs:
         with: { node-version: 22, cache: {{pmCache}} }
       - run: {{pmInstall}}
       - run: {{pmRun}} build
+      # Fail the release before publishing if the bundle is missing or the
+      # package/manifest/versions trio is desynced (a manual tag or shadowed
+      # `version` script), instead of shipping broken plugin metadata.
+      - run: {{pmRun}} check:artifacts
       # Obsidian's release convention: the three artifacts attached directly
       # (not only zipped) so the community-plugins updater can fetch them.
       - uses: softprops/action-gh-release@v2

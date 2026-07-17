@@ -46,15 +46,19 @@ Add new wiring as its own `register*` module rather than growing `onload`.
 
 Pick the helper by how the command should behave:
 
-| Helper       | Obsidian mechanism | Use when                                                     |
-| ------------ | ------------------ | ------------------------------------------------------------ |
-| `addSimple`  | `callback`         | The command is always runnable.                              |
-| `addChecked` | `checkCallback`    | The command only applies in some state — it hides otherwise. |
-| `addEditor`  | `editorCallback`   | The command acts on the active Markdown editor.              |
+| Helper             | Obsidian mechanism    | Use when                                                     |
+| ------------------ | --------------------- | ------------------------------------------------------------ |
+| `addSimple`        | `callback`            | The command is always runnable.                              |
+| `addChecked`       | `checkCallback`       | The command only applies in some state — it hides otherwise. |
+| `addEditor`        | `editorCallback`      | The command acts on the active Markdown editor.              |
+| `addEditorChecked` | `editorCheckCallback` | An editor command that is also conditional.                  |
 
-`checkCallback` is called twice: with `checking: true` to ask "does this
-apply?" (return a boolean, do nothing) and `checking: false` to run it. The
-`addChecked` wrapper collapses that into one `when()` predicate plus a `run()`.
+`checkCallback`/`editorCheckCallback` are called twice: with `checking: true`
+to ask "does this apply?" (return a boolean, do nothing) and `checking: false`
+to run it. The `addChecked`/`addEditorChecked` wrappers collapse that into one
+`when()` predicate plus a `run()`. Command ids are stable after release (they
+key user hotkeys), and the service intentionally forbids caller-supplied
+hotkeys — hardcoded defaults collide across plugins.
 
 ## Event flow (worked example)
 
@@ -85,19 +89,49 @@ subscriptions like the status bar need no teardown — the bus dies on unload).
 1. Model state/events first: extend settings (`withDefaults` keeps old vaults
    safe) and `AppEvents` if other surfaces must react.
 2. Put logic in `src/core/` (unit-tested), rendering in `src/ui/`.
-3. Register commands/views in `main.ts` — command ids never contain the plugin
-   id or the word "command"; names are sentence case without the plugin name.
+3. Register commands in `src/commands.ts` via `plugin.commands`; register
+   views/listeners in their `register*` module.
 4. User feedback goes through `plugin.notices` / `plugin.modals`.
 5. Style via `src/styles.css` (Obsidian CSS variables, no `!important`) or
    scoped SFC styles.
 6. Run the local gate set before pushing (see `CLAUDE.md`).
 
+## Lifecycle & cleanup (Obsidian rules)
+
+Let Obsidian own teardown — it auto-cleans anything registered through the
+plugin, and manual cleanup is where leaks and layout bugs come from.
+
+- **Register, don't hand-roll.** Obsidian events → `this.registerEvent(...)`;
+  DOM listeners → `this.registerDomEvent(el, type, cb)` (see `statusBar.ts`);
+  timers → `this.registerInterval(window.setInterval(...))`; commands/views via
+  `addCommand`/`registerView`. All are removed on unload — a raw
+  `addEventListener`/`setInterval`/`vault.on()` leaks past unload.
+- **Don't detach leaves in `onunload()`.** On update, Obsidian reinitializes
+  open leaves at their position; detaching them breaks the user's layout. Just
+  register the view type. (The scaffold has no `onunload` for this reason.)
+- **Don't store view instances.** Look them up on demand —
+  `app.workspace.getLeavesOfType(TYPE)` (see `registerViews.ts`) — never keep a
+  `this.view = leaf.view` reference (stale state + leaks).
+- **Use `this.app`, not the global `app`/`window.app`** (debug-only), and reach
+  the active view via `app.workspace.getActiveViewOfType(...)`, not
+  `workspace.activeLeaf`.
+
+## Files & paths
+
+- `normalizePath()` every constructed/user-supplied vault path (cross-platform).
+- Prefer the Vault API (`vault.getFileByPath`, `vault.process`,
+  `fileManager.processFrontMatter`) over the Adapter API and over iterating all
+  files; use the Editor API for the active note.
+
 ## Constraints worth remembering
 
 - {{mobileLine}}
+- Also avoid regex lookbehind (unsupported on some mobile engines).
 - Build artifacts (`main.js`, `styles.css`) are generated — never edit or
   commit them; `src/styles.css` is the stylesheet source.
 - `manifest.json`/`versions.json` change only through `npm version` (the
-  `sync-version` script) — `check:artifacts` fails on desync.
+  `sync-version` script) — `check:artifacts` fails on desync. Release tags must
+  equal the version with **no** leading `v` (`.npmrc` sets
+  `tag-version-prefix=""`).
 - Ratchets (`check:loc`, `check:css`, `check:quality`, coverage floors) only
   tighten: lock improvements in with each gate's `--update` in the same PR.

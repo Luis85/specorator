@@ -34,4 +34,23 @@ describe('CommandsService', () => {
     expect(check(false)).toBe(true); // ready + executing → runs
     expect(run).toHaveBeenCalledOnce();
   });
+
+  it('editorCheckCallback passes the editor through both phases', () => {
+    const plugin = fakePlugin();
+    const run = vi.fn();
+    const editor = { id: 'ed' } as never;
+    new CommandsService(plugin as never).addEditorChecked(
+      'edit',
+      'Edit',
+      (ed) => ed === editor,
+      run,
+    );
+    const check = plugin.added[0]?.editorCheckCallback;
+    if (!check) throw new Error('no editorCheckCallback registered');
+
+    expect(check(true, editor, null as never)).toBe(true); // probing → shown, not run
+    expect(run).not.toHaveBeenCalled();
+    expect(check(false, editor, null as never)).toBe(true); // executing → runs with editor
+    expect(run).toHaveBeenCalledWith(editor);
+  });
 });

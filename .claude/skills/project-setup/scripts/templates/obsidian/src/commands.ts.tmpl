@@ -16,6 +16,17 @@ export function registerCommands(plugin: {{pluginClass}}): void {
     editor.replaceSelection(plugin.settings.greeting);
   });
 
+  // editorCheckCallback — an editor command that is also conditional: hidden
+  // unless the editor has a selection.
+  plugin.commands.addEditorChecked(
+    'uppercase-selection',
+    'Uppercase the selection',
+    (editor) => editor.getSelection().length > 0,
+    (editor) => {
+      editor.replaceSelection(editor.getSelection().toUpperCase());
+    },
+  );
+
   // checkCallback — hidden from the palette unless a greeting is set.
   plugin.commands.addChecked(
     'clear-greeting',
