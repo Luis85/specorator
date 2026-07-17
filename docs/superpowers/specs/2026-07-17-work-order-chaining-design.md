@@ -71,8 +71,12 @@ the board, queue, or run engine, and no risk of one board pane double-spawning.
 
 ### Data model — `model/workOrderChain.ts` (new, pure)
 
-A work order is a "workflow work-order" iff it has a successor configured
-(`chain_template` or `chain_title` present). No new note `type`.
+A work order is a "workflow work-order" iff it has a successor configured — i.e.
+**any** of `chain_template`, `chain_title`, or `chain_objective` is present. (A
+successor needs no template and no explicit title: an objective-only config is
+valid, because creation supplies a fallback title. Excluding `chain_objective`
+from the predicate would let an objective-only config save yet silently never
+spawn.) No new note `type`.
 
 New **optional** frontmatter on a work order (all omitted when unconfigured, exactly
 like today's `loop`/`agent`):
@@ -106,7 +110,8 @@ export interface WorkOrderChainConfig {
   trigger: ChainTrigger;
 }
 
-// Returns null when no successor is configured (neither template nor title).
+// Returns null only when no successor is configured — i.e. template, title, and
+// objective are all absent. Any one of the three marks the chain as configured.
 export function parseChainConfig(fm: Record<string, unknown>): WorkOrderChainConfig | null;
 
 // The chain-config frontmatter lines for the YAML builder (omitted keys → no line).
@@ -149,38 +154,66 @@ the same event; if auto-run is on, the `ready` successor launches.
 Injected deps: `events`, `loadTaskSpec`, `listTemplates`, `createSuccessor`,
 `writeChainLink`, `appendLedger`, `readSettings`, `logger`, `showNotice`.
 
-### Successor creation — reuse `createWorkOrderFromSeed`
+### Successor creation
 
-`WorkOrderSeed` (in `commands/taskCommands.ts`) gains optional fields:
-`provider`, `model`, `agent` (inline inheritance), `chain` (a `WorkOrderChainConfig`
-to persist onto the successor for the next hop), `chainedFrom`, `chainDepth`.
-`workOrderFrontmatter()` conditionally emits the chain lines, mirroring the existing
-`loopLine` / `agentLine` pattern (omitted → no line). This keeps the whole successor
-in a single atomic creation write and reuses all existing logic (folder resolution,
-unique-path, template body rendering, provider/model resolution via `resolveRunTarget`).
+Successor creation reuses `createWorkOrderFromSeed` for the note skeleton, then applies
+the chain-specific content in one deterministic follow-up write. Splitting it this way
+is what makes the **template branch** correct. Today `buildWorkOrderMarkdownForSeed`'s
+template path renders only the template body — it never forwards `contextMarkdown` or
+`objective` (those are wired only in the blank branch) — and `createWorkOrderFromSeed`
+lets `template?.name` dominate `seed.title`. So a naive "just pass a seed" reuse would
+create every template-based successor **without** the predecessor wikilink / next-action
+seed and would **ignore** the configured title/objective overrides. The two-step flow
+below injects those inputs uniformly for template and blank successors.
 
-The coordinator's `createSuccessor` builds the seed:
+**Step 1 — base note via `createWorkOrderFromSeed`.** `WorkOrderSeed` (in
+`commands/taskCommands.ts`) gains optional fields: `titleOverride`, `provider`, `model`,
+`agent` (inline inheritance), `chain` (a `WorkOrderChainConfig` to persist onto the
+successor for the next hop), `chainedFrom`, `chainDepth`. `workOrderFrontmatter()`
+conditionally emits the chain/provenance lines, mirroring the existing `loopLine` /
+`agentLine` pattern (omitted → no line). The title-precedence line in
+`createWorkOrderFromSeed` becomes
+`seed.titleOverride?.trim() || template?.name?.trim() || seed.title || 'New work order'`
+— backward-compatible (no override → the template name still dominates the normal
+"+ Add from template" flow), but a chain's configured title now wins over the template
+name. Step 1 owns the frontmatter (provenance + inherited chain), provider/model/agent,
+folder/unique-path, and the body (template-rendered or the default blank body).
 
-- **title** = `config.title` ?? `template?.name` ?? `"<predecessor title> — next"`
-- **objective** = `config.objective` (else the template body supplies it)
-- **contextMarkdown** (the "input"):
+The coordinator computes:
+- **titleOverride** = `config.title` (undefined when unset)
+- **seed.title** (base fallback) = `"<predecessor title> — next"` — used only when there
+  is neither a `titleOverride` nor a template
+- **chain** = the resolved template's own `chain` config (the next hop), if any; else
+  undefined (the chain ends)
+- **provider/model/agent** = the template's when template-based (via the normal
+  `resolveRunTarget` path); otherwise inherited from the predecessor so a blank inline
+  successor is immediately runnable
+- **status** = `'ready'`; **chainedFrom** = predecessor id;
+  **chainDepth** = `(fm.chain_depth ?? 0) + 1`
+
+**Step 2 — inject the chain inputs (`applyNoteChange` on the just-created note).** One
+vault write composes pure `TaskNoteStore` transforms over the new note's content (no
+race — nothing else holds the fresh file):
+
+- `writeChainContext(content, { predecessorPath, nextAction })` — a new store method
+  that inserts the seed at the **top** of the `## Context` section, dropping the default
+  Context placeholder when present and preserving any template-authored context below.
+  The seed stays within the section (no `##` sub-heading, which `writeSections` would
+  treat as the next section boundary):
   ```
   Chained from [[<predecessor path without .md>]] — see its Result / Handoff.
 
-  ## Next action
-  <next_action from parseHandoffSections(predecessor.sections.handoff)>
+  **Next action:** <next_action from parseHandoffSections(predecessor.sections.handoff)>
   ```
-  When the handoff has no `next_action` (e.g. a manual send-to-review with no
-  structured handoff), the `## Next action` block is omitted; the wikilink stays.
-- **status** = `'ready'`
-- **chainedFrom** = predecessor id; **chainDepth** = `(fm.chain_depth ?? 0) + 1`
-- **chain** = the resolved template's own `chain` config (the next hop), if any; else
-  undefined (the chain ends).
-- **provider/model/agent** = the template's when template-based (via the normal
-  `resolveRunTarget` path); otherwise **inherited from the predecessor** so a blank
-  inline successor is immediately runnable.
+  When the handoff has no `next_action` (e.g. a manual send-to-review with no structured
+  handoff), the `**Next action:**` line is omitted; the wikilink stays.
+- `writeSections(content, { objective: config.objective })` — **only** when an objective
+  override is set, so a template-based successor honors the override instead of keeping
+  the template's authored objective.
 
-Then `createWorkOrderFromSeed(plugin, seed, { template, status: 'ready', reveal: 'none' })`.
+Because Step 2 injects context + objective for **both** branches, the blank branch no
+longer relies on `contextMarkdown`/`objective` being threaded through
+`createWorkOrderFromSeed`; the one path is uniform and directly testable.
 
 ### Templates carry chains
 
@@ -201,6 +234,9 @@ Then `createWorkOrderFromSeed(plugin, seed, { template, status: 'ready', reveal:
   `applyNoteChange` → `writeFields`).
 - A small dedicated method `writeChainLink(content, successorId, timestamp)` stamps
   `chained_to` (provenance kept out of the user-facing `writeFields` surface).
+- A new `writeChainContext(content, { predecessorPath, nextAction })` inserts the chain
+  seed at the top of the `## Context` section (drops the default placeholder; preserves
+  any existing context below). Pure string transform, unit-tested independently.
 - Unknown frontmatter already round-trips (`writeStatus`/`writeFields` spread
   `...frontmatter`), so the chain/provenance fields survive every existing note
   rewrite untouched.
@@ -246,8 +282,8 @@ user accepts ────────────────► transitionTask 
                      WorkOrderChainCoordinator.handle
                      (trigger match? · not already chained? · under depth cap?)
                                         │ yes
-                     resolve template → build seed (link + next_action, ready,
-                     provenance, inherited chain) → createWorkOrderFromSeed
+                     resolve template → createWorkOrderFromSeed (frontmatter/
+                     provider/model/title/body) → inject chain context + objective
                                         │
                      stamp chained_to on predecessor · ledger line · notice
                                         │
@@ -257,30 +293,43 @@ user accepts ────────────────► transitionTask 
 ## Testing
 
 - `tests/unit/features/tasks/model/workOrderChain.test.ts` — `parseChainConfig`
-  (null when unconfigured, default trigger, invalid trigger normalization) and the
-  frontmatter-line round-trip.
+  (null only when template + title + objective are all absent; **objective-only config
+  is non-null**; default trigger; invalid trigger normalization) and the frontmatter-line
+  round-trip.
+- `tests/unit/features/tasks/storage/taskNoteStore` — `writeChainContext` inserts the
+  seed at the top of `## Context`, drops the default placeholder, preserves existing
+  context below, and omits the `**Next action:**` line when `nextAction` is empty;
+  `writeChainLink` stamps `chained_to`.
 - `tests/unit/features/tasks/execution/workOrderChainCoordinator.test.ts` — fires only
   on a matching trigger; idempotent via `chained_to`; in-flight de-dup on a duplicate
-  same-tick event; depth cap; missing-template blank fallback; context seeded with the
-  wikilink + `next_action`; stamps `chained_from` + `chain_depth + 1` on the successor
-  and `chained_to` on the predecessor.
+  same-tick event; depth cap; missing-template blank fallback; stamps `chained_from` +
+  `chain_depth + 1` on the successor and `chained_to` on the predecessor. **Both a blank
+  and a template-based successor get the wikilink + `next_action` seeded into Context,
+  and a template-based successor honors the configured title/objective overrides (they
+  are not lost to the template body / template name).**
 - `tests/unit/features/tasks/commands/taskCommands` — successor frontmatter (chain
-  config + provenance) renders and round-trips through `TaskNoteStore.parse`.
+  config + provenance) renders and round-trips through `TaskNoteStore.parse`;
+  `titleOverride` wins over `template.name`, and its absence preserves the existing
+  template-name-dominates behavior.
 - `tests/unit/features/tasks/templates` — template `chain` parse/build round-trip and
   the instantiation copy into a new work order.
 - `tests/integration/features/tasks` — full `done → spawn → ready (→ auto-run)` path
-  driven through a fake event bus, asserting one successor, correct seeded context,
-  and no duplicate on a repeated event.
+  driven through a fake event bus, for **both** a blank and a template-based chain,
+  asserting one successor, correct seeded context + overrides, and no duplicate on a
+  repeated event.
 
 ## Files
 
 **New:** `model/workOrderChain.ts`, `execution/WorkOrderChainCoordinator.ts`,
 `ui/ChainConfigModal.ts`, plus the mirrored test files.
 
-**Edited:** `commands/taskCommands.ts` (seed + frontmatter builder),
+**Edited:** `commands/taskCommands.ts` (seed fields + `titleOverride` precedence in
+`createWorkOrderFromSeed` + `workOrderFrontmatter` chain/provenance lines;
+`title` is computed here and passed down, so `workOrderResolution.ts` is untouched),
 `templates/templateTypes.ts`, `templates/TemplateNoteStore.ts`,
 `ui/workOrderTemplateEditorForm.ts`, `ui/vue/WorkOrderTemplateEditorRoot.vue`,
-`storage/TaskNoteStore.ts` (`chain` in `writeFields` + `writeChainLink`),
+`storage/TaskNoteStore.ts` (`chain` in `writeFields` + `writeChainLink` +
+`writeChainContext`),
 `ui/vue/components/WorkOrderProperties.vue` + `ui/WorkOrderDetailModal.ts` /
 `ui/vue/detailKeys.ts` + `ui/AgentBoardView.ts` (chip + save seam + `ChainConfigModal`
 wiring + field options), `ui/vue/components/WorkOrderCard.vue` (indicator),
