@@ -28,29 +28,26 @@ describe('buildGitSlice', () => {
 });
 
 describe('buildConversationsSlice', () => {
-  it('sorts newest-first, carries the current id, and populates perItem open state', () => {
+  it('sorts newest-first and carries the current id', () => {
     const slice = buildConversationsSlice(
       [{ id: 'a', createdAt: 1 }, { id: 'b', createdAt: 2 }] as never,
       'b',
-      () => 'closed',
     );
     expect(slice.items.map((c) => c.id)).toEqual(['b', 'a']);
     expect(slice.currentConversationId).toBe('b');
-    expect(slice.perItem).toEqual({ a: { openState: 'closed' }, b: { openState: 'closed' } });
   });
 
   it('prefers lastResponseAt over createdAt for ordering', () => {
     const slice = buildConversationsSlice(
       [{ id: 'a', createdAt: 100, lastResponseAt: 1 }, { id: 'b', createdAt: 1, lastResponseAt: 100 }] as never,
       null,
-      () => 'current',
     );
     expect(slice.items.map((c) => c.id)).toEqual(['b', 'a']);
   });
 
   it('returns an empty slice for an empty list', () => {
-    expect(buildConversationsSlice([], null, () => 'closed')).toEqual({
-      items: [], currentConversationId: null, perItem: {},
+    expect(buildConversationsSlice([], null)).toEqual({
+      items: [], currentConversationId: null,
     });
   });
 });

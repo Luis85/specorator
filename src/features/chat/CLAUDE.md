@@ -66,8 +66,9 @@ SpecoratorView (lifecycle + assembly)
 The outer frame — header, tab-badge strip, and tab-content host — is a Vue 3 +
 Pinia island under `ui/vue/` (ADR 0005, mirroring the Agent Board's ADR 0004
 seam). `SpecoratorView.mountChatShell()` mounts `ChatShellRoot.vue` into
-`viewContainerEl` via a per-leaf `createApp` (Pinia singleton from
-`ui/vue/globalPinia.ts`); the engine — `TabManager`, controllers, `ChatState`,
+`viewContainerEl` via a per-leaf `createApp` + a FRESH per-leaf Pinia
+(`createChatShellPinia` in `ui/vue/globalPinia.ts` — despite the filename,
+never a shared singleton); the engine — `TabManager`, controllers, `ChatState`,
 and each tab's imperative DOM — is untouched and mounted afterward into the
 Vue-provided content host.
 
@@ -347,7 +348,7 @@ transcript scroll host pushed post-mount via `MountedTabChrome.setScrollHost`.
 
 - **Store**: `ui/vue/tabChrome/stores/tabChromeStore.ts` (`useTabChromeStore`) —
   `todos` + `bashOutputs`, both `shallowRef`. Truth stays in
-  `ChatState.currentTodos` + the engine-side `BashOutputStore` (LRU-50, the one
+  `ChatState.currentTodos` + the engine-side `BashOutputStore` (bounded FIFO-50, the one
   state relocation: the bang-bash `onSubmit` writes it, surviving conversation
   switch + Vue remount).
 - **Projection seam**: `tabs/tabChrome.ts`'s `TabChromeProjection` (mirror of

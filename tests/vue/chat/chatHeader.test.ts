@@ -47,7 +47,6 @@ function fakeCallbacks(overrides: Partial<ChatShellCallbacks> = {}): ChatShellCa
     // existing test below: a null target disables the Teleport.
     resolveNavRowEl: vi.fn(() => null),
     renderProviderLogo: vi.fn(),
-    onSelectConversation: vi.fn(),
     onOpenConversationInNewTab: vi.fn(),
     onRenameConversation: vi.fn(),
     onDeleteConversation: vi.fn(),

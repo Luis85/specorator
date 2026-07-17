@@ -2,6 +2,7 @@
 import { computed, inject } from 'vue';
 
 import { t } from '../../../../../i18n/i18n';
+import { onActivationKey } from '../activationKeys';
 import { CALLBACKS_KEY } from '../chatShellKeys';
 import { mountIcon } from '../mountIcon';
 import { useChatShellStore } from '../stores/chatShellStore';
@@ -24,12 +25,6 @@ function newConversationHost(el: unknown): void { mountIcon(el, 'square-pen'); }
 
 // Mirrors SpecoratorView.wireHeaderButton: click + Enter/Space both activate,
 // so each specorator-header-btn is keyboard-operable.
-function onKeydown(e: KeyboardEvent, fn: () => void): void {
-  if (e.key === 'Enter' || e.key === ' ') {
-    e.preventDefault();
-    fn();
-  }
-}
 </script>
 
 <template>
@@ -45,7 +40,7 @@ function onKeydown(e: KeyboardEvent, fn: () => void): void {
       :title="t('quickActions.toolbar.title')"
       @mouseenter="cb.onQuickActionsHover()"
       @click="cb.onQuickActions()"
-      @keydown="onKeydown($event, cb.onQuickActions)"
+      @keydown="onActivationKey($event, cb.onQuickActions)"
     />
 
     <div
@@ -58,7 +53,7 @@ function onKeydown(e: KeyboardEvent, fn: () => void): void {
       :aria-disabled="!canCreateTab ? 'true' : undefined"
       :aria-hidden="!canCreateTab ? 'true' : undefined"
       @click="cb.onNewTab()"
-      @keydown="onKeydown($event, cb.onNewTab)"
+      @keydown="onActivationKey($event, cb.onNewTab)"
     />
 
     <div
@@ -68,7 +63,7 @@ function onKeydown(e: KeyboardEvent, fn: () => void): void {
       tabindex="0"
       aria-label="New conversation"
       @click="cb.onNewConversation()"
-      @keydown="onKeydown($event, cb.onNewConversation)"
+      @keydown="onActivationKey($event, cb.onNewConversation)"
     />
 
     <ConversationHistoryDropdown />

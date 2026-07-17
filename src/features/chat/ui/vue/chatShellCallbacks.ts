@@ -47,9 +47,9 @@ export interface ChatShellCallbacks {
    *  SpecoratorView.syncHeaderLogo). The host is cleared by the caller
    *  (ChatLogo) before each render, so this only appends. */
   renderProviderLogo: (el: HTMLElement, providerId: ProviderId) => void;
-  /** Switch the active tab to a conversation (history row click). */
-  onSelectConversation: (id: string) => void;
-  /** Open a conversation in a new tab (modifier/middle click or context menu). */
+  /** Open a conversation in a new-or-existing tab (history row click, middle
+   *  click, or context menu — the header history menu never replaces the active
+   *  tab's conversation, matching the deleted imperative view). */
   onOpenConversationInNewTab: (id: string, activate: boolean) => void;
   /** Rename a conversation (inline rename input commit). */
   onRenameConversation: (id: string, title: string) => void;

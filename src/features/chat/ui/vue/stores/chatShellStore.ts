@@ -51,20 +51,16 @@ const DEFAULT_HEADER: ChatShellHeader = Object.freeze({
 });
 
 /** Per-conversation open state in the history dropdown — mirrors whether a
- *  conversation is closed, open in another tab, or the current tab's session. */
+ *  conversation is closed, open in another tab, or the current tab's session.
+ *  Resolved engine-side at context-menu time (never projected per row: scanning
+ *  tabs for every conversation on every shell emit would be O(rows × tabs)). */
 export type HistoryConversationOpenState = 'closed' | 'open' | 'current';
 
-/** Row-level history metadata keyed by conversation id (see perItem below). */
-export interface ChatShellConversationMeta {
-  openState: HistoryConversationOpenState;
-}
-
-/** History-dropdown projection: the conversation list plus the current
- *  selection and per-row open state. Truth stays in ConversationStore. */
+/** History-dropdown projection: the newest-first conversation list plus the
+ *  current selection. Truth stays in ConversationStore. */
 export interface ChatShellConversations {
   items: ConversationMeta[];
   currentConversationId: string | null;
-  perItem: Record<string, ChatShellConversationMeta>;
 }
 
 /** Git-action-button projection: repo presence + dirty count drive the badge,
@@ -76,7 +72,7 @@ export interface ChatShellGit {
 }
 
 const DEFAULT_CONVERSATIONS: ChatShellConversations = Object.freeze({
-  items: [], currentConversationId: null, perItem: {},
+  items: [], currentConversationId: null,
 });
 const DEFAULT_GIT: ChatShellGit = Object.freeze({ isRepo: false, dirtyCount: 0, visible: false });
 

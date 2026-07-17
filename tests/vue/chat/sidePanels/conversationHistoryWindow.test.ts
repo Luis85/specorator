@@ -16,9 +16,7 @@ function metas(n: number, currentId: string | null = null) {
     id: `conv-${i}`, providerId: 'claude', title: `Conversation ${i}`,
     createdAt: i * 1000, updatedAt: i * 1000, lastResponseAt: i * 1000, messageCount: 4, preview: '',
   }));
-  const perItem: Record<string, { openState: 'closed' | 'open' | 'current' }> = {};
-  for (const c of items) perItem[c.id] = { openState: c.id === currentId ? 'current' : 'closed' };
-  return { items, currentConversationId: currentId, perItem };
+  return { items, currentConversationId: currentId };
 }
 
 function mountOpen(store: ReturnType<typeof useChatShellStore>) {

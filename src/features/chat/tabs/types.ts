@@ -187,7 +187,7 @@ export interface TabDOMElements {
   /** Cleanup functions for event listeners (prevents memory leaks). */
   eventCleanups: Array<() => void>;
 
-  /** NavOverlay teleport target (Phase 4). */
+  /** NavOverlay teleport target. */
   navSidebarHostEl: HTMLElement;
 }
 
@@ -318,7 +318,7 @@ export interface TabData {
   /** Handle to the mounted Vue composer island (unmounted on tab destroy). */
   mountedComposer: MountedComposer | null;
 
-  /** Engine-side owner of this tab's bang-bash outputs (LRU-50). */
+  /** Engine-side owner of this tab's bang-bash outputs (bounded FIFO-50). */
   bashOutputs: BashOutputStore | null;
 
   /** Per-tab Vue tab-chrome projection source (engine → store snapshot fan-out). */

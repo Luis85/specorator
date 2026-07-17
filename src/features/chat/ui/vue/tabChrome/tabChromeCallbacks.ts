@@ -11,7 +11,7 @@ export type TabChromeSubscribe = (onChange: (s: TabChromeSnapshot) => void) => (
 
 /** Vue → engine seam for the tab-chrome island. Thin delegators; truth stays in
  *  the engine (ChatState / BashOutputStore). `resolveNavHost` returns the
- *  NavOverlay teleport target (Phase 4). */
+ *  NavOverlay teleport target. */
 export interface TabChromeCallbacks {
   subscribe: TabChromeSubscribe;
   /** Copy the latest bang-bash entry to the clipboard (`$ cmd\noutput`). */

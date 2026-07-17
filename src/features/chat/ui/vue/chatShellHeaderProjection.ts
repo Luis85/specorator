@@ -3,7 +3,7 @@ import {
   EMPTY_WORK_ORDER_ACTIVITY_SUMMARY,
   type WorkOrderActivitySummary,
 } from '../../../../core/types/workOrderActivity';
-import type { ChatShellConversations, ChatShellGit, HistoryConversationOpenState } from './stores/chatShellStore';
+import type { ChatShellConversations, ChatShellGit } from './stores/chatShellStore';
 
 /**
  * Pure projection builders for the chat-shell side-panel slices. Extracted from
@@ -12,16 +12,17 @@ import type { ChatShellConversations, ChatShellGit, HistoryConversationOpenState
  * rather than reading `this`.
  */
 
-/** History-dropdown slice: newest-first conversation list plus per-row open state. */
+/** History-dropdown slice: newest-first conversation list + the current id.
+ *  Per-row open state is deliberately NOT projected — only the context menu
+ *  needs it, and it resolves engine-side at click time
+ *  (`getHistoryConversationOpenState`), so the projection stays O(conversations)
+ *  per shell emit instead of scanning tabs per row. */
 export function buildConversationsSlice(
   list: ConversationMeta[],
   currentConversationId: string | null,
-  getOpenState: (id: string) => HistoryConversationOpenState,
 ): ChatShellConversations {
   const items = [...list].sort((a, b) => (b.lastResponseAt ?? b.createdAt) - (a.lastResponseAt ?? a.createdAt));
-  const perItem: Record<string, { openState: HistoryConversationOpenState }> = {};
-  for (const c of items) perItem[c.id] = { openState: getOpenState(c.id) };
-  return { items, currentConversationId, perItem };
+  return { items, currentConversationId };
 }
 
 /** Work-order slice: the live summary, or the shared empty summary when absent. */

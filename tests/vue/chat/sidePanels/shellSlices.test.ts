@@ -12,18 +12,17 @@ describe('chatShellStore — side-panel slices', () => {
 
   it('defaults the three new slices to empty', () => {
     const store = useChatShellStore();
-    expect(store.conversations).toEqual({ items: [], currentConversationId: null, perItem: {} });
+    expect(store.conversations).toEqual({ items: [], currentConversationId: null });
     expect(store.workOrder.items).toEqual([]);
     expect(store.git).toEqual({ isRepo: false, dirtyCount: 0, visible: false });
   });
 
   it('replaces whole values through the setters', () => {
     const store = useChatShellStore();
-    store.setConversations({ items: [{ id: 'c1' } as never], currentConversationId: 'c1', perItem: { c1: { openState: 'current' } } });
+    store.setConversations({ items: [{ id: 'c1' } as never], currentConversationId: 'c1' });
     store.setWorkOrder({ items: [], closableTabs: [], runningCount: 0, attentionCount: 0 });
     store.setGit({ isRepo: true, dirtyCount: 3, visible: true });
     expect(store.conversations.currentConversationId).toBe('c1');
-    expect(store.conversations.perItem.c1.openState).toBe('current');
     expect(store.git.dirtyCount).toBe(3);
   });
 });
@@ -43,7 +42,7 @@ describe('useChatShellEventRouting — side-panel slices', () => {
     mount(Comp);
     push({
       tabs: [], activeTabId: null, header: DEFAULT_HEADER_FOR_TEST,
-      conversations: { items: [], currentConversationId: 'x', perItem: {} },
+      conversations: { items: [], currentConversationId: 'x' },
       workOrder: { items: [], closableTabs: [], runningCount: 0, attentionCount: 0 },
       git: { isRepo: true, dirtyCount: 2, visible: true },
     });

@@ -5,6 +5,7 @@ import { getToolIcon } from '../../../../../core/tools/toolIcons';
 import { TOOL_TODO_WRITE } from '../../../../../core/tools/toolNames';
 import { t } from '../../../../../i18n/i18n';
 import type { PanelBashOutput } from '../../../state/BashOutputStore';
+import { onActivationKey } from '../activationKeys';
 import { mountIcon } from '../mountIcon';
 import TodoListView from '../transcript/blocks/TodoListView.vue';
 import IconSpan from '../transcript/IconSpan.vue';
@@ -75,9 +76,6 @@ watch(todos, async (next, prev) => {
   await nextTick();
   scrollHostToBottom();
 });
-function onKey(e: KeyboardEvent, fn: () => void): void {
-  if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); fn(); }
-}
 // Stable top-level ref functions (not recreated per render) so Vue only mounts
 // the static icon once rather than unbind/rebind on every patch.
 function copyIconRef(el: unknown): void { mountIcon(el, 'copy'); }
@@ -99,7 +97,7 @@ function clearIconRef(el: unknown): void { mountIcon(el, 'trash'); }
         role="button"
         :aria-expanded="bashExpanded ? 'true' : 'false'"
         @click="bashExpanded = !bashExpanded"
-        @keydown="onKey($event, () => (bashExpanded = !bashExpanded))"
+        @keydown="onActivationKey($event, () => (bashExpanded = !bashExpanded))"
       >
         <IconSpan
           icon="terminal"
@@ -111,6 +109,9 @@ function clearIconRef(el: unknown): void { mountIcon(el, 'trash'); }
           class="specorator-status-panel-bash-actions"
           @click.stop
         >
+          <!-- keydown.stop: without it Enter/Space on a focused action bubbles to
+               the header's own keydown and toggles the panel (parity with the
+               deleted appendActionButton's stopPropagation). -->
           <span
             :ref="copyIconRef"
             class="specorator-status-panel-bash-action specorator-status-panel-bash-action-copy"
@@ -118,7 +119,7 @@ function clearIconRef(el: unknown): void { mountIcon(el, 'trash'); }
             tabindex="0"
             :aria-label="t('chat.bangBash.copyAriaLabel')"
             @click="cb.onCopyBashOutput()"
-            @keydown="onKey($event, cb.onCopyBashOutput)"
+            @keydown.stop="onActivationKey($event, cb.onCopyBashOutput)"
           />
           <span
             :ref="clearIconRef"
@@ -127,7 +128,7 @@ function clearIconRef(el: unknown): void { mountIcon(el, 'trash'); }
             tabindex="0"
             :aria-label="t('chat.bangBash.clearAriaLabel')"
             @click="cb.onClearBashOutputs()"
-            @keydown="onKey($event, cb.onClearBashOutputs)"
+            @keydown.stop="onActivationKey($event, cb.onClearBashOutputs)"
           />
         </span>
       </div>
@@ -147,7 +148,7 @@ function clearIconRef(el: unknown): void { mountIcon(el, 'trash'); }
             role="button"
             :aria-expanded="isEntryExpanded(info.id) ? 'true' : 'false'"
             @click="toggleEntry(info.id)"
-            @keydown="onKey($event, () => toggleEntry(info.id))"
+            @keydown="onActivationKey($event, () => toggleEntry(info.id))"
           >
             <IconSpan
               icon="dollar-sign"
@@ -193,7 +194,7 @@ function clearIconRef(el: unknown): void { mountIcon(el, 'trash'); }
         :aria-expanded="todoExpanded ? 'true' : 'false'"
         :aria-label="`${todoExpanded ? 'Collapse' : 'Expand'} task list - ${completedCount} of ${totalCount} completed`"
         @click="todoExpanded = !todoExpanded"
-        @keydown="onKey($event, () => (todoExpanded = !todoExpanded))"
+        @keydown="onActivationKey($event, () => (todoExpanded = !todoExpanded))"
       >
         <IconSpan
           :icon="getToolIcon(TOOL_TODO_WRITE)"

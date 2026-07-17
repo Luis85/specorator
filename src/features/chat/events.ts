@@ -21,6 +21,13 @@ export interface ChatEventMap {
    */
   'conversation:title-status-changed': { conversationId: string };
   /**
+   * Emitted after a conversation is fully deleted (metadata gone, views
+   * repaired). The deleting view re-projects through its own subscription, and
+   * OTHER leaves with an open history dropdown drop the dead row instead of
+   * rendering it until their next re-projection.
+   */
+  'conversation:deleted': { conversationId: string };
+  /**
    * Emitted when a provider history service reports an `error` outcome from
    * either `hydrateConversationHistory` or `deleteConversationSession`.
    * The payload is the redacted user-safe summary from the provider; raw

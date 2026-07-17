@@ -48,4 +48,19 @@ describe('WorkOrderActivityDropdown.vue', () => {
     await w.find('.specorator-work-order-activity-item').trigger('click');
     expect(onOpenWorkOrderItem).toHaveBeenCalledWith('i1');
   });
+  it('stays closed when items return after the summary drained to empty', async () => {
+    const store = useChatShellStore();
+    store.setWorkOrder(SUMMARY as never);
+    const w = mountDd();
+    await w.find('.specorator-work-order-activity-toggle').trigger('click');
+    expect(w.find('.specorator-work-order-activity-menu').exists()).toBe(true);
+    // Drain: the collapse watch must reset the local open state...
+    store.setWorkOrder({ items: [], closableTabs: [], runningCount: 0, attentionCount: 0 } as never);
+    await w.vm.$nextTick();
+    expect(w.find('.specorator-work-order-activity-slot').classes()).toContain('specorator-hidden');
+    // ...so a later item does NOT auto-reopen the menu.
+    store.setWorkOrder(SUMMARY as never);
+    await w.vm.$nextTick();
+    expect(w.find('.specorator-work-order-activity-menu').exists()).toBe(false);
+  });
 });

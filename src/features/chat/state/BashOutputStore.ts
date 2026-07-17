@@ -11,7 +11,7 @@ export interface PanelBashOutput {
 const MAX_BASH_OUTPUTS = 50;
 
 /**
- * Engine-side owner of a tab's bang-bash outputs. Bounded LRU-50 insertion-ordered
+ * Engine-side owner of a tab's bang-bash outputs. Bounded FIFO-50 insertion-ordered
  * map; the bang-bash `onSubmit` writes here and the `TabChromeProjection` reads
  * `list()`. `onChange` fires the projection emit (mirror of ComposerDropdownCoordinator).
  * Truth stays in the engine; Vue only renders + owns view-local collapse state.

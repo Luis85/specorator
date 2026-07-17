@@ -19,20 +19,30 @@ export interface SidePanelCallbackHost {
   sendGitCommitPromptToActiveTab(): void;
 }
 
+/** Opens a conversation through the TabManager, surfacing failures as the
+ *  shared load-failed Notice (the one recovery every history action uses). */
+function openConversationOrNotice(
+  host: SidePanelCallbackHost,
+  id: string,
+  options?: { requireNewTab: boolean; activate: boolean },
+): void {
+  void host.tabManager?.openConversation(id, options)
+    .catch(() => new Notice(t('chat.history.loadFailed')));
+}
+
 /**
  * Builds the side-panel slice of `ChatShellCallbacks` — conversation history
- * (select/rename/delete/regenerate-title/context-menu), work-order activity
+ * (open/rename/delete/regenerate-title/context-menu), work-order activity
  * (open/close), and the git-commit action. Extracted from `SpecoratorView` so
  * the view stays under its LOC ceiling; these started as independent copies of
  * the now-deleted imperative `ConversationHistoryView`'s private methods,
  * ported to read through `host` instead of `this` — they are now the single
- * source of truth these behaviors, consumed by `ConversationHistoryDropdown.vue`.
+ * source of truth for these behaviors, consumed by `ConversationHistoryDropdown.vue`.
  */
 export function buildSidePanelCallbacks(
   host: SidePanelCallbackHost,
 ): Pick<
   ChatShellCallbacks,
-  | 'onSelectConversation'
   | 'onOpenConversationInNewTab'
   | 'onRenameConversation'
   | 'onDeleteConversation'
@@ -43,13 +53,8 @@ export function buildSidePanelCallbacks(
   | 'onGitCommit'
 > {
   return {
-    onSelectConversation: (id) => {
-      void host.tabManager?.openConversation(id).catch(() => new Notice(t('chat.history.loadFailed')));
-    },
-    onOpenConversationInNewTab: (id, activate) => {
-      void host.tabManager?.openConversation(id, { requireNewTab: true, activate })
-        .catch(() => new Notice(t('chat.history.loadFailed')));
-    },
+    onOpenConversationInNewTab: (id, activate) =>
+      openConversationOrNotice(host, id, { requireNewTab: true, activate }),
     onRenameConversation: (id, title) => {
       void host.plugin.renameConversation(id, title.trim() || title)
         .then(() => host.emitChatShellChange())
@@ -71,8 +76,9 @@ async function deleteHistoryConversation(host: SidePanelCallbackHost, conversati
   const activeTab = host.tabManager?.getActiveTab();
   if (activeTab?.state.isStreaming) return;
   try {
+    // ConversationStore emits conversation:deleted, which every view (this one
+    // included) subscribes to for a re-projection — no direct emit needed here.
     await host.plugin.deleteConversation(conversationId);
-    host.emitChatShellChange();
     if (conversationId === activeTab?.conversationId) {
       await activeTab.controllers.conversationController?.loadActive();
     }
@@ -92,7 +98,11 @@ async function regenerateHistoryTitle(host: SidePanelCallbackHost, conversationI
   const userContent = firstUserMsg.displayContent || firstUserMsg.content;
   const expectedTitle = fullConv.title;
   await host.plugin.updateConversation(conversationId, { titleGenerationStatus: 'pending' });
-  host.emitChatShellChange();
+  // Status-only writes never fire conversation:renamed, so broadcast the shared
+  // title-status event (same as InputController's auto-title flow): EVERY view
+  // subscribes and re-projects, keeping a second leaf's open dropdown in sync —
+  // a direct emitChatShellChange() would refresh only the initiating view.
+  host.plugin.events.emit('conversation:title-status-changed', { conversationId });
   await titleService.generateTitle(conversationId, userContent, async (convId, result) => {
     const currentConv = await host.plugin.getConversationById(convId);
     if (!currentConv) return;
@@ -105,7 +115,7 @@ async function regenerateHistoryTitle(host: SidePanelCallbackHost, conversationI
     } else {
       await host.plugin.updateConversation(convId, { titleGenerationStatus: undefined });
     }
-    host.emitChatShellChange();
+    host.plugin.events.emit('conversation:title-status-changed', { conversationId: convId });
   });
 }
 
@@ -127,18 +137,16 @@ function showHistoryContextMenu(
     if (openState === 'closed') {
       menu.addItem((mi) => mi.setTitle('Open in new tab').onClick(() => {
         closeDropdown();
-        void host.tabManager?.openConversation(conversationId, { requireNewTab: true, activate: true })
-          .catch(() => new Notice(t('chat.history.loadFailed')));
+        openConversationOrNotice(host, conversationId, { requireNewTab: true, activate: true });
       }));
       menu.addItem((mi) => mi.setTitle('Open in background tab').onClick(() => {
         closeDropdown();
-        void host.tabManager?.openConversation(conversationId, { requireNewTab: true, activate: false })
-          .catch(() => new Notice(t('chat.history.loadFailed')));
+        openConversationOrNotice(host, conversationId, { requireNewTab: true, activate: false });
       }));
     } else if (openState === 'open') {
       menu.addItem((mi) => mi.setTitle('Switch to open session').onClick(() => {
         closeDropdown();
-        void host.tabManager?.openConversation(conversationId).catch(() => new Notice(t('chat.history.loadFailed')));
+        openConversationOrNotice(host, conversationId);
       }));
     }
   }

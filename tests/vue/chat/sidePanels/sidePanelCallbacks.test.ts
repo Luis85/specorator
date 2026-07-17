@@ -19,7 +19,7 @@ function makeHost(overrides: Partial<{
   sendGitCommitPromptToActiveTab: () => void;
 }> = {}): SidePanelCallbackHost {
   return {
-    plugin: (overrides.plugin ?? {}) as unknown as SidePanelCallbackHost['plugin'],
+    plugin: ({ events: { emit: vi.fn() }, ...(overrides.plugin ?? {}) }) as unknown as SidePanelCallbackHost['plugin'],
     tabManager: (overrides.tabManager ?? null) as SidePanelCallbackHost['tabManager'],
     emitChatShellChange: overrides.emitChatShellChange ?? vi.fn(),
     getHistoryConversationOpenState: overrides.getHistoryConversationOpenState ?? (() => 'closed'),
@@ -62,14 +62,7 @@ describe('buildSidePanelCallbacks — git + work order', () => {
   });
 });
 
-describe('buildSidePanelCallbacks — conversation selection', () => {
-  it('onSelectConversation delegates to tabManager.openConversation(id)', () => {
-    const openConversation = vi.fn().mockResolvedValue(undefined);
-    const host = makeHost({ tabManager: { openConversation } });
-    buildSidePanelCallbacks(host).onSelectConversation('c1');
-    expect(openConversation).toHaveBeenCalledWith('c1');
-  });
-
+describe('buildSidePanelCallbacks — conversation open', () => {
   it('onOpenConversationInNewTab requests a new tab with the given activate flag', () => {
     const openConversation = vi.fn().mockResolvedValue(undefined);
     const host = makeHost({ tabManager: { openConversation } });
@@ -77,10 +70,10 @@ describe('buildSidePanelCallbacks — conversation selection', () => {
     expect(openConversation).toHaveBeenCalledWith('c1', { requireNewTab: true, activate: false });
   });
 
-  it('onSelectConversation swallows a rejected openConversation', async () => {
+  it('swallows a rejected openConversation', async () => {
     const openConversation = vi.fn().mockRejectedValue(new Error('nope'));
     const host = makeHost({ tabManager: { openConversation } });
-    expect(() => buildSidePanelCallbacks(host).onSelectConversation('c1')).not.toThrow();
+    expect(() => buildSidePanelCallbacks(host).onOpenConversationInNewTab('c1', true)).not.toThrow();
     await Promise.resolve().then(() => Promise.resolve());
   });
 });
@@ -115,7 +108,9 @@ describe('buildSidePanelCallbacks — delete', () => {
     };
   }
 
-  it('deletes and re-projects when the active tab is not streaming', async () => {
+  it('deletes without reloading when another conversation is active', async () => {
+    // Re-projection rides ConversationStore's conversation:deleted event (every
+    // leaf subscribes), so no direct emitChatShellChange is expected here.
     const deleteConversation = vi.fn().mockResolvedValue(undefined);
     const emitChatShellChange = vi.fn();
     const tab = activeTab({ conversationId: 'other' });
@@ -127,7 +122,7 @@ describe('buildSidePanelCallbacks — delete', () => {
     buildSidePanelCallbacks(host).onDeleteConversation('c1');
     await Promise.resolve().then(() => Promise.resolve()).then(() => Promise.resolve());
     expect(deleteConversation).toHaveBeenCalledWith('c1');
-    expect(emitChatShellChange).toHaveBeenCalled();
+    expect(emitChatShellChange).not.toHaveBeenCalled();
     expect(tab.loadActive).not.toHaveBeenCalled();
   });
 
@@ -197,21 +192,22 @@ describe('buildSidePanelCallbacks — regenerate title', () => {
     const getConversationById = vi.fn().mockResolvedValue(fullConv);
     const updateConversation = vi.fn().mockResolvedValue(undefined);
     const renameConversation = vi.fn().mockResolvedValue(undefined);
-    const emitChatShellChange = vi.fn();
     const generateTitle = vi.fn(async (_id: string, _content: string, onDone: (id: string, result: { success: boolean; title: string }) => Promise<void>) => {
       await onDone('c1', { success: true, title: 'New Title' });
     });
     const host = makeHost({
       plugin: { settings: { enableAutoTitleGeneration: true }, getConversationById, updateConversation, renameConversation },
       tabManager: { getActiveTab: () => ({ services: { titleGenerationService: { generateTitle } } }) },
-      emitChatShellChange,
     });
     buildSidePanelCallbacks(host).onRegenerateConversationTitle('c1');
     await Promise.resolve().then(() => Promise.resolve()).then(() => Promise.resolve()).then(() => Promise.resolve());
     expect(updateConversation).toHaveBeenCalledWith('c1', { titleGenerationStatus: 'pending' });
     expect(renameConversation).toHaveBeenCalledWith('c1', 'New Title');
     expect(updateConversation).toHaveBeenCalledWith('c1', { titleGenerationStatus: 'success' });
-    expect(emitChatShellChange).toHaveBeenCalled();
+    // Broadcast on the plugin bus (not a view-local emit) so EVERY leaf's open
+    // history dropdown re-projects the status flip.
+    expect((host.plugin as unknown as { events: { emit: ReturnType<typeof vi.fn> } }).events.emit)
+      .toHaveBeenCalledWith('conversation:title-status-changed', { conversationId: 'c1' });
   });
 
   it('marks failed when generation fails and the title was not manually changed', async () => {

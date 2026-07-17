@@ -456,7 +456,7 @@ export class SpecoratorView extends ItemView {
       tabs: this.tabManager?.getTabBarItems() ?? [],
       activeTabId: activeTab?.id ?? null,
       header: this.projectChatShellHeader(),
-      conversations: buildConversationsSlice(this.plugin.getConversationList(), activeTab?.conversationId ?? null, (id) => this.getHistoryConversationOpenState(id)),
+      conversations: buildConversationsSlice(this.plugin.getConversationList(), activeTab?.conversationId ?? null),
       workOrder: buildWorkOrderSlice(this.plugin.workOrderActivity?.getSummary()),
       git: buildGitSlice(this.plugin.gitStatusWatcher?.getLastStatus(), this.isActiveTabGitActionEnabled()),
     };
@@ -830,20 +830,14 @@ export class SpecoratorView extends ItemView {
     this.registerEvent(this.plugin.app.vault.on('rename', () => markCacheDirty(true)));
     this.registerEvent(this.plugin.app.vault.on('modify', () => markCacheDirty(false)));
 
-    // UX-4: refresh header title + tab bar when the active tab's conversation
-    // is renamed (manual rename or auto-title generation).
-    this.register(this.plugin.events.on('conversation:renamed', () => {
-      // The projection recomputes the header title + badge titles from the live
-      // TabManager, so one emit covers both the active-tab title and the strip.
-      this.emitChatShellChange();
-    }));
-
-    // Title-generation status flips (pending/success/failed) don't change the
-    // title, so `conversation:renamed` never fires; re-project so an open Vue
-    // history dropdown updates its spinner / regenerate affordance in place.
-    this.register(this.plugin.events.on('conversation:title-status-changed', () => {
-      this.emitChatShellChange();
-    }));
+    // Cross-leaf conversation-list changes re-project the shell: renames (UX-4:
+    // header title + badge strip), title-generation status flips (spinner /
+    // regenerate affordance — no title change, so `conversation:renamed` never
+    // fires), and deletes (drop the dead row from an open history dropdown in
+    // EVERY leaf, not just the deleting one).
+    for (const event of ['conversation:renamed', 'conversation:title-status-changed', 'conversation:deleted'] as const) {
+      this.register(this.plugin.events.on(event, () => this.emitChatShellChange()));
+    }
 
     // A roster edit can change a bound agent's saved model while its tab stays
     // open; the conversation-keyed displayModel seed wouldn't invalidate (same

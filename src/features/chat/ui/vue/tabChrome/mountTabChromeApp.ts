@@ -11,7 +11,7 @@ import TabChromeRoot from './TabChromeRoot.vue';
 export interface MountedTabChrome {
   app: VueApp;
   unmount: () => void;
-  /** Pushes the transcript's live scroll host to NavOverlay (Phase 4), post-transcript-mount. */
+  /** Pushes the transcript's live scroll host to NavOverlay, post-transcript-mount. */
   setScrollHost: (el: HTMLElement | null) => void;
 }
 

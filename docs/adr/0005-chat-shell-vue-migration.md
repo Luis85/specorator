@@ -343,7 +343,7 @@ button (per-view header) became Vue. Two homes reused the established seams:
    `<Teleport>`s to a new `.specorator-nav-sidebar-host`, with imperative scroll
    geometry in `useTabNavigation` bound to the transcript scroll host via
    `MountedTabChrome.setScrollHost` (post-transcript-mount, popout-safe
-   `nodeType === 1`). The panel-local bash-output LRU-50 map was lifted to an
+   `nodeType === 1`). The panel-local bounded bash-output map (FIFO-50) was lifted to an
    engine-side `BashOutputStore` so it survives conversation switch + remount.
    `navigationSidebar.perf`'s scan-scaling guard moved to the Vitest lane
    (`navOverlayScaling.test.ts`).

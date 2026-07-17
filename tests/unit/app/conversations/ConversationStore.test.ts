@@ -40,9 +40,10 @@ function createStore(options?: {
   vaultPath?: string | null;
   quiesceViewsForDelete?: (conversationId: string) => Promise<void>;
   repairViewsAfterDelete?: (conversationId: string) => Promise<void>;
-}): { store: ConversationStore; sessions: MockSessions } {
+}): { store: ConversationStore; sessions: MockSessions; events: { emit: jest.Mock } } {
   const sessions = options?.sessions ?? createMockSessions();
   const storage = { sessions } as unknown as SharedAppStorage;
+  const events = { emit: jest.fn(), on: jest.fn(), off: jest.fn(), setErrorSink: jest.fn() } as any;
   const store = new ConversationStore({
     storage,
     getVaultPath: () => (options?.vaultPath !== undefined ? options.vaultPath : '/vault'),
@@ -50,9 +51,9 @@ function createStore(options?: {
       options?.quiesceViewsForDelete ?? (async () => undefined),
     repairViewsAfterDelete:
       options?.repairViewsAfterDelete ?? (async () => undefined),
-    events: { emit: jest.fn(), on: jest.fn(), off: jest.fn(), setErrorSink: jest.fn() } as any,
+    events,
   });
-  return { store, sessions };
+  return { store, sessions, events };
 }
 
 describe('ConversationStore', () => {
@@ -264,6 +265,20 @@ describe('ConversationStore', () => {
       });
       expect(sessions.deleteMetadata).toHaveBeenCalledWith(conv.id);
       expect(repairViewsAfterDelete).toHaveBeenCalledWith(conv.id);
+    });
+
+    it('emits conversation:deleted after teardown, even when metadata delete throws', async () => {
+      const { store, sessions, events } = createStore({});
+      const conv = await store.createConversation();
+      await store.deleteConversation(conv.id);
+      expect(events.emit).toHaveBeenCalledWith('conversation:deleted', { conversationId: conv.id });
+
+      // Failure path: the row is out of memory and views are repaired, so every
+      // leaf's history projection must still drop it.
+      const conv2 = await store.createConversation();
+      (sessions.deleteMetadata as jest.Mock).mockRejectedValueOnce(new Error('disk full'));
+      await expect(store.deleteConversation(conv2.id)).rejects.toThrow('disk full');
+      expect(events.emit).toHaveBeenCalledWith('conversation:deleted', { conversationId: conv2.id });
     });
 
     it('finishes teardown (tombstone clear + repair) even when metadata delete throws', async () => {

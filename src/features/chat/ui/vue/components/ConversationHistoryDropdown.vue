@@ -1,8 +1,9 @@
 <script setup lang="ts">
-import { computed, inject, nextTick, onBeforeUnmount, onMounted, ref } from 'vue';
+import { computed, inject, nextTick, onBeforeUnmount, ref, watch } from 'vue';
 
 import type { ConversationMeta } from '../../../../../core/types';
 import { t } from '../../../../../i18n/i18n';
+import { onActivationKey } from '../activationKeys';
 import { CALLBACKS_KEY } from '../chatShellKeys';
 import { mountIcon } from '../mountIcon';
 import { useChatShellStore } from '../stores/chatShellStore';
@@ -111,22 +112,28 @@ function onRenameKeydown(e: KeyboardEvent, conv: ConversationMeta): void {
   if (e.key === 'Enter' && !e.isComposing) { commitRename(conv); (e.target as HTMLInputElement).blur(); }
   else if (e.key === 'Escape' && !e.isComposing) { renamingId.value = null; }
 }
-function onHeaderKeydown(e: KeyboardEvent): void {
-  if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggleOpen(); }
-}
 
 function onDocClick(e: MouseEvent): void {
-  if (!open.value) return;
   if (rootEl.value && !rootEl.value.contains(e.target as Node)) close();
 }
-// Scope to the component's ownerDocument so click-away still fires in Obsidian
-// popout windows; capture it on mount so removal targets the same document.
-let listenerDoc: Document = document;
-onMounted(() => {
-  listenerDoc = rootEl.value?.ownerDocument ?? document;
-  listenerDoc.addEventListener('click', onDocClick);
+// The click-away listener attaches when the menu OPENS, resolving the owner
+// document at that moment — so it lands on the right document even after
+// Obsidian moves the leaf into a popout window mid-life (a mount-time capture
+// would keep listening on the stale document). Detach always targets the
+// document the listener was added to.
+let listenerDoc: Document | null = null;
+function detachDocClick(): void {
+  listenerDoc?.removeEventListener('click', onDocClick);
+  listenerDoc = null;
+}
+watch(open, (isOpen) => {
+  detachDocClick();
+  if (isOpen) {
+    listenerDoc = rootEl.value?.ownerDocument ?? document;
+    listenerDoc.addEventListener('click', onDocClick);
+  }
 });
-onBeforeUnmount(() => listenerDoc.removeEventListener('click', onDocClick));
+onBeforeUnmount(detachDocClick);
 </script>
 
 <template>
@@ -143,7 +150,7 @@ onBeforeUnmount(() => listenerDoc.removeEventListener('click', onDocClick));
       aria-haspopup="true"
       :aria-expanded="open ? 'true' : 'false'"
       @click.stop="toggleOpen()"
-      @keydown="onHeaderKeydown($event)"
+      @keydown="onActivationKey($event, toggleOpen)"
     />
     <div
       class="specorator-history-menu"

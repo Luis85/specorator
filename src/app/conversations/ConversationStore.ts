@@ -304,6 +304,10 @@ export class ConversationStore {
       this.metadataWriteTails.delete(id);
       this.conversationRevisions.delete(id);
       await this.deps.repairViewsAfterDelete(id);
+      // In the finally deliberately: the conversation is out of memory and views
+      // are repaired even when the metadata delete threw, so every leaf's history
+      // projection must still drop the row.
+      this.deps.events.emit('conversation:deleted', { conversationId: id });
     }
   }
 

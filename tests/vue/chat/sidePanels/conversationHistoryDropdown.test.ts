@@ -28,7 +28,7 @@ describe('ConversationHistoryDropdown.vue', () => {
 
   it('renders legacy history classes and marks the current row active', async () => {
     const store = useChatShellStore();
-    store.setConversations({ items: [conv('a'), conv('b')], currentConversationId: 'b', perItem: { a: { openState: 'closed' }, b: { openState: 'current' } } });
+    store.setConversations({ items: [conv('a'), conv('b')], currentConversationId: 'b' });
     const w = mountDd();
     await w.find('.specorator-header-btn').trigger('click');
     expect(w.findAll('.specorator-history-item')).toHaveLength(2);
@@ -38,7 +38,7 @@ describe('ConversationHistoryDropdown.vue', () => {
 
   it('opens a non-current row in a (new-or-existing) tab, never replacing the active tab', async () => {
     const store = useChatShellStore();
-    store.setConversations({ items: [conv('a'), conv('b')], currentConversationId: 'b', perItem: { a: { openState: 'closed' }, b: { openState: 'current' } } });
+    store.setConversations({ items: [conv('a'), conv('b')], currentConversationId: 'b' });
     const onOpenConversationInNewTab = vi.fn();
     const onSelectConversation = vi.fn();
     const w = mountDd({ onOpenConversationInNewTab, onSelectConversation });
@@ -50,7 +50,7 @@ describe('ConversationHistoryDropdown.vue', () => {
 
   it('takes no action when clicking the loaded current row', async () => {
     const store = useChatShellStore();
-    store.setConversations({ items: [conv('b')], currentConversationId: 'b', perItem: { b: { openState: 'current' } } });
+    store.setConversations({ items: [conv('b')], currentConversationId: 'b' });
     const onOpenConversationInNewTab = vi.fn();
     const w = mountDd({ onOpenConversationInNewTab });
     await w.find('.specorator-header-btn').trigger('click');
@@ -60,7 +60,7 @@ describe('ConversationHistoryDropdown.vue', () => {
 
   it('commits an inline rename on Enter', async () => {
     const store = useChatShellStore();
-    store.setConversations({ items: [conv('a')], currentConversationId: null, perItem: { a: { openState: 'closed' } } });
+    store.setConversations({ items: [conv('a')], currentConversationId: null });
     const onRenameConversation = vi.fn();
     const w = mountDd({ onRenameConversation });
     await w.find('.specorator-header-btn').trigger('click');
@@ -71,9 +71,43 @@ describe('ConversationHistoryDropdown.vue', () => {
     expect(onRenameConversation).toHaveBeenCalledWith('a', 'New name');
   });
 
+  it('closes on an outside click but stays open for inside clicks', async () => {
+    const store = useChatShellStore();
+    store.setConversations({ items: [conv('a')], currentConversationId: null });
+    const w = mountDd();
+    await w.find('.specorator-header-btn').trigger('click');
+    expect(w.find('.specorator-history-menu').classes()).toContain('visible');
+    // Inside click (the list) does not close.
+    w.find('.specorator-history-list').element.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    await w.vm.$nextTick();
+    expect(w.find('.specorator-history-menu').classes()).toContain('visible');
+    // Outside click (the document) closes.
+    document.body.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    await w.vm.$nextTick();
+    expect(w.find('.specorator-history-menu').classes()).not.toContain('visible');
+    w.unmount();
+  });
+
+  it('Escape cancels an inline rename without committing', async () => {
+    const store = useChatShellStore();
+    store.setConversations({ items: [conv('a')], currentConversationId: null });
+    const onRenameConversation = vi.fn();
+    const w = mountDd({ onRenameConversation });
+    await w.find('.specorator-header-btn').trigger('click');
+    await w.find('.specorator-action-btn[aria-label="Rename"]').trigger('click');
+    const input = w.find('input.specorator-rename-input');
+    await input.setValue('Discarded edit');
+    await input.trigger('keydown', { key: 'Escape' });
+    expect(onRenameConversation).not.toHaveBeenCalled();
+    expect(w.find('input.specorator-rename-input').exists()).toBe(false);
+    // The follow-on blur (the input unmounting) must not commit either.
+    await w.vm.$nextTick();
+    expect(onRenameConversation).not.toHaveBeenCalled();
+  });
+
   it('shows a regenerate button for failed title generation', async () => {
     const store = useChatShellStore();
-    store.setConversations({ items: [conv('a', { titleGenerationStatus: 'failed' })], currentConversationId: null, perItem: { a: { openState: 'closed' } } });
+    store.setConversations({ items: [conv('a', { titleGenerationStatus: 'failed' })], currentConversationId: null });
     const onRegenerateConversationTitle = vi.fn();
     const w = mountDd({ onRegenerateConversationTitle });
     await w.find('.specorator-header-btn').trigger('click');

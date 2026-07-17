@@ -18,7 +18,7 @@ vi.mock('@/i18n/i18n', () => ({ t: (k: string) => k }));
 
 const shellCb = () => ({
   onGitCommit: vi.fn(), onOpenWorkOrderItem: vi.fn(), onCloseWorkOrderTab: vi.fn(),
-  onOpenHistory: vi.fn(), onSelectConversation: vi.fn(), onOpenConversationInNewTab: vi.fn(),
+  onOpenHistory: vi.fn(), onOpenConversationInNewTab: vi.fn(),
   onRenameConversation: vi.fn(), onDeleteConversation: vi.fn(), onRegenerateConversationTitle: vi.fn(),
   onConversationContextMenu: vi.fn(),
 });
@@ -40,28 +40,28 @@ describe('side panels DOM contract', () => {
     store.setWorkOrder({ items: [{ id: 'i', path: 'p', title: 'T', status: 'running', labelKey: 'k', actionHintKey: 'a', sidepanelTabId: null }], closableTabs: [{ tabId: 't', title: 'D' }], runningCount: 1, attentionCount: 1 } as never);
     const w = mount(WorkOrderActivityDropdown, { global: { provide: { [SHELL_CB as symbol]: shellCb() } } });
     await w.find('.specorator-work-order-activity-toggle').trigger('click');
-    for (const c of ['specorator-work-order-activity', 'specorator-work-order-activity-toggle', 'specorator-work-order-activity-count', 'specorator-work-order-activity-menu', 'specorator-work-order-activity-item', 'specorator-work-order-activity-close']) {
+    for (const c of ['specorator-work-order-activity', 'specorator-work-order-activity-toggle', 'specorator-work-order-activity-count', 'specorator-work-order-activity-menu', 'specorator-work-order-activity-item', 'specorator-work-order-activity-close', 'specorator-work-order-activity-title', 'specorator-work-order-activity-status', 'specorator-work-order-activity-action']) {
       expect(w.find(`.${c}`).exists()).toBe(true);
     }
   });
 
   it('ConversationHistoryDropdown emits .specorator-history-* classes', async () => {
     const store = useChatShellStore();
-    store.setConversations({ items: [{ id: 'a', providerId: 'claude', title: 'A', createdAt: 1, updatedAt: 1, lastResponseAt: 1, messageCount: 1, preview: '' }], currentConversationId: 'a', perItem: { a: { openState: 'current' } } } as never);
+    store.setConversations({ items: [{ id: 'a', providerId: 'claude', title: 'A', createdAt: 1, updatedAt: 1, lastResponseAt: 1, messageCount: 1, preview: '' }], currentConversationId: 'a' } as never);
     const w = mount(ConversationHistoryDropdown, { global: { provide: { [SHELL_CB as symbol]: shellCb() } } });
     await w.find('.specorator-header-btn').trigger('click');
-    for (const c of ['specorator-history-container', 'specorator-history-menu', 'specorator-history-header', 'specorator-history-list', 'specorator-history-item', 'specorator-history-item-icon', 'specorator-history-item-content', 'specorator-history-item-title', 'specorator-history-item-date', 'specorator-history-item-actions']) {
+    for (const c of ['specorator-history-container', 'specorator-history-menu', 'specorator-history-header', 'specorator-history-list', 'specorator-history-item', 'specorator-history-item-icon', 'specorator-history-item-content', 'specorator-history-item-title', 'specorator-history-item-date', 'specorator-history-item-actions', 'specorator-action-btn', 'specorator-delete-btn']) {
       expect(w.find(`.${c}`).exists()).toBe(true);
     }
   });
 
   it('StatusPanel emits .specorator-status-panel-* classes', async () => {
     const store = useTabChromeStore();
-    store.setTodos([{ content: 'x', status: 'pending', activeForm: 'X' }] as never);
+    store.setTodos([{ content: 'x', status: 'pending', activeForm: 'X' }, { content: 'y', status: 'in_progress', activeForm: 'Y' }] as never);
     store.setBashOutputs([{ id: 'a', command: 'ls', status: 'completed', output: 'o' }] as never);
     const w = mount(StatusPanel, { global: { provide: { [CHROME_CB as symbol]: { onCopyBashOutput: vi.fn(), onClearBashOutputs: vi.fn(), resolveNavHost: () => null } } } });
     await w.vm.$nextTick();
-    for (const c of ['specorator-status-panel', 'specorator-status-panel-bash', 'specorator-status-panel-bash-entry', 'specorator-status-panel-todos', 'specorator-status-panel-header', 'specorator-todo-item']) {
+    for (const c of ['specorator-status-panel', 'specorator-status-panel-bash', 'specorator-status-panel-bash-entry', 'specorator-status-panel-todos', 'specorator-status-panel-header', 'specorator-status-panel-current', 'specorator-todo-item']) {
       expect(w.find(`.${c}`).exists()).toBe(true);
     }
   });

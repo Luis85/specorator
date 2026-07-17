@@ -73,7 +73,6 @@ function seededCallbacks(snapshot: ChatShellSnapshot): ChatShellCallbacks {
     onOpenSettings: vi.fn(),
     resolveNavRowEl: vi.fn(() => null),
     renderProviderLogo: vi.fn(),
-    onSelectConversation: vi.fn(),
     onOpenConversationInNewTab: vi.fn(),
     onRenameConversation: vi.fn(),
     onDeleteConversation: vi.fn(),
@@ -111,7 +110,7 @@ function mountShell(tabs: TabBarItem[], log?: RenderEntry[]) {
     tabs,
     activeTabId: tabs.find((t) => t.isActive)?.id ?? null,
     header: header(),
-    conversations: { items: [], currentConversationId: null, perItem: {} },
+    conversations: { items: [], currentConversationId: null },
     workOrder: { items: [], closableTabs: [], runningCount: 0, attentionCount: 0 },
     git: { isRepo: false, dirtyCount: 0, visible: false },
   };

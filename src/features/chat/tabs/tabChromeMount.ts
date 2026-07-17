@@ -44,8 +44,8 @@ export function mountTabChrome(
       }
     },
     onClearBashOutputs: () => { tab.bashOutputs?.clear(); },
-    // Phase 4 wires the real teleport host; until then NavOverlay is not rendered,
-    // so a null host is harmless.
+    // NavOverlay teleports into the floating `.specorator-nav-sidebar-host`
+    // built by buildTabDOM; a null host falls back to in-place rendering.
     resolveNavHost: () => tab.dom.navSidebarHostEl ?? null,
   };
 
