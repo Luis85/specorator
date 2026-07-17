@@ -63,12 +63,22 @@ function showMore(): void { visibleCount.value += HISTORY_RENDER_WINDOW_SIZE; }
 function isNewTabModifierClick(e: MouseEvent): boolean {
   return !e.altKey && !e.shiftKey && (e.metaKey || e.ctrlKey);
 }
+// Parity with the deleted ConversationHistoryView: a header history row always
+// opens the conversation in a (new-or-existing) tab via `onOpenConversationInNewTab`
+// — plain, modifier, and middle clicks all target the same action (the modifier
+// only suppresses the browser default), never replacing the active tab's
+// conversation. The loaded current row has no action (its list of messages is
+// already on screen); only an empty current row is re-openable.
+function isRowActionable(conv: ConversationMeta): boolean {
+  return !isCurrent(conv.id) || (conv.messageCount ?? 0) === 0;
+}
 const onRowClick = (conv: ConversationMeta, e: MouseEvent): void => {
-  if (isNewTabModifierClick(e)) { e.preventDefault(); cb.onOpenConversationInNewTab(conv.id, true); close(); return; }
-  cb.onSelectConversation(conv.id); close();
+  if (!isRowActionable(conv)) return;
+  if (isNewTabModifierClick(e)) e.preventDefault();
+  cb.onOpenConversationInNewTab(conv.id, true); close();
 };
 const onRowAux = (conv: ConversationMeta, e: MouseEvent): void => {
-  if (e.button !== 1) return;
+  if (e.button !== 1 || !isRowActionable(conv)) return;
   e.preventDefault(); e.stopPropagation();
   cb.onOpenConversationInNewTab(conv.id, true); close();
 };

@@ -33,7 +33,15 @@ export function mountTabChrome(
       if (!latest) return;
       const output = latest.output?.trim() || (latest.status === 'running' ? t('chat.bangBash.running') : '');
       const text = output ? `$ ${latest.command}\n${output}` : `$ ${latest.command}`;
-      void navigator.clipboard.writeText(text).catch(() => { new Notice(t('chat.bangBash.copyFailed')); });
+      // `navigator.clipboard` is undefined in some Obsidian webview/mobile
+      // contexts, so the property access itself can throw before `.catch()` is
+      // attached; the try wraps that, the catch handles a rejected write.
+      // Mirrors the deleted StatusPanel.copyLatestBashOutput try/catch.
+      try {
+        void navigator.clipboard.writeText(text).catch(() => { new Notice(t('chat.bangBash.copyFailed')); });
+      } catch {
+        new Notice(t('chat.bangBash.copyFailed'));
+      }
     },
     onClearBashOutputs: () => { tab.bashOutputs?.clear(); },
     // Phase 4 wires the real teleport host; until then NavOverlay is not rendered,

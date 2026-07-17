@@ -36,14 +36,26 @@ describe('ConversationHistoryDropdown.vue', () => {
     expect(w.find('.specorator-history-header').exists()).toBe(true);
   });
 
-  it('selects a non-current row', async () => {
+  it('opens a non-current row in a (new-or-existing) tab, never replacing the active tab', async () => {
     const store = useChatShellStore();
     store.setConversations({ items: [conv('a'), conv('b')], currentConversationId: 'b', perItem: { a: { openState: 'closed' }, b: { openState: 'current' } } });
+    const onOpenConversationInNewTab = vi.fn();
     const onSelectConversation = vi.fn();
-    const w = mountDd({ onSelectConversation });
+    const w = mountDd({ onOpenConversationInNewTab, onSelectConversation });
     await w.find('.specorator-header-btn').trigger('click');
     await w.findAll('.specorator-history-item')[0].find('.specorator-history-item-content').trigger('click');
-    expect(onSelectConversation).toHaveBeenCalledWith('a');
+    expect(onOpenConversationInNewTab).toHaveBeenCalledWith('a', true);
+    expect(onSelectConversation).not.toHaveBeenCalled();
+  });
+
+  it('takes no action when clicking the loaded current row', async () => {
+    const store = useChatShellStore();
+    store.setConversations({ items: [conv('b')], currentConversationId: 'b', perItem: { b: { openState: 'current' } } });
+    const onOpenConversationInNewTab = vi.fn();
+    const w = mountDd({ onOpenConversationInNewTab });
+    await w.find('.specorator-header-btn').trigger('click');
+    await w.find('.specorator-history-item.active .specorator-history-item-content').trigger('click');
+    expect(onOpenConversationInNewTab).not.toHaveBeenCalled();
   });
 
   it('commits an inline rename on Enter', async () => {
