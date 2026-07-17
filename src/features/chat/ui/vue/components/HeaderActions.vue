@@ -5,6 +5,7 @@ import { t } from '../../../../../i18n/i18n';
 import { CALLBACKS_KEY } from '../chatShellKeys';
 import { mountIcon } from '../mountIcon';
 import { useChatShellStore } from '../stores/chatShellStore';
+import WorkOrderActivityDropdown from './WorkOrderActivityDropdown.vue';
 
 const cb = inject(CALLBACKS_KEY);
 if (!cb) throw new Error('HeaderActions mounted without CALLBACKS_KEY');
@@ -15,10 +16,8 @@ const store = useChatShellStore();
 const canCreateTab = computed(() => store.header.canCreateTab);
 
 const historyHost = ref<HTMLElement | null>(null);
-const workOrderHost = ref<HTMLElement | null>(null);
 onMounted(() => {
   if (historyHost.value) cb.mountHistoryHost(historyHost.value);
-  if (workOrderHost.value) cb.mountWorkOrderHost(workOrderHost.value);
 });
 
 // Stable named host functions per button (consistent with TabBadge.vue /
@@ -40,10 +39,7 @@ function onKeydown(e: KeyboardEvent, fn: () => void): void {
 
 <template>
   <div class="specorator-header-actions">
-    <div
-      ref="workOrderHost"
-      class="specorator-work-order-activity-slot"
-    />
+    <WorkOrderActivityDropdown />
 
     <div
       :ref="quickActionsHost"

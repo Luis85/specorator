@@ -30,7 +30,6 @@ export interface ChatShellCallbacks {
    *  was deleted in the chat-shell Vue cutover (ADR 0005). */
   onNewConversation: () => void;
   onOpenHistory: () => void;
-  onOpenWorkOrders: () => void;
   onQuickActions: () => void;
   /** Hover pre-warm for the Quick Actions modal — warms the Skills-tab cache so
    *  the modal opens hot (mirrors the old buildNavRowContent mouseenter). */
@@ -39,9 +38,8 @@ export interface ChatShellCallbacks {
   /** Empty-state "Open settings" CTA — thin delegator to
    *  SpecoratorView.openPluginSettings(). */
   onOpenSettings: () => void;
-  /** Hosts the imperative history + work-order dropdowns into the header. */
+  /** Hosts the imperative history dropdown into the header. */
   mountHistoryHost: (el: HTMLElement) => void;
-  mountWorkOrderHost: (el: HTMLElement) => void;
   /** Resolves the active tab's navRowEl for 'input' tabBarPosition mode
    *  (mirrors updateNavRowLocation's input-mode branch); null when there is
    *  no active tab yet. */

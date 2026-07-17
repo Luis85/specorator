@@ -39,13 +39,11 @@ function fakeCallbacks(overrides: Partial<ChatShellCallbacks> = {}): ChatShellCa
     onNewTab: vi.fn(),
     onNewConversation: vi.fn(),
     onOpenHistory: vi.fn(),
-    onOpenWorkOrders: vi.fn(),
     onQuickActions: vi.fn(),
     onQuickActionsHover: vi.fn(),
     onRename: vi.fn(),
     onOpenSettings: vi.fn(),
     mountHistoryHost: vi.fn(),
-    mountWorkOrderHost: vi.fn(),
     // Defaulting to null preserves the pre-6a in-place render for every
     // existing test below: a null target disables the Teleport.
     resolveNavRowEl: vi.fn(() => null),
@@ -172,15 +170,13 @@ describe('ChatHeader', () => {
     expect(cb.onNewConversation).toHaveBeenCalledTimes(1);
   });
 
-  it('mountHistoryHost and mountWorkOrderHost were each called once with an element on mount', () => {
+  it('mountHistoryHost was called once with an element on mount', () => {
     const store = useChatShellStore();
     store.setHeader(hdr());
     const cb = fakeCallbacks();
     mountHeader(cb);
     expect(cb.mountHistoryHost).toHaveBeenCalledTimes(1);
     expect((cb.mountHistoryHost as unknown as ReturnType<typeof vi.fn>).mock.calls[0][0]).toBeInstanceOf(HTMLElement);
-    expect(cb.mountWorkOrderHost).toHaveBeenCalledTimes(1);
-    expect((cb.mountWorkOrderHost as unknown as ReturnType<typeof vi.fn>).mock.calls[0][0]).toBeInstanceOf(HTMLElement);
   });
 
   it('TabStrip is hidden (v-show) when tabBarVisible is false and shown when true', async () => {

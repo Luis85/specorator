@@ -42,7 +42,6 @@ import ChatShellRoot from './ui/vue/ChatShellRoot.vue';
 import { createChatShellPinia } from './ui/vue/globalPinia';
 import { buildSidePanelCallbacks } from './ui/vue/sidePanelCallbacks';
 import type { ChatBoundAgent, ChatShellHeader } from './ui/vue/stores/chatShellStore';
-import { WorkOrderActivityDropdown } from './ui/WorkOrderActivityDropdown';
 import { deriveEditedFilesFromMessages } from './utils/editedFiles';
 import { recalculateUsageForModel } from './utils/usageInfo';
 
@@ -71,9 +70,6 @@ export class SpecoratorView extends ItemView {
   private viewContainerEl: HTMLElement | null = null;
   // Imperative widgets hosted into the Vue header via the mount* callbacks; they
   // stay imperative and persist across the empty<->content transition.
-  private workOrderActivitySlotEl: HTMLElement | null = null;
-  private workOrderActivityDropdown: WorkOrderActivityDropdown | null = null;
-  private disposeWorkOrderActivitySubscription: (() => void) | null = null;
 
   // History dropdown host (the `.specorator-history-menu` element) + its trigger
   // button, both supplied by the Vue HeaderActions via mountHistoryHost.
@@ -393,7 +389,6 @@ export class SpecoratorView extends ItemView {
     // Vault events registered via registerEvent are auto-released by the
     // Component lifecycle — no manual offref sweep needed.
     await this.destroyTabRuntime();
-    this.disposeWorkOrderActivityDropdown();
     // unmount() runs the shell's onUnmounted hooks (routing disposers); clearing
     // the observers drops the view-side subscription set.
     this.vueApp?.unmount();
@@ -434,10 +429,6 @@ export class SpecoratorView extends ItemView {
         );
       },
       onOpenHistory: () => this.toggleHistoryDropdown(),
-      // No dedicated trigger in the Vue header: the WorkOrderActivityDropdown
-      // (mounted via mountWorkOrderHost) owns its own toggle. Kept to satisfy
-      // the callbacks contract.
-      onOpenWorkOrders: () => {},
       onQuickActions: () => this.openQuickActionsForActiveTab(),
       // Pre-warm the Skills-tab cache on hover so the Quick Actions modal opens
       // against a hot cache (old buildNavRowContent mouseenter). Idempotent:
@@ -453,10 +444,6 @@ export class SpecoratorView extends ItemView {
         // `.specorator-history-container` (see HeaderActions.vue); capture it so
         // toggleHistoryDropdown can sync aria-expanded.
         this.historyBtn = el.previousElementSibling as HTMLElement | null;
-      },
-      mountWorkOrderHost: (el) => {
-        this.workOrderActivitySlotEl = el;
-        this.mountWorkOrderActivityDropdown();
       },
       resolveNavRowEl: (tabId) =>
         (tabId ? this.tabManager?.getTab(tabId)?.dom.navRowEl ?? null : null),
@@ -581,28 +568,6 @@ export class SpecoratorView extends ItemView {
   /** Opens the Obsidian settings dialog focused on the Specorator plugin tab. */
   private openPluginSettings(): void {
     openPluginSettingsTab(this.app, this.plugin.manifest.id);
-  }
-
-  private mountWorkOrderActivityDropdown(): void {
-    if (!this.workOrderActivitySlotEl || !this.plugin.workOrderActivity) return;
-    this.disposeWorkOrderActivitySubscription?.();
-    this.workOrderActivityDropdown?.destroy();
-    this.workOrderActivityDropdown = new WorkOrderActivityDropdown(this.workOrderActivitySlotEl, {
-      summary: this.plugin.workOrderActivity.getSummary(),
-      onOpenItem: (id) => this.plugin.workOrderActivity?.openItem(id),
-      onCloseItem: (tabId) => this.plugin.workOrderActivity?.closeTab(tabId),
-    });
-    this.disposeWorkOrderActivitySubscription = this.plugin.workOrderActivity.subscribe((summary) => {
-      this.workOrderActivityDropdown?.update(summary);
-    });
-  }
-
-  private disposeWorkOrderActivityDropdown(): void {
-    this.disposeWorkOrderActivitySubscription?.();
-    this.disposeWorkOrderActivitySubscription = null;
-    this.workOrderActivityDropdown?.destroy();
-    this.workOrderActivityDropdown = null;
-    this.workOrderActivitySlotEl = null;
   }
 
   /**
