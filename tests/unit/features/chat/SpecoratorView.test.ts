@@ -957,3 +957,24 @@ describe('SpecoratorView applyEditedFilesSetting', () => {
     expect(state.editedFiles).toEqual([{ path: 'derived.md', changeKind: 'created' }]);
   });
 });
+
+describe('side-panel callback delegators', () => {
+  it('onGitCommit delegates to sendGitCommitPromptToActiveTab', () => {
+    const view = Object.create(SpecoratorView.prototype) as any;
+    view.plugin = {}; view.tabManager = null; view.chatShellObservers = new Set();
+    const spy = jest.fn();
+    view.sendGitCommitPromptToActiveTab = spy;
+    const cb = view.buildChatShellCallbacks();
+    cb.onGitCommit();
+    expect(spy).toHaveBeenCalled();
+  });
+
+  it('onOpenWorkOrderItem delegates to workOrderActivity.openItem', () => {
+    const view = Object.create(SpecoratorView.prototype) as any;
+    const openItem = jest.fn().mockResolvedValue(undefined);
+    view.plugin = { workOrderActivity: { openItem } }; view.tabManager = null; view.chatShellObservers = new Set();
+    const cb = view.buildChatShellCallbacks();
+    cb.onOpenWorkOrderItem('wo-1');
+    expect(openItem).toHaveBeenCalledWith('wo-1');
+  });
+});

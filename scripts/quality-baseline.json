@@ -1,15 +1,15 @@
 {
-  "description": "Fallow quality baseline. Counters may shrink but not grow; averageMaintainability may rise but not drop. Regenerate with `npm run check:quality -- --update` (commit the diff in the same PR that moves the metric). 2026-07-16 (composer Vue migration, ADR 0005 sub-project 3, Task 19 re-lock): net shrink to cloneGroups 39, duplicatedLines 994, complexFunctions 246, averageMaintainability 90.2 — the intermediate island-seam mirroring that temporarily raised these during the build (composerCallbacks/tabComposer/useComposerEventRouting/mountComposer paralleling the transcript island) was reclaimed once the imperative InputToolbar, ui/toolbar/* pure-render widgets, FileChipsView, EditedFilesView, and the ResumeSessionDropdown DOM render were deleted.",
+  "description": "Fallow quality baseline. Counters may shrink but not grow; averageMaintainability may rise but not drop. Regenerate with `npm run check:quality -- --update` (commit the diff in the same PR that moves the metric). 2026-07-17 (chat side-panels Vue prep, sub-project 4 Task 4): +1 cloneGroups / +21 duplicatedLines / -0.1 averageMaintainability from sidePanelCallbacks.ts's regenerateHistoryTitle, a deliberate verbatim port of ConversationHistoryView.regenerateTitle (Vue→engine seam for the still-imperative ConversationHistoryView, which coexists until Phase 2 Task 7 deletes it and reclaims the duplication — same pattern as the composer island's temporary seam-mirroring noted below).",
   "fallowVersion": "2.91.0",
   "metrics": {
     "deadCodeIssues": 0,
     "circularDependencies": 0,
     "reExportCycles": 0,
     "boundaryViolations": 0,
-    "cloneGroups": 39,
-    "duplicatedLines": 994,
+    "cloneGroups": 40,
+    "duplicatedLines": 1015,
     "complexFunctions": 246,
     "criticalComplexity": 5,
-    "averageMaintainability": 90.2
+    "averageMaintainability": 90.1
   }
 }

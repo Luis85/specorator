@@ -77,6 +77,15 @@ function seededCallbacks(snapshot: ChatShellSnapshot): ChatShellCallbacks {
     mountGitActionHost: vi.fn(),
     resolveNavRowEl: vi.fn(() => null),
     renderProviderLogo: vi.fn(),
+    onSelectConversation: vi.fn(),
+    onOpenConversationInNewTab: vi.fn(),
+    onRenameConversation: vi.fn(),
+    onDeleteConversation: vi.fn(),
+    onRegenerateConversationTitle: vi.fn(),
+    onConversationContextMenu: vi.fn(),
+    onOpenWorkOrderItem: vi.fn(),
+    onCloseWorkOrderTab: vi.fn(),
+    onGitCommit: vi.fn(),
   };
 }
 

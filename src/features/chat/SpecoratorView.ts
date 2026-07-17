@@ -41,6 +41,7 @@ import { buildConversationsSlice, buildGitSlice, buildWorkOrderSlice } from './u
 import { CALLBACKS_KEY, CONTENT_HOST_KEY, PLUGIN_KEY } from './ui/vue/chatShellKeys';
 import ChatShellRoot from './ui/vue/ChatShellRoot.vue';
 import { createChatShellPinia } from './ui/vue/globalPinia';
+import { buildSidePanelCallbacks } from './ui/vue/sidePanelCallbacks';
 import type { ChatBoundAgent, ChatShellHeader } from './ui/vue/stores/chatShellStore';
 import { WorkOrderActivityDropdown } from './ui/WorkOrderActivityDropdown';
 import { deriveEditedFilesFromMessages } from './utils/editedFiles';
@@ -52,11 +53,11 @@ type LoadableView = {
 };
 
 export class SpecoratorView extends ItemView {
-  private plugin: SpecoratorPlugin;
+  readonly plugin: SpecoratorPlugin;
   private _workOrderBridge: SpecoratorViewWorkOrderBridge | null = null;
 
-  // Tab management
-  private tabManager: TabManager | null = null;
+  // Tab management (public: SidePanelCallbackHost reads it off `this`)
+  tabManager: TabManager | null = null;
   // False until restoreOrCreateTabs() finishes: the tab manager is assigned
   // before the async restore runs, so the Agent Board queue must not count the
   // live tab count during that window or it can overbook the cap / drop tabs.
@@ -232,8 +233,7 @@ export class SpecoratorView extends ItemView {
     // Use contentEl (standard Obsidian API) as primary target.
     // Hover Editor and other plugins may modify the DOM structure,
     // so we need fallbacks to handle non-standard scenarios.
-    let container: HTMLElement | null =
-      this.contentEl ?? (this.containerEl.children[1] as HTMLElement | null);
+    let container: HTMLElement | null = this.contentEl ?? (this.containerEl.children[1] as HTMLElement | null);
 
     if (!container) {
       // Last resort: create our own container inside containerEl
@@ -422,6 +422,7 @@ export class SpecoratorView extends ItemView {
    *  method, so a single stable instance stays correct across projections. */
   private buildChatShellCallbacks(): ChatShellCallbacks {
     return {
+      ...buildSidePanelCallbacks(this),
       subscribe: (onChange) => {
         this.chatShellObservers.add(onChange);
         onChange(this.projectChatShell());
@@ -554,8 +555,9 @@ export class SpecoratorView extends ItemView {
     };
   }
 
-  /** Builds a snapshot and pushes it to every registered shell observer. */
-  private emitChatShellChange(): void {
+  /** Builds a snapshot and pushes it to every registered shell observer.
+   *  Public: SidePanelCallbackHost calls it off `this`. */
+  emitChatShellChange(): void {
     if (this.chatShellObservers.size === 0) return;
     const snapshot = this.projectChatShell();
     for (const observer of this.chatShellObservers) {
@@ -655,7 +657,8 @@ export class SpecoratorView extends ItemView {
     return ProviderRegistry.getChatUIConfig(providerId).isGitActionsEnabled?.(settings) !== false;
   }
 
-  private sendGitCommitPromptToActiveTab(): void {
+  // Public: SidePanelCallbackHost calls it off `this`.
+  sendGitCommitPromptToActiveTab(): void {
     const inputController = this.tabManager?.getActiveTab()?.controllers.inputController;
     if (!inputController) {
       return;
@@ -756,12 +759,8 @@ export class SpecoratorView extends ItemView {
   private async refreshBoundAgentChip(): Promise<void> {
     const gen = ++this.boundAgentChipGen;
     const conversationId = this.tabManager?.getActiveTab()?.conversationId ?? null;
-    const conversation = conversationId
-      ? await this.plugin.getConversationById(conversationId)
-      : null;
-    const agent = conversation?.boundAgentId
-      ? await this.plugin.agentRosterStore?.get(conversation.boundAgentId)
-      : null;
+    const conversation = conversationId ? await this.plugin.getConversationById(conversationId) : null;
+    const agent = conversation?.boundAgentId ? await this.plugin.agentRosterStore?.get(conversation.boundAgentId) : null;
     if (gen !== this.boundAgentChipGen) return;
 
     this.cachedBoundAgentConversationId = conversationId;
@@ -858,7 +857,8 @@ export class SpecoratorView extends ItemView {
     this.closeHistoryDropdown();
   }
 
-  private getHistoryConversationOpenState(conversationId: string): HistoryConversationOpenState {
+  // Public: SidePanelCallbackHost calls it off `this`.
+  getHistoryConversationOpenState(conversationId: string): HistoryConversationOpenState {
     const activeTab = this.tabManager?.getActiveTab();
     if (activeTab?.conversationId === conversationId) {
       return 'current';
