@@ -33,13 +33,19 @@ function pascal(value) {
   return safe || 'My';
 }
 
+// eslint-plugin-obsidianmd bans the sample plugin's literal identifiers. The
+// default id "my-plugin" and a name of "sample" both pascal back into this set,
+// so a scaffold that shipped them would fail its own `lint` gate out of the box.
+const SAMPLE_NAMES = new Set(['MyPlugin', 'MyPluginSettings', 'SampleSettingTab', 'SampleModal']);
+
 function classNames(o) {
   const base = pascal(o.name).replace(/Plugin$/, '');
-  return {
-    pluginClass: `${base}Plugin`,
-    settingsType: `${base}Settings`,
-    settingsTab: `${base}SettingTab`,
-  };
+  const derive = (b) => ({ pluginClass: `${b}Plugin`, settingsType: `${b}Settings`, settingsTab: `${b}SettingTab` });
+  let names = derive(base);
+  // Disambiguate rather than emit banned code. One pass suffices: no "…App…"
+  // identifier is in the banned set.
+  if (Object.values(names).some((n) => SAMPLE_NAMES.has(n))) names = derive(`${base}App`);
+  return names;
 }
 
 const write = (path, content, mode = 'skip-if-exists') => ({ type: 'writeFile', path, mode, content });
@@ -55,14 +61,15 @@ function isGreenfield(options, state) {
 }
 
 // The build/fallow entry. Greenfield writes src/main.ts; a brownfield adopt
-// keeps the user's detected entry (e.g. a root main.ts), so the generated
-// esbuild build and fallow ratchet point at the file that actually exists.
+// keeps the user's detected entry (e.g. a root main.ts) — but only if it
+// actually exists. A manifest-only repo with no source has detectEntry fall
+// back to a phantom src/index.ts; don't point the build at it (see planBuild's
+// no-source notice), default to src/main.ts instead.
 export function obsidianEntry(options, state) {
   if (isGreenfield(options, state)) return 'src/main.ts';
   const entry = state?.entry;
-  return typeof entry === 'string' && /^[\w./-]+\.(?:ts|tsx|mts|cts|js|jsx|mjs|cjs)$/.test(entry)
-    ? entry
-    : 'src/main.ts';
+  const valid = typeof entry === 'string' && /^[\w./-]+\.(?:ts|tsx|mts|cts|js|jsx|mjs|cjs)$/.test(entry);
+  return valid && state?.entryExists ? entry : 'src/main.ts';
 }
 
 function planManifest(o, state, version) {
@@ -102,6 +109,12 @@ function planBuild(options, state) {
   const actions = [];
   if (state?.esbuildConfig) {
     actions.push(notice('Existing esbuild.config.mjs kept — review it against the generated build contract (styles.css assembly, vault deploy, mobile externals) in references/obsidian-plugin.md.'));
+  }
+  // Brownfield adopt with no source anywhere (a manifest but no entry file):
+  // the build points at src/main.ts, which does not exist yet — say so instead
+  // of failing the build gate cryptically.
+  if (!isGreenfield(options, state) && !state?.entryExists) {
+    actions.push(notice('No source entry was found (a manifest is present but no source file). The generated build points at src/main.ts — create it (or your real entry) before `build`/`verify` can produce artifacts.'));
   }
   // Desktop-only plugins may import node builtins and electron (Obsidian ships
   // Electron), so those are externals. A mobile-ready plugin must NOT mark them
@@ -428,8 +441,14 @@ function planRelease(options, state) {
   return [...notices, write('.github/workflows/release.yml', content)];
 }
 
-function planProjectDocs(options) {
+function planProjectDocs(options, state) {
   const o = options.obsidian;
+  // Render commands with the selected package manager so the generated docs
+  // don't tell a pnpm/yarn/bun user to run npm (wrong lockfile / bypasses CI).
+  const pm = safePackageManager(options.packageManager ?? state?.packageManager ?? 'npm');
+  const run = runPrefix(pm);
+  const installCmd = PM_INSTALL[pm];
+  const versionCmd = pm === 'bun' ? 'npm version patch' : `${pm} version patch`;
   const mobileLine = o.mobile
     ? '**Mobile-ready** (`isDesktopOnly: false`): never import Node/Electron modules (lint-enforced and non-external in the build); test flows on iOS/Android or the mobile emulator before release.'
     : '**Desktop-only** (`isDesktopOnly: true`): Node builtins are available, but prefer Vault/adapter APIs so a later mobile port stays possible.';
@@ -437,11 +456,15 @@ function planProjectDocs(options) {
     write('README.md', renderTemplate(loadTemplate('obsidian/README.md.tmpl'), {
       name: o.name,
       description: o.description,
-      id: o.id,
+      run,
+      installCmd,
+      versionCmd,
     })),
     write('CLAUDE.md', renderTemplate(loadTemplate('obsidian/CLAUDE.md.tmpl'), {
       name: o.name,
       id: o.id,
+      run,
+      versionCmd,
       typecheckTool: o.vue ? 'vue-tsc' : 'tsc',
       mobileLine: `- ${mobileLine}`,
       vueLine: o.vue
@@ -526,6 +549,6 @@ export function planObsidian(options, state = {}) {
     ...planGithubTemplates(options),
     ...planVerifyScript(options, state),
     ...planClaudeSettings(options, state),
-    ...planProjectDocs(options),
+    ...planProjectDocs(options, state),
   ];
 }

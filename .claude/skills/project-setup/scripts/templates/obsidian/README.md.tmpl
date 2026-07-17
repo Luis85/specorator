@@ -5,20 +5,21 @@
 ## Development
 
 ```bash
-npm install
-cp .env.example .env.local   # point OBSIDIAN_VAULT at a test vault
-npm run dev                  # watch build + deploy into the vault (hot reload)
+{{installCmd}}
+cp .env.example .env.local
+{{run}} dev
 ```
 
-Install the community **Hot Reload** plugin in the test vault once — dev builds
-write a `.hotreload` marker so every rebuild reloads the plugin in place.
+`{{run}} dev` watch-builds and deploys into `$OBSIDIAN_VAULT`. Install the
+community **Hot Reload** plugin in the test vault once — dev builds write a
+`.hotreload` marker so every rebuild reloads the plugin in place.
 
 ## Quality gates
 
+Run the whole local gate set with one command:
+
 ```bash
-npm run lint && npm run check:loc && npm run check:css && npm run check:quality
-npm run typecheck && npm run test
-npm run build && npm run check:artifacts
+{{run}} verify
 ```
 
 See `docs/quality-integration-guide.md` for how the ratchets work.
@@ -26,7 +27,7 @@ See `docs/quality-integration-guide.md` for how the ratchets work.
 ## Release
 
 ```bash
-npm version patch   # bumps package.json + manifest.json + versions.json
+{{versionCmd}}   # bumps package.json + manifest.json + versions.json
 git push --follow-tags
 ```
 

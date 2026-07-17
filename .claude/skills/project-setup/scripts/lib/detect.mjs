@@ -192,6 +192,7 @@ export function detect(cwd) {
   const deps = { ...(pkg.dependencies ?? {}), ...(pkg.devDependencies ?? {}) };
   const has = (name) => Object.prototype.hasOwnProperty.call(deps, name);
   const testFramework = has('vitest') ? 'vitest' : has('jest') ? 'jest' : null;
+  const entry = detectEntry(cwd);
   return {
     packageManager: detectPackageManager(cwd),
     typescript: has('typescript') || existsSync(join(cwd, 'tsconfig.json')),
@@ -201,7 +202,10 @@ export function detect(cwd) {
     git: existsSync(join(cwd, '.git')),
     github: detectGithubRemote(cwd),
     defaultBranch: detectDefaultBranch(cwd),
-    entry: detectEntry(cwd),
+    entry,
+    // detectEntry returns src/index.ts as a syntactic fallback even when nothing
+    // exists — obsidianEntry uses this to avoid pointing the build at a phantom.
+    entryExists: existsSync(join(cwd, entry)),
     // Brownfield collision signals — planners turn these into user-facing notices
     // instead of silently no-op'ing on a pre-existing config/script/workflow.
     scripts: pkg.scripts ?? {},

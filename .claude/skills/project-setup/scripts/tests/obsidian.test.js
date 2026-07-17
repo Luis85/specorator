@@ -154,15 +154,34 @@ test('manifest-only brownfield seeds the package version from the manifest (no c
   assert.equal(JSON.parse(findWrite(actions, 'manifest.json').content).version, '3.1.0');
 });
 
-test('obsidianEntry keeps a brownfield entry (root main.ts) and forces src/main.ts on greenfield', () => {
+test('obsidianEntry keeps an EXISTING brownfield entry (root main.ts) and forces src/main.ts on greenfield', () => {
   assert.equal(obsidianEntry(optionsWith(BASE), {}), 'src/main.ts');
-  assert.equal(obsidianEntry(optionsWith(BASE), { obsidianAppPresent: true, entry: 'main.ts' }), 'main.ts');
-  const brown = planObsidian(optionsWith(BASE), { obsidianAppPresent: true, entry: 'main.ts' });
+  const brownState = { obsidianAppPresent: true, entry: 'main.ts', entryExists: true };
+  assert.equal(obsidianEntry(optionsWith(BASE), brownState), 'main.ts');
+  const brown = planObsidian(optionsWith(BASE), brownState);
   // a non-src entry lands in the tsconfig include so the type-aware lint resolves it
   assert.match(findWrite(brown, 'tsconfig.json').content, /"main\.ts"/);
   // esbuild gets an explicitly-relative entry (a bare specifier is ambiguous)
   assert.match(findWrite(brown, 'esbuild.config.mjs').content, /entryPoints: \['\.\/main\.ts'\]/);
   assert.match(findWrite(actionsFor(), 'esbuild.config.mjs').content, /entryPoints: \['\.\/src\/main\.ts'\]/);
+});
+
+test('a manifest-only brownfield with no source entry falls back to src/main.ts and warns', () => {
+  // detectEntry returns a phantom src/index.ts fallback; entryExists is false.
+  const state = { obsidianAppPresent: true, entry: 'src/index.ts', entryExists: false };
+  assert.equal(obsidianEntry(optionsWith(BASE), state), 'src/main.ts');
+  const actions = planObsidian(optionsWith(BASE), state);
+  assert.ok(actions.some((a) => a.type === 'notice' && /No source entry was found/.test(a.message)));
+});
+
+test('the docs render with the selected package manager (no hardcoded npm)', () => {
+  const opts = { ...optionsWith(BASE), packageManager: 'pnpm' };
+  const actions = planObsidian(opts, { packageManager: 'pnpm' });
+  const readme = findWrite(actions, 'README.md').content;
+  assert.match(readme, /pnpm install/);
+  assert.match(readme, /pnpm dev/);
+  assert.doesNotMatch(readme, /npm run/);
+  assert.match(findWrite(actions, 'CLAUDE.md').content, /pnpm verify/);
 });
 
 test('VueView pushes the start route before mount (memory history has no initial navigation)', () => {
@@ -223,6 +242,18 @@ test('main.ts is orchestration-only: it delegates registration, no inline addCom
   assert.match(commands, /open-view/);
   const noVue = findWrite(actionsFor({ vue: false }), 'src/main.ts').content;
   assert.doesNotMatch(noVue, /registerViews/);
+});
+
+test('class names never reproduce obsidianmd sample identifiers (would fail the lint gate)', () => {
+  // A normal name keeps the plain <Name>Plugin convention.
+  assert.match(findWrite(actionsFor(), 'src/main.ts').content, /class DemoNotesPlugin extends Plugin/);
+  // The default id "my-plugin" pascals back to the banned "MyPlugin"; disambiguate.
+  const myMain = findWrite(actionsFor({ id: 'my-plugin', name: 'My Plugin' }), 'src/main.ts').content;
+  assert.match(myMain, /class MyAppPlugin extends Plugin/);
+  assert.doesNotMatch(myMain, /class MyPlugin extends/);
+  // "sample" would collide on the settings tab (SampleSettingTab).
+  const sampleSettings = findWrite(actionsFor({ id: 'sample', name: 'Sample' }), 'src/settings.ts').content;
+  assert.doesNotMatch(sampleSettings, /SampleSettingTab/);
 });
 
 test('raw `new Notice()` is lint-banned in src, with the NoticeService file exempt', () => {

@@ -12,18 +12,21 @@ before structural changes.**
 
 ## Commands
 
+Commands are shown for this repo's package manager (`{{run}} …`).
+
 ```bash
-npm run dev              # watch build; deploys into $OBSIDIAN_VAULT (hot reload)
-npm run build            # production bundle (main.js + styles.css)
-npm run test             # Vitest (jsdom; `obsidian` aliased to tests/__mocks__/obsidian.ts)
-npm run test:coverage    # coverage with rise-only floors
-npm run typecheck        # {{typecheckTool}} --noEmit
-npm run lint             # eslint (obsidianmd + type-aware rules, all-error)
-npm run format           # prettier --write
-npm run check:loc        # per-file LOC ratchet
-npm run check:css        # CSS !important ratchet (run with -- --update to re-baseline)
-npm run check:quality    # fallow metric ratchet (run with ./coverage absent)
-npm run check:artifacts  # post-build artifact smoke (run after npm run build)
+{{run}} verify         # the whole local gate set in CI order (run before pushing)
+{{run}} dev            # watch build; deploys into $OBSIDIAN_VAULT (hot reload)
+{{run}} build          # production bundle (main.js + styles.css)
+{{run}} test           # Vitest (jsdom; obsidian aliased to tests/__mocks__/obsidian.ts)
+{{run}} test:coverage  # coverage with rise-only floors
+{{run}} typecheck      # {{typecheckTool}} --noEmit
+{{run}} lint           # eslint (obsidianmd + type-aware rules, all-error)
+{{run}} format         # prettier --write
+{{run}} check:loc      # per-file LOC ratchet
+{{run}} check:css      # CSS !important ratchet (add -- --update to re-baseline)
+{{run}} check:quality  # fallow metric ratchet (run with ./coverage absent)
+{{run}} check:artifacts # post-build artifact smoke (run after build)
 ```
 
 ## Development notes
@@ -45,11 +48,10 @@ npm run check:artifacts  # post-build artifact smoke (run after npm run build)
 - Ratchets (`check:loc`, `check:css`, `check:quality`, coverage floors) may
   improve but never regress; lock improvements in with each gate's `--update`
   in the same PR.
-- Run `npm run lint && npm run typecheck && npm run test && npm run build && npm run check:artifacts`
-  before pushing.
+- Run `{{run}} verify` before pushing.
 
 ## Release flow
 
-`npm version patch|minor|major` syncs `manifest.json` and `versions.json` via
-`scripts/sync-version.mjs`; `git push --follow-tags` triggers the release
+`{{versionCmd}}` (or `minor`/`major`) syncs `manifest.json` and `versions.json`
+via `scripts/sync-version.mjs`; `git push --follow-tags` triggers the release
 workflow, which attaches `main.js`, `manifest.json`, and `styles.css`.
