@@ -68,7 +68,7 @@ export function createTab(options: TabCreateOptions): TabData {
   // This placeholder is replaced in initializeTabControllers() with the actual
   // callback that updates the StreamController. We defer the real callback
   // because StreamController doesn't exist until controllers are initialized.
-  const subagentManager = new SubagentManager(plugin.app, () => {});
+  const subagentManager = new SubagentManager(() => {});
 
   const dom = buildTabDOM(contentEl);
   state.queueIndicatorEl = dom.queueIndicatorEl;

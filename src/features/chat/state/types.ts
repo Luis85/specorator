@@ -26,10 +26,11 @@ export interface QueuedMessage {
   turnRequest?: ChatTurnRequest;
 }
 
-/** Pending tool call waiting to be rendered (buffered until input is complete). */
+/** Buffered Task tool call waiting for its mode (and an active assistant message). */
 export interface PendingToolCall {
   toolCall: ToolCallInfo;
-  parentEl: HTMLElement | null;
+  /** True when an assistant message was active at buffer/merge time, unlocking creation. */
+  canRender: boolean;
 }
 
 /**

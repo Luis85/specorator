@@ -26,14 +26,6 @@ jest.mock('@/core/tools/toolInput', () => ({
   extractResolvedAnswersFromResultText: jest.fn().mockReturnValue(undefined),
 }));
 
-jest.mock('@/features/chat/rendering/SubagentRenderer', () => ({
-  createSubagentBlock: jest.fn().mockReturnValue({
-    info: { id: 'task-1', description: 'test', status: 'running', toolCalls: [] },
-    labelEl: { setText: jest.fn() },
-  }),
-  finalizeSubagentBlock: jest.fn(),
-}));
-
 jest.mock('@/features/chat/rendering/ThinkingBlockRenderer', () => ({
   appendThinkingContent: jest.fn(),
   createThinkingBlock: jest.fn().mockImplementation(() => ({
@@ -888,9 +880,7 @@ describe('StreamController - Text Content', () => {
       // Configure mock to return created_sync when run_in_background is known
       (deps.subagentManager.handleTaskToolUse as jest.Mock).mockReturnValueOnce({
         action: 'created_sync',
-        subagentState: {
-          info: { id: 'task-1', description: 'test', status: 'running', toolCalls: [] },
-        },
+        info: { id: 'task-1', description: 'test', status: 'running', toolCalls: [] },
       });
 
       await controller.handleStreamChunk(
@@ -1108,9 +1098,7 @@ describe('StreamController - Text Content', () => {
 
       (deps.subagentManager.handleTaskToolUse as jest.Mock).mockReturnValueOnce({
         action: 'created_sync',
-        subagentState: {
-          info: { id: 'task-1', description: 'test', status: 'running', toolCalls: [] },
-        },
+        info: { id: 'task-1', description: 'test', status: 'running', toolCalls: [] },
       });
 
       await controller.handleStreamChunk(
@@ -1510,9 +1498,9 @@ describe('StreamController - Text Content', () => {
       deps.state.currentContentEl = createMockEl();
 
       const toolCall = { id: 'read-1', name: 'Read', input: {}, status: 'running' };
-      (deps.subagentManager.getSyncSubagent as jest.Mock).mockReturnValueOnce({
-        info: { id: 'task-1', description: 'test', status: 'running', toolCalls: [toolCall] },
-      });
+      (deps.subagentManager.getSyncSubagent as jest.Mock).mockReturnValueOnce(
+        { id: 'task-1', description: 'test', status: 'running', toolCalls: [toolCall] },
+      );
 
       await controller.handleStreamChunk(
         { type: 'subagent_tool_result', id: 'read-1', subagentId: 'task-1', content: 'file content' },
@@ -1530,9 +1518,9 @@ describe('StreamController - Text Content', () => {
       const msg = createTestMessage();
       deps.state.currentContentEl = createMockEl();
 
-      (deps.subagentManager.getSyncSubagent as jest.Mock).mockReturnValueOnce({
-        info: { id: 'task-1', description: 'test', status: 'running', toolCalls: [] },
-      });
+      (deps.subagentManager.getSyncSubagent as jest.Mock).mockReturnValueOnce(
+        { id: 'task-1', description: 'test', status: 'running', toolCalls: [] },
+      );
 
       await controller.handleStreamChunk(
         { type: 'subagent_tool_use', id: 'grep-1', name: 'Grep', input: { pattern: 'test' }, subagentId: 'task-1' },
@@ -1785,14 +1773,12 @@ describe('StreamController - Text Content', () => {
       (deps.subagentManager.hasPendingTask as jest.Mock).mockReturnValueOnce(true);
       (deps.subagentManager.renderPendingTask as jest.Mock).mockReturnValueOnce({
         mode: 'sync',
-        subagentState: {
-          info: { id: 'task-1', description: 'Do something', status: 'running', toolCalls: [] },
-        },
-      });
-      // Also configure getSyncSubagent for the child chunk routing
-      (deps.subagentManager.getSyncSubagent as jest.Mock).mockReturnValueOnce({
         info: { id: 'task-1', description: 'Do something', status: 'running', toolCalls: [] },
       });
+      // Also configure getSyncSubagent for the child chunk routing
+      (deps.subagentManager.getSyncSubagent as jest.Mock).mockReturnValueOnce(
+        { id: 'task-1', description: 'Do something', status: 'running', toolCalls: [] },
+      );
 
       // Child chunk arrives with parentToolUseId - should trigger render
       await controller.handleStreamChunk(
@@ -1808,7 +1794,7 @@ describe('StreamController - Text Content', () => {
           subagent: expect.objectContaining({ id: 'task-1' }),
         })
       );
-      expect(deps.subagentManager.renderPendingTask).toHaveBeenCalledWith('task-1', deps.state.currentContentEl);
+      expect(deps.subagentManager.renderPendingTask).toHaveBeenCalledWith('task-1', true);
     });
 
     it('should not crash stream when pending Task rendering returns null via child chunk', async () => {
@@ -1832,7 +1818,7 @@ describe('StreamController - Text Content', () => {
       );
 
       // Should not throw - manager handled errors internally
-      expect(deps.subagentManager.renderPendingTask).toHaveBeenCalledWith('task-1', deps.state.currentContentEl);
+      expect(deps.subagentManager.renderPendingTask).toHaveBeenCalledWith('task-1', true);
     });
 
     it('should not crash stream when pending Task rendering returns null via tool_result', async () => {
@@ -1860,7 +1846,7 @@ describe('StreamController - Text Content', () => {
         'task-1',
         'Task completed',
         false,
-        deps.state.currentContentEl,
+        true,
         undefined
       );
     });
@@ -1899,7 +1885,7 @@ describe('StreamController - Text Content', () => {
         'task-1',
         '{"agent_id":"agent-1"}',
         false,
-        deps.state.currentContentEl,
+        true,
         undefined
       );
       expect(deps.subagentManager.handleTaskToolResult).toHaveBeenCalledWith(
@@ -1944,7 +1930,7 @@ describe('StreamController - Text Content', () => {
         'task-1',
         'Launching...',
         false,
-        deps.state.currentContentEl,
+        true,
         toolUseResult
       );
     });
@@ -2377,7 +2363,6 @@ describe('StreamController - Text Content', () => {
 
   describe('Codex subagent lifecycle', () => {
     it('tracks spawn/wait lifecycle tool calls without imperative subagent DOM', async () => {
-      const { createSubagentBlock, finalizeSubagentBlock } = jest.requireMock('@/features/chat/rendering/SubagentRenderer');
       const msg = createTestMessage();
       deps.state.currentContentEl = createMockEl();
       deps.getAgentService = () => ({
@@ -2427,8 +2412,8 @@ describe('StreamController - Text Content', () => {
         msg,
       );
 
-      expect(createSubagentBlock).not.toHaveBeenCalled();
-      expect(finalizeSubagentBlock).not.toHaveBeenCalled();
+      // No imperative subagent DOM exists to assert against anymore — the
+      // detached SubagentRenderer was deleted; lifecycle stays data-only.
       const spawn = msg.toolCalls!.find((tc) => tc.id === 'spawn-1');
       expect(spawn).toBeDefined();
       expect(spawn?.status).toBe('completed');
@@ -2910,8 +2895,8 @@ describe('StreamController - edited files', () => {
   it('records a file edited by a sync sub-agent', async () => {
     const msg = createTestMessage();
     const subToolCalls: Array<{ id: string; name: string; input: Record<string, unknown>; status: string }> = [];
-    const subagentState = { info: { id: 'p', description: 'sub', status: 'running', toolCalls: subToolCalls } };
-    deps.subagentManager.getSyncSubagent = jest.fn().mockReturnValue(subagentState);
+    const syncInfo = { id: 'p', description: 'sub', status: 'running', toolCalls: subToolCalls };
+    deps.subagentManager.getSyncSubagent = jest.fn().mockReturnValue(syncInfo);
     deps.subagentManager.addSyncToolCall = jest.fn((_pid: string, tc: never) => subToolCalls.push(tc));
     deps.subagentManager.updateSyncToolResult = jest.fn();
 

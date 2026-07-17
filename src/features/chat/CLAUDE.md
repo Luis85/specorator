@@ -162,11 +162,17 @@ The feature layer consumes provider-neutral `StreamChunk` values. Providers own 
 The per-tab transcript — every stored and live turn — is a Vue 3 + Pinia island
 under `ui/vue/transcript/` (ADR 0005 sub-project 2, mirroring the shell island's
 sub-project 1 seam one level deeper, into each tab's `messagesEl`). The
-imperative top-level/stored renderers and the DOM-patching streaming write-side
-were deleted; only detached lifecycle adapters still used by the stream
-coordinators remain under `rendering/`. Transcript output changed from raw DOM
-mutation to reactive-data mutation; `TabManager`, controllers, `ChatState`, and
-`StreamController` keep ownership of lifecycle and block transitions.
+imperative top-level/stored renderers, the DOM-patching streaming write-side,
+AND the detached subagent DOM adapters (`SubagentRenderer`/`ToolCallRenderer`)
+were deleted; `rendering/` now holds DOM-free view models and a few live
+engine helpers (thinking timing/cleanup, scroll, message actions) — no
+detached subagent DOM adapters remain. `SubagentManager` mutates
+`SubagentInfo` data through `services/subagentTaskState.ts`, and the Task
+pipeline gates buffering on a `hasActiveMessage` boolean (derived from the
+`currentContentEl` sentinel) instead of receiving the detached element.
+Transcript output changed from raw DOM mutation to reactive-data mutation;
+`TabManager`, controllers, `ChatState`, and `StreamController` keep ownership
+of lifecycle and block transitions.
 
 - **Mount**: `mountTranscript(containerEl, plugin, component, callbacks)` (per
   tab, mirror of `mountChatShell`) `createApp(TranscriptRoot)` + a FRESH per-leaf

@@ -12,10 +12,10 @@ import type { ChatState } from '../state/ChatState';
 /**
  * Marks `message` as the in-flight assistant turn for the stream pipeline.
  *
- * `currentContentEl` is a DETACHED element: it still marks "an assistant message
- * is active" for the stream pipeline's guards and supplies an `ownerDocument` for
- * timers, but subagent/legacy DOM writes vanish into it while the Vue transcript
- * renders `message` from reactive data. `activeMessageId`/`activeBlockIndex` are
+ * `currentContentEl` is a DETACHED element: it marks "an assistant message is
+ * active" for the stream pipeline's guards (the subagent pipeline reads it only
+ * as that boolean — nothing writes DOM into it) and supplies an `ownerDocument`
+ * for timers. `activeMessageId`/`activeBlockIndex` are
  * the reactive-stream pointers the Vue transcript projects; the block index opens
  * (from -1) once the first text/thinking chunk lands (the coordinators own it).
  */

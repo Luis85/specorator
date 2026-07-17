@@ -116,18 +116,24 @@ export class SubagentStreamCoordinator {
     return false;
   }
 
+  /** Whether the stream pipeline has an active assistant message (the sentinel
+   *  `activateStreamingAssistantMessage` sets); Task creation buffers without one. */
+  private hasActiveMessage(): boolean {
+    return this.deps.state.currentContentEl !== null;
+  }
+
   private handleTaskToolUseViaManager(
     chunk: { type: 'tool_use'; id: string; name: string; input: Record<string, unknown> },
     msg: ChatMessage
   ): void {
-    const { state, subagentManager } = this.deps;
+    const { subagentManager } = this.deps;
     this.ensureTaskToolCall(msg, chunk.id, chunk.input);
 
-    const result = subagentManager.handleTaskToolUse(chunk.id, chunk.input, state.currentContentEl);
+    const result = subagentManager.handleTaskToolUse(chunk.id, chunk.input, this.hasActiveMessage());
 
     switch (result.action) {
       case 'created_sync':
-        this.recordSubagentInMessage(msg, result.subagentState.info, chunk.id);
+        this.recordSubagentInMessage(msg, result.info, chunk.id);
         this.deps.showThinkingIndicator();
         break;
       case 'created_async':
@@ -142,16 +148,12 @@ export class SubagentStreamCoordinator {
     }
   }
 
-  /** Renders a pending Agent tool call via SubagentManager and updates message. */
+  /** Creates a pending Agent tool call's subagent via SubagentManager and updates message. */
   private renderPendingTaskViaManager(toolId: string, msg: ChatMessage): void {
-    const result = this.deps.subagentManager.renderPendingTask(toolId, this.deps.state.currentContentEl);
+    const result = this.deps.subagentManager.renderPendingTask(toolId, this.hasActiveMessage());
     if (!result) return;
 
-    if (result.mode === 'sync') {
-      this.recordSubagentInMessage(msg, result.subagentState.info, toolId);
-    } else {
-      this.recordSubagentInMessage(msg, result.info, toolId, 'async');
-    }
+    this.recordSubagentInMessage(msg, result.info, toolId, result.mode === 'async' ? 'async' : undefined);
   }
 
   /** Resolves a pending Agent tool call when its own tool_result arrives. */
@@ -163,16 +165,12 @@ export class SubagentStreamCoordinator {
       chunk.id,
       chunk.content,
       chunk.isError || false,
-      this.deps.state.currentContentEl,
+      this.hasActiveMessage(),
       chunk.toolUseResult
     );
     if (!result) return;
 
-    if (result.mode === 'sync') {
-      this.recordSubagentInMessage(msg, result.subagentState.info, chunk.id);
-    } else {
-      this.recordSubagentInMessage(msg, result.info, chunk.id, 'async');
-    }
+    this.recordSubagentInMessage(msg, result.info, chunk.id, result.mode === 'async' ? 'async' : undefined);
   }
 
   private recordSubagentInMessage(
@@ -210,9 +208,9 @@ export class SubagentStreamCoordinator {
       this.renderPendingTaskViaManager(parentToolUseId, msg);
     }
 
-    const subagentState = subagentManager.getSyncSubagent(parentToolUseId);
+    const syncInfo = subagentManager.getSyncSubagent(parentToolUseId);
 
-    if (!subagentState) {
+    if (!syncInfo) {
       return;
     }
 
@@ -225,7 +223,7 @@ export class SubagentStreamCoordinator {
       }
 
       case 'subagent_tool_result': {
-        const toolCall = subagentState.info.toolCalls.find((tc: ToolCallInfo) => tc.id === chunk.id);
+        const toolCall = syncInfo.toolCalls.find((tc: ToolCallInfo) => tc.id === chunk.id);
         if (toolCall) {
           const normalizedContent = this.deps.normalizeToolResultContent(chunk.content);
           const isBlocked = isBlockedToolResult(normalizedContent, chunk.isError);

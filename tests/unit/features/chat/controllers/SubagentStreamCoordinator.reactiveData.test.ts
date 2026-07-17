@@ -14,24 +14,16 @@ import { SubagentManager } from '@/features/chat/services/SubagentManager';
  * Task 17b characterization: locks that the SUBAGENT reactive DATA on
  * `msg.toolCalls[].subagent` (a `SubagentInfo`) is fully populated DURING
  * streaming by the `SubagentManager`-mediated Task path, independent of the
- * imperative DOM. This is the safety net for the Task 18 cutover that removes
- * the imperative `SubagentRenderer` DOM: `SubagentBlock.vue` /
+ * imperative DOM: `SubagentBlock.vue` /
  * `subagentViewModel.resolveTaskSubagent` read exactly these fields
  * (`description`, `prompt`, `mode`, `status`, `asyncStatus`, `result`, and
  * `toolCalls[]` with each nested `id`/`name`/`input`/`status`/`result`), so if
  * they're present here, the Vue component has what it needs.
  *
- * Unlike `SubagentManager.test.ts` (which mocks `SubagentRenderer`, so
- * `state.info.toolCalls` never grows), this drives the REAL coordinator + REAL
- * `SubagentManager` + REAL `SubagentRenderer` over mock DOM elements, so the
- * data mutations that the SFC depends on actually run.
+ * Drives the REAL coordinator + REAL `SubagentManager` (both data-only since
+ * the detached `SubagentRenderer` DOM was severed), so the data mutations the
+ * SFC depends on actually run.
  */
-
-const mockApp = {
-  workspace: { openLinkText: jest.fn() },
-  metadataCache: { getFirstLinkpathDest: jest.fn(() => null) },
-  vault: { getAbstractFileByPath: jest.fn(() => null) },
-} as never;
 
 function createMessage(): ChatMessage {
   return { id: 'assistant-1', role: 'assistant', content: '', timestamp: 0 } as ChatMessage;
@@ -45,7 +37,7 @@ function setup() {
 
   const ref: { coordinator?: SubagentStreamCoordinator } = {};
 
-  const subagentManager = new SubagentManager(mockApp, (subagent) => {
+  const subagentManager = new SubagentManager((subagent) => {
     ref.coordinator?.onAsyncSubagentStateChange(subagent);
   });
 
