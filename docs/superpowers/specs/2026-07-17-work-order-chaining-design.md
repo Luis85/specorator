@@ -264,7 +264,10 @@ that window.
   `chained_to` (provenance kept out of the user-facing `writeFields` surface).
 - A new `writeChainContext(content, { predecessorPath, nextAction })` inserts the chain
   seed at the top of the `## Context` section (drops the default placeholder; preserves
-  any existing context below). Pure string transform, unit-tested independently.
+  any existing context below). The next-action is **blockquoted** so a heading the handoff
+  parser preserved inside it (`## …`) can't create a false `## ` section boundary that a
+  later parse would read as the next section (truncating the seed). Pure string transform,
+  unit-tested independently.
 - Unknown frontmatter already round-trips (`writeStatus`/`writeFields` spread
   `...frontmatter`), so the chain/provenance fields survive every existing note
   rewrite untouched.

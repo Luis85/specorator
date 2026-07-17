@@ -23,7 +23,8 @@ scope: features/tasks (model/workOrderChain, execution/WorkOrderChainCoordinator
 
 - Run a single test file: `npm run test -- --selectProjects unit -t "<describe/it substring>"` or by path `npm run test -- <testfile>`.
 - Commit after each task with the message shown. Committer identity is already `Claude <noreply@anthropic.com>`.
-- After the final task run the full gate: `npm run typecheck && npm run lint && npm run test && npm run build`.
+- After any task that adds or edits functions under `src/`, also run `npm run check:quality` — the fallow complexity / duplication / dead-code ratchet is a **blocking CI gate** (`quality` job). A newly-complex function must be simplified (extract helpers), not ratcheted, unless the trade-off is deliberate and justified in the PR. Prefer extracting a small private helper over inlining branch-heavy logic into an already-large method.
+- After the final task run the full gate: `npm run typecheck && npm run lint && npm run test && npm run build && npm run check:quality`.
 - Do NOT put `console.*` in `src/`. Do NOT use `innerHTML`/`v-html`; build DOM via Obsidian `createEl`/`setIcon` and render markdown via `MarkdownRenderer`.
 
 ---
@@ -285,18 +286,20 @@ describe('TaskNoteStore chain writes', () => {
 
   it('writeFields sets chain_* keys and clears them on null', () => {
     const withChain = store.writeFields(NOTE, {
-      chain: { template: 'Impl', trigger: 'review', title: 'Next' },
+      chain: { template: 'Impl', trigger: 'review', title: 'Next', objective: 'obj' },
     });
     const parsed = store.parse('p', withChain).task.frontmatter;
     expect(parsed.chain_template).toBe('Impl');
     expect(parsed.chain_trigger).toBe('review');
     expect(parsed.chain_title).toBe('Next');
+    expect(parsed.chain_objective).toBe('obj');
 
     const cleared = store.writeFields(withChain, { chain: null });
     const clearedFm = store.parse('p', cleared).task.frontmatter;
     expect(clearedFm.chain_template).toBeUndefined();
     expect(clearedFm.chain_trigger).toBeUndefined();
     expect(clearedFm.chain_title).toBeUndefined();
+    expect(clearedFm.chain_objective).toBeUndefined();
   });
 
   it('writeChainLink stamps chained_to', () => {
@@ -311,8 +314,24 @@ describe('TaskNoteStore chain writes', () => {
     });
     const context = store.parse('p', out).task.sections.context;
     expect(context).toContain('Chained from [[Agent Board/tasks/task-1]]');
-    expect(context).toContain('**Next action:** Ship it');
+    expect(context).toContain('**Next action:**');
+    expect(context).toContain('> Ship it');
     expect(context).not.toContain('_Add the links');
+  });
+
+  it('writeChainContext blockquotes next_action so an embedded heading cannot split Context', () => {
+    const out = store.writeChainContext(NOTE, {
+      predecessorPath: 'Agent Board/tasks/task-1.md',
+      nextAction: 'Do X\n## Looks like a heading\nDo Y',
+    });
+    const parsed = store.parse('p', out).task;
+    // The whole seed stays inside Context — the embedded '## ' did not start a new section.
+    expect(parsed.sections.context).toContain('Do X');
+    expect(parsed.sections.context).toContain('## Looks like a heading');
+    expect(parsed.sections.context).toContain('Do Y');
+    // Generated regions remain intact.
+    expect(out).toContain('<!-- specorator:run-ledger-start -->');
+    expect(out).toContain('<!-- specorator:handoff-start -->');
   });
 
   it('writeChainContext omits the next-action line when empty and preserves existing context', () => {
@@ -353,22 +372,33 @@ Extend `WriteFieldsOptions` (after the `loop?` field):
   chain?: WorkOrderChainConfig | null;
 ```
 
-In `writeFields`, after the existing `if (fields.loop !== undefined) { ... }` block and before `frontmatter.updated = timestamp;`:
+In `writeFields`, after the existing `if (fields.loop !== undefined) { ... }` block and before `frontmatter.updated = timestamp;`, delegate to a helper (keeping `writeFields` under the fallow complexity ratchet — inlining the block here trips `check:quality`'s `complexFunctions` gate):
 
 ```ts
     if (fields.chain !== undefined) {
-      delete frontmatter.chain_template;
-      delete frontmatter.chain_title;
-      delete frontmatter.chain_objective;
-      delete frontmatter.chain_trigger;
-      if (fields.chain) {
-        const config = fields.chain;
-        if (config.template) frontmatter.chain_template = config.template;
-        if (config.title) frontmatter.chain_title = config.title;
-        if (config.objective) frontmatter.chain_objective = config.objective;
-        frontmatter.chain_trigger = config.trigger;
-      }
+      this.applyChainFields(frontmatter, fields.chain);
     }
+```
+
+Add the helper as a private method on the class:
+
+```ts
+  /**
+   * Write or clear the `chain_*` frontmatter keys. Extracted from `writeFields` so that
+   * method stays under the fallow complexity ratchet. An explicit `null` clears the chain
+   * (all four keys); a config re-adds only the set keys plus the always-explicit trigger.
+   */
+  private applyChainFields(frontmatter: Record<string, unknown>, chain: WorkOrderChainConfig | null): void {
+    delete frontmatter.chain_template;
+    delete frontmatter.chain_title;
+    delete frontmatter.chain_objective;
+    delete frontmatter.chain_trigger;
+    if (!chain) return;
+    if (chain.template) frontmatter.chain_template = chain.template;
+    if (chain.title) frontmatter.chain_title = chain.title;
+    if (chain.objective) frontmatter.chain_objective = chain.objective;
+    frontmatter.chain_trigger = chain.trigger;
+  }
 ```
 
 Add these two public methods (e.g. after `writeFields`):
@@ -405,6 +435,14 @@ Add these two public methods (e.g. after `writeFields`):
     const nextAction = args.nextAction.trim();
     if (nextAction.length > 0) {
       lines.push('', `**Next action:** ${nextAction}`);
+    }
+    // Blockquote each line of nextAction so a heading the handoff parser preserved inside
+    // it (`## ...`) can't become a real `## ` section boundary inside Context — which, on
+    // the next parse, extractSection would treat as the next section, truncating the seed.
+    const nextAction = args.nextAction.trim();
+    if (nextAction.length > 0) {
+      const quoted = nextAction.split('\n').map((line) => `> ${line}`).join('\n');
+      lines.push('', '**Next action:**', quoted);
     }
     const existing = parsed.task.sections.context.trim();
     const keep = existing && existing !== CONTEXT_PLACEHOLDER ? `\n\n${existing}` : '';
