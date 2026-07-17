@@ -63,13 +63,15 @@ function planBuild(options, state) {
   if (state?.esbuildConfig) {
     actions.push(notice('Existing esbuild.config.mjs kept — review it against the generated build contract (styles.css assembly, vault deploy, mobile externals) in references/obsidian-plugin.md.'));
   }
-  // Desktop-only plugins may import node builtins (Obsidian ships Electron), so
-  // they are externals. A mobile-ready plugin must NOT mark them external: an
-  // accidental `import 'fs'` then fails the build loudly instead of crashing on
-  // iOS/Android at runtime.
+  // Desktop-only plugins may import node builtins and electron (Obsidian ships
+  // Electron), so those are externals. A mobile-ready plugin must NOT mark them
+  // external: an accidental `import 'fs'` or `import 'electron'` then fails the
+  // build loudly instead of crashing on iOS/Android at runtime.
   const content = renderTemplate(loadTemplate('obsidian/esbuild.config.mjs.tmpl'), {
     nodeModuleImport: o.mobile ? '' : "import { builtinModules } from 'node:module';\n",
-    nodeExternals: o.mobile ? '' : '    ...builtinModules,\n    ...builtinModules.map((m) => `node:${m}`),\n',
+    nodeExternals: o.mobile
+      ? ''
+      : "    'electron',\n    ...builtinModules,\n    ...builtinModules.map((m) => `node:${m}`),\n",
     vueImport: o.vue ? "import VuePlugin from 'unplugin-vue/esbuild';\n" : '',
     vuePluginEntry: o.vue ? 'VuePlugin({ isProduction: prod, sourceMap: false }), ' : '',
     vueDefines: o.vue
@@ -207,10 +209,14 @@ function planObsidianVitest(options, state) {
   // via standsDownTestConfig: obsidian mode is vitest by construction, even
   // before freezeOptions has resolved options.testFramework.
   if (state?.vitestConfig || state?.viteConfig) {
+    // The sample tests above are still written, so everything they import must
+    // still install — the vue component test needs @vue/test-utils, and the
+    // user's config will need @vitejs/plugin-vue to transform the SFCs.
+    const standdownDeps = o.vue ? ['vitest', 'jsdom', '@vue/test-utils', '@vitejs/plugin-vue'] : ['vitest', 'jsdom'];
     return [
       notice('Existing test config kept — the generated vitest.config.mjs was NOT written and the coverage gate was not wired. Wire the `obsidian` alias to tests/__mocks__/obsidian.ts and jsdom yourself (see references/obsidian-plugin.md).'),
       ...actions,
-      { type: 'mergeJson', path: 'package.json', patch: { scripts: { test: 'vitest run' }, devDependencies: dep('vitest', 'jsdom') } },
+      { type: 'mergeJson', path: 'package.json', patch: { scripts: { test: 'vitest run' }, devDependencies: dep(...standdownDeps) } },
     ];
   }
   // Prettier-shaped object literal (not JSON.stringify) so the generated

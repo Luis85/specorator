@@ -41,9 +41,11 @@ export function runGates(cwd, options, exec = defaultExec) {
   }
   run(g.coverageFloors ? 'test:coverage' : 'test'); // always run a test gate, like CI
   if (options.obsidian) {
-    // Mirror the generated CI exactly: type gate, then prove the release
-    // bundle (build + artifact smoke) — local verify must not pass while CI fails.
+    // Mirror the generated CI exactly: type + format gates, then prove the
+    // release bundle (build + artifact smoke) — local verify must not pass
+    // while CI fails.
     run('typecheck');
+    run('format:check');
     run('build');
     run('check:artifacts');
   }

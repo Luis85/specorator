@@ -118,7 +118,7 @@ test('verify runs the obsidian gate set: check:css, typecheck, build, check:arti
     freezeOptions(options, null, detect(p.dir));
     const scripts = [];
     runGates(p.dir, options, (cmd, args) => scripts.push(args.at(-1)));
-    for (const s of ['check:css', 'typecheck', 'build', 'check:artifacts', 'test']) {
+    for (const s of ['check:css', 'typecheck', 'format:check', 'build', 'check:artifacts', 'test']) {
       assert.ok(scripts.includes(s), `verify missing gate ${s} (ran: ${scripts.join(', ')})`);
     }
   } finally {

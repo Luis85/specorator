@@ -130,11 +130,13 @@ test('vue:false scaffolds no island and no vue deps; typecheck falls back to tsc
 
 // --- mobile vs desktop -----------------------------------------------------
 
-test('desktop build externalizes node builtins; mobile does not (an accidental node import must fail the build)', () => {
+test('desktop build externalizes node builtins + electron; mobile externalizes neither (an accidental import must fail the build)', () => {
   const desktop = findWrite(actionsFor({ mobile: false }), 'esbuild.config.mjs').content;
   assert.match(desktop, /builtinModules/);
+  assert.match(desktop, /'electron',/);
   const mobile = findWrite(actionsFor({ mobile: true }), 'esbuild.config.mjs').content;
   assert.doesNotMatch(mobile, /builtinModules/);
+  assert.doesNotMatch(mobile, /'electron'/);
 });
 
 test('mobile mode bans node/electron imports in the eslint config', () => {
@@ -212,4 +214,13 @@ test('a hand-written vitest/vite config stands the generated config down with a 
   const actions = actionsFor({}, { vitestConfig: true });
   assert.equal(findWrite(actions, 'vitest.config.mjs'), undefined);
   assert.ok(actions.some((a) => a.type === 'notice' && /test config/i.test(a.message)));
+});
+
+test('the standdown path still installs the deps its generated vue tests import', () => {
+  // The sample tests are written even when the config stands down, so the
+  // deps they import must install too — else the tests fail unresolved.
+  const pkg = mergedPackagePatch(actionsFor({ vue: true }, { vitestConfig: true }));
+  for (const d of ['vitest', 'jsdom', '@vue/test-utils', '@vitejs/plugin-vue']) {
+    assert.equal(pkg.devDependencies[d], PINNED[d], `standdown missing ${d}`);
+  }
 });
