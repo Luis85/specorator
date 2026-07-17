@@ -1660,6 +1660,14 @@ it('builds a chain in the payload only when a successor is configured', () => {
   const withChain = buildTemplatePayload({ ...base, name: 'T', chainTemplate: 'Impl', chainTrigger: 'done' });
   expect(withChain.chain).toEqual({ template: 'Impl', trigger: 'done' });
 });
+
+it('preserves an existing template chain through an untouched editor round-trip', () => {
+  // Opening a chained template and saving WITHOUT touching the chain fields must not drop
+  // the successor config (Codex P2: a description/body edit silently disabled the chain).
+  const existing = { path: 'p', name: 'T', body: 'b', chain: { template: 'Impl', title: 'Wire it', trigger: 'review' as const } };
+  const payload = buildTemplatePayload(createInitialForm(existing));
+  expect(payload.chain).toEqual({ template: 'Impl', title: 'Wire it', trigger: 'review' });
+});
 ```
 
 - [ ] **Step 2: Run to verify it fails**
