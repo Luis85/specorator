@@ -58,7 +58,9 @@ export function entryDir(entry) {
   const e = entry.replace(/^\.\//, ''); // normalize a leading ./ so the root isn't '.'
   if (!e.includes('/')) return null;
   const seg = e.slice(0, e.indexOf('/'));
-  return /^[A-Za-z0-9._-]+$/.test(seg) ? seg : 'src';
+  // Reject a parent-dir ('..') scan root: `..` matches the char class but would
+  // point check-loc/coverage/fallow outside the project. Fall back to src.
+  return /^[A-Za-z0-9._-]+$/.test(seg) && seg !== '..' ? seg : 'src';
 }
 
 // Test-lint plugin wiring by framework. Empty when no framework (so eslint still

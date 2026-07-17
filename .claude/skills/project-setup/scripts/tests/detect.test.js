@@ -1,6 +1,7 @@
 // .claude/skills/project-setup/scripts/tests/detect.test.js
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
+import { join } from 'node:path';
 import { test } from 'node:test';
 
 import { detect, detectDefaultBranch, detectEntry, detectGithubRemote, detectPackageManager } from '../lib/detect.mjs';
@@ -86,6 +87,21 @@ test('detectEntry returns src/main.ts when it exists, falling back to src/index.
   } finally {
     withMain.cleanup();
     empty.cleanup();
+  }
+});
+
+test('detectEntry rejects a parent-directory package source (no ".." traversal)', () => {
+  // plugin/package.json points source one level up to an existing file; the `..`
+  // segment must be rejected so the build/ratchets stay inside the project.
+  const p = tmpProject({
+    'plugin/package.json': { source: '../shared/main.ts' },
+    'shared/main.ts': '', // exists relative to plugin/ via ..
+    'plugin/src/index.ts': '', // the safe fallback
+  });
+  try {
+    assert.equal(detectEntry(join(p.dir, 'plugin')), 'src/index.ts');
+  } finally {
+    p.cleanup();
   }
 });
 

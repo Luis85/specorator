@@ -22,9 +22,13 @@ const BUILD_DIRS = new Set(['dist', 'build', 'out', 'esm', 'cjs', 'umd', 'lib-es
 export function detectEntry(cwd) {
   const pkg = readJsonSafe(join(cwd, 'package.json'));
   const strip = (p) => p.replace(/^\.\//, ''); // normalize a leading ./ so roots derive correctly
+  // A package.json path field is untrusted: reject `..` segments so a crafted
+  // `source`/`main` (e.g. "../shared/main.ts") can't make the generated build
+  // bundle — or the ratchets scan — files outside the plugin project.
+  const withinProject = (p) => !p.split('/').includes('..');
   // A bundler `source` field is unambiguously the source entry.
   const src = pkg?.source;
-  if (typeof src === 'string' && existsSync(join(cwd, src))) return strip(src);
+  if (typeof src === 'string' && withinProject(strip(src)) && existsSync(join(cwd, src))) return strip(src);
   // The first existing common source entry (src/lib/app/source/root).
   for (const c of ENTRY_CANDIDATES) if (existsSync(join(cwd, c))) return c;
   // `module`/`main` may name the source for a build-less package — use it if it
@@ -33,7 +37,7 @@ export function detectEntry(cwd) {
     const raw = pkg?.[field];
     if (typeof raw !== 'string') continue;
     const p = strip(raw);
-    if (existsSync(join(cwd, p)) && !BUILD_DIRS.has(p.split('/')[0])) return p;
+    if (withinProject(p) && existsSync(join(cwd, p)) && !BUILD_DIRS.has(p.split('/')[0])) return p;
   }
   return 'src/index.ts';
 }

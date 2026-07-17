@@ -77,7 +77,12 @@ function isGreenfield(options, state) {
 export function obsidianEntry(options, state) {
   if (isGreenfield(options, state)) return 'src/main.ts';
   const entry = state?.entry;
-  const valid = typeof entry === 'string' && /^[\w./-]+\.(?:ts|tsx|mts|cts|js|jsx|mjs|cjs)$/.test(entry);
+  // Reject `..` segments (defense in depth beyond detectEntry): a parent-relative
+  // entry would make esbuild bundle — and entryDir scan — outside the project.
+  const valid =
+    typeof entry === 'string' &&
+    /^[\w./-]+\.(?:ts|tsx|mts|cts|js|jsx|mjs|cjs)$/.test(entry) &&
+    !entry.split('/').includes('..');
   return valid && state?.entryExists ? entry : 'src/main.ts';
 }
 
@@ -275,7 +280,9 @@ function planObsidianEslint(options, state) {
   } else if (state?.legacyEslintrc) {
     notices.push(notice('Legacy .eslintrc* found — ESLint 10 reads only the flat eslint.config.mjs the harness wrote; remove the legacy file once migrated.'));
   }
-  const vueSrcFiles = o.vue ? "'src/**/*.ts', 'src/**/*.vue'" : "'src/**/*.ts'";
+  // JS/JSX included so the safety + mobile-import bans also cover an adopted JS
+  // plugin's source; a greenfield TS scaffold has no such files, so it's a no-op.
+  const vueSrcFiles = o.vue ? "'src/**/*.{ts,tsx,vue,js,jsx}'" : "'src/**/*.{ts,tsx,js,jsx}'";
   const mobileBlock = o.mobile
     ? renderTemplate(loadTemplate('obsidian/eslint-mobile-block.tmpl'), { vueSrcFiles })
     : '';

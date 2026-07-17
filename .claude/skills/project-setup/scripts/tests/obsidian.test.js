@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { test } from 'node:test';
 
-import { PINNED, planFallow } from '../lib/harness.mjs';
+import { entryDir, PINNED, planFallow } from '../lib/harness.mjs';
 import { obsidianEntry, planObsidian } from '../lib/obsidian.mjs';
 import { loadOptions } from '../lib/options.mjs';
 
@@ -368,6 +368,20 @@ test('a kept manifest whose isDesktopOnly disagrees with the mobile answer warns
   // Agreement (desktop-only manifest + desktop-only answer) is silent.
   const agree = actionsFor({ mobile: false }, { obsidianManifest: { isDesktopOnly: true, version: '1.0.0' } });
   assert.ok(!agree.some((a) => a.type === 'notice' && /isDesktopOnly/.test(a.message)));
+});
+
+test('the src safety/mobile lint globs include JS (an adopted JS plugin is linted)', () => {
+  assert.match(findWrite(actionsFor({ vue: false }), 'eslint.config.mjs').content, /src\/\*\*\/\*\.\{ts,tsx,js,jsx\}/);
+  assert.match(findWrite(actionsFor({ vue: true }), 'eslint.config.mjs').content, /src\/\*\*\/\*\.\{ts,tsx,vue,js,jsx\}/);
+});
+
+test('a parent-relative entry is rejected everywhere (no build/scan outside the project)', () => {
+  // obsidianEntry: even with entryExists true, a `..` entry falls back to src/main.ts.
+  const state = { obsidianAppPresent: true, entry: '../shared/main.ts', entryExists: true };
+  assert.equal(obsidianEntry(optionsWith(BASE), state), 'src/main.ts');
+  // entryDir: a `..` scan root falls back to src.
+  assert.equal(entryDir('../shared/main.ts'), 'src');
+  assert.equal(entryDir('main.ts'), null); // a real root entry is still fine
 });
 
 test('raw `new Notice()` is lint-banned in src, with the NoticeService file exempt', () => {
