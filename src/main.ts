@@ -4,8 +4,8 @@ patchSetMaxListenersForElectron();
 
 import './providers';
 
-import type { TFile, TFolder } from 'obsidian';
-import { Notice, Plugin } from 'obsidian';
+import type { TFolder } from 'obsidian';
+import { Notice, Plugin, TFile } from 'obsidian';
 
 import { RosterAgentService } from './app/agents/RosterAgentService';
 import { registerChatMessageActions } from './app/commands/registerChatMessageActions';
@@ -71,14 +71,17 @@ import { QuickActionStorage } from './features/quickActions/QuickActionStorage';
 import { buildProviderRecords } from './features/quickActions/skills/buildProviderRecords';
 import { VaultSkillAggregator } from './features/quickActions/skills/VaultSkillAggregator';
 import { SpecoratorSettingTab } from './features/settings/SpecoratorSettings';
+import { createWorkOrderFromSeed } from './features/tasks/commands/taskCommands';
 import { CommitOnAcceptCoordinator } from './features/tasks/commit/CommitOnAcceptCoordinator';
 import { CommitOnAcceptModal } from './features/tasks/commit/CommitOnAcceptModal';
 import { ChatTabExecutionSurface } from './features/tasks/execution/ChatTabExecutionSurface';
 import { ChatWorkOrderLinker } from './features/tasks/execution/ChatWorkOrderLinker';
 import { createQueueControlState, type QueueControlState } from './features/tasks/execution/QueueRunner';
 import { QueueSlotTracker } from './features/tasks/execution/QueueSlotTracker';
+import { WorkOrderChainCoordinator } from './features/tasks/execution/WorkOrderChainCoordinator';
 import { RunSidecarStore } from './features/tasks/storage/RunSidecarStore';
 import { TaskNoteStore } from './features/tasks/storage/TaskNoteStore';
+import { TemplateNoteStore } from './features/tasks/templates/TemplateNoteStore';
 import { WorkOrderActivityProvider } from './features/tasks/ui/WorkOrderActivityProvider';
 import { setLocale, t } from './i18n/i18n';
 import type { Locale } from './i18n/types';
@@ -98,6 +101,7 @@ export default class SpecoratorPlugin extends Plugin implements PluginContext {
   storage!: SharedAppStorage;
   gitStatusWatcher: GitStatusWatcher | null = null;
   private commitOnAcceptCoordinator: CommitOnAcceptCoordinator | null = null;
+  private workOrderChainCoordinator: WorkOrderChainCoordinator | null = null;
   conversationStore!: ConversationStore;
   /** Plugin-lifetime singleton. Built in onload before any consumer reads it. */
   public quickActionStorage!: QuickActionStorage;
@@ -206,6 +210,105 @@ export default class SpecoratorPlugin extends Plugin implements PluginContext {
         showNotice: (message) => { new Notice(message); },
       });
       this.commitOnAcceptCoordinator.start();
+
+      this.workOrderChainCoordinator = new WorkOrderChainCoordinator({
+        events: this.events,
+        loadTaskSpec: async (path) => {
+          const file = this.app.vault.getAbstractFileByPath(path);
+          if (!file || !('vault' in file)) {
+            throw new Error('Work order file not found');
+          }
+          const content = await this.app.vault.read(file as Parameters<typeof this.app.vault.read>[0]);
+          return noteStore.parse(path, content).task;
+        },
+        listTemplates: async () => {
+          const folder = this.settings.agentBoardTemplateFolder || 'Agent Board/templates';
+          const { templates } = await new TemplateNoteStore().list(this.app.vault, folder);
+          return templates;
+        },
+        createSuccessor: async (plan) => {
+          // Seed the chain context (+ objective override) INSIDE the single create
+          // write via postProcess, so the note is never `ready`-but-un-seeded for the
+          // auto-run queue to race (spec §Successor creation Step 2).
+          const seedContent = (markdown: string): string => {
+            let next = noteStore.writeChainContext(markdown, {
+              predecessorPath: plan.predecessorPath,
+              nextAction: plan.nextAction,
+            });
+            if (plan.seed.objective) {
+              next = noteStore.writeSections(next, { objective: plan.seed.objective });
+            }
+            return next;
+          };
+          // Agent-only predecessor (roster agent, no explicit provider/model): resolve the
+          // agent's backend so the successor gets a concrete, queue-eligible provider/model
+          // matching the assigned agent — NOT the board defaults. Mirrors
+          // TaskRunCoordinator.resolveRunProviderModel; without this, an inline chain from
+          // an agent-only work order would run on board defaults (or fail creation).
+          let provider = plan.seed.provider;
+          let model = plan.seed.model;
+          const agentId = plan.seed.agent;
+          if ((!provider || !model) && agentId?.startsWith('roster:')) {
+            const target = await this.resolveAgentRunTarget(agentId);
+            if (target) {
+              provider = provider ?? target.providerId;
+              model = model ?? target.model;
+            }
+          }
+          const created = await createWorkOrderFromSeed(
+            this,
+            {
+              title: plan.seed.title,
+              titleOverride: plan.seed.titleOverride,
+              objective: plan.seed.objective,
+              provider,
+              model,
+              agent: plan.seed.agent,
+              chain: plan.seed.chain,
+              chainedFrom: plan.seed.chainedFrom,
+              chainDepth: plan.seed.chainDepth,
+            },
+            { template: plan.template, status: 'ready', reveal: 'none', postProcess: seedContent },
+          );
+          if (!(created instanceof TFile)) return null;
+          const content = await this.app.vault.read(created);
+          return noteStore.parse(created.path, content).task;
+        },
+        linkSuccessor: async (predecessorPath, successorId, entry) => {
+          const file = this.app.vault.getAbstractFileByPath(predecessorPath);
+          if (!(file instanceof TFile)) return;
+          // ONE atomic vault.process transform: stamp chained_to AND append the ledger
+          // line together. vault.process serializes with RunSession's terminal note
+          // finalization (which also uses vault.process on the `review` trigger), so
+          // neither write is lost to a read+modify race.
+          await this.app.vault.process(file, (content) => {
+            let next = noteStore.writeChainLink(content, successorId, new Date().toISOString());
+            try {
+              next = noteStore.appendLedger(next, entry);
+            } catch {
+              // Note may lack the ledger region (hand-edited); still persist chained_to.
+            }
+            return next;
+          });
+        },
+        appendLedger: async (task, entry) => {
+          const file = this.app.vault.getAbstractFileByPath(task.path);
+          if (!(file instanceof TFile)) return;
+          await this.app.vault.process(file, (content) => {
+            try {
+              return noteStore.appendLedger(content, entry);
+            } catch {
+              return content; // hand-edited note without the ledger region; best-effort.
+            }
+          });
+        },
+        readSettings: () => this.settings,
+        now: () => new Date().toISOString(),
+        logger: this.logger.scope('tasks.chain'),
+        showNotice: (message) => { new Notice(message); },
+      });
+      this.workOrderChainCoordinator.start();
+      this.register(() => this.workOrderChainCoordinator?.stop());
     }
 
     registerPluginViews({ plugin: this, taskExecutionSurface });
