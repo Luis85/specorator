@@ -253,17 +253,20 @@ export function initializeTabControllers(
   );
   const scrollEl = tab.mountedTranscript.getScrollEl();
   tab.dom.messagesEl = scrollEl ?? wrapperEl;
+  // Bind the tab-chrome island's NavOverlay to the live scroll host on first
+  // mount regardless of whether it differs from the placeholder wrapper —
+  // `setScrollHost` is a no-op-safe reactive set.
+  tab.mountedTabChrome?.setScrollHost(tab.dom.messagesEl);
 
-  // `initializeTabUI` / `buildTabNavigationController` bound the NavigationSidebar
-  // (scroll listener + scan + scrollTo target) AND the NavigationController's
-  // keyboard bindings (tabindex + focus class + keydown listener) against the
+  // `buildTabNavigationController` bound the NavigationController's keyboard
+  // bindings (tabindex + focus class + keydown listener) against the
   // placeholder `wrapperEl` BEFORE this mount repointed `dom.messagesEl`. Rebind
-  // both to the live Vue scroll element so prev/next/top/bottom navigation and
-  // vim-style keyboard scroll + Escape-to-focus target the real scroll container,
-  // not the dead wrapper. Controllers reach `dom.messagesEl` through live getters,
-  // so only each one's captured element / listener binding needs moving.
+  // it to the live Vue scroll element so vim-style keyboard scroll +
+  // Escape-to-focus target the real scroll container, not the dead wrapper.
+  // The controller reaches `dom.messagesEl` through a live getter, so only its
+  // captured element / listener binding needs moving.
   if (scrollEl && scrollEl !== wrapperEl) {
-    tab.ui.navigationSidebar?.rebindScrollEl(scrollEl);
+    tab.mountedTabChrome?.setScrollHost(scrollEl);
     tab.controllers.navigationController?.rebindMessagesEl(scrollEl);
   }
 }

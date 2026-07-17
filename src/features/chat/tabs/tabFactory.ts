@@ -132,7 +132,6 @@ export function createTab(options: TabCreateOptions): TabData {
       slashCommandDropdown: null,
       instructionModeManager: null,
       bangBashModeManager: null,
-      navigationSidebar: null,
     },
     dom,
     transcript: null,

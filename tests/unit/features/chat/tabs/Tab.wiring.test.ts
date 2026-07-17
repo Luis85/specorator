@@ -582,16 +582,16 @@ describe('Tab - Controller Initialization', () => {
       expect(tab.mountedTranscript).not.toBeNull();
     });
 
-    it('rebinds the NavigationSidebar and keyboard NavigationController to the Vue scroll element after mount', () => {
+    it('binds the NavOverlay scroll host and rebinds the keyboard NavigationController to the Vue scroll element after mount', () => {
       const options = createMockOptions();
       const tab = createTab(options);
       const mockComponent = {} as any;
 
       initializeTabUI(tab, options.plugin);
 
-      // The mount hands back a real Vue scroll container; the wrapper the sidebar
-      // was built against is replaced by it (getScrollEl is null in the default
-      // stub, so override it for this case).
+      // The mount hands back a real Vue scroll container; the wrapper the tab
+      // chrome island was bound against is replaced by it (getScrollEl is null
+      // in the default stub, so override it for this case).
       const scrollEl = createMockEl();
       (mountTranscript as unknown as jest.Mock).mockReturnValueOnce({
         app: { unmount: jest.fn() },
@@ -599,15 +599,15 @@ describe('Tab - Controller Initialization', () => {
         unmount: jest.fn(),
       });
 
-      const rebindScrollEl = jest.fn();
-      tab.ui.navigationSidebar = { rebindScrollEl, destroy: jest.fn() } as any;
+      const setScrollHost = jest.fn();
+      tab.mountedTabChrome = { app: {} as any, unmount: jest.fn(), setScrollHost } as any;
 
       initializeTabControllers(tab, options.plugin, mockComponent);
 
       // dom.messagesEl is repointed at the Vue element AND both nav surfaces
-      // (sidebar scroll target + keyboard controller listener) rebound to it.
+      // (tab-chrome scroll host + keyboard controller listener) rebound to it.
       expect(tab.dom.messagesEl).toBe(scrollEl);
-      expect(rebindScrollEl).toHaveBeenCalledWith(scrollEl);
+      expect(setScrollHost).toHaveBeenCalledWith(scrollEl);
       expect(mockNavigationController.rebindMessagesEl).toHaveBeenCalledWith(scrollEl);
     });
 

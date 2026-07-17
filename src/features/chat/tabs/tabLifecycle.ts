@@ -147,8 +147,6 @@ export function activateTab(tab: TabData): void {
   tab.controllers.selectionController?.start();
   tab.controllers.browserSelectionController?.start();
   tab.controllers.canvasSelectionController?.start();
-  // Refresh navigation sidebar visibility (dimensions now available after display)
-  tab.ui.navigationSidebar?.updateVisibility();
 }
 
 /**
@@ -193,8 +191,6 @@ function destroyTabUi(tab: TabData): void {
   tab.services.instructionRefineService = null;
   tab.services.titleGenerationService?.cancel();
   tab.services.titleGenerationService = null;
-  tab.ui.navigationSidebar?.destroy();
-  tab.ui.navigationSidebar = null;
 }
 
 /**

@@ -21,7 +21,6 @@ import { BangBashModeManager as BangBashModeManagerClass } from '../ui/BangBashM
 import { FileContextManager } from '../ui/FileContext';
 import { ImageContextManager } from '../ui/ImageContext';
 import { InstructionModeManager as InstructionModeManagerClass } from '../ui/InstructionModeManager';
-import { NavigationSidebar } from '../ui/NavigationSidebar';
 import { autoResizeTextarea } from '../ui/textareaResize';
 import { ExternalContextSelector } from '../ui/toolbar/ExternalContextSelector';
 import { McpServerSelector } from '../ui/toolbar/McpServerSelector';
@@ -483,13 +482,6 @@ export function initializeTabUI(
     catalogInfo,
   );
 
-  if (dom.messagesEl.parentElement) {
-    tab.ui.navigationSidebar = new NavigationSidebar(
-      dom.messagesEl.parentElement,
-      dom.messagesEl
-    );
-  }
-
   initializeInstructionAndTodo(tab, plugin);
   initializeInputToolbar(tab, plugin);
 
@@ -501,7 +493,6 @@ export function initializeTabUI(
       tab.composer?.emit();
     },
     onTodosChanged: () => tab.tabChrome?.emit(),
-    onAutoScrollChanged: () => tab.ui.navigationSidebar?.updateVisibility(),
     // Edited-files truth lives in ChatState.editedFiles; the Vue EditedFilesBar
     // renders it off the projected store slice, so this only re-projects.
     onEditedFilesChanged: () => {
@@ -509,13 +500,6 @@ export function initializeTabUI(
       tab.composer?.emit();
     },
   };
-
-  // ResizeObserver to detect overflow changes (e.g., content growth)
-  const resizeObserver = new ResizeObserver(() => {
-    tab.ui.navigationSidebar?.updateVisibility();
-  });
-  resizeObserver.observe(dom.messagesEl);
-  dom.eventCleanups.push(() => resizeObserver.disconnect());
 }
 
 // Opens a file from the agent-edited-files strip. Re-resolves at click time so a

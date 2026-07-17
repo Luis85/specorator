@@ -20,7 +20,6 @@ import type { BangBashModeManager } from '../ui/BangBashModeManager';
 import type { FileContextManager } from '../ui/FileContext';
 import type { ImageContextManager } from '../ui/ImageContext';
 import type { InstructionModeManager } from '../ui/InstructionModeManager';
-import type { NavigationSidebar } from '../ui/NavigationSidebar';
 import type { ExternalContextSelector } from '../ui/toolbar/ExternalContextSelector';
 import type { McpServerSelector } from '../ui/toolbar/McpServerSelector';
 import type { MountedComposer } from '../ui/vue/composer/mountComposer';
@@ -153,7 +152,6 @@ export interface TabUIComponents {
   slashCommandDropdown: SlashCommandDropdown | null;
   instructionModeManager: InstructionModeManager | null;
   bangBashModeManager: BangBashModeManager | null;
-  navigationSidebar: NavigationSidebar | null;
 }
 
 /**
