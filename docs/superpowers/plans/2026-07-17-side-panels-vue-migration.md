@@ -1,3 +1,10 @@
+---
+title: Chat side panels + header remnants — Vue 3 + Pinia migration implementation plan (sub-project 4)
+date: 2026-07-17
+status: in-progress
+scope: features/chat — StatusPanel, NavigationSidebar, ConversationHistoryView, WorkOrderActivityDropdown, GitActionButton
+---
+
 # Chat Side Panels + Header Remnants Vue 3 + Pinia Migration Implementation Plan
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
