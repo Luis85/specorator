@@ -370,6 +370,13 @@ test('a kept manifest whose isDesktopOnly disagrees with the mobile answer warns
   assert.ok(!agree.some((a) => a.type === 'notice' && /isDesktopOnly/.test(a.message)));
 });
 
+test('an existing .npmrc without tag-version-prefix warns (release tag policy)', () => {
+  const warned = planObsidian(optionsWith(BASE), { npmrcNeedsTagPrefix: true });
+  assert.ok(warned.some((a) => a.type === 'notice' && /tag-version-prefix/.test(a.message)));
+  const clean = planObsidian(optionsWith(BASE), {});
+  assert.ok(!clean.some((a) => a.type === 'notice' && /tag-version-prefix/.test(a.message)));
+});
+
 test('the src safety/mobile lint globs include JS (an adopted JS plugin is linted)', () => {
   assert.match(findWrite(actionsFor({ vue: false }), 'eslint.config.mjs').content, /src\/\*\*\/\*\.\{ts,tsx,js,jsx\}/);
   assert.match(findWrite(actionsFor({ vue: true }), 'eslint.config.mjs').content, /src\/\*\*\/\*\.\{ts,tsx,vue,js,jsx\}/);

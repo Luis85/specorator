@@ -539,6 +539,9 @@ function planProjectDocs(options, state) {
     write('.env.example', loadTemplate('obsidian/env.example.tmpl')),
     // Tag releases WITHOUT npm's default "v" prefix — Obsidian matches a
     // release by tag === manifest version.
+    ...(state?.npmrcNeedsTagPrefix
+      ? [notice('Existing .npmrc kept — it does not set tag-version-prefix="". npm defaults to "v", so `npm version` tags v1.2.3, which the release workflow rejects (it requires tag === manifest.version). Add `tag-version-prefix=""` to your .npmrc.')]
+      : []),
     write('.npmrc', loadTemplate('obsidian/npmrc.tmpl')),
   ];
   if (options.docs?.scaffold) {

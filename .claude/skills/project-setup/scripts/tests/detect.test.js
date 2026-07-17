@@ -105,6 +105,34 @@ test('detectEntry rejects a parent-directory package source (no ".." traversal)'
   }
 });
 
+test('detect treats a root-entry repo (no manifest, no src/) as an existing app', () => {
+  // package.json#source names a root main.ts that hasSourceFiles (src/-only) misses.
+  const rootEntry = tmpProject({ 'package.json': { source: 'main.ts' }, 'main.ts': 'export default class {}' });
+  const empty = tmpProject({ 'package.json': { name: 'x' } });
+  try {
+    assert.equal(detect(rootEntry.dir).obsidianAppPresent, true);
+    assert.equal(detect(empty.dir).obsidianAppPresent, false); // no real entry -> greenfield
+  } finally {
+    rootEntry.cleanup();
+    empty.cleanup();
+  }
+});
+
+test('detect flags an existing .npmrc that lacks tag-version-prefix', () => {
+  const without = tmpProject({ '.npmrc': 'save-exact=true\n' });
+  const withPrefix = tmpProject({ '.npmrc': 'tag-version-prefix=""\n' });
+  const none = tmpProject({});
+  try {
+    assert.equal(detect(without.dir).npmrcNeedsTagPrefix, true);
+    assert.equal(detect(withPrefix.dir).npmrcNeedsTagPrefix, false); // already set
+    assert.equal(detect(none.dir).npmrcNeedsTagPrefix, false); // no .npmrc
+  } finally {
+    without.cleanup();
+    withPrefix.cleanup();
+    none.cleanup();
+  }
+});
+
 test('detect flags a JS-only src tree as an existing app (brownfield, no manifest)', () => {
   // A repo whose only source is src/main.js must be brownfield, or setup writes
   // the sample TS app and points the build at a nonexistent src/main.ts.

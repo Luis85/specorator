@@ -200,6 +200,7 @@ export function detect(cwd) {
   const has = (name) => Object.prototype.hasOwnProperty.call(deps, name);
   const testFramework = has('vitest') ? 'vitest' : has('jest') ? 'jest' : null;
   const entry = detectEntry(cwd);
+  const entryExists = existsSync(join(cwd, entry));
   return {
     packageManager: detectPackageManager(cwd),
     typescript: has('typescript') || existsSync(join(cwd, 'tsconfig.json')),
@@ -212,7 +213,7 @@ export function detect(cwd) {
     entry,
     // detectEntry returns src/index.ts as a syntactic fallback even when nothing
     // exists — obsidianEntry uses this to avoid pointing the build at a phantom.
-    entryExists: existsSync(join(cwd, entry)),
+    entryExists,
     // Brownfield collision signals — planners turn these into user-facing notices
     // instead of silently no-op'ing on a pre-existing config/script/workflow.
     scripts: pkg.scripts ?? {},
@@ -252,7 +253,19 @@ export function detect(cwd) {
     packageVersion: /^\d+\.\d+\.\d+/.test(String(pkg.version ?? '')) ? pkg.version : null,
     // An existing plugin: a manifest or any src source is present. The planner
     // writes the harness + docs but skips the sample app for these.
-    obsidianAppPresent: existsSync(join(cwd, 'manifest.json')) || hasSourceFiles(cwd),
+    // Brownfield when a real entry exists too: detectEntry supports root/lib/app
+    // entries (e.g. a root main.ts, or package.json#source) that hasSourceFiles
+    // (src/-only) misses — without this such a repo is treated greenfield and the
+    // scaffold overwrites the build target while leaving the real entry unbuilt.
+    obsidianAppPresent: existsSync(join(cwd, 'manifest.json')) || hasSourceFiles(cwd) || entryExists,
+    // An existing .npmrc is kept (skip-if-exists), so the tag-version-prefix=""
+    // policy may not apply. Flag it only when the file lacks that key at all, so a
+    // repo that already sets it isn't nagged. npm defaults to "v", which the
+    // release workflow's tag===manifest.version check would then reject.
+    npmrcNeedsTagPrefix: (() => {
+      const p = join(cwd, '.npmrc');
+      return existsSync(p) && !/tag-version-prefix/.test(readFileSync(p, 'utf8'));
+    })(),
     // Obsidian loads root styles.css, but the scaffold build treats src/styles.css
     // as SOURCE and regenerates root styles.css. An adopt with a real root sheet
     // but no src/styles.css must migrate it first — surface the content so the
