@@ -589,8 +589,10 @@ In `src/features/chat/ui/vue/chatShellCallbacks.ts`, add to the `ChatShellCallba
   onDeleteConversation: (id: string) => void;
   /** Regenerate a conversation's AI title (pending/failed status flow). */
   onRegenerateConversationTitle: (id: string) => void;
-  /** Build the Obsidian right-click Menu for a history row at the event. */
-  onConversationContextMenu: (id: string, event: MouseEvent, anchorEl: HTMLElement) => void;
+  /** Build the Obsidian right-click Menu for a history row at the event.
+   *  `startRename` enters the Vue component's inline-rename mode for the row
+   *  (the rename `<input>` lives in the component, not the view). */
+  onConversationContextMenu: (id: string, event: MouseEvent, anchorEl: HTMLElement, startRename: () => void) => void;
   /** Open a work-order activity item (then the dropdown closes). */
   onOpenWorkOrderItem: (id: string) => void;
   /** Close a finished work-order tab (dropdown stays open for batch dismiss). */
@@ -616,7 +618,7 @@ In `SpecoratorView.buildChatShellCallbacks()`, add these members to the returned
       },
       onDeleteConversation: (id) => { void this.deleteHistoryConversation(id); },
       onRegenerateConversationTitle: (id) => { void this.regenerateHistoryTitle(id); },
-      onConversationContextMenu: (id, event, anchorEl) => this.showHistoryContextMenu(id, event, anchorEl),
+      onConversationContextMenu: (id, event, anchorEl, startRename) => this.showHistoryContextMenu(id, event, anchorEl, startRename),
       onOpenWorkOrderItem: (id) => { void this.plugin.workOrderActivity?.openItem(id); },
       onCloseWorkOrderTab: (tabId) => { void this.plugin.workOrderActivity?.closeTab(tabId); },
       onGitCommit: () => this.sendGitCommitPromptToActiveTab(),
@@ -676,7 +678,7 @@ Add these private methods to `SpecoratorView` (place near the History Dropdown s
   /** Builds the Obsidian right-click Menu for a history row. Relocated from
    *  ConversationHistoryView.showHistoryContextMenu; open-state comes from the
    *  live projection helper, actions delegate to the same view methods. */
-  private showHistoryContextMenu(conversationId: string, event: MouseEvent, anchorEl: HTMLElement): void {
+  private showHistoryContextMenu(conversationId: string, event: MouseEvent, anchorEl: HTMLElement, startRename: () => void): void {
     const activeTab = this.tabManager?.getActiveTab();
     const isCurrent = activeTab?.conversationId === conversationId;
     const openState = this.getHistoryConversationOpenState(conversationId);
@@ -695,6 +697,7 @@ Add these private methods to `SpecoratorView` (place near the History Dropdown s
         }));
       }
     }
+    menu.addItem((mi) => mi.setTitle('Rename').onClick(() => startRename()));
     menu.addItem((mi) => mi.setTitle('Delete').onClick(() => { void this.deleteHistoryConversation(conversationId); }));
     menu.showAtMouseEvent(event);
     void anchorEl; // anchor retained for parity; menu positions at the event
@@ -968,7 +971,7 @@ Create `src/features/chat/ui/vue/components/WorkOrderActivityDropdown.vue`:
 
 ```vue
 <script setup lang="ts">
-import { computed, inject, ref } from 'vue';
+import { computed, inject, ref, watch } from 'vue';
 
 import { t } from '../../../../../i18n/i18n';
 import { CALLBACKS_KEY } from '../chatShellKeys';
@@ -988,7 +991,11 @@ const entryCount = computed(() => summary.value.items.length + summary.value.clo
 const isEmpty = computed(() => entryCount.value === 0);
 const attention = computed(() => summary.value.attentionCount > 0);
 
-// Collapse when the summary drains to empty (parity with the imperative update()).
+// Collapse when the summary drains to empty (parity with the imperative update(),
+// which sets `this.open = false` when entryCount === 0). Without this, the local
+// `open` ref stays true while the empty slot is hidden, so a later item auto-reopens.
+watch(isEmpty, (empty) => { if (empty) open.value = false; });
+
 const toggleLabel = computed(() => {
   const s = summary.value;
   if (s.attentionCount > 0) return t('workOrderActivity.toggleAttention', { count: String(s.items.length), attention: String(s.attentionCount) });
@@ -1312,7 +1319,7 @@ function onRowAux(conv: ConversationMeta, e: MouseEvent): void {
 }
 function onContextMenu(conv: ConversationMeta, e: MouseEvent): void {
   e.preventDefault(); e.stopPropagation();
-  cb.onConversationContextMenu(conv.id, e, e.currentTarget as HTMLElement);
+  cb.onConversationContextMenu(conv.id, e, e.currentTarget as HTMLElement, () => { void startRename(conv); });
 }
 
 async function startRename(conv: ConversationMeta): Promise<void> {
@@ -1477,8 +1484,17 @@ function onDocClick(e: MouseEvent): void {
   if (!open.value) return;
   if (rootEl.value && !rootEl.value.contains(e.target as Node)) close();
 }
-onMounted(() => document.addEventListener('click', onDocClick));
-onBeforeUnmount(() => document.removeEventListener('click', onDocClick));
+// Scope to the component's ownerDocument so click-away still fires in Obsidian
+// popout windows (the dropdown lives in a different document than the main one);
+// mirrors the deleted view's `this.containerEl.ownerDocument` and EditedFilesBar.vue.
+// Capture the same document on mount/unmount so the listener is removed off the doc
+// it was added to, even if the element is detached before unmount.
+let listenerDoc: Document = document;
+onMounted(() => {
+  listenerDoc = rootEl.value?.ownerDocument ?? document;
+  listenerDoc.addEventListener('click', onDocClick);
+});
+onBeforeUnmount(() => listenerDoc.removeEventListener('click', onDocClick));
 ```
 
 Bind `ref="rootEl"` on the outer `.specorator-history-container` div.
