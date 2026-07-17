@@ -7,7 +7,7 @@
 // Prettier, the CSS !important ratchet, an artifact smoke gate, version sync,
 // and a tag-push release workflow. Everything user-editable is skip-if-exists;
 // engine-owned ratchet/build scripts under scripts/ are overwrite-backup.
-import { CI_PM, dep, entryDir, notice, scriptCollision } from './harness.mjs';
+import { CI_PM, dep, engineConfigMode, entryDir, notice, scriptCollision } from './harness.mjs';
 import { runPrefix, safePackageManager } from './packageManager.mjs';
 import { loadTemplate, renderTemplate } from './templates.mjs';
 
@@ -138,7 +138,10 @@ function planBuild(options, state) {
       ? "  define: {\n    // Vue compile-time flags: Composition API only, no devtools/SSR branches.\n    __VUE_OPTIONS_API__: 'false',\n    __VUE_PROD_DEVTOOLS__: 'false',\n    __VUE_PROD_HYDRATION_MISMATCH_DETAILS__: 'false',\n    ...(prod ? { 'process.env.NODE_ENV': '\"production\"' } : {}),\n  },\n"
       : '',
   });
-  actions.push(write('esbuild.config.mjs', content));
+  // Engine-owned (marked): overwrite-backup so template updates (e.g. the entry
+  // ./-prefix, mobile externals) reach a re-applied plugin; an unmarked user
+  // esbuild config stood down with the notice above.
+  actions.push(write('esbuild.config.mjs', content, engineConfigMode(state?.esbuildConfig)));
   actions.push(write('scripts/sync-version.mjs', loadTemplate('obsidian/sync-version.mjs.tmpl'), 'overwrite-backup'));
   return actions;
 }
@@ -271,7 +274,9 @@ function planObsidianEslint(options, state) {
   if (o.vue) deps.push('eslint-plugin-vue', 'vue-eslint-parser');
   return [
     ...notices,
-    write('eslint.config.mjs', content),
+    // Upgrade a marked generic eslint config (the obsidianmd/raw-HTML/mobile/i18n
+    // rules the generated docs/CI promise); an unmarked user config stood down above.
+    write('eslint.config.mjs', content, engineConfigMode(state?.eslintConfigMjs)),
     {
       type: 'mergeJson',
       path: 'package.json',

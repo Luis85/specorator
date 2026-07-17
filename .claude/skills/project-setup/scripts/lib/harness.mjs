@@ -43,6 +43,13 @@ export function scriptCollision(options, state, name, desired) {
 // silently inert on those extensions.
 const TEST_GLOB = "'**/*.{test,spec}.{ts,mts,cts,tsx,js,mjs,cjs,jsx}'";
 
+// Write mode for a same-name config the engine owns (marker-identified). An
+// UNMARKED user config (unmarkedUser=true) has stood down earlier, so keep
+// skip-if-exists; otherwise overwrite-backup so a MARKED generic config is
+// upgraded to the current template instead of silently surviving (a re-apply of
+// our own content is a no-op — apply() skips when content already matches).
+export const engineConfigMode = (unmarkedUser) => (unmarkedUser ? 'skip-if-exists' : 'overwrite-backup');
+
 // The first path segment of the detected entry, sanitized: it comes from an
 // untrusted repo's package.json#source and is templated into generated executables
 // (check-loc scan root, coverage globs), so reject anything that isn't a plain path
@@ -91,14 +98,25 @@ export function planFallow(options, state) {
   // The obsidian variant widens the ignore set: generated build/ratchet scripts
   // live under scripts/, and main.js/styles.css are build artifacts.
   const fallowTemplate = options.obsidian ? 'obsidian/fallowrc.json.tmpl' : 'fallowrc.json.tmpl';
+  // Obsidian's fallow config adds the main/core/ui boundary zones the quality
+  // gate enforces. A pre-Obsidian .fallowrc.json (generic or legacy) has none;
+  // upgrade it (overwrite-backup keeps a .backup) instead of ratcheting a graph
+  // with no boundaries while AGENTS.md claims they're enforced at 0. A config
+  // that already has boundaries is left as-is (ours no-ops, the user's is kept).
+  const upgradeFallowrc = Boolean(options.obsidian) && Boolean(state?.fallowrcNeedsBoundaries);
   const fallowrc = state?.fallowConfig
     ? [notice('Existing fallow config (.fallowrc.jsonc / fallow.toml / ...) kept — the generated .fallowrc.json was NOT written (it would take precedence and shadow yours). check:quality ratchets your config; add scripts/check-*.mjs, scripts/quality-report.mjs, and test files to its ignore patterns so the ratchet doesn\'t bank them as dead code.')]
-    : [{
-        type: 'writeFile',
-        path: '.fallowrc.json',
-        mode: 'skip-if-exists',
-        content: renderTemplate(loadTemplate(fallowTemplate), { entry }),
-      }];
+    : [
+        ...(upgradeFallowrc
+          ? [notice('Existing .fallowrc.json had no boundary zones — it was replaced (a .backup is kept) with the Obsidian config so check:quality enforces the main/core/ui boundaries. Re-add any custom ignore patterns from the backup.')]
+          : []),
+        {
+          type: 'writeFile',
+          path: '.fallowrc.json',
+          mode: upgradeFallowrc ? 'overwrite-backup' : 'skip-if-exists',
+          content: renderTemplate(loadTemplate(fallowTemplate), { entry }),
+        },
+      ];
   return [
     ...scriptCollision(options, state, 'check:quality', 'node scripts/check-quality.mjs'),
     ...fallowrc,
@@ -302,7 +320,9 @@ export function planCi(options, state) {
     pmSetup: pm.setup, pmCache: pm.cache, pmInstall: pm.install, steps: steps.join('\n'),
     defaultBranch: state?.defaultBranch ?? 'main',
   });
-  return [...notices, { type: 'writeFile', path: '.github/workflows/ci.yml', mode: 'skip-if-exists', content }];
+  // Upgrade a marked generic CI (Obsidian mode adds check:css/build/check:artifacts
+  // gates); an unmarked user workflow stood down above with a notice.
+  return [...notices, { type: 'writeFile', path: '.github/workflows/ci.yml', mode: engineConfigMode(state?.ciWorkflow), content }];
 }
 
 export function planInstall(options, state) {

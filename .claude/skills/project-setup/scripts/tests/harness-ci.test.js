@@ -16,7 +16,9 @@ test('planCi only emits the workflow when GitHub integration is opted in', () =>
     { packageManager: 'npm' },
   );
   const wf = actions.find((a) => a.path === '.github/workflows/ci.yml');
-  assert.equal(wf.mode, 'skip-if-exists');
+  // No existing unmarked workflow -> overwrite-backup so a marked generic CI is
+  // upgraded (a re-apply of our own content no-ops in apply()).
+  assert.equal(wf.mode, 'overwrite-backup');
   assert.match(wf.content, /npm ci/);
   assert.match(wf.content, /npm run lint/);
   assert.match(wf.content, /npm run check:loc/);
@@ -61,7 +63,8 @@ test('planCi emits a notice when an existing ci.yml would be left untouched', ()
     { github: { integrate: true }, guardrails: { ci: true, fallowRatchet: true } },
     { packageManager: 'npm', ciWorkflow: true },
   );
-  assert.ok(actions.find((a) => a.path === '.github/workflows/ci.yml')); // still writes (skip-if-exists)
+  const wf = actions.find((a) => a.path === '.github/workflows/ci.yml');
+  assert.equal(wf.mode, 'skip-if-exists'); // an UNMARKED user workflow is never clobbered
   assert.ok(actions.some((a) => a.type === 'notice' && /ci\.yml kept/.test(a.message)));
 });
 

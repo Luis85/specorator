@@ -14,8 +14,15 @@ const defaultExec = (cmd, args, opts) => execFileSync(cmd, args, { stdio: 'inher
 // the ratchets to the current, possibly regressed, state and silently bless debt
 // accumulated since adoption. Order: fallow + LOC first (coverage absent so CRAP
 // stays static_estimated), coverage last (it creates ./coverage).
-export function initBaselines(cwd, options, exec = defaultExec) {
+//
+// Exception: when apply just CHANGED .fallowrc.json (a generic→Obsidian upgrade
+// that adds boundary zones/ignores), the quality baseline was measured against a
+// different analysis graph and is no longer comparable — re-measure against the
+// new config. `changed` is apply()'s changed-path list; a converged re-apply
+// leaves .fallowrc.json out of it, so the ratchet is never reset spuriously.
+export function initBaselines(cwd, options, exec = defaultExec, changed = []) {
   const g = options.guardrails ?? {};
+  const fallowConfigChanged = changed.includes('.fallowrc.json');
   const pm = options.packageManager ?? 'npm';
   // Run the GENERATED ratchet FILE directly (not the `check:quality`/`check:loc`
   // npm script, which a brownfield repo may have shadowed with a different command
@@ -25,7 +32,7 @@ export function initBaselines(cwd, options, exec = defaultExec) {
     const [cmd, cargs] = pm === 'yarn' ? ['yarn', ['node', file, ...args]] : ['node', [file, ...args]];
     exec(cmd, cargs, { cwd });
   };
-  if (g.fallowRatchet && !existsSync(join(cwd, 'scripts', 'quality-baseline.json'))) {
+  if (g.fallowRatchet && (fallowConfigChanged || !existsSync(join(cwd, 'scripts', 'quality-baseline.json')))) {
     // Remove any pre-existing coverage BEFORE the fallow baseline: a stray
     // ./coverage flips fallow CRAP to coverage-weighted, which would bless inflated
     // complexity debt into the baseline (docs/CI require coverage absent). Scoped to

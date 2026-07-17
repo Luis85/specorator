@@ -203,16 +203,44 @@ test('VueView pushes the start route before mount (memory history has no initial
 
 test('scaffold sources are skip-if-exists (brownfield-safe, never clobbers)', () => {
   // Engine-owned files may overwrite-backup: ratchet/build scripts, and the
-  // vitest config (an unmarked USER config stands down earlier, so reaching the
-  // write means it is ours or a replaceable marked generic one). Everything else
-  // — sources, docs, other configs — must never clobber user files.
-  const engineOwned = (p) => p.startsWith('scripts/') || p === 'vitest.config.mjs';
+  // marker-identified configs (vitest/eslint/esbuild). For those, an unmarked
+  // USER config stands down earlier, so reaching the write means it is ours or a
+  // replaceable marked generic one. Everything else — sources, docs — never
+  // clobbers user files.
+  const engineOwned = (p) =>
+    p.startsWith('scripts/') || ['vitest.config.mjs', 'eslint.config.mjs', 'esbuild.config.mjs'].includes(p);
   for (const a of actionsFor()) {
     if (a.type !== 'writeFile' || engineOwned(a.path)) continue;
     assert.equal(a.mode, 'skip-if-exists', `${a.path} must be skip-if-exists`);
   }
-  const vitest = findWrite(actionsFor(), 'vitest.config.mjs');
-  assert.equal(vitest.mode, 'overwrite-backup', 'vitest.config.mjs replaces a marked generic config');
+  for (const p of ['vitest.config.mjs', 'eslint.config.mjs', 'esbuild.config.mjs']) {
+    assert.equal(findWrite(actionsFor(), p).mode, 'overwrite-backup', `${p} upgrades a marked generic config`);
+  }
+});
+
+test('an UNMARKED user eslint/esbuild config stands down (skip-if-exists), never clobbered', () => {
+  const withUserEslint = actionsFor({}, { eslintConfigMjs: true });
+  assert.equal(findWrite(withUserEslint, 'eslint.config.mjs').mode, 'skip-if-exists');
+  assert.ok(withUserEslint.some((a) => a.type === 'notice' && /eslint\.config\.mjs/.test(a.message)));
+  assert.equal(findWrite(actionsFor({}, { esbuildConfig: true }), 'esbuild.config.mjs').mode, 'skip-if-exists');
+});
+
+test('a boundary-less .fallowrc.json is upgraded to the Obsidian config in obsidian mode (backup kept)', () => {
+  const opts = optionsWith(BASE); // obsidian options (BASE carries the obsidian block)
+  const upgrade = planFallow(opts, { entry: 'src/main.ts', fallowrcNeedsBoundaries: true });
+  const rc = upgrade.find((a) => a.path === '.fallowrc.json');
+  assert.equal(rc.mode, 'overwrite-backup');
+  assert.ok(upgrade.some((a) => a.type === 'notice' && /boundary zones/.test(a.message)));
+  // A config that already has boundaries (ours, or the user's) is left alone.
+  const keep = planFallow(opts, { entry: 'src/main.ts', fallowrcNeedsBoundaries: false });
+  assert.equal(keep.find((a) => a.path === '.fallowrc.json').mode, 'skip-if-exists');
+  assert.ok(!keep.some((a) => a.type === 'notice' && /boundary zones/.test(a.message)));
+});
+
+test('generic mode never force-upgrades .fallowrc.json (obsidian-only behavior)', () => {
+  // No obsidian block -> even a boundary-less fallowrc stays skip-if-exists.
+  const generic = planFallow({ guardrails: { fallowRatchet: true } }, { entry: 'src/index.ts', fallowrcNeedsBoundaries: true });
+  assert.equal(generic.find((a) => a.path === '.fallowrc.json').mode, 'skip-if-exists');
 });
 
 test('brownfield seeds src/styles.css from an existing root styles.css (no first-build clobber)', () => {

@@ -100,7 +100,9 @@ export async function cli(argv, io = {}) {
         // idempotent (per-artifact existence checks), so this completes a baseline
         // left missing by an interrupted apply and no-ops when all already exist.
         // Effective options so baselining matches the plan (coverage gate may be off).
-        initBaselines(cwd, effectiveOptions(options, state), io.exec);
+        // result.changed lets it re-baseline quality when .fallowrc.json was upgraded
+        // (the analysis graph changed, so the old baseline is no longer comparable).
+        initBaselines(cwd, effectiveOptions(options, state), io.exec, result.changed);
       }
       if (dryRun) {
         // Dedupe (package.json is touched by several planners) and name the

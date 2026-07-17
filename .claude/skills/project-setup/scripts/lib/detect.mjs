@@ -215,6 +215,15 @@ export function detect(cwd) {
     // generated .fallowrc.json would take precedence and shadow it, so planFallow
     // stands down and ratchets THEIR config instead.
     fallowConfig: existsAny(cwd, FALLOW_CONFIGS),
+    // A same-name .fallowrc.json that predates Obsidian mode has no boundary
+    // zones. It can't carry the engine marker (strict JSON), so we key the
+    // upgrade off the missing `boundaries` key: present-but-no-boundaries means
+    // a generic/legacy config to replace; a config that already has boundaries
+    // (ours, or the user's) is left alone. Invalid JSON reads as null → untouched.
+    fallowrcNeedsBoundaries: (() => {
+      const rc = readJsonSafe(join(cwd, '.fallowrc.json'));
+      return rc != null && rc.boundaries == null;
+    })(),
     // The same-name config we write (skip-if-exists) — flagged only when it's the
     // user's own (no marker), so a re-apply of our generated one won't false-fire.
     eslintConfigMjs: hasUnmarkedConfig(cwd, ['eslint.config.mjs']),
