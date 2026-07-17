@@ -35,7 +35,6 @@ import {
   createMockPlugin,
   createMockSelectionController,
   createMockSlashCommandDropdown,
-  createMockStatusPanel,
   installMockResizeObserver,
 } from './tabTestKit';
 
@@ -60,7 +59,6 @@ let mockFileContextManager: ReturnType<typeof createMockFileContextManager>;
 let mockImageContextManager: ReturnType<typeof createMockImageContextManager>;
 let mockSlashCommandDropdown: ReturnType<typeof createMockSlashCommandDropdown>;
 let mockInstructionModeManager: ReturnType<typeof createMockInstructionModeManager>;
-let mockStatusPanel: ReturnType<typeof createMockStatusPanel>;
 let mockExternalContextSelector: ReturnType<typeof createMockExternalContextSelector>;
 let mockMcpServerSelector: ReturnType<typeof createMockMcpServerSelector>;
 let mockSelectionController: ReturnType<typeof createMockSelectionController>;
@@ -89,13 +87,6 @@ jest.mock('@/features/chat/ui/InstructionModeManager', () => ({
   InstructionModeManager: jest.fn().mockImplementation(() => {
     mockInstructionModeManager = createMockInstructionModeManager();
     return mockInstructionModeManager;
-  }),
-}));
-
-jest.mock('@/features/chat/ui/StatusPanel', () => ({
-  StatusPanel: jest.fn().mockImplementation(() => {
-    mockStatusPanel = createMockStatusPanel();
-    return mockStatusPanel;
   }),
 }));
 
@@ -1198,7 +1189,7 @@ describe('Tab - Destruction', () => {
       const destroyInstructionMode = jest.fn();
       const cancelInstructionRefine = jest.fn();
       const cancelTitleGeneration = jest.fn();
-      const destroyTodoPanel = jest.fn();
+      const unmountTabChrome = jest.fn();
       const destroyResumeDropdown = jest.fn();
 
       tab.controllers.inputController = { destroyResumeDropdown, dismissPendingApproval: jest.fn() } as any;
@@ -1207,7 +1198,7 @@ describe('Tab - Destruction', () => {
       tab.ui.instructionModeManager = { destroy: destroyInstructionMode } as any;
       tab.services.instructionRefineService = { cancel: cancelInstructionRefine, resetConversation: jest.fn() } as any;
       tab.services.titleGenerationService = { cancel: cancelTitleGeneration } as any;
-      tab.ui.statusPanel = { destroy: destroyTodoPanel } as any;
+      tab.mountedTabChrome = { unmount: unmountTabChrome } as any;
 
       await destroyTab(tab);
 
@@ -1217,7 +1208,7 @@ describe('Tab - Destruction', () => {
       expect(destroyInstructionMode).toHaveBeenCalled();
       expect(cancelInstructionRefine).toHaveBeenCalled();
       expect(cancelTitleGeneration).toHaveBeenCalled();
-      expect(destroyTodoPanel).toHaveBeenCalled();
+      expect(unmountTabChrome).toHaveBeenCalled();
     });
   });
 });

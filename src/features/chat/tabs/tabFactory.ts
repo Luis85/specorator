@@ -132,7 +132,6 @@ export function createTab(options: TabCreateOptions): TabData {
       slashCommandDropdown: null,
       instructionModeManager: null,
       bangBashModeManager: null,
-      statusPanel: null,
       navigationSidebar: null,
     },
     dom,
@@ -140,6 +139,9 @@ export function createTab(options: TabCreateOptions): TabData {
     mountedTranscript: null,
     composer: null,
     mountedComposer: null,
+    bashOutputs: null,
+    tabChrome: null,
+    mountedTabChrome: null,
   };
 
   return tab;

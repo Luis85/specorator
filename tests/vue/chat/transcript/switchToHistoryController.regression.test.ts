@@ -102,7 +102,6 @@ function makeControllerDeps(
     getExternalContextSelector: () => null,
     clearQueuedMessage: vi.fn(),
     clearRetryableTurn: vi.fn(),
-    getStatusPanel: () => null,
     getAgentService: () => null,
   };
 }

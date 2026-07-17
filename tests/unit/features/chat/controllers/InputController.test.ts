@@ -224,7 +224,6 @@ function createMockDeps(overrides: Partial<InputControllerDeps> = {}): InputCont
     getInstructionModeManager: () => null,
     getInstructionRefineService: () => null,
     getTitleGenerationService: () => null,
-    getStatusPanel: () => null,
     // Chat always injects the composer dropdown coordinator; the resume dropdown
     // delegates render to it (no DOM-render fallback), so it must be present.
     getDropdownCoordinator: () => ({}) as any,
@@ -1799,21 +1798,6 @@ describe('InputController - Message Queue', () => {
       expect(deps.state.currentTodos).toHaveLength(2);
     });
 
-    it('should handle null statusPanel gracefully', async () => {
-      deps = createSendableDeps({
-        getStatusPanel: () => null,
-      });
-
-      ((deps as any).mockAgentService.query as jest.Mock).mockReturnValue(
-        createMockStream([{ type: 'done' }])
-      );
-
-      inputEl = deps.getInputEl() as ReturnType<typeof createMockInputEl>;
-      inputEl.value = 'Test message';
-      controller = new InputController(deps);
-
-      await expect(controller.sendMessage()).resolves.not.toThrow();
-    });
   });
 
   describe('Approval inline tracking', () => {

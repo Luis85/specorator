@@ -23,7 +23,6 @@ import {
   createMockPlugin,
   createMockSelectionController,
   createMockSlashCommandDropdown,
-  createMockStatusPanel,
   installMockResizeObserver,
 } from './tabTestKit';
 
@@ -53,10 +52,6 @@ jest.mock('@/features/chat/ui/ImageContext', () => ({
 
 jest.mock('@/features/chat/ui/InstructionModeManager', () => ({
   InstructionModeManager: jest.fn().mockImplementation(() => createMockInstructionModeManager()),
-}));
-
-jest.mock('@/features/chat/ui/StatusPanel', () => ({
-  StatusPanel: jest.fn().mockImplementation(() => createMockStatusPanel()),
 }));
 
 jest.mock('@/features/chat/ui/toolbar/ExternalContextSelector', () => ({

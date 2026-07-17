@@ -38,7 +38,6 @@ import {
   createMockPlugin,
   createMockSelectionController,
   createMockSlashCommandDropdown,
-  createMockStatusPanel,
   installMockResizeObserver,
 } from './tabTestKit';
 
@@ -64,7 +63,6 @@ let mockImageContextManager: ReturnType<typeof createMockImageContextManager>;
 let mockSlashCommandDropdown: ReturnType<typeof createMockSlashCommandDropdown>;
 let mockInstructionModeManager: ReturnType<typeof createMockInstructionModeManager>;
 let mockBangBashModeManager: ReturnType<typeof createMockBangBashModeManager>;
-let mockStatusPanel: ReturnType<typeof createMockStatusPanel>;
 let mockExternalContextSelector: ReturnType<typeof createMockExternalContextSelector>;
 let mockMcpServerSelector: ReturnType<typeof createMockMcpServerSelector>;
 let mockSelectionController: ReturnType<typeof createMockSelectionController>;
@@ -93,13 +91,6 @@ jest.mock('@/features/chat/ui/InstructionModeManager', () => ({
   InstructionModeManager: jest.fn().mockImplementation(() => {
     mockInstructionModeManager = createMockInstructionModeManager();
     return mockInstructionModeManager;
-  }),
-}));
-
-jest.mock('@/features/chat/ui/StatusPanel', () => ({
-  StatusPanel: jest.fn().mockImplementation(() => {
-    mockStatusPanel = createMockStatusPanel();
-    return mockStatusPanel;
   }),
 }));
 
@@ -445,16 +436,6 @@ describe('Tab - UI Initialization', () => {
       initializeTabUI(tab, options.plugin);
 
       expect(tab.ui.instructionModeManager).toBeDefined();
-    });
-
-    it('should create and mount StatusPanel', () => {
-      const options = createMockOptions();
-      const tab = createTab(options);
-
-      initializeTabUI(tab, options.plugin);
-
-      expect(tab.ui.statusPanel).toBeDefined();
-      expect(mockStatusPanel.mount).toHaveBeenCalledWith(tab.dom.statusPanelContainerEl);
     });
 
     it('should create the retained toolbar selector objects', () => {
@@ -1407,17 +1388,20 @@ describe('Tab - UI Callback Wiring', () => {
       getCapabilitiesSpy.mockRestore();
     });
 
-    it('should wire onTodosChanged callback to update todo panel', () => {
+    it('should wire onTodosChanged callback to re-project the tab-chrome island', () => {
       const options = createMockOptions();
       const tab = createTab(options);
 
       initializeTabUI(tab, options.plugin);
 
+      const emit = jest.fn();
+      tab.tabChrome = { emit } as any;
+
       // Verify callback is wired
       const todos = [{ id: '1', content: 'Test todo', status: 'pending' }];
       tab.state.callbacks.onTodosChanged?.(todos as any);
 
-      expect(mockStatusPanel.updateTodos).toHaveBeenCalledWith(todos);
+      expect(emit).toHaveBeenCalled();
     });
 
     it('should wire instruction mode onSubmit to input controller', async () => {

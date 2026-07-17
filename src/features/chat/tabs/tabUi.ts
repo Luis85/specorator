@@ -22,7 +22,6 @@ import { FileContextManager } from '../ui/FileContext';
 import { ImageContextManager } from '../ui/ImageContext';
 import { InstructionModeManager as InstructionModeManagerClass } from '../ui/InstructionModeManager';
 import { NavigationSidebar } from '../ui/NavigationSidebar';
-import { StatusPanel } from '../ui/StatusPanel';
 import { autoResizeTextarea } from '../ui/textareaResize';
 import { ExternalContextSelector } from '../ui/toolbar/ExternalContextSelector';
 import { McpServerSelector } from '../ui/toolbar/McpServerSelector';
@@ -158,16 +157,16 @@ function initializeInstructionAndTodo(tab: TabData, plugin: SpecoratorPlugin): v
         dom.inputEl,
         {
           onSubmit: async (command) => {
-            const statusPanel = tab.ui.statusPanel;
-            if (!statusPanel) return;
+            const store = tab.bashOutputs;
+            if (!store) return;
 
             const id = `bash-${Date.now()}`;
-            statusPanel.addBashOutput({ id, command, status: 'running', output: '' });
+            store.add({ id, command, status: 'running', output: '' });
 
             const result = await bashService.execute(command);
             const output = [result.stdout, result.stderr, result.error].filter(Boolean).join('\n').trim();
             const status = result.exitCode === 0 ? 'completed' : 'error';
-            statusPanel.updateBashOutput(id, { status, output, exitCode: result.exitCode });
+            store.update(id, { status, output, exitCode: result.exitCode });
           },
           getInputWrapper: () => dom.inputWrapper,
           onModeChanged: () => tab.composer?.emit(),
@@ -175,9 +174,6 @@ function initializeInstructionAndTodo(tab: TabData, plugin: SpecoratorPlugin): v
       );
     }
   }
-
-  tab.ui.statusPanel = new StatusPanel();
-  tab.ui.statusPanel.mount(dom.statusPanelContainerEl);
 }
 
 function isBangBashEnabled(settings: Record<string, unknown>): boolean {
@@ -504,7 +500,7 @@ export function initializeTabUI(
       // ContextUsageMeter repaints (the imperative render object is gone).
       tab.composer?.emit();
     },
-    onTodosChanged: (todos) => tab.ui.statusPanel?.updateTodos(todos),
+    onTodosChanged: () => tab.tabChrome?.emit(),
     onAutoScrollChanged: () => tab.ui.navigationSidebar?.updateVisibility(),
     // Edited-files truth lives in ChatState.editedFiles; the Vue EditedFilesBar
     // renders it off the projected store slice, so this only re-projects.

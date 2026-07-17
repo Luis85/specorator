@@ -78,13 +78,6 @@ export const createMockBangBashModeManager = () => ({
   destroy: jest.fn(),
 });
 
-export const createMockStatusPanel = () => ({
-  mount: jest.fn(),
-  remount: jest.fn(),
-  updateTodos: jest.fn(),
-  destroy: jest.fn(),
-});
-
 export const createMockModelSelector = () => ({
   updateDisplay: jest.fn(),
   renderOptions: jest.fn(),

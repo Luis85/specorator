@@ -94,9 +94,6 @@ function createMockDeps(overrides: Partial<ConversationControllerDeps> = {}): Co
     }) as any,
     clearQueuedMessage: jest.fn(),
     clearRetryableTurn: jest.fn(),
-    getStatusPanel: () => ({
-      remount: jest.fn(),
-    }) as any,
     consumePendingHydrationError: jest.fn().mockReturnValue(null),
     ...overrides,
   };

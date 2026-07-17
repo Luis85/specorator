@@ -144,7 +144,6 @@ export function buildTabConversationController(
       getExternalContextSelector: () => ui.externalContextSelector,
       clearQueuedMessage: () => tab.controllers.inputController?.clearQueuedMessage(),
       clearRetryableTurn: () => tab.controllers.inputController?.clearRetryableTurn(),
-      getStatusPanel: () => ui.statusPanel,
       getAgentService: () => tab.service, // Use tab's service instead of plugin's
       dismissPendingInlinePrompts: () => tab.controllers.inputController?.dismissPendingApproval(),
       consumePendingHydrationError: (conversationId: string) =>
@@ -272,7 +271,6 @@ export function buildTabInputController(
     getInstructionModeManager: () => ui.instructionModeManager,
     getInstructionRefineService: () => services.instructionRefineService,
     getTitleGenerationService: () => services.titleGenerationService,
-    getStatusPanel: () => ui.statusPanel,
     getDropdownCoordinator: () => tab.controllers.composerDropdownCoordinator,
     generateId: generateMessageId,
     resetInputHeight: () => {

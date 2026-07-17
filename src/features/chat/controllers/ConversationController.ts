@@ -13,7 +13,6 @@ import type { SubagentManager } from '../services/SubagentManager';
 import type { ChatState } from '../state/ChatState';
 import type { FileContextManager } from '../ui/FileContext';
 import type { ImageContextManager } from '../ui/ImageContext';
-import type { StatusPanel } from '../ui/StatusPanel';
 import type { ExternalContextSelector, McpServerSelector } from '../ui/toolbar/shared';
 import { deriveEditedFilesFromMessages } from '../utils/editedFiles';
 import {
@@ -64,7 +63,6 @@ export interface ConversationControllerDeps {
   clearQueuedMessage: () => void;
   /** Drops the retained retryable turn when (re)binding/switching conversations. */
   clearRetryableTurn: () => void;
-  getStatusPanel: () => StatusPanel | null;
   getAgentService?: () => ChatRuntime | null;
   ensureServiceForConversation?: (conversation: Conversation | null) => Promise<void>;
   dismissPendingInlinePrompts?: () => void;
@@ -229,9 +227,6 @@ export class ConversationController {
       // `state.messages` (above) re-projects an empty transcript, and this shows
       // the welcome greeting again. Never `.empty()` the Vue-owned scroll host.
       this.deps.setTranscriptGreeting(this.getGreeting());
-
-      // Remount StatusPanel to restore state for new conversation
-      this.deps.getStatusPanel()?.remount();
 
       this.deps.getInputEl().value = '';
 

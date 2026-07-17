@@ -40,7 +40,6 @@ import type { ChatState } from '../state/ChatState';
 import type { FileContextManager } from '../ui/FileContext';
 import type { ImageContextManager } from '../ui/ImageContext';
 import type { InstructionModeManager } from '../ui/InstructionModeManager';
-import type { StatusPanel } from '../ui/StatusPanel';
 import type { AddExternalContextResult, McpServerSelector } from '../ui/toolbar/shared';
 import type { BrowserSelectionController } from './BrowserSelectionController';
 import type { CanvasSelectionController } from './CanvasSelectionController';
@@ -100,7 +99,6 @@ export interface InputControllerDeps {
   getInstructionModeManager: () => InstructionModeManager | null;
   getInstructionRefineService: () => InstructionRefineService | null;
   getTitleGenerationService: () => TitleGenerationService | null;
-  getStatusPanel: () => StatusPanel | null;
   getInputContainerEl: () => HTMLElement;
   /** Chat dropdown coordinator the resume dropdown delegates render/keyboard to. */
   getDropdownCoordinator?: ResumeSessionDropdownDeps['getDropdownCoordinator'];
