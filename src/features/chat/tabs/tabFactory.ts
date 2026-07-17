@@ -156,6 +156,11 @@ function buildTabDOM(contentEl: HTMLElement): TabDOMElements {
   const messagesEl = messagesWrapperEl;
   const statusPanelContainerEl = contentEl.createDiv({ cls: 'specorator-status-panel-container' });
 
+  // Floating teleport target for the Vue NavOverlay, a sibling of the messages
+  // wrapper inside contentEl (where the imperative NavigationSidebar used to
+  // createDiv its container).
+  const navSidebarHostEl = contentEl.createDiv({ cls: 'specorator-nav-sidebar-host' });
+
   // The Vue composer island mounts into this host and renders the composer
   // structural DOM (`.specorator-input-container` and its children), handing the
   // real elements back through element-handle keys (mountTabComposer). Until then
@@ -174,6 +179,7 @@ function buildTabDOM(contentEl: HTMLElement): TabDOMElements {
     contentEl,
     messagesEl,
     statusPanelContainerEl,
+    navSidebarHostEl,
     composerHostEl,
     inputContainerEl: composerHostEl,
     queueIndicatorEl: composerHostEl,

@@ -189,8 +189,8 @@ export interface TabDOMElements {
   /** Cleanup functions for event listeners (prevents memory leaks). */
   eventCleanups: Array<() => void>;
 
-  /** NavOverlay teleport target (Phase 4). Optional until Phase 4 populates it. */
-  navSidebarHostEl?: HTMLElement | null;
+  /** NavOverlay teleport target (Phase 4). */
+  navSidebarHostEl: HTMLElement;
 }
 
 /**

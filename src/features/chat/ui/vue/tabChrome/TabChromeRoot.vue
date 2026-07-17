@@ -1,11 +1,12 @@
 <script setup lang="ts">
 import { inject } from 'vue';
 
+import NavOverlay from './NavOverlay.vue';
 import StatusPanel from './StatusPanel.vue';
 import { CALLBACKS_KEY } from './tabChromeKeys';
 import { useTabChromeEventRouting } from './useTabChromeEventRouting';
 
-// The tab-chrome island root: StatusPanel in place + (Phase 4) a teleported NavOverlay.
+// The tab-chrome island root: StatusPanel in place + a teleported NavOverlay.
 const cb = inject(CALLBACKS_KEY);
 if (!cb) throw new Error('TabChromeRoot mounted without CALLBACKS_KEY');
 
@@ -15,4 +16,5 @@ useTabChromeEventRouting(cb.subscribe);
 
 <template>
   <StatusPanel />
+  <NavOverlay />
 </template>
