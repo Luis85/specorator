@@ -432,10 +432,6 @@ Add these two public methods (e.g. after `writeFields`):
     const parsed = this.parse('', content);
     const wikilink = args.predecessorPath.replace(/\.md$/i, '');
     const lines = [`Chained from [[${wikilink}]] — see its Result / Handoff.`];
-    const nextAction = args.nextAction.trim();
-    if (nextAction.length > 0) {
-      lines.push('', `**Next action:** ${nextAction}`);
-    }
     // Blockquote each line of nextAction so a heading the handoff parser preserved inside
     // it (`## ...`) can't become a real `## ` section boundary inside Context — which, on
     // the next parse, extractSection would treat as the next section, truncating the seed.
@@ -448,7 +444,7 @@ Add these two public methods (e.g. after `writeFields`):
     const keep = existing && existing !== CONTEXT_PLACEHOLDER ? `\n\n${existing}` : '';
     const nextContext = `${lines.join('\n')}${keep}`;
 
-    let body = this.replaceSection(parsed.task.body, SECTION_HEADINGS.context, nextContext);
+    const body = this.replaceSection(parsed.task.body, SECTION_HEADINGS.context, nextContext);
     const frontmatter: Record<string, unknown> = { ...parsed.task.frontmatter };
     frontmatter.updated = timestamp;
     return this.withFrontmatter(frontmatter, body);
