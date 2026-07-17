@@ -1,6 +1,6 @@
 // .claude/skills/project-setup/scripts/lib/detect.mjs
 import { execFileSync } from 'node:child_process';
-import { existsSync, readFileSync } from 'node:fs';
+import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 import { MARKER } from './marker.mjs';
@@ -104,21 +104,29 @@ const PM_LOCKFILES = [
 const PM_NAMES = new Set(['npm', 'pnpm', 'yarn', 'bun']);
 
 // The scaffold's sample app is an integrated greenfield artifact — its modules
-// import each other's APIs. If ANY of these already exist (or a manifest does),
-// the target is an existing plugin, and dropping the scaffold's app sources
-// beside the user's would mismatch (their main.ts lacks the scaffold's service
-// shape). So brownfield gets the harness + docs only; the app is greenfield-only.
-const OBSIDIAN_APP_SOURCES = [
-  'src/main.ts',
-  'src/settings.ts',
-  'src/commands.ts',
-  'src/core/events/EventBus.ts',
-  'src/core/notices/NoticeService.ts',
-  'src/core/modals/ModalService.ts',
-  'src/core/commands/CommandsService.ts',
-  'src/ui/statusBar.ts',
-  'src/ui/VueView.ts',
-];
+// import each other's APIs. If the target already has ANY source (or a
+// manifest), it is an existing plugin, and dropping the scaffold's app beside
+// the user's would mismatch (their code lacks the scaffold's service shape). So
+// brownfield gets the harness + docs only; the app is greenfield-only. A
+// directory scan (not a fixed file list) so new scaffold sources can't drift
+// out of the signal.
+function hasSourceFiles(cwd) {
+  const stack = [join(cwd, 'src')];
+  while (stack.length) {
+    const dir = stack.pop();
+    let entries;
+    try {
+      entries = readdirSync(dir, { withFileTypes: true });
+    } catch {
+      continue; // dir absent or unreadable
+    }
+    for (const entry of entries) {
+      if (entry.isDirectory()) stack.push(join(dir, entry.name));
+      else if (/\.(?:ts|tsx|mts|cts|vue)$/.test(entry.name)) return true;
+    }
+  }
+  return false;
+}
 
 export function detectPackageManager(cwd) {
   // 1. Explicit corepack field, e.g. "packageManager": "pnpm@9.1.0" — wins even
@@ -222,10 +230,9 @@ export function detect(cwd) {
     // so a brownfield adopt (pkg 2.3.0, no manifest) doesn't emit manifest 0.1.0
     // and fail check:artifacts on desync. Only a valid semver is trusted.
     packageVersion: /^\d+\.\d+\.\d+/.test(String(pkg.version ?? '')) ? pkg.version : null,
-    // An existing plugin: a manifest or any scaffold app source is present. The
-    // planner writes the harness + docs but skips the sample app for these.
-    obsidianAppPresent:
-      existsSync(join(cwd, 'manifest.json')) || OBSIDIAN_APP_SOURCES.some((p) => existsSync(join(cwd, p))),
+    // An existing plugin: a manifest or any src source is present. The planner
+    // writes the harness + docs but skips the sample app for these.
+    obsidianAppPresent: existsSync(join(cwd, 'manifest.json')) || hasSourceFiles(cwd),
     esbuildConfig: hasUnmarkedConfig(cwd, ['esbuild.config.mjs']),
     prettierConfig: foreignPrettierConfig(cwd, pkg),
     releaseWorkflow: hasUnmarkedConfig(cwd, ['.github/workflows/release.yml']),

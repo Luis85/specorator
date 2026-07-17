@@ -234,3 +234,18 @@ test('detect exposes per-runner config signals (scoped standdown is decided at p
     viteP.cleanup();
   }
 });
+
+test('obsidianAppPresent is a directory scan: any src source (or manifest) means an existing plugin', () => {
+  const empty = tmpProject({ 'package.json': { name: 'x' } });
+  const nested = tmpProject({ 'src/core/logging/Logger.ts': 'export class Logger {}\n' });
+  const manifestOnly = tmpProject({ 'manifest.json': { id: 'x' } });
+  try {
+    assert.equal(detect(empty.dir).obsidianAppPresent, false); // greenfield
+    assert.equal(detect(nested.dir).obsidianAppPresent, true); // a deep src source counts
+    assert.equal(detect(manifestOnly.dir).obsidianAppPresent, true); // manifest counts
+  } finally {
+    empty.cleanup();
+    nested.cleanup();
+    manifestOnly.cleanup();
+  }
+});

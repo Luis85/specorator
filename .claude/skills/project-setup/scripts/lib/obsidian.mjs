@@ -392,7 +392,12 @@ function planVerifyScript(options, state) {
   if (g.fallowRatchet) steps.push('check:quality');
   steps.push('typecheck', 'format:check', g.coverageFloors ? 'test:coverage' : 'test', 'build', 'check:artifacts');
   const verify = steps.map((s) => `${run} ${s}`).join(' && ');
-  return [{ type: 'mergeJson', path: 'package.json', patch: { scripts: { verify } } }];
+  return [
+    // AGENTS/CLAUDE docs tell users to run `verify`; if it is shadowed, say so
+    // (mergeJson keeps the existing script) instead of documenting a no-op.
+    ...scriptCollision(options, state, 'verify', verify),
+    { type: 'mergeJson', path: 'package.json', patch: { scripts: { verify } } },
+  ];
 }
 
 // A SessionStart hook so Claude Code on the web installs deps before working —

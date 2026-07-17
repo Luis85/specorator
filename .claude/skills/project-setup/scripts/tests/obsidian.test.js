@@ -131,6 +131,11 @@ test('a single verify script chains the whole gate set in CI order', () => {
   assert.match(pkg.scripts.verify, /lint .*check:quality.*typecheck.*format:check.*build.*check:artifacts/);
 });
 
+test('a shadowed verify script surfaces a collision notice (docs point users at it)', () => {
+  const actions = actionsFor({}, { scripts: { verify: 'echo mine' } });
+  assert.ok(actions.some((a) => a.type === 'notice' && /"verify" script kept/.test(a.message)));
+});
+
 test('the i18n scaffold + SessionStart hook ship, with notice text lint-forced through t()', () => {
   const actions = actionsFor();
   const hook = JSON.parse(findWrite(actions, '.claude/settings.json').content);
