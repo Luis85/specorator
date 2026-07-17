@@ -30,6 +30,10 @@ function findWrite(actions, path) {
   return actions.find((a) => a.type === 'writeFile' && a.path === path);
 }
 
+function findMerge(actions, path) {
+  return actions.find((a) => a.type === 'mergeJson' && a.path === path);
+}
+
 // planObsidian with github integration on (release/CI sub-planners are gated on it).
 function planWithGithub(obsidian = {}, state = {}) {
   const dir = mkdtempSync(join(tmpdir(), 'obs-gh-'));
@@ -105,15 +109,24 @@ test('manifest fields are JSON-encoded (a crafted name cannot inject manifest ke
 
 test('versions.json maps the initial version to minAppVersion', () => {
   const actions = actionsFor({ minAppVersion: '1.6.7' });
-  const versions = JSON.parse(findWrite(actions, 'versions.json').content);
+  const versions = findMerge(actions, 'versions.json').patch;
   const manifest = JSON.parse(findWrite(actions, 'manifest.json').content);
   assert.equal(versions[manifest.version], '1.6.7');
+});
+
+test('versions.json is reconciled (merge+force) so a kept/stale file gets the current entry', () => {
+  // mergeJson preserves historical entries; force fixes a stale minAppVersion for
+  // the current version (check:artifacts requires versions[version] === minAppVersion).
+  const action = findMerge(actionsFor({ minAppVersion: '1.7.2' }), 'versions.json');
+  const manifest = JSON.parse(findWrite(actionsFor({ minAppVersion: '1.7.2' }), 'manifest.json').content);
+  assert.equal(action.patch[manifest.version], '1.7.2');
+  assert.deepEqual(action.force, [manifest.version]);
 });
 
 test('manifest/versions inherit an existing package.json version (brownfield, no check:artifacts desync)', () => {
   const brown = planObsidian(optionsWith(BASE), { packageVersion: '2.3.0' });
   assert.equal(JSON.parse(findWrite(brown, 'manifest.json').content).version, '2.3.0');
-  assert.equal(JSON.parse(findWrite(brown, 'versions.json').content)['2.3.0'] !== undefined, true);
+  assert.equal(findMerge(brown, 'versions.json').patch['2.3.0'] !== undefined, true);
   // Greenfield (no package version) falls back to the initial version.
   const green = planObsidian(optionsWith(BASE), {});
   assert.equal(JSON.parse(findWrite(green, 'manifest.json').content).version, '0.1.0');
@@ -194,6 +207,14 @@ test('the docs render with the selected package manager (no hardcoded npm)', () 
   assert.match(readme, /pnpm dev/);
   assert.doesNotMatch(readme, /npm run/);
   assert.match(findWrite(actions, 'CLAUDE.md').content, /pnpm verify/);
+});
+
+test('yarn release docs use `npm version` (yarn version skips the sync lifecycle + git tag)', () => {
+  const opts = { ...optionsWith(BASE), packageManager: 'yarn' };
+  const actions = planObsidian(opts, { packageManager: 'yarn' });
+  assert.match(findWrite(actions, 'README.md').content, /npm version patch/);
+  assert.match(findWrite(actions, 'CLAUDE.md').content, /npm version patch/);
+  assert.doesNotMatch(findWrite(actions, 'README.md').content, /yarn version/);
 });
 
 test('VueView pushes the start route before mount (memory history has no initial navigation)', () => {
@@ -364,6 +385,20 @@ test('the fallow config declares main/core/ui boundary zones with core kept leaf
   for (const z of ['main', 'core', 'ui']) assert.ok(zoneNames.includes(z), `missing zone ${z}`);
   const core = rc.boundaries.rules.find((r) => r.from === 'core');
   assert.deepEqual(core.allow, []);
+});
+
+test('the fallow main boundary zone includes a real detected entry (brownfield root main.ts)', () => {
+  const bf = JSON.parse(
+    planFallow(optionsWith(BASE), { entry: 'main.ts', entryExists: true }).find((a) => a.path === '.fallowrc.json').content,
+  );
+  const mainZone = bf.boundaries.zones.find((z) => z.name === 'main');
+  assert.ok(mainZone.patterns.includes('main.ts'), 'detected root entry is zoned');
+  assert.ok(mainZone.patterns.includes('src/main.ts'), 'scaffold entries still present');
+  // A greenfield src/index.ts fallback (does not exist) is NOT zoned.
+  const gf = JSON.parse(
+    planFallow(optionsWith(BASE), { entry: 'src/index.ts', entryExists: false }).find((a) => a.path === '.fallowrc.json').content,
+  );
+  assert.ok(!gf.boundaries.zones.find((z) => z.name === 'main').patterns.includes('src/index.ts'));
 });
 
 // --- vue toggle ------------------------------------------------------------

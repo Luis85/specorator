@@ -91,6 +91,17 @@ export function planFallow(options, state) {
   // filesystem (a crafted filename could break out of an unescaped JSON string
   // and inject keys into .fallowrc.json).
   const entry = JSON.stringify([state?.entry ?? 'src/index.ts']);
+  // The obsidian boundary `main` zone: the scaffold's entry files, PLUS a real
+  // detected entry outside them (e.g. a brownfield root main.ts) so the actual
+  // plugin entry is zoned and its cross-layer imports are checked, not silently
+  // outside every zone. Only a real (existing) entry is added — a greenfield's
+  // src/index.ts fallback doesn't exist, so it isn't zoned. JSON.stringify each
+  // pattern (untrusted filename) as with `entry`.
+  const mainDefaults = ['src/main.ts', 'src/settings.ts', 'src/commands.ts', 'src/vue-shims.d.ts'];
+  const detectedEntry = state?.entryExists ? state?.entry : null;
+  const mainPatterns = [...new Set([...(detectedEntry ? [detectedEntry] : []), ...mainDefaults])]
+    .map((p) => JSON.stringify(p))
+    .join(', ');
   // A fallow config in another form (.fallowrc.jsonc / fallow.toml / ...) already
   // owns the analysis graph. Writing our .fallowrc.json would take PRECEDENCE and
   // shadow theirs, so the ratchet would baseline/gate the wrong graph. Stand down
@@ -114,7 +125,7 @@ export function planFallow(options, state) {
           type: 'writeFile',
           path: '.fallowrc.json',
           mode: upgradeFallowrc ? 'overwrite-backup' : 'skip-if-exists',
-          content: renderTemplate(loadTemplate(fallowTemplate), { entry }),
+          content: renderTemplate(loadTemplate(fallowTemplate), { entry, mainPatterns }),
         },
       ];
   return [

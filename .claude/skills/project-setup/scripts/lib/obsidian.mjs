@@ -100,7 +100,11 @@ function planManifest(o, state, version) {
     authorUrlLine,
     isDesktopOnly: String(!o.mobile),
   });
-  const versions = `{\n  ${JSON.stringify(manifestVersion)}: ${JSON.stringify(minApp)}\n}\n`;
+  // versions.json is reconciled, not skip-if-exists: a kept file from a brownfield
+  // adopt may lack the current manifest version or carry a stale minAppVersion for
+  // it, either of which fails check:artifacts. mergeJson+force ensures the current
+  // entry equals the manifest's minAppVersion while preserving historical entries.
+  const versionsAction = { type: 'mergeJson', path: 'versions.json', patch: { [manifestVersion]: minApp }, force: [manifestVersion] };
   // A kept manifest (skip-if-exists) can disagree with the answered mobile mode:
   // the build/lint/docs follow o.mobile, so e.g. a manifest advertising mobile
   // while esbuild externalizes desktop-only Electron/Node ships a broken plugin.
@@ -108,7 +112,7 @@ function planManifest(o, state, version) {
   if (existing && typeof existing.isDesktopOnly === 'boolean' && existing.isDesktopOnly === Boolean(o.mobile)) {
     notices.push(notice(`Existing manifest.json says isDesktopOnly: ${existing.isDesktopOnly}, but you chose ${o.mobile ? 'mobile-ready' : 'desktop-only'} — the build, lint, and docs follow your answer. Set "isDesktopOnly": ${!o.mobile} in manifest.json to match (or re-run with the other mobile choice).`));
   }
-  return [...notices, write('manifest.json', manifest), write('versions.json', versions)];
+  return [...notices, write('manifest.json', manifest), versionsAction];
 }
 
 // The version shared by the generated manifest, versions.json, AND package.json
@@ -489,7 +493,11 @@ function planProjectDocs(options, state) {
   const pm = safePackageManager(options.packageManager ?? state?.packageManager ?? 'npm');
   const run = runPrefix(pm);
   const installCmd = PM_INSTALL[pm];
-  const versionCmd = pm === 'bun' ? 'npm version patch' : `${pm} version patch`;
+  // npm and pnpm `version` run the `version` lifecycle (sync-version.mjs) and
+  // create the git tag the release workflow keys off. Yarn's `version` only bumps
+  // package.json (no lifecycle, no tag) and bun has no equivalent, so both use the
+  // npm command — it runs regardless of the project's package manager.
+  const versionCmd = pm === 'bun' || pm === 'yarn' ? 'npm version patch' : `${pm} version patch`;
   const mobileLine = o.mobile
     ? '**Mobile-ready** (`isDesktopOnly: false`): never import Node/Electron modules (lint-enforced and non-external in the build); test flows on iOS/Android or the mobile emulator before release.'
     : '**Desktop-only** (`isDesktopOnly: true`): Node builtins are available, but prefer Vault/adapter APIs so a later mobile port stays possible.';
