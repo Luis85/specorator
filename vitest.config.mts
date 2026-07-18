@@ -32,6 +32,10 @@ export default defineConfig({
         // strip/content-host SFCs) — tested in this lane and excluded from
         // Jest collection; gate its coverage here where it is exercised.
         'src/features/chat/ui/vue/**/*.{ts,vue}',
+        // Marketplace Vue island (store, MarketplaceRoot/MarketplaceCard SFCs,
+        // accessors) — tested in this lane and excluded from Jest collection
+        // (jest.config.js); gate its coverage here where it is exercised.
+        'src/features/marketplace/vue/**/*.{ts,vue}',
         // Shared accessor/action modules whose meaningful exercise lives in
         // this lane: the loop accessors feed LoopsPanel, and the roster pair
         // is only function-covered by AgentsPanel tests (the legacy

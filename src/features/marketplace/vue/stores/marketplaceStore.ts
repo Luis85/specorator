@@ -32,6 +32,9 @@ export const useMarketplaceStore = defineStore('marketplace', () => {
   /** True when the list is served from the on-disk cache (a fetch failed). */
   const offline = ref(false);
   const source = ref(DEFAULT_MARKETPLACE_BASE_URL);
+  // Bumped whenever a new catalog load begins, so async work (an in-flight install)
+  // that started against an older catalog can detect it went stale.
+  let loadGeneration = 0;
 
   function init(p: SpecoratorPlugin): void {
     plugin ??= p;
@@ -58,8 +61,8 @@ export const useMarketplaceStore = defineStore('marketplace', () => {
     }
   }
 
-  function client(): MarketplaceCatalogClient {
-    return new MarketplaceCatalogClient(resolveSource());
+  function clientFor(baseUrl: string): MarketplaceCatalogClient {
+    return new MarketplaceCatalogClient(baseUrl);
   }
 
   function cache(): MarketplaceCache {
@@ -105,12 +108,13 @@ export const useMarketplaceStore = defineStore('marketplace', () => {
   async function load(): Promise<void> {
     if (loading.value) return;
     loading.value = true;
+    loadGeneration += 1;
     error.value = null;
     const src = resolveSource();
     source.value = src;
     try {
       assertNetworkEnabled();
-      const manifest = await client().fetchIndex();
+      const manifest = await clientFor(src).fetchIndex();
       items.value = manifest.items;
       offline.value = false;
       // Cache persistence is a best-effort optimization — a write failure
@@ -139,10 +143,15 @@ export const useMarketplaceStore = defineStore('marketplace', () => {
     }
   }
 
-  /** Fetches one item's raw body (for the preview pane). */
+  /**
+   * Fetches one item's raw body (for the preview pane) from the source the
+   * CURRENT catalog was loaded from (`source.value`) — NOT the live setting. If
+   * the user edits `marketplaceSourceUrl` without refreshing, the displayed items
+   * still belong to the old source, so their paths must resolve against it.
+   */
   async function fetchBody(item: MarketplaceItem): Promise<string> {
     assertNetworkEnabled();
-    return client().fetchItemBody(item.path);
+    return clientFor(source.value).fetchItemBody(item.path);
   }
 
   /**
@@ -152,10 +161,18 @@ export const useMarketplaceStore = defineStore('marketplace', () => {
    * is also why install issues no network request and needs no opt-in guard.
    */
   async function install(item: MarketplaceItem, body: string): Promise<InstallOutcome> {
+    const generation = loadGeneration;
     const outcome = await installMarketplaceItem(item, body, installDeps(), Date.now());
-    const next = new Set(installedIds.value);
-    next.add(item.id);
-    installedIds.value = next;
+    // If the catalog reloaded during the vault write (Refresh / source switch,
+    // possibly from another leaf), a later refreshInstalled already recomputed
+    // installedIds against the new catalog — blindly adding this id could
+    // falsely mark a reused id installed, so only optimistically mark when the
+    // catalog is still the one this install ran against.
+    if (generation === loadGeneration) {
+      const next = new Set(installedIds.value);
+      next.add(item.id);
+      installedIds.value = next;
+    }
     return outcome;
   }
 

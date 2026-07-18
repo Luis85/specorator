@@ -127,6 +127,21 @@ describe('marketplaceStore network opt-in guard', () => {
     expect(fetchBodySpy).not.toHaveBeenCalled();
     expect(clientCtor).not.toHaveBeenCalled();
   });
+
+  it('fetchBody fetches from the loaded source, not the live setting', async () => {
+    const store = useMarketplaceStore();
+    const p = fakePlugin(true);
+    p.settings.marketplaceSourceUrl = 'https://a.example/';
+    store.init(p);
+    await store.load();
+    clientCtor.mockClear();
+    // The user edits the source in settings but hasn't refreshed the leaf; the
+    // displayed items still belong to source A, so their paths must resolve to A.
+    p.settings.marketplaceSourceUrl = 'https://b.example/';
+    await store.fetchBody(item);
+    expect(clientCtor).toHaveBeenCalledWith('https://a.example/');
+    expect(clientCtor).not.toHaveBeenCalledWith('https://b.example/');
+  });
 });
 
 describe('marketplaceStore install', () => {
@@ -151,6 +166,30 @@ describe('marketplaceStore install', () => {
     expect(fetchBodySpy).not.toHaveBeenCalled();
     expect(clientCtor).not.toHaveBeenCalled();
     expect(store.installedIds.has('a')).toBe(true);
+  });
+
+  it('does not optimistically mark installed when the catalog reloaded mid-write', async () => {
+    // Hold the install's vault write open until we release it.
+    let finishInstall: (v: 'installed') => void = () => {};
+    installSpy.mockReturnValue(
+      new Promise<'installed'>((resolve) => {
+        finishInstall = resolve;
+      }),
+    );
+    isInstalledSpy.mockResolvedValue(false);
+    fetchIndexSpy.mockResolvedValue(manifest);
+    cacheRead.mockResolvedValue(null);
+    cacheWrite.mockResolvedValue(undefined);
+    const store = useMarketplaceStore();
+    store.init(fakePlugin(true));
+
+    const installing = store.install(item, 'BODY'); // captures the load generation
+    await store.load(); // a concurrent reload bumps the generation
+    finishInstall('installed');
+    await installing;
+
+    // The stale install must NOT re-add the id — load's refreshInstalled owns it.
+    expect(store.installedIds.has('a')).toBe(false);
   });
 });
 
