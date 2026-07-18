@@ -63,7 +63,13 @@ Modeled on — and reuses the components of — `features/library`.
   shape (`CATALOG_ID_PATTERN`) — the view keys plain-object caches
   (`bodies`/`previewErrors`/`installing`) by id, so an `Object.prototype` name
   like `__proto__`/`toString` would otherwise read as already-present or pollute
-  a record prototype. Two SSRF residuals
+  a record prototype — and rejects items with a **blank name** (a blank name
+  slugifies to the installer's shared per-type fallback and collides). At install,
+  loop/template payloads are additionally identity-checked: the body's frontmatter
+  name must slugify to the SAME path as the manifest name (`installParsedNote`),
+  so a body that names a different item than its catalog entry is refused rather
+  than written under the manifest's filename while the Library shows the payload's
+  name. Two SSRF residuals
   remain because `requestUrl` is a high-level API with no socket hooks — DNS
   rebinding (the vet is preflight-only; `createPinnedLookup` can't attach) and
   HTTP-redirect following (3xx is auto-followed with no `Location` re-vet). Both

@@ -78,12 +78,18 @@ function isSafeCatalogId(id: unknown): boolean {
   return typeof id === 'string' && CATALOG_ID_PATTERN.test(id);
 }
 
+/** A present, non-whitespace string. Guards name (a blank name slugifies to the
+ *  installer's shared per-type fallback — `loop`/`template`/… — and collides). */
+function isNonBlankString(value: unknown): value is string {
+  return typeof value === 'string' && value.trim().length > 0;
+}
+
 function isMarketplaceItem(value: unknown): value is MarketplaceItem {
   if (typeof value !== 'object' || value === null) return false;
   const item = value as Record<string, unknown>;
   return (
     isSafeCatalogId(item.id) &&
-    typeof item.name === 'string' &&
+    isNonBlankString(item.name) &&
     typeof item.path === 'string' &&
     typeof item.type === 'string' &&
     (MARKETPLACE_ITEM_TYPES as readonly string[]).includes(item.type) &&

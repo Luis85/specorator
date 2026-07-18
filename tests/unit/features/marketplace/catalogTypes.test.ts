@@ -58,6 +58,20 @@ describe('parseManifest', () => {
     expect(manifest?.items.map((i) => i.id)).toEqual(['loops/x']);
   });
 
+  it('rejects catalog items with a blank name', () => {
+    // A blank name slugifies to the installer's shared per-type fallback (loop/
+    // template/…), so two blank-named items would collide on one file.
+    const manifest = parseManifest({
+      schemaVersion: 1,
+      items: [
+        validItem,
+        { id: 'loops/blank', type: 'loop', name: '   ', description: 'd', path: 'loops/blank.md', tags: [] },
+        { id: 'loops/empty', type: 'loop', name: '', description: 'd', path: 'loops/empty.md', tags: [] },
+      ],
+    });
+    expect(manifest?.items.map((i) => i.id)).toEqual(['loops/x']);
+  });
+
   it('dedupes items by id (first wins) so card v-for keys stay unique', () => {
     const manifest = parseManifest({
       schemaVersion: 1,

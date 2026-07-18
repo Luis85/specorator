@@ -28,9 +28,9 @@ import { MarketplaceError } from './MarketplaceCatalogClient';
  * never reports `installed` for content that a later `list()` silently drops
  * (leaving the item marked installed but absent from the Library).
  */
-function assertInstallableBody(parse: () => unknown, label: string): void {
+function parseInstallable<T>(parse: () => T, label: string): T {
   try {
-    parse();
+    return parse();
   } catch (error) {
     throw new MarketplaceError(
       `This ${label}'s content is malformed and can't be installed: ${error instanceof Error ? error.message : String(error)}`,
@@ -74,15 +74,25 @@ export async function installMarketplaceItem(
   switch (item.type) {
     case 'loop': {
       const store = new LoopNoteStore();
-      const path = store.getFilePathForName(deps.loopFolder, item.name);
-      assertInstallableBody(() => store.parse(path, body), 'loop');
-      return installNoteVerbatim(deps.vault, path, body);
+      return installParsedNote(
+        deps.vault,
+        body,
+        (name) => store.getFilePathForName(deps.loopFolder, name),
+        (path) => store.parse(path, body).name,
+        item.name,
+        'loop',
+      );
     }
     case 'template': {
       const store = new TemplateNoteStore();
-      const path = store.getFilePathForName(deps.templateFolder, item.name);
-      assertInstallableBody(() => store.parse(path, body), 'template');
-      return installNoteVerbatim(deps.vault, path, body);
+      return installParsedNote(
+        deps.vault,
+        body,
+        (name) => store.getFilePathForName(deps.templateFolder, name),
+        (path) => store.parse(path, body).name,
+        item.name,
+        'template',
+      );
     }
     case 'quick-action':
       return installQuickAction(deps, item.name, body);
@@ -165,6 +175,33 @@ async function installNoteVerbatim(vault: Vault, path: string, body: string): Pr
   return 'installed';
 }
 
+/**
+ * Installs a loop/template body verbatim after two guards: it parses with its own
+ * store (rejecting a body that store can't load), and the payload names the SAME
+ * item as the catalog entry. A body whose frontmatter name slugifies to a
+ * different path than the manifest's would install under the manifest's filename
+ * while the Library displays the payload's name — a provenance mismatch from a
+ * malformed/hostile catalog. `pathForName` is the store's own slug-path derivation,
+ * so the comparison uses identical rules for both names.
+ */
+async function installParsedNote(
+  vault: Vault,
+  body: string,
+  pathForName: (name: string) => string,
+  parseName: (path: string) => string,
+  manifestName: string,
+  label: string,
+): Promise<InstallOutcome> {
+  const path = pathForName(manifestName);
+  const parsedName = parseInstallable(() => parseName(path), label);
+  if (pathForName(parsedName) !== path) {
+    throw new MarketplaceError(
+      `This ${label} names a different item than its catalog entry, so it can't be installed.`,
+    );
+  }
+  return installNoteVerbatim(vault, path, body);
+}
+
 async function installQuickAction(
   deps: MarketplaceInstallDeps,
   name: string,
@@ -172,7 +209,7 @@ async function installQuickAction(
 ): Promise<InstallOutcome> {
   const storage = new QuickActionStorage(deps.adapter, () => deps.quickActionsFolder);
   const path = storage.getFilePathForName(name);
-  assertInstallableBody(() => {
+  parseInstallable(() => {
     if (parseQuickActionContent(body, path) === null) throw new Error('empty or wrong-type quick action');
   }, 'quick action');
   if (await storage.exists(path)) return 'skipped';

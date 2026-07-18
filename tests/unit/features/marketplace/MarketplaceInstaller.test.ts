@@ -88,6 +88,17 @@ describe('installMarketplaceItem', () => {
     await expect(installMarketplaceItem(qa, '', deps, 1)).rejects.toThrow(/malformed/i);
   });
 
+  it('rejects a loop whose body names a different item than the manifest', async () => {
+    const { deps, notes } = makeDeps();
+    // The manifest entry is "Alpha" but the fetched body's frontmatter says "Beta"
+    // — writing it at the Alpha slug would let the Library show Beta while the
+    // Marketplace marks Alpha installed. Reject the mismatched payload.
+    const item: MarketplaceItem = { id: 'loops/alpha', type: 'loop', name: 'Alpha', description: 'd', path: 'loops/alpha.md', tags: [] };
+    const body = '---\ntype: specorator-loop\nschema_version: 1\nname: "Beta"\n---\n\n## Approach\n\na\n';
+    await expect(installMarketplaceItem(item, body, deps, 1)).rejects.toThrow(/different item/i);
+    expect(notes.size).toBe(0);
+  });
+
   it('writes a quick action verbatim at its slug and dedups', async () => {
     const { deps, qaFiles } = makeDeps();
     const item: MarketplaceItem = { id: 'quick-actions/foo', type: 'quick-action', name: 'Foo bar', description: 'd', path: 'quick-actions/foo.md', tags: [] };
