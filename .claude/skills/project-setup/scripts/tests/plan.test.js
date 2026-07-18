@@ -7,6 +7,20 @@ import { effectiveOptions, plan } from '../lib/plan.mjs';
 const options = { guardrails: {}, github: { integrate: false }, docs: {} };
 const state = { packageManager: 'npm', github: false };
 
+test('plan resolves a rejected root main.js entry to src/main.ts and warns (no self-overwrite)', () => {
+  const opts = {
+    obsidian: { id: 'art', name: 'Art', description: 'd', author: 'a', authorUrl: '', minAppVersion: '1.7.2', mobile: false, vue: false },
+    guardrails: { fallowRatchet: true }, github: { integrate: false }, docs: {},
+  };
+  // Artifact-only brownfield: detected entry is the build output main.js.
+  const st = { obsidianManifest: { version: '1.0.0', minAppVersion: '1.7.2' }, entry: 'main.js', entryExists: true, obsidianAppPresent: true };
+  const actions = plan(opts, st);
+  const esbuild = actions.find((a) => a.path === 'esbuild.config.mjs');
+  assert.match(esbuild.content, /entryPoints: \['\.\/src\/main\.ts'\]/);
+  assert.doesNotMatch(esbuild.content, /entryPoints: \['\.\/main\.js'\]/);
+  assert.ok(actions.some((a) => a.type === 'notice' && /No source entry/.test(a.message)));
+});
+
 test('plan returns an ordered array of known action types', () => {
   const actions = plan(options, state);
   assert.ok(Array.isArray(actions) && actions.length >= 2);

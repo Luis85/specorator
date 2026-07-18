@@ -191,6 +191,13 @@ test('obsidianEntry keeps an EXISTING brownfield entry (root main.ts) and forces
   assert.match(findWrite(actionsFor(), 'esbuild.config.mjs').content, /entryPoints: \['\.\/src\/main\.ts'\]/);
 });
 
+test('obsidianEntry rejects a root main.js (the esbuild outfile) — no self-overwrite', () => {
+  // A manifest + built main.js (no source): main.js is the OUTPUT, so bundling it
+  // into itself fails esbuild. Fall back to src/main.ts instead.
+  const state = { obsidianAppPresent: true, entry: 'main.js', entryExists: true };
+  assert.equal(obsidianEntry(optionsWith(BASE), state), 'src/main.ts');
+});
+
 test('a manifest-only brownfield with no source entry falls back to src/main.ts and warns', () => {
   // detectEntry returns a phantom src/index.ts fallback; entryExists is false.
   const state = { obsidianAppPresent: true, entry: 'src/index.ts', entryExists: false };

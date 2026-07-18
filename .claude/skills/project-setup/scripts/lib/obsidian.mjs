@@ -82,7 +82,8 @@ export function obsidianEntry(options, state) {
   const valid =
     typeof entry === 'string' &&
     /^[\w./-]+\.(?:ts|tsx|mts|cts|js|jsx|mjs|cjs)$/.test(entry) &&
-    !entry.split('/').includes('..');
+    !entry.split('/').includes('..') &&
+    entry !== 'main.js'; // the esbuild OUTFILE — bundling it into itself fails the build
   return valid && state?.entryExists ? entry : 'src/main.ts';
 }
 
@@ -135,11 +136,11 @@ function planBuild(options, state) {
   if (state?.esbuildConfig) {
     actions.push(notice('Existing esbuild.config.mjs kept — review it against the generated build contract (styles.css assembly, vault deploy, mobile externals) in references/obsidian-plugin.md.'));
   }
-  // Brownfield adopt with no source anywhere (a manifest but no entry file):
-  // the build points at src/main.ts, which does not exist yet — say so instead
-  // of failing the build gate cryptically.
+  // Brownfield adopt with no real source (a manifest/artifact but no source file,
+  // or an "entry" that is just the build output main.js): the build points at
+  // src/main.ts, which does not exist yet — say so instead of failing cryptically.
   if (!isGreenfield(options, state) && !state?.entryExists) {
-    actions.push(notice('No source entry was found (a manifest is present but no source file). The generated build points at src/main.ts — create it (or your real entry) before `build`/`verify` can produce artifacts.'));
+    actions.push(notice('No source entry was found (a manifest or build artifact is present, but no source file — a root main.js is the build OUTPUT, not a source). The generated build points at src/main.ts — create it (or your real entry) before `build`/`verify` can produce artifacts.'));
   }
   // Desktop-only plugins may import node builtins and electron (Obsidian ships
   // Electron), so those are externals. A mobile-ready plugin must NOT mark them

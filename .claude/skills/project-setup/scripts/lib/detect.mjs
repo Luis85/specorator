@@ -257,7 +257,9 @@ export function detect(cwd) {
     // entries (e.g. a root main.ts, or package.json#source) that hasSourceFiles
     // (src/-only) misses — without this such a repo is treated greenfield and the
     // scaffold overwrites the build target while leaving the real entry unbuilt.
-    obsidianAppPresent: existsSync(join(cwd, 'manifest.json')) || hasSourceFiles(cwd) || entryExists,
+    // main.js is excluded: it is the esbuild OUTFILE, so a lone build artifact is
+    // not an existing app (and obsidianEntry rejects it as a source entry).
+    obsidianAppPresent: existsSync(join(cwd, 'manifest.json')) || hasSourceFiles(cwd) || (entryExists && entry !== 'main.js'),
     // An existing .npmrc is kept (skip-if-exists), so the tag-version-prefix=""
     // policy may not apply. Flag it only when the file lacks that key at all, so a
     // repo that already sets it isn't nagged. npm defaults to "v", which the
