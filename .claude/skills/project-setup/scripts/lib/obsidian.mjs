@@ -614,7 +614,14 @@ function planClaudeSettings(options, state) {
   const actions = [command('add-command'), command('add-setting'), command('new-service'), command('release')];
   const hooks = {};
   if (h.sessionStart) hooks.SessionStart = [{ hooks: [{ type: 'command', command: PM_INSTALL[pm] }] }];
-  if (h.qualityGate) hooks.Stop = [{ hooks: [{ type: 'command', command: `${run} typecheck && ${run} lint` }] }];
+  if (h.qualityGate) {
+    // Build from gates that actually generated a script: typecheck is always
+    // written; lint only when severity-staging is on (planObsidianEslint gates on
+    // it), so an unconditional `${run} lint` would fail every Stop hook with a
+    // missing script when the user turned linting off.
+    const gates = ['typecheck', ...(options.guardrails?.eslintSeverityStaging ? ['lint'] : [])];
+    hooks.Stop = [{ hooks: [{ type: 'command', command: gates.map((s) => `${run} ${s}`).join(' && ') }] }];
+  }
   if (Object.keys(hooks).length > 0) {
     // mergeJson (not a plain write) so an opted-in hook actually lands when the
     // repo already has a .claude/settings.json — skip-if-exists would silently

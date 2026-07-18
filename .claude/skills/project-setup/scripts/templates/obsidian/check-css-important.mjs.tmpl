@@ -29,9 +29,13 @@ const ROOT = join(__dirname, '..');
 // default; a project-relative dir like 'lib', or '.' for a root entry).
 const STYLE_ROOTS = [{{styleRoots}}].map((d) => join(ROOT, d));
 // Non-source trees never ship styles into styles.css; skip them so scanning '.'
-// (a root entry) stays bounded and never counts a dependency's or artifact's CSS.
+// (a root entry) stays bounded and never counts a dependency's, fixture's, doc's,
+// or artifact's CSS. docs/tests/scripts/.github/.claude hold non-shipped files
+// esbuild never folds into styles.css — a `!important` there must not block or
+// baseline the guard.
 const SKIP_DIRS = new Set([
   'node_modules', '.git', 'dist', 'build', 'out', 'coverage', '.fallow', '.project-setup-backup',
+  'docs', 'tests', 'scripts', '.github', '.claude',
 ]);
 // Root-level esbuild outputs are bundled artifacts, not source — excluding them
 // keeps a root-entry scan ('.') from recounting SFC styles already extracted into

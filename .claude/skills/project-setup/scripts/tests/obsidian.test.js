@@ -216,6 +216,28 @@ test('hooks are opt-in: no .claude/settings.json by default; slash commands alwa
   assert.equal(findMerge(optionsForHooks({}), '.claude/settings.json'), undefined);
 });
 
+test('the qualityGate Stop hook omits lint when severity-staging is off (no missing-script failure)', () => {
+  // eslintSeverityStaging off => planObsidianEslint writes no `lint` script, so the
+  // hook must not run `${run} lint` or every Claude Stop fails on a missing script.
+  const dir = mkdtempSync(join(tmpdir(), 'obs-qg-'));
+  const path = join(dir, 'answers.json');
+  writeFileSync(path, JSON.stringify({ obsidian: BASE, hooks: { qualityGate: true }, guardrails: { eslintSeverityStaging: false } }));
+  try {
+    const cmd = findMerge(planObsidian(loadOptions(path), {}), '.claude/settings.json').patch.hooks.Stop[0].hooks[0].command;
+    assert.match(cmd, /typecheck/);
+    assert.doesNotMatch(cmd, /\blint\b/);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('the obsidian devDependency is pinned to eslint-plugin-obsidianmd\'s exact peer (1.8.7)', () => {
+  // obsidianmd@0.4.1 declares peerDependencies.obsidian === "1.8.7", so a newer
+  // obsidian pin makes a fresh strict-peer install reject. refresh-pins caps it to
+  // that peer range; this guards the pinned value against an accidental bump.
+  assert.equal(mergedPackagePatch(actionsFor()).devDependencies.obsidian, '1.8.7');
+});
+
 test('manifest-beta.json ships mirroring manifest.json (BRAT-ready), and the publishing guide lands', () => {
   const actions = actionsFor();
   assert.equal(findWrite(actions, 'manifest-beta.json').content, findWrite(actions, 'manifest.json').content);
