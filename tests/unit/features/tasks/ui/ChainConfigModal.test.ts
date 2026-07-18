@@ -1,4 +1,4 @@
-import { Setting } from 'obsidian';
+import { Notice, Setting } from 'obsidian';
 
 import type { WorkOrderChainConfig } from '../../../../../src/features/tasks/model/workOrderChain';
 import {
@@ -66,6 +66,7 @@ function patchContentElEmpty(modal: ChainConfigModal): void {
 
 beforeEach(() => {
   (Setting as unknown as { instances: unknown[] }).instances = [];
+  (Notice as unknown as jest.Mock).mockClear();
 });
 
 // onOpen() fires the async template-row render without awaiting it (by design —
@@ -161,7 +162,7 @@ describe('ChainConfigModal — Save / Clear / Cancel', () => {
     expect((modal.close as jest.Mock)).toHaveBeenCalled();
   });
 
-  it('Save resolves null when every field is left blank', async () => {
+  it('Save on an all-blank form warns and neither resolves nor closes (use Clear to remove a chain)', async () => {
     const resolve = jest.fn();
     const modal = new ChainConfigModal(mockApp, mockPlugin, undefined, resolve);
     modal.onOpen();
@@ -169,7 +170,9 @@ describe('ChainConfigModal — Save / Clear / Cancel', () => {
     const [saveBtn] = buttonComponents();
     await saveBtn.clickHandler();
 
-    expect(resolve).toHaveBeenCalledWith(null);
+    expect(resolve).not.toHaveBeenCalled();
+    expect(modal.close as jest.Mock).not.toHaveBeenCalled();
+    expect(Notice as unknown as jest.Mock).toHaveBeenCalledTimes(1);
   });
 
   it('Clear resolves null even when the form holds an existing, unsaved config', async () => {
@@ -218,12 +221,13 @@ describe('ChainConfigModal — Save / Clear / Cancel', () => {
     patchContentElEmpty(modal);
     modal.onOpen();
 
+    textComponents()[0]?.changeHandler('A successor');
     const [saveBtn] = buttonComponents();
     await saveBtn.clickHandler();
     modal.onClose();
     jest.runAllTimers();
     jest.useRealTimers();
 
-    expect(resolveResults).toEqual([null]);
+    expect(resolveResults).toEqual([expect.objectContaining({ title: 'A successor' })]);
   });
 });

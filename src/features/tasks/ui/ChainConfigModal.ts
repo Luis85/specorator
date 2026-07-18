@@ -1,5 +1,5 @@
 import type { App } from 'obsidian';
-import { Modal, Setting } from 'obsidian';
+import { Modal, Notice, Setting } from 'obsidian';
 
 import { t } from '../../../i18n/i18n';
 import type SpecoratorPlugin from '../../../main';
@@ -108,7 +108,7 @@ export class ChainConfigModal extends Modal {
       .addButton((btn) => btn
         .setButtonText(t('tasks.chainConfig.save'))
         .setCta()
-        .onClick(() => this.settle(buildChainConfig({ template, title, objective, trigger }))))
+        .onClick(() => this.save({ template, title, objective, trigger })))
       .addButton((btn) => btn
         .setButtonText(t('tasks.chainConfig.clear'))
         .setWarning()
@@ -140,6 +140,20 @@ export class ChainConfigModal extends Modal {
         for (const tpl of templates) dd.addOption(tpl.name, tpl.name);
         dd.setValue(current).onChange(onChange);
       });
+  }
+
+  /**
+   * Save the collected config. An all-blank form defines no successor, so warn and
+   * keep the dialog open rather than silently settling `null` — which reads as
+   * nothing happening. Removing a configured chain is the dedicated Clear button.
+   */
+  private save(form: ChainConfigForm): void {
+    const config = buildChainConfig(form);
+    if (!config) {
+      new Notice(t('tasks.chainConfig.emptyWarning'));
+      return;
+    }
+    this.settle(config);
   }
 
   private settle(result: ChainConfigResult): void {

@@ -1087,7 +1087,8 @@
       "clear": "Clear chain",
       "cancel": "Cancel",
       "chipNone": "None",
-      "onHandoffSuffix": "on handoff"
+      "onHandoffSuffix": "on handoff",
+      "emptyWarning": "Add a template, title, or objective for the next work order."
     }
   },
   "env": {

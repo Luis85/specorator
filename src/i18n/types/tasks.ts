@@ -263,6 +263,7 @@ export type TasksTranslationKey =
   | 'tasks.chainConfig.cancel'
   | 'tasks.chainConfig.chipNone'
   | 'tasks.chainConfig.onHandoffSuffix'
+  | 'tasks.chainConfig.emptyWarning'
   | 'tasks.workOrderModal.fieldNextStep'
   | 'tasks.board.card.chainedBadge'
   | 'tasks.templateEditor.chainHeading';
