@@ -251,7 +251,9 @@ function planObsidianEslint(options) {
     brandLiteral: jsString(o.name),
   });
   const deps = [
-    'eslint', '@eslint/js', 'typescript-eslint', 'eslint-plugin-obsidianmd',
+    // @eslint/json: eslint-plugin-obsidianmd declares it as an exact peer; provide
+    // it at the root so a strict-peer layout (Yarn PnP) resolves the config.
+    'eslint', '@eslint/js', '@eslint/json', 'typescript-eslint', 'eslint-plugin-obsidianmd',
     'eslint-plugin-simple-import-sort', '@eslint-community/eslint-plugin-eslint-comments',
     '@vitest/eslint-plugin', 'eslint-config-prettier',
   ];

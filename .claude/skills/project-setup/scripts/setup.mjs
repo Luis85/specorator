@@ -146,10 +146,15 @@ export async function cli(argv, io = {}) {
       // as a peer: resolve each to the newest version WITHIN that plugin's peer
       // range instead of @latest, so a fresh setup can't install an unsatisfiable
       // pair. Auto-unblocks when the plugin widens its peer range.
+      // Order matters: a host must be resolved before any dep capped against it,
+      // so `obsidian` precedes the @codemirror/* pair it hosts.
       const capped = {
         typescript: 'typescript-eslint',
         '@eslint/js': 'eslint-plugin-obsidianmd',
+        '@eslint/json': 'eslint-plugin-obsidianmd',
         obsidian: 'eslint-plugin-obsidianmd',
+        '@codemirror/view': 'obsidian',
+        '@codemirror/state': 'obsidian',
       };
       for (const name of Object.keys(pins)) {
         if (name in capped) continue; // resolved within a peer range below

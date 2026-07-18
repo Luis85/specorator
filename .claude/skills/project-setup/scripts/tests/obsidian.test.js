@@ -203,6 +203,14 @@ test('the obsidian devDependency is pinned to eslint-plugin-obsidianmd\'s exact 
   assert.equal(mergedPackagePatch(actionsFor()).devDependencies.obsidian, '1.8.7');
 });
 
+test('eslint-plugin-obsidianmd\'s exact @eslint/json peer is provided at the root (strict-peer/PnP)', () => {
+  // obsidianmd@0.4.1 declares peerDependencies['@eslint/json'] === '0.14.0' and
+  // imports it; node_modules PMs resolve it transitively, but Yarn PnP needs the
+  // consumer to declare it, or the generated config fails to load before any rule
+  // runs. Provide it as a root devDep pinned to that exact peer.
+  assert.equal(mergedPackagePatch(actionsFor()).devDependencies['@eslint/json'], '0.14.0');
+});
+
 test('manifest-beta.json ships mirroring manifest.json (BRAT-ready), and the publishing guide lands', () => {
   const actions = actionsFor();
   assert.equal(findWrite(actions, 'manifest-beta.json').content, findWrite(actions, 'manifest.json').content);
