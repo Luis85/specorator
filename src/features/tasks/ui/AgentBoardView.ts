@@ -413,9 +413,7 @@ export class AgentBoardView extends ItemView {
       onSaveFields: (target, fields) => this.saveTaskFields(target, fields),
       onSaveSections: (tk, s) => this.applyNoteChange(tk.path, (c) => this.noteStore.writeSections(c, s)),
       ...buildWorkOrderFieldOptions(settings, agents),
-      getLoopName: (loopId) => (loopId ? this.loopNameCache.get(loopId) : undefined),
-      onPickLoop: (target) => this.pickLoopForTask(target),
-      ...buildChainDetailCallbacks(this.plugin, (target, fields) => this.saveTaskFields(target, fields)),
+      ...buildChainDetailCallbacks(this.plugin, (target, fields) => this.saveTaskFields(target, fields), { loopNameCache: this.loopNameCache, pickLoopForTask: (target) => this.pickLoopForTask(target) }),
     }).open();
   }
 

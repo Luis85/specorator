@@ -391,7 +391,9 @@ export async function createWorkOrderFromSeed(
   // strongest signal of what this work order is "about".
   const title = seed.titleOverride?.trim() || template?.name?.trim() || seed.title || 'New work order';
   const slug = slugifyTitle(title) || 'work-order';
-  const id = `task-${timestampId(now)}-${slug}`;
+  // Dedupe the filename first, then derive id from the deduped basename — otherwise two same-second, same-title successors would collide on this id (the board/queue key) despite landing in different files.
+  const filePath = uniquePath(plugin, normalizePath(`${folder}/task-${timestampId(now)}-${slug}.md`));
+  const id = stripMarkdownExtension(filePath.split('/').pop() ?? filePath);
 
   const seedChain = resolveSeedChain(seed, template);
 
@@ -421,7 +423,6 @@ export async function createWorkOrderFromSeed(
   // Applied before the single vault.create so a chain successor's context/objective
   // seed lands in the same write as its `ready` status — see CreateWorkOrderOptions.
   const finalMarkdown = applyPostProcess(markdown, options);
-  const filePath = uniquePath(plugin, normalizePath(`${folder}/${id}.md`));
   const created = await plugin.app.vault.create(filePath, finalMarkdown);
   if (!(created instanceof TFile)) return null;
   if ((options?.reveal ?? 'note') === 'note') {

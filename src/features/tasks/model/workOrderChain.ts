@@ -58,3 +58,23 @@ export function chainConfigFrontmatterLines(config: WorkOrderChainConfig): strin
   lines.push(`chain_trigger: ${config.trigger}`);
   return lines;
 }
+
+/**
+ * Set/clear the four `chain_*` keys on an in-memory frontmatter record — the
+ * mutable-record counterpart to `chainConfigFrontmatterLines`'s hand-written
+ * YAML lines. Shared by `TaskNoteStore.writeFields` (the on-disk frontmatter
+ * record parsed from a note) and `workOrderChainSummary.ts`'s same-session
+ * snapshot sync (the Vue detail modal's in-memory `TaskSpec.frontmatter`), so
+ * the set/clear semantics can't drift between the two writers.
+ */
+export function applyChainConfigToFrontmatter(frontmatter: Record<string, unknown>, chain: WorkOrderChainConfig | null): void {
+  delete frontmatter.chain_template;
+  delete frontmatter.chain_title;
+  delete frontmatter.chain_objective;
+  delete frontmatter.chain_trigger;
+  if (!chain) return;
+  if (chain.template) frontmatter.chain_template = chain.template;
+  if (chain.title) frontmatter.chain_title = chain.title;
+  if (chain.objective) frontmatter.chain_objective = chain.objective;
+  frontmatter.chain_trigger = chain.trigger;
+}

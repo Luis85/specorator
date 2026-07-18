@@ -9,13 +9,36 @@ import { TemplateNoteStore } from '../templates/TemplateNoteStore';
 /** Resolves to the new config, `null` to clear the chain, or `undefined` when cancelled. */
 export type ChainConfigResult = WorkOrderChainConfig | null | undefined;
 
-/** Blank/whitespace-only fields collapse to `undefined`; an all-blank form clears the chain. */
-function buildChainConfig(form: {
+/** The modal's editable field set — plain strings so a blank field round-trips through `<input>`/`<textarea>` cleanly. */
+export interface ChainConfigForm {
   template: string;
   title: string;
   objective: string;
   trigger: ChainTrigger;
-}): WorkOrderChainConfig | null {
+}
+
+/**
+ * Config → form direction: seed the modal's fields from an existing chain (edit),
+ * or blank fields + the default trigger when there is none (create). Exported
+ * (pure, no DOM) so the prefill mapping — including the trigger — is covered
+ * without exercising the `Modal` subclass.
+ */
+export function initialChainForm(current: WorkOrderChainConfig | undefined): ChainConfigForm {
+  return {
+    template: current?.template ?? '',
+    title: current?.title ?? '',
+    objective: current?.objective ?? '',
+    trigger: current?.trigger ?? DEFAULT_CHAIN_TRIGGER,
+  };
+}
+
+/**
+ * Form → config direction: blank/whitespace-only fields collapse to `undefined`;
+ * an all-blank form clears the chain. Exported (pure, no DOM) per the sibling
+ * `initialChainForm` above, so both directions of the trigger mapping — and the
+ * all-blank-clears-the-chain rule — are covered without exercising the `Modal`.
+ */
+export function buildChainConfig(form: ChainConfigForm): WorkOrderChainConfig | null {
   const template = form.template.trim() || undefined;
   const title = form.title.trim() || undefined;
   const objective = form.objective.trim() || undefined;
@@ -47,10 +70,11 @@ export class ChainConfigModal extends Modal {
     this.modalEl.addClass('specorator-sp-modal', 'specorator-chain-config-modal');
     this.contentEl.createEl('p', { text: t('tasks.chainConfig.lead') });
 
-    let template = this.current?.template ?? '';
-    let title = this.current?.title ?? '';
-    let objective = this.current?.objective ?? '';
-    let trigger: ChainTrigger = this.current?.trigger ?? DEFAULT_CHAIN_TRIGGER;
+    const seed = initialChainForm(this.current);
+    let template = seed.template;
+    let title = seed.title;
+    let objective = seed.objective;
+    let trigger: ChainTrigger = seed.trigger;
 
     // Reserve the Template row's position with a placeholder container: the row
     // itself renders in once the async template list resolves, so it can't land

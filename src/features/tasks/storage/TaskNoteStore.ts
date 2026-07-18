@@ -3,7 +3,7 @@ import { stringifyYaml } from 'obsidian';
 import { parseFrontmatter } from '../../../utils/frontmatter';
 import { HANDOFF_FIELD_MARKER_STRINGS } from '../model/handoffSections';
 import type { TaskLedgerEntry, TaskPriority, TaskSpec, TaskStatus } from '../model/taskTypes';
-import type { WorkOrderChainConfig } from '../model/workOrderChain';
+import { applyChainConfigToFrontmatter, type WorkOrderChainConfig } from '../model/workOrderChain';
 import { extractSection } from '../shared/noteStoreShared';
 
 export const RUN_LEDGER_START = '<!-- specorator:run-ledger-start -->';
@@ -214,28 +214,11 @@ export class TaskNoteStore {
       else delete frontmatter.loop;
     }
     if (fields.chain !== undefined) {
-      this.applyChainFields(frontmatter, fields.chain);
+      applyChainConfigToFrontmatter(frontmatter, fields.chain);
     }
     frontmatter.updated = timestamp;
 
     return this.withFrontmatter(frontmatter, body);
-  }
-
-  /**
-   * Write or clear the `chain_*` frontmatter keys. Extracted from `writeFields` so that
-   * method stays under the fallow complexity ratchet. An explicit `null` clears the chain
-   * (all four keys); a config re-adds only the set keys plus the always-explicit trigger.
-   */
-  private applyChainFields(frontmatter: Record<string, unknown>, chain: WorkOrderChainConfig | null): void {
-    delete frontmatter.chain_template;
-    delete frontmatter.chain_title;
-    delete frontmatter.chain_objective;
-    delete frontmatter.chain_trigger;
-    if (!chain) return;
-    if (chain.template) frontmatter.chain_template = chain.template;
-    if (chain.title) frontmatter.chain_title = chain.title;
-    if (chain.objective) frontmatter.chain_objective = chain.objective;
-    frontmatter.chain_trigger = chain.trigger;
   }
 
   /**

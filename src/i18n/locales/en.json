@@ -1008,7 +1008,8 @@
       "save": "Save",
       "clear": "Clear chain",
       "cancel": "Cancel",
-      "chipNone": "None"
+      "chipNone": "None",
+      "onHandoffSuffix": "on handoff"
     }
   },
   "provider": {

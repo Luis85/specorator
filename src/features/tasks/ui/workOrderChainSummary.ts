@@ -1,7 +1,7 @@
 import { t } from '../../../i18n/i18n';
 import type SpecoratorPlugin from '../../../main';
 import type { TaskSpec } from '../model/taskTypes';
-import { parseChainConfig, type WorkOrderChainConfig } from '../model/workOrderChain';
+import { applyChainConfigToFrontmatter, parseChainConfig, type WorkOrderChainConfig } from '../model/workOrderChain';
 import { chooseChainConfig } from './ChainConfigModal';
 import type { WorkOrderDetailModalCallbacks, WorkOrderFieldUpdate } from './WorkOrderDetailModal';
 
@@ -24,12 +24,25 @@ function chainFrontmatter(task: TaskSpec): Record<string, unknown> {
 }
 
 /**
- * Chip label for a parsed config. Objective-only chains are valid (Task 1's
- * `parseChainConfig` treats an objective alone as configured), so fall back to
- * the (truncated) objective before "None" — never show "None" for a configured
- * chain.
+ * Apply `applyChainConfigToFrontmatter`'s set/clear semantics onto the
+ * in-memory task snapshot shared by reference with the Vue detail modal (the
+ * callback is invoked with the modal's own `task`, not a copy). Without this,
+ * `chainFrontmatter` above keeps reading the pre-save keys until the board's
+ * next vault-modify re-index replaces this `TaskSpec` — so reopening "Next
+ * step" in the same session would prefill from the stale config and a second
+ * Save could silently clobber the config just written. Same class of problem
+ * `WorkOrderProperties.vue`'s `pickLoop()` solves for `frontmatter.loop`;
+ * unlike `loop`, `chain_*` has no typed `TaskFrontmatter` field (a
+ * loosely-typed extension bag throughout this feature — see `chainFrontmatter`
+ * above and `WorkOrderChainCoordinator`'s `chained_to`/`chain_depth` reads),
+ * so the sync goes through the same cast rather than a direct assignment.
  */
-export function chainSummaryFromConfig(config: WorkOrderChainConfig): string {
+function syncChainFrontmatter(task: TaskSpec, chain: WorkOrderChainConfig | null): void {
+  applyChainConfigToFrontmatter(task.frontmatter as unknown as Record<string, unknown>, chain);
+}
+
+/** The label alone, before the trigger suffix — title > template > (truncated) objective > "None". */
+function chainLabelFromFields(config: WorkOrderChainConfig): string {
   if (config.title) return config.title;
   if (config.template) return config.template;
   if (config.objective) {
@@ -38,6 +51,20 @@ export function chainSummaryFromConfig(config: WorkOrderChainConfig): string {
       : config.objective;
   }
   return t('tasks.chainConfig.chipNone');
+}
+
+/**
+ * Chip label for a parsed config. Objective-only chains are valid (Task 1's
+ * `parseChainConfig` treats an objective alone as configured), so fall back to
+ * the (truncated) objective before "None" — never show "None" for a configured
+ * chain. Appends the on-handoff suffix for the `review` trigger so the chip
+ * communicates the successor's create-time, not just its content (plan Task 9
+ * Step 4); the separator is punctuation, not translated text, so only the
+ * suffix words route through `t()`.
+ */
+export function chainSummaryFromConfig(config: WorkOrderChainConfig): string {
+  const label = chainLabelFromFields(config);
+  return config.trigger === 'review' ? `${label} · ${t('tasks.chainConfig.onHandoffSuffix')}` : label;
 }
 
 /** Sync summary for the "Next step" chip, reading the task's current `chain_*` frontmatter. */
@@ -61,20 +88,37 @@ async function configureChainForTask(
   const result = await chooseChainConfig(plugin, current);
   if (result === undefined) return undefined;
   await saveFields(task, { chain: result });
+  syncChainFrontmatter(task, result);
   return result ? chainSummaryFromConfig(result) : t('tasks.chainConfig.chipNone');
 }
 
 /**
- * The `onConfigureChain` / `getChainSummary` callback pair, bundled for a single
+ * Loop deps needed to fold `AgentBoardView`'s `getLoopName`/`onPickLoop` wiring
+ * into the shared bundle below. Optional at the call site: only `AgentBoardView`
+ * wires a loop picker into this modal today — `WorkOrderActivityProvider`'s
+ * fallback modal omits it, and passing no `loopDeps` there keeps that call site
+ * un-changed (no dead callbacks gained).
+ */
+export interface ChainDetailLoopDeps {
+  loopNameCache: Map<string, string>;
+  pickLoopForTask: (task: TaskSpec) => Promise<string | undefined>;
+}
+
+/**
+ * The `onConfigureChain` / `getChainSummary` callback pair — plus, when
+ * `loopDeps` is supplied, `getLoopName` / `onPickLoop` — bundled for a single
  * spread at each `WorkOrderDetailModalCallbacks` call site (same shape as
  * `buildWorkOrderFieldOptions`).
  */
 export function buildChainDetailCallbacks(
   plugin: SpecoratorPlugin,
   saveFields: (task: TaskSpec, fields: WorkOrderFieldUpdate) => Promise<void>,
-): Pick<WorkOrderDetailModalCallbacks, 'onConfigureChain' | 'getChainSummary'> {
+  loopDeps?: ChainDetailLoopDeps,
+): Pick<WorkOrderDetailModalCallbacks, 'onConfigureChain' | 'getChainSummary' | 'getLoopName' | 'onPickLoop'> {
   return {
     onConfigureChain: (task) => configureChainForTask(plugin, task, saveFields),
     getChainSummary: (task) => chainSummaryForTask(task),
+    getLoopName: loopDeps ? (loopId) => (loopId ? loopDeps.loopNameCache.get(loopId) : undefined) : undefined,
+    onPickLoop: loopDeps ? (task) => loopDeps.pickLoopForTask(task) : undefined,
   };
 }

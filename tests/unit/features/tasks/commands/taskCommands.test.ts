@@ -1,10 +1,14 @@
+import { TFile } from 'obsidian';
+
 import {
   __taskCaptureTestUtils,
   __taskCommandTestUtils,
+  createWorkOrderFromSeed,
   resolveArchiveFolder,
 } from '../../../../../src/features/tasks/commands/taskCommands';
 import { TaskNoteStore } from '../../../../../src/features/tasks/storage/TaskNoteStore';
 import { TemplateNoteStore } from '../../../../../src/features/tasks/templates/TemplateNoteStore';
+import type SpecoratorPlugin from '../../../../../src/main';
 
 const { buildWorkOrderMarkdown, buildWorkOrderFromTemplate, slugifyTitle } = __taskCommandTestUtils;
 
@@ -360,5 +364,82 @@ describe('work-order builder — chain metadata', () => {
     expect(fm.chain_trigger).toBe('review');
     expect(fm.chained_from).toBe('task-1');
     expect(fm.chain_depth).toBe(1);
+  });
+});
+
+describe('createWorkOrderFromSeed — same-second id collision', () => {
+  const WORK_ORDER_FOLDER = 'Agent Board/tasks';
+
+  /**
+   * Minimal in-memory vault: just enough of the real `Vault` surface
+   * (`getAbstractFileByPath` / `createFolder` / `create`) for
+   * `createWorkOrderFromSeed` to run against real path/content instead of a
+   * call-recording stub. No template is used below, so — unlike
+   * workOrderChaining.integration.test.ts's fuller FakeVault — `read` /
+   * `process` / `getMarkdownFiles` aren't needed.
+   */
+  class FakeVault {
+    private readonly files = new Map<string, string>();
+
+    getContent(path: string): string | undefined {
+      return this.files.get(path);
+    }
+
+    getAbstractFileByPath = (path: string): TFile | null =>
+      this.files.has(path) ? Object.assign(new TFile(), { path }) : null;
+
+    createFolder = async (): Promise<void> => undefined;
+
+    create = jest.fn(async (path: string, content: string): Promise<TFile> => {
+      this.files.set(path, content);
+      return Object.assign(new TFile(), { path });
+    });
+  }
+
+  function buildPlugin(vault: FakeVault): SpecoratorPlugin {
+    return {
+      settings: { agentBoardWorkOrderFolder: WORK_ORDER_FOLDER },
+      app: { vault },
+    } as unknown as SpecoratorPlugin;
+  }
+
+  beforeEach(() => {
+    // Explicit seed.provider/seed.model short-circuit inlineRunDefaults before
+    // it would otherwise call resolveAgentBoardDefaultProvider/Model (which
+    // touch ProviderRegistry) — so a fixed system time is the only fake needed
+    // to force two calls into the same `timestampId` second, deterministically
+    // (real timers would very likely — but not certainly — land in the same
+    // second too, since both calls run synchronously back to back).
+    jest.useFakeTimers();
+    jest.setSystemTime(new Date('2026-07-18T10:00:00.000Z').getTime());
+  });
+
+  afterEach(() => {
+    jest.useRealTimers();
+  });
+
+  it('gives two same-title work orders created into the same folder distinct frontmatter ids matching their filenames', async () => {
+    const vault = new FakeVault();
+    const plugin = buildPlugin(vault);
+    const seed = { title: 'Same title', provider: 'claude', model: 'sonnet' };
+
+    const first = await createWorkOrderFromSeed(plugin, seed, { reveal: 'none' });
+    const second = await createWorkOrderFromSeed(plugin, seed, { reveal: 'none' });
+
+    expect(first).not.toBeNull();
+    expect(second).not.toBeNull();
+    expect(first!.path).not.toBe(second!.path);
+
+    const store = new TaskNoteStore();
+    const firstFm = store.parse(first!.path, vault.getContent(first!.path)!).task.frontmatter;
+    const secondFm = store.parse(second!.path, vault.getContent(second!.path)!).task.frontmatter;
+
+    // The bug: both would previously carry the SAME pre-dedupe id even though
+    // uniquePath gave them distinct filenames — the board/queue key work
+    // orders by this id, so the collision silently merged two cards into one.
+    expect(firstFm.id).not.toBe(secondFm.id);
+    expect(first!.path).toBe(`${WORK_ORDER_FOLDER}/${firstFm.id}.md`);
+    expect(second!.path).toBe(`${WORK_ORDER_FOLDER}/${secondFm.id}.md`);
+    expect(secondFm.id).toBe(`${firstFm.id}-2`);
   });
 });

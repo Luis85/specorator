@@ -123,6 +123,14 @@ const canConfigureChain = computed(() => Boolean(cb.onConfigureChain));
 const chainLabel = ref(cb.getChainSummary?.(props.task) ?? t('tasks.chainConfig.chipNone'));
 function configureChain(): void {
   void (async () => {
+    // Unlike pickLoop()'s picked slug, onConfigureChain resolves only the chip
+    // label (a chain has 4 fields; a label can't be reverse-parsed back into
+    // them without risking corrupting a truncated objective). The in-place
+    // frontmatter sync this needs (parity with pickLoop's `task.frontmatter.loop`
+    // sync below) instead happens inside the callback's implementation
+    // (configureChainForTask in workOrderChainSummary.ts), which holds the real
+    // WorkOrderChainConfig and is handed this same `task` object by reference —
+    // so `props.task.frontmatter` is already correct by the time this resolves.
     const summary = await cb.onConfigureChain?.(props.task);
     if (summary === undefined) return;
     chainLabel.value = summary;
