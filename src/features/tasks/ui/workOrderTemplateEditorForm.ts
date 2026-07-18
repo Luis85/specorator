@@ -3,7 +3,12 @@ import { t } from '../../../i18n/i18n';
 import type SpecoratorPlugin from '../../../main';
 import { LoopNoteStore } from '../loops/LoopNoteStore';
 import type { TaskPriority } from '../model/taskTypes';
-import type { SaveTemplateInput } from '../templates/TemplateNoteStore';
+import {
+  type ChainTrigger,
+  parseChainConfig,
+  type WorkOrderChainConfig,
+} from '../model/workOrderChain';
+import { type SaveTemplateInput,TemplateNoteStore } from '../templates/TemplateNoteStore';
 import type { WorkOrderTemplate } from '../templates/templateTypes';
 
 // Pure form data + option/payload helpers for the work-order template editor.
@@ -31,6 +36,11 @@ export interface TemplateEditorForm {
   loop: string;
   agent: string;
   body: string;
+  /** Default-successor fields; a blank trigger resolves to `DEFAULT_CHAIN_TRIGGER` on save. */
+  chainTemplate: string;
+  chainTitle: string;
+  chainObjective: string;
+  chainTrigger: '' | ChainTrigger;
 }
 
 // `null` label means "Use default", resolved through i18n at render time so the
@@ -42,6 +52,18 @@ export const PRIORITY_OPTIONS: Array<{ value: '' | TaskPriority; label: string |
   { value: '2 - normal', label: '2 - normal' },
   { value: '3 - low', label: '3 - low' },
 ];
+
+/** The four default-successor fields, split out so `createInitialForm` keeps its own complexity flat. */
+type ChainFormFields = Pick<TemplateEditorForm, 'chainTemplate' | 'chainTitle' | 'chainObjective' | 'chainTrigger'>;
+
+function initialChainFields(existing: WorkOrderTemplate | null): ChainFormFields {
+  return {
+    chainTemplate: existing?.chain?.template ?? '',
+    chainTitle: existing?.chain?.title ?? '',
+    chainObjective: existing?.chain?.objective ?? '',
+    chainTrigger: existing?.chain?.trigger ?? '',
+  };
+}
 
 /** Seed the editable form from the existing template (or blank defaults for a new one). */
 export function createInitialForm(existing: WorkOrderTemplate | null): TemplateEditorForm {
@@ -55,7 +77,24 @@ export function createInitialForm(existing: WorkOrderTemplate | null): TemplateE
     loop: existing?.loop ?? '',
     agent: existing?.agent ?? '',
     body: existing?.body ?? defaultBody(),
+    ...initialChainFields(existing),
   };
+}
+
+/**
+ * Collapse the form's chain fields into a `WorkOrderChainConfig`, or `undefined`
+ * when no successor is configured. Delegates to the canonical `parseChainConfig`
+ * (same trimming, all-blank → none, and blank-trigger → default) by mapping the
+ * form fields onto the `chain_*` keys it reads — one source of truth for the
+ * predicate, and it keeps `buildTemplatePayload` under the complexity ratchet.
+ */
+function buildTemplateChain(form: TemplateEditorForm): WorkOrderChainConfig | undefined {
+  return parseChainConfig({
+    chain_template: form.chainTemplate,
+    chain_title: form.chainTitle,
+    chain_objective: form.chainObjective,
+    chain_trigger: form.chainTrigger,
+  }) ?? undefined;
 }
 
 /**
@@ -77,6 +116,7 @@ export function buildTemplatePayload(
     loop: form.loop.trim() || undefined,
     agent: form.agent.trim() || undefined,
     body: form.body.trim(),
+    chain: buildTemplateChain(form),
     originalPath,
   };
 }
@@ -124,6 +164,23 @@ export async function loadLoopOptions(plugin: SpecoratorPlugin): Promise<Templat
   const folder = plugin.settings.agentBoardLoopFolder || 'Agent Board/loops';
   const { loops } = await new LoopNoteStore().list(plugin.app.vault, folder);
   return loops.map((loop) => ({ value: loop.id, label: loop.name }));
+}
+
+/**
+ * Template names for the default-successor picker, keyed by name (the chain config
+ * references a template by name, mirroring `chain_template`). Excludes the currently
+ * edited template so a template cannot trivially chain to itself. An unknown stored
+ * name is preserved via the form's v-model ref, same as `loadLoopOptions`.
+ */
+export async function loadTemplateNameOptions(
+  plugin: SpecoratorPlugin,
+  currentName: string,
+): Promise<TemplateEditorOption[]> {
+  const folder = plugin.settings.agentBoardTemplateFolder || 'Agent Board/templates';
+  const { templates } = await new TemplateNoteStore().list(plugin.app.vault, folder);
+  return templates
+    .filter((tpl) => tpl.name !== currentName)
+    .map((tpl) => ({ value: tpl.name, label: tpl.name }));
 }
 
 /**

@@ -9,6 +9,7 @@ import {
   createInitialForm,
   loadAgentOptions,
   loadLoopOptions,
+  loadTemplateNameOptions,
   modelOptionList,
   PRIORITY_OPTIONS,
   providerOptionList,
@@ -52,6 +53,12 @@ const priority = ref(form.priority);
 const loop = ref(form.loop);
 const agent = ref(form.agent);
 const body = ref(form.body);
+const chainTemplate = ref(form.chainTemplate);
+const chainTitle = ref(form.chainTitle);
+const chainObjective = ref(form.chainObjective);
+// Blank trigger resolves to the default so the select always shows a concrete
+// option; an existing template's saved trigger is preserved.
+const chainTrigger = ref(form.chainTrigger || 'done');
 
 const providerOptions = providerOptionList(settings);
 // Model options track the selected provider; a provider change resets the model.
@@ -66,11 +73,14 @@ function priorityLabel(option: (typeof PRIORITY_OPTIONS)[number]): string {
 // touches the select preserves the stored value).
 const loopOptions = ref<TemplateEditorOption[]>([]);
 const agentOptions = ref<TemplateEditorOption[]>([]);
+const chainTemplateOptions = ref<TemplateEditorOption[]>([]);
 onMounted(() => {
   // Swallow vault I/O / roster rejections (leaving the select at its empty
   // option) so a failed listing never escapes as an unhandled promise.
   void loadLoopOptions(pluginRef).then((options) => { loopOptions.value = options; }).catch(() => {});
   void loadAgentOptions(pluginRef, agent.value).then((options) => { agentOptions.value = options; }).catch(() => {});
+  // The successor-template picker excludes this template's own name (no self-loop).
+  void loadTemplateNameOptions(pluginRef, name.value).then((options) => { chainTemplateOptions.value = options; }).catch(() => {});
 });
 
 function onProviderChange(value: string): void {
@@ -99,6 +109,10 @@ async function submit(): Promise<void> {
       loop: loop.value,
       agent: agent.value,
       body: body.value,
+      chainTemplate: chainTemplate.value,
+      chainTitle: chainTitle.value,
+      chainObjective: chainObjective.value,
+      chainTrigger: chainTrigger.value,
     },
     existing?.path,
   );
@@ -246,6 +260,63 @@ async function submit(): Promise<void> {
         {{ option.label }}
       </option>
     </select>
+  </SettingRow>
+
+  <SettingRow
+    :name="t('tasks.templateEditor.chainHeading')"
+    extra-class="setting-item-heading"
+  />
+
+  <SettingRow :name="t('tasks.chainConfig.templateLabel')">
+    <select
+      v-model="chainTemplate"
+      class="dropdown"
+      data-field="chain-template"
+    >
+      <option value="">
+        {{ t('tasks.chainConfig.templateNone') }}
+      </option>
+      <option
+        v-for="option in chainTemplateOptions"
+        :key="option.value"
+        :value="option.value"
+      >
+        {{ option.label }}
+      </option>
+    </select>
+  </SettingRow>
+
+  <SettingRow :name="t('tasks.chainConfig.triggerLabel')">
+    <select
+      v-model="chainTrigger"
+      class="dropdown"
+      data-field="chain-trigger"
+    >
+      <option value="done">
+        {{ t('tasks.chainConfig.triggerDone') }}
+      </option>
+      <option value="review">
+        {{ t('tasks.chainConfig.triggerReview') }}
+      </option>
+    </select>
+  </SettingRow>
+
+  <SettingRow :name="t('tasks.chainConfig.titleLabel')">
+    <input
+      v-model="chainTitle"
+      type="text"
+      data-field="chain-title"
+      :placeholder="t('tasks.chainConfig.titlePlaceholder')"
+    >
+  </SettingRow>
+
+  <SettingRow :name="t('tasks.chainConfig.objectiveLabel')">
+    <input
+      v-model="chainObjective"
+      type="text"
+      data-field="chain-objective"
+      :placeholder="t('tasks.chainConfig.objectivePlaceholder')"
+    >
   </SettingRow>
 
   <SettingRow
