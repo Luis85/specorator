@@ -34,7 +34,7 @@ test('detectPackageManager reads the lockfile, defaults to npm', () => {
 
 test('detect reports tooling presence from package.json', () => {
   const p = tmpProject({
-    'package.json': { devDependencies: { eslint: '^9', vitest: '^2', typescript: '^5' } },
+    'package.json': { devDependencies: { eslint: '^9', vitest: '^2', typescript: '^5', esbuild: '^0.16.0' } },
     'tsconfig.json': '{}',
   });
   try {
@@ -44,6 +44,7 @@ test('detect reports tooling presence from package.json', () => {
     assert.equal(state.testFramework, 'vitest');
     assert.equal(state.typescript, true);
     assert.equal(state.typescriptVersion, '^5'); // the kept range (Obsidian TS-pin collision check)
+    assert.equal(state.esbuildVersion, '^0.16.0'); // the kept range (Obsidian esbuild.context() check)
   } finally {
     p.cleanup();
   }

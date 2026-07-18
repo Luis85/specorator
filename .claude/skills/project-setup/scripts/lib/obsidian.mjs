@@ -751,6 +751,17 @@ function typescriptTooOld(range) {
   return m ? Number(m[0]) < 5 : false;
 }
 
+// The generated esbuild.config.mjs calls esbuild.context() (the watch/rebuild API
+// that landed in 0.17.0), and mergeJson keeps a brownfield devDependencies.esbuild
+// scalar, so an existing 0.16.x survives and breaks `build`/`dev` on the first run.
+// esbuild is 0.x, so read major.minor: 0.<17 is too old; 1.x (future) or a missing
+// digit (latest / *) is assumed adequate.
+function esbuildTooOld(range) {
+  if (typeof range !== 'string') return false;
+  const m = /(\d+)\.(\d+)/.exec(range);
+  return m ? Number(m[1]) === 0 && Number(m[2]) < 17 : false;
+}
+
 function planPackageBasics(options, state, version) {
   const o = options.obsidian;
   const scripts = {
@@ -781,6 +792,13 @@ function planPackageBasics(options, state, version) {
   if (typescriptTooOld(state?.typescriptVersion)) {
     notices.push(
       notice(`Existing devDependencies.typescript (\`${state.typescriptVersion}\`) kept — the generated tsconfig.json uses moduleResolution "bundler", which needs TypeScript 5+. Upgrade to \`${PINNED.typescript}\` (or any 5+) or the typecheck/verify gate fails on the first run.`),
+    );
+  }
+  // Same shape for esbuild: a kept 0.16.x can't build the generated config's
+  // esbuild.context() call, so warn rather than ship a scaffold whose build is dead.
+  if (esbuildTooOld(state?.esbuildVersion)) {
+    notices.push(
+      notice(`Existing devDependencies.esbuild (\`${state.esbuildVersion}\`) kept — the generated esbuild.config.mjs uses esbuild.context(), which needs esbuild 0.17+. Upgrade to \`${PINNED.esbuild}\` (or any 0.17+) or the build/dev gate fails on the first run.`),
     );
   }
   // Force `version`: a brownfield package.json (e.g. 1.0.0) must be synced to the

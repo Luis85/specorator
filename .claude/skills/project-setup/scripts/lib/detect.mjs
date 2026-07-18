@@ -234,6 +234,9 @@ export function detect(cwd) {
     // Obsidian tsconfig needs 5+ for moduleResolution "bundler", so planPackageBasics
     // warns when an existing 4.x would break the generated typecheck gate.
     typescriptVersion: deps.typescript ?? null,
+    // Likewise the kept esbuild range: the generated esbuild.config.mjs calls
+    // esbuild.context() (landed in 0.17), so an existing 0.16.x would break `build`.
+    esbuildVersion: deps.esbuild ?? null,
     eslint: has('eslint'),
     fallow: has('fallow'),
     testFramework,

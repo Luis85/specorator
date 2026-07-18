@@ -233,9 +233,11 @@ test('npm version stages manifest-beta.json alongside manifest.json (BRAT lockst
   assert.match(pkg.patch.scripts.version, /git add manifest\.json manifest-beta\.json versions\.json/);
 });
 
-test('vitest discovers .test and .spec across JS/TS, not just *.test.ts', () => {
+test('vitest discovers .test and .spec across JS/TS incl. module forms (.mts/.cts), not just *.test.ts', () => {
+  // --passWithNoTests means a repo whose suite is only in tests/*.spec.mts would
+  // pass verify/CI without running — the include must cover mts/cts too.
   const vitest = findWrite(actionsFor(), 'vitest.config.mjs').content;
-  assert.match(vitest, /include: \['tests\/\*\*\/\*\.\{test,spec\}\.\{ts,tsx,js,jsx,mjs,cjs\}'\]/);
+  assert.match(vitest, /include: \['tests\/\*\*\/\*\.\{test,spec\}\.\{ts,mts,cts,tsx,js,jsx,mjs,cjs\}'\]/);
 });
 
 test('dependabot ships only with github integration', () => {
@@ -288,6 +290,19 @@ test('a kept sub-5 TypeScript devDependency is flagged (bundler-resolution tscon
   assert.ok(!hasTsNotice({}));
   // The notice is advisory — the package.json patch still applies (non-blocking).
   assert.ok(findMerge(actionsFor({}, { typescriptVersion: '^4.9.0' }), 'package.json'));
+});
+
+test('a kept pre-0.17 esbuild devDependency is flagged (generated config uses esbuild.context())', () => {
+  const hasEsbuildNotice = (state) =>
+    actionsFor({}, state).some((a) => a.type === 'notice' && /esbuild.*esbuild\.context\(\).*0\.17\+/is.test(a.message));
+  assert.ok(hasEsbuildNotice({ esbuildVersion: '^0.16.0' }), 'expected an esbuild-too-old notice for 0.16.x');
+  assert.ok(hasEsbuildNotice({ esbuildVersion: '0.16.17' }));
+  // 0.17+, a future 1.x, latest/*, or absent (greenfield adds the pin) — no warning.
+  assert.ok(!hasEsbuildNotice({ esbuildVersion: '^0.17.0' }));
+  assert.ok(!hasEsbuildNotice({ esbuildVersion: '0.28.1' }));
+  assert.ok(!hasEsbuildNotice({ esbuildVersion: '^1.0.0' }));
+  assert.ok(!hasEsbuildNotice({ esbuildVersion: 'latest' }));
+  assert.ok(!hasEsbuildNotice({}));
 });
 
 test('manifest-only brownfield seeds the package version from the manifest (no check:artifacts desync)', () => {
