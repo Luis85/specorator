@@ -155,7 +155,7 @@ function planSources(options) {
     ...shared,
     activateViewImport: o.vue ? "import { activateView } from './ui/registerViews';\n" : '',
     openViewCommand: o.vue
-      ? "\n  // callback — reveal the plugin view.\n  plugin.commands.addSimple('open-view', 'Open view', () => {\n    void activateView(plugin);\n  });\n"
+      ? "\n  // callback — reveal the plugin view (errors.wrap surfaces a failure as a notice).\n  plugin.commands.addSimple(\n    'open-view',\n    'Open view',\n    plugin.errors.wrap('open the view', () => activateView(plugin)),\n  );\n"
       : '',
   };
   const actions = [

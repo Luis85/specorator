@@ -4,9 +4,13 @@ import { VIEW_TYPE, VueView } from './VueView';
 // View + ribbon wiring, kept out of main.ts so onload reads as orchestration.
 export function registerViews(plugin: {{pluginClass}}): void {
   plugin.registerView(VIEW_TYPE, (leaf) => new VueView(leaf, plugin));
-  plugin.addRibbonIcon('layout-dashboard', {{nameLiteral}}, () => {
-    void activateView(plugin);
-  });
+  // errors.wrap: if activateView rejects (a view mount/route failure), the user
+  // sees a notice instead of a ribbon click that silently does nothing.
+  plugin.addRibbonIcon(
+    'layout-dashboard',
+    {{nameLiteral}},
+    plugin.errors.wrap('open the view', () => activateView(plugin)),
+  );
 }
 
 // Reveal the plugin's leaf, creating it in the right sidebar if absent.

@@ -6,7 +6,15 @@
 // community "Hot Reload" plugin. `node esbuild.config.mjs` watches;
 // `node esbuild.config.mjs production` does a minified one-shot build.
 import esbuild from 'esbuild';
-import { copyFileSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import {
+  copyFileSync,
+  existsSync,
+  mkdirSync,
+  readFileSync,
+  rmSync,
+  watch,
+  writeFileSync,
+} from 'node:fs';
 {{nodeModuleImport}}import path from 'node:path';
 import process from 'node:process';
 {{vueImport}}
@@ -107,4 +115,17 @@ if (prod) {
   await context.dispose();
 } else {
   await context.watch();
+  // esbuild only watches its module graph; src/styles.css is folded into styles.css
+  // by the deploy plugin's onEnd but is never imported, so a stylesheet-only edit
+  // wouldn't rebuild. Watch it directly and trigger a rebuild (debounced — editors
+  // emit several fs events per save) so the base sheet reaches the vault too.
+  if (existsSync('src/styles.css')) {
+    let pending;
+    watch('src/styles.css', () => {
+      clearTimeout(pending);
+      pending = setTimeout(() => {
+        void context.rebuild().catch(() => {});
+      }, 50);
+    });
+  }
 }
