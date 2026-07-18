@@ -49,7 +49,11 @@ const toPosix = (p) => p.split(sep).join('/');
 
 function countImportantIn(text) {
   const stripped = text.replace(/\/\*[\s\S]*?\*\//g, '');
-  return (stripped.match(/!important/g) ?? []).length;
+  // CSS is case-insensitive and allows whitespace between `!` and `important`, so
+  // `! IMPORTANT` is still an important declaration. Match those forms (comments
+  // are already stripped) so formatting can't slip a declaration past the ratchet
+  // that the Obsidian marketplace check would still reject.
+  return (stripped.match(/!\s*important/gi) ?? []).length;
 }
 
 function countVueImportant(absPath) {

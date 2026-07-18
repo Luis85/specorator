@@ -108,8 +108,10 @@ test('greenfield apply: full scaffold lands, second apply converges to a no-op',
   }
 });
 
-test('brownfield apply: an existing manifest and entry are kept byte-for-byte', () => {
-  const manifest = JSON.stringify({ id: 'mine', version: '3.2.1', minAppVersion: '1.4.0' });
+test('brownfield apply: a complete existing manifest and entry are kept byte-for-byte', () => {
+  // Complete = carries minAppVersion + isDesktopOnly, so neither reconcile fires;
+  // the non-destructive guarantee is that we never rewrite a manifest that has no gap.
+  const manifest = JSON.stringify({ id: 'mine', version: '3.2.1', minAppVersion: '1.4.0', isDesktopOnly: true });
   const p = tmpProject({ 'manifest.json': manifest, 'src/main.ts': '// mine\n' });
   try {
     const options = loadFrom(p.dir, { obsidian: OBSIDIAN });

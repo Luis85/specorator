@@ -618,6 +618,27 @@ test('a kept manifest whose isDesktopOnly disagrees with the mobile answer warns
   assert.ok(!agree.some((a) => a.type === 'notice' && /isDesktopOnly/.test(a.message)));
 });
 
+test('a brownfield manifest missing isDesktopOnly is reconciled to true for desktop-only mode', () => {
+  const findManifestMerge = (actions) =>
+    actions.find(
+      (a) => a.type === 'mergeJson' && a.path === 'manifest.json' && a.patch.isDesktopOnly === true && (a.force ?? []).includes('isDesktopOnly'),
+    );
+  // Missing flag + desktop-only answer -> force it true (a kept manifest defaults
+  // to mobile-ready in Obsidian, contradicting the build/docs).
+  assert.ok(
+    findManifestMerge(actionsFor({ mobile: false }, { obsidianManifest: { version: '1.0.0' } })),
+    'expected an isDesktopOnly reconcile for a manifest missing the flag',
+  );
+  // Non-boolean flag is also reconciled (force overwrites the malformed value).
+  assert.ok(findManifestMerge(actionsFor({ mobile: false }, { obsidianManifest: { version: '1.0.0', isDesktopOnly: 'yes' } })));
+  // Not touched when mobile-ready was chosen (a missing flag already means mobile-ready).
+  assert.ok(!findManifestMerge(actionsFor({ mobile: true }, { obsidianManifest: { version: '1.0.0' } })));
+  // Not touched when the flag is already an explicit boolean (don't clobber a choice).
+  assert.ok(!findManifestMerge(actionsFor({ mobile: false }, { obsidianManifest: { version: '1.0.0', isDesktopOnly: false } })));
+  // Greenfield (no existing manifest) writes the flag directly — no reconcile action.
+  assert.ok(!findManifestMerge(actionsFor({ mobile: false })));
+});
+
 test('an existing .npmrc without tag-version-prefix warns (release tag policy)', () => {
   const warned = planObsidian(optionsWith(BASE), { npmrcNeedsTagPrefix: true });
   assert.ok(warned.some((a) => a.type === 'notice' && /tag-version-prefix/.test(a.message)));

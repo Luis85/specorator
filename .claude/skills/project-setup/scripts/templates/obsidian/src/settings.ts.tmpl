@@ -50,8 +50,12 @@ export class {{settingsTab}} extends PluginSettingTab {
       .setName('Greeting')
       .setDesc('Shown by the sample command and view.')
       .addText((text) =>
-        text.setValue(this.plugin.settings.greeting).onChange(async (value) => {
-          await this.plugin.saveSettings({ greeting: value });
+        // Route the save through ErrorService so a rejected write (adapter/disk
+        // failure) surfaces a notice instead of an unhandled rejection.
+        text.setValue(this.plugin.settings.greeting).onChange((value) => {
+          void this.plugin.errors.run('save the greeting', () =>
+            this.plugin.saveSettings({ greeting: value }),
+          );
         }),
       );
 
@@ -59,8 +63,10 @@ export class {{settingsTab}} extends PluginSettingTab {
       .setName('Debug logging')
       .setDesc('Log debug and info messages to the developer console.')
       .addToggle((toggle) =>
-        toggle.setValue(this.plugin.settings.debugLogging).onChange(async (value) => {
-          await this.plugin.saveSettings({ debugLogging: value });
+        toggle.setValue(this.plugin.settings.debugLogging).onChange((value) => {
+          void this.plugin.errors.run('save the debug-logging setting', () =>
+            this.plugin.saveSettings({ debugLogging: value }),
+          );
         }),
       );
   }

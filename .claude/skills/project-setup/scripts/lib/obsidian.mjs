@@ -145,11 +145,22 @@ function planManifest(o, state, version) {
     existing && !existing.minAppVersion
       ? [{ type: 'mergeJson', path: 'manifest.json', patch: { minAppVersion: minApp } }]
       : [];
+  // A brownfield manifest that OMITS isDesktopOnly (or carries a non-boolean)
+  // defaults to mobile-ready in Obsidian. If the user chose desktop-only, the
+  // build/lint/docs follow that answer, so a kept manifest without the flag would
+  // ship advertised as mobile-ready. Force it true — gated on a non-boolean
+  // current value, so an explicit choice is never clobbered (an explicit-false
+  // mismatch is left to the notice above, consistent with skip-if-exists).
+  const desktopOnlyReconcile =
+    existing && !o.mobile && typeof existing.isDesktopOnly !== 'boolean'
+      ? [{ type: 'mergeJson', path: 'manifest.json', patch: { isDesktopOnly: true }, force: ['isDesktopOnly'] }]
+      : [];
   return [
     ...notices,
     write('manifest.json', manifest),
     write('manifest-beta.json', betaManifest),
     ...minAppReconcile,
+    ...desktopOnlyReconcile,
     versionsAction,
   ];
 }

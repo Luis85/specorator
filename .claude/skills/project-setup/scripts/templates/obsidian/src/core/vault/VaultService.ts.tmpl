@@ -25,4 +25,14 @@ export class VaultService {
     if (existing) await this.app.vault.modify(existing, content);
     else await this.app.vault.create(normalized, content);
   }
+
+  // Atomic append. Vault.process serializes read-modify-write, so concurrent
+  // callers (a double-tapped command) can't both read the same content and
+  // clobber each other — a plain read-then-write can silently drop an append.
+  // A missing file is created via write().
+  async append(path: string, content: string): Promise<void> {
+    const existing = this.app.vault.getFileByPath(normalizePath(path));
+    if (existing) await this.app.vault.process(existing, (data) => data + content);
+    else await this.write(path, content);
+  }
 }

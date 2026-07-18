@@ -81,10 +81,13 @@ async function appendGreetingToLog(plugin: {{pluginClass}}): Promise<void> {
   await plugin.errors.run('append the greeting to the log note', async () => {
     const path = 'logs/greeting-log.md';
     await plugin.vault.ensureFolder('logs');
-    const previous = (await plugin.vault.read(path)) ?? '';
-    await plugin.vault.write(path, `${previous}${greeting}\n`);
+    // Atomic append: a double-tapped hotkey must not read-then-write the same
+    // content twice and drop a line (see VaultService.append / Vault.process).
+    await plugin.vault.append(path, `${greeting}\n`);
+    // Read back (after the atomic write) to report the running total.
+    const total = (await plugin.vault.read(path))?.split('\n').filter(Boolean).length ?? 0;
     plugin.logger.debug('appended greeting', path);
-    plugin.notices.info(t('notice.greetingAppended'));
+    plugin.notices.info(t('notice.greetingAppended', { count: total }));
   });
 }
 

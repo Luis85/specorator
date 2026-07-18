@@ -18,4 +18,24 @@ describe('VaultService', () => {
     await service.write('note.md', 'two');
     expect(await service.read('note.md')).toBe('two');
   });
+
+  it('append creates the file, then adds to it without clobbering', async () => {
+    const service = new VaultService(new App());
+    await service.append('log.md', 'a\n');
+    await service.append('log.md', 'b\n');
+    expect(await service.read('log.md')).toBe('a\nb\n');
+  });
+
+  it('append is atomic: concurrent appends do not drop writes', async () => {
+    const service = new VaultService(new App());
+    await service.write('log.md', '');
+    // A plain read-then-write would let these interleave and lose lines; process()
+    // serializes the read-modify-write so every line survives.
+    await Promise.all(Array.from({ length: 20 }, (_, i) => service.append('log.md', `${i}\n`)));
+    const lines = (await service.read('log.md'))!
+      .trim()
+      .split('\n')
+      .sort((a, b) => Number(a) - Number(b));
+    expect(lines).toEqual(Array.from({ length: 20 }, (_, i) => String(i)));
+  });
 });

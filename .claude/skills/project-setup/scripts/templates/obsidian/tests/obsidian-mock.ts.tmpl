@@ -54,6 +54,14 @@ class MockVault {
     return Promise.resolve(this.files.get(file.path) ?? '');
   }
 
+  // Atomic read-modify-write, mirroring Obsidian's Vault.process: the whole
+  // transform runs to completion before any other write is observed.
+  process(file: TFile, fn: (data: string) => string): Promise<string> {
+    const next = fn(this.files.get(file.path) ?? '');
+    this.files.set(file.path, next);
+    return Promise.resolve(next);
+  }
+
   on(name: string, _callback: (...args: unknown[]) => unknown): { name: string } {
     return { name };
   }
