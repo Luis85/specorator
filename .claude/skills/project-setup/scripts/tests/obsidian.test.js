@@ -183,17 +183,18 @@ test('the i18n scaffold ships by default and notice text is lint-forced through 
 
 test('hooks are opt-in: no .claude/settings.json by default; slash commands always ship', () => {
   const actions = actionsFor();
-  assert.equal(findWrite(actions, '.claude/settings.json'), undefined, 'no hooks -> no settings.json');
+  assert.equal(findMerge(actions, '.claude/settings.json'), undefined, 'no hooks -> no settings.json');
   for (const c of ['add-command', 'add-setting', 'new-service', 'release']) {
     assert.ok(findWrite(actions, `.claude/commands/${c}.md`), `missing slash command ${c}`);
   }
-  // Opting in wires SessionStart (deps install) and a qualityGate Stop hook.
-  const settings = JSON.parse(findWrite(optionsForHooks({ sessionStart: true, qualityGate: true }), '.claude/settings.json').content);
-  assert.ok(settings.hooks.SessionStart, 'missing SessionStart hook');
-  assert.ok(settings.hooks.Stop, 'missing qualityGate Stop hook');
-  assert.match(settings.hooks.Stop[0].hooks[0].command, /typecheck.*lint/);
+  // Opting in wires SessionStart (deps install) and a qualityGate Stop hook,
+  // merged (not written) so it survives an existing .claude/settings.json.
+  const merge = findMerge(optionsForHooks({ sessionStart: true, qualityGate: true }), '.claude/settings.json');
+  assert.ok(merge.patch.hooks.SessionStart, 'missing SessionStart hook');
+  assert.ok(merge.patch.hooks.Stop, 'missing qualityGate Stop hook');
+  assert.match(merge.patch.hooks.Stop[0].hooks[0].command, /typecheck.*lint/);
   // Neither on -> still no settings.json.
-  assert.equal(findWrite(optionsForHooks({}), '.claude/settings.json'), undefined);
+  assert.equal(findMerge(optionsForHooks({}), '.claude/settings.json'), undefined);
 });
 
 test('manifest-beta.json ships mirroring manifest.json (BRAT-ready), and the publishing guide lands', () => {
@@ -202,6 +203,20 @@ test('manifest-beta.json ships mirroring manifest.json (BRAT-ready), and the pub
   const pub = findWrite(actions, 'docs/publishing.md');
   assert.match(pub.content, /BRAT/);
   assert.match(pub.content, /obsidian-releases/);
+});
+
+test('npm version stages manifest-beta.json alongside manifest.json (BRAT lockstep)', () => {
+  // sync-version.mjs rewrites manifest-beta.json, so the lifecycle script must
+  // stage it too — otherwise the version commit ships a stale beta manifest.
+  const pkg = actionsFor().find(
+    (a) => a.type === 'mergeJson' && a.path === 'package.json' && a.patch.scripts?.version,
+  );
+  assert.match(pkg.patch.scripts.version, /git add manifest\.json manifest-beta\.json versions\.json/);
+});
+
+test('vitest discovers .test and .spec across JS/TS, not just *.test.ts', () => {
+  const vitest = findWrite(actionsFor(), 'vitest.config.mjs').content;
+  assert.match(vitest, /include: \['tests\/\*\*\/\*\.\{test,spec\}\.\{ts,tsx,js,jsx,mjs,cjs\}'\]/);
 });
 
 test('dependabot ships only with github integration', () => {
@@ -393,6 +408,28 @@ test('main.ts is orchestration-only: it delegates registration, no inline addCom
   assert.match(commands, /open-view/);
   const noVue = findWrite(actionsFor({ vue: false }), 'src/main.ts').content;
   assert.doesNotMatch(noVue, /registerViews/);
+});
+
+test('main.ts ./settings import is pre-sorted so lint passes for any plugin name', () => {
+  // The SettingTab class name sorts before or after DEFAULT_SETTINGS depending on
+  // the plugin name; lint (CI) runs without --fix, so the planner emits members
+  // already in simple-import-sort order (en collator, base sensitivity) either way.
+  const early = findWrite(actionsFor({ id: 'acme-sync', name: 'Acme Sync' }), 'src/main.ts').content;
+  assert.match(early, /\{ AcmeSyncSettingTab, DEFAULT_SETTINGS, migrateSettings \} from '\.\/settings'/);
+  const late = findWrite(actionsFor({ id: 'demo-notes', name: 'Demo Notes' }), 'src/main.ts').content;
+  assert.match(late, /\{ DEFAULT_SETTINGS, DemoNotesSettingTab, migrateSettings \} from '\.\/settings'/);
+});
+
+test('Tier 3 sample ships: SuggestModal picker + ribbon/editor-menu wiring, in both variants', () => {
+  for (const vue of [true, false]) {
+    const actions = actionsFor({ vue });
+    assert.ok(findWrite(actions, 'src/ui/GreetingSuggestModal.ts'), `GreetingSuggestModal missing (vue=${vue})`);
+    assert.ok(findWrite(actions, 'src/ui/registerExtras.ts'), `registerExtras missing (vue=${vue})`);
+    assert.ok(findWrite(actions, 'tests/unit/registerExtras.test.ts'), `test missing (vue=${vue})`);
+    const main = findWrite(actions, 'src/main.ts').content;
+    assert.match(main, /import \{ registerExtras \} from '\.\/ui\/registerExtras'/);
+    assert.match(main, /registerExtras\(this\)/);
+  }
 });
 
 test('class names never reproduce obsidianmd sample identifiers (would fail the lint gate)', () => {

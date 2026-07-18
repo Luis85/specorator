@@ -1,0 +1,30 @@
+import type { Editor, Menu } from 'obsidian';
+
+import { t } from '../i18n/i18n';
+import type {{pluginClass}} from '../main';
+import { GreetingSuggestModal } from './GreetingSuggestModal';
+
+// A ribbon icon that opens a greeting picker, and an editor context-menu item
+// that inserts the greeting. Both go through the plugin so Obsidian tears them
+// down on unload (registerEvent for the menu; the ribbon element is plugin-owned).
+const PRESETS = ['Hello there', 'Good morning', 'Welcome back', 'Happy writing'] as const;
+
+export function registerExtras(plugin: {{pluginClass}}): void {
+  plugin.addRibbonIcon('dice', t('ribbon.pickGreeting'), () => {
+    new GreetingSuggestModal(plugin.app, PRESETS, (greeting) => {
+      void plugin.saveSettings({ greeting });
+      plugin.notices.info(t('notice.greetingSet', { greeting }));
+    }).open();
+  });
+
+  plugin.registerEvent(
+    plugin.app.workspace.on('editor-menu', (menu: Menu, editor: Editor) => {
+      menu.addItem((item) =>
+        item
+          .setTitle(t('menu.insertGreeting'))
+          .setIcon('dice')
+          .onClick(() => editor.replaceSelection(plugin.settings.greeting)),
+      );
+    }),
+  );
+}

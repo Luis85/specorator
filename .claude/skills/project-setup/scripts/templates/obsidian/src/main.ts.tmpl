@@ -12,7 +12,8 @@ import { SettingsService } from './core/settings/SettingsService';
 import { VaultService } from './core/vault/VaultService';
 import { t } from './i18n/i18n';
 import type { {{settingsType}} } from './settings';
-import { DEFAULT_SETTINGS, migrateSettings, {{settingsTab}} } from './settings';
+import { {{settingsValueImports}} } from './settings';
+import { registerExtras } from './ui/registerExtras';
 {{viewImport}}import { registerStatusBar } from './ui/statusBar';
 
 // main.ts orchestrates only: it constructs the plugin-owned services, then
@@ -46,6 +47,7 @@ export default class {{pluginClass}} extends Plugin {
       this.addSettingTab(new {{settingsTab}}(this.app, this));
       registerCommands(this);
       registerStatusBar(this);
+      registerExtras(this);
 {{viewRegistration}}      this.logger.info('loaded');
     } catch (error) {
       this.logger.error('Failed to load', error);

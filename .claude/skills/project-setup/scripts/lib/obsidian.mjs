@@ -59,6 +59,15 @@ function classNames(o) {
 
 const write = (path, content, mode = 'skip-if-exists') => ({ type: 'writeFile', path, mode, content });
 
+// Emit named import members already sorted the way simple-import-sort would, so
+// the generated source passes `lint` (CI runs it WITHOUT --fix). Matches the
+// plugin's comparator exactly: an en collator at "base" sensitivity + numeric,
+// with a raw-string tiebreak. Needed because one member is the plugin-named
+// SettingTab class, whose sort position varies with the plugin name.
+const IMPORT_COLLATOR = new Intl.Collator('en', { sensitivity: 'base', numeric: true });
+const sortImportMembers = (...members) =>
+  members.sort((a, b) => IMPORT_COLLATOR.compare(a, b) || (a < b ? -1 : a > b ? 1 : 0)).join(', ');
+
 // Greenfield = a brand-new plugin (no manifest, no scaffold app source). The
 // sample app (sources + tests) is written only then; an existing plugin gets
 // the harness + docs and adopts the patterns from AGENTS.md. Uses the frozen
@@ -211,6 +220,7 @@ function planSources(options, state) {
   // module; command wiring lives in commands.ts for both.
   const mainVars = {
     ...shared,
+    settingsValueImports: sortImportMembers('DEFAULT_SETTINGS', 'migrateSettings', names.settingsTab),
     viewImport: o.vue ? "import { registerViews } from './ui/registerViews';\n" : '',
     // Six-space indent: this line sits inside onload's try block.
     viewRegistration: o.vue ? '      registerViews(this);\n' : '',
@@ -244,6 +254,10 @@ function planSources(options, state) {
     write('src/core/http/RequestService.ts', loadTemplate('obsidian/src/core/http/RequestService.ts.tmpl')),
     // The status-bar item wires the event bus from the UI layer in both variants.
     write('src/ui/statusBar.ts', renderTemplate(loadTemplate('obsidian/src/ui/statusBar.ts.tmpl'), shared)),
+    // Canonical Obsidian UI patterns (both variants): a ribbon icon opening a
+    // SuggestModal fuzzy picker, and an editor context-menu item.
+    write('src/ui/GreetingSuggestModal.ts', loadTemplate('obsidian/src/ui/GreetingSuggestModal.ts.tmpl')),
+    write('src/ui/registerExtras.ts', renderTemplate(loadTemplate('obsidian/src/ui/registerExtras.ts.tmpl'), shared)),
   ];
   if (o.vue) {
     actions.push(
@@ -374,6 +388,7 @@ function planObsidianVitest(options, state) {
       write('tests/unit/requestService.test.ts', loadTemplate('obsidian/tests/requestService.test.ts.tmpl')),
       write('tests/unit/i18n.test.ts', loadTemplate('obsidian/tests/i18n.test.ts.tmpl')),
       write('tests/unit/statusBar.test.ts', loadTemplate('obsidian/tests/statusBar.test.ts.tmpl')),
+      write('tests/unit/registerExtras.test.ts', loadTemplate('obsidian/tests/registerExtras.test.ts.tmpl')),
     );
     if (o.vue) {
       actions.push(
@@ -509,7 +524,11 @@ function planClaudeSettings(options, state) {
   if (h.sessionStart) hooks.SessionStart = [{ hooks: [{ type: 'command', command: PM_INSTALL[pm] }] }];
   if (h.qualityGate) hooks.Stop = [{ hooks: [{ type: 'command', command: `${run} typecheck && ${run} lint` }] }];
   if (Object.keys(hooks).length > 0) {
-    actions.push(write('.claude/settings.json', JSON.stringify({ hooks }, null, 2) + '\n'));
+    // mergeJson (not a plain write) so an opted-in hook actually lands when the
+    // repo already has a .claude/settings.json — skip-if-exists would silently
+    // drop it while apply still reports success. Additive: existing permissions
+    // and hooks survive, our hook groups union in.
+    actions.push({ type: 'mergeJson', path: '.claude/settings.json', patch: { hooks } });
   }
   return actions;
 }
@@ -646,7 +665,7 @@ function planPackageBasics(options, state, version) {
     dev: 'node esbuild.config.mjs',
     build: 'node esbuild.config.mjs production',
     typecheck: o.vue ? 'vue-tsc --noEmit' : 'tsc --noEmit',
-    version: 'node scripts/sync-version.mjs && git add manifest.json versions.json',
+    version: 'node scripts/sync-version.mjs && git add manifest.json manifest-beta.json versions.json',
   };
   const patch = {
     name: o.id,

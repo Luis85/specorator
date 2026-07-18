@@ -18,8 +18,13 @@ module that needs something from main/ui receives it as a constructor
 argument or event, never as an import.
 
 `main.ts` is orchestration-only: it constructs the services and delegates
-every registration (`registerCommands`, `registerStatusBar`, `registerViews`).
-Add new wiring as its own `register*` module rather than growing `onload`.
+every registration (`registerCommands`, `registerStatusBar`, `registerExtras`,
+`registerViews`). Add new wiring as its own `register*` module rather than
+growing `onload`. `registerExtras.ts` is a worked sample of two common
+affordances — a ribbon icon that opens a `SuggestModal` picker
+(`GreetingSuggestModal.ts`) and an `editor-menu` context item — kept UI-only
+(the picker hands its choice back through a callback; state lands via
+`saveSettings`).
 
 ## Services (owned by the plugin instance)
 
@@ -127,8 +132,9 @@ subscriptions like the status bar need no teardown — the bus dies on unload).
 Let Obsidian own teardown — it auto-cleans anything registered through the
 plugin, and manual cleanup is where leaks and layout bugs come from.
 
-- **Register, don't hand-roll.** Obsidian events → `this.registerEvent(...)`;
-  DOM listeners → `this.registerDomEvent(el, type, cb)` (see `statusBar.ts`);
+- **Register, don't hand-roll.** Obsidian events → `this.registerEvent(...)`
+  (see `registerExtras.ts` for the `editor-menu` handler); DOM listeners →
+  `this.registerDomEvent(el, type, cb)` (see `statusBar.ts`);
   timers → `this.registerInterval(window.setInterval(...))`; commands/views via
   `addCommand`/`registerView`. All are removed on unload — a raw
   `addEventListener`/`setInterval`/`vault.on()` leaks past unload.
