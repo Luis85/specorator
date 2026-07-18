@@ -13,7 +13,6 @@ import {
 } from '@/features/tasks/commands/taskCommands';
 import type { ChatTabExecutionSurface } from '@/features/tasks/execution/ChatTabExecutionSurface';
 import type { ChatWorkOrderLinker } from '@/features/tasks/execution/ChatWorkOrderLinker';
-import { installPresetTemplatesWithNotice } from '@/features/tasks/templates/installPresetTemplates';
 import {
   createWorkOrderAndOpenModal,
   createWorkOrderFromCurrentNoteAndOpenModal,
@@ -126,14 +125,6 @@ function registerWorkOrderCommands(
     name: t('commands.createWorkOrderTemplate'),
     callback: () => {
       void createWorkOrderTemplate(plugin);
-    },
-  });
-
-  register({
-    id: 'install-common-work-order-templates',
-    name: t('commands.installCommonWorkOrderTemplates'),
-    callback: () => {
-      void installPresetTemplatesWithNotice(plugin);
     },
   });
 

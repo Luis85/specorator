@@ -594,15 +594,8 @@
       }
     },
     "agentBoard": {
-      "commonTemplates": "Common work-order templates: {templates}.",
-      "commonTemplatesEmpty": "Common work-order templates: nothing to do.",
-      "installFailed": "Install failed: {error}",
-      "commonLoops": "Common loops: {loops}.",
-      "commonLoopsEmpty": "Common loops: nothing to do.",
       "loopFolderName": "Loop folder",
-      "loopFolderDesc": "Folder where loop notes are stored.",
-      "installLoopsName": "Install common loops",
-      "installLoopsDesc": "Add a starter set of loop notes to the loop folder."
+      "loopFolderDesc": "Folder where loop notes are stored."
     },
     "maxChatTabs": {
       "name": "Max chat tabs",
@@ -1147,9 +1140,6 @@
     "save": "Save",
     "startChat": "与此代理开始聊天",
     "chattingWith": "正在与 {name} 聊天",
-    "installStarter": "Install starter agents",
-    "installStarterDone": "Installed starter agents ({installed} new, {skipped} skipped).",
-    "installStarterNone": "All starter agents are already installed.",
     "fieldName": "Name",
     "fieldDescription": "Description",
     "delete": "Delete",
@@ -1247,7 +1237,6 @@
     "navLabel": "Loops",
     "title": "Loop library",
     "newLoop": "New loop",
-    "installStarter": "Install starter loops",
     "empty": "No loops yet. Create one to reuse a playbook across work orders.",
     "edit": "Edit",
     "delete": "Delete",
@@ -1273,7 +1262,6 @@
     "createWorkOrderFromCurrentNote": "Create work order from current note",
     "createWorkOrderFromSelection": "Create work order from selection",
     "createWorkOrderTemplate": "Create work-order template",
-    "installCommonWorkOrderTemplates": "Install common work-order templates",
     "createWorkOrderFromBrowserSelection": "Create work order from browser selection",
     "createWorkOrderFromChatConversation": "Create work order from current chat conversation",
     "copyDiagnosticLogs": "Copy diagnostic logs",

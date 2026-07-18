@@ -65,7 +65,7 @@ describe('Agent Board tab registry fields', () => {
     expect(tab?.order).toBe(60);
   });
 
-  it('registers 7 sections under Agent Board in spec order', () => {
+  it('registers 6 sections under Agent Board in spec order', () => {
     registerAgentBoardTabFields();
     const r = getSettingsRegistry();
     const sections = r.getSections('agentBoard', { providerConfigs: {} } as any);
@@ -74,7 +74,6 @@ describe('Agent Board tab registry fields', () => {
       'defaults',
       'lanes',
       'queue',
-      'templates',
       'archive',
       'commitOnAccept',
     ]);
@@ -104,36 +103,6 @@ describe('Agent Board tab registry fields', () => {
     expect(model).toBeDefined();
     expect(model?.type.kind).toBe('custom');
     expect(model?.default).toBeNull();
-  });
-
-  it('registers installCommonTemplatesButton in templates section as a button field', () => {
-    registerAgentBoardTabFields();
-    const r = getSettingsRegistry();
-    const fields = r.getFields('agentBoard', 'templates', { providerConfigs: {} } as any);
-    const button = fields.find((f) => f.id === 'installCommonTemplatesButton');
-    expect(button).toBeDefined();
-    expect(button?.sectionId).toBe('templates');
-    const type = button!.type;
-    expect(type.kind).toBe('button');
-    if (type.kind !== 'button') {
-      throw new Error('installCommonTemplatesButton type must be button');
-    }
-    expect(type.label).toBe('Install common templates');
-  });
-
-  it('registers installCommonLoopsButton in templates section as a button field', () => {
-    registerAgentBoardTabFields();
-    const r = getSettingsRegistry();
-    const fields = r.getFields('agentBoard', 'templates', { providerConfigs: {} } as any);
-    const button = fields.find((f) => f.id === 'installCommonLoopsButton');
-    expect(button).toBeDefined();
-    expect(button?.sectionId).toBe('templates');
-    const type = button!.type;
-    expect(type.kind).toBe('button');
-    if (type.kind !== 'button') {
-      throw new Error('installCommonLoopsButton type must be button');
-    }
-    expect(type.label).toBe('Install common loops');
   });
 
   it('registers agentBoardLoopFolder in folders section with correct default', () => {

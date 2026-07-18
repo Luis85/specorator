@@ -1,5 +1,5 @@
 import type { DropdownComponent } from 'obsidian';
-import { Notice, Setting } from 'obsidian';
+import { Setting } from 'obsidian';
 
 import { ProviderRegistry } from '../../../core/providers/ProviderRegistry';
 import type { ProviderId } from '../../../core/providers/types';
@@ -7,8 +7,6 @@ import { asSettingsBag } from '../../../core/types/settings';
 import { t } from '../../../i18n/i18n';
 import type SpecoratorPlugin from '../../../main';
 import { resolveAgentBoardDefaultProvider } from '../../tasks/defaultProviderResolver';
-import { installPresetLoopsWithNotice } from '../../tasks/loops/installPresetLoops';
-import { installPresetTemplatesWithNotice } from '../../tasks/templates/installPresetTemplates';
 import { renderAgentBoardLaneEditor } from '../../tasks/ui/AgentBoardLaneEditor';
 
 /**
@@ -80,22 +78,6 @@ export function renderAgentBoardSettingsSection(
   refreshFolderWarning();
 
   new Setting(container)
-    .setName('Common templates')
-    .setDesc('Install the starter set (bug fix, feature, refactor, research spike, documentation, test backfill). Re-running skips any whose filename already exists.')
-    .addButton((btn) => {
-      btn.setButtonText('Install').onClick(async () => {
-        btn.setDisabled(true);
-        try {
-          await installPresetTemplatesWithNotice(plugin);
-        } catch (error) {
-          new Notice(t('settings.agentBoard.installFailed', { error: error instanceof Error ? error.message : String(error) }));
-        } finally {
-          btn.setDisabled(false);
-        }
-      });
-    });
-
-  new Setting(container)
     .setName(t('settings.agentBoard.loopFolderName'))
     .setDesc(t('settings.agentBoard.loopFolderDesc'))
     .addText((text) =>
@@ -107,22 +89,6 @@ export function renderAgentBoardSettingsSection(
           await plugin.saveSettings();
         }),
     );
-
-  new Setting(container)
-    .setName(t('settings.agentBoard.installLoopsName'))
-    .setDesc(t('settings.agentBoard.installLoopsDesc'))
-    .addButton((btn) => {
-      btn.setButtonText('Install').onClick(async () => {
-        btn.setDisabled(true);
-        try {
-          await installPresetLoopsWithNotice(plugin);
-        } catch (error) {
-          new Notice(t('settings.agentBoard.installFailed', { error: error instanceof Error ? error.message : String(error) }));
-        } finally {
-          btn.setDisabled(false);
-        }
-      });
-    });
 
   new Setting(container)
     .setName('Archive folder')

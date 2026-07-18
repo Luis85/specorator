@@ -1,13 +1,10 @@
-import { Notice, Setting } from 'obsidian';
+import { Setting } from 'obsidian';
 
 import { ProviderRegistry } from '../../../../core/providers/ProviderRegistry';
 import type { ProviderId } from '../../../../core/providers/types';
 import { asSettingsBag } from '../../../../core/types/settings';
-import { t } from '../../../../i18n/i18n';
 import { resolveAgentBoardDefaultModel } from '../../../tasks/defaultModelResolver';
 import { resolveAgentBoardDefaultProvider } from '../../../tasks/defaultProviderResolver';
-import { installPresetLoopsWithNotice } from '../../../tasks/loops/installPresetLoops';
-import { installPresetTemplatesWithNotice } from '../../../tasks/templates/installPresetTemplates';
 import { renderAgentBoardLaneEditor } from '../../../tasks/ui/AgentBoardLaneEditor';
 import { writePathInPlace } from '../path';
 import { getSettingsRegistry } from '../registry';
@@ -58,14 +55,6 @@ function registerAgentBoardSections(r: ReturnType<typeof getSettingsRegistry>): 
     label: 'Lanes',
     order: 30,
     description: 'Configure board columns shown in the Agent Board view.',
-  });
-
-  r.registerSection({
-    id: 'templates',
-    tabId: 'agentBoard',
-    label: 'Templates',
-    order: 40,
-    description: 'Pre-built work-order templates you can install in one click.',
   });
 
   r.registerSection({
@@ -228,49 +217,6 @@ function registerAgentBoardFields(r: ReturnType<typeof getSettingsRegistry>): vo
     type: { kind: 'number', min: 1, max: 20, step: 1 },
     default: 3,
     keywords: ['queue', 'halt', 'failure', 'safety'],
-  });
-
-  r.registerField({
-    id: 'installCommonTemplatesButton',
-    tabId: 'agentBoard',
-    sectionId: 'templates',
-    label: 'Common templates',
-     
-    description: 'Install the starter set (Bug fix, Feature, Refactor, Research spike, Documentation, Test backfill). Re-running skips any whose filename already exists.',
-    type: {
-      kind: 'button',
-      label: 'Install common templates',
-      onClick: async (ctx) => {
-        try {
-          await installPresetTemplatesWithNotice(ctx.plugin);
-        } catch (error) {
-          new Notice(t('settings.agentBoard.installFailed', { error: error instanceof Error ? error.message : String(error) }));
-        }
-      },
-    },
-    default: null,
-    keywords: ['template', 'install', 'preset'],
-  });
-
-  r.registerField({
-    id: 'installCommonLoopsButton',
-    tabId: 'agentBoard',
-    sectionId: 'templates',
-    label: 'Common loops',
-    description: 'Install a starter set of loops adapted from the Forward-Future loop library. Re-running skips any whose filename already exists.',
-    type: {
-      kind: 'button',
-      label: 'Install common loops',
-      onClick: async (ctx) => {
-        try {
-          await installPresetLoopsWithNotice(ctx.plugin);
-        } catch (error) {
-          new Notice(t('settings.agentBoard.installFailed', { error: error instanceof Error ? error.message : String(error) }));
-        }
-      },
-    },
-    default: null,
-    keywords: ['loop', 'install', 'preset', 'library'],
   });
 }
 

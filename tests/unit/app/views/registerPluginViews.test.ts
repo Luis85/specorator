@@ -2,6 +2,7 @@ import { registerPluginViews } from '@/app/views/registerPluginViews';
 import { VIEW_TYPE_SPECORATOR, VIEW_TYPE_SPECORATOR_AGENT_BOARD } from '@/core/types';
 import { activateLibrary } from '@/features/library/activateLibrary';
 import { VIEW_TYPE_LIBRARY } from '@/features/library/viewType';
+import { VIEW_TYPE_MARKETPLACE } from '@/features/marketplace/viewType';
 import type { ChatTabExecutionSurface } from '@/features/tasks/execution/ChatTabExecutionSurface';
 import type SpecoratorPlugin from '@/main';
 
@@ -38,7 +39,7 @@ function register(plugin: SpecoratorPlugin): void {
 describe('registerPluginViews', () => {
   beforeEach(() => jest.clearAllMocks());
 
-  it('registers the three workspace views', () => {
+  it('registers the four workspace views', () => {
     const { plugin } = createPlugin();
     register(plugin);
     const types = (plugin.registerView as jest.Mock).mock.calls.map(([type]) => type);
@@ -46,14 +47,16 @@ describe('registerPluginViews', () => {
       VIEW_TYPE_SPECORATOR,
       VIEW_TYPE_SPECORATOR_AGENT_BOARD,
       VIEW_TYPE_LIBRARY,
+      VIEW_TYPE_MARKETPLACE,
     ]);
   });
 
-  it('registers exactly one Library ribbon (chat → board → library order)', () => {
+  it('registers the ribbons in chat → board → library → marketplace order', () => {
     const { plugin, ribbons } = createPlugin();
     register(plugin);
-    expect(ribbons.map((r) => r.icon)).toEqual(['bot', 'kanban-square', 'library-big']);
+    expect(ribbons.map((r) => r.icon)).toEqual(['bot', 'kanban-square', 'library-big', 'store']);
     expect(ribbons[2].label).toBe('Open Library');
+    expect(ribbons[3].label).toBe('Open Marketplace');
   });
 
   it('the Library ribbon opens the Library without forcing a tab', () => {

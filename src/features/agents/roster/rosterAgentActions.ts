@@ -4,7 +4,6 @@ import { ProviderRegistry } from '../../../core/providers/ProviderRegistry';
 import { asSettingsBag } from '../../../core/types/settings';
 import { t } from '../../../i18n/i18n';
 import type SpecoratorPlugin from '../../../main';
-import { installPresetAgents } from './presetAgents';
 import { resolveAgentProvider } from './resolveAgentProvider';
 import type { RosterAgent } from './rosterTypes';
 
@@ -28,19 +27,6 @@ export async function syncRosterAgentsWithNotice(plugin: SpecoratorPlugin): Prom
           providers: result.providers.join(', '),
         })
       : t('agentRoster.syncNone'),
-  );
-}
-
-/** Install the starter agents and notice how many were new vs already present. */
-export async function installPresetAgentsWithNotice(plugin: SpecoratorPlugin): Promise<void> {
-  const result = await installPresetAgents(plugin.agentRosterStore);
-  new Notice(
-    result.installed.length > 0
-      ? t('agentRoster.installStarterDone', {
-          installed: String(result.installed.length),
-          skipped: String(result.skipped.length),
-        })
-      : t('agentRoster.installStarterNone'),
   );
 }
 
