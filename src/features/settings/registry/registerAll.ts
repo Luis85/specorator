@@ -4,9 +4,12 @@ import { registerCodexTabFields } from './fields/codex';
 import { registerCursorTabFields } from './fields/cursor';
 import { registerDiagnosticsTabFields } from './fields/diagnostics';
 import { registerGeneralTabFields } from './fields/general';
+import { registerMarketplaceTabFields } from './fields/marketplace';
 import { registerOpencodeTabFields } from './fields/opencode';
+import { getSettingsRegistry } from './registry';
 
 export function registerAllSettings(): void {
+  const r = getSettingsRegistry();
   registerGeneralTabFields();
   registerClaudeTabFields();
   registerCodexTabFields();
@@ -14,4 +17,5 @@ export function registerAllSettings(): void {
   registerCursorTabFields();
   registerAgentBoardTabFields();
   registerDiagnosticsTabFields();
+  registerMarketplaceTabFields(r);
 }

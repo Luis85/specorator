@@ -1,4 +1,47 @@
 {
+  "marketplace": {
+    "viewTitle": "Marketplace",
+    "ribbon": "Open Marketplace",
+    "command": {
+      "open": "Open Marketplace"
+    },
+    "source": "Catalog: {source}",
+    "settings": {
+      "tab": "Marketplace",
+      "networkSection": "Network",
+      "enable": {
+        "name": "Enable the Marketplace",
+        "desc": "Fetch a curated catalog of Quick Actions, Agents, Loops, and Work-Order Templates from GitHub. Off by default; when enabled, opening the Marketplace makes network requests to raw.githubusercontent.com."
+      },
+      "source": {
+        "name": "Catalog source URL",
+        "desc": "Advanced: override the base URL the catalog is fetched from. Leave blank to use the default Specorator marketplace."
+      }
+    },
+    "warning": "The Marketplace fetches content from GitHub. Installed items are prompts, agents, loops, and templates you should review before running them.",
+    "enablePrompt": "The Marketplace is off. Enable it to browse and install curated items.",
+    "enableButton": "Enable the Marketplace",
+    "refresh": "Refresh",
+    "loading": "Loading catalog…",
+    "empty": "No items match your filters.",
+    "offline": "Showing the last cached catalog.",
+    "loadError": "Couldn't load the marketplace catalog.",
+    "install": "Install",
+    "installing": "Installing…",
+    "installed": "Installed",
+    "notInstallable": "Not yet installable",
+    "preview": "Preview",
+    "installedNotice": "Installed \"{name}\".",
+    "skippedNotice": "\"{name}\" is already installed.",
+    "failedNotice": "Couldn't install \"{name}\".",
+    "type": {
+      "quickAction": "Quick Action",
+      "agent": "Agent",
+      "loop": "Loop",
+      "template": "Template",
+      "skill": "Skill"
+    }
+  },
   "common": {
     "save": "Speichern",
     "cancel": "Abbrechen",
