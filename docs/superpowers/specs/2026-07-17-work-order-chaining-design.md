@@ -361,18 +361,29 @@ user accepts ────────────────► transitionTask 
 
 ## Known limitations (follow-ups)
 
-- **Agent-only templates run a chained successor on board defaults.** A chain successor
-  created from a *template* that sets only `agent: roster:*` (no explicit `provider`/`model`)
-  is instantiated with the board-default provider/model rather than the agent's backend,
-  because `createWorkOrderFromSeed` resolves a template's provider/model without consulting
-  the roster agent, and `TaskRunCoordinator` only falls back to the agent when provider/model
-  are *absent*. This is **pre-existing** `createWorkOrderFromSeed` behavior (the normal
-  "+ Add from an agent-only template" flow has the same gap), surfaced by chaining. Agent
-  specialization works today for **inline** chains (an agent-only *predecessor* — covered by
-  the integration test) and for templates that pin provider/model. A proper fix belongs in
-  the general creation/roster path (make `createWorkOrderFromSeed` resolve an agent-only
-  template's backend via `resolveAgentRunTarget`), which is deliberately out of scope for this
-  chaining slice. Workaround: pin provider/model on the template, or use inline chains.
+- **A chained successor falls back to board defaults when a bound roster agent can't supply
+  a backend.** Two cases:
+  1. *Agent-only template* — a chain template that sets only `agent: roster:*` (no explicit
+     `provider`/`model`) instantiates the successor with the board-default provider/model,
+     because `createWorkOrderFromSeed` resolves a template's provider/model without consulting
+     the roster agent.
+  2. *Inline agent deleted/renamed* — an inline chain that inherits `agent: roster:*` (no
+     provider/model) from its predecessor, where the roster entry no longer resolves
+     (`resolveAgentRunTarget` → `null`): the successor is created `ready` on board defaults
+     with a dangling agent instead of surfacing the missing agent.
+
+  Both are the same root: `TaskRunCoordinator` only falls back to the agent when
+  provider/model are *absent*, but `createWorkOrderFromSeed`'s `inlineRunDefaults` fills board
+  defaults, so the agent is never consulted at run time. This is **pre-existing**
+  `createWorkOrderFromSeed`/roster behavior surfaced by chaining (the normal "+ Add from an
+  agent-only template" flow has the same gap). Agent specialization **works today** for inline
+  chains whose agent *resolves* (covered by the integration test) and for templates that pin
+  provider/model. A proper fix belongs in the general creation/roster path — make
+  `createWorkOrderFromSeed` resolve an agent-backed WO's backend via `resolveAgentRunTarget`,
+  and skip + surface when a *bound* agent can't be resolved — which touches the shared creation
+  flow and is deliberately **out of scope for this chaining slice** (a tracked follow-up; note
+  the lint rule requires the surface Notice to be i18n'd via `t()`). Workaround: pin
+  provider/model on the template/work order, or keep the roster agent valid.
 
 ## Files
 
