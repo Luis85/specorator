@@ -707,9 +707,10 @@ test('the formatter writes .prettierrc.json and wires format scripts', () => {
   assert.equal(pkg.scripts['format:check'], 'prettier --check .');
 });
 
-test('the vue test lane installs the deps its generated tests import', () => {
+test('the vue test lane installs the deps its generated tests import (incl. the vite peer)', () => {
   const pkg = mergedPackagePatch(actionsFor({ vue: true }));
-  for (const d of ['vitest', 'jsdom', '@vue/test-utils', '@vitejs/plugin-vue']) {
+  // vite is @vitejs/plugin-vue's peer — needed at the root for strict-peer installs.
+  for (const d of ['vitest', 'jsdom', '@vue/test-utils', '@vitejs/plugin-vue', 'vite']) {
     assert.equal(pkg.devDependencies[d], PINNED[d], `missing ${d}`);
   }
 });

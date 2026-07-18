@@ -274,7 +274,10 @@ function planObsidianVitest(options) {
     scripts['test:coverage'] = 'vitest run --coverage --passWithNoTests';
     deps.push('@vitest/coverage-istanbul');
   }
-  if (o.vue) deps.push('@vitejs/plugin-vue', '@vue/test-utils');
+  // vite: @vitejs/plugin-vue declares it as a peer and imports it when the vitest
+  // config loads, so a strict-peer install (pnpm strict / Yarn PnP) needs it listed
+  // at the root — npm hoists it transitively, but those layouts don't.
+  if (o.vue) deps.push('@vitejs/plugin-vue', '@vue/test-utils', 'vite');
   const actions = [
     write('tests/setup.ts', loadTemplate('obsidian/tests/setup.ts.tmpl')),
     write('tests/__mocks__/obsidian.ts', loadTemplate('obsidian/tests/obsidian-mock.ts.tmpl')),
