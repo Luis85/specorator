@@ -15,6 +15,7 @@ import { ConversationStore } from './app/conversations/ConversationStore';
 import { EnvironmentApplyService } from './app/environment/EnvironmentApplyService';
 import type { SpecoratorEventMap } from './app/events/specoratorEvents';
 import { PluginLifecycle } from './app/lifecycle/PluginLifecycle';
+import { registerWorkOrderCoordinators } from './app/registerWorkOrderCoordinators';
 import { type RosterProjectionResult, type RosterRemovalResult } from './app/rosterAgentProjection';
 import { DEFAULT_SPECORATOR_SETTINGS } from './app/settings/defaultSettings';
 import { SharedStorageService } from './app/storage/SharedStorageService';
@@ -71,14 +72,11 @@ import { QuickActionStorage } from './features/quickActions/QuickActionStorage';
 import { buildProviderRecords } from './features/quickActions/skills/buildProviderRecords';
 import { VaultSkillAggregator } from './features/quickActions/skills/VaultSkillAggregator';
 import { SpecoratorSettingTab } from './features/settings/SpecoratorSettings';
-import { CommitOnAcceptCoordinator } from './features/tasks/commit/CommitOnAcceptCoordinator';
-import { CommitOnAcceptModal } from './features/tasks/commit/CommitOnAcceptModal';
 import { ChatTabExecutionSurface } from './features/tasks/execution/ChatTabExecutionSurface';
 import { ChatWorkOrderLinker } from './features/tasks/execution/ChatWorkOrderLinker';
 import { createQueueControlState, type QueueControlState } from './features/tasks/execution/QueueRunner';
 import { QueueSlotTracker } from './features/tasks/execution/QueueSlotTracker';
 import { RunSidecarStore } from './features/tasks/storage/RunSidecarStore';
-import { TaskNoteStore } from './features/tasks/storage/TaskNoteStore';
 import { WorkOrderActivityProvider } from './features/tasks/ui/WorkOrderActivityProvider';
 import { setLocale, t } from './i18n/i18n';
 import type { Locale } from './i18n/types';
@@ -97,7 +95,6 @@ export default class SpecoratorPlugin extends Plugin implements PluginContext {
   readonly chatMessageActions: ChatMessageAction[] = [];
   storage!: SharedAppStorage;
   gitStatusWatcher: GitStatusWatcher | null = null;
-  private commitOnAcceptCoordinator: CommitOnAcceptCoordinator | null = null;
   conversationStore!: ConversationStore;
   /** Plugin-lifetime singleton. Built in onload before any consumer reads it. */
   public quickActionStorage!: QuickActionStorage;
@@ -170,43 +167,7 @@ export default class SpecoratorPlugin extends Plugin implements PluginContext {
     });
 
     const taskExecutionSurface = new ChatTabExecutionSurface(this);
-    {
-      const noteStore = new TaskNoteStore();
-      this.commitOnAcceptCoordinator = new CommitOnAcceptCoordinator({
-        events: this.events,
-        loadTaskSpec: async (path) => {
-          const file = this.app.vault.getAbstractFileByPath(path);
-          if (!file || !('vault' in file)) {
-            throw new Error('Work order file not found');
-          }
-          const content = await this.app.vault.read(file as Parameters<typeof this.app.vault.read>[0]);
-          return noteStore.parse(path, content).task;
-        },
-        getGitStatus: async () => {
-          await this.gitStatusWatcher?.refresh();
-          return this.gitStatusWatcher?.getLastStatus() ?? { isRepo: false, dirtyCount: 0 };
-        },
-        isProviderGitEnabled: (providerId) => {
-          try {
-            const config = ProviderRegistry.getChatUIConfig(providerId);
-            return config.isGitActionsEnabled?.(this.settings) !== false;
-          } catch {
-            return false;
-          }
-        },
-        openModal: (opts) => {
-          const modal = new CommitOnAcceptModal(this.app, opts);
-          modal.open();
-          return modal.result();
-        },
-        surface: taskExecutionSurface,
-        readSettings: () => this.settings,
-        saveSettings: () => this.saveSettings(),
-        logger: this.logger.scope('tasks.commitOnAccept'),
-        showNotice: (message) => { new Notice(message); },
-      });
-      this.commitOnAcceptCoordinator.start();
-    }
+    registerWorkOrderCoordinators(this, taskExecutionSurface);
 
     registerPluginViews({ plugin: this, taskExecutionSurface });
 
@@ -327,8 +288,6 @@ export default class SpecoratorPlugin extends Plugin implements PluginContext {
     this.vaultSkillAggregator = null;
     this.quickActionFavoritesCache?.dispose();
     this.quickActionFavoritesCache = null;
-    this.commitOnAcceptCoordinator?.stop();
-    this.commitOnAcceptCoordinator = null;
     this.gitStatusWatcher?.stop();
     this.gitStatusWatcher = null;
     // Null the fields BEFORE the async teardown so any in-flight `set()` from a

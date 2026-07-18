@@ -39,6 +39,7 @@ import AgentBoardRoot from './vue/AgentBoardRoot.vue';
 import { CALLBACKS_KEY, PLUGIN_KEY } from './vue/boardKeys';
 import { getAgentBoardPinia } from './vue/globalPinia';
 import { useAgentBoardStore } from './vue/stores/agentBoardStore';
+import { buildChainDetailCallbacks } from './workOrderChainSummary';
 import { showWorkOrderContextMenu } from './WorkOrderContextMenu';
 import { buildWorkOrderConversationBindings } from './workOrderConversationBindings';
 import { WorkOrderDetailModal, type WorkOrderFieldUpdate } from './WorkOrderDetailModal';
@@ -412,8 +413,7 @@ export class AgentBoardView extends ItemView {
       onSaveFields: (target, fields) => this.saveTaskFields(target, fields),
       onSaveSections: (tk, s) => this.applyNoteChange(tk.path, (c) => this.noteStore.writeSections(c, s)),
       ...buildWorkOrderFieldOptions(settings, agents),
-      getLoopName: (loopId) => (loopId ? this.loopNameCache.get(loopId) : undefined),
-      onPickLoop: (target) => this.pickLoopForTask(target),
+      ...buildChainDetailCallbacks(this.plugin, (target, fields) => this.saveTaskFields(target, fields), { loopNameCache: this.loopNameCache, pickLoopForTask: (target) => this.pickLoopForTask(target) }),
     }).open();
   }
 

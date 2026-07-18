@@ -5,6 +5,7 @@ import { t } from '../../../i18n/i18n';
 import { formatRelativeTime } from '../../../utils/date';
 import { type PersonaResolver } from '../../agents/personaRegistry';
 import type { TaskPriority, TaskSpec, TaskStatus } from '../model/taskTypes';
+import type { WorkOrderChainConfig } from '../model/workOrderChain';
 import {
   DETAIL_APP_KEY,
   DETAIL_CALLBACKS_KEY,
@@ -25,6 +26,8 @@ export interface WorkOrderFieldUpdate {
   priority?: TaskPriority;
   /** Attached loop slug; empty string detaches. */
   loop?: string;
+  /** Successor chain config; explicit `null` clears it. */
+  chain?: WorkOrderChainConfig | null;
 }
 
 export interface WorkOrderOption {
@@ -66,6 +69,14 @@ export interface WorkOrderDetailModalCallbacks {
   onPickLoop?(task: TaskSpec): Promise<string | undefined>;
   /** Resolve the task's attached loop slug to a display name (sync, best-effort). */
   getLoopName?(loopId: string | undefined): string | undefined;
+  /**
+   * Open the chain-config modal for this task, persist the result, and resolve
+   * to the new "Next step" chip summary (or `undefined` when cancelled) — so the
+   * caller can update the (non-native) chain chip in place.
+   */
+  onConfigureChain?(task: TaskSpec): Promise<string | undefined>;
+  /** Sync summary label for the "Next step" chip ("None" when no chain configured). */
+  getChainSummary?(task: TaskSpec): string;
   /**
    * Combined persona + roster agent options for the agent picker. Preloaded at
    * modal-open time by the caller so the agent row stays synchronous.

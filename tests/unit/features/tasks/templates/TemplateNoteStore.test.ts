@@ -253,6 +253,34 @@ describe('TemplateNoteStore agent field', () => {
   });
 });
 
+describe('TemplateNoteStore chain field', () => {
+  const store = new TemplateNoteStore();
+
+  it('parses chain_* into template.chain', () => {
+    const content = `---
+type: specorator-work-order-template
+schema_version: 1
+name: "Design stage"
+chain_template: "Implement stage"
+chain_trigger: done
+---
+# {{title}}
+`;
+    const tpl = store.parse('Agent Board/templates/design.md', content);
+    expect(tpl.chain).toEqual({ template: 'Implement stage', trigger: 'done' });
+  });
+
+  it('build round-trips chain', () => {
+    const md = store.build({ name: 'Design', body: '# x', chain: { title: 'N', trigger: 'review' } });
+    expect(store.parse('p', md).chain).toEqual({ title: 'N', trigger: 'review' });
+  });
+
+  it('omits chain when unset', () => {
+    const tpl = store.parse('p', `---\ntype: specorator-work-order-template\nschema_version: 1\nname: "X"\n---\n# x\n`);
+    expect(tpl.chain).toBeUndefined();
+  });
+});
+
 describe('TemplateNoteStore.list', () => {
   it('returns valid templates sorted by name and warns on bad notes', async () => {
     const byPath: Record<string, string> = {

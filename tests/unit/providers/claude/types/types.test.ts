@@ -118,6 +118,7 @@ describe('types.ts', () => {
         agentBoardDefaultModel: '',
         agentBoardQueueCap: 1,
         agentBoardQueueHaltAfter: 3,
+        agentBoardMaxChainDepth: 25,
         hiddenProviderCommands: {
           claude: [],
           codex: [],
@@ -185,6 +186,7 @@ describe('types.ts', () => {
         agentBoardDefaultModel: '',
         agentBoardQueueCap: 1,
         agentBoardQueueHaltAfter: 3,
+        agentBoardMaxChainDepth: 25,
         hiddenProviderCommands: {
           claude: [],
           codex: [],
@@ -253,6 +255,7 @@ describe('types.ts', () => {
         agentBoardDefaultModel: '',
         agentBoardQueueCap: 1,
         agentBoardQueueHaltAfter: 3,
+        agentBoardMaxChainDepth: 25,
         hiddenProviderCommands: {
           claude: [],
           codex: [],

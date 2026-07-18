@@ -373,3 +373,37 @@ describe('WorkOrderCard assignee persona', () => {
     expect(resolvePersona.mock.calls.length).toBeGreaterThan(before);
   });
 });
+
+describe('WorkOrderCard chain indicator', () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  function chainBadge(container: Container): Element | null {
+    return container.querySelector('.specorator-agent-board-card-chain');
+  }
+
+  function mountWith(overrides: Partial<TaskSpec['frontmatter']>) {
+    const layout: ResolvedBoardLayout = {
+      lanes: [makeLane('ready', [makeTask('c-chain', 'ready', overrides)])],
+      errors: [],
+    };
+    return mountBoard(layout, makeCallbacks());
+  }
+
+  it('shows the link badge when the card declares a successor (chain_title)', () => {
+    const { container } = mountWith({ chain_title: 'Impl stage' } as Partial<TaskSpec['frontmatter']>);
+    const badge = chainBadge(container);
+    expect(badge).toBeTruthy();
+    // mountLucide records the glyph intent as data-icon (the mock setIcon is a no-op).
+    expect(badge?.getAttribute('data-icon')).toBe('link');
+  });
+
+  it('shows the badge for a chain successor (chained_from) too', () => {
+    const { container } = mountWith({ chained_from: 'task-1' } as Partial<TaskSpec['frontmatter']>);
+    expect(chainBadge(container)).toBeTruthy();
+  });
+
+  it('omits the badge for an unchained card', () => {
+    const { container } = mountWith({});
+    expect(chainBadge(container)).toBeNull();
+  });
+});

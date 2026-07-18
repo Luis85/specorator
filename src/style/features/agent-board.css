@@ -330,6 +330,23 @@
   text-wrap: pretty;
 }
 
+/* Workflow work-order marker: a small link glyph beside the title when the card
+   declares a successor or sits in a chain. flex: none keeps it from shrinking in
+   the title row; the slight top offset aligns the glyph with the title's cap line. */
+.specorator-agent-board-card-chain {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  margin-top: 2px;
+  color: var(--text-muted);
+  opacity: 0.75;
+}
+
+.specorator-agent-board-card-chain svg {
+  width: 13px;
+  height: 13px;
+}
+
 /* ---------- Hover action cluster: primary action + ⋯ overflow trigger ----------
    Floats over the card's top-right so it reserves no layout width (titles keep
    their full width). Hidden until card hover/focus; the left fade shadow lets it

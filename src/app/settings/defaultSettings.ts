@@ -77,6 +77,7 @@ export const DEFAULT_SPECORATOR_SETTINGS: SpecoratorSettings = {
   agentBoardDefaultModel: null,
   agentBoardQueueCap: 1,
   agentBoardQueueHaltAfter: 3,
+  agentBoardMaxChainDepth: 25,
 
   hiddenProviderCommands: getDefaultHiddenProviderCommands(),
 

@@ -1,5 +1,5 @@
 {
-  "description": "Fallow quality baseline. Counters may shrink but not grow; averageMaintainability may rise but not drop. Regenerate with `npm run check:quality -- --update` (commit the diff in the same PR that moves the metric). 2026-07-17 (subagent DOM sever, transcript-migration debt #86): cloneGroups 39→38, duplicatedLines 970→956, complexFunctions 244→242 — deleted the detached SubagentRenderer/ToolCallRenderer/applyPatchExpandedHelpers DOM adapters; SubagentManager is data-only over subagentTaskState and the Task pipeline passes a hasActiveMessage boolean instead of the detached currentContentEl element.",
+  "description": "Fallow quality baseline. Counters may shrink but not grow; averageMaintainability may rise but not drop. Regenerate with `npm run check:quality -- --update` (commit the diff in the same PR that moves the metric). 2026-07-18 (work-order-chaining Task 9 review fixes): averageMaintainability 90.2→90.1 — new test coverage (ChainConfigModal.test.ts, workOrderChainSummary.test.ts) plus the chainSummaryFromConfig/buildChainDetailCallbacks/createWorkOrderFromSeed changes shift the whole-project average slightly; all counter metrics (cloneGroups, duplicatedLines, complexFunctions, criticalComplexity, deadCodeIssues) are unchanged from baseline — the applyChainConfigToFrontmatter extraction (model/workOrderChain.ts) kept the new chain-frontmatter sync from duplicating TaskNoteStore's existing logic.",
   "fallowVersion": "2.91.0",
   "metrics": {
     "deadCodeIssues": 0,
@@ -10,6 +10,6 @@
     "duplicatedLines": 956,
     "complexFunctions": 242,
     "criticalComplexity": 5,
-    "averageMaintainability": 90.2
+    "averageMaintainability": 90.1
   }
 }
