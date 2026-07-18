@@ -23,6 +23,16 @@ describe('VaultService', () => {
     expect(await service.read('log.md')).toBe('a\nb\n');
   });
 
+  it('append re-throws a genuine create failure instead of reporting false success', async () => {
+    const app = new App();
+    const failure = new Error('disk full');
+    // A non-race create failure leaves no file, so append must propagate — the
+    // command's ErrorService relies on the rejection to notice the dropped write.
+    app.vault.create = () => Promise.reject(failure);
+    const service = new VaultService(app);
+    await expect(service.append('log.md', 'x')).rejects.toThrow('disk full');
+  });
+
   it('append is atomic even on the first write: concurrent appends to a new file keep every line', async () => {
     const service = new VaultService(new App());
     // No pre-created file: overlapping first appends race Vault.create; the loser

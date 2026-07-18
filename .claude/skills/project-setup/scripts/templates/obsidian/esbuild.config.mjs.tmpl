@@ -53,6 +53,14 @@ const pluginDir =
 const deployToVault = {
   name: 'deploy-to-vault',
   setup(build) {
+    build.onStart(() => {
+      // Drop the previous build's extracted CSS so assembleStyles never folds a
+      // leftover main.css (from a build that had styles, or an interrupted one)
+      // into styles.css when THIS build emits none — existsSync then means "this
+      // build produced CSS", not "a file happens to be on disk".
+      rmSync('main.css', { force: true });
+      rmSync('main.css.map', { force: true });
+    });
     build.onEnd(async (result) => {
       if (result.errors.length > 0) return;
       await assembleStyles();

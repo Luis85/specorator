@@ -34,9 +34,14 @@ export class VaultService {
     }
     try {
       await this.app.vault.create(normalized, content);
-    } catch {
+    } catch (error) {
+      // Only the concurrent-create race is recoverable: the file now exists, so
+      // append through process(). Any other failure (adapter/permission) left no
+      // file — re-throw so the caller's ErrorService reports it instead of the
+      // command showing a false success on a dropped write.
       const created = this.app.vault.getFileByPath(normalized);
-      if (created) await this.app.vault.process(created, (data) => data + content);
+      if (!created) throw error;
+      await this.app.vault.process(created, (data) => data + content);
     }
   }
 }
