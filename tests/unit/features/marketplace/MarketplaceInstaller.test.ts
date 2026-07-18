@@ -136,4 +136,24 @@ describe('isItemInstalled', () => {
     const item: MarketplaceItem = { id: 'skills/x', type: 'skill', name: 'x', description: 'd', path: 'skills/x/SKILL.md', tags: [] };
     expect(await isItemInstalled(item, deps)).toBe(false);
   });
+
+  it('keys agent identity on the manifest name so the check matches after install (badge regression)', async () => {
+    const { deps } = makeDeps();
+    // Body frontmatter name deliberately differs from the manifest item name.
+    const body = '---\ntype: specorator-agent\nname: "Frontmatter Name"\n---\n\nPrompt.';
+    const item: MarketplaceItem = { id: 'agents/x', type: 'agent', name: 'Manifest Name', description: 'd', path: 'agents/x.md', tags: [] };
+    expect(await isItemInstalled(item, deps)).toBe(false);
+    await installMarketplaceItem(item, body, deps, 1);
+    // isItemInstalled only has the manifest item; it must still see it installed.
+    expect(await isItemInstalled(item, deps)).toBe(true);
+  });
+
+  it('honors a precomputed roster id set instead of scanning the store', async () => {
+    const { deps } = makeDeps();
+    const item: MarketplaceItem = { id: 'agents/p', type: 'agent', name: 'Planner', description: 'd', path: 'agents/p.md', tags: [] };
+    const listSpy = jest.spyOn(deps.rosterStore, 'list');
+    expect(await isItemInstalled(item, deps, new Set(['roster:planner']))).toBe(true);
+    expect(await isItemInstalled(item, deps, new Set(['roster:other']))).toBe(false);
+    expect(listSpy).not.toHaveBeenCalled();
+  });
 });

@@ -7,7 +7,7 @@ import { t } from '../../i18n/i18n';
 import type SpecoratorPlugin from '../../main';
 import { VIEW_TYPE_MARKETPLACE } from './viewType';
 import { getMarketplacePinia } from './vue/globalPinia';
-import { PLUGIN_KEY, VIEW_KEY } from './vue/marketplaceKeys';
+import { PLUGIN_KEY } from './vue/marketplaceKeys';
 import MarketplaceRoot from './vue/MarketplaceRoot.vue';
 
 export class MarketplaceView extends ItemView {
@@ -45,7 +45,6 @@ export class MarketplaceView extends ItemView {
     app.use(getMarketplacePinia());
     // markRaw: Obsidian objects are large and cyclic; never deep-proxy them.
     app.provide(PLUGIN_KEY, markRaw(this.plugin));
-    app.provide(VIEW_KEY, markRaw(this));
     app.mount(this.contentEl);
     this.vueApp = app;
   }

@@ -32,7 +32,6 @@ export const useMarketplaceStore = defineStore('marketplace', () => {
   /** True when the list is served from the on-disk cache (a fetch failed). */
   const offline = ref(false);
   const source = ref(DEFAULT_MARKETPLACE_BASE_URL);
-  const loaded = ref(false);
 
   function init(p: SpecoratorPlugin): void {
     plugin ??= p;
@@ -81,10 +80,20 @@ export const useMarketplaceStore = defineStore('marketplace', () => {
 
   async function refreshInstalled(): Promise<void> {
     const deps = installDeps();
+    // Scan the agent roster at most once per refresh (not once per agent item);
+    // an unreadable roster degrades to "no agents marked", never a thrown scan.
+    let rosterIds: ReadonlySet<string> | undefined;
+    if (items.value.some((item) => item.type === 'agent')) {
+      try {
+        rosterIds = new Set((await deps.rosterStore.list()).map((agent) => agent.id));
+      } catch {
+        rosterIds = new Set<string>();
+      }
+    }
     const ids = new Set<string>();
     for (const item of items.value) {
       try {
-        if (await isItemInstalled(item, deps)) ids.add(item.id);
+        if (await isItemInstalled(item, deps, rosterIds)) ids.add(item.id);
       } catch {
         // a folder-resolution hiccup shouldn't blank the whole list
       }
@@ -104,7 +113,14 @@ export const useMarketplaceStore = defineStore('marketplace', () => {
       const manifest = await client().fetchIndex();
       items.value = manifest.items;
       offline.value = false;
-      await cache().write(manifest, src, Date.now());
+      // Cache persistence is a best-effort optimization — a write failure
+      // (permissions, transient FS) must not discard the catalog we just
+      // fetched, so it stays out of the fetch-error fallback below.
+      try {
+        await cache().write(manifest, src, Date.now());
+      } catch {
+        // The online catalog is already shown; losing the cache is harmless.
+      }
     } catch (fetchError) {
       const cached = await cache().read();
       if (cached && cached.source === src) {
@@ -119,7 +135,6 @@ export const useMarketplaceStore = defineStore('marketplace', () => {
       }
     } finally {
       loading.value = false;
-      loaded.value = true;
       await refreshInstalled();
     }
   }
@@ -151,7 +166,6 @@ export const useMarketplaceStore = defineStore('marketplace', () => {
     error,
     offline,
     source,
-    loaded,
     init,
     load,
     fetchBody,

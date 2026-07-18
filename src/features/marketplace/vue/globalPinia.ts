@@ -10,8 +10,3 @@ export function getMarketplacePinia(): Pinia {
   pinia ??= createPinia();
   return pinia;
 }
-
-/** Test-only: drop the singleton so each test starts from clean store state. */
-export function resetMarketplacePinia(): void {
-  pinia = null;
-}

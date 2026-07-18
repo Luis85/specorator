@@ -11,7 +11,6 @@ interface StoreFake {
   error: string | null;
   offline: boolean;
   source: string;
-  loaded: boolean;
   init: ReturnType<typeof vi.fn>;
   load: ReturnType<typeof vi.fn>;
   fetchBody: ReturnType<typeof vi.fn>;
@@ -57,7 +56,6 @@ function makeStore(overrides: Partial<StoreFake> = {}): StoreFake {
     error: null,
     offline: false,
     source: 'https://example.test/catalog',
-    loaded: true,
     init: vi.fn(),
     load: vi.fn().mockResolvedValue(undefined),
     fetchBody: vi.fn().mockResolvedValue('BODY TEXT'),

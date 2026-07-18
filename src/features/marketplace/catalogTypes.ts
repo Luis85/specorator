@@ -86,11 +86,20 @@ export function parseManifest(raw: unknown): MarketplaceManifest | null {
   if (manifest.schemaVersion !== MARKETPLACE_MANIFEST_SCHEMA_VERSION) return null;
   if (!Array.isArray(manifest.items)) return null;
 
-  const items = manifest.items.filter(isMarketplaceItem).map((item) => ({
+  const parsed = manifest.items.filter(isMarketplaceItem).map((item) => ({
     ...item,
     description: typeof item.description === 'string' ? item.description : '',
     tags: Array.isArray(item.tags) ? item.tags.map(String) : [],
   }));
+
+  // Dedupe by id (first wins): duplicate ids collide on the `:key` of the view's
+  // card v-for and break Vue list reconciliation.
+  const seen = new Set<string>();
+  const items = parsed.filter((item) => {
+    if (seen.has(item.id)) return false;
+    seen.add(item.id);
+    return true;
+  });
 
   return {
     schemaVersion: MARKETPLACE_MANIFEST_SCHEMA_VERSION,

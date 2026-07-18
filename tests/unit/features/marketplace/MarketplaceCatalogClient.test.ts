@@ -50,4 +50,22 @@ describe('MarketplaceCatalogClient', () => {
     expect(vet).toHaveBeenCalledWith('https://example.test/base/index.json');
     expect(request).not.toHaveBeenCalled();
   });
+
+  it('vets item-body URLs too, not just the index', async () => {
+    const vet = jest.fn(async () => {
+      throw new MarketplaceError('blocked for safety');
+    });
+    const request = jest.fn(async () => ({ status: 200, text: '# body' }));
+    const client = new MarketplaceCatalogClient('https://example.test/base/', request, vet);
+    await expect(client.fetchItemBody('loops/x.md')).rejects.toThrow(/blocked for safety/);
+    expect(request).not.toHaveBeenCalled();
+  });
+
+  it('refuses an item path that escapes the base URL (absolute or ../)', async () => {
+    const request = jest.fn(async () => ({ status: 200, text: '# body' }));
+    const client = new MarketplaceCatalogClient('https://example.test/base/', request, noVet);
+    await expect(client.fetchItemBody('../other/x.md')).rejects.toThrow(/escapes the marketplace base URL/);
+    await expect(client.fetchItemBody('https://evil.test/x.md')).rejects.toThrow(/escapes the marketplace base URL/);
+    expect(request).not.toHaveBeenCalled();
+  });
 });

@@ -15,6 +15,7 @@ import { ProviderRegistry } from '../../../core/providers/ProviderRegistry';
 const STATIC_REGISTRY_TABS: ReadonlySet<string> = new Set<string>([
   'general',
   'agentBoard',
+  'marketplace',
   'diagnostics',
 ]);
 

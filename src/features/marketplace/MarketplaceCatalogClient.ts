@@ -1,8 +1,18 @@
 /**
  * Fetches the marketplace catalog over HTTPS using Obsidian's `requestUrl`
  * (which bypasses renderer CORS — a raw `fetch` cannot reliably reach
- * raw.githubusercontent.com from a plugin). Every URL is SSRF-vetted before the
- * dial. The request + vet seams are injectable so unit tests need no network.
+ * raw.githubusercontent.com from a plugin). The request + vet seams are
+ * injectable so unit tests need no network.
+ *
+ * SSRF posture: every URL is SSRF-vetted (`assertSafeRemoteUrl`) before the dial
+ * AND every fetched path is constrained to stay under the configured base URL
+ * (`resolve`), so a catalog can't redirect fetches to another origin. The vet is
+ * PREFLIGHT-ONLY, though: `requestUrl` opens its own connection and exposes no
+ * `lookup`/agent hook, so the DNS-rebinding pin (`createPinnedLookup`) the
+ * Node-socket MCP transports use cannot be applied here. The residual rebinding
+ * window is bounded — the base origin is a user-set setting defaulting to the
+ * trusted marketplace repo — and closing it fully would mean abandoning
+ * `requestUrl` and its CORS bypass, a deliberate design choice.
  */
 import { requestUrl } from 'obsidian';
 
@@ -37,8 +47,12 @@ const obsidianRequest: CatalogRequestFn = async (url) => {
 const ssrfVet: UrlVetFn = async (url) => {
   try {
     await assertSafeRemoteUrl(url);
-  } catch (error) {
-    throw new MarketplaceError(error instanceof Error ? error.message : String(error));
+  } catch {
+    // The shared SSRF guard's message talks about "remote MCP servers", which is
+    // misleading in the catalog UI — re-wrap with marketplace-context wording.
+    throw new MarketplaceError(
+      `Blocked for safety: "${url}" is not a permitted marketplace address (must be a public http(s) URL).`,
+    );
   }
 };
 
@@ -92,6 +106,15 @@ export class MarketplaceCatalogClient {
   }
 
   private resolve(relativePath: string): string {
-    return new URL(relativePath, this.base).toString();
+    const resolved = new URL(relativePath, this.base).toString();
+    // An absolute or `../`-laden item path could resolve to a different origin
+    // or repo while still passing the SSRF vet (both public) — a provenance
+    // spoof. Require the resolved URL to stay under the configured base URL.
+    if (!resolved.startsWith(this.base)) {
+      throw new MarketplaceError(
+        `Refusing to fetch "${relativePath}" — it escapes the marketplace base URL.`,
+      );
+    }
+    return resolved;
   }
 }

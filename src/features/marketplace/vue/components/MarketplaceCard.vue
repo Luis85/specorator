@@ -31,6 +31,15 @@ const typeLabels: Record<MarketplaceItemType, string> = {
   skill: t('marketplace.type.skill'),
 };
 const typeLabel = computed(() => typeLabels[props.item.type]);
+
+// The catalog is untrusted, so `source` must not become a live href unless it
+// is an http(s) URL — Vue does not sanitize `:href`, and a `javascript:` value
+// would execute in the Electron renderer on click. Non-URL provenance still
+// shows as inert text.
+const safeSourceUrl = computed(() => {
+  const src = props.item.source;
+  return src && /^https?:\/\//i.test(src) ? src : null;
+});
 </script>
 
 <template>
@@ -80,11 +89,12 @@ const typeLabel = computed(() => typeLabels[props.item.type]);
         <span v-if="props.item.author">{{ props.item.author }}</span>
         <span v-if="props.item.license">{{ props.item.license }}</span>
         <a
-          v-if="props.item.source"
-          :href="props.item.source"
+          v-if="safeSourceUrl"
+          :href="safeSourceUrl"
           target="_blank"
-          rel="noopener"
+          rel="noopener noreferrer"
         >{{ props.item.source }}</a>
+        <span v-else-if="props.item.source">{{ props.item.source }}</span>
       </div>
       <!-- Install lives ONLY inside the preview: a user must open and see what
         they are installing first (security requirement). Stays disabled until

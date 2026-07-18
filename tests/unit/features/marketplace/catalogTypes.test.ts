@@ -40,6 +40,21 @@ describe('parseManifest', () => {
     expect(manifest?.items[0].description).toBe('');
     expect(manifest?.items[0].tags).toEqual([]);
   });
+
+  it('dedupes items by id (first wins) so card v-for keys stay unique', () => {
+    const manifest = parseManifest({
+      schemaVersion: 1,
+      items: [
+        validItem,
+        { ...validItem, name: 'X duplicate' },
+        { id: 'loops/y', type: 'loop', name: 'Y', description: 'd', path: 'loops/y.md', tags: [] },
+      ],
+    });
+    expect(manifest?.items).toHaveLength(2);
+    expect(manifest?.items.map((i) => i.id)).toEqual(['loops/x', 'loops/y']);
+    expect(manifest?.items[0].name).toBe('X'); // first occurrence wins
+    expect(manifest?.count).toBe(2);
+  });
 });
 
 describe('isInstallableType', () => {

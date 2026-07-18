@@ -153,3 +153,46 @@ describe('marketplaceStore install', () => {
     expect(store.installedIds.has('a')).toBe(true);
   });
 });
+
+describe('marketplaceStore load fallbacks', () => {
+  beforeEach(() => {
+    setActivePinia(createPinia());
+    vi.clearAllMocks();
+    isInstalledSpy.mockResolvedValue(false);
+    fetchIndexSpy.mockResolvedValue(manifest);
+    cacheRead.mockResolvedValue(null);
+    cacheWrite.mockResolvedValue(undefined);
+  });
+
+  it('keeps the freshly fetched catalog when the cache write fails', async () => {
+    cacheWrite.mockRejectedValue(new Error('disk full'));
+    const store = useMarketplaceStore();
+    store.init(fakePlugin(true));
+    await store.load();
+    // A best-effort cache write failure must not discard the online catalog.
+    expect(store.items).toEqual([item]);
+    expect(store.offline).toBe(false);
+    expect(store.error).toBeNull();
+  });
+
+  it('falls back to the cache (offline) when an enabled fetch fails for the same source', async () => {
+    fetchIndexSpy.mockRejectedValue(new Error('network down'));
+    cacheRead.mockResolvedValue({ manifest, source: DEFAULT_MARKETPLACE_BASE_URL, fetchedAt: 0 });
+    const store = useMarketplaceStore();
+    store.init(fakePlugin(true));
+    await store.load();
+    expect(store.offline).toBe(true);
+    expect(store.items).toEqual([item]);
+  });
+
+  it('clears the list and surfaces an error when the cache is for a different source', async () => {
+    fetchIndexSpy.mockRejectedValue(new Error('network down'));
+    cacheRead.mockResolvedValue({ manifest, source: 'https://other.example/', fetchedAt: 0 });
+    const store = useMarketplaceStore();
+    store.init(fakePlugin(true));
+    await store.load();
+    expect(store.items).toEqual([]);
+    expect(store.offline).toBe(false);
+    expect(store.error).toMatch(/network down/);
+  });
+});

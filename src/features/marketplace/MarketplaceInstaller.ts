@@ -58,8 +58,25 @@ export async function installMarketplaceItem(
   }
 }
 
-/** True when an item with the same natural key is already present (drives the "Installed" badge). */
-export async function isItemInstalled(item: MarketplaceItem, deps: MarketplaceInstallDeps): Promise<boolean> {
+/**
+ * Roster id an agent item installs under. Both the installer and the
+ * installed-check derive it HERE from the manifest `item.name` so the two can
+ * never drift — a mismatch made the "Installed" badge flip back after a refresh.
+ */
+function agentRosterId(item: MarketplaceItem): string {
+  return rosterIdFromSlug(slugifyRosterName(item.name) || 'agent');
+}
+
+/**
+ * True when an item with the same natural key is already present (drives the
+ * "Installed" badge). `rosterIds` lets a caller checking many agent items pass a
+ * once-computed roster id set instead of forcing a full roster scan per item.
+ */
+export async function isItemInstalled(
+  item: MarketplaceItem,
+  deps: MarketplaceInstallDeps,
+  rosterIds?: ReadonlySet<string>,
+): Promise<boolean> {
   if (!isInstallableType(item.type)) return false;
   switch (item.type) {
     case 'loop':
@@ -71,8 +88,8 @@ export async function isItemInstalled(item: MarketplaceItem, deps: MarketplaceIn
       return storage.exists(storage.getFilePathForName(item.name));
     }
     case 'agent': {
-      const id = rosterIdFromSlug(slugifyRosterName(item.name) || 'agent');
-      return (await deps.rosterStore.list()).some((agent) => agent.id === id);
+      const ids = rosterIds ?? new Set((await deps.rosterStore.list()).map((agent) => agent.id));
+      return ids.has(agentRosterId(item));
     }
     default:
       return false;
@@ -115,13 +132,14 @@ async function installAgent(
 ): Promise<InstallOutcome> {
   const parsed = parseFrontmatter(body);
   const fm = parsed?.frontmatter ?? {};
-  const name = extractString(fm, 'name') ?? item.name;
-  const id = rosterIdFromSlug(slugifyRosterName(name) || 'agent');
+  // Identity keys on the manifest `item.name` (via agentRosterId), not the body
+  // frontmatter name, so it matches isItemInstalled and the card's display name.
+  const id = agentRosterId(item);
   if ((await store.list()).some((agent) => agent.id === id)) return 'skipped';
 
   const agent: RosterAgent = {
     id,
-    name,
+    name: item.name,
     description: extractString(fm, 'description') ?? item.description,
     prompt: (parsed?.body ?? body).trim(),
     disallowedTools: [],

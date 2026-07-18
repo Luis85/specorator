@@ -31,6 +31,7 @@ import {
   buildTabContents,
   computeTabIds,
   ensureRegistryForLocale,
+  FIXED_TAB_ID_SET,
   type SettingsTabId,
 } from './settingsTabStrip';
 import { renderAgentBoardSettingsSection } from './ui/AgentBoardSettingsSection';
@@ -212,10 +213,10 @@ export class SpecoratorSettingTab extends PluginSettingTab {
   ): void {
     this.renderFixedTabBodies(tabContents, ctx);
 
-    // Provider tabs are every tab id that is not one of the three fixed tabs,
+    // Provider tabs are every tab id that is not one of the fixed tabs,
     // preserving the original enabled-provider iteration order.
     for (const id of tabIds) {
-      if (id === 'general' || id === 'agentBoard' || id === 'diagnostics') {
+      if (FIXED_TAB_ID_SET.has(id)) {
         continue;
       }
       const content = tabContents.get(id);
@@ -240,6 +241,13 @@ export class SpecoratorSettingTab extends PluginSettingTab {
     const agentBoardContent = tabContents.get('agentBoard');
     if (agentBoardContent && !this.pushRegistryTab(agentBoardContent, 'agentBoard', ctx)) {
       renderAgentBoardSettingsSection(agentBoardContent, this.plugin);
+    }
+
+    // Marketplace is registry-only (no legacy renderer) — it renders whenever
+    // its content host exists, like diagnostics.
+    const marketplaceContent = tabContents.get('marketplace');
+    if (marketplaceContent) {
+      this.pushRegistryTab(marketplaceContent, 'marketplace', ctx);
     }
 
     // Diagnostics has no legacy tab renderer — its imperative collaborators

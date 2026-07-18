@@ -1,0 +1,55 @@
+# Marketplace Feature
+
+A dedicated Vue 3 + Pinia island (`VIEW_TYPE_MARKETPLACE`, `store` ribbon,
+`open-marketplace` command) that browses a remote catalog and installs items
+into the vault Library. Replaces the deleted bundled starter presets (ADR 0007).
+Modeled on — and reuses the components of — `features/library`.
+
+## Layout
+
+| File | Role |
+|------|------|
+| `catalogTypes.ts` | `MarketplaceItem`/`MarketplaceManifest` types, `parseManifest` (validates `schemaVersion`, drops malformed items, dedupes by id), `INSTALLABLE_ITEM_TYPES` (excludes `skill`) + `isInstallableType` |
+| `MarketplaceCatalogClient.ts` | HTTP fetch over Obsidian `requestUrl`; `fetchIndex()` + `fetchItemBody(path)`. Injectable `request`/`vet` seams (default: `requestUrl` + `assertSafeRemoteUrl`) |
+| `MarketplaceCache.ts` | Schema-versioned JSON cache at `.specorator/cache/marketplace-index.json`; cold-safe `read()`/`write()` via `writeAtomic` |
+| `MarketplaceInstaller.ts` | `installMarketplaceItem(item, body, deps, now)` routes to the same vault stores the app uses; `isItemInstalled(item, deps, rosterIds?)` drives the badge |
+| `MarketplaceView.ts` / `activateMarketplace.ts` / `viewType.ts` | `ItemView` host (per-leaf Vue app), leaf activation, view-type constant |
+| `marketplaceNetworkGate.ts` | One-time in-app Notice on first opt-in |
+| `vue/MarketplaceRoot.vue` | Opt-in gate, `LibraryToolbar` + `useLibraryList` reuse, load/preview/install orchestration, offline/error banners |
+| `vue/components/MarketplaceCard.vue` | Per-item card (type badge, preview, attribution, gated Install) |
+| `vue/stores/marketplaceStore.ts` | Shared Pinia store over one Pinia per plugin (all leaves share fetched catalog + installed state) |
+
+## Contracts & invariants
+
+- **Network is opt-in, enforced at the I/O boundary.** The store re-reads
+  `plugin.settings.marketplaceNetworkEnabled` in `load()`/`fetchBody()` on every
+  call (not just at view mount), so disabling it stops all `requestUrl` calls
+  immediately; a disabled `load` serves the on-disk cache and constructs no
+  client. Config lives on the **Marketplace settings tab** (registered in
+  `settings/registry/fields/marketplace.ts`; it is a fixed registry-rendered tab
+  — see `settingsTabStrip.ts` `FIXED_TAB_IDS` + `featureFlag.ts`
+  `STATIC_REGISTRY_TABS`, both of which must list `marketplace` or the tab never
+  renders) and, for the toggle only, the view's Enable button.
+- **Install writes the reviewed body.** `MarketplaceRoot` passes the
+  already-previewed body into `store.install(item, body)`; the store does NOT
+  re-fetch (no TOCTOU, no re-dial), and the Install button stays disabled until
+  that body has loaded. Loops/templates/quick-actions are written **verbatim**
+  (provenance frontmatter preserved); agents parse into a `RosterAgent`.
+- **Agent identity keys on the manifest `item.name`** (via `agentRosterId`),
+  used identically by the installer and `isItemInstalled`, so the "Installed"
+  badge can't drift from what was written.
+- **The catalog is untrusted.** `item.source` is only linkified when it is an
+  `http(s)` URL (`MarketplaceCard` `safeSourceUrl`) — never a live `javascript:`
+  href. Every fetched URL is SSRF-vetted AND constrained to stay under the
+  configured base URL (`MarketplaceCatalogClient.resolve`). The SSRF vet is
+  **preflight-only**: `requestUrl` exposes no `lookup` hook, so `createPinnedLookup`
+  (the Node-socket DNS-rebinding pin) can't be applied here; the residual window
+  is bounded because the base origin is a user-set, trusted-by-default setting.
+- **Skills are deferred.** `INSTALLABLE_ITEM_TYPES` excludes `skill`; adding it
+  there plus an installer branch is the whole extension point.
+
+## Tests
+
+`tests/unit/features/marketplace/` (catalog types, client, cache, installer) and
+`tests/vue/marketplace/` (root, store, card). The settings-tab rendering
+regression lives in `tests/integration/settings/marketplaceTab.test.ts`.

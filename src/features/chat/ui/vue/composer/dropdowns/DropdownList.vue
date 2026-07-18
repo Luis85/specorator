@@ -32,6 +32,11 @@ withDefaults(defineProps<{
   primaryTag: 'span',
   secondaryTag: 'span',
   contentTag: 'span',
+  // Optional per-skin class hooks — absent means "no extra class on this node".
+  secondaryClass: undefined,
+  hintClass: undefined,
+  contentClass: undefined,
+  iconClass: undefined,
 });
 
 const emit = defineEmits<{ (e: 'select', index: number): void }>();
