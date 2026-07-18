@@ -21,14 +21,21 @@ const BUILD_DIRS = new Set(['dist', 'build', 'out', 'esm', 'cjs', 'umd', 'lib-es
 
 export function detectEntry(cwd) {
   const pkg = readJsonSafe(join(cwd, 'package.json'));
-  const strip = (p) => p.replace(/^\.\//, ''); // normalize a leading ./ so roots derive correctly
+  // Normalize a leading ./ or / so roots derive correctly and the entry stays
+  // project-relative: a leading-slash "source":"/src/main.ts" would otherwise be
+  // returned verbatim and become an absolute esbuild/fallow target at the FS root.
+  const strip = (p) => p.replace(/^\.?\/+/, '');
   // A package.json path field is untrusted: reject `..` segments so a crafted
   // `source`/`main` (e.g. "../shared/main.ts") can't make the generated build
-  // bundle — or the ratchets scan — files outside the plugin project.
+  // bundle — or the ratchets scan — files outside the plugin project. (Leading
+  // slashes are stripped above, so the existence check and return stay under cwd.)
   const withinProject = (p) => !p.split('/').includes('..');
   // A bundler `source` field is unambiguously the source entry.
   const src = pkg?.source;
-  if (typeof src === 'string' && withinProject(strip(src)) && existsSync(join(cwd, src))) return strip(src);
+  if (typeof src === 'string') {
+    const p = strip(src);
+    if (withinProject(p) && existsSync(join(cwd, p))) return p;
+  }
   // The first existing common source entry (src/lib/app/source/root).
   for (const c of ENTRY_CANDIDATES) if (existsSync(join(cwd, c))) return c;
   // `module`/`main` may name the source for a build-less package — use it if it
@@ -40,6 +47,18 @@ export function detectEntry(cwd) {
     if (withinProject(p) && existsSync(join(cwd, p)) && !BUILD_DIRS.has(p.split('/')[0])) return p;
   }
   return 'src/index.ts';
+}
+
+// True only when a .npmrc line actively sets tag-version-prefix to empty
+// (tag-version-prefix="" or tag-version-prefix=). Commented lines (# or ;) and a
+// non-empty value like `=v` do NOT count — those still leave npm tagging "v...".
+function npmrcSetsEmptyTagPrefix(content) {
+  return content.split(/\r?\n/).some((line) => {
+    const s = line.trim();
+    if (!s || s.startsWith('#') || s.startsWith(';')) return false;
+    const m = /^tag-version-prefix\s*=\s*(.*)$/.exec(s);
+    return m ? m[1].trim().replace(/^["']|["']$/g, '') === '' : false;
+  });
 }
 
 const ESLINTRC = ['.eslintrc', '.eslintrc.js', '.eslintrc.cjs', '.eslintrc.json', '.eslintrc.yml', '.eslintrc.yaml'];
@@ -264,12 +283,13 @@ export function detect(cwd) {
     // not an existing app (and obsidianEntry rejects it as a source entry).
     obsidianAppPresent: existsSync(join(cwd, 'manifest.json')) || hasSourceFiles(cwd) || (entryExists && entry !== 'main.js'),
     // An existing .npmrc is kept (skip-if-exists), so the tag-version-prefix=""
-    // policy may not apply. Flag it only when the file lacks that key at all, so a
-    // repo that already sets it isn't nagged. npm defaults to "v", which the
-    // release workflow's tag===manifest.version check would then reject.
+    // policy may not apply. Flag it unless the file ACTIVELY sets the prefix to
+    // empty — a mere mention (a commented example, or `tag-version-prefix=v`)
+    // leaves npm defaulting to "v", which the release workflow's
+    // tag===manifest.version check would then reject.
     npmrcNeedsTagPrefix: (() => {
       const p = join(cwd, '.npmrc');
-      return existsSync(p) && !/tag-version-prefix/.test(readFileSync(p, 'utf8'));
+      return existsSync(p) && !npmrcSetsEmptyTagPrefix(readFileSync(p, 'utf8'));
     })(),
     // Obsidian loads root styles.css, but the scaffold build treats src/styles.css
     // as SOURCE and regenerates root styles.css. An adopt with a real root sheet

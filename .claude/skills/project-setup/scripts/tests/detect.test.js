@@ -105,6 +105,17 @@ test('detectEntry rejects a parent-directory package source (no ".." traversal)'
   }
 });
 
+test('detectEntry normalizes a leading-slash package source to a project-relative path', () => {
+  // "source":"/src/main.ts" resolves under cwd (path.join drops the leading
+  // slash) but must be RETURNED relative, else esbuild/fallow target the FS root.
+  const p = tmpProject({ 'package.json': { source: '/src/main.ts' }, 'src/main.ts': '' });
+  try {
+    assert.equal(detectEntry(p.dir), 'src/main.ts'); // not '/src/main.ts'
+  } finally {
+    p.cleanup();
+  }
+});
+
 test('detect treats a root-entry repo (no manifest, no src/) as an existing app', () => {
   // package.json#source names a root main.ts that hasSourceFiles (src/-only) misses.
   const rootEntry = tmpProject({ 'package.json': { source: 'main.ts' }, 'main.ts': 'export default class {}' });
@@ -118,18 +129,22 @@ test('detect treats a root-entry repo (no manifest, no src/) as an existing app'
   }
 });
 
-test('detect flags an existing .npmrc that lacks tag-version-prefix', () => {
+test('detect flags an existing .npmrc unless it actively sets tag-version-prefix empty', () => {
   const without = tmpProject({ '.npmrc': 'save-exact=true\n' });
-  const withPrefix = tmpProject({ '.npmrc': 'tag-version-prefix=""\n' });
+  const emptyQuoted = tmpProject({ '.npmrc': 'tag-version-prefix=""\n' });
+  const emptyBare = tmpProject({ '.npmrc': 'tag-version-prefix=\n' });
+  const nonEmpty = tmpProject({ '.npmrc': 'tag-version-prefix=v\n' }); // npm's default -> still needs fixing
+  const commented = tmpProject({ '.npmrc': '# tag-version-prefix=""\nsave-exact=true\n' });
   const none = tmpProject({});
   try {
     assert.equal(detect(without.dir).npmrcNeedsTagPrefix, true);
-    assert.equal(detect(withPrefix.dir).npmrcNeedsTagPrefix, false); // already set
+    assert.equal(detect(emptyQuoted.dir).npmrcNeedsTagPrefix, false); // "" -> satisfied
+    assert.equal(detect(emptyBare.dir).npmrcNeedsTagPrefix, false); // bare = -> satisfied
+    assert.equal(detect(nonEmpty.dir).npmrcNeedsTagPrefix, true); // =v is NOT satisfied
+    assert.equal(detect(commented.dir).npmrcNeedsTagPrefix, true); // a comment does not count
     assert.equal(detect(none.dir).npmrcNeedsTagPrefix, false); // no .npmrc
   } finally {
-    without.cleanup();
-    withPrefix.cleanup();
-    none.cleanup();
+    for (const p of [without, emptyQuoted, emptyBare, nonEmpty, commented, none]) p.cleanup();
   }
 });
 

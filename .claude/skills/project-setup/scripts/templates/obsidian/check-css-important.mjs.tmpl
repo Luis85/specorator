@@ -5,8 +5,9 @@
 // here instead of surfacing at submission.
 //
 // Policy (a ratchet, not a freeze):
-//   - Scanned: every stylesheet under src/ plus the <style> blocks of every
-//     .vue SFC under src/ — moving CSS into a component does not escape it.
+//   - Scanned: every stylesheet plus the <style> blocks of every .vue SFC under
+//     the plugin's source root(s) — moving CSS into a component does not escape
+//     it. node_modules/dist/build/coverage and other non-source dirs are skipped.
 //   - A file with zero `!important` is always fine.
 //   - A new `!important` in a non-baselined file fails. Re-scope by specificity
 //     or CSS variables, or earn a baseline entry with a reason.
@@ -24,7 +25,18 @@ import { fileURLToPath } from 'node:url';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const ROOT = join(__dirname, '..');
-const SRC_DIR = join(ROOT, 'src');
+// Source root(s) to scan, derived from the resolved plugin entry ('src' by
+// default; a project-relative dir like 'lib', or '.' for a root entry).
+const STYLE_ROOTS = [{{styleRoots}}].map((d) => join(ROOT, d));
+// Non-source trees never ship styles into styles.css; skip them so scanning '.'
+// (a root entry) stays bounded and never counts a dependency's or artifact's CSS.
+const SKIP_DIRS = new Set([
+  'node_modules', '.git', 'dist', 'build', 'out', 'coverage', '.fallow', '.project-setup-backup',
+]);
+// Root-level esbuild outputs are bundled artifacts, not source — excluding them
+// keeps a root-entry scan ('.') from recounting SFC styles already extracted into
+// styles.css. A real source sheet lives under a dir (e.g. src/styles.css).
+const BUILD_OUTPUTS = new Set(['styles.css', 'main.css']);
 const BASELINE_PATH = join(__dirname, 'css-important-baseline.json');
 
 const DEFAULT_REASON =
@@ -50,10 +62,19 @@ function collectFiles(dir, ext, acc = []) {
   if (!existsSync(dir)) return acc;
   for (const entry of readdirSync(dir, { withFileTypes: true })) {
     const abs = join(dir, entry.name);
-    if (entry.isDirectory()) collectFiles(abs, ext, acc);
-    else if (entry.isFile() && entry.name.endsWith(ext)) acc.push(abs);
+    if (entry.isDirectory()) {
+      if (!SKIP_DIRS.has(entry.name)) collectFiles(abs, ext, acc);
+    } else if (entry.isFile() && entry.name.endsWith(ext)) {
+      acc.push(abs);
+    }
   }
   return acc;
+}
+
+// Collect across every source root, deduped by absolute path (roots may overlap,
+// e.g. '.' subsuming 'src').
+function collectAcross(ext) {
+  return [...new Set(STYLE_ROOTS.flatMap((root) => collectFiles(root, ext)))];
 }
 
 function readBaseline() {
@@ -67,16 +88,16 @@ function readBaseline() {
 const baseline = readBaseline();
 
 const files = [
-  ...collectFiles(SRC_DIR, '.css').map((abs) => ({
+  ...collectAcross('.css').map((abs) => ({
     path: toPosix(relative(ROOT, abs)),
     count: countImportantIn(readFileSync(abs, 'utf8')),
   })),
-  ...collectFiles(SRC_DIR, '.vue').map((abs) => ({
+  ...collectAcross('.vue').map((abs) => ({
     path: toPosix(relative(ROOT, abs)),
     count: countVueImportant(abs),
   })),
 ]
-  .filter((f) => f.count > 0)
+  .filter((f) => f.count > 0 && !BUILD_OUTPUTS.has(f.path))
   .sort((a, b) => b.count - a.count);
 
 if (update) {

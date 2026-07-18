@@ -432,6 +432,19 @@ test('Tier 3 sample ships: SuggestModal picker + ribbon/editor-menu wiring, in b
   }
 });
 
+test('ribbon + status-bar services ship in core and wire as plugin fields (both variants)', () => {
+  for (const vue of [true, false]) {
+    const actions = actionsFor({ vue });
+    assert.ok(findWrite(actions, 'src/core/ribbon/RibbonService.ts'), `RibbonService missing (vue=${vue})`);
+    assert.ok(findWrite(actions, 'src/core/statusbar/StatusBarService.ts'), `StatusBarService missing (vue=${vue})`);
+    assert.ok(findWrite(actions, 'tests/unit/ribbonService.test.ts'), `ribbon test missing (vue=${vue})`);
+    assert.ok(findWrite(actions, 'tests/unit/statusBarService.test.ts'), `status-bar test missing (vue=${vue})`);
+    const main = findWrite(actions, 'src/main.ts').content;
+    assert.match(main, /readonly ribbon = new RibbonService\(this\)/);
+    assert.match(main, /readonly statusBar = new StatusBarService\(this\)/);
+  }
+});
+
 test('class names never reproduce obsidianmd sample identifiers (would fail the lint gate)', () => {
   // A normal name keeps the plain <Name>Plugin convention.
   assert.match(findWrite(actionsFor(), 'src/main.ts').content, /class DemoNotesPlugin extends Plugin/);
@@ -483,9 +496,21 @@ test('the lint safety globs follow the detected source root (brownfield lib/ or 
   // brownfield entry in lib/ -> lib/** added alongside src/**
   const lib = findWrite(actionsFor({ vue: false }, { obsidianAppPresent: true, entry: 'lib/main.ts', entryExists: true }), 'eslint.config.mjs').content;
   assert.match(lib, /'src\/\*\*\/\*\.\{ts,tsx,js,jsx\}', 'lib\/\*\*\/\*\.\{ts,tsx,js,jsx\}'/);
-  // brownfield root entry -> the entry file itself is linted
+  // brownfield root entry -> a bounded flat-root glob covers the entry's siblings
+  // (view.ts, settings.ts, …), not just the entry file
   const root = findWrite(actionsFor({ vue: false }, { obsidianAppPresent: true, entry: 'main.ts', entryExists: true }), 'eslint.config.mjs').content;
-  assert.match(root, /'src\/\*\*\/\*\.\{ts,tsx,js,jsx\}', 'main\.ts'/);
+  assert.match(root, /'src\/\*\*\/\*\.\{ts,tsx,js,jsx\}', '\*\.\{ts,tsx,js,jsx\}'/);
+});
+
+test('the CSS !important guard scans the detected source root, not a hardcoded src/', () => {
+  const gf = findWrite(actionsFor(), 'scripts/check-css-important.mjs').content;
+  assert.match(gf, /const STYLE_ROOTS = \['src'\]\.map/);
+  assert.doesNotMatch(gf, /\{\{styleRoots\}\}/); // placeholder is rendered, not shipped
+  const lib = findWrite(actionsFor({}, { obsidianAppPresent: true, entry: 'lib/main.ts', entryExists: true }), 'scripts/check-css-important.mjs').content;
+  assert.match(lib, /const STYLE_ROOTS = \['src', 'lib'\]\.map/);
+  // a root entry scans '.' (bounded by the script's SKIP_DIRS)
+  const root = findWrite(actionsFor({}, { obsidianAppPresent: true, entry: 'main.ts', entryExists: true }), 'scripts/check-css-important.mjs').content;
+  assert.match(root, /const STYLE_ROOTS = \['\.'\]\.map/);
 });
 
 test('tsconfig is greenfield-owned (overwrite-backup, replacing a stray one) but kept in brownfield', () => {

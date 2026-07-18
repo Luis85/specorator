@@ -1,0 +1,17 @@
+import type {{pluginClass}} from '../../main';
+
+// Ergonomic seam over `plugin.addRibbonIcon`. Obsidian removes ribbon items on
+// unload and the returned element is plugin-owned, so there is no manual
+// teardown. Centralizing creation keeps icon wiring testable and gives one place
+// for future cross-cutting concerns (mobile gating, telemetry) to land — the
+// same role CommandsService plays for `addCommand`.
+export class RibbonService {
+  constructor(private readonly plugin: {{pluginClass}}) {}
+
+  // `icon` is a registered Obsidian icon id (e.g. 'dice'); `title` is the hover
+  // tooltip (sentence case, no plugin name). Returns the ribbon element so the
+  // caller can toggle a state class if it needs to.
+  add(icon: string, title: string, onClick: (evt: MouseEvent) => void): HTMLElement {
+    return this.plugin.addRibbonIcon(icon, title, onClick);
+  }
+}

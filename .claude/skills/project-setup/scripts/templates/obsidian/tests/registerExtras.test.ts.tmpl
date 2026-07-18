@@ -1,6 +1,7 @@
 import { App } from 'obsidian';
 import { describe, expect, it, vi } from 'vitest';
 
+import { RibbonService } from '@/core/ribbon/RibbonService';
 import { GreetingSuggestModal } from '@/ui/GreetingSuggestModal';
 import { registerExtras } from '@/ui/registerExtras';
 
@@ -23,28 +24,31 @@ describe('GreetingSuggestModal', () => {
 // so the fake stays small and is cast `as never` at the call site.
 function fakePlugin() {
   const app = new App();
-  const ribbon: Array<{ icon: string; title: string; cb: () => void }> = [];
+  const ribbonCalls: Array<{ icon: string; title: string; cb: () => void }> = [];
   const registered: unknown[] = [];
-  const plugin = {
+  // registerExtras adds its ribbon icon through plugin.ribbon, so the fake wires
+  // a real RibbonService over the fake's addRibbonIcon (which records the call).
+  const base = {
     app,
     settings: { greeting: 'Saved greeting' },
     notices: { info: vi.fn() },
     saveSettings: vi.fn(),
     addRibbonIcon: (icon: string, title: string, cb: () => void) => {
-      ribbon.push({ icon, title, cb });
+      ribbonCalls.push({ icon, title, cb });
       return document.createElement('div');
     },
     registerEvent: (ref: unknown) => registered.push(ref),
   };
-  return { plugin, app, ribbon, registered };
+  const plugin = { ...base, ribbon: new RibbonService(base as never) };
+  return { plugin, app, ribbonCalls, registered };
 }
 
 describe('registerExtras', () => {
   it('registers a ribbon icon that opens the greeting picker', () => {
-    const { plugin, ribbon } = fakePlugin();
+    const { plugin, ribbonCalls } = fakePlugin();
     registerExtras(plugin as never);
-    expect(ribbon).toHaveLength(1);
-    const [entry] = ribbon;
+    expect(ribbonCalls).toHaveLength(1);
+    const [entry] = ribbonCalls;
     if (!entry) throw new Error('ribbon icon was not registered');
     expect(entry.icon).toBe('dice');
     // The mock SuggestModal.open() is a no-op; opening must not throw.

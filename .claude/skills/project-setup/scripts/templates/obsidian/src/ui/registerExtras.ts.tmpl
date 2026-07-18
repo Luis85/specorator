@@ -10,7 +10,7 @@ import { GreetingSuggestModal } from './GreetingSuggestModal';
 const PRESETS = ['Hello there', 'Good morning', 'Welcome back', 'Happy writing'] as const;
 
 export function registerExtras(plugin: {{pluginClass}}): void {
-  plugin.addRibbonIcon('dice', t('ribbon.pickGreeting'), () => {
+  plugin.ribbon.add('dice', t('ribbon.pickGreeting'), () => {
     new GreetingSuggestModal(plugin.app, PRESETS, (greeting) => {
       void plugin.saveSettings({ greeting });
       plugin.notices.info(t('notice.greetingSet', { greeting }));

@@ -8,7 +8,9 @@ import { RequestService } from './core/http/RequestService';
 import { Logger } from './core/logging/Logger';
 import { ModalService } from './core/modals/ModalService';
 import { NoticeService } from './core/notices/NoticeService';
+import { RibbonService } from './core/ribbon/RibbonService';
 import { SettingsService } from './core/settings/SettingsService';
+import { StatusBarService } from './core/statusbar/StatusBarService';
 import { VaultService } from './core/vault/VaultService';
 import { t } from './i18n/i18n';
 import type { {{settingsType}} } from './settings';
@@ -26,6 +28,8 @@ export default class {{pluginClass}} extends Plugin {
   readonly notices = new NoticeService();
   readonly modals = new ModalService(this.app);
   readonly commands = new CommandsService(this);
+  readonly ribbon = new RibbonService(this);
+  readonly statusBar = new StatusBarService(this);
   readonly vault = new VaultService(this.app);
   readonly requests = new RequestService();
   private readonly settingsService = new SettingsService<{{settingsType}}>({

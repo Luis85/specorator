@@ -46,6 +46,14 @@ affordances — a ribbon icon that opens a `SuggestModal` picker
 - **`plugin.modals` — `ModalService`** (`src/core/modals/`): async wrappers
   over Obsidian modals (`await plugin.modals.confirm(title, message)`).
   Extend it with new dialog kinds instead of scattering `Modal` subclasses.
+- **`plugin.ribbon` — `RibbonService`** (`src/core/ribbon/`): `add(icon, title, onClick)`
+  over `addRibbonIcon`. Obsidian removes ribbon items on unload (no teardown); the
+  returned element lets you toggle a state class. `registerExtras` uses it for the
+  greeting picker.
+- **`plugin.statusBar` — `StatusBarService`** (`src/core/statusbar/`): `add()`
+  returns a chainable item handle (`setText`/`setTooltip`/`onClick`/`remove`).
+  Clicks bind through `registerDomEvent`, so they are dropped on unload — never a
+  raw `addEventListener`. `registerStatusBar` builds the greeting mirror with it.
 - **`plugin.logger` — `Logger`** (`src/core/logging/`): the only sanctioned
   `console` user (raw `console.*` is lint-banned). `debug`/`info` are gated by
   the `debugLogging` setting; `warn`/`error` always print. `child('name')`

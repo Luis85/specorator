@@ -86,11 +86,13 @@ function isGreenfield(options, state) {
 export function obsidianEntry(options, state) {
   if (isGreenfield(options, state)) return 'src/main.ts';
   const entry = state?.entry;
-  // Reject `..` segments (defense in depth beyond detectEntry): a parent-relative
-  // entry would make esbuild bundle — and entryDir scan — outside the project.
+  // Reject `..` segments and absolute (leading-slash) paths (defense in depth
+  // beyond detectEntry): either would make esbuild bundle — and entryDir scan —
+  // outside the project or at the filesystem root.
   const valid =
     typeof entry === 'string' &&
     /^[\w./-]+\.(?:ts|tsx|mts|cts|js|jsx|mjs|cjs)$/.test(entry) &&
+    !entry.startsWith('/') &&
     !entry.split('/').includes('..') &&
     entry !== 'main.js'; // the esbuild OUTFILE — bundling it into itself fails the build
   return valid && state?.entryExists ? entry : 'src/main.ts';
@@ -252,6 +254,9 @@ function planSources(options, state) {
     write('src/core/modals/ModalService.ts', loadTemplate('obsidian/src/core/modals/ModalService.ts.tmpl')),
     write('src/core/vault/VaultService.ts', loadTemplate('obsidian/src/core/vault/VaultService.ts.tmpl')),
     write('src/core/http/RequestService.ts', loadTemplate('obsidian/src/core/http/RequestService.ts.tmpl')),
+    // Ribbon + status-bar seams over plugin.addRibbonIcon / addStatusBarItem.
+    write('src/core/ribbon/RibbonService.ts', renderTemplate(loadTemplate('obsidian/src/core/ribbon/RibbonService.ts.tmpl'), shared)),
+    write('src/core/statusbar/StatusBarService.ts', renderTemplate(loadTemplate('obsidian/src/core/statusbar/StatusBarService.ts.tmpl'), shared)),
     // The status-bar item wires the event bus from the UI layer in both variants.
     write('src/ui/statusBar.ts', renderTemplate(loadTemplate('obsidian/src/ui/statusBar.ts.tmpl'), shared)),
     // Canonical Obsidian UI patterns (both variants): a ribbon icon opening a
@@ -313,13 +318,16 @@ function planObsidianEslint(options, state) {
   // The safety + mobile-import bans must cover the ACTUAL source, not a hardcoded
   // src/**: a brownfield entry in lib/ (or a root main.ts) would otherwise let lint
   // pass over raw-HTML/Notice/console/Node-Electron violations. Always keep src/**
-  // (greenfield), add the entry's dir when it's elsewhere (e.g. lib/**), or the
-  // entry file itself for a root entry. JS/JSX included so adopted JS is linted too.
+  // (greenfield), add the entry's dir when it's elsewhere (e.g. lib/**), or a
+  // bounded flat-root glob for a root entry — the entry file alone would leave its
+  // sibling helpers (view.ts, settings.ts) bundled but unlinted. The config's
+  // global ignores drop node_modules/scripts/*.mjs configs, so *.{exts} is safe
+  // and non-recursive keeps it off tests/ and dist/. JS/JSX so adopted JS is linted.
   const exts = o.vue ? 'ts,tsx,vue,js,jsx' : 'ts,tsx,js,jsx';
   const srcRoot = entryDir(obsidianEntry(options, state)); // 'src' | 'lib' | null (root)
   const lintGlobs = new Set([`src/**/*.{${exts}}`]);
   if (srcRoot && srcRoot !== 'src') lintGlobs.add(`${srcRoot}/**/*.{${exts}}`);
-  else if (!srcRoot) lintGlobs.add(obsidianEntry(options, state));
+  else if (!srcRoot) lintGlobs.add(`*.{${exts}}`);
   const vueSrcFiles = [...lintGlobs].map((g) => `'${g}'`).join(', ');
   const mobileBlock = o.mobile
     ? renderTemplate(loadTemplate('obsidian/eslint-mobile-block.tmpl'), { vueSrcFiles })
@@ -388,6 +396,8 @@ function planObsidianVitest(options, state) {
       write('tests/unit/requestService.test.ts', loadTemplate('obsidian/tests/requestService.test.ts.tmpl')),
       write('tests/unit/i18n.test.ts', loadTemplate('obsidian/tests/i18n.test.ts.tmpl')),
       write('tests/unit/statusBar.test.ts', loadTemplate('obsidian/tests/statusBar.test.ts.tmpl')),
+      write('tests/unit/ribbonService.test.ts', loadTemplate('obsidian/tests/ribbonService.test.ts.tmpl')),
+      write('tests/unit/statusBarService.test.ts', loadTemplate('obsidian/tests/statusBarService.test.ts.tmpl')),
       write('tests/unit/registerExtras.test.ts', loadTemplate('obsidian/tests/registerExtras.test.ts.tmpl')),
     );
     if (o.vue) {
@@ -469,9 +479,17 @@ function planFormatter(options, state) {
 
 function planCssGuard(options, state) {
   if (!options.guardrails?.cssGuard) return [];
+  // Scan the resolved source root, not a hardcoded src/: an entry in lib/ (or a
+  // root entry whose SFC/CSS sits at the repo root) extracts styles into
+  // styles.css that a src/-only walk would miss. '.' is safe — the script skips
+  // node_modules/dist/build/coverage.
+  const root = entryDir(obsidianEntry(options, state)); // 'src' | 'lib' | null (root)
+  const roots = !root ? ['.'] : root === 'src' ? ['src'] : ['src', root];
+  const styleRoots = roots.map((r) => `'${r}'`).join(', ');
+  const content = renderTemplate(loadTemplate('obsidian/check-css-important.mjs.tmpl'), { styleRoots });
   return [
     ...scriptCollision(options, state, 'check:css', 'node scripts/check-css-important.mjs'),
-    write('scripts/check-css-important.mjs', loadTemplate('obsidian/check-css-important.mjs.tmpl'), 'overwrite-backup'),
+    write('scripts/check-css-important.mjs', content, 'overwrite-backup'),
     { type: 'mergeJson', path: 'package.json', patch: { scripts: { 'check:css': 'node scripts/check-css-important.mjs' } } },
   ];
 }
