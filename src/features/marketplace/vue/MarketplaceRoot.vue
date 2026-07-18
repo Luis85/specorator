@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { Notice } from 'obsidian';
 import type { Ref } from 'vue';
-import { inject, onMounted, reactive, ref } from 'vue';
+import { inject, onMounted, reactive, ref, watch } from 'vue';
 
 import { t } from '../../../i18n/i18n';
 import LibraryToolbar from '../../library/vue/components/LibraryToolbar.vue';
@@ -40,8 +40,29 @@ const bodies = reactive<Record<string, string>>({});
 const previewErrors = reactive<Record<string, boolean>>({});
 const installing = reactive<Record<string, boolean>>({});
 
+// Preview bodies are keyed by item id, but a different source (fork/mirror) can
+// reuse an id for different content — and even the same source can update an
+// item in place. Whenever the catalog (re)loads (`store.items` is replaced),
+// drop the cached previews so Preview re-fetches the current path and Install
+// can never write a stale body under a refreshed item.
+watch(
+  () => store.items,
+  () => {
+    expandedId.value = null;
+    for (const key of Object.keys(bodies)) delete bodies[key];
+    for (const key of Object.keys(previewErrors)) delete previewErrors[key];
+  },
+);
+
 onMounted(() => {
-  if (enabled.value) void store.load();
+  if (enabled.value) {
+    // The one-time network/provenance warning must fire here too: the settings
+    // tab can flip marketplaceNetworkEnabled without going through enable(), so
+    // an already-enabled view would otherwise dial GitHub with no notice. It is
+    // idempotent (persisted flag), so enable()'s call can't double-show it.
+    void maybeWarnMarketplaceNetwork(plugin);
+    void store.load();
+  }
 });
 
 async function enable(): Promise<void> {

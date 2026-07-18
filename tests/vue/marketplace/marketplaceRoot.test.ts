@@ -1,5 +1,6 @@
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/vue';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { nextTick, reactive } from 'vue';
 
 import type { MarketplaceItem } from '@/features/marketplace/catalogTypes';
 import { PLUGIN_KEY } from '@/features/marketplace/vue/marketplaceKeys';
@@ -189,5 +190,42 @@ describe('MarketplaceRoot preview + install', () => {
         'LATE BODY',
       ),
     );
+  });
+});
+
+describe('MarketplaceRoot network warning + preview invalidation', () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  it('fires the one-time network warning on an already-enabled mount (not only via Enable)', async () => {
+    // The settings-tab toggle can enable networking without going through the
+    // view's Enable button, so an already-enabled mount must still warn.
+    const { plugin } = setup(makeStore({ items: [alpha] }), {
+      marketplaceNetworkEnabled: true,
+    });
+    await waitFor(() =>
+      expect(plugin.settings.marketplaceNetworkWarningShown).toBe(true),
+    );
+    expect(plugin.saveSettings).toHaveBeenCalled();
+  });
+
+  it('drops cached previews when the catalog reloads (source switch / refresh)', async () => {
+    // A reactive store so reassigning items triggers the component's watch.
+    const store = reactive(
+      makeStore({ items: [alpha], fetchBody: vi.fn().mockResolvedValue('OLD BODY') }),
+    );
+    setup(store as StoreFake, {
+      marketplaceNetworkEnabled: true,
+      marketplaceNetworkWarningShown: true,
+    });
+    await screen.findByText('Alpha Loop');
+    await fireEvent.click(screen.getByRole('button', { name: 'Preview' }));
+    await screen.findByText('OLD BODY');
+
+    // A reload (e.g. after changing marketplaceSourceUrl) replaces the catalog;
+    // a fork could reuse id 'a' for different content, so the stale preview must
+    // not survive — the expanded body collapses and Preview must re-fetch.
+    store.items = [{ ...alpha }];
+    await nextTick();
+    await waitFor(() => expect(screen.queryByText('OLD BODY')).toBeNull());
   });
 });
