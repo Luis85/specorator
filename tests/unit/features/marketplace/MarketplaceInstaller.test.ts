@@ -132,6 +132,19 @@ describe('installMarketplaceItem', () => {
     expect(agents[0].roles).toEqual(['worker']);
   });
 
+  it('rejects a malformed agent body (wrong type or empty prompt) before saving', async () => {
+    const { deps, agents } = makeDeps();
+    const item: MarketplaceItem = { id: 'agents/bad', type: 'agent', name: 'Bad', description: 'd', path: 'agents/bad.md', tags: [] };
+    // Wrong marker type — the roster would otherwise save whatever text as a prompt.
+    const wrongType = '---\ntype: specorator-loop\nname: "Bad"\n---\n\nPrompt.';
+    await expect(installMarketplaceItem(item, wrongType, deps, 1)).rejects.toThrow(/malformed/i);
+    // Right type but no prompt body — an empty roster entry.
+    const emptyPrompt = '---\ntype: specorator-agent\nname: "Bad"\n---\n\n   \n';
+    await expect(installMarketplaceItem(item, emptyPrompt, deps, 1)).rejects.toThrow(/malformed/i);
+    // Neither malformed body reached the store.
+    expect(agents).toHaveLength(0);
+  });
+
   it('throws for a skill (not yet installable)', async () => {
     const { deps } = makeDeps();
     const item: MarketplaceItem = { id: 'skills/x', type: 'skill', name: 'x', description: 'd', path: 'skills/x/SKILL.md', tags: [] };

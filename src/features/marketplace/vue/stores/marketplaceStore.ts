@@ -46,8 +46,18 @@ export const useMarketplaceStore = defineStore('marketplace', () => {
   }
 
   function resolveSource(): string {
-    const override = requirePlugin().settings.marketplaceSourceUrl?.trim();
-    return override || DEFAULT_MARKETPLACE_BASE_URL;
+    const raw = requirePlugin().settings.marketplaceSourceUrl?.trim() || DEFAULT_MARKETPLACE_BASE_URL;
+    // Canonicalize to match what MarketplaceCatalogClient's constructor stores as
+    // its base: the cache is keyed on this source, and a fetch that succeeds under
+    // the client's canonical URL must read/write the SAME key here — otherwise a
+    // non-canonical custom source (`…:443/`, uppercase host) would cache under one
+    // spelling and the offline fallback would look under another and always miss.
+    const withSlash = raw.endsWith('/') ? raw : `${raw}/`;
+    try {
+      return new URL(withSlash).toString();
+    } catch {
+      return withSlash;
+    }
   }
 
   /**

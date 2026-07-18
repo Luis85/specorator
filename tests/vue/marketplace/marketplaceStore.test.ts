@@ -296,4 +296,28 @@ describe('marketplaceStore load fallbacks', () => {
     expect(store.offline).toBe(false);
     expect(store.error).toMatch(/network down/);
   });
+
+  it('canonicalizes a non-canonical custom source so the offline cache round-trips', async () => {
+    // The client canonicalizes its base URL (lowercase host, strip :443). The
+    // store's source key MUST canonicalize identically, or the cache written
+    // under the fetched (canonical) source would never match on the offline
+    // fallback and every reconnect-then-drop would surface an error instead.
+    const canonical = 'https://example.com/base/';
+    const store = useMarketplaceStore();
+    const p = fakePlugin(true);
+    p.settings.marketplaceSourceUrl = 'https://Example.COM:443/base';
+    store.init(p);
+
+    await store.load();
+    expect(store.source).toBe(canonical);
+    expect(clientCtor).toHaveBeenCalledWith(canonical);
+    expect(cacheWrite).toHaveBeenCalledWith(manifest, canonical, expect.any(Number));
+
+    // Network drops; the cache stored under the canonical key is found again.
+    fetchIndexSpy.mockRejectedValue(new Error('network down'));
+    cacheRead.mockResolvedValue({ manifest, source: canonical, fetchedAt: 0 });
+    await store.load();
+    expect(store.offline).toBe(true);
+    expect(store.items).toEqual([item]);
+  });
 });

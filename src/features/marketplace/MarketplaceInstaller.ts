@@ -38,6 +38,21 @@ function assertInstallableBody(parse: () => unknown, label: string): void {
   }
 }
 
+/**
+ * The agent equivalent of `assertInstallableBody`: agents are mapped by hand (no
+ * store `.parse()` that throws), so guard the two ways a catalog agent body can
+ * be unusable — a wrong marker type or an empty prompt — before the roster save,
+ * so a malformed agent fails visibly instead of installing as a blank entry the
+ * card still reports "installed".
+ */
+function assertInstallableAgentBody(fm: Record<string, unknown>, prompt: string): void {
+  if (extractString(fm, 'type') !== 'specorator-agent' || !prompt) {
+    throw new MarketplaceError(
+      "This agent's content is malformed and can't be installed (needs `type: specorator-agent` frontmatter and a non-empty body).",
+    );
+  }
+}
+
 export type InstallOutcome = 'installed' | 'skipped';
 
 export interface MarketplaceInstallDeps {
@@ -155,6 +170,8 @@ async function installAgent(
 ): Promise<InstallOutcome> {
   const parsed = parseFrontmatter(body);
   const fm = parsed?.frontmatter ?? {};
+  const prompt = (parsed?.body ?? body).trim();
+  assertInstallableAgentBody(fm, prompt);
   // Identity keys on the manifest `item.name` (via agentRosterId), not the body
   // frontmatter name, so it matches isItemInstalled and the card's display name.
   const id = agentRosterId(item);
@@ -164,7 +181,7 @@ async function installAgent(
     id,
     name: item.name,
     description: extractString(fm, 'description') ?? item.description,
-    prompt: (parsed?.body ?? body).trim(),
+    prompt,
     disallowedTools: [],
     skills: [],
     roles: normalizeRoles(extractStringArray(fm, 'roles')),
