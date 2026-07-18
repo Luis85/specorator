@@ -640,6 +640,13 @@ test('a brownfield manifest missing isDesktopOnly is reconciled to true for desk
   assert.ok(!findManifestMerge(actionsFor({ mobile: false }, { obsidianManifest: { version: '1.0.0', isDesktopOnly: false } })));
   // Greenfield (no existing manifest) writes the flag directly — no reconcile action.
   assert.ok(!findManifestMerge(actionsFor({ mobile: false })));
+  // The freshly-generated beta manifest carries the same forced flag (BRAT beta
+  // installs must not advertise mobile-ready while the build enforces desktop-only).
+  const beta = JSON.parse(findWrite(actionsFor({ mobile: false }, { obsidianManifest: { version: '1.0.0' } }), 'manifest-beta.json').content);
+  assert.equal(beta.isDesktopOnly, true);
+  // Mobile-ready adopt: beta manifest is not forced desktop-only.
+  const betaMobile = JSON.parse(findWrite(actionsFor({ mobile: true }, { obsidianManifest: { version: '1.0.0' } }), 'manifest-beta.json').content);
+  assert.notEqual(betaMobile.isDesktopOnly, true);
 });
 
 test('an existing .npmrc without tag-version-prefix warns (release tag policy)', () => {

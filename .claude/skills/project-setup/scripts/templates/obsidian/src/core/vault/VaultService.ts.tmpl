@@ -3,7 +3,7 @@ import { normalizePath } from 'obsidian';
 
 // Thin wrapper over the Vault API (preferred over the Adapter API for
 // performance + caching) with normalizePath baked in, so call sites never
-// hand-build cross-platform paths or juggle create-vs-modify.
+// hand-build cross-platform paths or race their own reads and writes.
 export class VaultService {
   constructor(private readonly app: App) {}
 
@@ -19,20 +19,24 @@ export class VaultService {
     return file ? this.app.vault.read(file) : null;
   }
 
-  async write(path: string, content: string): Promise<void> {
+  // Atomic append across BOTH paths. Vault.process serializes the read-modify-write
+  // on an existing file, so a plain read-then-write can't drop an overlapping
+  // append. process() only guards an existing file, so the first-ever append
+  // creates it — and a concurrent first append loses the create race (Vault.create
+  // throws when the file already exists), then appends through process() too, so no
+  // initial line is dropped.
+  async append(path: string, content: string): Promise<void> {
     const normalized = normalizePath(path);
     const existing = this.app.vault.getFileByPath(normalized);
-    if (existing) await this.app.vault.modify(existing, content);
-    else await this.app.vault.create(normalized, content);
-  }
-
-  // Atomic append. Vault.process serializes read-modify-write, so concurrent
-  // callers (a double-tapped command) can't both read the same content and
-  // clobber each other — a plain read-then-write can silently drop an append.
-  // A missing file is created via write().
-  async append(path: string, content: string): Promise<void> {
-    const existing = this.app.vault.getFileByPath(normalizePath(path));
-    if (existing) await this.app.vault.process(existing, (data) => data + content);
-    else await this.write(path, content);
+    if (existing) {
+      await this.app.vault.process(existing, (data) => data + content);
+      return;
+    }
+    try {
+      await this.app.vault.create(normalized, content);
+    } catch {
+      const created = this.app.vault.getFileByPath(normalized);
+      if (created) await this.app.vault.process(created, (data) => data + content);
+    }
   }
 }

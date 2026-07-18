@@ -129,13 +129,29 @@ function planManifest(o, state, version) {
   if (existing && typeof existing.isDesktopOnly === 'boolean' && existing.isDesktopOnly === Boolean(o.mobile)) {
     notices.push(notice(`Existing manifest.json says isDesktopOnly: ${existing.isDesktopOnly}, but you chose ${o.mobile ? 'mobile-ready' : 'desktop-only'} — the build, lint, and docs follow your answer. Set "isDesktopOnly": ${!o.mobile} in manifest.json to match (or re-run with the other mobile choice).`));
   }
+  // A brownfield manifest that OMITS isDesktopOnly (or carries a non-boolean)
+  // defaults to mobile-ready in Obsidian. If the user chose desktop-only, the
+  // build/lint/docs follow that answer, so a kept manifest without the flag would
+  // ship advertised as mobile-ready. Computed here so BOTH the reconcile below and
+  // the freshly-generated beta manifest carry the forced flag.
+  const needsDesktopOnly = existing && !o.mobile && typeof existing.isDesktopOnly !== 'boolean';
   // manifest-beta.json mirrors manifest.json for BRAT beta installs; sync-version
   // keeps it in lockstep so it never lags stable (see docs/publishing.md for how
   // to run a beta channel ahead of stable). Brownfield: mirror the KEPT manifest
   // (manifest.json is skip-if-exists), not the answers — else the beta manifest
   // describes a different plugin (id/name/description/desktop) than the adopted one.
+  // The beta payload is built from pre-reconcile `existing`, so fold in the same
+  // minAppVersion/isDesktopOnly gap-fills the manifest.json reconciles get below.
   const betaManifest = existing
-    ? JSON.stringify({ ...existing, minAppVersion: existing.minAppVersion ?? minApp }, null, 2) + '\n'
+    ? JSON.stringify(
+        {
+          ...existing,
+          minAppVersion: existing.minAppVersion ?? minApp,
+          ...(needsDesktopOnly ? { isDesktopOnly: true } : {}),
+        },
+        null,
+        2,
+      ) + '\n'
     : manifest;
   // A kept manifest.json (skip-if-exists) with a version but no minAppVersion
   // desyncs against the generated versions.json (keyed to minApp) and fails
@@ -145,16 +161,12 @@ function planManifest(o, state, version) {
     existing && !existing.minAppVersion
       ? [{ type: 'mergeJson', path: 'manifest.json', patch: { minAppVersion: minApp } }]
       : [];
-  // A brownfield manifest that OMITS isDesktopOnly (or carries a non-boolean)
-  // defaults to mobile-ready in Obsidian. If the user chose desktop-only, the
-  // build/lint/docs follow that answer, so a kept manifest without the flag would
-  // ship advertised as mobile-ready. Force it true — gated on a non-boolean
-  // current value, so an explicit choice is never clobbered (an explicit-false
-  // mismatch is left to the notice above, consistent with skip-if-exists).
-  const desktopOnlyReconcile =
-    existing && !o.mobile && typeof existing.isDesktopOnly !== 'boolean'
-      ? [{ type: 'mergeJson', path: 'manifest.json', patch: { isDesktopOnly: true }, force: ['isDesktopOnly'] }]
-      : [];
+  // Force isDesktopOnly true on the kept manifest.json when needed — gated on a
+  // non-boolean current value, so an explicit choice is never clobbered (an
+  // explicit-false mismatch is left to the notice above, consistent with skip-if-exists).
+  const desktopOnlyReconcile = needsDesktopOnly
+    ? [{ type: 'mergeJson', path: 'manifest.json', patch: { isDesktopOnly: true }, force: ['isDesktopOnly'] }]
+    : [];
   return [
     ...notices,
     write('manifest.json', manifest),

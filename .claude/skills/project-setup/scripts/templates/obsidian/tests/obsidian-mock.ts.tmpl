@@ -41,6 +41,9 @@ class MockVault {
   }
 
   create(path: string, data: string): Promise<TFile> {
+    // Obsidian's Vault.create rejects when the path already exists — model that so
+    // tests exercise VaultService.append's first-append create-race handling.
+    if (this.files.has(path)) return Promise.reject(new Error(`File already exists: ${path}`));
     this.files.set(path, data);
     return Promise.resolve({ path });
   }

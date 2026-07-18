@@ -4,19 +4,16 @@ import { describe, expect, it } from 'vitest';
 import { VaultService } from '@/core/vault/VaultService';
 
 describe('VaultService', () => {
-  it('creates the folder, then writes and reads a note', async () => {
+  it('creates the folder, then appends and reads a note', async () => {
     const service = new VaultService(new App());
     await service.ensureFolder('logs');
-    await service.write('logs/a.md', 'hello');
+    await service.append('logs/a.md', 'hello');
     expect(await service.read('logs/a.md')).toBe('hello');
   });
 
-  it('returns null for a missing file and overwrites an existing one', async () => {
+  it('read returns null for a missing file', async () => {
     const service = new VaultService(new App());
     expect(await service.read('missing.md')).toBeNull();
-    await service.write('note.md', 'one');
-    await service.write('note.md', 'two');
-    expect(await service.read('note.md')).toBe('two');
   });
 
   it('append creates the file, then adds to it without clobbering', async () => {
@@ -26,11 +23,11 @@ describe('VaultService', () => {
     expect(await service.read('log.md')).toBe('a\nb\n');
   });
 
-  it('append is atomic: concurrent appends do not drop writes', async () => {
+  it('append is atomic even on the first write: concurrent appends to a new file keep every line', async () => {
     const service = new VaultService(new App());
-    await service.write('log.md', '');
-    // A plain read-then-write would let these interleave and lose lines; process()
-    // serializes the read-modify-write so every line survives.
+    // No pre-created file: overlapping first appends race Vault.create; the loser
+    // catches the "already exists" reject and appends through process() instead, so
+    // no initial line is dropped.
     await Promise.all(Array.from({ length: 20 }, (_, i) => service.append('log.md', `${i}\n`)));
     const lines = (await service.read('log.md'))!
       .trim()
