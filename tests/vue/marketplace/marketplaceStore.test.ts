@@ -47,6 +47,17 @@ vi.mock('@/features/marketplace/MarketplaceCache', () => ({
 vi.mock('@/features/marketplace/MarketplaceInstaller', () => ({
   installMarketplaceItem: installSpy,
   isItemInstalled: isInstalledSpy,
+  // Faithful stand-in: refreshInstalled uses this to precompute the agent key set
+  // (roster ids + catalog ids). Kept real so an agent-item test can't silently
+  // fall through the try/catch to an empty set.
+  installedAgentKeys: (agents: Array<{ id: string; catalog?: { id?: string } }>) => {
+    const keys = new Set<string>();
+    for (const agent of agents) {
+      keys.add(agent.id);
+      if (agent.catalog?.id) keys.add(agent.catalog.id);
+    }
+    return keys;
+  },
 }));
 
 import { DEFAULT_MARKETPLACE_BASE_URL } from '@/features/marketplace/MarketplaceCatalogClient';

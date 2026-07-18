@@ -132,6 +132,32 @@ describe('installMarketplaceItem', () => {
     expect(agents[0].roles).toEqual(['worker']);
   });
 
+  it('stamps catalog provenance onto an installed agent', async () => {
+    const { deps, agents } = makeDeps();
+    const body = '---\ntype: specorator-agent\nname: "Code Reviewer"\n---\n\nYou review changes.';
+    const item: MarketplaceItem = {
+      id: 'agents/code-reviewer',
+      type: 'agent',
+      name: 'Code Reviewer',
+      description: 'x',
+      path: 'agents/code-reviewer.md',
+      tags: [],
+      author: 'Specorator',
+      license: 'MIT',
+      source: 'https://example.test/agents',
+      version: 3,
+    };
+    await installMarketplaceItem(item, body, deps, 1);
+    // The installed roster JSON records where the agent came from.
+    expect(agents[0].catalog).toEqual({
+      id: 'agents/code-reviewer',
+      author: 'Specorator',
+      license: 'MIT',
+      source: 'https://example.test/agents',
+      version: 3,
+    });
+  });
+
   it('rejects a malformed agent body (wrong type or empty prompt) before saving', async () => {
     const { deps, agents } = makeDeps();
     const item: MarketplaceItem = { id: 'agents/bad', type: 'agent', name: 'Bad', description: 'd', path: 'agents/bad.md', tags: [] };
@@ -175,6 +201,19 @@ describe('isItemInstalled', () => {
     await installMarketplaceItem(item, body, deps, 1);
     // isItemInstalled only has the manifest item; it must still see it installed.
     expect(await isItemInstalled(item, deps)).toBe(true);
+  });
+
+  it('recognizes an installed agent by catalog id after a display-name rebrand', async () => {
+    const { deps } = makeDeps();
+    const body = '---\ntype: specorator-agent\nname: "Old Name"\n---\n\nPrompt.';
+    const original: MarketplaceItem = { id: 'agents/x', type: 'agent', name: 'Old Name', description: 'd', path: 'agents/x.md', tags: [] };
+    await installMarketplaceItem(original, body, deps, 1);
+    expect(await isItemInstalled(original, deps)).toBe(true);
+
+    // The catalog later rebrands the display name: the roster id (name slug) now
+    // differs, but the stable catalog id still matches → still marked installed.
+    const rebranded: MarketplaceItem = { ...original, name: 'New Name' };
+    expect(await isItemInstalled(rebranded, deps)).toBe(true);
   });
 
   it('honors a precomputed roster id set instead of scanning the store', async () => {

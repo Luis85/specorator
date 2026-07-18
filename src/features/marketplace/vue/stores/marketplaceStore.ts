@@ -10,6 +10,7 @@ import {
   MarketplaceError,
 } from '../../MarketplaceCatalogClient';
 import {
+  installedAgentKeys,
   installMarketplaceItem,
   type InstallOutcome,
   isItemInstalled,
@@ -102,18 +103,20 @@ export const useMarketplaceStore = defineStore('marketplace', () => {
     const deps = installDeps();
     // Scan the agent roster at most once per refresh (not once per agent item);
     // an unreadable roster degrades to "no agents marked", never a thrown scan.
-    let rosterIds: ReadonlySet<string> | undefined;
+    // The key set carries both roster ids and catalog ids (installedAgentKeys) so
+    // the agent badge matches on either without a per-item roster scan.
+    let agentKeys: ReadonlySet<string> | undefined;
     if (items.value.some((item) => item.type === 'agent')) {
       try {
-        rosterIds = new Set((await deps.rosterStore.list()).map((agent) => agent.id));
+        agentKeys = installedAgentKeys(await deps.rosterStore.list());
       } catch {
-        rosterIds = new Set<string>();
+        agentKeys = new Set<string>();
       }
     }
     const ids = new Set<string>();
     for (const item of items.value) {
       try {
-        if (await isItemInstalled(item, deps, rosterIds)) ids.add(item.id);
+        if (await isItemInstalled(item, deps, agentKeys)) ids.add(item.id);
       } catch {
         // a folder-resolution hiccup shouldn't blank the whole list
       }

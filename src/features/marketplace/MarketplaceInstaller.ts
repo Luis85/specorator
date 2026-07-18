@@ -103,14 +103,30 @@ function agentRosterId(item: MarketplaceItem): string {
 }
 
 /**
+ * The identity keys an installed agent can match on: its roster id (name-slug)
+ * and, for Marketplace installs, its stored catalog id. The two live in disjoint
+ * namespaces (`roster:…` vs `<type>/<slug>`), so one set serves both lookups and
+ * a caller checking many agent items can precompute it once (the refresh
+ * fast-path) instead of scanning the roster per item.
+ */
+export function installedAgentKeys(agents: readonly RosterAgent[]): Set<string> {
+  const keys = new Set<string>();
+  for (const agent of agents) {
+    keys.add(agent.id);
+    if (agent.catalog?.id) keys.add(agent.catalog.id);
+  }
+  return keys;
+}
+
+/**
  * True when an item with the same natural key is already present (drives the
- * "Installed" badge). `rosterIds` lets a caller checking many agent items pass a
- * once-computed roster id set instead of forcing a full roster scan per item.
+ * "Installed" badge). `agentKeys` lets a caller checking many agent items pass a
+ * once-computed key set (see `installedAgentKeys`) instead of a per-item scan.
  */
 export async function isItemInstalled(
   item: MarketplaceItem,
   deps: MarketplaceInstallDeps,
-  rosterIds?: ReadonlySet<string>,
+  agentKeys?: ReadonlySet<string>,
 ): Promise<boolean> {
   if (!isInstallableType(item.type)) return false;
   switch (item.type) {
@@ -123,8 +139,12 @@ export async function isItemInstalled(
       return storage.exists(storage.getFilePathForName(item.name));
     }
     case 'agent': {
-      const ids = rosterIds ?? new Set((await deps.rosterStore.list()).map((agent) => agent.id));
-      return ids.has(agentRosterId(item));
+      // Match the roster id (name-slug) OR the stored catalog id: the catalog id
+      // keeps an installed agent recognized across a catalog-side display-name
+      // rebrand, while the roster-id fallback keeps pre-provenance and
+      // hand-authored agents recognized.
+      const keys = agentKeys ?? installedAgentKeys(await deps.rosterStore.list());
+      return keys.has(agentRosterId(item)) || keys.has(item.id);
     }
     default:
       return false;
@@ -162,6 +182,22 @@ async function installQuickAction(
   return 'installed';
 }
 
+/**
+ * Provenance block stamped onto a Marketplace-installed agent — where it came
+ * from, so `.specorator/agents/*.json` records its origin and installed-detection
+ * can key on the stable catalog id. Undefined attribution fields drop out of the
+ * persisted JSON (JSON.stringify omits them).
+ */
+function marketplaceProvenance(item: MarketplaceItem): NonNullable<RosterAgent['catalog']> {
+  return {
+    id: item.id,
+    source: item.source,
+    author: item.author,
+    license: item.license,
+    version: item.version,
+  };
+}
+
 async function installAgent(
   store: AgentRosterStore,
   item: MarketplaceItem,
@@ -189,6 +225,7 @@ async function installAgent(
     initials: extractString(fm, 'initials'),
     icon: extractString(fm, 'icon') ?? item.icon,
     tags: extractStringArray(fm, 'tags'),
+    catalog: marketplaceProvenance(item),
     createdAt: now,
     updatedAt: now,
   };

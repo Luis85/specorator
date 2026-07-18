@@ -38,7 +38,14 @@ Modeled on — and reuses the components of — `features/library`.
   (provenance frontmatter preserved); agents parse into a `RosterAgent`.
 - **Agent identity keys on the manifest `item.name`** (via `agentRosterId`),
   used identically by the installer and `isItemInstalled`, so the "Installed"
-  badge can't drift from what was written.
+  badge can't drift from what was written. Installed agents also carry a
+  `catalog` provenance block (`{ id, source?, author?, license?, version? }`) on
+  the `RosterAgent`, populated from the manifest item. `isItemInstalled` then
+  matches on the roster id **or** the stored catalog id (`installedAgentKeys`) —
+  the catalog id keeps an agent recognized across a catalog-side display-name
+  rebrand, while the roster-id fallback keeps pre-provenance/hand-authored agents
+  recognized. The storage/dedup key stays the name-slug roster id (no file
+  churn); cross-rename install idempotency is deferred update-management.
 - **The catalog is untrusted.** `item.source` is only linkified when it is an
   `http(s)` URL (`MarketplaceCard` `safeSourceUrl`) — never a live `javascript:`
   href. Every fetched URL is SSRF-vetted AND constrained to stay under the

@@ -43,6 +43,34 @@ describe('AgentRosterStore', () => {
     expect(all[0].id).toBe('roster:reviewer');
   });
 
+  it('round-trips catalog provenance on save/list', async () => {
+    const files: Record<string, string> = {};
+    const store = new AgentRosterStore(makeAdapter(files));
+    const agent = {
+      ...createRosterAgent('Reviewer', 1),
+      catalog: {
+        id: 'agents/reviewer',
+        source: 'https://example.test/agents',
+        author: 'Specorator',
+        license: 'MIT',
+        version: 2,
+      },
+    };
+
+    await store.save(agent);
+    const [listed] = await store.list();
+
+    // The store serializes the whole object (no field allowlist), so provenance
+    // added to RosterAgent survives a save → list round-trip.
+    expect(listed.catalog).toEqual({
+      id: 'agents/reviewer',
+      source: 'https://example.test/agents',
+      author: 'Specorator',
+      license: 'MIT',
+      version: 2,
+    });
+  });
+
   it('skips malformed json files', async () => {
     const files = { [`${ROSTER_DIR}/bad.json`]: '{not json' };
     const store = new AgentRosterStore(makeAdapter(files));
