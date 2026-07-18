@@ -616,9 +616,18 @@ function planPublishing(options) {
 // instant local feedback. The `prepare` script installs the git hook on `install`.
 function planPreCommit(options, state) {
   if (!options.hooks?.preCommit) return [];
+  // mergeJson keeps an existing nested scalar, so a pre-existing
+  // simple-git-hooks.pre-commit shadows the generated `npx nano-staged` hook —
+  // staged files would run the user's command, not eslint+prettier. Warn.
+  const hook = state?.preCommitHook;
+  const hookCollision =
+    hook && hook !== 'npx nano-staged'
+      ? [notice(`Existing simple-git-hooks.pre-commit kept (\`${hook}\`) — the generated \`npx nano-staged\` hook was NOT installed (mergeJson keeps your value). Replace it, or chain both, so staged files get eslint --fix + prettier.`)]
+      : [];
   return [
     notice('Pre-commit hook enabled (simple-git-hooks + nano-staged): staged files get eslint --fix + prettier before each commit. It installs via the `prepare` script on your next install; run `npx simple-git-hooks` once if you commit before installing.'),
     ...scriptCollision(options, state, 'prepare', 'simple-git-hooks'),
+    ...hookCollision,
     {
       type: 'mergeJson',
       path: 'package.json',
@@ -676,6 +685,9 @@ function planProjectDocs(options, state) {
       id: o.id,
       run,
       versionCmd,
+      // Only list test:coverage when the script exists — coverageFloors off, or an
+      // adopted vitest/vite config standing coverage down, means no such script.
+      coverageLine: options.guardrails?.coverageFloors ? `\n${run} test:coverage  # coverage with rise-only floors` : '',
       typecheckTool: o.vue ? 'vue-tsc' : 'tsc',
       mobileLine: `- ${mobileLine}`,
       vueLine: o.vue

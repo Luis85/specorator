@@ -238,6 +238,23 @@ test('pre-commit hook is opt-in (off by default; on wires lint-staged + simple-g
   assert.ok(on.some((a) => a.type === 'notice' && /pre-commit/i.test(a.message)));
 });
 
+test('pre-commit: a pre-existing simple-git-hooks.pre-commit is flagged (mergeJson keeps it, shadowing nano-staged)', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'obs-hook-'));
+  const path = join(dir, 'answers.json');
+  writeFileSync(path, JSON.stringify({ obsidian: BASE, hooks: { preCommit: true } }));
+  try {
+    const kept = (actions) => actions.some((a) => a.type === 'notice' && /simple-git-hooks\.pre-commit kept/.test(a.message));
+    // A differing existing hook -> the generated `npx nano-staged` is shadowed -> warn.
+    assert.ok(kept(planObsidian(loadOptions(path), { preCommitHook: 'lint-staged' })), 'expected a kept-hook collision notice');
+    // No existing hook -> nothing to shadow -> no collision notice.
+    assert.ok(!kept(planObsidian(loadOptions(path), {})));
+    // Re-apply of ours (identical hook) -> no false collision.
+    assert.ok(!kept(planObsidian(loadOptions(path), { preCommitHook: 'npx nano-staged' })));
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
 test('manifest-only brownfield seeds the package version from the manifest (no check:artifacts desync)', () => {
   const state = { obsidianAppPresent: true, obsidianManifest: { version: '3.1.0', minAppVersion: '1.5.0' } };
   const actions = planObsidian(optionsWith(BASE), state);
@@ -289,6 +306,21 @@ test('yarn release docs use `npm version` (yarn version skips the sync lifecycle
   assert.match(findWrite(actions, 'README.md').content, /npm version patch/);
   assert.match(findWrite(actions, 'CLAUDE.md').content, /npm version patch/);
   assert.doesNotMatch(findWrite(actions, 'README.md').content, /yarn version/);
+});
+
+test('CLAUDE.md documents test:coverage only when coverage floors are on (no phantom command)', () => {
+  // Default (coverageFloors on): the script exists, so the docs list it.
+  assert.match(findWrite(actionsFor(), 'CLAUDE.md').content, /\btest:coverage\b/);
+  // Off: planObsidianVitest emits no test:coverage script, so CLAUDE.md must not
+  // point at a command that isn't generated.
+  const dir = mkdtempSync(join(tmpdir(), 'obs-cov-'));
+  const path = join(dir, 'answers.json');
+  writeFileSync(path, JSON.stringify({ obsidian: BASE, guardrails: { coverageFloors: false } }));
+  try {
+    assert.doesNotMatch(findWrite(planObsidian(loadOptions(path), {}), 'CLAUDE.md').content, /\btest:coverage\b/);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
 });
 
 test('VueView pushes the start route before mount (memory history has no initial navigation)', () => {
@@ -458,6 +490,20 @@ test('ErrorService ships in core and onload routes through it (both variants)', 
     assert.match(commands, /plugin\.errors\.wrap\(/);
     assert.match(commands, /plugin\.errors\.run\(/);
   }
+});
+
+test('the ribbon greeting save awaits through ErrorService before the success notice', () => {
+  // A rejected saveSettings must NOT show "greeting set" — persist first inside
+  // errors.run, notice only after the await resolves.
+  const extras = findWrite(actionsFor(), 'src/ui/registerExtras.ts').content;
+  assert.match(extras, /plugin\.errors\.run\('save the greeting', async \(\) => \{/);
+  assert.match(extras, /await plugin\.saveSettings\(\{ greeting \}\)/);
+  // Ordering: the success notice sits after the awaited save in the same callback.
+  const body = extras.slice(extras.indexOf("errors.run('save the greeting'"));
+  assert.ok(
+    body.indexOf('await plugin.saveSettings') < body.indexOf('notices.info'),
+    'the greeting success notice must follow the awaited save',
+  );
 });
 
 test('menu/timers/vault-event services ship in core, wire as fields, and are demoed (both variants)', () => {

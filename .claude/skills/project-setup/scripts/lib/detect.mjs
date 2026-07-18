@@ -243,6 +243,10 @@ export function detect(cwd) {
     // Brownfield collision signals — planners turn these into user-facing notices
     // instead of silently no-op'ing on a pre-existing config/script/workflow.
     scripts: pkg.scripts ?? {},
+    // Existing simple-git-hooks.pre-commit: a kept nested scalar (mergeJson keeps
+    // it) would shadow the generated nano-staged hook — planPreCommit warns.
+    // Optional chaining is safe on a string/array/null value (yields undefined).
+    preCommitHook: pkg['simple-git-hooks']?.['pre-commit'],
     legacyEslintrc: existsAny(cwd, ESLINTRC),
     eslintFlatConfig: existsAny(cwd, ESLINT_FLAT),
     // A fallow config in another form (.fallowrc.jsonc / fallow.toml / ...). The

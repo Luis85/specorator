@@ -11,8 +11,12 @@ const PRESETS = ['Hello there', 'Good morning', 'Welcome back', 'Happy writing']
 export function registerExtras(plugin: {{pluginClass}}): void {
   plugin.ribbon.add('dice', t('ribbon.pickGreeting'), () => {
     new GreetingSuggestModal(plugin.app, PRESETS, (greeting) => {
-      void plugin.saveSettings({ greeting });
-      plugin.notices.info(t('notice.greetingSet', { greeting }));
+      // Persist first; only report success once the save resolves. ErrorService
+      // logs + notices (and skips the success notice) if storage rejects.
+      void plugin.errors.run('save the greeting', async () => {
+        await plugin.saveSettings({ greeting });
+        plugin.notices.info(t('notice.greetingSet', { greeting }));
+      });
     }).open();
   });
 

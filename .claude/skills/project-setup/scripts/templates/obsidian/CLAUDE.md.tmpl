@@ -18,8 +18,7 @@ Commands are shown for this repo's package manager (`{{run}} …`).
 {{run}} verify         # the whole local gate set in CI order (run before pushing)
 {{run}} dev            # watch build; deploys into $OBSIDIAN_VAULT (hot reload)
 {{run}} build          # production bundle (main.js + styles.css)
-{{run}} test           # Vitest (jsdom; obsidian aliased to tests/__mocks__/obsidian.ts)
-{{run}} test:coverage  # coverage with rise-only floors
+{{run}} test           # Vitest (jsdom; obsidian aliased to tests/__mocks__/obsidian.ts){{coverageLine}}
 {{run}} typecheck      # {{typecheckTool}} --noEmit
 {{run}} lint           # eslint (obsidianmd + type-aware rules, all-error)
 {{run}} format         # prettier --write

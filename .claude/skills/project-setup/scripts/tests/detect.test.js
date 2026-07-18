@@ -247,7 +247,10 @@ test('detect flags a user eslint.config.mjs but not the engine\'s own (marker)',
 
 test('detect surfaces brownfield collision signals', () => {
   const p = tmpProject({
-    'package.json': { scripts: { lint: 'eslint src' } },
+    'package.json': {
+      scripts: { lint: 'eslint src' },
+      'simple-git-hooks': { 'pre-commit': 'lint-staged' },
+    },
     '.eslintrc.json': '{}',
     '.github/workflows/ci.yml': 'name: ci\n',
     'jest.config.js': 'module.exports = {};\n',
@@ -255,11 +258,25 @@ test('detect surfaces brownfield collision signals', () => {
   try {
     const s = detect(p.dir);
     assert.equal(s.scripts.lint, 'eslint src');
+    assert.equal(s.preCommitHook, 'lint-staged'); // an existing hook mergeJson would keep
     assert.equal(s.legacyEslintrc, true);
     assert.equal(s.ciWorkflow, true);
     assert.equal(s.jestConfig, true);
   } finally {
     p.cleanup();
+  }
+});
+
+test('detect.preCommitHook is undefined (never throws) when simple-git-hooks is absent or a non-object', () => {
+  // Optional chaining on a string/missing value yields undefined, not a crash.
+  const none = tmpProject({ 'package.json': { name: 'x' } });
+  const weird = tmpProject({ 'package.json': { 'simple-git-hooks': 'husky' } });
+  try {
+    assert.equal(detect(none.dir).preCommitHook, undefined);
+    assert.equal(detect(weird.dir).preCommitHook, undefined);
+  } finally {
+    none.cleanup();
+    weird.cleanup();
   }
 });
 
