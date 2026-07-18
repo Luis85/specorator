@@ -244,4 +244,24 @@ export type TasksTranslationKey =
   | 'tasks.laneEditor.definitionOfDone'
   | 'tasks.laneEditor.addLane'
   | 'tasks.laneEditor.resetToDefault'
-  | 'tasks.laneEditor.newLaneTitle';
+  | 'tasks.laneEditor.newLaneTitle'
+
+  // Tasks - Work-order chaining (chain config modal, next-step field, chained badge, template default successor)
+  | 'tasks.chainConfig.title'
+  | 'tasks.chainConfig.lead'
+  | 'tasks.chainConfig.templateLabel'
+  | 'tasks.chainConfig.templateNone'
+  | 'tasks.chainConfig.titleLabel'
+  | 'tasks.chainConfig.titlePlaceholder'
+  | 'tasks.chainConfig.objectiveLabel'
+  | 'tasks.chainConfig.objectivePlaceholder'
+  | 'tasks.chainConfig.triggerLabel'
+  | 'tasks.chainConfig.triggerDone'
+  | 'tasks.chainConfig.triggerReview'
+  | 'tasks.chainConfig.save'
+  | 'tasks.chainConfig.clear'
+  | 'tasks.chainConfig.cancel'
+  | 'tasks.chainConfig.chipNone'
+  | 'tasks.workOrderModal.fieldNextStep'
+  | 'tasks.board.card.chainedBadge'
+  | 'tasks.templateEditor.chainHeading';

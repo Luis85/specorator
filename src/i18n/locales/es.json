@@ -857,7 +857,8 @@
           "heartbeatVeryStale": "Very stale heartbeat ({age} ago)"
         },
         "updatedAgo": "hace {ago}",
-        "ariaLabel": "{title} — {status}"
+        "ariaLabel": "{title} — {status}",
+        "chainedBadge": "Part of a chain"
       },
       "attention": {
         "waitingOne": "1 espera tu respuesta",
@@ -973,6 +974,7 @@
       "fieldConversation": "Conversation",
       "fieldLoop": "Loop",
       "loopNone": "No loop",
+      "fieldNextStep": "Next step",
       "sectionHandoff": "Agent handoff",
       "sectionRunLedger": "Run ledger",
       "handoffSummary": "Summary",
@@ -1031,7 +1033,8 @@
       "loopDesc": "Loop attached to every work order created from this template.",
       "loopNone": "No loop",
       "agentName": "Agent",
-      "agentDesc": "Optional roster agent assigned to work orders created from this template."
+      "agentDesc": "Optional roster agent assigned to work orders created from this template.",
+      "chainHeading": "Default next step"
     },
     "addToWorkOrder": {
       "title": "Add to work order",
@@ -1067,6 +1070,23 @@
       "addLane": "Agregar carril",
       "resetToDefault": "Restablecer valores predeterminados",
       "newLaneTitle": "Nuevo carril"
+    },
+    "chainConfig": {
+      "title": "Next work order",
+      "lead": "When this work order finishes, create a successor — seeded with this one's handoff.",
+      "templateLabel": "Template",
+      "templateNone": "No template (blank)",
+      "titleLabel": "Title override",
+      "titlePlaceholder": "Defaults to the template name or \"<this> — next\"",
+      "objectiveLabel": "Objective override",
+      "objectivePlaceholder": "Optional objective for the successor",
+      "triggerLabel": "Create it",
+      "triggerDone": "After I accept (done)",
+      "triggerReview": "When the agent hands off (review)",
+      "save": "Save",
+      "clear": "Clear chain",
+      "cancel": "Cancel",
+      "chipNone": "None"
     }
   },
   "env": {
