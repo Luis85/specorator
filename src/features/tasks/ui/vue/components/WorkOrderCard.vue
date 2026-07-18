@@ -8,6 +8,7 @@ import { DEFAULT_LANE_TITLES } from '../../../config/boardConfigTypes';
 import { parseAcceptanceProgress } from '../../../model/acceptanceProgress';
 import type { TaskSpec } from '../../../model/taskTypes';
 import { CALLBACKS_KEY } from '../boardKeys';
+import { mountLucide } from '../mountLucide';
 import { ATTENTION_STATUSES, LIVE_STATUSES, priorityBars, statusDotClass } from '../statusDot';
 import { useAgentBoardStore } from '../stores/agentBoardStore';
 import AgentAvatar from './AgentAvatar.vue';
@@ -44,6 +45,16 @@ function ackSkip(): void {
   store.clearSkip(props.task.frontmatter.id);
   cb.onAckSkip?.(props.task);
 }
+
+// A "workflow work-order": it either declares a successor (chain_* config) or sits
+// in a chain (chained_to/chained_from). Frontmatter carries these as loosely-typed
+// extension keys, so read through a Record cast (parity with the coordinator/board).
+const isChained = computed(() => {
+  // Spread into a fresh Record — TaskFrontmatter has no index signature, so a direct
+  // `as Record<string, unknown>` cast trips TS2352 (idiom shared with chainFrontmatter).
+  const fm: Record<string, unknown> = { ...props.task.frontmatter };
+  return Boolean(fm.chain_template || fm.chain_title || fm.chain_objective || fm.chained_to || fm.chained_from);
+});
 
 const status = computed(() => props.task.frontmatter.status);
 const live = computed(() => LIVE_STATUSES.has(status.value));
@@ -146,6 +157,13 @@ const persona = computed(() => {
       <div class="specorator-agent-board-card-title">
         {{ props.task.frontmatter.title }}
       </div>
+      <span
+        v-if="isChained"
+        :ref="(el) => mountLucide(el, 'link')"
+        class="specorator-agent-board-card-chain"
+        :title="t('tasks.board.card.chainedBadge')"
+        :aria-label="t('tasks.board.card.chainedBadge')"
+      />
     </div>
 
     <CardActionCluster

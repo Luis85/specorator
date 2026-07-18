@@ -7,8 +7,10 @@ import type { BrowserSelectionContext } from '../../../utils/browser';
 import { resolveAgentBoardDefaultModel } from '../defaultModelResolver';
 import { resolveAgentBoardDefaultProvider } from '../defaultProviderResolver';
 import type { TaskPriority, TaskSpec, TaskStatus } from '../model/taskTypes';
+import { chainConfigFrontmatterLines, type WorkOrderChainConfig } from '../model/workOrderChain';
 import { CONTEXT_PLACEHOLDER, HANDOFF_END, HANDOFF_START, RUN_LEDGER_END, RUN_LEDGER_START } from '../storage/TaskNoteStore';
 import type { WorkOrderTemplate } from '../templates/templateTypes';
+import { createNoteWithUniqueId, stripMarkdownExtension, uniquePath } from './workOrderNoteFactory';
 import {
   buildWorkOrderMarkdownForSeed,
   resolveRunTarget,
@@ -28,6 +30,11 @@ interface BuildWorkOrderArgs {
   objective?: string;
   contextMarkdown?: string;
   conversationId?: string | null;
+  /** Roster agent id (`roster:<slug>`); omitted from the note when unset. */
+  agent?: string;
+  chain?: WorkOrderChainConfig;
+  chainedFrom?: string;
+  chainDepth?: number;
 }
 
 function slugifyTitle(title: string): string {
@@ -36,10 +43,6 @@ function slugifyTitle(title: string): string {
     .trim()
     .replace(/[^a-z0-9]+/g, '-')
     .replace(/^-+|-+$/g, '');
-}
-
-function stripMarkdownExtension(path: string): string {
-  return path.replace(/\.md$/i, '');
 }
 
 interface FrontmatterArgs {
@@ -54,6 +57,20 @@ interface FrontmatterArgs {
   loop?: string;
   /** Roster agent id (`roster:<slug>`); omitted from the note when unset. */
   agent?: string;
+  /** Successor chain config to persist for the next hop; omitted when unset. */
+  chain?: WorkOrderChainConfig;
+  /** Predecessor work-order id; provenance for a chain-spawned successor. */
+  chainedFrom?: string;
+  /** Hop count from the chain's origin; provenance for a chain-spawned successor. */
+  chainDepth?: number;
+}
+
+/** Render the optional provenance/chain frontmatter lines, appended after `attempts: 0`. */
+function provenanceFrontmatterLines(args: Pick<FrontmatterArgs, 'chain' | 'chainedFrom' | 'chainDepth'>): string {
+  const chainLines = args.chain ? `\n${chainConfigFrontmatterLines(args.chain).join('\n')}` : '';
+  const chainedFromLine = args.chainedFrom ? `\nchained_from: ${JSON.stringify(args.chainedFrom)}` : '';
+  const chainDepthLine = args.chainDepth !== undefined ? `\nchain_depth: ${args.chainDepth}` : '';
+  return `${chainLines}${chainedFromLine}${chainDepthLine}`;
 }
 
 function workOrderFrontmatter(args: FrontmatterArgs): string {
@@ -62,6 +79,7 @@ function workOrderFrontmatter(args: FrontmatterArgs): string {
     : 'conversation_id:';
   const loopLine = args.loop ? `\nloop: ${JSON.stringify(args.loop)}` : '';
   const agentLine = args.agent ? `\nagent: ${JSON.stringify(args.agent)}` : '';
+  const provenanceLines = provenanceFrontmatterLines(args);
   return `---
 type: specorator-work-order
 schema_version: 1
@@ -78,7 +96,7 @@ ${conversationLine}${loopLine}
 sidepanel_tab_id:
 started:
 finished:
-attempts: 0
+attempts: 0${provenanceLines}
 ---`;
 }
 
@@ -124,6 +142,10 @@ function buildWorkOrderMarkdown(args: BuildWorkOrderArgs): string {
     provider: args.provider,
     model: args.model,
     conversationId: args.conversationId,
+    agent: args.agent,
+    chain: args.chain,
+    chainedFrom: args.chainedFrom,
+    chainDepth: args.chainDepth,
   })}
 # ${args.title}
 
@@ -208,16 +230,6 @@ async function ensureFolder(plugin: SpecoratorPlugin, folder: string): Promise<v
   await plugin.app.vault.createFolder(folder);
 }
 
-function uniquePath(plugin: SpecoratorPlugin, basePath: string): string {
-  if (!plugin.app.vault.getAbstractFileByPath(basePath)) return basePath;
-  const withoutExt = stripMarkdownExtension(basePath);
-  let counter = 2;
-  while (plugin.app.vault.getAbstractFileByPath(`${withoutExt}-${counter}.md`)) {
-    counter += 1;
-  }
-  return `${withoutExt}-${counter}.md`;
-}
-
 /** Resolve the board archive folder, defaulting and stripping stray slashes (mirrors the board's folder getter). */
 export function resolveArchiveFolder(setting: string): string {
   return (setting || 'Agent Board/archive').replace(/^\/+|\/+$/g, '');
@@ -265,6 +277,13 @@ export interface CreateWorkOrderOptions {
   status?: TaskStatus;
   reveal?: 'note' | 'none';
   template?: WorkOrderTemplate;
+  /**
+   * Transforms the generated markdown immediately before `vault.create`, e.g. to
+   * inject chain context so the note is created already seeded. No-op for existing
+   * callers — used by the chain coordinator to close the create-then-modify race
+   * where an auto-run queue could reload a `ready` note before the seed write lands.
+   */
+  postProcess?: (markdown: string) => string;
 }
 
 export interface WorkOrderSeed {
@@ -275,6 +294,16 @@ export interface WorkOrderSeed {
   objective?: string;
   contextMarkdown?: string;
   conversationId?: string | null;
+  /** Wins over a template's name and the seed's own `title` when set. */
+  titleOverride?: string;
+  /** Preferred over the board defaults when creating without a template (chain inheritance). */
+  provider?: string;
+  model?: string;
+  /** Roster agent id (`roster:<slug>`) to inherit onto an inline (no-template) successor. */
+  agent?: string;
+  chain?: WorkOrderChainConfig;
+  chainedFrom?: string;
+  chainDepth?: number;
 }
 
 function buildSeedFromSource(source?: TFile | TFolder | null): WorkOrderSeed {
@@ -289,56 +318,96 @@ const WORK_ORDER_MARKDOWN_BUILDERS: WorkOrderMarkdownBuilders = {
   fromSeed: buildWorkOrderMarkdown,
 };
 
+/**
+ * Provider/model defaults for `resolveRunTarget`. A template's own preference
+ * always wins (via `resolveProviderModel`, unaffected by this), so this only
+ * matters for the no-template branch: there, prefer the seed's provider/model
+ * (e.g. a chain successor inheriting its predecessor's backend) over the board
+ * defaults, so an inline successor keeps running on the same provider.
+ */
+function inlineRunDefaults(
+  plugin: SpecoratorPlugin,
+  seed: WorkOrderSeed,
+  template: WorkOrderTemplate | undefined,
+): { provider: string; model: string } {
+  const inline = !template;
+  return {
+    provider: inline && seed.provider ? seed.provider : (resolveAgentBoardDefaultProvider(plugin.settings) ?? ''),
+    model: inline && seed.model ? seed.model : (resolveAgentBoardDefaultModel(plugin.settings) ?? ''),
+  };
+}
+
+/**
+ * Apply the caller's `postProcess` hook (if any) to the generated markdown
+ * immediately before `vault.create` — a no-op when unset. Extracted so
+ * `createWorkOrderFromSeed` stays under the fallow complexity ratchet.
+ */
+function applyPostProcess(markdown: string, options: CreateWorkOrderOptions | undefined): string {
+  return options?.postProcess ? options.postProcess(markdown) : markdown;
+}
+
+/**
+ * Resolve the chain config for the new note: an explicit seed chain (e.g. a chain
+ * successor's own configured hand-off) wins; otherwise a picked template's default
+ * successor carries forward onto the note. Extracted so `createWorkOrderFromSeed`
+ * stays under the fallow complexity ratchet.
+ */
+function resolveSeedChain(
+  seed: WorkOrderSeed,
+  template: WorkOrderTemplate | undefined,
+): WorkOrderChainConfig | undefined {
+  return seed.chain ?? template?.chain;
+}
+
 export async function createWorkOrderFromSeed(
   plugin: SpecoratorPlugin,
   seed: WorkOrderSeed,
   options?: CreateWorkOrderOptions,
 ): Promise<TFile | null> {
   const template = options?.template;
-  const target = resolveRunTarget(
-    asSettingsBag(plugin.settings),
-    {
-      provider: resolveAgentBoardDefaultProvider(plugin.settings) ?? '',
-      model: resolveAgentBoardDefaultModel(plugin.settings) ?? '',
-    },
-    template,
-  );
+  const target = resolveRunTarget(asSettingsBag(plugin.settings), inlineRunDefaults(plugin, seed, template), template);
   if (!target) return null;
 
   const folder = normalizePath(plugin.settings.agentBoardWorkOrderFolder || 'Agent Board/tasks');
   await ensureFolder(plugin, folder);
 
   const now = new Date();
-  // Template name dominates the seed-derived title: when the user explicitly
-  // picks a template, that picker choice is the strongest signal of what this
-  // work order is "about", so it drives the frontmatter title, the H1, and the
-  // filename slug.
-  const title = template?.name?.trim() || seed.title || 'New work order';
+  // An explicit override (e.g. a chain's configured title) wins outright; failing
+  // that, the template name still dominates the seed-derived title, unchanged:
+  // when the user explicitly picks a template, that picker choice is the
+  // strongest signal of what this work order is "about".
+  const title = seed.titleOverride?.trim() || template?.name?.trim() || seed.title || 'New work order';
   const slug = slugifyTitle(title) || 'work-order';
-  const id = `task-${timestampId(now)}-${slug}`;
+  const seedChain = resolveSeedChain(seed, template);
 
-  const markdown = buildWorkOrderMarkdownForSeed(
-    {
-      id,
-      title,
-      status: options?.status ?? seed.status ?? 'inbox',
-      timestamp: now.toISOString(),
-      isoDate: isoDate(now),
-      conversationId: seed.conversationId ?? null,
-      sourcePath: seed.sourcePath ?? null,
-      sourceFolderPath: seed.sourceFolderPath ?? null,
-      objective: seed.objective,
-      contextMarkdown: seed.contextMarkdown,
-    },
-    target,
-    template,
-    WORK_ORDER_MARKDOWN_BUILDERS,
-  );
-  if (markdown === null) return null;
-
-  const filePath = uniquePath(plugin, normalizePath(`${folder}/${id}.md`));
-  const created = await plugin.app.vault.create(filePath, markdown);
-  if (!(created instanceof TFile)) return null;
+  const created = await createNoteWithUniqueId(plugin, folder, `task-${timestampId(now)}-${slug}`, (id) => {
+    const markdown = buildWorkOrderMarkdownForSeed(
+      {
+        id,
+        title,
+        status: options?.status ?? seed.status ?? 'inbox',
+        timestamp: now.toISOString(),
+        isoDate: isoDate(now),
+        conversationId: seed.conversationId ?? null,
+        sourcePath: seed.sourcePath ?? null,
+        sourceFolderPath: seed.sourceFolderPath ?? null,
+        objective: seed.objective,
+        contextMarkdown: seed.contextMarkdown,
+        agent: seed.agent,
+        chain: seedChain,
+        chainedFrom: seed.chainedFrom,
+        chainDepth: seed.chainDepth,
+      },
+      target,
+      template,
+      WORK_ORDER_MARKDOWN_BUILDERS,
+    );
+    if (markdown === null) return null;
+    // Post-process (chain successor context/objective seed) runs before the single
+    // vault.create so the note is never `ready`-but-un-seeded — see CreateWorkOrderOptions.
+    return applyPostProcess(markdown, options);
+  });
+  if (!created) return null;
   if ((options?.reveal ?? 'note') === 'note') {
     await plugin.app.workspace.getLeaf('tab').openFile(created);
   }

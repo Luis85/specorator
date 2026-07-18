@@ -3,6 +3,7 @@ import { Notice } from 'obsidian';
 import { ProviderRegistry } from '../../../core/providers/ProviderRegistry';
 import { t } from '../../../i18n/i18n';
 import type { TaskPriority, TaskStatus } from '../model/taskTypes';
+import type { WorkOrderChainConfig } from '../model/workOrderChain';
 import {
   buildTemplateVars,
   type ProviderModelValidators,
@@ -78,6 +79,11 @@ export interface WorkOrderMarkdownContext {
   sourceFolderPath: string | null;
   objective?: string;
   contextMarkdown?: string;
+  /** Roster agent id to inherit onto a no-template (inline) successor. */
+  agent?: string;
+  chain?: WorkOrderChainConfig;
+  chainedFrom?: string;
+  chainDepth?: number;
 }
 
 export interface WorkOrderMarkdownBuilders {
@@ -93,6 +99,9 @@ export interface WorkOrderMarkdownBuilders {
     body: string;
     loop?: string;
     agent?: string;
+    chain?: WorkOrderChainConfig;
+    chainedFrom?: string;
+    chainDepth?: number;
   }): string;
   fromSeed(args: {
     id: string;
@@ -106,6 +115,10 @@ export interface WorkOrderMarkdownBuilders {
     objective?: string;
     contextMarkdown?: string;
     conversationId: string | null;
+    agent?: string;
+    chain?: WorkOrderChainConfig;
+    chainedFrom?: string;
+    chainDepth?: number;
   }): string;
 }
 
@@ -135,6 +148,10 @@ export function buildWorkOrderMarkdownForSeed(
       objective: ctx.objective,
       contextMarkdown: ctx.contextMarkdown,
       conversationId: ctx.conversationId,
+      agent: ctx.agent,
+      chain: ctx.chain,
+      chainedFrom: ctx.chainedFrom,
+      chainDepth: ctx.chainDepth,
     });
   }
 
@@ -161,5 +178,8 @@ export function buildWorkOrderMarkdownForSeed(
     body: rendered.body,
     loop: template.loop,
     agent: template.agent,
+    chain: ctx.chain,
+    chainedFrom: ctx.chainedFrom,
+    chainDepth: ctx.chainDepth,
   });
 }

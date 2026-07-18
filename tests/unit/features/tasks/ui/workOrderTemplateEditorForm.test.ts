@@ -12,6 +12,7 @@ import { ProviderRegistry } from '../../../../../src/core/providers/ProviderRegi
 import type { TemplateEditorForm } from '../../../../../src/features/tasks/ui/workOrderTemplateEditorForm';
 import {
   buildTemplatePayload,
+  createInitialForm,
   modelOptionList,
   providerOptionList,
 } from '../../../../../src/features/tasks/ui/workOrderTemplateEditorForm';
@@ -91,6 +92,10 @@ describe('buildTemplatePayload', () => {
       loop: '',
       agent: '',
       body: '  # Body  ',
+      chainTemplate: '',
+      chainTitle: '',
+      chainObjective: '',
+      chainTrigger: '',
       ...overrides,
     };
   }
@@ -135,5 +140,28 @@ describe('buildTemplatePayload', () => {
       body: '# Body',
       originalPath: 'Agent Board/templates/bug-fix.md',
     });
+  });
+});
+
+describe('template editor chain fields', () => {
+  it('seeds chain fields from an existing template', () => {
+    const form = createInitialForm({ path: 'p', name: 'T', body: 'b', chain: { template: 'Impl', trigger: 'review' } });
+    expect(form.chainTemplate).toBe('Impl');
+    expect(form.chainTrigger).toBe('review');
+  });
+
+  it('builds a chain in the payload only when a successor is configured', () => {
+    const base = createInitialForm(null);
+    expect(buildTemplatePayload({ ...base, name: 'T' }).chain).toBeUndefined();
+    const withChain = buildTemplatePayload({ ...base, name: 'T', chainTemplate: 'Impl', chainTrigger: 'done' });
+    expect(withChain.chain).toEqual({ template: 'Impl', trigger: 'done' });
+  });
+
+  it('preserves an existing template chain through an untouched editor round-trip', () => {
+    // Opening a chained template and saving WITHOUT touching the chain fields must not drop
+    // the successor config (Codex P2: a description/body edit silently disabled the chain).
+    const existing = { path: 'p', name: 'T', body: 'b', chain: { template: 'Impl', title: 'Wire it', trigger: 'review' as const } };
+    const payload = buildTemplatePayload(createInitialForm(existing));
+    expect(payload.chain).toEqual({ template: 'Impl', title: 'Wire it', trigger: 'review' });
   });
 });

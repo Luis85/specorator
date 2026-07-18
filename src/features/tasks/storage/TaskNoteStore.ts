@@ -3,6 +3,7 @@ import { stringifyYaml } from 'obsidian';
 import { parseFrontmatter } from '../../../utils/frontmatter';
 import { HANDOFF_FIELD_MARKER_STRINGS } from '../model/handoffSections';
 import type { TaskLedgerEntry, TaskPriority, TaskSpec, TaskStatus } from '../model/taskTypes';
+import { applyChainConfigToFrontmatter, type WorkOrderChainConfig } from '../model/workOrderChain';
 import { extractSection } from '../shared/noteStoreShared';
 
 export const RUN_LEDGER_START = '<!-- specorator:run-ledger-start -->';
@@ -64,6 +65,8 @@ export interface WriteFieldsOptions {
   priority?: TaskPriority;
   /** Loop slug to attach; pass an empty string to detach. */
   loop?: string;
+  /** Successor chain config to write; an explicit `null` clears all `chain_*` keys. */
+  chain?: WorkOrderChainConfig | null;
 }
 
 /**
@@ -210,8 +213,58 @@ export class TaskNoteStore {
       if (fields.loop) frontmatter.loop = fields.loop;
       else delete frontmatter.loop;
     }
+    if (fields.chain !== undefined) {
+      applyChainConfigToFrontmatter(frontmatter, fields.chain);
+    }
     frontmatter.updated = timestamp;
 
+    return this.withFrontmatter(frontmatter, body);
+  }
+
+  /**
+   * Stamp `chained_to` on a predecessor note after its successor is spawned. This
+   * is the idempotency guard (the coordinator skips a note that already has it) and
+   * a forward link. Bumps `updated`.
+   */
+  writeChainLink(content: string, successorId: string, timestamp: string = new Date().toISOString()): string {
+    const parsed = this.parse('', content);
+    const frontmatter: Record<string, unknown> = { ...parsed.task.frontmatter };
+    frontmatter.chained_to = successorId;
+    frontmatter.updated = timestamp;
+    return this.withFrontmatter(frontmatter, parsed.task.body);
+  }
+
+  /**
+   * Insert the chain seed at the top of the `## Context` section: a wikilink back
+   * to the predecessor plus (when present) its handoff next-action. Drops the
+   * default Context placeholder; preserves any existing context below. Kept within
+   * the section (no `##` sub-heading, which `writeSections`/`replaceSection` would
+   * read as the next section boundary).
+   */
+  writeChainContext(
+    content: string,
+    args: { predecessorPath: string; nextAction: string },
+    timestamp: string = new Date().toISOString(),
+  ): string {
+    const parsed = this.parse('', content);
+    const wikilink = args.predecessorPath.replace(/\.md$/i, '');
+    const lines = [`Chained from [[${wikilink}]] — see its Result / Handoff.`];
+    const nextAction = args.nextAction.trim();
+    if (nextAction.length > 0) {
+      // Blockquote every line so a Markdown heading the handoff parser preserved inside
+      // nextAction (`## ...`) can't become a real `## ` section boundary inside Context —
+      // which, on the next parse, extractSection would read as the next section start,
+      // truncating the rest of the seed.
+      const quoted = nextAction.split('\n').map((line) => `> ${line}`).join('\n');
+      lines.push('', '**Next action:**', quoted);
+    }
+    const existing = parsed.task.sections.context.trim();
+    const keep = existing && existing !== CONTEXT_PLACEHOLDER ? `\n\n${existing}` : '';
+    const nextContext = `${lines.join('\n')}${keep}`;
+
+    const body = this.replaceSection(parsed.task.body, SECTION_HEADINGS.context, nextContext);
+    const frontmatter: Record<string, unknown> = { ...parsed.task.frontmatter };
+    frontmatter.updated = timestamp;
     return this.withFrontmatter(frontmatter, body);
   }
 

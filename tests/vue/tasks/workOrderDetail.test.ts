@@ -181,7 +181,7 @@ describe('WorkOrderDetailRoot — properties sidebar', () => {
   it('renders editable rows in spec order (no Conversation without a link)', () => {
     const { container } = renderRoot(makeTask('t', 'inbox'), richCallbacks());
     expect(propRowKeys(container)).toEqual([
-      'status', 'agent', 'provider', 'model', 'loop', 'priority', 'created', 'updated', 'attempts',
+      'status', 'agent', 'provider', 'model', 'loop', 'chain', 'priority', 'created', 'updated', 'attempts',
     ]);
   });
 
@@ -310,6 +310,46 @@ describe('WorkOrderDetailRoot — properties sidebar', () => {
     await nextTick();
     expect(row(container, 'loop').querySelector('.specorator-work-order-modal-chip-value')?.textContent).toBe('No loop');
     expect(task.frontmatter.loop).toBeUndefined();
+  });
+
+  it('renders the Next step chip with the configured summary and updates it in place after configuring', async () => {
+    const task = makeTask('t', 'inbox');
+    const onConfigureChain = vi.fn().mockResolvedValue('Implement stage');
+    const { container } = renderRoot(task, richCallbacks({
+      onConfigureChain,
+      getChainSummary: () => 'None',
+    }));
+    const chainRow = row(container, 'chain');
+    const chip = chainRow.querySelector('.specorator-work-order-modal-chip--chain') as HTMLElement;
+    expect(chip).toBeTruthy();
+    expect(chainRow.querySelector('.specorator-work-order-modal-chip-value')?.textContent).toBe('None');
+    await fireEvent.click(chip);
+    await nextTick();
+    expect(onConfigureChain).toHaveBeenCalledWith(task);
+    expect(chainRow.querySelector('.specorator-work-order-modal-chip-value')?.textContent).toBe('Implement stage');
+  });
+
+  it('leaves the Next step label untouched when configuring is cancelled', async () => {
+    const task = makeTask('t', 'inbox');
+    const onConfigureChain = vi.fn().mockResolvedValue(undefined);
+    const { container } = renderRoot(task, richCallbacks({ onConfigureChain, getChainSummary: () => 'None' }));
+    const chainRow = row(container, 'chain');
+    await fireEvent.click(chainRow.querySelector('.specorator-work-order-modal-chip--chain') as HTMLElement);
+    await nextTick();
+    expect(chainRow.querySelector('.specorator-work-order-modal-chip-value')?.textContent).toBe('None');
+  });
+
+  it('renders the Next step value as static text (not a button) when onConfigureChain is absent', () => {
+    const task = makeTask('t', 'inbox');
+    const { container } = renderRoot(task, richCallbacks({ getChainSummary: () => 'Custom summary' }));
+    const chainRow = row(container, 'chain');
+    expect(chainRow.querySelector('.specorator-work-order-modal-chip--chain')).toBeFalsy();
+    expect(chainRow.textContent).toContain('Custom summary');
+  });
+
+  it('defaults the Next step chip to "None" when no chain callbacks are wired', () => {
+    const { container } = renderRoot(makeTask('t', 'inbox'), makeCallbacks());
+    expect(row(container, 'chain').textContent).toContain('None');
   });
 
   it('marks Created/Updated/Attempts values with the tabular-nums class', () => {
