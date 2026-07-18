@@ -170,7 +170,12 @@ export default [
     },
   },
   {
-    files: ['tests/**/*.ts'],
+    // Cover every extension the Vitest `include` runs (incl. .mts/.cts/.js), so the
+    // vitest guardrails (no-focused/skipped-test) reach a `foo.spec.mts` suite too —
+    // a `.ts`-only glob would let `.only` slip past lint while the test still runs.
+    // Scope stays all of tests/ (not just {test,spec}) so mocks/helpers keep the
+    // test-double exemptions below.
+    files: ['tests/**/*.{ts,mts,cts,tsx,js,jsx,mjs,cjs}'],
     plugins: { vitest: vitestPlugin },
     rules: {
       ...vitestPlugin.configs.recommended.rules,

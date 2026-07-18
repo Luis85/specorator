@@ -651,6 +651,13 @@ test('the src safety/mobile lint globs include JS and module extensions (an adop
   assert.match(findWrite(actionsFor({ vue: true }), 'eslint.config.mjs').content, /src\/\*\*\/\*\.\{ts,tsx,mts,cts,vue,js,jsx,mjs,cjs\}/);
 });
 
+test('the vitest lint-rules block covers every extension the Vitest include runs (no-only reaches a .spec.mts)', () => {
+  // A `.ts`-only glob would let `.only`/`.skip` in a tests/foo.spec.mts slip past
+  // lint while --passWithNoTests keeps CI green. Must match the Vitest include exts.
+  const eslint = findWrite(actionsFor(), 'eslint.config.mjs').content;
+  assert.match(eslint, /files: \['tests\/\*\*\/\*\.\{ts,mts,cts,tsx,js,jsx,mjs,cjs\}'\]/);
+});
+
 test('the lint safety globs follow the detected source root (brownfield lib/ or root entry)', () => {
   // brownfield entry in lib/ -> lib/** added alongside src/**
   const lib = findWrite(actionsFor({ vue: false }, { obsidianAppPresent: true, entry: 'lib/main.ts', entryExists: true }), 'eslint.config.mjs').content;
