@@ -83,7 +83,7 @@ export async function cli(argv, io = {}) {
         err(`${e.message}\n`);
         return 2;
       }
-      const state = detect(cwd, { obsidian: Boolean(options.obsidian) });
+      const state = detect(cwd);
       // Freeze install-volatile fields so a post-install re-detect can't flip them
       // and break the "second apply is a no-op" contract (see freezeOptions).
       freezeOptions(options, readPriorReport(cwd)?.options, state);
@@ -204,7 +204,7 @@ export async function cli(argv, io = {}) {
         err(`${e.message}\n`);
         return 2;
       }
-      const state = detect(cwd, { obsidian: Boolean(options.obsidian) });
+      const state = detect(cwd);
       // Same resolution as apply, so verify runs the gates with the PM that
       // installed the harness and effectiveOptions sees the resolved runner.
       freezeOptions(options, readPriorReport(cwd)?.options, state);

@@ -109,24 +109,16 @@ export function planFallow(options, state) {
   // shadow theirs, so the ratchet would baseline/gate the wrong graph. Stand down
   // and surface a notice — check:quality still wraps `fallow`, now reading THEIR config.
   // The obsidian variant widens the ignore set: generated build/ratchet scripts
-  // live under scripts/, and main.js/styles.css are build artifacts.
+  // live under scripts/, and main.js/styles.css are build artifacts. Its config
+  // also carries the main/core/ui boundary zones the quality gate enforces.
   const fallowTemplate = options.obsidian ? 'obsidian/fallowrc.json.tmpl' : 'fallowrc.json.tmpl';
-  // Obsidian's fallow config adds the main/core/ui boundary zones the quality
-  // gate enforces. A pre-Obsidian .fallowrc.json (generic or legacy) has none;
-  // upgrade it (overwrite-backup keeps a .backup) instead of ratcheting a graph
-  // with no boundaries while AGENTS.md claims they're enforced at 0. A config
-  // that already has boundaries is left as-is (ours no-ops, the user's is kept).
-  const upgradeFallowrc = Boolean(options.obsidian) && Boolean(state?.fallowrcNeedsBoundaries);
   const fallowrc = state?.fallowConfig
     ? [notice('Existing fallow config (.fallowrc.jsonc / fallow.toml / ...) kept — the generated .fallowrc.json was NOT written (it would take precedence and shadow yours). check:quality ratchets your config; add scripts/check-*.mjs, scripts/quality-report.mjs, and test files to its ignore patterns so the ratchet doesn\'t bank them as dead code.')]
     : [
-        ...(upgradeFallowrc
-          ? [notice('Existing .fallowrc.json had no boundary zones — it was replaced (a .backup is kept) with the Obsidian config so check:quality enforces the main/core/ui boundaries. Re-add any custom ignore patterns from the backup.')]
-          : []),
         {
           type: 'writeFile',
           path: '.fallowrc.json',
-          mode: upgradeFallowrc ? 'overwrite-backup' : 'skip-if-exists',
+          mode: 'skip-if-exists',
           content: renderTemplate(loadTemplate(fallowTemplate), { entry, mainPatterns }),
         },
       ];

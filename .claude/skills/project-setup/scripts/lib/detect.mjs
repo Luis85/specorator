@@ -1,10 +1,9 @@
 // .claude/skills/project-setup/scripts/lib/detect.mjs
 import { execFileSync } from 'node:child_process';
-import { existsSync, readdirSync, readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 import { MARKER } from './marker.mjs';
-import { loadTemplate } from './templates.mjs';
 
 // index/main/app under src/ then root, each in ts/tsx/js/jsx/mjs. Covers JS-only
 // apps (e.g. src/app.js, src/app.jsx) — not just the TypeScript variants — so a
@@ -16,16 +15,10 @@ const ENTRY_DIRS = ['src', 'lib', 'app', 'source', ''];
 const candidatesFor = (basenames) =>
   ENTRY_DIRS.flatMap((d) => basenames.flatMap((b) => ENTRY_EXTS.map((e) => (d ? `${d}/${b}.${e}` : `${b}.${e}`))));
 const ENTRY_CANDIDATES = candidatesFor(ENTRY_BASENAMES);
-// Obsidian's source entry is conventionally main.* (the build emits main.js, which
-// the manifest loads). In Obsidian mode (or with a manifest present), prefer main
-// over an index.* barrel so the build bundles the file that registers the Plugin,
-// not a helper index that build/check:artifacts would happily bundle into an
-// unloadable release.
-const OBSIDIAN_CANDIDATES = candidatesFor(['main', 'index', 'app']);
 // `main`/`module` often point at BUILD output, not source — skip those roots.
 const BUILD_DIRS = new Set(['dist', 'build', 'out', 'esm', 'cjs', 'umd', 'lib-esm', 'node_modules', '.next']);
 
-export function detectEntry(cwd, { obsidian = false } = {}) {
+export function detectEntry(cwd) {
   const pkg = readJsonSafe(join(cwd, 'package.json'));
   // Normalize a leading ./ or / so roots derive correctly and the entry stays
   // project-relative: a leading-slash "source":"/src/main.ts" would otherwise be
@@ -33,8 +26,8 @@ export function detectEntry(cwd, { obsidian = false } = {}) {
   const strip = (p) => p.replace(/^\.?\/+/, '');
   // A package.json path field is untrusted: reject `..` segments so a crafted
   // `source`/`main` (e.g. "../shared/main.ts") can't make the generated build
-  // bundle — or the ratchets scan — files outside the plugin project. (Leading
-  // slashes are stripped above, so the existence check and return stay under cwd.)
+  // bundle — or the ratchets scan — files outside the project. (Leading slashes
+  // are stripped above, so the existence check and return stay under cwd.)
   const withinProject = (p) => !p.split('/').includes('..');
   // A bundler `source` field is unambiguously the source entry.
   const src = pkg?.source;
@@ -42,12 +35,8 @@ export function detectEntry(cwd, { obsidian = false } = {}) {
     const p = strip(src);
     if (withinProject(p) && existsSync(join(cwd, p))) return p;
   }
-  // The first existing common source entry (src/lib/app/source/root). Obsidian mode
-  // (or a present manifest) flips the scan to prefer main.* over an index.* barrel:
-  // a source-only adopt with both src/index.ts and src/main.ts must build main.ts,
-  // else esbuild bundles a plugin whose Plugin class is never registered.
-  const candidates = obsidian || existsSync(join(cwd, 'manifest.json')) ? OBSIDIAN_CANDIDATES : ENTRY_CANDIDATES;
-  for (const c of candidates) if (existsSync(join(cwd, c))) return c;
+  // The first existing common source entry (src/lib/app/source/root).
+  for (const c of ENTRY_CANDIDATES) if (existsSync(join(cwd, c))) return c;
   // `module`/`main` may name the source for a build-less package — use it if it
   // exists and its top dir isn't a build-output dir.
   for (const field of ['module', 'main']) {
@@ -57,18 +46,6 @@ export function detectEntry(cwd, { obsidian = false } = {}) {
     if (withinProject(p) && existsSync(join(cwd, p)) && !BUILD_DIRS.has(p.split('/')[0])) return p;
   }
   return 'src/index.ts';
-}
-
-// True only when a .npmrc line actively sets tag-version-prefix to empty
-// (tag-version-prefix="" or tag-version-prefix=). Commented lines (# or ;) and a
-// non-empty value like `=v` do NOT count — those still leave npm tagging "v...".
-function npmrcSetsEmptyTagPrefix(content) {
-  return content.split(/\r?\n/).some((line) => {
-    const s = line.trim();
-    if (!s || s.startsWith('#') || s.startsWith(';')) return false;
-    const m = /^tag-version-prefix\s*=\s*(.*)$/.exec(s);
-    return m ? m[1].trim().replace(/^["']|["']$/g, '') === '' : false;
-  });
 }
 
 const ESLINTRC = ['.eslintrc', '.eslintrc.js', '.eslintrc.cjs', '.eslintrc.json', '.eslintrc.yml', '.eslintrc.yaml'];
@@ -86,26 +63,6 @@ const FALLOW_CONFIGS = ['.fallowrc.jsonc', 'fallow.toml', '.fallow.toml', '.fall
 const JEST_CONFIGS = ['jest.config.js', 'jest.config.ts', 'jest.config.mjs', 'jest.config.cjs', 'jest.config.cts', 'jest.config.mts', 'jest.config.json'];
 const VITEST_CONFIGS = ['vitest.config.ts', 'vitest.config.js', 'vitest.config.mjs', 'vitest.config.cjs', 'vitest.config.cts', 'vitest.config.mts'];
 const VITE_CONFIGS = ['vite.config.ts', 'vite.config.js', 'vite.config.mjs', 'vite.config.cjs', 'vite.config.cts', 'vite.config.mts'];
-// Any prettier config form: writing .prettierrc.json beside one would make two
-// configs compete (prettier picks the closest/first — ambiguous either way).
-// .prettierrc.json itself is handled separately: strict-JSON configs cannot
-// carry the engine marker, so "ours" is recognized by exact template content.
-const PRETTIER_CONFIGS = [
-  '.prettierrc', '.prettierrc.yml', '.prettierrc.yaml', '.prettierrc.json5',
-  '.prettierrc.js', '.prettierrc.cjs', '.prettierrc.mjs', '.prettierrc.toml',
-  'prettier.config.js', 'prettier.config.cjs', 'prettier.config.mjs',
-];
-
-function foreignPrettierConfig(cwd, pkg) {
-  if (pkg.prettier != null || existsAny(cwd, PRETTIER_CONFIGS)) return true;
-  const p = join(cwd, '.prettierrc.json');
-  if (!existsSync(p)) return false;
-  try {
-    return readFileSync(p, 'utf8') !== loadTemplate('obsidian/prettierrc.json.tmpl');
-  } catch {
-    return true;
-  }
-}
 
 function existsAny(cwd, names) {
   return names.some((n) => existsSync(join(cwd, n)));
@@ -135,34 +92,6 @@ const PM_LOCKFILES = [
 ];
 
 const PM_NAMES = new Set(['npm', 'pnpm', 'yarn', 'bun']);
-
-// The scaffold's sample app is an integrated greenfield artifact — its modules
-// import each other's APIs. If the target already has ANY source (or a
-// manifest), it is an existing plugin, and dropping the scaffold's app beside
-// the user's would mismatch (their code lacks the scaffold's service shape). So
-// brownfield gets the harness + docs only; the app is greenfield-only. A
-// directory scan (not a fixed file list) so new scaffold sources can't drift
-// out of the signal.
-function hasSourceFiles(cwd) {
-  const stack = [join(cwd, 'src')];
-  while (stack.length) {
-    const dir = stack.pop();
-    let entries;
-    try {
-      entries = readdirSync(dir, { withFileTypes: true });
-    } catch {
-      continue; // dir absent or unreadable
-    }
-    for (const entry of entries) {
-      if (entry.isDirectory()) stack.push(join(dir, entry.name));
-      // Match the extensions detectEntry accepts (incl. JS): a repo whose only
-      // source is src/main.js is brownfield, not greenfield — else setup writes
-      // the sample TS app and points the build at a nonexistent src/main.ts.
-      else if (/\.(?:ts|tsx|mts|cts|js|jsx|mjs|cjs|vue)$/.test(entry.name)) return true;
-    }
-  }
-  return false;
-}
 
 export function detectPackageManager(cwd) {
   // 1. Explicit corepack field, e.g. "packageManager": "pnpm@9.1.0" — wins even
@@ -223,25 +152,16 @@ export function detectDefaultBranch(cwd) {
   return 'main';
 }
 
-export function detect(cwd, { obsidian = false } = {}) {
+export function detect(cwd) {
   const pkg = readJsonSafe(join(cwd, 'package.json')) ?? {};
   const deps = { ...(pkg.dependencies ?? {}), ...(pkg.devDependencies ?? {}) };
   const has = (name) => Object.prototype.hasOwnProperty.call(deps, name);
   const testFramework = has('vitest') ? 'vitest' : has('jest') ? 'jest' : null;
-  // Obsidian mode (from the answers, threaded by setup.mjs) makes entry detection
-  // prefer main.* over an index.* barrel even before a manifest exists.
-  const entry = detectEntry(cwd, { obsidian });
+  const entry = detectEntry(cwd);
   const entryExists = existsSync(join(cwd, entry));
   return {
     packageManager: detectPackageManager(cwd),
     typescript: has('typescript') || existsSync(join(cwd, 'tsconfig.json')),
-    // The kept TypeScript range (mergeJson keeps a brownfield scalar): the
-    // Obsidian tsconfig needs 5+ for moduleResolution "bundler", so planPackageBasics
-    // warns when an existing 4.x would break the generated typecheck gate.
-    typescriptVersion: deps.typescript ?? null,
-    // Likewise the kept esbuild range: the generated esbuild.config.mjs calls
-    // esbuild.context() (landed in 0.17), so an existing 0.16.x would break `build`.
-    esbuildVersion: deps.esbuild ?? null,
     eslint: has('eslint'),
     fallow: has('fallow'),
     testFramework,
@@ -250,30 +170,17 @@ export function detect(cwd, { obsidian = false } = {}) {
     defaultBranch: detectDefaultBranch(cwd),
     entry,
     // detectEntry returns src/index.ts as a syntactic fallback even when nothing
-    // exists — obsidianEntry uses this to avoid pointing the build at a phantom.
+    // exists; entryExists lets the fallow planner zone only a real entry.
     entryExists,
-    // Brownfield collision signals — planners turn these into user-facing notices
-    // instead of silently no-op'ing on a pre-existing config/script/workflow.
+    // Collision signals — planners turn these into user-facing notices instead of
+    // silently no-op'ing on a pre-existing config/script/workflow.
     scripts: pkg.scripts ?? {},
-    // Existing simple-git-hooks.pre-commit: a kept nested scalar (mergeJson keeps
-    // it) would shadow the generated nano-staged hook — planPreCommit warns.
-    // Optional chaining is safe on a string/array/null value (yields undefined).
-    preCommitHook: pkg['simple-git-hooks']?.['pre-commit'],
     legacyEslintrc: existsAny(cwd, ESLINTRC),
     eslintFlatConfig: existsAny(cwd, ESLINT_FLAT),
     // A fallow config in another form (.fallowrc.jsonc / fallow.toml / ...). The
     // generated .fallowrc.json would take precedence and shadow it, so planFallow
     // stands down and ratchets THEIR config instead.
     fallowConfig: existsAny(cwd, FALLOW_CONFIGS),
-    // A same-name .fallowrc.json that predates Obsidian mode has no boundary
-    // zones. It can't carry the engine marker (strict JSON), so we key the
-    // upgrade off the missing `boundaries` key: present-but-no-boundaries means
-    // a generic/legacy config to replace; a config that already has boundaries
-    // (ours, or the user's) is left alone. Invalid JSON reads as null → untouched.
-    fallowrcNeedsBoundaries: (() => {
-      const rc = readJsonSafe(join(cwd, '.fallowrc.json'));
-      return rc != null && rc.boundaries == null;
-    })(),
     // The same-name config we write (skip-if-exists) — flagged only when it's the
     // user's own (no marker), so a re-apply of our generated one won't false-fire.
     eslintConfigMjs: hasUnmarkedConfig(cwd, ['eslint.config.mjs']),
@@ -283,48 +190,6 @@ export function detect(cwd, { obsidian = false } = {}) {
     jestConfig: hasUnmarkedConfig(cwd, JEST_CONFIGS) || pkg.jest != null,
     vitestConfig: hasUnmarkedConfig(cwd, VITEST_CONFIGS),
     viteConfig: existsAny(cwd, VITE_CONFIGS),
-    // Obsidian-plugin signals: an existing manifest means brownfield adoption
-    // (scaffold files stay skip-if-exists); existing USER build/format configs
-    // make their planners stand down with a notice instead of writing a
-    // competitor. Engine-written ones (marker / exact template content) don't
-    // re-fire the notice on a converged re-apply.
-    obsidianManifest: readJsonSafe(join(cwd, 'manifest.json')),
-    // Greenfield replaces the tsconfig (the sample app needs its alias/includes);
-    // this flags an existing one only so the replacement can be announced.
-    tsconfigExists: existsSync(join(cwd, 'tsconfig.json')),
-    // Seed a generated manifest/versions from an existing package.json version
-    // so a brownfield adopt (pkg 2.3.0, no manifest) doesn't emit manifest 0.1.0
-    // and fail check:artifacts on desync. Only a valid semver is trusted.
-    packageVersion: /^\d+\.\d+\.\d+/.test(String(pkg.version ?? '')) ? pkg.version : null,
-    // An existing plugin: a manifest or any src source is present. The planner
-    // writes the harness + docs but skips the sample app for these.
-    // Brownfield when a real entry exists too: detectEntry supports root/lib/app
-    // entries (e.g. a root main.ts, or package.json#source) that hasSourceFiles
-    // (src/-only) misses — without this such a repo is treated greenfield and the
-    // scaffold overwrites the build target while leaving the real entry unbuilt.
-    // main.js is excluded: it is the esbuild OUTFILE, so a lone build artifact is
-    // not an existing app (and obsidianEntry rejects it as a source entry).
-    obsidianAppPresent: existsSync(join(cwd, 'manifest.json')) || hasSourceFiles(cwd) || (entryExists && entry !== 'main.js'),
-    // An existing .npmrc is kept (skip-if-exists), so the tag-version-prefix=""
-    // policy may not apply. Flag it unless the file ACTIVELY sets the prefix to
-    // empty — a mere mention (a commented example, or `tag-version-prefix=v`)
-    // leaves npm defaulting to "v", which the release workflow's
-    // tag===manifest.version check would then reject.
-    npmrcNeedsTagPrefix: (() => {
-      const p = join(cwd, '.npmrc');
-      return existsSync(p) && !npmrcSetsEmptyTagPrefix(readFileSync(p, 'utf8'));
-    })(),
-    // Obsidian loads root styles.css, but the scaffold build treats src/styles.css
-    // as SOURCE and regenerates root styles.css. An adopt with a real root sheet
-    // but no src/styles.css must migrate it first — surface the content so the
-    // planner can seed src/styles.css from it (else the first build clobbers it).
-    rootStylesheet:
-      existsSync(join(cwd, 'styles.css')) && !existsSync(join(cwd, 'src', 'styles.css'))
-        ? readFileSync(join(cwd, 'styles.css'), 'utf8')
-        : null,
-    esbuildConfig: hasUnmarkedConfig(cwd, ['esbuild.config.mjs']),
-    prettierConfig: foreignPrettierConfig(cwd, pkg),
-    releaseWorkflow: hasUnmarkedConfig(cwd, ['.github/workflows/release.yml']),
     docs: {
       context: existsSync(join(cwd, 'CONTEXT.md')),
       dir: existsSync(join(cwd, 'docs')),

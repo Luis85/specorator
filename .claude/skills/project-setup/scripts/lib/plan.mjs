@@ -81,17 +81,11 @@ export function effectiveOptions(options, state) {
 // Ordered composition of pure sub-planners.
 export function plan(options, state) {
   const opts = effectiveOptions(options, state);
-  // Greenfield's entry is src/main.ts (detection's src/index.ts fallback would
-  // point fallow/build at a file that never exists); a brownfield adopt keeps
-  // the user's detected entry so the build/ratchet target actually exists.
-  // entryExists is recomputed for the RESOLVED entry: true only when obsidianEntry
-  // kept the user's existing entry; a fallback to src/main.ts (detected entry
-  // missing, or an artifact like main.js) is "no real source", which planBuild
-  // surfaces as a notice instead of a cryptic build failure.
-  const resolvedEntry = opts.obsidian ? obsidianEntry(opts, state) : state.entry;
-  const st = opts.obsidian
-    ? { ...state, entry: resolvedEntry, entryExists: resolvedEntry === state.entry && Boolean(state.entryExists) }
-    : state;
+  // Obsidian mode is greenfield: the entry is always src/main.ts, which the shared
+  // fallow/LOC planners target. A fresh repo's detected entry may be a src/index.ts
+  // fallback that never gets written, so override it (and mark it existing — the
+  // scaffold writes it) for those planners.
+  const st = opts.obsidian ? { ...state, entry: obsidianEntry(), entryExists: true } : state;
   return [
     ...planGitignore(opts, st),
     ...planRunReport(opts),

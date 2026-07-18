@@ -12,8 +12,9 @@ engine owns every mutation; you detect, interview, then invoke it.
 
 1. **Detect:** `node scripts/setup.mjs detect` (run from the target repo root via
    the absolute path to this skill's `setup.mjs`). Read the JSON to tailor the
-   interview and skip redundant work. `obsidianManifest` non-null means an
-   existing plugin (brownfield adoption — scaffold files never clobber).
+   interview and skip redundant work (detected package manager, test framework,
+   existing configs). Obsidian mode scaffolds a **new** plugin, so run it in a
+   fresh repo or empty directory.
 2. **Refresh pins (optional, network):** when the user wants the latest
    dependencies, run `node .../setup.mjs refresh-pins` first and commit the
    `scripts/pins.json` diff to this skill. It resolves every pin to its latest
@@ -62,10 +63,11 @@ engine owns every mutation; you detect, interview, then invoke it.
    installed before applying.
 6. **Apply:** `node .../setup.mjs apply --config answers.json`. This installs
    deps, writes/merges configs, and baselines every ratchet from the **current**
-   state (brownfield-safe — green CI on day one). Relay the output: a **Notice**
-   means your existing file/script was kept and that generated gate won't run
-   until you merge or rename it — surface these for a decision. **Next steps**
-   (e.g. commit the lockfile) are routine.
+   state (green CI on day one). Relay the output: a **Notice** flags something
+   worth a human decision (e.g. an opt-in hook's install step) — surface these.
+   **Next steps** (e.g. commit the lockfile) are routine. Re-applying is
+   idempotent: user-editable files are kept, engine scripts/configs refresh from
+   the templates (backup kept), and a converged re-apply prints no warnings.
 7. **Optional grill:** if requested, run the interview in `references/grill.md`
    to fill `CONTEXT.md`, seed ADRs, and a first requirements doc.
 8. **Verify + report:** `node .../setup.mjs verify --config answers.json` then

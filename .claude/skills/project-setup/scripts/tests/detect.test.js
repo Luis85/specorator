@@ -34,7 +34,7 @@ test('detectPackageManager reads the lockfile, defaults to npm', () => {
 
 test('detect reports tooling presence from package.json', () => {
   const p = tmpProject({
-    'package.json': { devDependencies: { eslint: '^9', vitest: '^2', typescript: '^5', esbuild: '^0.16.0' } },
+    'package.json': { devDependencies: { eslint: '^9', vitest: '^2', typescript: '^5' } },
     'tsconfig.json': '{}',
   });
   try {
@@ -43,19 +43,6 @@ test('detect reports tooling presence from package.json', () => {
     assert.equal(state.fallow, false);
     assert.equal(state.testFramework, 'vitest');
     assert.equal(state.typescript, true);
-    assert.equal(state.typescriptVersion, '^5'); // the kept range (Obsidian TS-pin collision check)
-    assert.equal(state.esbuildVersion, '^0.16.0'); // the kept range (Obsidian esbuild.context() check)
-  } finally {
-    p.cleanup();
-  }
-});
-
-test('detect.typescriptVersion is null when no typescript dep is declared (tsconfig-only project)', () => {
-  const p = tmpProject({ 'package.json': { devDependencies: { eslint: '^9' } }, 'tsconfig.json': '{}' });
-  try {
-    const state = detect(p.dir);
-    assert.equal(state.typescript, true); // tsconfig present
-    assert.equal(state.typescriptVersion, null); // but no dep range to keep
   } finally {
     p.cleanup();
   }
@@ -103,16 +90,12 @@ test('detectEntry returns src/main.ts when it exists, falling back to src/index.
   }
 });
 
-test('detectEntry({obsidian}) prefers main.* over an index.* barrel (source-only adopt, no manifest)', () => {
-  // Both an index barrel and the real Plugin entry exist, no manifest.json.
-  const both = tmpProject({ 'src/index.ts': '// barrel\n', 'src/main.ts': '// Plugin\n' });
+test('detectEntry prefers an index barrel over main in the generic scan order', () => {
+  // With both present and no bundler `source` field, the scan order (index before
+  // main within a dir) returns src/index.ts.
+  const both = tmpProject({ 'src/index.ts': '// barrel\n', 'src/main.ts': '// entry\n' });
   try {
-    // Generic scan prefers the index barrel — which would build an unloadable plugin.
     assert.equal(detectEntry(both.dir), 'src/index.ts');
-    // Obsidian mode flips to main.* even without a manifest present.
-    assert.equal(detectEntry(both.dir, { obsidian: true }), 'src/main.ts');
-    // detect() threads the flag through to state.entry.
-    assert.equal(detect(both.dir, { obsidian: true }).entry, 'src/main.ts');
     assert.equal(detect(both.dir).entry, 'src/index.ts');
   } finally {
     both.cleanup();
@@ -142,63 +125,6 @@ test('detectEntry normalizes a leading-slash package source to a project-relativ
     assert.equal(detectEntry(p.dir), 'src/main.ts'); // not '/src/main.ts'
   } finally {
     p.cleanup();
-  }
-});
-
-test('detectEntry prefers main.* over an index.* barrel when a manifest is present (Obsidian)', () => {
-  // An Obsidian plugin with both a helper src/index.ts and the real src/main.ts:
-  // the manifest flips the scan to main so the build bundles the Plugin entry.
-  const obs = tmpProject({ 'manifest.json': { id: 'x' }, 'src/index.ts': '', 'src/main.ts': 'export default class {}' });
-  const generic = tmpProject({ 'src/index.ts': '', 'src/main.ts': '' });
-  try {
-    assert.equal(detectEntry(obs.dir), 'src/main.ts'); // manifest present -> main wins
-    assert.equal(detectEntry(generic.dir), 'src/index.ts'); // no manifest -> index first
-  } finally {
-    obs.cleanup();
-    generic.cleanup();
-  }
-});
-
-test('detect treats a root-entry repo (no manifest, no src/) as an existing app', () => {
-  // package.json#source names a root main.ts that hasSourceFiles (src/-only) misses.
-  const rootEntry = tmpProject({ 'package.json': { source: 'main.ts' }, 'main.ts': 'export default class {}' });
-  const empty = tmpProject({ 'package.json': { name: 'x' } });
-  try {
-    assert.equal(detect(rootEntry.dir).obsidianAppPresent, true);
-    assert.equal(detect(empty.dir).obsidianAppPresent, false); // no real entry -> greenfield
-  } finally {
-    rootEntry.cleanup();
-    empty.cleanup();
-  }
-});
-
-test('detect flags an existing .npmrc unless it actively sets tag-version-prefix empty', () => {
-  const without = tmpProject({ '.npmrc': 'save-exact=true\n' });
-  const emptyQuoted = tmpProject({ '.npmrc': 'tag-version-prefix=""\n' });
-  const emptyBare = tmpProject({ '.npmrc': 'tag-version-prefix=\n' });
-  const nonEmpty = tmpProject({ '.npmrc': 'tag-version-prefix=v\n' }); // npm's default -> still needs fixing
-  const commented = tmpProject({ '.npmrc': '# tag-version-prefix=""\nsave-exact=true\n' });
-  const none = tmpProject({});
-  try {
-    assert.equal(detect(without.dir).npmrcNeedsTagPrefix, true);
-    assert.equal(detect(emptyQuoted.dir).npmrcNeedsTagPrefix, false); // "" -> satisfied
-    assert.equal(detect(emptyBare.dir).npmrcNeedsTagPrefix, false); // bare = -> satisfied
-    assert.equal(detect(nonEmpty.dir).npmrcNeedsTagPrefix, true); // =v is NOT satisfied
-    assert.equal(detect(commented.dir).npmrcNeedsTagPrefix, true); // a comment does not count
-    assert.equal(detect(none.dir).npmrcNeedsTagPrefix, false); // no .npmrc
-  } finally {
-    for (const p of [without, emptyQuoted, emptyBare, nonEmpty, commented, none]) p.cleanup();
-  }
-});
-
-test('detect flags a JS-only src tree as an existing app (brownfield, no manifest)', () => {
-  // A repo whose only source is src/main.js must be brownfield, or setup writes
-  // the sample TS app and points the build at a nonexistent src/main.ts.
-  const jsOnly = tmpProject({ 'src/main.js': 'module.exports = {};' });
-  try {
-    assert.equal(detect(jsOnly.dir).obsidianAppPresent, true);
-  } finally {
-    jsOnly.cleanup();
   }
 });
 
@@ -274,11 +200,10 @@ test('detect flags a user eslint.config.mjs but not the engine\'s own (marker)',
   }
 });
 
-test('detect surfaces brownfield collision signals', () => {
+test('detect surfaces config/script collision signals', () => {
   const p = tmpProject({
     'package.json': {
       scripts: { lint: 'eslint src' },
-      'simple-git-hooks': { 'pre-commit': 'lint-staged' },
     },
     '.eslintrc.json': '{}',
     '.github/workflows/ci.yml': 'name: ci\n',
@@ -287,25 +212,11 @@ test('detect surfaces brownfield collision signals', () => {
   try {
     const s = detect(p.dir);
     assert.equal(s.scripts.lint, 'eslint src');
-    assert.equal(s.preCommitHook, 'lint-staged'); // an existing hook mergeJson would keep
     assert.equal(s.legacyEslintrc, true);
     assert.equal(s.ciWorkflow, true);
     assert.equal(s.jestConfig, true);
   } finally {
     p.cleanup();
-  }
-});
-
-test('detect.preCommitHook is undefined (never throws) when simple-git-hooks is absent or a non-object', () => {
-  // Optional chaining on a string/missing value yields undefined, not a crash.
-  const none = tmpProject({ 'package.json': { name: 'x' } });
-  const weird = tmpProject({ 'package.json': { 'simple-git-hooks': 'husky' } });
-  try {
-    assert.equal(detect(none.dir).preCommitHook, undefined);
-    assert.equal(detect(weird.dir).preCommitHook, undefined);
-  } finally {
-    none.cleanup();
-    weird.cleanup();
   }
 });
 
@@ -365,17 +276,3 @@ test('detect exposes per-runner config signals (scoped standdown is decided at p
   }
 });
 
-test('obsidianAppPresent is a directory scan: any src source (or manifest) means an existing plugin', () => {
-  const empty = tmpProject({ 'package.json': { name: 'x' } });
-  const nested = tmpProject({ 'src/core/logging/Logger.ts': 'export class Logger {}\n' });
-  const manifestOnly = tmpProject({ 'manifest.json': { id: 'x' } });
-  try {
-    assert.equal(detect(empty.dir).obsidianAppPresent, false); // greenfield
-    assert.equal(detect(nested.dir).obsidianAppPresent, true); // a deep src source counts
-    assert.equal(detect(manifestOnly.dir).obsidianAppPresent, true); // manifest counts
-  } finally {
-    empty.cleanup();
-    nested.cleanup();
-    manifestOnly.cleanup();
-  }
-});

@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { test } from 'node:test';
 
-import { entryDir, PINNED, planFallow } from '../lib/harness.mjs';
+import { PINNED, planFallow } from '../lib/harness.mjs';
 import { obsidianEntry, planObsidian } from '../lib/obsidian.mjs';
 import { loadOptions } from '../lib/options.mjs';
 
@@ -121,43 +121,13 @@ test('manifest fields are JSON-encoded (a crafted name cannot inject manifest ke
 
 test('versions.json maps the initial version to minAppVersion', () => {
   const actions = actionsFor({ minAppVersion: '1.6.7' });
-  const versions = findMerge(actions, 'versions.json').patch;
+  const versions = JSON.parse(findWrite(actions, 'versions.json').content);
   const manifest = JSON.parse(findWrite(actions, 'manifest.json').content);
   assert.equal(versions[manifest.version], '1.6.7');
+  assert.equal(manifest.version, '0.1.0'); // the fixed greenfield initial version
 });
 
-test('versions.json is reconciled (merge+force) so a kept/stale file gets the current entry', () => {
-  // mergeJson preserves historical entries; force fixes a stale minAppVersion for
-  // the current version (check:artifacts requires versions[version] === minAppVersion).
-  const action = findMerge(actionsFor({ minAppVersion: '1.7.2' }), 'versions.json');
-  const manifest = JSON.parse(findWrite(actionsFor({ minAppVersion: '1.7.2' }), 'manifest.json').content);
-  assert.equal(action.patch[manifest.version], '1.7.2');
-  assert.deepEqual(action.force, [manifest.version]);
-});
-
-test('manifest/versions inherit an existing package.json version (brownfield, no check:artifacts desync)', () => {
-  const brown = planObsidian(optionsWith(BASE), { packageVersion: '2.3.0' });
-  assert.equal(JSON.parse(findWrite(brown, 'manifest.json').content).version, '2.3.0');
-  assert.equal(findMerge(brown, 'versions.json').patch['2.3.0'] !== undefined, true);
-  // Greenfield (no package version) falls back to the initial version.
-  const green = planObsidian(optionsWith(BASE), {});
-  assert.equal(JSON.parse(findWrite(green, 'manifest.json').content).version, '0.1.0');
-});
-
-test('brownfield (existing plugin) writes the harness + docs but skips the sample app + tests', () => {
-  const actions = planObsidian(optionsWith({ ...BASE, vue: false }), { obsidianAppPresent: true });
-  // No sample app sources or sample tests...
-  for (const p of ['src/main.ts', 'src/settings.ts', 'src/commands.ts', 'src/core/events/EventBus.ts', 'tests/unit/settings.test.ts', 'tests/unit/eventBus.test.ts']) {
-    assert.equal(findWrite(actions, p), undefined, `${p} must not be written on brownfield`);
-  }
-  // ...but the harness/infra + docs still land.
-  for (const p of ['eslint.config.mjs', 'vitest.config.mjs', 'tests/setup.ts', 'tests/__mocks__/obsidian.ts', 'AGENTS.md', '.npmrc']) {
-    assert.ok(findWrite(actions, p), `${p} must still be written on brownfield`);
-  }
-  assert.ok(actions.some((a) => a.type === 'notice' && /Existing plugin detected/.test(a.message)));
-});
-
-test('greenfield (empty) writes the full sample app + tests', () => {
+test('the scaffold writes the full sample app + tests', () => {
   const actions = planObsidian(optionsWith({ ...BASE, vue: false }), {});
   assert.ok(findWrite(actions, 'src/main.ts'));
   assert.ok(findWrite(actions, 'tests/unit/settings.test.ts'));
@@ -185,11 +155,6 @@ test('verify clears stale coverage immediately before check:quality (fallow ratc
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
-});
-
-test('a shadowed verify script surfaces a collision notice (docs point users at it)', () => {
-  const actions = actionsFor({}, { scripts: { verify: 'echo mine' } });
-  assert.ok(actions.some((a) => a.type === 'notice' && /"verify" script kept/.test(a.message)));
 });
 
 test('the i18n scaffold ships by default and notice text is lint-forced through t()', () => {
@@ -281,85 +246,9 @@ test('pre-commit hook is opt-in (off by default; on wires lint-staged + simple-g
   assert.ok(on.some((a) => a.type === 'notice' && /pre-commit/i.test(a.message)));
 });
 
-test('pre-commit: a pre-existing simple-git-hooks.pre-commit is flagged (mergeJson keeps it, shadowing nano-staged)', () => {
-  const dir = mkdtempSync(join(tmpdir(), 'obs-hook-'));
-  const path = join(dir, 'answers.json');
-  writeFileSync(path, JSON.stringify({ obsidian: BASE, hooks: { preCommit: true } }));
-  try {
-    const kept = (actions) => actions.some((a) => a.type === 'notice' && /simple-git-hooks\.pre-commit kept/.test(a.message));
-    // A differing existing hook -> the generated `npx nano-staged` is shadowed -> warn.
-    assert.ok(kept(planObsidian(loadOptions(path), { preCommitHook: 'lint-staged' })), 'expected a kept-hook collision notice');
-    // No existing hook -> nothing to shadow -> no collision notice.
-    assert.ok(!kept(planObsidian(loadOptions(path), {})));
-    // Re-apply of ours (identical hook) -> no false collision.
-    assert.ok(!kept(planObsidian(loadOptions(path), { preCommitHook: 'npx nano-staged' })));
-  } finally {
-    rmSync(dir, { recursive: true, force: true });
-  }
-});
-
-test('a kept sub-5 TypeScript devDependency is flagged (bundler-resolution tsconfig needs 5+)', () => {
-  // mergeJson keeps a brownfield devDependencies.typescript and `force` only reaches
-  // top-level keys, so an existing 4.x survives and breaks the generated typecheck.
-  const hasTsNotice = (state) =>
-    actionsFor({}, state).some((a) => a.type === 'notice' && /typescript.*moduleResolution "bundler".*TypeScript 5\+/is.test(a.message));
-  assert.ok(hasTsNotice({ typescriptVersion: '^4.9.0' }), 'expected a TS-too-old notice for 4.x');
-  assert.ok(hasTsNotice({ typescriptVersion: '4.x' }));
-  // 5+, latest/*, or absent (greenfield adds the pin) — no false warning.
-  assert.ok(!hasTsNotice({ typescriptVersion: '^5.4.0' }));
-  assert.ok(!hasTsNotice({ typescriptVersion: '6.0.3' }));
-  assert.ok(!hasTsNotice({ typescriptVersion: 'latest' }));
-  assert.ok(!hasTsNotice({}));
-  // The notice is advisory — the package.json patch still applies (non-blocking).
-  assert.ok(findMerge(actionsFor({}, { typescriptVersion: '^4.9.0' }), 'package.json'));
-});
-
-test('a kept pre-0.17 esbuild devDependency is flagged (generated config uses esbuild.context())', () => {
-  const hasEsbuildNotice = (state) =>
-    actionsFor({}, state).some((a) => a.type === 'notice' && /esbuild.*esbuild\.context\(\).*0\.17\+/is.test(a.message));
-  assert.ok(hasEsbuildNotice({ esbuildVersion: '^0.16.0' }), 'expected an esbuild-too-old notice for 0.16.x');
-  assert.ok(hasEsbuildNotice({ esbuildVersion: '0.16.17' }));
-  // 0.17+, a future 1.x, latest/*, or absent (greenfield adds the pin) — no warning.
-  assert.ok(!hasEsbuildNotice({ esbuildVersion: '^0.17.0' }));
-  assert.ok(!hasEsbuildNotice({ esbuildVersion: '0.28.1' }));
-  assert.ok(!hasEsbuildNotice({ esbuildVersion: '^1.0.0' }));
-  assert.ok(!hasEsbuildNotice({ esbuildVersion: 'latest' }));
-  assert.ok(!hasEsbuildNotice({}));
-});
-
-test('manifest-only brownfield seeds the package version from the manifest (no check:artifacts desync)', () => {
-  const state = { obsidianAppPresent: true, obsidianManifest: { version: '3.1.0', minAppVersion: '1.5.0' } };
-  const actions = planObsidian(optionsWith(BASE), state);
-  const versionPatch = actions.find((a) => a.type === 'mergeJson' && a.path === 'package.json' && a.patch.version);
-  assert.equal(versionPatch.patch.version, '3.1.0');
-  assert.equal(JSON.parse(findWrite(actions, 'manifest.json').content).version, '3.1.0');
-});
-
-test('obsidianEntry keeps an EXISTING brownfield entry (root main.ts) and forces src/main.ts on greenfield', () => {
-  assert.equal(obsidianEntry(optionsWith(BASE), {}), 'src/main.ts');
-  const brownState = { obsidianAppPresent: true, entry: 'main.ts', entryExists: true };
-  assert.equal(obsidianEntry(optionsWith(BASE), brownState), 'main.ts');
-  const brown = planObsidian(optionsWith(BASE), brownState);
-  // a non-src entry lands in the tsconfig include so the type-aware lint resolves it
-  assert.match(findWrite(brown, 'tsconfig.json').content, /"main\.ts"/);
-  // esbuild gets an explicitly-relative entry (a bare specifier is ambiguous)
-  assert.match(findWrite(brown, 'esbuild.config.mjs').content, /entryPoints: \['\.\/main\.ts'\]/);
+test('obsidianEntry is the fixed greenfield entry, and esbuild bundles it (explicitly relative)', () => {
+  assert.equal(obsidianEntry(), 'src/main.ts');
   assert.match(findWrite(actionsFor(), 'esbuild.config.mjs').content, /entryPoints: \['\.\/src\/main\.ts'\]/);
-});
-
-test('obsidianEntry rejects a root main.js (the esbuild outfile) — no self-overwrite', () => {
-  // A manifest + built main.js (no source): main.js is the OUTPUT, so bundling it
-  // into itself fails esbuild. Fall back to src/main.ts instead.
-  const state = { obsidianAppPresent: true, entry: 'main.js', entryExists: true };
-  assert.equal(obsidianEntry(optionsWith(BASE), state), 'src/main.ts');
-});
-
-test('a manifest-only brownfield with no source entry falls back to src/main.ts and warns', () => {
-  // detectEntry returns a phantom src/index.ts fallback; entryExists is false.
-  const state = { obsidianAppPresent: true, entry: 'src/index.ts', entryExists: false };
-  assert.equal(obsidianEntry(optionsWith(BASE), state), 'src/main.ts');
-  const actions = planObsidian(optionsWith(BASE), state);
-  assert.ok(actions.some((a) => a.type === 'notice' && /No source entry was found/.test(a.message)));
 });
 
 test('the docs render with the selected package manager (no hardcoded npm)', () => {
@@ -400,13 +289,11 @@ test('VueView pushes the start route before mount (memory history has no initial
   assert.match(vueView, /await router\.push\('\/'\)/);
 });
 
-test('scaffold sources are skip-if-exists (brownfield-safe, never clobbers)', () => {
-  // Engine-owned files may overwrite-backup: ratchet/build scripts, and the
-  // marker-identified configs (vitest/eslint/esbuild). For those, an unmarked
-  // USER config stands down earlier, so reaching the write means it is ours or a
-  // replaceable marked generic one. tsconfig.json is greenfield-owned (the sample
-  // app needs its alias/includes). Everything else — sources, docs — never
-  // clobbers user files.
+test('scaffold sources are skip-if-exists (re-apply never clobbers user edits)', () => {
+  // Engine-owned files overwrite-backup so a re-apply picks up template updates:
+  // the ratchet/build scripts under scripts/, the marker-identified configs
+  // (vitest/eslint/esbuild), and the tsconfig (the sample app needs its alias/
+  // includes). Everything else — sources, docs — is skip-if-exists.
   const overwriteOwned = ['vitest.config.mjs', 'eslint.config.mjs', 'esbuild.config.mjs', 'tsconfig.json'];
   const engineOwned = (p) => p.startsWith('scripts/') || overwriteOwned.includes(p);
   for (const a of actionsFor()) {
@@ -418,47 +305,9 @@ test('scaffold sources are skip-if-exists (brownfield-safe, never clobbers)', ()
   }
 });
 
-test('an UNMARKED user eslint/esbuild config stands down (skip-if-exists), never clobbered', () => {
-  const withUserEslint = actionsFor({}, { eslintConfigMjs: true });
-  assert.equal(findWrite(withUserEslint, 'eslint.config.mjs').mode, 'skip-if-exists');
-  assert.ok(withUserEslint.some((a) => a.type === 'notice' && /eslint\.config\.mjs/.test(a.message)));
-  assert.equal(findWrite(actionsFor({}, { esbuildConfig: true }), 'esbuild.config.mjs').mode, 'skip-if-exists');
-});
-
-test('a boundary-less .fallowrc.json is upgraded to the Obsidian config in obsidian mode (backup kept)', () => {
-  const opts = optionsWith(BASE); // obsidian options (BASE carries the obsidian block)
-  const upgrade = planFallow(opts, { entry: 'src/main.ts', fallowrcNeedsBoundaries: true });
-  const rc = upgrade.find((a) => a.path === '.fallowrc.json');
-  assert.equal(rc.mode, 'overwrite-backup');
-  assert.ok(upgrade.some((a) => a.type === 'notice' && /boundary zones/.test(a.message)));
-  // A config that already has boundaries (ours, or the user's) is left alone.
-  const keep = planFallow(opts, { entry: 'src/main.ts', fallowrcNeedsBoundaries: false });
-  assert.equal(keep.find((a) => a.path === '.fallowrc.json').mode, 'skip-if-exists');
-  assert.ok(!keep.some((a) => a.type === 'notice' && /boundary zones/.test(a.message)));
-});
-
-test('generic mode never force-upgrades .fallowrc.json (obsidian-only behavior)', () => {
-  // No obsidian block -> even a boundary-less fallowrc stays skip-if-exists.
-  const generic = planFallow({ guardrails: { fallowRatchet: true } }, { entry: 'src/index.ts', fallowrcNeedsBoundaries: true });
-  assert.equal(generic.find((a) => a.path === '.fallowrc.json').mode, 'skip-if-exists');
-});
-
-test('brownfield seeds src/styles.css from an existing root styles.css (no first-build clobber)', () => {
-  const state = { obsidianAppPresent: true, entry: 'main.ts', entryExists: true, rootStylesheet: '.card { color: red; }\n' };
-  const actions = actionsFor({}, state);
-  const styles = findWrite(actions, 'src/styles.css');
-  assert.equal(styles.content, '.card { color: red; }\n', 'src/styles.css is seeded from the existing sheet');
-  assert.equal(styles.mode, 'skip-if-exists');
-  assert.ok(actions.some((a) => a.type === 'notice' && /migrated into src\/styles\.css/.test(a.message)));
-});
-
-test('vitest coverage include tracks the entry root and includes JS/TS/Vue extensions', () => {
-  // greenfield entry src/main.ts -> src/** (js/jsx included so a brownfield JS
-  // plugin is measured; a greenfield TS scaffold has no .js there so it's a no-op).
+test('vitest coverage include covers src/** across JS/TS/Vue extensions', () => {
   assert.match(findWrite(actionsFor({ vue: true }), 'vitest.config.mjs').content, /include: \['src\/\*\*\/\*\.\{ts,tsx,mts,cts,vue,js,jsx,mjs,cjs\}'\]/);
-  // brownfield root entry main.ts -> **/* (measuring src/** would false-pass on zero files)
-  const bf = findWrite(actionsFor({ vue: false }, { obsidianAppPresent: true, entry: 'main.ts', entryExists: true }), 'vitest.config.mjs').content;
-  assert.match(bf, /include: \['\*\*\/\*\.\{ts,tsx,mts,cts,js,jsx,mjs,cjs\}'\]/);
+  assert.match(findWrite(actionsFor({ vue: false }), 'vitest.config.mjs').content, /include: \['src\/\*\*\/\*\.\{ts,tsx,mts,cts,js,jsx,mjs,cjs\}'\]/);
 });
 
 test('the release workflow fails a tag that disagrees with manifest.version before publishing', () => {
@@ -627,55 +476,11 @@ test('a plugin named "Plugin" avoids `class Plugin extends Plugin` (obsidian imp
   assert.doesNotMatch(main, /class Plugin extends Plugin/);
 });
 
-test('package.json version is force-synced to the manifest-wins version (no check:artifacts desync)', () => {
-  // manifest 3.2.1 beats an existing package.json 1.0.0; force syncs package to it.
-  const actions = actionsFor({}, { obsidianManifest: { version: '3.2.1' }, packageVersion: '1.0.0' });
-  const pkg = actions.find((a) => a.type === 'mergeJson' && a.path === 'package.json');
+test('package.json version is force-synced to the initial scaffold version (no check:artifacts desync)', () => {
+  // force syncs a possible `npm init` default (1.0.0) to the manifest-owned 0.1.0.
+  const pkg = actionsFor().find((a) => a.type === 'mergeJson' && a.path === 'package.json' && a.patch.version);
   assert.deepEqual(pkg.force, ['version']);
-  assert.equal(pkg.patch.version, '3.2.1');
-});
-
-test('a kept manifest whose isDesktopOnly disagrees with the mobile answer warns', () => {
-  const conflict = actionsFor({ mobile: true }, { obsidianManifest: { isDesktopOnly: true, version: '1.0.0' } });
-  assert.ok(conflict.some((a) => a.type === 'notice' && /isDesktopOnly/.test(a.message)));
-  // Agreement (desktop-only manifest + desktop-only answer) is silent.
-  const agree = actionsFor({ mobile: false }, { obsidianManifest: { isDesktopOnly: true, version: '1.0.0' } });
-  assert.ok(!agree.some((a) => a.type === 'notice' && /isDesktopOnly/.test(a.message)));
-});
-
-test('a brownfield manifest missing isDesktopOnly is reconciled to true for desktop-only mode', () => {
-  const findManifestMerge = (actions) =>
-    actions.find(
-      (a) => a.type === 'mergeJson' && a.path === 'manifest.json' && a.patch.isDesktopOnly === true && (a.force ?? []).includes('isDesktopOnly'),
-    );
-  // Missing flag + desktop-only answer -> force it true (a kept manifest defaults
-  // to mobile-ready in Obsidian, contradicting the build/docs).
-  assert.ok(
-    findManifestMerge(actionsFor({ mobile: false }, { obsidianManifest: { version: '1.0.0' } })),
-    'expected an isDesktopOnly reconcile for a manifest missing the flag',
-  );
-  // Non-boolean flag is also reconciled (force overwrites the malformed value).
-  assert.ok(findManifestMerge(actionsFor({ mobile: false }, { obsidianManifest: { version: '1.0.0', isDesktopOnly: 'yes' } })));
-  // Not touched when mobile-ready was chosen (a missing flag already means mobile-ready).
-  assert.ok(!findManifestMerge(actionsFor({ mobile: true }, { obsidianManifest: { version: '1.0.0' } })));
-  // Not touched when the flag is already an explicit boolean (don't clobber a choice).
-  assert.ok(!findManifestMerge(actionsFor({ mobile: false }, { obsidianManifest: { version: '1.0.0', isDesktopOnly: false } })));
-  // Greenfield (no existing manifest) writes the flag directly — no reconcile action.
-  assert.ok(!findManifestMerge(actionsFor({ mobile: false })));
-  // The freshly-generated beta manifest carries the same forced flag (BRAT beta
-  // installs must not advertise mobile-ready while the build enforces desktop-only).
-  const beta = JSON.parse(findWrite(actionsFor({ mobile: false }, { obsidianManifest: { version: '1.0.0' } }), 'manifest-beta.json').content);
-  assert.equal(beta.isDesktopOnly, true);
-  // Mobile-ready adopt: beta manifest is not forced desktop-only.
-  const betaMobile = JSON.parse(findWrite(actionsFor({ mobile: true }, { obsidianManifest: { version: '1.0.0' } }), 'manifest-beta.json').content);
-  assert.notEqual(betaMobile.isDesktopOnly, true);
-});
-
-test('an existing .npmrc without tag-version-prefix warns (release tag policy)', () => {
-  const warned = planObsidian(optionsWith(BASE), { npmrcNeedsTagPrefix: true });
-  assert.ok(warned.some((a) => a.type === 'notice' && /tag-version-prefix/.test(a.message)));
-  const clean = planObsidian(optionsWith(BASE), {});
-  assert.ok(!clean.some((a) => a.type === 'notice' && /tag-version-prefix/.test(a.message)));
+  assert.equal(pkg.patch.version, '0.1.0');
 });
 
 test('the src safety/mobile lint globs include JS and module extensions (an adopted JS/module plugin is linted)', () => {
@@ -690,25 +495,10 @@ test('the vitest lint-rules block covers every extension the Vitest include runs
   assert.match(eslint, /files: \['tests\/\*\*\/\*\.\{ts,mts,cts,tsx,js,jsx,mjs,cjs\}'\]/);
 });
 
-test('the lint safety globs follow the detected source root (brownfield lib/ or root entry)', () => {
-  // brownfield entry in lib/ -> lib/** added alongside src/**
-  const lib = findWrite(actionsFor({ vue: false }, { obsidianAppPresent: true, entry: 'lib/main.ts', entryExists: true }), 'eslint.config.mjs').content;
-  assert.match(lib, /'src\/\*\*\/\*\.\{ts,tsx,mts,cts,js,jsx,mjs,cjs\}', 'lib\/\*\*\/\*\.\{ts,tsx,mts,cts,js,jsx,mjs,cjs\}'/);
-  // brownfield root entry -> a bounded flat-root glob covers the entry's siblings
-  // (view.ts, settings.ts, …), not just the entry file
-  const root = findWrite(actionsFor({ vue: false }, { obsidianAppPresent: true, entry: 'main.ts', entryExists: true }), 'eslint.config.mjs').content;
-  assert.match(root, /'src\/\*\*\/\*\.\{ts,tsx,mts,cts,js,jsx,mjs,cjs\}', '\*\.\{ts,tsx,mts,cts,js,jsx,mjs,cjs\}'/);
-});
-
-test('the CSS !important guard scans the detected source root, not a hardcoded src/', () => {
+test('the CSS !important guard scans src/, with the placeholder rendered', () => {
   const gf = findWrite(actionsFor(), 'scripts/check-css-important.mjs').content;
   assert.match(gf, /const STYLE_ROOTS = \['src'\]\.map/);
   assert.doesNotMatch(gf, /\{\{styleRoots\}\}/); // placeholder is rendered, not shipped
-  const lib = findWrite(actionsFor({}, { obsidianAppPresent: true, entry: 'lib/main.ts', entryExists: true }), 'scripts/check-css-important.mjs').content;
-  assert.match(lib, /const STYLE_ROOTS = \['src', 'lib'\]\.map/);
-  // a root entry scans '.' (bounded by the script's SKIP_DIRS)
-  const root = findWrite(actionsFor({}, { obsidianAppPresent: true, entry: 'main.ts', entryExists: true }), 'scripts/check-css-important.mjs').content;
-  assert.match(root, /const STYLE_ROOTS = \['\.'\]\.map/);
 });
 
 test('the gates cover every accepted source extension, not only plain .ts', () => {
@@ -727,59 +517,10 @@ test('the gates cover every accepted source extension, not only plain .ts', () =
   assert.match(eslint, /files: \['\*\*\/\*\.\{ts,tsx,mts,cts\}'\],\s*\n\s*languageOptions/);
 });
 
-test('manifest-beta mirrors the KEPT manifest on brownfield adopt (not the answers)', () => {
-  // A brownfield plugin whose manifest.json differs from the answers: the beta
-  // manifest must describe the adopted plugin, not the scaffold's answer id/name.
-  const state = { obsidianAppPresent: true, obsidianManifest: { id: 'their-plugin', name: 'Their Plugin', version: '2.0.0', minAppVersion: '1.5.0', description: 'Theirs', isDesktopOnly: true } };
-  const actions = planObsidian(optionsWith(BASE), state);
-  const beta = JSON.parse(findWrite(actions, 'manifest-beta.json').content);
-  assert.equal(beta.id, 'their-plugin'); // mirrors the kept manifest, not BASE.id
-  assert.equal(beta.name, 'Their Plugin');
-  // greenfield beta still mirrors the generated manifest (answers)
-  const gfBeta = JSON.parse(findWrite(actionsFor(), 'manifest-beta.json').content);
-  assert.equal(gfBeta.id, 'demo-notes');
-});
-
-test('a kept manifest missing minAppVersion is reconciled so check:artifacts does not desync', () => {
-  // brownfield manifest has a version but no minAppVersion -> versions.json would
-  // key an entry the manifest lacks; the field is merged into the kept manifest.
-  const noMin = planObsidian(optionsWith(BASE), { obsidianAppPresent: true, obsidianManifest: { id: 'x', name: 'X', version: '3.0.0' } });
-  const merge = noMin.find((a) => a.type === 'mergeJson' && a.path === 'manifest.json' && a.patch.minAppVersion);
-  assert.ok(merge, 'expected a mergeJson filling minAppVersion into the kept manifest');
-  assert.ok(JSON.parse(findWrite(noMin, 'manifest-beta.json').content).minAppVersion, 'beta mirror carries minAppVersion too');
-  // a manifest that already sets minAppVersion is left untouched
-  const withMin = planObsidian(optionsWith(BASE), { obsidianAppPresent: true, obsidianManifest: { id: 'x', version: '3.0.0', minAppVersion: '1.5.0' } });
-  assert.equal(withMin.find((a) => a.type === 'mergeJson' && a.path === 'manifest.json' && a.patch.minAppVersion), undefined);
-});
-
-test('vitest standdown surfaces a `test` script collision (an existing jest is not silently kept)', () => {
-  // Existing vitest config -> the generated config stands down; a stale `test:
-  // jest` must be flagged so verify/CI do not silently skip the Vitest lane.
-  const state = { obsidianAppPresent: true, vitestConfig: true, scripts: { test: 'jest' } };
-  const actions = planObsidian(optionsWith(BASE), state);
-  assert.ok(
-    actions.some((a) => a.type === 'notice' && /"test" script kept/.test(a.message)),
-    'expected a test-script collision notice on the vitest standdown path',
-  );
-});
-
-test('tsconfig is greenfield-owned (overwrite-backup, replacing a stray one) but kept in brownfield', () => {
-  const gf = actionsFor({}, { tsconfigExists: true });
-  assert.equal(findWrite(gf, 'tsconfig.json').mode, 'overwrite-backup');
-  assert.ok(gf.some((a) => a.type === 'notice' && /tsconfig\.json replaced/.test(a.message)));
-  // no existing tsconfig -> still overwrite-backup (writes fresh), but no notice
-  assert.ok(!actionsFor().some((a) => a.type === 'notice' && /tsconfig\.json replaced/.test(a.message)));
-  // brownfield keeps the user's tsconfig
-  assert.equal(findWrite(planObsidian(optionsWith(BASE), { obsidianAppPresent: true }), 'tsconfig.json').mode, 'skip-if-exists');
-});
-
-test('a parent-relative entry is rejected everywhere (no build/scan outside the project)', () => {
-  // obsidianEntry: even with entryExists true, a `..` entry falls back to src/main.ts.
-  const state = { obsidianAppPresent: true, entry: '../shared/main.ts', entryExists: true };
-  assert.equal(obsidianEntry(optionsWith(BASE), state), 'src/main.ts');
-  // entryDir: a `..` scan root falls back to src.
-  assert.equal(entryDir('../shared/main.ts'), 'src');
-  assert.equal(entryDir('main.ts'), null); // a real root entry is still fine
+test('tsconfig is engine-owned (overwrite-backup, replacing a stray one)', () => {
+  // The sample app + tests need the "@/*" alias and src/tests includes, so a stray
+  // default tsconfig (e.g. a `tsc --init` "{}") is replaced; a backup is kept.
+  assert.equal(findWrite(actionsFor(), 'tsconfig.json').mode, 'overwrite-backup');
 });
 
 test('raw `new Notice()` is lint-banned in src, with the NoticeService file exempt', () => {
@@ -799,18 +540,14 @@ test('the fallow config declares main/core/ui boundary zones with core kept leaf
   assert.deepEqual(core.allow, []);
 });
 
-test('the fallow main boundary zone includes a real detected entry (brownfield root main.ts)', () => {
-  const bf = JSON.parse(
-    planFallow(optionsWith(BASE), { entry: 'main.ts', entryExists: true }).find((a) => a.path === '.fallowrc.json').content,
+test('the fallow main boundary zone always includes the scaffold entry files', () => {
+  const rc = JSON.parse(
+    planFallow(optionsWith(BASE), { entry: 'src/main.ts', entryExists: true }).find((a) => a.path === '.fallowrc.json').content,
   );
-  const mainZone = bf.boundaries.zones.find((z) => z.name === 'main');
-  assert.ok(mainZone.patterns.includes('main.ts'), 'detected root entry is zoned');
-  assert.ok(mainZone.patterns.includes('src/main.ts'), 'scaffold entries still present');
-  // A greenfield src/index.ts fallback (does not exist) is NOT zoned.
-  const gf = JSON.parse(
-    planFallow(optionsWith(BASE), { entry: 'src/index.ts', entryExists: false }).find((a) => a.path === '.fallowrc.json').content,
-  );
-  assert.ok(!gf.boundaries.zones.find((z) => z.name === 'main').patterns.includes('src/index.ts'));
+  const mainZone = rc.boundaries.zones.find((z) => z.name === 'main');
+  for (const p of ['src/main.ts', 'src/settings.ts', 'src/commands.ts']) {
+    assert.ok(mainZone.patterns.includes(p), `scaffold entry ${p} is zoned`);
+  }
 });
 
 // --- vue toggle ------------------------------------------------------------
@@ -923,43 +660,17 @@ test('AGENTS.md is scaffolded and the ADR seed follows the docs.scaffold gate', 
   assert.equal(findWrite(noDocs, 'docs/adr/0001-plugin-architecture-baseline.md'), undefined);
 });
 
-test('brownfield script shadowing surfaces a collision notice for every obsidian gate script', () => {
-  // mergeJson keeps existing scalars, so a shadowed script means the generated
-  // command silently never runs — CI/verify/release then assume the wrong tool.
-  const scripts = {
-    dev: 'old-dev',
-    build: 'tsc',
-    typecheck: 'tsc -p other',
-    version: 'my-hook',
-    test: 'jest',
-    'format:check': 'other-formatter',
-  };
-  const actions = actionsFor({}, { scripts });
-  for (const name of Object.keys(scripts)) {
-    assert.ok(
-      actions.some((a) => a.type === 'notice' && a.message.includes(`"${name}" script kept`)),
-      `missing collision notice for ${name}`,
-    );
-  }
+test('the formatter writes .prettierrc.json and wires format scripts', () => {
+  const actions = actionsFor();
+  assert.ok(findWrite(actions, '.prettierrc.json'));
+  const pkg = mergedPackagePatch(actions);
+  assert.equal(pkg.scripts.format, 'prettier --write .');
+  assert.equal(pkg.scripts['format:check'], 'prettier --check .');
 });
 
-test('an existing prettier config stands the formatter write down with a notice', () => {
-  const actions = actionsFor({}, { prettierConfig: true });
-  assert.equal(findWrite(actions, '.prettierrc.json'), undefined);
-  assert.ok(actions.some((a) => a.type === 'notice' && /prettier/i.test(a.message)));
-});
-
-test('a hand-written vitest/vite config stands the generated config down with a notice', () => {
-  const actions = actionsFor({}, { vitestConfig: true });
-  assert.equal(findWrite(actions, 'vitest.config.mjs'), undefined);
-  assert.ok(actions.some((a) => a.type === 'notice' && /test config/i.test(a.message)));
-});
-
-test('the standdown path still installs the deps its generated vue tests import', () => {
-  // The sample tests are written even when the config stands down, so the
-  // deps they import must install too — else the tests fail unresolved.
-  const pkg = mergedPackagePatch(actionsFor({ vue: true }, { vitestConfig: true }));
+test('the vue test lane installs the deps its generated tests import', () => {
+  const pkg = mergedPackagePatch(actionsFor({ vue: true }));
   for (const d of ['vitest', 'jsdom', '@vue/test-utils', '@vitejs/plugin-vue']) {
-    assert.equal(pkg.devDependencies[d], PINNED[d], `standdown missing ${d}`);
+    assert.equal(pkg.devDependencies[d], PINNED[d], `missing ${d}`);
   }
 });
