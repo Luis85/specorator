@@ -220,5 +220,9 @@ export const useMarketplaceStore = defineStore('marketplace', () => {
     load,
     fetchBody,
     install,
+    // Exposed so a per-leaf event subscription can recompute the installed badges
+    // when items are mutated OUTSIDE the marketplace (Library delete/rename, roster
+    // change). No network, generation-guarded — safe to call anytime.
+    refreshInstalled,
   };
 });

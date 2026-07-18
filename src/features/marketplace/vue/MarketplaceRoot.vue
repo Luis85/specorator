@@ -13,6 +13,7 @@ import { marketplaceAccessors } from './marketplaceAccessors';
 import { PLUGIN_KEY } from './marketplaceKeys';
 import { marketplaceTypeLabels } from './marketplaceTypeLabels';
 import { useMarketplaceStore } from './stores/marketplaceStore';
+import { useMarketplaceInstalledRefresh } from './useMarketplaceInstalledRefresh';
 
 const injectedPlugin = inject(PLUGIN_KEY);
 if (!injectedPlugin) throw new Error('MarketplaceRoot mounted without PLUGIN_KEY');
@@ -23,6 +24,13 @@ const plugin = injectedPlugin;
 
 const store = useMarketplaceStore();
 store.init(plugin);
+
+// Live-sync the Installed badges with mutations OUTSIDE the marketplace (a
+// Library delete/rename, a roster change) — the shared store means each leaf
+// subscribes independently, torn down per-leaf on unmount.
+useMarketplaceInstalledRefresh(plugin, () => {
+  void store.refreshInstalled();
+});
 
 // Marketplace-local type facet: narrows the source BEFORE useLibraryList, so the
 // shared search/sort/tag facet (and its tag chips) operate on the type-filtered

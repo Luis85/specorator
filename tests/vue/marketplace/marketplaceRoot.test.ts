@@ -16,6 +16,7 @@ interface StoreFake {
   load: ReturnType<typeof vi.fn>;
   fetchBody: ReturnType<typeof vi.fn>;
   install: ReturnType<typeof vi.fn>;
+  refreshInstalled: ReturnType<typeof vi.fn>;
 }
 
 // The real store constructs a MarketplaceCatalogClient that hits the network on
@@ -61,6 +62,7 @@ function makeStore(overrides: Partial<StoreFake> = {}): StoreFake {
     load: vi.fn().mockResolvedValue(undefined),
     fetchBody: vi.fn().mockResolvedValue('BODY TEXT'),
     install: vi.fn().mockResolvedValue('installed'),
+    refreshInstalled: vi.fn().mockResolvedValue(undefined),
     ...overrides,
   };
 }
@@ -76,9 +78,12 @@ function setup(
   const plugin = {
     settings,
     saveSettings,
-    app: { vault: {} },
+    // Stubs the live-sync composable subscribes to on mount (returns an
+    // unsubscribe disposer / EventRef, the real bus + vault contract).
+    app: { vault: { on: vi.fn(() => ({})), offref: vi.fn() } },
     vaultFileAdapter: {},
     agentRosterStore: {},
+    events: { on: vi.fn(() => vi.fn()) },
   };
   const utils = render(MarketplaceRoot, {
     global: { provide: { [PLUGIN_KEY as symbol]: plugin } },
@@ -340,5 +345,19 @@ describe('MarketplaceRoot network warning + preview invalidation', () => {
     await screen.findByText('FRESH BODY');
     expect(screen.queryByText('STALE BODY')).toBeNull();
     expect(fetchBody).toHaveBeenCalledTimes(2);
+  });
+});
+
+describe('MarketplaceRoot installed-badge live-sync', () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  it('subscribes to roster + vault mutations to keep Installed badges fresh', async () => {
+    const { plugin } = setup(makeStore({ items: [alpha] }), { marketplaceNetworkEnabled: true });
+    await screen.findByText('Alpha Loop');
+    // Agents reach the store via the event bus; loop/template/quick-action notes
+    // surface only as folder-scoped vault events — the composable wires both.
+    expect(plugin.events.on).toHaveBeenCalledWith('roster:changed', expect.any(Function));
+    expect(plugin.app.vault.on).toHaveBeenCalledWith('delete', expect.any(Function));
+    expect(plugin.app.vault.on).toHaveBeenCalledWith('rename', expect.any(Function));
   });
 });
