@@ -137,7 +137,7 @@ describe('MarketplaceRoot list', () => {
 describe('MarketplaceRoot preview + install', () => {
   beforeEach(() => vi.clearAllMocks());
 
-  it('opening the preview fetches the body and only THEN exposes Install, which installs the item', async () => {
+  it('installs the exact body shown in the preview (no re-fetch)', async () => {
     const { store } = setup(makeStore({ items: [alpha] }), {
       marketplaceNetworkEnabled: true,
     });
@@ -146,14 +146,50 @@ describe('MarketplaceRoot preview + install', () => {
     expect(screen.queryByRole('button', { name: 'Install' })).toBeNull();
 
     await fireEvent.click(screen.getByRole('button', { name: 'Preview' }));
-    await waitFor(() =>
-      expect(store.fetchBody).toHaveBeenCalledWith(expect.objectContaining({ id: 'a' })),
-    );
+    // The reviewed body renders in the preview...
+    await screen.findByText('BODY TEXT');
+    expect(store.fetchBody).toHaveBeenCalledWith(expect.objectContaining({ id: 'a' }));
 
-    const installBtn = await screen.findByRole('button', { name: 'Install' });
+    // ...and Install hands that same body straight to the store — the store no
+    // longer re-fetches, so what installs is exactly what was reviewed.
+    await fireEvent.click(screen.getByRole('button', { name: 'Install' }));
+    await waitFor(() =>
+      expect(store.install).toHaveBeenCalledWith(
+        expect.objectContaining({ id: 'a' }),
+        'BODY TEXT',
+      ),
+    );
+  });
+
+  it('keeps Install disabled until the previewed body has loaded', async () => {
+    // A body fetch left pending: the preview is open but nothing is shown yet,
+    // so a fast click must not install content the user never saw.
+    let resolveBody: (v: string) => void = () => {};
+    const pending = new Promise<string>((res) => {
+      resolveBody = res;
+    });
+    const { store } = setup(
+      makeStore({ items: [alpha], fetchBody: vi.fn().mockReturnValue(pending) }),
+      { marketplaceNetworkEnabled: true },
+    );
+    await screen.findByText('Alpha Loop');
+    await fireEvent.click(screen.getByRole('button', { name: 'Preview' }));
+
+    const installBtn = (await screen.findByRole('button', { name: 'Install' })) as HTMLButtonElement;
+    expect(installBtn.disabled).toBe(true);
+    // Even if the click lands, the view's guard blocks an install with no body.
+    await fireEvent.click(installBtn);
+    expect(store.install).not.toHaveBeenCalled();
+
+    resolveBody('LATE BODY');
+    await screen.findByText('LATE BODY');
+    await waitFor(() => expect(installBtn.disabled).toBe(false));
     await fireEvent.click(installBtn);
     await waitFor(() =>
-      expect(store.install).toHaveBeenCalledWith(expect.objectContaining({ id: 'a' })),
+      expect(store.install).toHaveBeenCalledWith(
+        expect.objectContaining({ id: 'a' }),
+        'LATE BODY',
+      ),
     );
   });
 });

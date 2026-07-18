@@ -33,7 +33,11 @@ const enabled = ref(plugin.settings.marketplaceNetworkEnabled === true);
 // Preview is lazy: the body is fetched only when a card is expanded, and the
 // Install action is gated behind opening that preview (a security requirement).
 const expandedId: Ref<string | null> = ref(null);
+// `bodies` holds ONLY successfully-fetched content; a failed preview sets
+// `previewErrors` instead of poisoning `bodies`, so the error banner is never
+// mistaken for reviewable content and can never be installed.
 const bodies = reactive<Record<string, string>>({});
+const previewErrors = reactive<Record<string, boolean>>({});
 const installing = reactive<Record<string, boolean>>({});
 
 onMounted(() => {
@@ -56,17 +60,22 @@ async function togglePreview(item: MarketplaceItem): Promise<void> {
   expandedId.value = item.id;
   if (bodies[item.id] === undefined) {
     try {
+      previewErrors[item.id] = false;
       bodies[item.id] = await store.fetchBody(item);
     } catch {
-      bodies[item.id] = t('marketplace.loadError');
+      previewErrors[item.id] = true;
     }
   }
 }
 
 async function install(item: MarketplaceItem): Promise<void> {
+  // Install the reviewed body only; if the preview hasn't loaded it yet, there
+  // is nothing vetted to install (the button is disabled in this state too).
+  const body = bodies[item.id];
+  if (body === undefined) return;
   installing[item.id] = true;
   try {
-    const outcome = await store.install(item);
+    const outcome = await store.install(item, body);
     new Notice(
       outcome === 'installed'
         ? t('marketplace.installedNotice', { name: item.name })
@@ -149,6 +158,7 @@ async function install(item: MarketplaceItem): Promise<void> {
         :installing="!!installing[row.id]"
         :expanded="expandedId === row.id"
         :body="bodies[row.id] ?? null"
+        :preview-error="!!previewErrors[row.id]"
         @toggle-preview="togglePreview(row)"
         @install="install(row)"
       />

@@ -12,6 +12,7 @@ const props = defineProps<{
   installing: boolean;
   expanded: boolean;
   body: string | null;
+  previewError: boolean;
 }>();
 
 const emit = defineEmits<{
@@ -69,7 +70,9 @@ const typeLabel = computed(() => typeLabels[props.item.type]);
       v-if="props.expanded"
       class="marketplace-preview"
     >
-      <pre class="marketplace-preview-body">{{ props.body ?? t('marketplace.loading') }}</pre>
+      <pre class="marketplace-preview-body">{{
+        props.previewError ? t('marketplace.loadError') : (props.body ?? t('marketplace.loading'))
+      }}</pre>
       <div
         v-if="props.item.author || props.item.license || props.item.source"
         class="marketplace-attribution"
@@ -84,12 +87,14 @@ const typeLabel = computed(() => typeLabels[props.item.type]);
         >{{ props.item.source }}</a>
       </div>
       <!-- Install lives ONLY inside the preview: a user must open and see what
-        they are installing first (security requirement). -->
+        they are installing first (security requirement). Stays disabled until
+        the reviewed body has actually loaded (props.body !== null), so a fast
+        click can't install content the preview never displayed. -->
       <button
         v-if="isInstallableType(props.item.type) && !props.installed"
         type="button"
         class="mod-cta"
-        :disabled="props.installing"
+        :disabled="props.installing || props.body === null"
         @click="emit('install')"
       >
         {{ props.installing ? t('marketplace.installing') : t('marketplace.install') }}

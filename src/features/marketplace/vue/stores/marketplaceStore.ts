@@ -48,6 +48,17 @@ export const useMarketplaceStore = defineStore('marketplace', () => {
     return override || DEFAULT_MARKETPLACE_BASE_URL;
   }
 
+  /**
+   * The network opt-in, re-read at every I/O boundary. A mounted leaf can outlive
+   * the user toggling `marketplaceNetworkEnabled` off in settings, so gating only
+   * at mount would let Refresh/Preview keep dialing; check it here instead.
+   */
+  function assertNetworkEnabled(): void {
+    if (requirePlugin().settings.marketplaceNetworkEnabled !== true) {
+      throw new MarketplaceError('Marketplace networking is disabled.');
+    }
+  }
+
   function client(): MarketplaceCatalogClient {
     return new MarketplaceCatalogClient(resolveSource());
   }
@@ -89,6 +100,7 @@ export const useMarketplaceStore = defineStore('marketplace', () => {
     const src = resolveSource();
     source.value = src;
     try {
+      assertNetworkEnabled();
       const manifest = await client().fetchIndex();
       items.value = manifest.items;
       offline.value = false;
@@ -114,12 +126,17 @@ export const useMarketplaceStore = defineStore('marketplace', () => {
 
   /** Fetches one item's raw body (for the preview pane). */
   async function fetchBody(item: MarketplaceItem): Promise<string> {
+    assertNetworkEnabled();
     return client().fetchItemBody(item.path);
   }
 
-  /** Installs an item, marking it installed on success (or if already present). */
-  async function install(item: MarketplaceItem): Promise<InstallOutcome> {
-    const body = await client().fetchItemBody(item.path);
+  /**
+   * Installs the exact body the user reviewed in the preview — passed in by the
+   * caller rather than re-fetched, so what lands in the vault is what was shown
+   * (no re-dial, no chance the remote changed between preview and install). This
+   * is also why install issues no network request and needs no opt-in guard.
+   */
+  async function install(item: MarketplaceItem, body: string): Promise<InstallOutcome> {
     const outcome = await installMarketplaceItem(item, body, installDeps(), Date.now());
     const next = new Set(installedIds.value);
     next.add(item.id);
