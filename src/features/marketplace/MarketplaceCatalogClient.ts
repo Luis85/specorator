@@ -4,15 +4,21 @@
  * raw.githubusercontent.com from a plugin). The request + vet seams are
  * injectable so unit tests need no network.
  *
- * SSRF posture: every URL is SSRF-vetted (`assertSafeRemoteUrl`) before the dial
- * AND every fetched path is constrained to stay under the configured base URL
- * (`resolve`), so a catalog can't redirect fetches to another origin. The vet is
- * PREFLIGHT-ONLY, though: `requestUrl` opens its own connection and exposes no
- * `lookup`/agent hook, so the DNS-rebinding pin (`createPinnedLookup`) the
- * Node-socket MCP transports use cannot be applied here. The residual rebinding
- * window is bounded — the base origin is a user-set setting defaulting to the
- * trusted marketplace repo — and closing it fully would mean abandoning
- * `requestUrl` and its CORS bypass, a deliberate design choice.
+ * SSRF posture: every request URL is SSRF-vetted (`assertSafeRemoteUrl`) before
+ * the dial AND constrained to stay under the configured base URL (`resolve`), so
+ * the URLs this client *constructs* can't point off the source origin. Two
+ * residuals remain, both because `requestUrl` (mandated for the renderer CORS
+ * bypass) is a high-level API with no low-level socket hooks:
+ *   - DNS rebinding — the vet is preflight-only; `requestUrl` re-resolves and
+ *     exposes no `lookup`/agent, so `createPinnedLookup` (the Node-socket pin the
+ *     MCP transports use) can't be applied.
+ *   - HTTP redirects — `requestUrl` auto-follows 3xx with no manual-redirect or
+ *     final-URL hook, so a mirror that passes the vet could 302 to an internal
+ *     address without its `Location` being re-vetted.
+ * Both are bounded to a NON-DEFAULT, user-configured source (the default is the
+ * trusted marketplace repo, which does neither); closing them fully would mean
+ * moving off `requestUrl` to a pinned, redirect-vetting Node http(s) socket — a
+ * deliberate trade against the CORS bypass, left to the source owner.
  */
 import { requestUrl } from 'obsidian';
 

@@ -44,10 +44,14 @@ const installing = reactive<Record<string, boolean>>({});
 // reuse an id for different content — and even the same source can update an
 // item in place. Whenever the catalog (re)loads (`store.items` is replaced),
 // drop the cached previews so Preview re-fetches the current path and Install
-// can never write a stale body under a refreshed item.
+// can never write a stale body under a refreshed item. `catalogGeneration` is
+// bumped on each reload so an in-flight preview fetch that started before the
+// reload discards its result instead of repopulating the cleared cache.
+let catalogGeneration = 0;
 watch(
   () => store.items,
   () => {
+    catalogGeneration += 1;
     expandedId.value = null;
     for (const key of Object.keys(bodies)) delete bodies[key];
     for (const key of Object.keys(previewErrors)) delete previewErrors[key];
@@ -82,10 +86,16 @@ async function togglePreview(item: MarketplaceItem): Promise<void> {
   }
   expandedId.value = item.id;
   if (bodies[item.id] === undefined) {
+    const generation = catalogGeneration;
     try {
       previewErrors[item.id] = false;
-      bodies[item.id] = await store.fetchBody(item);
+      const body = await store.fetchBody(item);
+      // If the catalog reloaded while this fetch was in flight, its body is for
+      // a now-stale item id — discard it so it can't land in the cleared cache.
+      if (generation !== catalogGeneration) return;
+      bodies[item.id] = body;
     } catch {
+      if (generation !== catalogGeneration) return;
       previewErrors[item.id] = true;
     }
   }

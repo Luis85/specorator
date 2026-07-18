@@ -245,4 +245,37 @@ describe('MarketplaceRoot network warning + preview invalidation', () => {
     await nextTick();
     await waitFor(() => expect(screen.queryByText('OLD BODY')).toBeNull());
   });
+
+  it('discards a preview body that resolves AFTER a catalog reload (no stale write)', async () => {
+    // The first fetch stays pending across the reload, then resolves late.
+    let resolveStale: (v: string) => void = () => {};
+    const stalePending = new Promise<string>((r) => {
+      resolveStale = r;
+    });
+    const fetchBody = vi
+      .fn()
+      .mockReturnValueOnce(stalePending)
+      .mockResolvedValue('FRESH BODY');
+    const store = reactive(makeStore({ items: [alpha], fetchBody }));
+    setup(store as StoreFake, {
+      marketplaceNetworkEnabled: true,
+      marketplaceNetworkWarningShown: true,
+    });
+    await screen.findByText('Alpha Loop');
+
+    await fireEvent.click(screen.getByRole('button', { name: 'Preview' }));
+    // Catalog reloads while the first fetch is still in flight (generation bumps).
+    store.items = [{ ...alpha }];
+    await nextTick();
+    // The stale fetch resolves only now — its body must be discarded, not cached.
+    resolveStale('STALE BODY');
+    await nextTick();
+    await Promise.resolve();
+
+    // Re-open the preview: because nothing stale was cached, it re-fetches.
+    await fireEvent.click(screen.getByRole('button', { name: 'Preview' }));
+    await screen.findByText('FRESH BODY');
+    expect(screen.queryByText('STALE BODY')).toBeNull();
+    expect(fetchBody).toHaveBeenCalledTimes(2);
+  });
 });

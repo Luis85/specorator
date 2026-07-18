@@ -41,10 +41,16 @@ Modeled on — and reuses the components of — `features/library`.
 - **The catalog is untrusted.** `item.source` is only linkified when it is an
   `http(s)` URL (`MarketplaceCard` `safeSourceUrl`) — never a live `javascript:`
   href. Every fetched URL is SSRF-vetted AND constrained to stay under the
-  configured base URL (`MarketplaceCatalogClient.resolve`). The SSRF vet is
-  **preflight-only**: `requestUrl` exposes no `lookup` hook, so `createPinnedLookup`
-  (the Node-socket DNS-rebinding pin) can't be applied here; the residual window
-  is bounded because the base origin is a user-set, trusted-by-default setting.
+  configured base URL (`MarketplaceCatalogClient.resolve`). Two SSRF residuals
+  remain because `requestUrl` is a high-level API with no socket hooks — DNS
+  rebinding (the vet is preflight-only; `createPinnedLookup` can't attach) and
+  HTTP-redirect following (3xx is auto-followed with no `Location` re-vet). Both
+  are bounded to a non-default, user-configured source; closing them means moving
+  off `requestUrl` (see the `MarketplaceCatalogClient` class doc).
+- **Preview cache is generation-guarded.** Previews are keyed by item id and
+  cleared when the catalog reloads; an in-flight fetch that resolves after a
+  reload is discarded via `catalogGeneration` so a stale body can't repopulate a
+  reused id.
 - **Skills are deferred.** `INSTALLABLE_ITEM_TYPES` excludes `skill`; adding it
   there plus an installer branch is the whole extension point.
 
