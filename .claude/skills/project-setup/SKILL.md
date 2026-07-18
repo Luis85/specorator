@@ -38,8 +38,12 @@ engine owns every mutation; you detect, interview, then invoke it.
    re-apply. Shape in `references/quality-harness.md`. Skip cleanly if the user
    just wants the harness (leave `prds` empty).
 4. **Interview** (one question at a time):
-   - **Obsidian plugin?** If the user is building one (or detect found a
-     manifest), collect: plugin id, display name, description, author
+   - **Obsidian plugin?** Obsidian mode scaffolds a **new** plugin, so use it
+     only for a fresh repo / empty directory. If `detect` already found a
+     `manifest.json` (an existing plugin), do NOT enable Obsidian mode — point the
+     user at a fresh repo, or run the generic quality-harness (leave `obsidian`
+     null) to add just the gates to their existing plugin. For a new plugin,
+     collect: plugin id, display name, description, author
      (+ optional authorUrl); then **ALWAYS ask: mobile-ready, or desktop-only?**
      (`obsidian.mobile` — flips manifest `isDesktopOnly`, esbuild externals,
      and the Node/Electron import ban); then the Vue island (`obsidian.vue`,
