@@ -233,16 +233,17 @@ test('scaffold sources are skip-if-exists (brownfield-safe, never clobbers)', ()
   // Engine-owned files may overwrite-backup: ratchet/build scripts, and the
   // marker-identified configs (vitest/eslint/esbuild). For those, an unmarked
   // USER config stands down earlier, so reaching the write means it is ours or a
-  // replaceable marked generic one. Everything else — sources, docs — never
+  // replaceable marked generic one. tsconfig.json is greenfield-owned (the sample
+  // app needs its alias/includes). Everything else — sources, docs — never
   // clobbers user files.
-  const engineOwned = (p) =>
-    p.startsWith('scripts/') || ['vitest.config.mjs', 'eslint.config.mjs', 'esbuild.config.mjs'].includes(p);
+  const overwriteOwned = ['vitest.config.mjs', 'eslint.config.mjs', 'esbuild.config.mjs', 'tsconfig.json'];
+  const engineOwned = (p) => p.startsWith('scripts/') || overwriteOwned.includes(p);
   for (const a of actionsFor()) {
     if (a.type !== 'writeFile' || engineOwned(a.path)) continue;
     assert.equal(a.mode, 'skip-if-exists', `${a.path} must be skip-if-exists`);
   }
-  for (const p of ['vitest.config.mjs', 'eslint.config.mjs', 'esbuild.config.mjs']) {
-    assert.equal(findWrite(actionsFor(), p).mode, 'overwrite-backup', `${p} upgrades a marked generic config`);
+  for (const p of overwriteOwned) {
+    assert.equal(findWrite(actionsFor(), p).mode, 'overwrite-backup', `${p} is engine-owned (overwrite-backup)`);
   }
 });
 
@@ -387,6 +388,25 @@ test('an existing .npmrc without tag-version-prefix warns (release tag policy)',
 test('the src safety/mobile lint globs include JS (an adopted JS plugin is linted)', () => {
   assert.match(findWrite(actionsFor({ vue: false }), 'eslint.config.mjs').content, /src\/\*\*\/\*\.\{ts,tsx,js,jsx\}/);
   assert.match(findWrite(actionsFor({ vue: true }), 'eslint.config.mjs').content, /src\/\*\*\/\*\.\{ts,tsx,vue,js,jsx\}/);
+});
+
+test('the lint safety globs follow the detected source root (brownfield lib/ or root entry)', () => {
+  // brownfield entry in lib/ -> lib/** added alongside src/**
+  const lib = findWrite(actionsFor({ vue: false }, { obsidianAppPresent: true, entry: 'lib/main.ts', entryExists: true }), 'eslint.config.mjs').content;
+  assert.match(lib, /'src\/\*\*\/\*\.\{ts,tsx,js,jsx\}', 'lib\/\*\*\/\*\.\{ts,tsx,js,jsx\}'/);
+  // brownfield root entry -> the entry file itself is linted
+  const root = findWrite(actionsFor({ vue: false }, { obsidianAppPresent: true, entry: 'main.ts', entryExists: true }), 'eslint.config.mjs').content;
+  assert.match(root, /'src\/\*\*\/\*\.\{ts,tsx,js,jsx\}', 'main\.ts'/);
+});
+
+test('tsconfig is greenfield-owned (overwrite-backup, replacing a stray one) but kept in brownfield', () => {
+  const gf = actionsFor({}, { tsconfigExists: true });
+  assert.equal(findWrite(gf, 'tsconfig.json').mode, 'overwrite-backup');
+  assert.ok(gf.some((a) => a.type === 'notice' && /tsconfig\.json replaced/.test(a.message)));
+  // no existing tsconfig -> still overwrite-backup (writes fresh), but no notice
+  assert.ok(!actionsFor().some((a) => a.type === 'notice' && /tsconfig\.json replaced/.test(a.message)));
+  // brownfield keeps the user's tsconfig
+  assert.equal(findWrite(planObsidian(optionsWith(BASE), { obsidianAppPresent: true }), 'tsconfig.json').mode, 'skip-if-exists');
 });
 
 test('a parent-relative entry is rejected everywhere (no build/scan outside the project)', () => {

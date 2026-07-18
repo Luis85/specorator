@@ -247,6 +247,9 @@ export function detect(cwd) {
     // competitor. Engine-written ones (marker / exact template content) don't
     // re-fire the notice on a converged re-apply.
     obsidianManifest: readJsonSafe(join(cwd, 'manifest.json')),
+    // Greenfield replaces the tsconfig (the sample app needs its alias/includes);
+    // this flags an existing one only so the replacement can be announced.
+    tsconfigExists: existsSync(join(cwd, 'tsconfig.json')),
     // Seed a generated manifest/versions from an existing package.json version
     // so a brownfield adopt (pkg 2.3.0, no manifest) doesn't emit manifest 0.1.0
     // and fail check:artifacts on desync. Only a valid semver is trusted.

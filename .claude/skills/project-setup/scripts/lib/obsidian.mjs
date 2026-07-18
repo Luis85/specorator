@@ -267,7 +267,19 @@ function planTsconfig(options, state) {
   // include, or the type-aware lint project service can't resolve it.
   const entry = state?.entry ?? 'src/main.ts';
   const entryInclude = entry.startsWith('src/') ? '' : `, ${JSON.stringify(entry)}`;
-  return [write('tsconfig.json', renderTemplate(loadTemplate('obsidian/tsconfig.json.tmpl'), { vueIncludes, entryInclude }))];
+  const content = renderTemplate(loadTemplate('obsidian/tsconfig.json.tmpl'), { vueIncludes, entryInclude });
+  // Greenfield owns the tsconfig: the sample app + tests import through the "@/*"
+  // path alias and need the src/tests includes, so a stray existing tsconfig (e.g.
+  // "{}") must be replaced or typecheck fails day one. overwrite-backup keeps a
+  // backup; a fresh repo has none, and re-apply no-ops on matching content. A
+  // brownfield adopt keeps the user's tsconfig (they own their real source).
+  if (isGreenfield(options, state)) {
+    const notices = state?.tsconfigExists
+      ? [notice('Existing tsconfig.json replaced (a backup is kept) — the generated sample app/tests need the "@/*" path alias and the src/tests includes. Re-add any custom compilerOptions from the backup.')]
+      : [];
+    return [...notices, write('tsconfig.json', content, 'overwrite-backup')];
+  }
+  return [write('tsconfig.json', content)];
 }
 
 function planObsidianEslint(options, state) {
@@ -281,9 +293,17 @@ function planObsidianEslint(options, state) {
   } else if (state?.legacyEslintrc) {
     notices.push(notice('Legacy .eslintrc* found — ESLint 10 reads only the flat eslint.config.mjs the harness wrote; remove the legacy file once migrated.'));
   }
-  // JS/JSX included so the safety + mobile-import bans also cover an adopted JS
-  // plugin's source; a greenfield TS scaffold has no such files, so it's a no-op.
-  const vueSrcFiles = o.vue ? "'src/**/*.{ts,tsx,vue,js,jsx}'" : "'src/**/*.{ts,tsx,js,jsx}'";
+  // The safety + mobile-import bans must cover the ACTUAL source, not a hardcoded
+  // src/**: a brownfield entry in lib/ (or a root main.ts) would otherwise let lint
+  // pass over raw-HTML/Notice/console/Node-Electron violations. Always keep src/**
+  // (greenfield), add the entry's dir when it's elsewhere (e.g. lib/**), or the
+  // entry file itself for a root entry. JS/JSX included so adopted JS is linted too.
+  const exts = o.vue ? 'ts,tsx,vue,js,jsx' : 'ts,tsx,js,jsx';
+  const srcRoot = entryDir(obsidianEntry(options, state)); // 'src' | 'lib' | null (root)
+  const lintGlobs = new Set([`src/**/*.{${exts}}`]);
+  if (srcRoot && srcRoot !== 'src') lintGlobs.add(`${srcRoot}/**/*.{${exts}}`);
+  else if (!srcRoot) lintGlobs.add(obsidianEntry(options, state));
+  const vueSrcFiles = [...lintGlobs].map((g) => `'${g}'`).join(', ');
   const mobileBlock = o.mobile
     ? renderTemplate(loadTemplate('obsidian/eslint-mobile-block.tmpl'), { vueSrcFiles })
     : '';
