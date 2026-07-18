@@ -385,6 +385,20 @@ user accepts ────────────────► transitionTask 
   the lint rule requires the surface Notice to be i18n'd via `t()`). Workaround: pin
   provider/model on the template/work order, or keep the roster agent valid.
 
+- **Chain spawning is not sequenced with commit-on-accept (auto-run only).** When
+  `promptCommitOnAccept` is enabled and auto-run is active, accepting a chained work order
+  (the `done` trigger) fires both `CommitOnAcceptCoordinator` (opens a scoped-commit modal,
+  awaiting the user) and `WorkOrderChainCoordinator` (creates a `ready` successor) as
+  **independent, non-awaited** `task:status-changed` subscribers (`registerWorkOrderCoordinators.ts`).
+  The queue can launch the successor before the user resolves the commit prompt, so the
+  successor's run may modify the repo concurrently with the intended scoped commit and
+  contaminate its scope. Practical risk is low (small window; the commit is scoped; requires
+  that specific settings combination), but the coordinators are not sequenced. A proper fix
+  holds chain spawning until the commit-on-accept checkpoint resolves (or keeps the successor
+  non-runnable until then) — a cross-coordinator sequencing change out of scope for this slice.
+  Mitigation today: keep auto-run **off** when using commit-on-accept, so the `ready` successor
+  waits for a manual run after the commit is confirmed.
+
 ## Files
 
 **New:** `model/workOrderChain.ts`, `execution/WorkOrderChainCoordinator.ts`,
