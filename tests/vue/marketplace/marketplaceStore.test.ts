@@ -113,6 +113,7 @@ describe('marketplaceStore network opt-in guard', () => {
     expect(fetchIndexSpy).toHaveBeenCalled();
     expect(store.items).toEqual([item]);
     expect(store.offline).toBe(false);
+    expect(store.loaded).toBe(true);
     expect(cacheWrite).toHaveBeenCalled();
   });
 
@@ -306,6 +307,8 @@ describe('marketplaceStore load fallbacks', () => {
     expect(store.items).toEqual([]);
     expect(store.offline).toBe(false);
     expect(store.error).toMatch(/network down/);
+    // An empty-and-errored load stays "not loaded" so a remount can retry.
+    expect(store.loaded).toBe(false);
   });
 
   it('discards a stale installed-scan when a concurrent reload commits first', async () => {

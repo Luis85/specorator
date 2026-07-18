@@ -27,7 +27,11 @@ Modeled on — and reuses the components of — `features/library`.
   `plugin.settings.marketplaceNetworkEnabled` in `load()`/`fetchBody()` on every
   call (not just at view mount), so disabling it stops all `requestUrl` calls
   immediately; a disabled `load` serves the on-disk cache and constructs no
-  client. Config lives on the **Marketplace settings tab** (registered in
+  client. The view auto-loads only on the first enabled mount that finds the
+  shared store empty (`store.loaded`) — the module-singleton store retains the
+  catalog across leaf open/close, so reopening a leaf or opening a second one
+  reuses it and refreshes on demand (the Refresh button), not on every mount.
+  Config lives on the **Marketplace settings tab** (registered in
   `settings/registry/fields/marketplace.ts`; it is a fixed registry-rendered tab
   — see `settingsTabStrip.ts` `FIXED_TAB_IDS` + `featureFlag.ts`
   `STATIC_REGISTRY_TABS`, both of which must list `marketplace` or the tab never

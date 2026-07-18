@@ -11,6 +11,7 @@ interface StoreFake {
   loading: boolean;
   error: string | null;
   offline: boolean;
+  loaded: boolean;
   source: string;
   init: ReturnType<typeof vi.fn>;
   load: ReturnType<typeof vi.fn>;
@@ -57,6 +58,7 @@ function makeStore(overrides: Partial<StoreFake> = {}): StoreFake {
     loading: false,
     error: null,
     offline: false,
+    loaded: false,
     source: 'https://example.test/catalog',
     init: vi.fn(),
     load: vi.fn().mockResolvedValue(undefined),
@@ -139,6 +141,18 @@ describe('MarketplaceRoot list', () => {
     // Alpha is not installed → a Preview button (install is gated behind it).
     const alphaCard = screen.getByRole('button', { name: 'Alpha Loop' });
     expect(within(alphaCard).getByRole('button', { name: 'Preview' })).toBeTruthy();
+  });
+
+  it('reuses the already-loaded catalog on mount instead of re-fetching', async () => {
+    // The shared store retains a catalog from a prior leaf/open; mounting must
+    // NOT auto-fetch again (reopening reuses it, Refresh is the on-demand path).
+    const { store } = setup(makeStore({ items: [alpha], loaded: true }), {
+      marketplaceNetworkEnabled: true,
+      marketplaceNetworkWarningShown: true,
+    });
+    await screen.findByText('Alpha Loop');
+    await Promise.resolve();
+    expect(store.load).not.toHaveBeenCalled();
   });
 });
 

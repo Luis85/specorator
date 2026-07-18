@@ -104,7 +104,11 @@ watch(
 );
 
 onMounted(async () => {
-  if (enabled.value) {
+  // Auto-load only on the FIRST enabled mount that finds the shared store empty.
+  // The module-singleton store retains the catalog across leaf open/close, so
+  // reopening a leaf (or opening a second one) reuses it and refreshes on demand
+  // via the Refresh button — no redundant index.json fetch on every mount.
+  if (enabled.value && !store.loaded) {
     // The one-time network/provenance warning must fire here too — and BEFORE
     // the first fetch: the settings tab can flip marketplaceNetworkEnabled
     // without going through enable(), so an already-enabled view would

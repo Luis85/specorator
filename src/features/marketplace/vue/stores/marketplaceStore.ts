@@ -32,6 +32,14 @@ export const useMarketplaceStore = defineStore('marketplace', () => {
   const error = ref<string | null>(null);
   /** True when the list is served from the on-disk cache (a fetch failed). */
   const offline = ref(false);
+  /**
+   * True once a load has populated the catalog. The shared (module-singleton)
+   * store retains the catalog across leaf open/close, so the view auto-loads only
+   * when this is false — reopening a leaf or opening a second one reuses the
+   * loaded catalog and refreshes on demand (the Refresh button) instead of
+   * re-fetching index.json on every mount.
+   */
+  const loaded = ref(false);
   const source = ref(DEFAULT_MARKETPLACE_BASE_URL);
   // Bumped whenever a new catalog load begins, so async work (an in-flight install)
   // that started against an older catalog can detect it went stale.
@@ -181,6 +189,9 @@ export const useMarketplaceStore = defineStore('marketplace', () => {
       }
     } finally {
       loading.value = false;
+      // Mark loaded only when a catalog actually landed (online or cache). A load
+      // that ended empty-and-errored leaves this false so a remount can retry.
+      if (items.value.length > 0) loaded.value = true;
       await refreshInstalled();
     }
   }
@@ -224,6 +235,7 @@ export const useMarketplaceStore = defineStore('marketplace', () => {
     loading,
     error,
     offline,
+    loaded,
     source,
     init,
     load,
