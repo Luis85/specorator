@@ -62,11 +62,27 @@ export function isInstallableType(type: MarketplaceItemType): boolean {
   return INSTALLABLE_ITEM_TYPES.includes(type);
 }
 
+/**
+ * Catalog ids are `<folder>/<slug>` — lowercase alphanumeric/hyphen segments,
+ * slash-separated (as produced by the marketplace repo's build-index). Enforcing
+ * the shape rejects a malformed or hostile id such as `__proto__`, `constructor`,
+ * or `toString`: the view keys plain-object caches (bodies/previewErrors/
+ * installing) by id, so an Object.prototype name would read as already-present
+ * (skipping the fetch) or, worse, `bodies['__proto__'] = body` could mutate the
+ * record's prototype.
+ */
+const CATALOG_ID_PATTERN = /^[a-z0-9]+(?:-[a-z0-9]+)*(?:\/[a-z0-9]+(?:-[a-z0-9]+)*)+$/;
+
+/** A safe-to-key catalog id: the expected lowercase `<folder>/<slug>` shape. */
+function isSafeCatalogId(id: unknown): boolean {
+  return typeof id === 'string' && CATALOG_ID_PATTERN.test(id);
+}
+
 function isMarketplaceItem(value: unknown): value is MarketplaceItem {
   if (typeof value !== 'object' || value === null) return false;
   const item = value as Record<string, unknown>;
   return (
-    typeof item.id === 'string' &&
+    isSafeCatalogId(item.id) &&
     typeof item.name === 'string' &&
     typeof item.path === 'string' &&
     typeof item.type === 'string' &&

@@ -54,6 +54,11 @@ export function cloneRosterAgent(agent: RosterAgent, existing: RosterAgent[], no
   const base = createRosterAgent(cloneName, now);
   return {
     ...agent,
+    // A clone is a NEW user-owned agent, not the installed catalog item — drop the
+    // `catalog` provenance. Otherwise the clone keeps the original's catalog id,
+    // and after the original is deleted the Marketplace's catalog-id installed
+    // check would still match the clone and wrongly hide the item's Install action.
+    catalog: undefined,
     id: dedupeRosterId(base.id, existing.map((a) => a.id)),
     name: cloneName,
     createdAt: now,

@@ -47,10 +47,19 @@ Modeled on — and reuses the components of — `features/library`.
   rebrand, while the roster-id fallback keeps pre-provenance/hand-authored agents
   recognized. The storage/dedup key stays the name-slug roster id (no file
   churn); cross-rename install idempotency is deferred update-management.
+  `cloneRosterAgent` strips `catalog` — a clone is a user-owned derivative, not
+  the catalog item, so it must not keep the provenance (else after the original
+  is deleted the clone's catalog id would still satisfy the installed check and
+  wrongly hide the item's Install action).
 - **The catalog is untrusted.** `item.source` is only linkified when it is an
   `http(s)` URL (`MarketplaceCard` `safeSourceUrl`) — never a live `javascript:`
   href. Every fetched URL is SSRF-vetted AND constrained to stay under the
-  configured base URL (`MarketplaceCatalogClient.resolve`). Two SSRF residuals
+  configured base URL (`MarketplaceCatalogClient.resolve`). `parseManifest` also
+  rejects any item whose `id` isn't the expected lowercase `<folder>/<slug>`
+  shape (`CATALOG_ID_PATTERN`) — the view keys plain-object caches
+  (`bodies`/`previewErrors`/`installing`) by id, so an `Object.prototype` name
+  like `__proto__`/`toString` would otherwise read as already-present or pollute
+  a record prototype. Two SSRF residuals
   remain because `requestUrl` is a high-level API with no socket hooks — DNS
   rebinding (the vet is preflight-only; `createPinnedLookup` can't attach) and
   HTTP-redirect following (3xx is auto-followed with no `Location` re-vet). Both

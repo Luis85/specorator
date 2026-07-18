@@ -36,9 +36,26 @@ describe('parseManifest', () => {
   });
 
   it('defaults a missing description and tags', () => {
-    const manifest = parseManifest({ schemaVersion: 1, items: [{ id: 'i', type: 'agent', name: 'n', path: 'agents/n.md' }] });
+    const manifest = parseManifest({ schemaVersion: 1, items: [{ id: 'agents/n', type: 'agent', name: 'n', path: 'agents/n.md' }] });
     expect(manifest?.items[0].description).toBe('');
     expect(manifest?.items[0].tags).toEqual([]);
+  });
+
+  it('rejects prototype-polluting and non-path-like item ids', () => {
+    // A hostile/malformed catalog id keyed onto the view's plain-object caches
+    // could read as already-present or mutate a record prototype — reject any id
+    // that isn't the expected lowercase `<folder>/<slug>` shape.
+    const manifest = parseManifest({
+      schemaVersion: 1,
+      items: [
+        validItem,
+        { id: '__proto__', type: 'loop', name: 'p', path: 'loops/p.md', tags: [] },
+        { id: 'constructor', type: 'loop', name: 'c', path: 'loops/c.md', tags: [] },
+        { id: 'toString', type: 'loop', name: 't', path: 'loops/t.md', tags: [] },
+        { id: 'nofolder', type: 'loop', name: 'n', path: 'loops/n.md', tags: [] },
+      ],
+    });
+    expect(manifest?.items.map((i) => i.id)).toEqual(['loops/x']);
   });
 
   it('dedupes items by id (first wins) so card v-for keys stay unique', () => {
