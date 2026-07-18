@@ -539,6 +539,9 @@ test('ErrorService ships in core and onload routes through it (both variants)', 
     const commands = findWrite(actions, 'src/commands.ts').content;
     assert.match(commands, /plugin\.errors\.wrap\(/);
     assert.match(commands, /plugin\.errors\.run\(/);
+    // the clear-greeting checkCallback routes its discarded promise through run()
+    // (a post-confirm save failure must notice, not become an unhandled rejection)
+    assert.match(commands, /void plugin\.errors\.run\('clear the greeting', \(\) => clearGreeting\(plugin\)\)/);
   }
 });
 

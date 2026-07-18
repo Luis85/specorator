@@ -103,6 +103,22 @@ test('detectEntry returns src/main.ts when it exists, falling back to src/index.
   }
 });
 
+test('detectEntry({obsidian}) prefers main.* over an index.* barrel (source-only adopt, no manifest)', () => {
+  // Both an index barrel and the real Plugin entry exist, no manifest.json.
+  const both = tmpProject({ 'src/index.ts': '// barrel\n', 'src/main.ts': '// Plugin\n' });
+  try {
+    // Generic scan prefers the index barrel — which would build an unloadable plugin.
+    assert.equal(detectEntry(both.dir), 'src/index.ts');
+    // Obsidian mode flips to main.* even without a manifest present.
+    assert.equal(detectEntry(both.dir, { obsidian: true }), 'src/main.ts');
+    // detect() threads the flag through to state.entry.
+    assert.equal(detect(both.dir, { obsidian: true }).entry, 'src/main.ts');
+    assert.equal(detect(both.dir).entry, 'src/index.ts');
+  } finally {
+    both.cleanup();
+  }
+});
+
 test('detectEntry rejects a parent-directory package source (no ".." traversal)', () => {
   // plugin/package.json points source one level up to an existing file; the `..`
   // segment must be rejected so the build/ratchets stay inside the project.

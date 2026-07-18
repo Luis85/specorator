@@ -36,7 +36,9 @@ export function registerCommands(plugin: {{pluginClass}}): void {
     'Clear greeting',
     () => plugin.settings.greeting.trim().length > 0,
     () => {
-      void clearGreeting(plugin);
+      // Route the fallible confirm+save through ErrorService so a rejected save
+      // surfaces a notice instead of an unhandled rejection swallowed by Obsidian.
+      void plugin.errors.run('clear the greeting', () => clearGreeting(plugin));
     },
   );
 
