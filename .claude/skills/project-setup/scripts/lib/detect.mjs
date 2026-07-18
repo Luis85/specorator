@@ -230,6 +230,10 @@ export function detect(cwd) {
   return {
     packageManager: detectPackageManager(cwd),
     typescript: has('typescript') || existsSync(join(cwd, 'tsconfig.json')),
+    // The kept TypeScript range (mergeJson keeps a brownfield scalar): the
+    // Obsidian tsconfig needs 5+ for moduleResolution "bundler", so planPackageBasics
+    // warns when an existing 4.x would break the generated typecheck gate.
+    typescriptVersion: deps.typescript ?? null,
     eslint: has('eslint'),
     fallow: has('fallow'),
     testFramework,

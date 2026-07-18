@@ -168,6 +168,25 @@ test('a single verify script chains the whole gate set in CI order', () => {
   assert.match(pkg.scripts.verify, /lint .*check:quality.*typecheck.*format:check.*build.*check:artifacts/);
 });
 
+test('verify clears stale coverage immediately before check:quality (fallow ratchet is coverage-absent, like CI)', () => {
+  // A prior `test:coverage` leaves ./coverage; fallow reads it and reports
+  // coverage-weighted metrics, so `verify` could false-fail while fresh CI passes.
+  // runGates clears it in the orchestrator — the generated script must mirror that.
+  const verify = mergedPackagePatch(actionsFor()).scripts.verify; // default PM: npm
+  assert.match(verify, /rmSync\('coverage',\{recursive:true,force:true\}\)" && npm run check:quality/);
+  // Off when the ratchet is off (no check:quality step to protect).
+  const dir = mkdtempSync(join(tmpdir(), 'obs-nr-'));
+  const path = join(dir, 'answers.json');
+  writeFileSync(path, JSON.stringify({ obsidian: BASE, guardrails: { fallowRatchet: false } }));
+  try {
+    const noRatchet = mergedPackagePatch(planObsidian(loadOptions(path), {})).scripts.verify;
+    assert.doesNotMatch(noRatchet, /rmSync\('coverage'/);
+    assert.doesNotMatch(noRatchet, /check:quality/);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
 test('a shadowed verify script surfaces a collision notice (docs point users at it)', () => {
   const actions = actionsFor({}, { scripts: { verify: 'echo mine' } });
   assert.ok(actions.some((a) => a.type === 'notice' && /"verify" script kept/.test(a.message)));
@@ -253,6 +272,22 @@ test('pre-commit: a pre-existing simple-git-hooks.pre-commit is flagged (mergeJs
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
+});
+
+test('a kept sub-5 TypeScript devDependency is flagged (bundler-resolution tsconfig needs 5+)', () => {
+  // mergeJson keeps a brownfield devDependencies.typescript and `force` only reaches
+  // top-level keys, so an existing 4.x survives and breaks the generated typecheck.
+  const hasTsNotice = (state) =>
+    actionsFor({}, state).some((a) => a.type === 'notice' && /typescript.*moduleResolution "bundler".*TypeScript 5\+/is.test(a.message));
+  assert.ok(hasTsNotice({ typescriptVersion: '^4.9.0' }), 'expected a TS-too-old notice for 4.x');
+  assert.ok(hasTsNotice({ typescriptVersion: '4.x' }));
+  // 5+, latest/*, or absent (greenfield adds the pin) — no false warning.
+  assert.ok(!hasTsNotice({ typescriptVersion: '^5.4.0' }));
+  assert.ok(!hasTsNotice({ typescriptVersion: '6.0.3' }));
+  assert.ok(!hasTsNotice({ typescriptVersion: 'latest' }));
+  assert.ok(!hasTsNotice({}));
+  // The notice is advisory — the package.json patch still applies (non-blocking).
+  assert.ok(findMerge(actionsFor({}, { typescriptVersion: '^4.9.0' }), 'package.json'));
 });
 
 test('manifest-only brownfield seeds the package version from the manifest (no check:artifacts desync)', () => {

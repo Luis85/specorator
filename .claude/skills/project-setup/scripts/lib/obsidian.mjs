@@ -7,7 +7,7 @@
 // Prettier, the CSS !important ratchet, an artifact smoke gate, version sync,
 // and a tag-push release workflow. Everything user-editable is skip-if-exists;
 // engine-owned ratchet/build scripts under scripts/ are overwrite-backup.
-import { CI_PM, dep, engineConfigMode, entryDir, notice, scriptCollision } from './harness.mjs';
+import { CI_PM, dep, engineConfigMode, entryDir, notice, PINNED, scriptCollision } from './harness.mjs';
 import { runPrefix, safePackageManager } from './packageManager.mjs';
 import { loadTemplate, renderTemplate } from './templates.mjs';
 
@@ -547,19 +547,30 @@ function planGithubTemplates(options) {
   return [write('.github/pull_request_template.md', loadTemplate('obsidian/pull_request_template.md.tmpl'))];
 }
 
+// The fallow ratchet is defined for ./coverage ABSENT (matching CI's fresh
+// checkout); a stale local coverage dir left by a prior `test:coverage` feeds
+// coverage-weighted metrics (CRAP/maintainability) into fallow and can false-fail
+// `verify` while CI passes. `setup.mjs verify`/runGates clears it in the
+// orchestrator before the gate — mirror that here so the generated npm script is
+// deterministic too. Kept out of `check:quality` itself so a standalone run does
+// not delete a user's coverage report. Dependency-free (no rimraf).
+const CLEAR_COVERAGE = `node -e "require('fs').rmSync('coverage',{recursive:true,force:true})"`;
+
 // One `verify` script that chains the whole local gate set in CI order, so
 // agents (and humans) run one command instead of the chain. Mirrors runGates /
 // the generated CI exactly.
 function planVerifyScript(options, state) {
   const g = options.guardrails ?? {};
   const run = runPrefix(options.packageManager ?? state?.packageManager ?? 'npm');
-  const steps = [];
-  if (g.eslintSeverityStaging) steps.push('lint');
-  if (g.locGuard) steps.push('check:loc');
-  if (g.cssGuard) steps.push('check:css');
-  if (g.fallowRatchet) steps.push('check:quality');
-  steps.push('typecheck', 'format:check', g.coverageFloors ? 'test:coverage' : 'test', 'build', 'check:artifacts');
-  const verify = steps.map((s) => `${run} ${s}`).join(' && ');
+  const cmds = [];
+  if (g.eslintSeverityStaging) cmds.push(`${run} lint`);
+  if (g.locGuard) cmds.push(`${run} check:loc`);
+  if (g.cssGuard) cmds.push(`${run} check:css`);
+  if (g.fallowRatchet) cmds.push(CLEAR_COVERAGE, `${run} check:quality`);
+  for (const s of ['typecheck', 'format:check', g.coverageFloors ? 'test:coverage' : 'test', 'build', 'check:artifacts']) {
+    cmds.push(`${run} ${s}`);
+  }
+  const verify = cmds.join(' && ');
   return [
     // AGENTS/CLAUDE docs tell users to run `verify`; if it is shadowed, say so
     // (mergeJson keeps the existing script) instead of documenting a no-op.
@@ -729,6 +740,17 @@ function planProjectDocs(options, state) {
   return actions;
 }
 
+// The generated tsconfig uses moduleResolution "bundler" (TypeScript 5+). mergeJson
+// keeps a brownfield devDependencies.typescript scalar and `force` only reaches
+// top-level keys, so an existing 4.x survives and breaks `typecheck`/`verify` on the
+// first apply. Read the range's leading integer as its major floor; a missing digit
+// (latest / * / workspace:*) is assumed adequate, so we only warn on a concrete <5.
+function typescriptTooOld(range) {
+  if (typeof range !== 'string') return false;
+  const m = /\d+/.exec(range);
+  return m ? Number(m[0]) < 5 : false;
+}
+
 function planPackageBasics(options, state, version) {
   const o = options.obsidian;
   const scripts = {
@@ -753,6 +775,14 @@ function planPackageBasics(options, state, version) {
   const notices = Object.entries(scripts).flatMap(([name, desired]) =>
     scriptCollision(options, state, name, desired),
   );
+  // A kept sub-5 typescript would compile-fail the generated bundler-resolution
+  // tsconfig; we can't force a nested dep key, so warn instead of silently shipping
+  // a scaffold whose typecheck gate is dead on arrival.
+  if (typescriptTooOld(state?.typescriptVersion)) {
+    notices.push(
+      notice(`Existing devDependencies.typescript (\`${state.typescriptVersion}\`) kept — the generated tsconfig.json uses moduleResolution "bundler", which needs TypeScript 5+. Upgrade to \`${PINNED.typescript}\` (or any 5+) or the typecheck/verify gate fails on the first run.`),
+    );
+  }
   // Force `version`: a brownfield package.json (e.g. 1.0.0) must be synced to the
   // canonical version (the manifest wins, per initialVersion) or check:artifacts
   // fails on a manifest/package desync after apply. Other keys stay merge-kept.

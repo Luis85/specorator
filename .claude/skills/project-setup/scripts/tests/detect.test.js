@@ -43,6 +43,18 @@ test('detect reports tooling presence from package.json', () => {
     assert.equal(state.fallow, false);
     assert.equal(state.testFramework, 'vitest');
     assert.equal(state.typescript, true);
+    assert.equal(state.typescriptVersion, '^5'); // the kept range (Obsidian TS-pin collision check)
+  } finally {
+    p.cleanup();
+  }
+});
+
+test('detect.typescriptVersion is null when no typescript dep is declared (tsconfig-only project)', () => {
+  const p = tmpProject({ 'package.json': { devDependencies: { eslint: '^9' } }, 'tsconfig.json': '{}' });
+  try {
+    const state = detect(p.dir);
+    assert.equal(state.typescript, true); // tsconfig present
+    assert.equal(state.typescriptVersion, null); // but no dep range to keep
   } finally {
     p.cleanup();
   }
