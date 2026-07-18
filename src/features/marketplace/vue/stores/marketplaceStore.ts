@@ -36,6 +36,11 @@ export const useMarketplaceStore = defineStore('marketplace', () => {
   // Bumped whenever a new catalog load begins, so async work (an in-flight install)
   // that started against an older catalog can detect it went stale.
   let loadGeneration = 0;
+  // Bumped at the start of every installed scan. Since Improvement C, external
+  // vault/roster events can trigger overlapping refreshInstalled() calls with NO
+  // catalog reload (same loadGeneration), so the generation guard alone can't
+  // order them; only the latest-started scan commits its result.
+  let installedScanSeq = 0;
 
   function init(p: SpecoratorPlugin): void {
     plugin ??= p;
@@ -100,6 +105,7 @@ export const useMarketplaceStore = defineStore('marketplace', () => {
     // the guard, a slow scan finishing last would clobber `installedIds` with ids
     // computed from the now-stale catalog — so only commit if still current.
     const generation = loadGeneration;
+    const seq = ++installedScanSeq;
     const deps = installDeps();
     // Scan the agent roster at most once per refresh (not once per agent item);
     // an unreadable roster degrades to "no agents marked", never a thrown scan.
@@ -121,7 +127,10 @@ export const useMarketplaceStore = defineStore('marketplace', () => {
         // a folder-resolution hiccup shouldn't blank the whole list
       }
     }
-    if (generation === loadGeneration) {
+    // Two independent staleness guards: `generation` rejects a scan the catalog
+    // reloaded under (covers the commitCatalog→reload-scan window); `seq` rejects
+    // an older scan that a newer overlapping scan (no reload) already superseded.
+    if (generation === loadGeneration && seq === installedScanSeq) {
       installedIds.value = ids;
     }
   }

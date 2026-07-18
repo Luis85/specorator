@@ -62,8 +62,12 @@ Modeled on — and reuses the components of — `features/library`.
   spans two signals: agents fire `roster:changed` on the event bus, while
   loop/template/quick-action notes surface only as Obsidian vault
   create/delete/rename events under their folders (existence-only — `modify` is
-  irrelevant). Both feed a debounced `store.refreshInstalled` (network-free,
-  generation-guarded). The composable is owned per-leaf (`onMounted`/
+  irrelevant). Both feed a debounced `store.refreshInstalled`, which is
+  network-free and double-guarded: a **generation** guard rejects a scan the
+  catalog reloaded under, and a **sequence** guard rejects an older scan a newer
+  overlapping scan already superseded (event-triggered scans can now run
+  concurrently with no reload, so ordering can't rely on generation alone). The
+  composable is owned per-leaf (`onMounted`/
   `onUnmounted` teardown: disposer + `offref` + timer clear); the shared store
   means every open leaf subscribes independently and each fires the same
   idempotent refresh — leak-free because teardown is per-leaf, NOT in `store.init`.

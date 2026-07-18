@@ -347,6 +347,35 @@ describe('marketplaceStore load fallbacks', () => {
     expect(store.installedIds.has('b')).toBe(true);
   });
 
+  it('discards an older installed-scan superseded by a newer one (no reload)', async () => {
+    // Since live-sync, external vault/roster events can trigger overlapping
+    // refreshInstalled() with NO catalog reload (same generation), so the older
+    // scan finishing last must not clobber the newer scan's result.
+    const store = useMarketplaceStore();
+    store.init(fakePlugin(true));
+    await store.load(); // seeds items=[item]; initial scan saw isInstalled=false
+
+    // Scan A parks on its per-item check; scan B resolves at once with installed=true.
+    let resolveA: (v: boolean) => void = () => {};
+    isInstalledSpy.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          resolveA = resolve;
+        }),
+    );
+    isInstalledSpy.mockResolvedValue(true);
+
+    const scanA = store.refreshInstalled();
+    const scanB = store.refreshInstalled();
+    await scanB;
+    expect(store.installedIds.has('a')).toBe(true);
+
+    // A resolves LAST with a now-stale 'false' — the seq guard must drop its write.
+    resolveA(false);
+    await scanA;
+    expect(store.installedIds.has('a')).toBe(true);
+  });
+
   it('canonicalizes a non-canonical custom source so the offline cache round-trips', async () => {
     // The client canonicalizes its base URL (lowercase host, strip :443). The
     // store's source key MUST canonicalize identically, or the cache written
