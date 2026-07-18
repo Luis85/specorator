@@ -43,7 +43,7 @@ describe('SettingsService', () => {
     expect(changes.at(-1)?.greeting).toBe('changed');
   });
 
-  it('serializes overlapping updates so the latest value persists last (no stale reorder)', async () => {
+  it('serializes overlapping updates in order; the last write wins on disk', async () => {
     const { store, writes } = makeStore(null);
     const releases: Array<() => void> = [];
     const base = store.write;
@@ -67,10 +67,33 @@ describe('SettingsService', () => {
     releases[1]?.();
     await b;
 
-    // Both writes persist the newest value — a slow earlier write cannot leave stale data.
+    // Each update persists its own step, in order; the last write is the final state.
     expect(writes).toEqual([
-      { schemaVersion: 1, greeting: 'second' },
+      { schemaVersion: 1, greeting: 'first' },
       { schemaVersion: 1, greeting: 'second' },
     ]);
+  });
+
+  it('does not leak a failed write into a later successful update', async () => {
+    const { store, writes, changes } = makeStore(null);
+    const base = store.write;
+    let failNext = true;
+    store.write = (data: Sample) => {
+      if (failNext) {
+        failNext = false;
+        return Promise.reject(new Error('disk full'));
+      }
+      return base(data);
+    };
+    const service = new SettingsService<Sample>(store);
+    await service.load();
+
+    await expect(service.update({ greeting: 'bad' })).rejects.toThrow('disk full');
+    await service.update({ greeting: 'good' });
+
+    // The rejected 'bad' patch never reached disk and must not tag along on the
+    // next write — the later value builds on the last *persisted* state.
+    expect(writes).toEqual([{ schemaVersion: 1, greeting: 'good' }]);
+    expect(changes.at(-1)?.greeting).toBe('good');
   });
 });

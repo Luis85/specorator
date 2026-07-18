@@ -33,6 +33,28 @@ describe('VaultService', () => {
     await expect(service.append('log.md', 'x')).rejects.toThrow('disk full');
   });
 
+  it('ensureFolder tolerates a concurrent create (the folder now exists)', async () => {
+    const app = new App();
+    let exists = false;
+    // Our create loses the race: it rejects "already exists", but the folder a
+    // concurrent call made is now present, so ensureFolder resolves rather than
+    // throwing and dropping the follow-up append.
+    app.vault.getFolderByPath = () => (exists ? ({ path: 'logs' } as never) : null);
+    app.vault.createFolder = () => {
+      exists = true;
+      return Promise.reject(new Error('Folder already exists.'));
+    };
+    // Resolves (does not throw) because the folder is present after the race.
+    await expect(new VaultService(app).ensureFolder('logs')).resolves.toBeUndefined();
+  });
+
+  it('ensureFolder re-throws a genuine create failure (folder still missing)', async () => {
+    const app = new App();
+    app.vault.getFolderByPath = () => null; // never created
+    app.vault.createFolder = () => Promise.reject(new Error('permission denied'));
+    await expect(new VaultService(app).ensureFolder('logs')).rejects.toThrow('permission denied');
+  });
+
   it('append is atomic even on the first write: concurrent appends to a new file keep every line', async () => {
     const service = new VaultService(new App());
     // No pre-created file: overlapping first appends race Vault.create; the loser

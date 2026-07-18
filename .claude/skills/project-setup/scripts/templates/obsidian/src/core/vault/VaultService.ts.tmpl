@@ -9,8 +9,15 @@ export class VaultService {
 
   async ensureFolder(path: string): Promise<void> {
     const normalized = normalizePath(path);
-    if (normalized && normalized !== '/' && !this.app.vault.getFolderByPath(normalized)) {
+    if (!normalized || normalized === '/' || this.app.vault.getFolderByPath(normalized)) return;
+    try {
       await this.app.vault.createFolder(normalized);
+    } catch (error) {
+      // A concurrent ensureFolder can create it between our check and this call,
+      // so createFolder throws "already exists". That's the goal state — swallow it.
+      // Any other failure (permission/adapter) leaves the folder missing, so re-throw
+      // for the caller's ErrorService instead of proceeding to a doomed write.
+      if (!this.app.vault.getFolderByPath(normalized)) throw error;
     }
   }
 

@@ -9,7 +9,7 @@ const ROOT = process.cwd();
 const BASELINE = join(ROOT, 'scripts', 'loc-baseline.json');
 const MAX_LOC = {{locCap}};
 const SRC = join(ROOT, '{{srcDir}}'); // source root derived from the detected entry
-const EXT = /\.(ts|tsx|mts|cts|js|jsx|mjs|cjs)$/;
+const EXT = /\.({{locExts}})$/;
 const IGNORE_DIRS = new Set(['node_modules', 'dist', 'coverage', '.git', '.fallow', '.project-setup-backup']);
 const update = process.argv.includes('--update');
 

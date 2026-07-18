@@ -28,14 +28,17 @@ export class SettingsService<T extends object> {
   }
 
   async update(patch: Partial<T>): Promise<void> {
-    this.value = { ...this.value, ...patch };
-    // Chain onto the queue and persist the LATEST value when the write actually
-    // runs, so a burst of updates collapses to the newest state on disk.
-    const done = this.writeQueue
-      .then(() => this.store.write(this.value))
-      .then(() => {
-        this.store.onChange(this.value);
-      });
+    // Serialize writes and build the next value INSIDE the queued task, from the
+    // last successfully persisted state — so overlapping updates apply in order and
+    // a rejected write leaves `value` (and disk) unchanged. That failure isolation
+    // is the point: a patch whose write failed must not ride along on a later
+    // update's write, silently resurfacing a change the caller was told had failed.
+    const done = this.writeQueue.then(async () => {
+      const next = { ...this.value, ...patch };
+      await this.store.write(next);
+      this.value = next;
+      this.store.onChange(this.value);
+    });
     this.writeQueue = done.catch(() => {});
     await done;
   }

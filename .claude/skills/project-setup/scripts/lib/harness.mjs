@@ -152,9 +152,13 @@ export function planLoc(options, state) {
   // layout is checked. '.' = repo root, walked with IGNORE_DIRS so node_modules isn't
   // scanned.
   const srcDir = entryDir(state?.entry ?? 'src/index.ts') ?? '.';
+  // .vue SFCs are source too: count them in Obsidian mode so a large Vue island
+  // component can't slip past the advertised check:loc gate. Generic mode stays
+  // TS/JS (matching its coverage/lint globs).
+  const locExts = ['ts', 'tsx', 'mts', 'cts', ...(options.obsidian ? ['vue'] : []), 'js', 'jsx', 'mjs', 'cjs'].join('|');
   return [
     ...scriptCollision(options, state, 'check:loc', 'node scripts/check-loc.mjs'),
-    { type: 'writeFile', path: 'scripts/check-loc.mjs', mode: 'overwrite-backup', content: renderTemplate(loadTemplate('check-loc.mjs.tmpl'), { locCap: String(options.locCap ?? 500), srcDir }) },
+    { type: 'writeFile', path: 'scripts/check-loc.mjs', mode: 'overwrite-backup', content: renderTemplate(loadTemplate('check-loc.mjs.tmpl'), { locCap: String(options.locCap ?? 500), srcDir, locExts }) },
     { type: 'mergeJson', path: 'package.json', patch: { scripts: { 'check:loc': 'node scripts/check-loc.mjs' } } },
   ];
 }
