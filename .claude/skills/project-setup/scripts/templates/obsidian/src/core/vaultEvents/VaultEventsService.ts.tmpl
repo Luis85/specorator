@@ -1,0 +1,26 @@
+import type { TAbstractFile } from 'obsidian';
+
+import type {{pluginClass}} from '../../main';
+
+// Typed subscriptions to the vault's file lifecycle. Each goes through
+// `registerEvent`, so Obsidian removes the listener on unload — never a raw
+// `vault.on(...)` in feature code, which would leak past a reload.
+export class VaultEventsService {
+  constructor(private readonly plugin: {{pluginClass}}) {}
+
+  onModify(handler: (file: TAbstractFile) => void): void {
+    this.plugin.registerEvent(this.plugin.app.vault.on('modify', handler));
+  }
+
+  onCreate(handler: (file: TAbstractFile) => void): void {
+    this.plugin.registerEvent(this.plugin.app.vault.on('create', handler));
+  }
+
+  onDelete(handler: (file: TAbstractFile) => void): void {
+    this.plugin.registerEvent(this.plugin.app.vault.on('delete', handler));
+  }
+
+  onRename(handler: (file: TAbstractFile, oldPath: string) => void): void {
+    this.plugin.registerEvent(this.plugin.app.vault.on('rename', handler));
+  }
+}

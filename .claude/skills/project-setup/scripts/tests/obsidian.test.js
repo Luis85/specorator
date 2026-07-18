@@ -460,6 +460,33 @@ test('ErrorService ships in core and onload routes through it (both variants)', 
   }
 });
 
+test('menu/timers/vault-event services ship in core, wire as fields, and are demoed (both variants)', () => {
+  for (const vue of [true, false]) {
+    const actions = actionsFor({ vue });
+    for (const p of [
+      'src/core/menus/MenuService.ts',
+      'src/core/timers/TimersService.ts',
+      'src/core/vaultEvents/VaultEventsService.ts',
+      'src/ui/registerActivity.ts',
+      'tests/unit/menuService.test.ts',
+      'tests/unit/timersService.test.ts',
+      'tests/unit/vaultEventsService.test.ts',
+      'tests/unit/registerActivity.test.ts',
+    ]) {
+      assert.ok(findWrite(actions, p), `${p} missing (vue=${vue})`);
+    }
+    const main = findWrite(actions, 'src/main.ts').content;
+    assert.match(main, /readonly menus = new MenuService\(this\)/);
+    assert.match(main, /readonly timers = new TimersService\(this\)/);
+    assert.match(main, /readonly vaultEvents = new VaultEventsService\(this\)/);
+    assert.match(main, /registerActivity\(this\)/); // demo consumer wired in onload
+    // registerExtras now routes its menus through MenuService (both editor + file)
+    const extras = findWrite(actions, 'src/ui/registerExtras.ts').content;
+    assert.match(extras, /plugin\.menus\.onEditorMenu\(/);
+    assert.match(extras, /plugin\.menus\.onFileMenu\(/);
+  }
+});
+
 test('class names never reproduce obsidianmd sample identifiers (would fail the lint gate)', () => {
   // A normal name keeps the plain <Name>Plugin convention.
   assert.match(findWrite(actionsFor(), 'src/main.ts').content, /class DemoNotesPlugin extends Plugin/);
@@ -502,19 +529,19 @@ test('an existing .npmrc without tag-version-prefix warns (release tag policy)',
   assert.ok(!clean.some((a) => a.type === 'notice' && /tag-version-prefix/.test(a.message)));
 });
 
-test('the src safety/mobile lint globs include JS (an adopted JS plugin is linted)', () => {
-  assert.match(findWrite(actionsFor({ vue: false }), 'eslint.config.mjs').content, /src\/\*\*\/\*\.\{ts,tsx,js,jsx\}/);
-  assert.match(findWrite(actionsFor({ vue: true }), 'eslint.config.mjs').content, /src\/\*\*\/\*\.\{ts,tsx,vue,js,jsx\}/);
+test('the src safety/mobile lint globs include JS and module extensions (an adopted JS/module plugin is linted)', () => {
+  assert.match(findWrite(actionsFor({ vue: false }), 'eslint.config.mjs').content, /src\/\*\*\/\*\.\{ts,tsx,mts,cts,js,jsx,mjs,cjs\}/);
+  assert.match(findWrite(actionsFor({ vue: true }), 'eslint.config.mjs').content, /src\/\*\*\/\*\.\{ts,tsx,mts,cts,vue,js,jsx,mjs,cjs\}/);
 });
 
 test('the lint safety globs follow the detected source root (brownfield lib/ or root entry)', () => {
   // brownfield entry in lib/ -> lib/** added alongside src/**
   const lib = findWrite(actionsFor({ vue: false }, { obsidianAppPresent: true, entry: 'lib/main.ts', entryExists: true }), 'eslint.config.mjs').content;
-  assert.match(lib, /'src\/\*\*\/\*\.\{ts,tsx,js,jsx\}', 'lib\/\*\*\/\*\.\{ts,tsx,js,jsx\}'/);
+  assert.match(lib, /'src\/\*\*\/\*\.\{ts,tsx,mts,cts,js,jsx,mjs,cjs\}', 'lib\/\*\*\/\*\.\{ts,tsx,mts,cts,js,jsx,mjs,cjs\}'/);
   // brownfield root entry -> a bounded flat-root glob covers the entry's siblings
   // (view.ts, settings.ts, …), not just the entry file
   const root = findWrite(actionsFor({ vue: false }, { obsidianAppPresent: true, entry: 'main.ts', entryExists: true }), 'eslint.config.mjs').content;
-  assert.match(root, /'src\/\*\*\/\*\.\{ts,tsx,js,jsx\}', '\*\.\{ts,tsx,js,jsx\}'/);
+  assert.match(root, /'src\/\*\*\/\*\.\{ts,tsx,mts,cts,js,jsx,mjs,cjs\}', '\*\.\{ts,tsx,mts,cts,js,jsx,mjs,cjs\}'/);
 });
 
 test('the CSS !important guard scans the detected source root, not a hardcoded src/', () => {
@@ -538,6 +565,23 @@ test('the gates cover every accepted source extension, not only plain .ts', () =
   // eslint base @eslint/js: adopted JS source still gets undefined-var/unused checks.
   const eslint = findWrite(actionsFor(), 'eslint.config.mjs').content;
   assert.match(eslint, /files: \['\*\*\/\*\.\{ts,tsx,mts,cts,js,jsx,mjs,cjs\}'\], \.\.\.js\.configs\.recommended/);
+  // typescript-eslint typed rules + parser apply to every TS extension, so an
+  // adopted .tsx/.mts/.cts parses and gets type-aware + import-sort rules.
+  assert.match(eslint, /recommendedTypeChecked\.map\(\(c\) => \(\{/);
+  assert.match(eslint, /files: \['\*\*\/\*\.\{ts,tsx,mts,cts\}'\],\s*\n\s*languageOptions/);
+});
+
+test('manifest-beta mirrors the KEPT manifest on brownfield adopt (not the answers)', () => {
+  // A brownfield plugin whose manifest.json differs from the answers: the beta
+  // manifest must describe the adopted plugin, not the scaffold's answer id/name.
+  const state = { obsidianAppPresent: true, obsidianManifest: { id: 'their-plugin', name: 'Their Plugin', version: '2.0.0', minAppVersion: '1.5.0', description: 'Theirs', isDesktopOnly: true } };
+  const actions = planObsidian(optionsWith(BASE), state);
+  const beta = JSON.parse(findWrite(actions, 'manifest-beta.json').content);
+  assert.equal(beta.id, 'their-plugin'); // mirrors the kept manifest, not BASE.id
+  assert.equal(beta.name, 'Their Plugin');
+  // greenfield beta still mirrors the generated manifest (answers)
+  const gfBeta = JSON.parse(findWrite(actionsFor(), 'manifest-beta.json').content);
+  assert.equal(gfBeta.id, 'demo-notes');
 });
 
 test('tsconfig is greenfield-owned (overwrite-backup, replacing a stray one) but kept in brownfield', () => {

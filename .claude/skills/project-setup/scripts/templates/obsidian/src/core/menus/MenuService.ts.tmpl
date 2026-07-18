@@ -1,0 +1,22 @@
+import type { Editor, Menu, TAbstractFile } from 'obsidian';
+
+import type {{pluginClass}} from '../../main';
+
+// Context-menu seams over the workspace's 'editor-menu' and 'file-menu' events.
+// Both register through `registerEvent`, so Obsidian drops the listener on
+// unload. Build items inside the handler with `menu.addItem(...)`.
+export class MenuService {
+  constructor(private readonly plugin: {{pluginClass}}) {}
+
+  // Fires when the editor context menu opens; the handler receives the menu and
+  // the active editor.
+  onEditorMenu(handler: (menu: Menu, editor: Editor) => void): void {
+    this.plugin.registerEvent(this.plugin.app.workspace.on('editor-menu', handler));
+  }
+
+  // Fires when a file's context menu opens (file explorer, tab, link); the
+  // handler receives the menu and the file.
+  onFileMenu(handler: (menu: Menu, file: TAbstractFile) => void): void {
+    this.plugin.registerEvent(this.plugin.app.workspace.on('file-menu', handler));
+  }
+}

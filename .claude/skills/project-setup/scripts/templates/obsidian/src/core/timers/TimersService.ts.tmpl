@@ -1,0 +1,43 @@
+import type {{pluginClass}} from '../../main';
+
+// Timers that clean up on unload. `every` hands the interval to Obsidian
+// (`registerInterval`, cleared on unload); `debounce` tracks its pending
+// `setTimeout`s and clears them via `plugin.register(dispose)` so a late trailing
+// call never fires against torn-down state. Never a raw `setInterval`/`setTimeout`
+// in feature code — go through here.
+export class TimersService {
+  private readonly pending = new Set<number>();
+
+  constructor(private readonly plugin: {{pluginClass}}) {
+    plugin.register(() => this.dispose());
+  }
+
+  // A repeating timer Obsidian clears on unload (auto-refresh, heartbeat).
+  every(ms: number, callback: () => void): void {
+    this.plugin.registerInterval(window.setInterval(callback, ms));
+  }
+
+  // Coalesce a burst of calls into one trailing call `ms` after the last —
+  // auto-save, search-as-you-type. The returned function is what you bind.
+  debounce<A extends unknown[]>(ms: number, fn: (...args: A) => void): (...args: A) => void {
+    let handle: number | undefined;
+    return (...args: A) => {
+      if (handle !== undefined) {
+        window.clearTimeout(handle);
+        this.pending.delete(handle);
+      }
+      const id = window.setTimeout(() => {
+        this.pending.delete(id);
+        handle = undefined;
+        fn(...args);
+      }, ms);
+      handle = id;
+      this.pending.add(id);
+    };
+  }
+
+  private dispose(): void {
+    for (const handle of this.pending) window.clearTimeout(handle);
+    this.pending.clear();
+  }
+}

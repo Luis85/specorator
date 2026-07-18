@@ -1,0 +1,26 @@
+import { describe, expect, it, vi } from 'vitest';
+
+import { VaultEventsService } from '@/core/vaultEvents/VaultEventsService';
+
+function fakePlugin() {
+  const on = vi.fn((name: string, cb: (...args: unknown[]) => unknown) => ({ name, cb }));
+  const registerEvent = vi.fn();
+  return { plugin: { app: { vault: { on } }, registerEvent }, on, registerEvent };
+}
+
+describe('VaultEventsService', () => {
+  it('subscribes to each vault event and routes it through registerEvent', () => {
+    const { plugin, on, registerEvent } = fakePlugin();
+    const svc = new VaultEventsService(plugin as never);
+    const handler = vi.fn();
+
+    svc.onModify(handler);
+    svc.onCreate(handler);
+    svc.onDelete(handler);
+    svc.onRename(handler);
+
+    expect(on.mock.calls.map((c) => c[0])).toEqual(['modify', 'create', 'delete', 'rename']);
+    expect(on).toHaveBeenCalledWith('modify', handler); // the caller's handler is registered
+    expect(registerEvent).toHaveBeenCalledTimes(4); // each is auto-cleaned on unload
+  });
+});

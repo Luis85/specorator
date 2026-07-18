@@ -53,6 +53,10 @@ class MockVault {
   read(file: TFile): Promise<string> {
     return Promise.resolve(this.files.get(file.path) ?? '');
   }
+
+  on(name: string, _callback: (...args: unknown[]) => unknown): { name: string } {
+    return { name };
+  }
 }
 
 // Minimal workspace event bus: on() records handlers, trigger() fires them so
@@ -141,6 +145,12 @@ export class Plugin {
   addSettingTab(_tab: unknown): void {}
 
   registerEvent(_eventRef: unknown): void {}
+
+  registerInterval(id: number): number {
+    return id;
+  }
+
+  register(_callback: () => unknown): void {}
 }
 
 export class ItemView {

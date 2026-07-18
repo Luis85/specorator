@@ -1,0 +1,62 @@
+import { afterEach, describe, expect, it, vi } from 'vitest';
+
+import { TimersService } from '@/core/timers/TimersService';
+
+// registerInterval hands the id to Obsidian; register captures the unload
+// disposer so the test can simulate teardown.
+function fakePlugin() {
+  const registerInterval = vi.fn((id: number) => id);
+  let disposer: (() => void) | undefined;
+  const register = vi.fn((cb: () => void) => {
+    disposer = cb;
+  });
+  return {
+    plugin: { registerInterval, register },
+    registerInterval,
+    runDispose: () => disposer?.(),
+  };
+}
+
+describe('TimersService', () => {
+  afterEach(() => vi.useRealTimers());
+
+  it('every schedules a self-cleaning interval', () => {
+    vi.useFakeTimers();
+    const { plugin, registerInterval } = fakePlugin();
+    const tick = vi.fn();
+
+    new TimersService(plugin as never).every(1000, tick);
+
+    expect(registerInterval).toHaveBeenCalledOnce();
+    vi.advanceTimersByTime(3000);
+    expect(tick).toHaveBeenCalledTimes(3);
+  });
+
+  it('debounce coalesces a burst into one trailing call', () => {
+    vi.useFakeTimers();
+    const { plugin } = fakePlugin();
+    const fn = vi.fn();
+
+    const debounced = new TimersService(plugin as never).debounce(200, fn);
+    debounced('a');
+    debounced('b');
+    debounced('c');
+    expect(fn).not.toHaveBeenCalled();
+
+    vi.advanceTimersByTime(200);
+    expect(fn).toHaveBeenCalledTimes(1);
+    expect(fn).toHaveBeenCalledWith('c');
+  });
+
+  it('dispose (registered for unload) cancels a pending debounce', () => {
+    vi.useFakeTimers();
+    const { plugin, runDispose } = fakePlugin();
+    const fn = vi.fn();
+
+    new TimersService(plugin as never).debounce(200, fn)('x');
+    runDispose();
+    vi.advanceTimersByTime(500);
+
+    expect(fn).not.toHaveBeenCalled();
+  });
+});

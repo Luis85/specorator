@@ -19,8 +19,8 @@ argument or event, never as an import.
 
 `main.ts` is orchestration-only: it constructs the services and delegates
 every registration (`registerCommands`, `registerStatusBar`, `registerExtras`,
-`registerViews`). Add new wiring as its own `register*` module rather than
-growing `onload`. `registerExtras.ts` is a worked sample of two common
+`registerActivity`, `registerViews`). Add new wiring as its own `register*`
+module rather than growing `onload`. `registerExtras.ts` is a worked sample of two common
 affordances — a ribbon icon that opens a `SuggestModal` picker
 (`GreetingSuggestModal.ts`) and an `editor-menu` context item — kept UI-only
 (the picker hands its choice back through a callback; state lands via
@@ -61,6 +61,17 @@ affordances — a ribbon icon that opens a `SuggestModal` picker
   returns a chainable item handle (`setText`/`setTooltip`/`onClick`/`remove`).
   Clicks bind through `registerDomEvent`, so they are dropped on unload — never a
   raw `addEventListener`. `registerStatusBar` builds the greeting mirror with it.
+- **`plugin.menus` — `MenuService`** (`src/core/menus/`): `onEditorMenu(cb)` /
+  `onFileMenu(cb)` over the workspace context-menu events, registered through
+  `registerEvent`. Build items in the handler with `menu.addItem(...)`;
+  `registerExtras` adds both an editor and a file item.
+- **`plugin.timers` — `TimersService`** (`src/core/timers/`): `every(ms, cb)` (a
+  `registerInterval` Obsidian clears on unload) and `debounce(ms, fn)` (coalesce a
+  burst — auto-save, search-as-you-type; pending timers are cleared on unload via
+  `plugin.register`). Never a raw `setInterval`/`setTimeout` in feature code.
+- **`plugin.vaultEvents` — `VaultEventsService`** (`src/core/vaultEvents/`): typed
+  `onModify`/`onCreate`/`onDelete`/`onRename` over `vault.on(...)`, each through
+  `registerEvent`. `registerActivity` reacts to all four (modify debounced).
 - **`plugin.logger` — `Logger`** (`src/core/logging/`): the only sanctioned
   `console` user (raw `console.*` is lint-banned). `debug`/`info` are gated by
   the `debugLogging` setting; `warn`/`error` always print. `child('name')`

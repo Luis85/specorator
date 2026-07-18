@@ -131,8 +131,11 @@ function planManifest(o, state, version) {
   }
   // manifest-beta.json mirrors manifest.json for BRAT beta installs; sync-version
   // keeps it in lockstep so it never lags stable (see docs/publishing.md for how
-  // to run a beta channel ahead of stable).
-  return [...notices, write('manifest.json', manifest), write('manifest-beta.json', manifest), versionsAction];
+  // to run a beta channel ahead of stable). Brownfield: mirror the KEPT manifest
+  // (manifest.json is skip-if-exists), not the answers — else the beta manifest
+  // describes a different plugin (id/name/description/desktop) than the adopted one.
+  const betaManifest = existing ? JSON.stringify(existing, null, 2) + '\n' : manifest;
+  return [...notices, write('manifest.json', manifest), write('manifest-beta.json', betaManifest), versionsAction];
 }
 
 // The version shared by the generated manifest, versions.json, AND package.json
@@ -255,15 +258,22 @@ function planSources(options, state) {
     write('src/core/modals/ModalService.ts', loadTemplate('obsidian/src/core/modals/ModalService.ts.tmpl')),
     write('src/core/vault/VaultService.ts', loadTemplate('obsidian/src/core/vault/VaultService.ts.tmpl')),
     write('src/core/http/RequestService.ts', loadTemplate('obsidian/src/core/http/RequestService.ts.tmpl')),
-    // Ribbon + status-bar seams over plugin.addRibbonIcon / addStatusBarItem.
+    // Ribbon, status-bar, menu, timer, and vault-event seams over the matching
+    // Obsidian plugin/app APIs (addRibbonIcon, addStatusBarItem, workspace menus,
+    // registerInterval, vault.on).
     write('src/core/ribbon/RibbonService.ts', renderTemplate(loadTemplate('obsidian/src/core/ribbon/RibbonService.ts.tmpl'), shared)),
     write('src/core/statusbar/StatusBarService.ts', renderTemplate(loadTemplate('obsidian/src/core/statusbar/StatusBarService.ts.tmpl'), shared)),
+    write('src/core/menus/MenuService.ts', renderTemplate(loadTemplate('obsidian/src/core/menus/MenuService.ts.tmpl'), shared)),
+    write('src/core/timers/TimersService.ts', renderTemplate(loadTemplate('obsidian/src/core/timers/TimersService.ts.tmpl'), shared)),
+    write('src/core/vaultEvents/VaultEventsService.ts', renderTemplate(loadTemplate('obsidian/src/core/vaultEvents/VaultEventsService.ts.tmpl'), shared)),
     // The status-bar item wires the event bus from the UI layer in both variants.
     write('src/ui/statusBar.ts', renderTemplate(loadTemplate('obsidian/src/ui/statusBar.ts.tmpl'), shared)),
     // Canonical Obsidian UI patterns (both variants): a ribbon icon opening a
-    // SuggestModal fuzzy picker, and an editor context-menu item.
+    // SuggestModal picker + editor/file context-menu items, and a vault-activity
+    // demo that debounces edit reactions and runs a periodic heartbeat.
     write('src/ui/GreetingSuggestModal.ts', loadTemplate('obsidian/src/ui/GreetingSuggestModal.ts.tmpl')),
     write('src/ui/registerExtras.ts', renderTemplate(loadTemplate('obsidian/src/ui/registerExtras.ts.tmpl'), shared)),
+    write('src/ui/registerActivity.ts', renderTemplate(loadTemplate('obsidian/src/ui/registerActivity.ts.tmpl'), shared)),
   ];
   if (o.vue) {
     actions.push(
@@ -324,7 +334,10 @@ function planObsidianEslint(options, state) {
   // sibling helpers (view.ts, settings.ts) bundled but unlinted. The config's
   // global ignores drop node_modules/scripts/*.mjs configs, so *.{exts} is safe
   // and non-recursive keeps it off tests/ and dist/. JS/JSX so adopted JS is linted.
-  const exts = o.vue ? 'ts,tsx,vue,js,jsx' : 'ts,tsx,js,jsx';
+  // Every extension detectEntry accepts (incl. module TS/JS: mts/cts/mjs/cjs), so a
+  // brownfield src/main.mjs or src/main.mts still gets the raw-HTML/Notice/console
+  // and mobile Node/Electron bans.
+  const exts = o.vue ? 'ts,tsx,mts,cts,vue,js,jsx,mjs,cjs' : 'ts,tsx,mts,cts,js,jsx,mjs,cjs';
   const srcRoot = entryDir(obsidianEntry(options, state)); // 'src' | 'lib' | null (root)
   const lintGlobs = new Set([`src/**/*.{${exts}}`]);
   if (srcRoot && srcRoot !== 'src') lintGlobs.add(`${srcRoot}/**/*.{${exts}}`);
@@ -400,7 +413,11 @@ function planObsidianVitest(options, state) {
       write('tests/unit/errorService.test.ts', loadTemplate('obsidian/tests/errorService.test.ts.tmpl')),
       write('tests/unit/ribbonService.test.ts', loadTemplate('obsidian/tests/ribbonService.test.ts.tmpl')),
       write('tests/unit/statusBarService.test.ts', loadTemplate('obsidian/tests/statusBarService.test.ts.tmpl')),
+      write('tests/unit/menuService.test.ts', loadTemplate('obsidian/tests/menuService.test.ts.tmpl')),
+      write('tests/unit/timersService.test.ts', loadTemplate('obsidian/tests/timersService.test.ts.tmpl')),
+      write('tests/unit/vaultEventsService.test.ts', loadTemplate('obsidian/tests/vaultEventsService.test.ts.tmpl')),
       write('tests/unit/registerExtras.test.ts', loadTemplate('obsidian/tests/registerExtras.test.ts.tmpl')),
+      write('tests/unit/registerActivity.test.ts', loadTemplate('obsidian/tests/registerActivity.test.ts.tmpl')),
     );
     if (o.vue) {
       actions.push(

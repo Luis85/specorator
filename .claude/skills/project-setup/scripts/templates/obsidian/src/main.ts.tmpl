@@ -7,15 +7,19 @@ import type { AppEvents } from './core/events/AppEvents';
 import { EventBus } from './core/events/EventBus';
 import { RequestService } from './core/http/RequestService';
 import { Logger } from './core/logging/Logger';
+import { MenuService } from './core/menus/MenuService';
 import { ModalService } from './core/modals/ModalService';
 import { NoticeService } from './core/notices/NoticeService';
 import { RibbonService } from './core/ribbon/RibbonService';
 import { SettingsService } from './core/settings/SettingsService';
 import { StatusBarService } from './core/statusbar/StatusBarService';
+import { TimersService } from './core/timers/TimersService';
 import { VaultService } from './core/vault/VaultService';
+import { VaultEventsService } from './core/vaultEvents/VaultEventsService';
 import { t } from './i18n/i18n';
 import type { {{settingsType}} } from './settings';
 import { {{settingsValueImports}} } from './settings';
+import { registerActivity } from './ui/registerActivity';
 import { registerExtras } from './ui/registerExtras';
 {{viewImport}}import { registerStatusBar } from './ui/statusBar';
 
@@ -32,7 +36,10 @@ export default class {{pluginClass}} extends Plugin {
   readonly commands = new CommandsService(this);
   readonly ribbon = new RibbonService(this);
   readonly statusBar = new StatusBarService(this);
+  readonly menus = new MenuService(this);
+  readonly timers = new TimersService(this);
   readonly vault = new VaultService(this.app);
+  readonly vaultEvents = new VaultEventsService(this);
   readonly requests = new RequestService();
   private readonly settingsService = new SettingsService<{{settingsType}}>({
     defaults: DEFAULT_SETTINGS,
@@ -57,6 +64,7 @@ export default class {{pluginClass}} extends Plugin {
         registerCommands(this);
         registerStatusBar(this);
         registerExtras(this);
+        registerActivity(this);
 {{viewRegistration}}        this.logger.info('loaded');
       },
       { message: t('notice.loadFailed') },
