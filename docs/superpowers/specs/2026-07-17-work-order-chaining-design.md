@@ -359,6 +359,21 @@ user accepts ────────────────► transitionTask 
   single `vault.create`** (the `postProcess` output), so an auto-run reload can never
   observe a runnable-but-un-seeded successor.
 
+## Known limitations (follow-ups)
+
+- **Agent-only templates run a chained successor on board defaults.** A chain successor
+  created from a *template* that sets only `agent: roster:*` (no explicit `provider`/`model`)
+  is instantiated with the board-default provider/model rather than the agent's backend,
+  because `createWorkOrderFromSeed` resolves a template's provider/model without consulting
+  the roster agent, and `TaskRunCoordinator` only falls back to the agent when provider/model
+  are *absent*. This is **pre-existing** `createWorkOrderFromSeed` behavior (the normal
+  "+ Add from an agent-only template" flow has the same gap), surfaced by chaining. Agent
+  specialization works today for **inline** chains (an agent-only *predecessor* — covered by
+  the integration test) and for templates that pin provider/model. A proper fix belongs in
+  the general creation/roster path (make `createWorkOrderFromSeed` resolve an agent-only
+  template's backend via `resolveAgentRunTarget`), which is deliberately out of scope for this
+  chaining slice. Workaround: pin provider/model on the template, or use inline chains.
+
 ## Files
 
 **New:** `model/workOrderChain.ts`, `execution/WorkOrderChainCoordinator.ts`,
