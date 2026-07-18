@@ -144,7 +144,7 @@ subscriptions like the status bar need no teardown — the bus dies on unload).
 
 ## Adding a feature (checklist)
 
-1. Model state/events first: extend settings (`withDefaults` keeps old vaults
+1. Model state/events first: extend settings (`migrateSettings` keeps old vaults
    safe) and `AppEvents` if other surfaces must react.
 2. Put logic in `src/core/` (unit-tested), rendering in `src/ui/`.
 3. Register commands in `src/commands.ts` via `plugin.commands`; register

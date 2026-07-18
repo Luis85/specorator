@@ -37,6 +37,20 @@ test('mergeJsonFile is idempotent', () => {
   }
 });
 
+test('mergeJsonFile overwrites the npm-init placeholder test script (day-one gate not dead on arrival)', () => {
+  const placeholder = 'echo "Error: no test specified" && exit 1';
+  const r = mergeJsonFile(
+    'x',
+    { scripts: { test: 'vitest run --passWithNoTests', build: 'esbuild' } },
+    { name: 'fresh', scripts: { test: placeholder } },
+  );
+  assert.equal(r.merged.scripts.test, 'vitest run --passWithNoTests'); // placeholder overwritten
+  assert.equal(r.merged.scripts.build, 'esbuild'); // added
+  // A REAL user script (not the placeholder) is still kept, not clobbered.
+  const kept = mergeJsonFile('x', { scripts: { test: 'vitest run' } }, { scripts: { test: 'my-runner' } });
+  assert.equal(kept.merged.scripts.test, 'my-runner');
+});
+
 test('mergeTextLines appends only missing lines', () => {
   const existing = 'node_modules/\ncoverage/\n';
   const r1 = mergeTextLines(existing, ['coverage/', '.fallow/'], 'project-setup');

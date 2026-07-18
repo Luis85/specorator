@@ -2,9 +2,10 @@
 
 One Vue app per leaf. `VueView.onOpen` creates the app, installs a **fresh
 `createPinia()` and memory-history router per mount** (never module-level
-singletons — a reopened leaf would inherit stale state), `await`s
-`router.isReady()` so the first paint renders the matched route, provides the
-`markRaw`'d plugin under `PLUGIN_KEY`, and mounts. `onClose` calls
+singletons — a reopened leaf would inherit stale state), pushes the start route
+(`await router.push('/')` — memory history has no initial navigation) so the
+first paint renders the matched route, provides the `markRaw`'d plugin under
+`PLUGIN_KEY`, and mounts. `onClose` calls
 `app.unmount()` + `contentEl.empty()` — the #1 Obsidian+Vue leak is a view that
 never unmounts.
 

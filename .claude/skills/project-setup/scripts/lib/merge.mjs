@@ -27,6 +27,12 @@ export function deepMerge(base, patch) {
   return base === undefined ? patch : base;
 }
 
+// `npm init -y` seeds this placeholder `test` script (exits 1). deepMerge keeps the
+// base scalar, so a generated gate script would lose to it and `npm test` would be
+// dead on arrival for a brand-new project. Treat the exact placeholder as absent so
+// the generated script wins — it's never a script anyone wants to keep.
+const NPM_INIT_PLACEHOLDER = 'echo "Error: no test specified" && exit 1';
+
 // `current` is optional, for tests that pass an in-memory object instead of reading disk.
 export function mergeJsonFile(path, patch, current, force = []) {
   const base = current ?? (existsSync(path) ? JSON.parse(readFileSync(path, 'utf8')) : {});
@@ -35,6 +41,13 @@ export function mergeJsonFile(path, patch, current, force = []) {
   // (deepMerge otherwise keeps the base). Used so package.json `version` syncs to
   // the manifest-derived version that check:artifacts requires them to share.
   for (const k of force) if (k in patch) merged[k] = patch[k];
+  // Overwrite an npm-init placeholder script with the generated one (nested under
+  // `scripts`, so `force` — top-level only — can't reach it).
+  if (isObject(base.scripts) && isObject(patch.scripts) && isObject(merged.scripts)) {
+    for (const [k, v] of Object.entries(patch.scripts)) {
+      if (base.scripts[k] === NPM_INIT_PLACEHOLDER) merged.scripts[k] = v;
+    }
+  }
   const changed = JSON.stringify(base) !== JSON.stringify(merged);
   return { merged, changed, text: JSON.stringify(merged, null, 2) + '\n' };
 }

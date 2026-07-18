@@ -756,6 +756,7 @@ function planProjectDocs(options, state) {
     actions.push(
       write('docs/adr/0001-plugin-architecture-baseline.md', renderTemplate(loadTemplate('obsidian/adr-0001.md.tmpl'), {
         name: o.name,
+        date: new Date().toISOString().slice(0, 10),
         mobileChoice: o.mobile ? 'mobile-ready' : 'desktop-only',
         isDesktopOnly: String(!o.mobile),
         mobileConsequence: o.mobile

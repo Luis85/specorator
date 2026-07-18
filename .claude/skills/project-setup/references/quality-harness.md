@@ -50,12 +50,17 @@ Installs the CSS `!important` ratchet (`scripts/check-css-important.mjs`): scans
     "integrate": false,
     "mcp": false
   },
+  "hooks": {
+    "sessionStart": false,
+    "qualityGate": false,
+    "preCommit": false
+  },
   "obsidian": null,
   "prds": []
 }
 ```
 
-`testFramework` defaults to the detected framework (jest or vitest). `packageManager` defaults to the detected one. All guardrails default to `true` when omitted (`cssGuard` only takes effect in Obsidian mode).
+`testFramework` defaults to the detected framework (jest or vitest). `packageManager` defaults to the detected one. All guardrails default to `true` when omitted (`cssGuard` only takes effect in Obsidian mode). `hooks` are Obsidian-only and **default all `false`** — nothing installs a Claude Code hook unless asked (see `references/obsidian-plugin.md`).
 
 ## `prds` — product-vision questionnaire (`docs/prds/`)
 

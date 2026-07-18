@@ -1,6 +1,6 @@
 ---
 name: project-setup
-description: Use when setting up a new project, bootstrapping an Obsidian plugin, writing a product vision / PRD to start a project, or retroactively adopting agent-driven development on an existing repo. Opens with a simple product-vision questionnaire that seeds docs/prds/ (prd-000 vision + optional feature PRDs), then installs a quality harness (fallow ratchet, ESLint severity-staging, LOC guard, coverage floors, CI) with docs scaffolding — and, in Obsidian mode, a complete plugin workspace (Vitest, Vue 3 + Pinia + vue-router, esbuild, obsidianmd lint, Prettier, CSS ratchet, release flow) with a mobile-or-desktop choice. Deterministic bundled Node engine; local-first; GitHub integration is opt-in.
+description: Use when setting up a new project, bootstrapping a new Obsidian plugin, or writing a product vision / PRD to start a project. Opens with a simple product-vision questionnaire that seeds docs/prds/ (prd-000 vision + optional feature PRDs), then installs a quality harness (fallow ratchet, ESLint severity-staging, LOC guard, coverage floors, CI) with docs scaffolding — and, in Obsidian mode, a complete new-plugin workspace (Vitest, Vue 3 + Pinia + vue-router, esbuild, obsidianmd lint, Prettier, CSS ratchet, release flow) with a mobile-or-desktop choice. Deterministic bundled Node engine; local-first; re-apply is idempotent; GitHub integration is opt-in.
 ---
 
 # project-setup
