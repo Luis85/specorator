@@ -445,6 +445,21 @@ test('ribbon + status-bar services ship in core and wire as plugin fields (both 
   }
 });
 
+test('ErrorService ships in core and onload routes through it (both variants)', () => {
+  for (const vue of [true, false]) {
+    const actions = actionsFor({ vue });
+    assert.ok(findWrite(actions, 'src/core/errors/ErrorService.ts'), `ErrorService missing (vue=${vue})`);
+    assert.ok(findWrite(actions, 'tests/unit/errorService.test.ts'), `error test missing (vue=${vue})`);
+    const main = findWrite(actions, 'src/main.ts').content;
+    assert.match(main, /readonly errors = new ErrorService\(this\.logger, this\.notices\)/);
+    assert.match(main, /await this\.errors\.run\(/); // the onload boundary
+    // the fallible command demos use it too (no dead API)
+    const commands = findWrite(actions, 'src/commands.ts').content;
+    assert.match(commands, /plugin\.errors\.wrap\(/);
+    assert.match(commands, /plugin\.errors\.run\(/);
+  }
+});
+
 test('class names never reproduce obsidianmd sample identifiers (would fail the lint gate)', () => {
   // A normal name keeps the plain <Name>Plugin convention.
   assert.match(findWrite(actionsFor(), 'src/main.ts').content, /class DemoNotesPlugin extends Plugin/);
@@ -511,6 +526,18 @@ test('the CSS !important guard scans the detected source root, not a hardcoded s
   // a root entry scans '.' (bounded by the script's SKIP_DIRS)
   const root = findWrite(actionsFor({}, { obsidianAppPresent: true, entry: 'main.ts', entryExists: true }), 'scripts/check-css-important.mjs').content;
   assert.match(root, /const STYLE_ROOTS = \['\.'\]\.map/);
+});
+
+test('the gates cover every accepted source extension, not only plain .ts', () => {
+  // tsconfig include: extensionless src/**/* covers every TS extension (a
+  // brownfield src/main.tsx/.mts/.cts) — TS globs don't do brace expansion.
+  const ts = findWrite(actionsFor(), 'tsconfig.json').content;
+  assert.match(ts, /"src\/\*\*\/\*"/);
+  assert.match(ts, /"tests\/\*\*\/\*"/);
+  assert.doesNotMatch(ts, /\{ts,tsx/); // no unsupported brace glob leaked in
+  // eslint base @eslint/js: adopted JS source still gets undefined-var/unused checks.
+  const eslint = findWrite(actionsFor(), 'eslint.config.mjs').content;
+  assert.match(eslint, /files: \['\*\*\/\*\.\{ts,tsx,mts,cts,js,jsx,mjs,cjs\}'\], \.\.\.js\.configs\.recommended/);
 });
 
 test('tsconfig is greenfield-owned (overwrite-backup, replacing a stray one) but kept in brownfield', () => {

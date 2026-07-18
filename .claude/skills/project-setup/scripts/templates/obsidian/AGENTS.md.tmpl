@@ -46,6 +46,13 @@ affordances — a ribbon icon that opens a `SuggestModal` picker
 - **`plugin.modals` — `ModalService`** (`src/core/modals/`): async wrappers
   over Obsidian modals (`await plugin.modals.confirm(title, message)`).
   Extend it with new dialog kinds instead of scattering `Modal` subclasses.
+- **`plugin.errors` — `ErrorService`** (`src/core/errors/`): the catch/log/notice
+  seam. `run(context, op, opts?)` runs a fallible op and, on throw, logs via
+  `Logger` and shows a notice (returning `undefined`); `wrap(context, fn, opts?)`
+  wraps a callback so a throw or rejection never becomes a dead command. `opts`
+  takes a user `message` and a `level` (`'warn'` for expected/transient failures
+  like an offline check, `'error'` by default). `onload` and the network/vault
+  command demos route through it — reach for this instead of a bare `try/catch`.
 - **`plugin.ribbon` — `RibbonService`** (`src/core/ribbon/`): `add(icon, title, onClick)`
   over `addRibbonIcon`. Obsidian removes ribbon items on unload (no teardown); the
   returned element lets you toggle a state class. `registerExtras` uses it for the
@@ -69,8 +76,9 @@ affordances — a ribbon icon that opens a `SuggestModal` picker
   schema is upgraded, never broken — add a branch per `schemaVersion` bump.
 
 `main.ts` is orchestration-only: it constructs these services and wraps
-`onload` in an error boundary (a thrown load reports via `logger` + `notices`
-and degrades, instead of leaving Obsidian half-registered).
+`onload` in the `ErrorService` boundary (`this.errors.run('load the plugin', …)`)
+— a thrown load reports via `logger` + `notices` and degrades, instead of
+leaving Obsidian half-registered.
 
 **i18n:** all user-facing text goes through `t('key')` (`src/i18n/`), backed by
 `en.json`. A literal or template string passed to `plugin.notices.info/error`
@@ -130,7 +138,8 @@ subscriptions like the status bar need no teardown — the bus dies on unload).
 2. Put logic in `src/core/` (unit-tested), rendering in `src/ui/`.
 3. Register commands in `src/commands.ts` via `plugin.commands`; register
    views/listeners in their `register*` module.
-4. User feedback goes through `plugin.notices` / `plugin.modals`.
+4. User feedback goes through `plugin.notices` / `plugin.modals`; wrap fallible
+   async work (I/O, network) in `plugin.errors.run` / `plugin.errors.wrap`.
 5. Style via `src/styles.css` (Obsidian CSS variables, no `!important`) or
    scoped SFC styles.
 6. Run the local gate set before pushing (see `CLAUDE.md`).

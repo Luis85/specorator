@@ -2,6 +2,7 @@ import { Plugin } from 'obsidian';
 
 import { registerCommands } from './commands';
 import { CommandsService } from './core/commands/CommandsService';
+import { ErrorService } from './core/errors/ErrorService';
 import type { AppEvents } from './core/events/AppEvents';
 import { EventBus } from './core/events/EventBus';
 import { RequestService } from './core/http/RequestService';
@@ -26,6 +27,7 @@ export default class {{pluginClass}} extends Plugin {
   readonly logger = new Logger('{{id}}', () => this.settings.debugLogging);
   readonly events = new EventBus<AppEvents>();
   readonly notices = new NoticeService();
+  readonly errors = new ErrorService(this.logger, this.notices);
   readonly modals = new ModalService(this.app);
   readonly commands = new CommandsService(this);
   readonly ribbon = new RibbonService(this);
@@ -44,19 +46,21 @@ export default class {{pluginClass}} extends Plugin {
   });
 
   async onload(): Promise<void> {
-    // Error boundary: a thrown onload leaves Obsidian with a half-registered
-    // plugin and no feedback. Report it and degrade instead.
-    try {
-      await this.settingsService.load();
-      this.addSettingTab(new {{settingsTab}}(this.app, this));
-      registerCommands(this);
-      registerStatusBar(this);
-      registerExtras(this);
-{{viewRegistration}}      this.logger.info('loaded');
-    } catch (error) {
-      this.logger.error('Failed to load', error);
-      this.notices.error(t('notice.loadFailed'));
-    }
+    // Error boundary through the ErrorService: a thrown onload leaves Obsidian
+    // with a half-registered plugin and no feedback, so catch → log → notice and
+    // degrade instead of failing silently.
+    await this.errors.run(
+      'load the plugin',
+      async () => {
+        await this.settingsService.load();
+        this.addSettingTab(new {{settingsTab}}(this.app, this));
+        registerCommands(this);
+        registerStatusBar(this);
+        registerExtras(this);
+{{viewRegistration}}        this.logger.info('loaded');
+      },
+      { message: t('notice.loadFailed') },
+    );
   }
 
   // Persist a settings change and notify subscribers (through SettingsService).

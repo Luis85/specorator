@@ -1,0 +1,56 @@
+import { t } from '../../i18n/i18n';
+import type { Logger } from '../logging/Logger';
+import type { NoticeService } from '../notices/NoticeService';
+
+export interface ErrorOptions {
+  // User-facing notice text; defaults to a generic "something went wrong".
+  message?: string;
+  // Log severity: 'warn' for an expected/transient failure (an offline network
+  // check), 'error' (default) for a genuine fault.
+  level?: 'warn' | 'error';
+}
+
+// One place to catch, log, and surface failures. Obsidian silently swallows a
+// throw or rejection in a command/event callback, so route risky work through
+// here: the error reaches the Logger (dev console) and the user sees a notice
+// instead of a dead button. Pairs the two seams that already own those channels
+// — it takes them directly, so it has no edge to the plugin at all.
+export class ErrorService {
+  constructor(
+    private readonly logger: Logger,
+    private readonly notices: NoticeService,
+  ) {}
+
+  // Run an async (or sync) operation; on throw, log with `context`, show a
+  // notice, and resolve to undefined so the caller can branch on success.
+  async run<T>(
+    context: string,
+    op: () => Promise<T> | T,
+    opts: ErrorOptions = {},
+  ): Promise<T | undefined> {
+    try {
+      return await op();
+    } catch (error) {
+      const label = `${context} failed`;
+      // Static calls (not a computed this.logger[level]) so both log channels
+      // stay visibly referenced for tree-shaking and dead-code analysis.
+      if (opts.level === 'warn') this.logger.warn(label, error);
+      else this.logger.error(label, error);
+      this.notices.error(opts.message ?? t('notice.unexpectedError'));
+      return undefined;
+    }
+  }
+
+  // Wrap a callback (command, event, DOM handler) so a throw or rejection is
+  // caught instead of surfacing as a dead action. Returns a void function that
+  // drops straight into Obsidian's callback slots.
+  wrap<A extends unknown[]>(
+    context: string,
+    fn: (...args: A) => unknown,
+    opts: ErrorOptions = {},
+  ): (...args: A) => void {
+    return (...args: A) => {
+      void this.run(context, () => fn(...args), opts);
+    };
+  }
+}

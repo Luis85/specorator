@@ -224,8 +224,8 @@ function planSources(options, state) {
     ...shared,
     settingsValueImports: sortImportMembers('DEFAULT_SETTINGS', 'migrateSettings', names.settingsTab),
     viewImport: o.vue ? "import { registerViews } from './ui/registerViews';\n" : '',
-    // Six-space indent: this line sits inside onload's try block.
-    viewRegistration: o.vue ? '      registerViews(this);\n' : '',
+    // Eight-space indent: this line sits inside onload's errors.run() callback.
+    viewRegistration: o.vue ? '        registerViews(this);\n' : '',
   };
   // The open-view command is vue-only; it reveals the island view.
   const commandVars = {
@@ -251,6 +251,7 @@ function planSources(options, state) {
     write('src/core/logging/Logger.ts', loadTemplate('obsidian/src/core/logging/Logger.ts.tmpl')),
     write('src/core/settings/SettingsService.ts', loadTemplate('obsidian/src/core/settings/SettingsService.ts.tmpl')),
     write('src/core/notices/NoticeService.ts', loadTemplate('obsidian/src/core/notices/NoticeService.ts.tmpl')),
+    write('src/core/errors/ErrorService.ts', loadTemplate('obsidian/src/core/errors/ErrorService.ts.tmpl')),
     write('src/core/modals/ModalService.ts', loadTemplate('obsidian/src/core/modals/ModalService.ts.tmpl')),
     write('src/core/vault/VaultService.ts', loadTemplate('obsidian/src/core/vault/VaultService.ts.tmpl')),
     write('src/core/http/RequestService.ts', loadTemplate('obsidian/src/core/http/RequestService.ts.tmpl')),
@@ -396,6 +397,7 @@ function planObsidianVitest(options, state) {
       write('tests/unit/requestService.test.ts', loadTemplate('obsidian/tests/requestService.test.ts.tmpl')),
       write('tests/unit/i18n.test.ts', loadTemplate('obsidian/tests/i18n.test.ts.tmpl')),
       write('tests/unit/statusBar.test.ts', loadTemplate('obsidian/tests/statusBar.test.ts.tmpl')),
+      write('tests/unit/errorService.test.ts', loadTemplate('obsidian/tests/errorService.test.ts.tmpl')),
       write('tests/unit/ribbonService.test.ts', loadTemplate('obsidian/tests/ribbonService.test.ts.tmpl')),
       write('tests/unit/statusBarService.test.ts', loadTemplate('obsidian/tests/statusBarService.test.ts.tmpl')),
       write('tests/unit/registerExtras.test.ts', loadTemplate('obsidian/tests/registerExtras.test.ts.tmpl')),

@@ -45,10 +45,17 @@ export function registerCommands(plugin: {{pluginClass}}): void {
     void appendGreetingToLog(plugin);
   });
 
-  // RequestService demo — fetch JSON over requestUrl (CORS-safe, mobile-friendly).
-  plugin.commands.addSimple('check-latest-obsidian', 'Check the latest Obsidian release', () => {
-    void checkLatestObsidian(plugin);
-  });
+  // RequestService + ErrorService demo — fetch JSON over requestUrl (CORS-safe,
+  // mobile-friendly), with the whole callback wrapped so a network failure logs
+  // and notices instead of becoming a dead command.
+  plugin.commands.addSimple(
+    'check-latest-obsidian',
+    'Check the latest Obsidian release',
+    plugin.errors.wrap('check the latest Obsidian release', () => checkLatestObsidian(plugin), {
+      message: t('notice.updateFailed'),
+      level: 'warn', // a network blip is expected, not a code fault
+    }),
+  );
 {{openViewCommand}}
   log.debug('commands registered');
 }
@@ -69,22 +76,23 @@ async function appendGreetingToLog(plugin: {{pluginClass}}): Promise<void> {
     plugin.notices.error(t('notice.setGreetingFirst'));
     return;
   }
-  const path = 'logs/greeting-log.md';
-  await plugin.vault.ensureFolder('logs');
-  const previous = (await plugin.vault.read(path)) ?? '';
-  await plugin.vault.write(path, `${previous}${greeting}\n`);
-  plugin.logger.debug('appended greeting', path);
-  plugin.notices.info(t('notice.greetingAppended'));
+  // The vault write can fail (permissions, a locked file); run() catches it,
+  // logs, and shows the default error notice instead of an unhandled rejection.
+  await plugin.errors.run('append the greeting to the log note', async () => {
+    const path = 'logs/greeting-log.md';
+    await plugin.vault.ensureFolder('logs');
+    const previous = (await plugin.vault.read(path)) ?? '';
+    await plugin.vault.write(path, `${previous}${greeting}\n`);
+    plugin.logger.debug('appended greeting', path);
+    plugin.notices.info(t('notice.greetingAppended'));
+  });
 }
 
+// The caller wraps this with errors.wrap(…, { level: 'warn' }), so a failed
+// fetch is caught and logged as a warning there — the happy path stays linear.
 async function checkLatestObsidian(plugin: {{pluginClass}}): Promise<void> {
-  try {
-    const release = await plugin.requests.getJson<{ name: string }>(
-      'https://api.github.com/repos/obsidianmd/obsidian-releases/releases/latest',
-    );
-    plugin.notices.info(t('notice.latestRelease', { name: release.name }));
-  } catch (error) {
-    plugin.logger.warn('update check failed', error);
-    plugin.notices.error(t('notice.updateFailed'));
-  }
+  const release = await plugin.requests.getJson<{ name: string }>(
+    'https://api.github.com/repos/obsidianmd/obsidian-releases/releases/latest',
+  );
+  plugin.notices.info(t('notice.latestRelease', { name: release.name }));
 }
