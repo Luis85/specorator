@@ -351,10 +351,10 @@ test('brownfield seeds src/styles.css from an existing root styles.css (no first
 test('vitest coverage include tracks the entry root and includes JS/TS/Vue extensions', () => {
   // greenfield entry src/main.ts -> src/** (js/jsx included so a brownfield JS
   // plugin is measured; a greenfield TS scaffold has no .js there so it's a no-op).
-  assert.match(findWrite(actionsFor({ vue: true }), 'vitest.config.mjs').content, /include: \['src\/\*\*\/\*\.\{ts,tsx,vue,js,jsx\}'\]/);
+  assert.match(findWrite(actionsFor({ vue: true }), 'vitest.config.mjs').content, /include: \['src\/\*\*\/\*\.\{ts,tsx,mts,cts,vue,js,jsx,mjs,cjs\}'\]/);
   // brownfield root entry main.ts -> **/* (measuring src/** would false-pass on zero files)
   const bf = findWrite(actionsFor({ vue: false }, { obsidianAppPresent: true, entry: 'main.ts', entryExists: true }), 'vitest.config.mjs').content;
-  assert.match(bf, /include: \['\*\*\/\*\.\{ts,tsx,js,jsx\}'\]/);
+  assert.match(bf, /include: \['\*\*\/\*\.\{ts,tsx,mts,cts,js,jsx,mjs,cjs\}'\]/);
 });
 
 test('the release workflow fails a tag that disagrees with manifest.version before publishing', () => {
@@ -582,6 +582,18 @@ test('manifest-beta mirrors the KEPT manifest on brownfield adopt (not the answe
   // greenfield beta still mirrors the generated manifest (answers)
   const gfBeta = JSON.parse(findWrite(actionsFor(), 'manifest-beta.json').content);
   assert.equal(gfBeta.id, 'demo-notes');
+});
+
+test('a kept manifest missing minAppVersion is reconciled so check:artifacts does not desync', () => {
+  // brownfield manifest has a version but no minAppVersion -> versions.json would
+  // key an entry the manifest lacks; the field is merged into the kept manifest.
+  const noMin = planObsidian(optionsWith(BASE), { obsidianAppPresent: true, obsidianManifest: { id: 'x', name: 'X', version: '3.0.0' } });
+  const merge = noMin.find((a) => a.type === 'mergeJson' && a.path === 'manifest.json' && a.patch.minAppVersion);
+  assert.ok(merge, 'expected a mergeJson filling minAppVersion into the kept manifest');
+  assert.ok(JSON.parse(findWrite(noMin, 'manifest-beta.json').content).minAppVersion, 'beta mirror carries minAppVersion too');
+  // a manifest that already sets minAppVersion is left untouched
+  const withMin = planObsidian(optionsWith(BASE), { obsidianAppPresent: true, obsidianManifest: { id: 'x', version: '3.0.0', minAppVersion: '1.5.0' } });
+  assert.equal(withMin.find((a) => a.type === 'mergeJson' && a.path === 'manifest.json' && a.patch.minAppVersion), undefined);
 });
 
 test('vitest standdown surfaces a `test` script collision (an existing jest is not silently kept)', () => {

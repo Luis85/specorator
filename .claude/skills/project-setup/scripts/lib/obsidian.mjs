@@ -134,8 +134,24 @@ function planManifest(o, state, version) {
   // to run a beta channel ahead of stable). Brownfield: mirror the KEPT manifest
   // (manifest.json is skip-if-exists), not the answers — else the beta manifest
   // describes a different plugin (id/name/description/desktop) than the adopted one.
-  const betaManifest = existing ? JSON.stringify(existing, null, 2) + '\n' : manifest;
-  return [...notices, write('manifest.json', manifest), write('manifest-beta.json', betaManifest), versionsAction];
+  const betaManifest = existing
+    ? JSON.stringify({ ...existing, minAppVersion: existing.minAppVersion ?? minApp }, null, 2) + '\n'
+    : manifest;
+  // A kept manifest.json (skip-if-exists) with a version but no minAppVersion
+  // desyncs against the generated versions.json (keyed to minApp) and fails
+  // check:artifacts on the first run. Merge the field in — mergeJson keeps an
+  // existing value, so this only fills the gap on brownfield adopt.
+  const minAppReconcile =
+    existing && !existing.minAppVersion
+      ? [{ type: 'mergeJson', path: 'manifest.json', patch: { minAppVersion: minApp } }]
+      : [];
+  return [
+    ...notices,
+    write('manifest.json', manifest),
+    write('manifest-beta.json', betaManifest),
+    ...minAppReconcile,
+    versionsAction,
+  ];
 }
 
 // The version shared by the generated manifest, versions.json, AND package.json
@@ -454,9 +470,10 @@ function planObsidianVitest(options, state) {
   // Coverage include tracks the actual entry root, not a hardcoded src/**: a
   // brownfield adopt whose entry is a root main.ts would otherwise measure zero
   // real source and give a false coverage pass. Mirrors the generic planner.
-  // JS extensions are included so a brownfield JS plugin (src/main.js) is
-  // measured too; a greenfield TS scaffold has no .js under src/, so it's a no-op.
-  const exts = o.vue ? 'ts,tsx,vue,js,jsx' : 'ts,tsx,js,jsx';
+  // Every extension detectEntry accepts (module TS/JS: mts/cts/mjs/cjs) so a
+  // brownfield entry like src/main.mts is measured, not silently at 0% while the
+  // build still ships it; a greenfield TS scaffold has none of these, so no-op.
+  const exts = o.vue ? 'ts,tsx,mts,cts,vue,js,jsx,mjs,cjs' : 'ts,tsx,mts,cts,js,jsx,mjs,cjs';
   const srcDir = entryDir(obsidianEntry(options, state));
   const coverageGlobs = srcDir ? `${srcDir}/**/*.{${exts}}` : `**/*.{${exts}}`;
   const config = renderTemplate(loadTemplate('obsidian/vitest.config.mjs.tmpl'), {
