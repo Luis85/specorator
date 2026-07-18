@@ -70,7 +70,13 @@ export class MarketplaceCatalogClient {
     private readonly request: CatalogRequestFn = obsidianRequest,
     private readonly vet: UrlVetFn = ssrfVet,
   ) {
-    this.base = baseUrl.endsWith('/') ? baseUrl : `${baseUrl}/`;
+    const withSlash = baseUrl.endsWith('/') ? baseUrl : `${baseUrl}/`;
+    // Canonicalize (lowercase host, strip default ports, resolve dot segments) so
+    // resolve()'s containment check compares like-for-like against the
+    // `new URL().toString()` output — otherwise a valid custom source such as
+    // `https://example.com:443/catalog/` or an uppercase host would make every
+    // request look like it escapes the base and be rejected.
+    this.base = new URL(withSlash).toString();
   }
 
   /** Fetches + validates the catalog manifest (one request). */

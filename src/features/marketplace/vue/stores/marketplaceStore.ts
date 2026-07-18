@@ -104,19 +104,31 @@ export const useMarketplaceStore = defineStore('marketplace', () => {
     installedIds.value = ids;
   }
 
+  /**
+   * Atomically swap in a freshly loaded catalog: its items, the source they came
+   * from, and a bumped generation all flip TOGETHER. Keeping them in lockstep is
+   * what lets an in-flight preview/install that began against the OLD catalog
+   * (still rendered during the fetch) detect the switch — the old source stays
+   * bound and the older generation was captured — instead of leaking the new
+   * source's content, or a stale install mark, under an old item's id.
+   */
+  function commitCatalog(newItems: MarketplaceItem[], src: string, isOffline: boolean): void {
+    items.value = newItems;
+    source.value = src;
+    loadGeneration += 1;
+    offline.value = isOffline;
+  }
+
   /** Fetches the catalog; on failure falls back to the cached copy for the same source. */
   async function load(): Promise<void> {
     if (loading.value) return;
     loading.value = true;
-    loadGeneration += 1;
     error.value = null;
     const src = resolveSource();
-    source.value = src;
     try {
       assertNetworkEnabled();
       const manifest = await clientFor(src).fetchIndex();
-      items.value = manifest.items;
-      offline.value = false;
+      commitCatalog(manifest.items, src, false);
       // Cache persistence is a best-effort optimization — a write failure
       // (permissions, transient FS) must not discard the catalog we just
       // fetched, so it stays out of the fetch-error fallback below.
@@ -128,10 +140,9 @@ export const useMarketplaceStore = defineStore('marketplace', () => {
     } catch (fetchError) {
       const cached = await cache().read();
       if (cached && cached.source === src) {
-        items.value = cached.manifest.items;
-        offline.value = true;
+        commitCatalog(cached.manifest.items, src, true);
       } else {
-        items.value = [];
+        commitCatalog([], src, false);
         error.value =
           fetchError instanceof MarketplaceError || fetchError instanceof Error
             ? fetchError.message

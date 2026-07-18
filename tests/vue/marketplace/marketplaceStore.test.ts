@@ -142,6 +142,36 @@ describe('marketplaceStore network opt-in guard', () => {
     expect(clientCtor).toHaveBeenCalledWith('https://a.example/');
     expect(clientCtor).not.toHaveBeenCalledWith('https://b.example/');
   });
+
+  it('keeps the old source bound until the reloaded catalog commits', async () => {
+    const store = useMarketplaceStore();
+    const p = fakePlugin(true);
+    p.settings.marketplaceSourceUrl = 'https://a.example/';
+    store.init(p);
+    await store.load();
+    expect(store.source).toBe('https://a.example/');
+
+    // Change the source and refresh, but hold the index fetch open.
+    let resolveIndex: (m: typeof manifest) => void = () => {};
+    fetchIndexSpy.mockReturnValueOnce(
+      new Promise((resolve) => {
+        resolveIndex = resolve;
+      }),
+    );
+    p.settings.marketplaceSourceUrl = 'https://b.example/';
+    const refreshing = store.load();
+
+    // During the reload the OLD catalog is still shown, so source stays A and a
+    // preview still targets A — source flips only when the new items commit.
+    expect(store.source).toBe('https://a.example/');
+    clientCtor.mockClear();
+    await store.fetchBody(item);
+    expect(clientCtor).toHaveBeenCalledWith('https://a.example/');
+
+    resolveIndex(manifest);
+    await refreshing;
+    expect(store.source).toBe('https://b.example/');
+  });
 });
 
 describe('marketplaceStore install', () => {
@@ -189,6 +219,38 @@ describe('marketplaceStore install', () => {
     await installing;
 
     // The stale install must NOT re-add the id — load's refreshInstalled owns it.
+    expect(store.installedIds.has('a')).toBe(false);
+  });
+
+  it('does not mark installed when the install begins during an in-flight reload', async () => {
+    // The generation must bump when the new catalog commits, not at load start —
+    // otherwise an install that starts mid-reload captures the already-bumped
+    // generation and its completion check passes against a replacement catalog.
+    let resolveIndex: (m: typeof manifest) => void = () => {};
+    let finishInstall: (v: 'installed') => void = () => {};
+    fetchIndexSpy.mockReturnValue(
+      new Promise((resolve) => {
+        resolveIndex = resolve;
+      }),
+    );
+    installSpy.mockReturnValue(
+      new Promise((resolve) => {
+        finishInstall = resolve;
+      }),
+    );
+    isInstalledSpy.mockResolvedValue(false);
+    cacheRead.mockResolvedValue(null);
+    cacheWrite.mockResolvedValue(undefined);
+    const store = useMarketplaceStore();
+    store.init(fakePlugin(true));
+
+    const loading = store.load(); // fetch pending; generation not yet bumped
+    const installing = store.install(item, 'BODY'); // captures the pre-commit generation
+    resolveIndex(manifest); // load commits: items replaced + generation bumped
+    await loading;
+    finishInstall('installed');
+    await installing;
+
     expect(store.installedIds.has('a')).toBe(false);
   });
 });

@@ -68,4 +68,13 @@ describe('MarketplaceCatalogClient', () => {
     await expect(client.fetchItemBody('https://evil.test/x.md')).rejects.toThrow(/escapes the marketplace base URL/);
     expect(request).not.toHaveBeenCalled();
   });
+
+  it('canonicalizes the base URL so a non-canonical custom source still resolves', async () => {
+    const request = jest.fn(async () => ({ status: 200, text: '# body' }));
+    // :443 is the default HTTPS port and is stripped by URL canonicalization; a
+    // raw startsWith against the un-canonicalized base would reject every request.
+    const client = new MarketplaceCatalogClient('https://example.test:443/base/', request, noVet);
+    expect(await client.fetchItemBody('loops/x.md')).toBe('# body');
+    expect(request).toHaveBeenCalledWith('https://example.test/base/loops/x.md');
+  });
 });
