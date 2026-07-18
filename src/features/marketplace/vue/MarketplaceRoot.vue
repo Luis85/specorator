@@ -54,13 +54,15 @@ watch(
   },
 );
 
-onMounted(() => {
+onMounted(async () => {
   if (enabled.value) {
-    // The one-time network/provenance warning must fire here too: the settings
-    // tab can flip marketplaceNetworkEnabled without going through enable(), so
-    // an already-enabled view would otherwise dial GitHub with no notice. It is
-    // idempotent (persisted flag), so enable()'s call can't double-show it.
-    void maybeWarnMarketplaceNetwork(plugin);
+    // The one-time network/provenance warning must fire here too — and BEFORE
+    // the first fetch: the settings tab can flip marketplaceNetworkEnabled
+    // without going through enable(), so an already-enabled view would
+    // otherwise dial GitHub before the user sees the notice. Awaited (like
+    // enable()) so load() never races ahead of it; idempotent (persisted flag),
+    // so enable()'s call can't double-show it.
+    await maybeWarnMarketplaceNetwork(plugin);
     void store.load();
   }
 });

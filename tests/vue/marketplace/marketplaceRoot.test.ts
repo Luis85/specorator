@@ -65,13 +65,17 @@ function makeStore(overrides: Partial<StoreFake> = {}): StoreFake {
   };
 }
 
-function setup(store: StoreFake, settings: Record<string, unknown>) {
+function setup(
+  store: StoreFake,
+  settings: Record<string, unknown>,
+  saveSettings: ReturnType<typeof vi.fn> = vi.fn().mockResolvedValue(undefined),
+) {
   hoisted.store = store;
   // One plugin whose settings object is mutated in place by enable() — assert
   // on the same reference the view flipped.
   const plugin = {
     settings,
-    saveSettings: vi.fn().mockResolvedValue(undefined),
+    saveSettings,
     app: { vault: {} },
     vaultFileAdapter: {},
     agentRosterStore: {},
@@ -196,16 +200,29 @@ describe('MarketplaceRoot preview + install', () => {
 describe('MarketplaceRoot network warning + preview invalidation', () => {
   beforeEach(() => vi.clearAllMocks());
 
-  it('fires the one-time network warning on an already-enabled mount (not only via Enable)', async () => {
+  it('awaits the one-time network warning BEFORE loading on an already-enabled mount', async () => {
     // The settings-tab toggle can enable networking without going through the
-    // view's Enable button, so an already-enabled mount must still warn.
-    const { plugin } = setup(makeStore({ items: [alpha] }), {
-      marketplaceNetworkEnabled: true,
+    // view's Enable button, so an already-enabled mount must still warn — and
+    // the warning must complete before the first catalog fetch. A deferred
+    // saveSettings pins the warning open so we can prove load() waits for it.
+    let resolveSave: () => void = () => {};
+    const savePromise = new Promise<void>((r) => {
+      resolveSave = r;
     });
-    await waitFor(() =>
-      expect(plugin.settings.marketplaceNetworkWarningShown).toBe(true),
+    const store = makeStore({ items: [alpha] });
+    const { plugin } = setup(
+      store,
+      { marketplaceNetworkEnabled: true },
+      vi.fn().mockReturnValue(savePromise),
     );
-    expect(plugin.saveSettings).toHaveBeenCalled();
+
+    // Warning in flight (save pending) → the fetch must not have started yet.
+    await Promise.resolve();
+    expect(store.load).not.toHaveBeenCalled();
+
+    resolveSave();
+    await waitFor(() => expect(store.load).toHaveBeenCalled());
+    expect(plugin.settings.marketplaceNetworkWarningShown).toBe(true);
   });
 
   it('drops cached previews when the catalog reloads (source switch / refresh)', async () => {

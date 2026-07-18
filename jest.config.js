@@ -37,6 +37,15 @@ module.exports = {
     // tested and coverage-gated in the Vitest lane; counting it here at 0%
     // would sink the Jest global floors.
     '!src/features/chat/ui/vue/**',
+    // src/features/marketplace/vue/** (the Marketplace Vue island: store, SFCs,
+    // accessors, pinia, keys) is tested + coverage-gated in the Vitest lane; the
+    // Obsidian-coupled ItemView host and leaf activation are manually verified
+    // like the other feature views. The pure logic (catalogTypes /
+    // MarketplaceCatalogClient / MarketplaceCache / MarketplaceInstaller /
+    // marketplaceNetworkGate) stays Jest-collected.
+    '!src/features/marketplace/vue/**',
+    '!src/features/marketplace/MarketplaceView.ts',
+    '!src/features/marketplace/activateMarketplace.ts',
   ],
   coverageDirectory: 'coverage',
   // Guardrail (Q-3): regression floors, not aspirations. Each floor sits a few
