@@ -433,3 +433,43 @@ export function planDocs(options, state) {
     { type: 'writeFile', path: 'CONTRIBUTING.md', mode: 'skip-if-exists', content: renderTemplate(loadTemplate('docs/CONTRIBUTING-quality.md'), { runCmd: run, verifyCmd }) },
   ];
 }
+
+// PRDs authored via the setup questionnaire (SKILL.md § product vision): prd-000
+// is the product vision, more are numbered from prd-001. Each renders to
+// docs/prds/<id>-<slug>.md (frontmatter + markdown) with an index README.
+// skip-if-exists so a re-apply never clobbers the user's edits.
+export function planPrds(options) {
+  const prds = Array.isArray(options.prds) ? options.prds : [];
+  if (prds.length === 0) return [];
+  const slug = (s) =>
+    String(s).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 60) || 'untitled';
+  const fallback = (v) => (v && String(v).trim() ? String(v).trim() : '_TBD._');
+  const goals = (list) => (Array.isArray(list) && list.length ? list.map((g) => `- ${g}`).join('\n') : '_TBD._');
+  const actions = prds.map((prd) => ({
+    type: 'writeFile',
+    path: `docs/prds/${prd.id}-${slug(prd.title)}.md`,
+    mode: 'skip-if-exists',
+    // titleJson keeps the YAML frontmatter valid for any title; the H1 uses it raw.
+    content: renderTemplate(loadTemplate('docs/prd.md.tmpl'), {
+      id: prd.id,
+      titleJson: JSON.stringify(prd.title),
+      title: prd.title,
+      status: prd.status,
+      created: prd.created,
+      problem: fallback(prd.problem),
+      vision: fallback(prd.vision),
+      goals: goals(prd.goals),
+      notes: fallback(prd.notes),
+    }),
+  }));
+  const rows = prds
+    .map((prd) => `| [${prd.id}](${prd.id}-${slug(prd.title)}.md) | ${String(prd.title).replace(/\|/g, '\\|')} | ${prd.status} |`)
+    .join('\n');
+  actions.push({
+    type: 'writeFile',
+    path: 'docs/prds/README.md',
+    mode: 'skip-if-exists',
+    content: renderTemplate(loadTemplate('docs/prds-README.md.tmpl'), { rows }),
+  });
+  return actions;
+}

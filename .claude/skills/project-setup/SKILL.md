@@ -1,6 +1,6 @@
 ---
 name: project-setup
-description: Use when setting up a new project, bootstrapping an Obsidian plugin, or retroactively adopting agent-driven development on an existing repo. Installs a quality harness (fallow ratchet, ESLint severity-staging, LOC guard, coverage floors, CI) with docs scaffolding — and, in Obsidian mode, a complete plugin workspace (Vitest, Vue 3 + Pinia + vue-router, esbuild, obsidianmd lint, Prettier, CSS ratchet, release flow) with a mobile-or-desktop choice. Deterministic bundled Node engine; local-first; GitHub integration is opt-in.
+description: Use when setting up a new project, bootstrapping an Obsidian plugin, writing a product vision / PRD to start a project, or retroactively adopting agent-driven development on an existing repo. Opens with a simple product-vision questionnaire that seeds docs/prds/ (prd-000 vision + optional feature PRDs), then installs a quality harness (fallow ratchet, ESLint severity-staging, LOC guard, coverage floors, CI) with docs scaffolding — and, in Obsidian mode, a complete plugin workspace (Vitest, Vue 3 + Pinia + vue-router, esbuild, obsidianmd lint, Prettier, CSS ratchet, release flow) with a mobile-or-desktop choice. Deterministic bundled Node engine; local-first; GitHub integration is opt-in.
 ---
 
 # project-setup
@@ -20,7 +20,23 @@ engine owns every mutation; you detect, interview, then invoke it.
    release (TypeScript capped by typescript-eslint's declared peer range —
    newer TS majors break the lint stack). After a refresh, re-run the E2E smoke
    in `references/obsidian-plugin.md` § Verification before relying on it.
-3. **Interview** (one question at a time):
+3. **Product vision (PRDs) — offer this first.** Before the technical interview,
+   ask: "Want to start with a short product vision?" If yes, guide the user
+   through a **simple** questionnaire (one plain question at a time) to document
+   the idea:
+   - What are you building? (a name/one-liner → `title`)
+   - What problem does it solve? (`problem`)
+   - What's your vision for the solution? (`vision`)
+   - The top 2–4 goals/outcomes? (`goals`)
+   Assemble a `prd-000` **Product Vision** entry, then loop: **"Add another PRD
+   (e.g. a feature), or proceed to scaffolding?"** — number extras from `prd-001`.
+   Collect them into the `prds` array of `answers.json` (each: `id`, `title`,
+   `status: "draft"`, `created` = today's date, `problem`, `vision`, `goals[]`,
+   optional `notes`). On apply the engine renders `docs/prds/<id>-<slug>.md`
+   (frontmatter + markdown) plus an index README — never clobbering edits on
+   re-apply. Shape in `references/quality-harness.md`. Skip cleanly if the user
+   just wants the harness (leave `prds` empty).
+4. **Interview** (one question at a time):
    - **Obsidian plugin?** If the user is building one (or detect found a
      manifest), collect: plugin id, display name, description, author
      (+ optional authorUrl); then **ALWAYS ask: mobile-ready, or desktop-only?**
@@ -41,24 +57,24 @@ engine owns every mutation; you detect, interview, then invoke it.
    - Docs scaffold + optional grill; the GitHub decision (see
      `references/github-integration.md`).
    Write the answers to `answers.json` (shape in `references/quality-harness.md`).
-4. **Preview:** `node .../setup.mjs plan --config answers.json` (dry-run; mutates
+5. **Preview:** `node .../setup.mjs plan --config answers.json` (dry-run; mutates
    nothing). Show the user the deduped change list and the deps that will be
    installed before applying.
-5. **Apply:** `node .../setup.mjs apply --config answers.json`. This installs
+6. **Apply:** `node .../setup.mjs apply --config answers.json`. This installs
    deps, writes/merges configs, and baselines every ratchet from the **current**
    state (brownfield-safe — green CI on day one). Relay the output: a **Notice**
    means your existing file/script was kept and that generated gate won't run
    until you merge or rename it — surface these for a decision. **Next steps**
    (e.g. commit the lockfile) are routine.
-6. **Optional grill:** if requested, run the interview in `references/grill.md`
+7. **Optional grill:** if requested, run the interview in `references/grill.md`
    to fill `CONTEXT.md`, seed ADRs, and a first requirements doc.
-7. **Verify + report:** `node .../setup.mjs verify --config answers.json` then
+8. **Verify + report:** `node .../setup.mjs verify --config answers.json` then
    `node .../setup.mjs report`. Then close with a concrete summary:
    - the gate commands with the detected package-manager prefix (e.g. `pnpm
      lint`, `pnpm check:loc`, `pnpm check:quality`, `pnpm test`);
    - `docs/quality-integration-guide.md` as the kept reference;
    - the top items from `quality-report.md`;
-   - any Notices from step 5 that still need attention;
+   - any Notices from step 6 that still need attention;
    - that the harness is re-runnable (re-apply any time; it won't clobber edits);
    - **Obsidian mode:** the dev loop (`.env.local` → `OBSIDIAN_VAULT`,
      `npm run dev`, community Hot Reload plugin) and the release flow

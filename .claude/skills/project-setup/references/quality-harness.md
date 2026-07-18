@@ -50,11 +50,35 @@ Installs the CSS `!important` ratchet (`scripts/check-css-important.mjs`): scans
     "integrate": false,
     "mcp": false
   },
-  "obsidian": null
+  "obsidian": null,
+  "prds": []
 }
 ```
 
 `testFramework` defaults to the detected framework (jest or vitest). `packageManager` defaults to the detected one. All guardrails default to `true` when omitted (`cssGuard` only takes effect in Obsidian mode).
+
+## `prds` — product-vision questionnaire (`docs/prds/`)
+
+Optional. Each entry is authored via the SKILL.md product-vision questionnaire and rendered to `docs/prds/<id>-<slug>.md` (YAML frontmatter + markdown), plus a `docs/prds/README.md` index. `prd-000` is the product vision; number features from `prd-001`. Files are `skip-if-exists`, so a re-apply never overwrites edits. Mode-agnostic — works for a plain repo and Obsidian mode alike.
+
+```json
+{
+  "prds": [
+    {
+      "id": "prd-000",
+      "title": "Product Vision",
+      "status": "draft",
+      "created": "2026-07-18",
+      "problem": "The pain the product removes.",
+      "vision": "The intended solution in a sentence or two.",
+      "goals": ["Outcome 1", "Outcome 2"],
+      "notes": "Optional extra context."
+    }
+  ]
+}
+```
+
+Every field is coerced to a safe primitive: `id` is forced to `prd-<digits>` (auto-numbered by position when absent), `title` falls back to `Product Vision` (first) / `Untitled`, `status` to `draft`. `title` is JSON-encoded into frontmatter and its slug is stripped to `[a-z0-9-]`, so a crafted title can't break the YAML or escape `docs/prds/`. Empty `problem`/`vision`/`goals`/`notes` render as `_TBD._`.
 
 `obsidian` is `null` for a plain JS/TS repo. Set it to an object to switch on the Obsidian-plugin harness — shape, defaults, and everything it generates are documented in `references/obsidian-plugin.md`. Obsidian mode forces `testFramework: "vitest"` and `typescript: true`.
 

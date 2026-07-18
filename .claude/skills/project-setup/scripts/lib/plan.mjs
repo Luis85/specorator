@@ -1,7 +1,7 @@
 // .claude/skills/project-setup/scripts/lib/plan.mjs
 import {
   planCi, planDocs, planEslint, planFallow, planGithubMcp,
-  planInstall, planLoc, planReport, planTest,
+  planInstall, planLoc, planPrds, planReport, planTest,
 } from './harness.mjs';
 import { obsidianEntry, planObsidian } from './obsidian.mjs';
 import { standsDownTestConfig } from './testConfig.mjs';
@@ -96,5 +96,8 @@ export function plan(options, state) {
     ...planGitignore(opts, st),
     ...planRunReport(opts),
     ...planHarness(opts, st),
+    // Product-vision PRDs from the setup questionnaire — mode-agnostic, so both
+    // the Obsidian and generic harnesses get docs/prds/ when answers include them.
+    ...planPrds(opts),
   ];
 }

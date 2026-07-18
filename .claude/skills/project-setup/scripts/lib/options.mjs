@@ -20,6 +20,9 @@ const DEFAULTS = {
   // null => plain JS/TS repo. An object switches on the Obsidian-plugin harness
   // (see sanitizeObsidian for the answer shape and references/obsidian-plugin.md).
   obsidian: null,
+  // Product-requirement docs authored via the setup questionnaire (SKILL.md §
+  // product vision). Each entry renders to docs/prds/<id>-<slug>.md; empty => none.
+  prds: [],
 };
 
 function isObject(v) {
@@ -75,6 +78,29 @@ function sanitizeObsidian(raw) {
   };
 }
 
+// Normalize the PRD list from the questionnaire. id/title are templated into a
+// FILE PATH and YAML frontmatter, so coerce every field to a safe primitive and
+// force id to prd-<digits> (auto-numbered when absent). Title/status/goals stay
+// prose — the doc renderer JSON-encodes the title and escapes the index rows.
+function sanitizePrds(raw) {
+  if (!Array.isArray(raw)) return [];
+  const str = (v) => (typeof v === 'string' ? v : v == null ? '' : String(v));
+  return raw.slice(0, 50).map((p, i) => {
+    const prd = isObject(p) ? p : {};
+    const id = /^prd-\d{1,4}$/.test(str(prd.id)) ? str(prd.id) : `prd-${String(i).padStart(3, '0')}`;
+    return {
+      id,
+      title: str(prd.title).trim() || (i === 0 ? 'Product Vision' : 'Untitled'),
+      status: str(prd.status).trim() || 'draft',
+      created: str(prd.created).trim(),
+      problem: str(prd.problem).trim(),
+      vision: str(prd.vision).trim(),
+      goals: Array.isArray(prd.goals) ? prd.goals.map(str).map((g) => g.trim()).filter(Boolean).slice(0, 30) : [],
+      notes: str(prd.notes).trim(),
+    };
+  });
+}
+
 export function loadOptions(configPath) {
   let raw;
   try {
@@ -90,6 +116,7 @@ export function loadOptions(configPath) {
   const cap = Number(options.locCap);
   options.locCap = Number.isInteger(cap) && cap > 0 && cap <= 1_000_000 ? cap : 500;
   options.obsidian = sanitizeObsidian(options.obsidian);
+  options.prds = sanitizePrds(options.prds);
   return options;
 }
 

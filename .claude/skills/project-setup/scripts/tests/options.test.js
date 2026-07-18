@@ -49,3 +49,37 @@ test('loadOptions keeps a valid integer locCap', () => {
     c.cleanup();
   }
 });
+
+test('loadOptions defaults prds to an empty array', () => {
+  const c = withConfig('{}');
+  try {
+    assert.deepEqual(loadOptions(c.path).prds, []);
+  } finally {
+    c.cleanup();
+  }
+});
+
+test('loadOptions sanitizes prds: auto-numbers ids, defaults title/status, coerces goals', () => {
+  const c = withConfig(
+    JSON.stringify({
+      prds: [
+        { title: 'Vision', problem: 'P' }, // no id -> prd-000; title kept
+        { id: 'prd-007', title: '', goals: ['a', '', '  b  '] }, // empty title -> Untitled; goals trimmed/filtered
+        'not-an-object', // -> defaults at index 2
+      ],
+    }),
+  );
+  try {
+    const { prds } = loadOptions(c.path);
+    assert.equal(prds[0].id, 'prd-000');
+    assert.equal(prds[0].title, 'Vision');
+    assert.equal(prds[0].status, 'draft');
+    assert.equal(prds[1].id, 'prd-007'); // valid id kept
+    assert.equal(prds[1].title, 'Untitled');
+    assert.deepEqual(prds[1].goals, ['a', 'b']); // empties dropped, trimmed
+    assert.equal(prds[2].id, 'prd-002'); // non-object -> defaults, auto-numbered
+    assert.equal(prds[2].title, 'Untitled');
+  } finally {
+    c.cleanup();
+  }
+});
