@@ -64,25 +64,24 @@ describe('buildSuccessorPlan', () => {
 });
 
 describe('WorkOrderChainCoordinator', () => {
-  function harness() {
+  function harness(overrides: { chainDepth?: number } = {}) {
     const created: unknown[] = [];
     const linked: Array<[string, string]> = [];
     const deps = {
       events: { on: () => () => {} },
-      loadTaskSpec: jest.fn(async () => task({ chain_title: 'Next' } as never, HANDOFF)),
+      loadTaskSpec: jest.fn(async () =>
+        task({ chain_title: 'Next', chain_depth: overrides.chainDepth } as never, HANDOFF)),
       listTemplates: jest.fn(async () => []),
       createSuccessor: jest.fn(async (plan: { seed: { title: string } }) => { created.push(plan); return task({ id: 'task-2' }); }),
-      linkSuccessor: jest.fn(async (p: string, id: string) => { linked.push([p, id]); }),
-      appendLedger: jest.fn(async () => {}),
+      markChained: jest.fn(async (p: string, id: string) => { linked.push([p, id]); }),
       readSettings: () => ({ agentBoardMaxChainDepth: 25 }),
-      now: () => 't',
       logger: { debug() {}, warn() {}, error() {} },
       showNotice: jest.fn(),
     };
     const coord = new WorkOrderChainCoordinator(deps as never);
     coord.start();
     // fire() calls the public handler DIRECTLY and returns its promise, so `await fire(...)`
-    // waits for the whole async chain (loadTaskSpec → createSuccessor → linkSuccessor)
+    // waits for the whole async chain (loadTaskSpec → createSuccessor → markChained)
     // rather than racing it — the production subscription is fire-and-forget (`void`), whose
     // returned void would let an `await` assert before the coordinator finished its work.
     return {
@@ -115,5 +114,13 @@ describe('WorkOrderChainCoordinator', () => {
     await Promise.all([a, b]);
     expect(h.created).toHaveLength(1);
     expect(h.linked).toEqual([['Agent Board/tasks/task-1.md', 'task-2']]);
+  });
+
+  it('does not spawn past the max chain depth and shows a notice (frontmatter-only audit: no ledger dep to assert)', async () => {
+    const h = harness({ chainDepth: 25 });
+    await h.fire('done');
+    expect(h.created).toHaveLength(0);
+    expect(h.linked).toHaveLength(0);
+    expect(h.deps.showNotice).toHaveBeenCalledWith(expect.stringContaining('max chain depth (25) reached'));
   });
 });

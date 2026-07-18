@@ -22,10 +22,11 @@ import type SpecoratorPlugin from '@/main';
 /**
  * End-to-end coverage for Task 7 of the work-order-chaining plan: this drives the
  * REAL `WorkOrderChainCoordinator` wired the same way `src/main.ts` wires it —
- * `loadTaskSpec`/`createSuccessor`/`linkSuccessor`/`appendLedger` closures built
- * against a real `TaskNoteStore` and `createWorkOrderFromSeed` — over a hand-rolled
- * in-memory vault. No shared "fake Vault" test helper exists in this repo (every
- * sibling integration test hand-rolls a narrower one), so this file builds its own.
+ * `loadTaskSpec`/`createSuccessor`/`markChained` closures (frontmatter-only audit;
+ * there is no `appendLedger` dep) built against a real `TaskNoteStore` and
+ * `createWorkOrderFromSeed` — over a hand-rolled in-memory vault. No shared "fake
+ * Vault" test helper exists in this repo (every sibling integration test
+ * hand-rolls a narrower one), so this file builds its own.
  */
 
 const WORK_ORDER_FOLDER = 'Agent Board/tasks';
@@ -282,32 +283,17 @@ function wireCoordinator(plugin: SpecoratorPlugin, noteStore: TaskNoteStore): Wo
       const content = await plugin.app.vault.read(created);
       return noteStore.parse(created.path, content).task;
     },
-    linkSuccessor: async (predecessorPath, successorId, entry) => {
+    markChained: async (predecessorPath, successorId) => {
       const file = plugin.app.vault.getAbstractFileByPath(predecessorPath);
       if (!(file instanceof TFile)) return;
-      await plugin.app.vault.process(file, (content) => {
-        let next = noteStore.writeChainLink(content, successorId, new Date().toISOString());
-        try {
-          next = noteStore.appendLedger(next, entry);
-        } catch {
-          // Note may lack the ledger region (hand-edited); still persist chained_to.
-        }
-        return next;
-      });
-    },
-    appendLedger: async (task, entry) => {
-      const file = plugin.app.vault.getAbstractFileByPath(task.path);
-      if (!(file instanceof TFile)) return;
-      await plugin.app.vault.process(file, (content) => {
-        try {
-          return noteStore.appendLedger(content, entry);
-        } catch {
-          return content;
-        }
-      });
+      // Frontmatter-only audit: stamp chained_to via one atomic vault.process. The
+      // coordinator no longer writes the note Run Ledger (a review-triggered
+      // writeLedgerSnapshot would erase it), so there is no appendLedger dep.
+      await plugin.app.vault.process(file, (content) =>
+        noteStore.writeChainLink(content, successorId, new Date().toISOString()),
+      );
     },
     readSettings: () => plugin.settings,
-    now: () => new Date().toISOString(),
     logger: plugin.logger.scope('tasks.chain'),
     showNotice: (message) => { new Notice(message); },
   });
@@ -418,8 +404,8 @@ describe('Work-order chaining (integration)', () => {
     expect(seededMarkdown).toContain('status: ready');
     expect(seededMarkdown).toContain(`Chained from [[${WORK_ORDER_FOLDER}/task-1]]`);
 
-    // linkSuccessor stamps chained_to AND appends the ledger line in ONE atomic
-    // vault.process transform, not two separate writes.
+    // markChained stamps chained_to via ONE atomic vault.process transform
+    // (frontmatter-only audit — there is no ledger line to append).
     expect(vault.process).toHaveBeenCalledTimes(1);
   });
 
@@ -549,7 +535,10 @@ describe('Work-order chaining (integration)', () => {
     expect(newWorkOrderPaths(vault, before)).toHaveLength(0);
     const predecessorNow = noteStore.parse(PRED_PATH, vault.getContent(PRED_PATH)!).task;
     expect(predecessorNow.frontmatter.chained_to).toBeUndefined();
-    expect(predecessorNow.sections.ledger).toContain('max chain depth (2) reached');
+    // The setup isolates the depth cap as the only possible skip reason (matching trigger +
+    // valid chain + depth already at the cap), so "no new note + no chained_to" proves the
+    // cap fired. Depth-cap surfaces via a Notice only; the frontmatter-only audit writes no
+    // ledger line to assert here.
   });
 
   it('falls back to a blank successor when the configured chain template is missing', async () => {

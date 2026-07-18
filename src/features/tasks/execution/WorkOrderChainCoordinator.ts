@@ -1,6 +1,6 @@
 import type { TaskEventMap } from '../events';
 import { parseHandoffSections } from '../model/handoffSections';
-import type { TaskLedgerEntry, TaskSpec, TaskStatus } from '../model/taskTypes';
+import type { TaskSpec, TaskStatus } from '../model/taskTypes';
 import { parseChainConfig, type WorkOrderChainConfig } from '../model/workOrderChain';
 import type { WorkOrderTemplate } from '../templates/templateTypes';
 
@@ -82,12 +82,15 @@ export interface WorkOrderChainDeps {
   listTemplates(): Promise<WorkOrderTemplate[]>;
   /** Create the successor note from the plan and return its parsed spec (id + path). */
   createSuccessor(plan: Extract<SuccessorPlan, { kind: 'create' }>): Promise<TaskSpec | null>;
-  /** Atomic combined write on the predecessor: stamp `chained_to` AND append the ledger line in ONE vault.process transform, so it can't race RunSession's terminal finalization. */
-  linkSuccessor(predecessorPath: string, successorId: string, ledgerEntry: TaskLedgerEntry): Promise<void>;
-  /** Append one ledger line to the predecessor via vault.process (atomic). Used for the depth-skip notice. */
-  appendLedger(task: TaskSpec, entry: TaskLedgerEntry): Promise<void>;
+  /**
+   * Stamp `chained_to` on the predecessor via one atomic vault.process transform. The
+   * chain's durable audit trail is frontmatter-only (`chained_to` / `chained_from` /
+   * `chain_depth`) — never the note's Run Ledger region, which `TaskNoteStore.writeLedgerSnapshot`
+   * REPLACES wholesale at terminal (`RunSession.finalizeLedgerToNote` on the `review`
+   * trigger), which would erase a line appended here first.
+   */
+  markChained(predecessorPath: string, successorId: string): Promise<void>;
   readSettings(): { agentBoardMaxChainDepth?: number };
-  now(): string;
   logger: ChainLogger;
   showNotice(message: string): void;
 }
@@ -175,14 +178,11 @@ export class WorkOrderChainCoordinator {
       this.deps.logger.warn('chain skip: successor creation returned null');
       return;
     }
-    // One atomic write on the predecessor: stamp chained_to AND append the ledger line
-    // together, so it can't race RunSession's terminal note finalization (which also
-    // writes this note for the `review` trigger).
-    await this.deps.linkSuccessor(predecessor.path, successor.frontmatter.id, {
-      timestamp: this.deps.now(),
-      status: payload.status,
-      message: `chain: spawned successor ${successor.frontmatter.id}`,
-    });
+    // Frontmatter-only audit trail: stamp chained_to via one atomic vault.process
+    // write. Never touch the note's Run Ledger region — writeLedgerSnapshot replaces
+    // it wholesale at terminal (RunSession.finalizeLedgerToNote), which would erase
+    // any line appended here.
+    await this.deps.markChained(predecessor.path, successor.frontmatter.id);
     this.deps.showNotice(`Chained → "${successor.frontmatter.title}" (ready).`);
   }
 
@@ -197,7 +197,7 @@ export class WorkOrderChainCoordinator {
     return template;
   }
 
-  /** A depth-cap skip is user-visible (notice + ledger line); every other skip reason is a silent debug log. */
+  /** A depth-cap skip is user-visible (a Notice); every other skip reason is a silent debug log. */
   private async recordSkip(
     predecessor: TaskSpec,
     payload: TaskEventMap['task:status-changed'],
@@ -208,10 +208,5 @@ export class WorkOrderChainCoordinator {
       return;
     }
     this.deps.showNotice(`Work order "${predecessor.frontmatter.title}": ${reason}.`);
-    await this.deps.appendLedger(predecessor, {
-      timestamp: this.deps.now(),
-      status: payload.status,
-      message: `chain: ${reason}`,
-    });
   }
 }
