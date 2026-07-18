@@ -6,6 +6,7 @@ import { ProviderWorkspaceRegistry } from '@/core/providers/ProviderWorkspaceReg
 import { type InlineEditContext, InlineEditModal } from '@/features/inline-edit/ui/InlineEditModal';
 import { activateLibrary } from '@/features/library/activateLibrary';
 import type { LibraryTab } from '@/features/library/viewType';
+import { activateMarketplace } from '@/features/marketplace/activateMarketplace';
 import {
   createWorkOrderFromBrowserSelection,
   createWorkOrderTemplate,
@@ -62,6 +63,12 @@ function registerViewCommands(plugin: SpecoratorPlugin, register: RegisterComman
     callback: () => {
       void plugin.runNextReadyWorkOrder();
     },
+  });
+
+  register({
+    id: 'open-marketplace',
+    name: t('marketplace.command.open'),
+    callback: () => void activateMarketplace(plugin),
   });
 }
 

@@ -3,6 +3,9 @@ import { SpecoratorView } from '@/features/chat/SpecoratorView';
 import { activateLibrary } from '@/features/library/activateLibrary';
 import { LibraryView } from '@/features/library/LibraryView';
 import { VIEW_TYPE_LIBRARY } from '@/features/library/viewType';
+import { activateMarketplace } from '@/features/marketplace/activateMarketplace';
+import { MarketplaceView } from '@/features/marketplace/MarketplaceView';
+import { VIEW_TYPE_MARKETPLACE } from '@/features/marketplace/viewType';
 import type { ChatTabExecutionSurface } from '@/features/tasks/execution/ChatTabExecutionSurface';
 import { AgentBoardView } from '@/features/tasks/ui/AgentBoardView';
 import { t } from '@/i18n/i18n';
@@ -37,5 +40,10 @@ export function registerPluginViews({ plugin, taskExecutionSurface }: PluginView
   plugin.registerView(VIEW_TYPE_LIBRARY, (leaf) => new LibraryView(leaf, plugin));
   plugin.addRibbonIcon('library-big', t('ribbon.openLibrary'), () => {
     void activateLibrary(plugin);
+  });
+
+  plugin.registerView(VIEW_TYPE_MARKETPLACE, (leaf) => new MarketplaceView(leaf, plugin));
+  plugin.addRibbonIcon('store', t('marketplace.ribbon'), () => {
+    void activateMarketplace(plugin);
   });
 }
