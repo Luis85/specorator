@@ -115,6 +115,26 @@ function onLoopKeydown(event: KeyboardEvent): void {
   }
 }
 
+// --- Chain (next step) -------------------------------------------------------
+// Gated on the callback's presence (not just assignEditable): a call site that
+// wires no onConfigureChain (a read-only surface) renders the static label
+// instead of a dead button.
+const canConfigureChain = computed(() => Boolean(cb.onConfigureChain));
+const chainLabel = ref(cb.getChainSummary?.(props.task) ?? t('tasks.chainConfig.chipNone'));
+function configureChain(): void {
+  void (async () => {
+    const summary = await cb.onConfigureChain?.(props.task);
+    if (summary === undefined) return;
+    chainLabel.value = summary;
+  })();
+}
+function onChainKeydown(event: KeyboardEvent): void {
+  if (event.key === 'Enter' || event.key === ' ') {
+    if (event.key === ' ') event.preventDefault();
+    configureChain();
+  }
+}
+
 // --- Priority ---------------------------------------------------------------
 const selectedPriority = ref<TaskPriority>(fm.value.priority);
 const priorityOptions = computed(() => PRIORITY_OPTIONS.map((p) => ({ value: p, label: p })));
@@ -249,6 +269,31 @@ function openConversation(): void {
         v-else
         class="specorator-work-order-modal-loop"
       >{{ loopLabel }}</span>
+    </PropertyRow>
+
+    <PropertyRow
+      prop-key="chain"
+      icon="link"
+      :label="t('tasks.workOrderModal.fieldNextStep')"
+    >
+      <span
+        v-if="assignEditable && canConfigureChain"
+        class="specorator-work-order-modal-chip specorator-work-order-modal-chip--chain"
+        role="button"
+        tabindex="0"
+        @click="configureChain"
+        @keydown="onChainKeydown"
+      >
+        <span class="specorator-work-order-modal-chip-value">{{ chainLabel }}</span>
+        <span
+          :ref="(el) => mountLucide(el, 'chevron-down')"
+          class="specorator-work-order-modal-chip-caret"
+        />
+      </span>
+      <span
+        v-else
+        class="specorator-work-order-modal-prop-inner"
+      >{{ chainLabel }}</span>
     </PropertyRow>
 
     <PropertyRow

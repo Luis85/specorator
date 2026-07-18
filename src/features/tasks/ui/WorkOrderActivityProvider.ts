@@ -15,6 +15,7 @@ import { TaskIndexer } from '../indexing/TaskIndexer';
 import type { TaskBoardModel, TaskSpec } from '../model/taskTypes';
 import { TaskNoteStore } from '../storage/TaskNoteStore';
 import { buildWorkOrderActivitySummary } from './workOrderActivitySummary';
+import { buildChainDetailCallbacks } from './workOrderChainSummary';
 import { buildWorkOrderConversationBindings } from './workOrderConversationBindings';
 import { WorkOrderDetailModal, type WorkOrderDetailModalCallbacks, type WorkOrderFieldUpdate } from './WorkOrderDetailModal';
 import type { WorkOrderSectionUpdate } from './workOrderEditForm';
@@ -225,6 +226,7 @@ export class WorkOrderActivityProvider implements WorkOrderActivityProviderContr
       onSaveFields: (target, fields) => this.saveTaskFields(target, fields),
       onSaveSections: (target, sections) => this.saveTaskSections(target, sections),
       ...buildWorkOrderFieldOptions(settings, agents),
+      ...buildChainDetailCallbacks(this.plugin, (target, fields) => this.saveTaskFields(target, fields)),
     };
   }
 
