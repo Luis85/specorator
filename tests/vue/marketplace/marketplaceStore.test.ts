@@ -297,6 +297,45 @@ describe('marketplaceStore load fallbacks', () => {
     expect(store.error).toMatch(/network down/);
   });
 
+  it('discards a stale installed-scan when a concurrent reload commits first', async () => {
+    // load()'s finally clears `loading` before awaiting refreshInstalled, so a
+    // second load can commit a replacement catalog while the first scan is still
+    // running. The first (stale) scan must NOT overwrite installedIds computed
+    // from the current catalog when it finishes last.
+    const itemA: MarketplaceItem = { id: 'a', type: 'loop', name: 'A', description: 'd', path: 'loops/a.md', tags: [] };
+    const itemB: MarketplaceItem = { id: 'b', type: 'loop', name: 'B', description: 'd', path: 'loops/b.md', tags: [] };
+    const manifestA: MarketplaceManifest = { schemaVersion: 1, catalog: 'x', count: 1, items: [itemA] };
+    const manifestB: MarketplaceManifest = { schemaVersion: 1, catalog: 'x', count: 1, items: [itemB] };
+
+    // Hold the first catalog's installed-scan open; the second resolves at once.
+    let releaseAScan: (v: boolean) => void = () => {};
+    const aScan = new Promise<boolean>((resolve) => {
+      releaseAScan = resolve;
+    });
+    isInstalledSpy.mockImplementation(async (it: MarketplaceItem) => {
+      if (it.id === 'a') return aScan;
+      if (it.id === 'b') return true;
+      return false;
+    });
+    fetchIndexSpy.mockResolvedValueOnce(manifestA).mockResolvedValueOnce(manifestB);
+
+    const store = useMarketplaceStore();
+    store.init(fakePlugin(true));
+    const loadingA = store.load(); // commits catalog A (gen 1), then parks in the A-scan
+    // Drain microtasks so load A reaches the paused per-item check (loading now false).
+    await new Promise((resolve) => setTimeout(resolve));
+
+    await store.load(); // catalog B commits (gen 2) and its scan marks B installed
+    expect(store.installedIds.has('b')).toBe(true);
+
+    releaseAScan(true); // the stale A-scan finishes last, computing { a }
+    await loadingA;
+
+    // The generation guard drops A's late write; installedIds still reflects B.
+    expect(store.installedIds.has('a')).toBe(false);
+    expect(store.installedIds.has('b')).toBe(true);
+  });
+
   it('canonicalizes a non-canonical custom source so the offline cache round-trips', async () => {
     // The client canonicalizes its base URL (lowercase host, strip :443). The
     // store's source key MUST canonicalize identically, or the cache written

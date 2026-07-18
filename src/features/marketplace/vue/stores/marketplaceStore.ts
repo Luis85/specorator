@@ -92,6 +92,13 @@ export const useMarketplaceStore = defineStore('marketplace', () => {
   }
 
   async function refreshInstalled(): Promise<void> {
+    // Capture the catalog generation up front. `load()`'s finally clears
+    // `loading` BEFORE awaiting this scan, so a concurrent load() (another shared
+    // leaf, or a Refresh during a long scan) can commit a replacement catalog and
+    // run its own scan while this one is still awaiting per-item checks. Without
+    // the guard, a slow scan finishing last would clobber `installedIds` with ids
+    // computed from the now-stale catalog — so only commit if still current.
+    const generation = loadGeneration;
     const deps = installDeps();
     // Scan the agent roster at most once per refresh (not once per agent item);
     // an unreadable roster degrades to "no agents marked", never a thrown scan.
@@ -111,7 +118,9 @@ export const useMarketplaceStore = defineStore('marketplace', () => {
         // a folder-resolution hiccup shouldn't blank the whole list
       }
     }
-    installedIds.value = ids;
+    if (generation === loadGeneration) {
+      installedIds.value = ids;
+    }
   }
 
   /**
