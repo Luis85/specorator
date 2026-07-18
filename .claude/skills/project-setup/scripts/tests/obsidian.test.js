@@ -34,6 +34,18 @@ function findMerge(actions, path) {
   return actions.find((a) => a.type === 'mergeJson' && a.path === path);
 }
 
+// planObsidian actions for a given opt-in hooks config (all hooks default off).
+function optionsForHooks(hooks) {
+  const dir = mkdtempSync(join(tmpdir(), 'obs-hooks-'));
+  const path = join(dir, 'answers.json');
+  writeFileSync(path, JSON.stringify({ obsidian: BASE, hooks }));
+  try {
+    return planObsidian(loadOptions(path), {});
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+}
+
 // planObsidian with github integration on (release/CI sub-planners are gated on it).
 function planWithGithub(obsidian = {}, state = {}) {
   const dir = mkdtempSync(join(tmpdir(), 'obs-gh-'));
@@ -161,14 +173,54 @@ test('a shadowed verify script surfaces a collision notice (docs point users at 
   assert.ok(actions.some((a) => a.type === 'notice' && /"verify" script kept/.test(a.message)));
 });
 
-test('the i18n scaffold + SessionStart hook ship, with notice text lint-forced through t()', () => {
+test('the i18n scaffold ships by default and notice text is lint-forced through t()', () => {
   const actions = actionsFor();
-  const hook = JSON.parse(findWrite(actions, '.claude/settings.json').content);
-  assert.ok(hook.hooks.SessionStart, 'missing SessionStart hook');
   for (const p of ['src/i18n/i18n.ts', 'src/i18n/en.json', 'tests/unit/i18n.test.ts']) {
     assert.ok(findWrite(actions, p), `missing ${p}`);
   }
   assert.match(findWrite(actions, 'eslint.config.mjs').content, /Route user-facing notice text through t\(\)/);
+});
+
+test('hooks are opt-in: no .claude/settings.json by default; slash commands always ship', () => {
+  const actions = actionsFor();
+  assert.equal(findWrite(actions, '.claude/settings.json'), undefined, 'no hooks -> no settings.json');
+  for (const c of ['add-command', 'add-setting', 'new-service', 'release']) {
+    assert.ok(findWrite(actions, `.claude/commands/${c}.md`), `missing slash command ${c}`);
+  }
+  // Opting in wires SessionStart (deps install) and a qualityGate Stop hook.
+  const settings = JSON.parse(findWrite(optionsForHooks({ sessionStart: true, qualityGate: true }), '.claude/settings.json').content);
+  assert.ok(settings.hooks.SessionStart, 'missing SessionStart hook');
+  assert.ok(settings.hooks.Stop, 'missing qualityGate Stop hook');
+  assert.match(settings.hooks.Stop[0].hooks[0].command, /typecheck.*lint/);
+  // Neither on -> still no settings.json.
+  assert.equal(findWrite(optionsForHooks({}), '.claude/settings.json'), undefined);
+});
+
+test('manifest-beta.json ships mirroring manifest.json (BRAT-ready), and the publishing guide lands', () => {
+  const actions = actionsFor();
+  assert.equal(findWrite(actions, 'manifest-beta.json').content, findWrite(actions, 'manifest.json').content);
+  const pub = findWrite(actions, 'docs/publishing.md');
+  assert.match(pub.content, /BRAT/);
+  assert.match(pub.content, /obsidian-releases/);
+});
+
+test('dependabot ships only with github integration', () => {
+  assert.ok(findWrite(planWithGithub(), '.github/dependabot.yml'));
+  assert.equal(findWrite(actionsFor(), '.github/dependabot.yml'), undefined);
+});
+
+test('pre-commit hook is opt-in (off by default; on wires lint-staged + simple-git-hooks)', () => {
+  assert.equal(
+    actionsFor().find((a) => a.type === 'mergeJson' && a.path === 'package.json' && a.patch['simple-git-hooks']),
+    undefined,
+  );
+  const on = optionsForHooks({ preCommit: true });
+  const p = on.find((a) => a.type === 'mergeJson' && a.path === 'package.json' && a.patch['nano-staged']);
+  assert.ok(p, 'missing nano-staged/simple-git-hooks patch');
+  assert.equal(p.patch.scripts.prepare, 'simple-git-hooks');
+  assert.equal(p.patch['simple-git-hooks']['pre-commit'], 'npx nano-staged');
+  assert.ok(p.patch.devDependencies['simple-git-hooks'] && p.patch.devDependencies['nano-staged']);
+  assert.ok(on.some((a) => a.type === 'notice' && /pre-commit/i.test(a.message)));
 });
 
 test('manifest-only brownfield seeds the package version from the manifest (no check:artifacts desync)', () => {

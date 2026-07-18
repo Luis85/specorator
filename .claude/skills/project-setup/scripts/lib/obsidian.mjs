@@ -118,7 +118,10 @@ function planManifest(o, state, version) {
   if (existing && typeof existing.isDesktopOnly === 'boolean' && existing.isDesktopOnly === Boolean(o.mobile)) {
     notices.push(notice(`Existing manifest.json says isDesktopOnly: ${existing.isDesktopOnly}, but you chose ${o.mobile ? 'mobile-ready' : 'desktop-only'} — the build, lint, and docs follow your answer. Set "isDesktopOnly": ${!o.mobile} in manifest.json to match (or re-run with the other mobile choice).`));
   }
-  return [...notices, write('manifest.json', manifest), versionsAction];
+  // manifest-beta.json mirrors manifest.json for BRAT beta installs; sync-version
+  // keeps it in lockstep so it never lags stable (see docs/publishing.md for how
+  // to run a beta channel ahead of stable).
+  return [...notices, write('manifest.json', manifest), write('manifest-beta.json', manifest), versionsAction];
 }
 
 // The version shared by the generated manifest, versions.json, AND package.json
@@ -492,12 +495,66 @@ function planVerifyScript(options, state) {
   ];
 }
 
-// A SessionStart hook so Claude Code on the web installs deps before working —
-// the generated repo is agent-ready out of the box.
+// Claude Code integration: slash commands (always — inert until invoked) plus
+// OPT-IN hooks. sessionStart installs deps on a fresh Claude web session;
+// qualityGate runs the fast gates (typecheck+lint) on Claude's Stop so the agent
+// self-corrects. .claude/settings.json is written only when a hook is enabled.
 function planClaudeSettings(options, state) {
+  const h = options.hooks ?? {};
   const pm = safePackageManager(options.packageManager ?? state?.packageManager ?? 'npm');
+  const run = runPrefix(pm);
+  const command = (name) => write(`.claude/commands/${name}.md`, renderTemplate(loadTemplate(`obsidian/claude/${name}.md.tmpl`), { run }));
+  const actions = [command('add-command'), command('add-setting'), command('new-service'), command('release')];
+  const hooks = {};
+  if (h.sessionStart) hooks.SessionStart = [{ hooks: [{ type: 'command', command: PM_INSTALL[pm] }] }];
+  if (h.qualityGate) hooks.Stop = [{ hooks: [{ type: 'command', command: `${run} typecheck && ${run} lint` }] }];
+  if (Object.keys(hooks).length > 0) {
+    actions.push(write('.claude/settings.json', JSON.stringify({ hooks }, null, 2) + '\n'));
+  }
+  return actions;
+}
+
+// Dependabot keeps the exact-pinned deps fresh with weekly PRs that must pass the
+// same gates. Gated on GitHub integration (it lives under .github/).
+function planDependabot(options) {
+  if (!options.github?.integrate) return [];
+  return [write('.github/dependabot.yml', loadTemplate('obsidian/dependabot.yml.tmpl'))];
+}
+
+// Publishing guide: BRAT beta testing + the community-plugins submission checklist.
+// manifest-beta.json ships alongside manifest.json (BRAT-ready) and is kept in
+// lockstep by sync-version, so it never rots; a separate beta channel (manifest-beta
+// ahead of stable) is a documented manual step in publishing.md.
+function planPublishing(options) {
+  const o = options.obsidian;
+  const run = runPrefix(safePackageManager(options.packageManager ?? 'npm'));
   return [
-    write('.claude/settings.json', renderTemplate(loadTemplate('obsidian/claude-settings.json.tmpl'), { pmInstall: PM_INSTALL[pm] })),
+    write('docs/publishing.md', renderTemplate(loadTemplate('obsidian/docs/publishing.md.tmpl'), { name: o.name, id: o.id, run })),
+  ];
+}
+
+// Opt-in pre-commit: nano-staged via simple-git-hooks (lighter than husky +
+// lint-staged; lint-staged is on the depend/ban-dependencies list the scaffold
+// enforces). Staged source is eslint --fix + prettier before every commit —
+// instant local feedback. The `prepare` script installs the git hook on `install`.
+function planPreCommit(options, state) {
+  if (!options.hooks?.preCommit) return [];
+  return [
+    notice('Pre-commit hook enabled (simple-git-hooks + nano-staged): staged files get eslint --fix + prettier before each commit. It installs via the `prepare` script on your next install; run `npx simple-git-hooks` once if you commit before installing.'),
+    ...scriptCollision(options, state, 'prepare', 'simple-git-hooks'),
+    {
+      type: 'mergeJson',
+      path: 'package.json',
+      patch: {
+        scripts: { prepare: 'simple-git-hooks' },
+        'simple-git-hooks': { 'pre-commit': 'npx nano-staged' },
+        'nano-staged': {
+          '*.{ts,tsx,vue,js,jsx,mjs,cjs}': ['eslint --fix', 'prettier --write'],
+          '*.{css,json,md,yml,yaml}': ['prettier --write'],
+        },
+        devDependencies: dep('simple-git-hooks', 'nano-staged'),
+      },
+    },
   ];
 }
 
@@ -630,8 +687,11 @@ export function planObsidian(options, state = {}) {
     ...planArtifacts(options, state),
     ...planRelease(options, state),
     ...planGithubTemplates(options),
+    ...planDependabot(options),
     ...planVerifyScript(options, state),
+    ...planPreCommit(options, state),
     ...planClaudeSettings(options, state),
+    ...planPublishing(options),
     ...planProjectDocs(options, state),
   ];
 }

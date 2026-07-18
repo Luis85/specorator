@@ -31,6 +31,13 @@ engine owns every mutation; you detect, interview, then invoke it.
    - Guardrail toggles (default all on; `cssGuard` is Obsidian-only).
    - **Test framework — Jest or Vitest** (default the detected one; Obsidian
      mode is always Vitest, don't ask).
+   - **Opt-in hooks (Obsidian; default ALL OFF — ask which, if any):**
+     `hooks.sessionStart` (Claude Code web installs deps on session start),
+     `hooks.qualityGate` (Claude runs typecheck+lint on Stop, self-correcting),
+     `hooks.preCommit` (simple-git-hooks + nano-staged runs eslint+prettier on
+     staged files). Nothing installs a hook unless asked. The Claude slash
+     commands, publishing guide, `manifest-beta.json`, and Dependabot (with
+     GitHub on) always ship — they are inert until used.
    - Docs scaffold + optional grill; the GitHub decision (see
      `references/github-integration.md`).
    Write the answers to `answers.json` (shape in `references/quality-harness.md`).

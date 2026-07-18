@@ -65,7 +65,7 @@ test('freezeOptions forces vitest + typescript in obsidian mode even when jest i
 test('greenfield apply: full scaffold lands, second apply converges to a no-op', () => {
   const p = tmpProject({});
   try {
-    const answers = { obsidian: OBSIDIAN, github: { integrate: false }, docs: { scaffold: true } };
+    const answers = { obsidian: OBSIDIAN, github: { integrate: false }, docs: { scaffold: true }, hooks: { sessionStart: true, qualityGate: true } };
     const run = () => {
       const options = loadFrom(p.dir, answers);
       const state = detect(p.dir);
@@ -89,7 +89,7 @@ test('greenfield apply: full scaffold lands, second apply converges to a no-op',
       'src/core/commands/CommandsService.ts', 'src/core/logging/Logger.ts', 'src/core/settings/SettingsService.ts',
       'src/core/vault/VaultService.ts', 'src/core/http/RequestService.ts',
       'src/commands.ts', 'src/ui/statusBar.ts', 'src/ui/registerViews.ts',
-      'src/i18n/i18n.ts', 'src/i18n/en.json', 'tests/unit/i18n.test.ts', '.claude/settings.json',
+      'src/i18n/i18n.ts', 'src/i18n/en.json', 'tests/unit/i18n.test.ts', '.claude/settings.json', '.claude/commands/release.md',
       'tests/unit/eventBus.test.ts', 'tests/unit/modalService.test.ts', 'tests/unit/commandsService.test.ts',
       'tests/unit/statusBar.test.ts', 'tests/unit/logger.test.ts', 'tests/unit/settingsService.test.ts',
       'tests/unit/vaultService.test.ts', 'tests/unit/requestService.test.ts',

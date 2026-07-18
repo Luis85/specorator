@@ -12,6 +12,10 @@ const DEFAULTS = {
   github: { integrate: false, mcp: false, fixApply: false },
   // scaffold gates the docs; grill is orchestration-only (SKILL.md/references), engine ignores.
   docs: { scaffold: true, grill: false },
+  // Hooks are OPT-IN (all default off): sessionStart installs deps on Claude Code
+  // web sessions; qualityGate runs typecheck+lint on Claude's Stop; preCommit wires
+  // lint-staged via a git pre-commit hook. Nothing installs a hook unless asked.
+  hooks: { sessionStart: false, qualityGate: false, preCommit: false },
   locCap: 500,
   // null => plain JS/TS repo. An object switches on the Obsidian-plugin harness
   // (see sanitizeObsidian for the answer shape and references/obsidian-plugin.md).

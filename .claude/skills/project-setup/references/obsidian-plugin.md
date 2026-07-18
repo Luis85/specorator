@@ -21,7 +21,8 @@ review parity, ratchets, Vue islands, artifact smoke).
   },
   "guardrails": { "cssGuard": true },
   "github": { "integrate": true },
-  "docs": { "scaffold": true }
+  "docs": { "scaffold": true },
+  "hooks": { "sessionStart": false, "qualityGate": false, "preCommit": false }
 }
 ```
 
@@ -43,6 +44,18 @@ review parity, ratchets, Vue islands, artifact smoke).
   raising/lowering it is checked, not guessed.
 - Obsidian mode forces `testFramework: "vitest"` and `typescript: true`;
   `guardrails.cssGuard` adds the CSS `!important` ratchet (Obsidian-only).
+- `hooks` — **all opt-in, default off; ask which the user wants**:
+  - `sessionStart` — a Claude Code `SessionStart` hook that installs deps
+    (`.claude/settings.json`), so a fresh web session is dependency-ready.
+  - `qualityGate` — a Claude Code `Stop` hook running `typecheck && lint`, so
+    the agent self-corrects when it finishes a turn.
+  - `preCommit` — `simple-git-hooks` + `nano-staged` running `eslint --fix` +
+    `prettier` on staged files (installed via a `prepare` script). `nano-staged`,
+    not `lint-staged` (which the scaffold's `depend/ban-dependencies` rule bans).
+
+  `.claude/settings.json` is written only when a hook is enabled. The slash
+  commands, publishing guide, and `manifest-beta.json` are NOT hooks — they ship
+  always (inert until used).
 
 ## What gets generated
 
@@ -57,9 +70,11 @@ review parity, ratchets, Vue islands, artifact smoke).
 | Lint/format | `eslint.config.mjs` (obsidianmd recommended + type-aware typescript-eslint + eslint-plugin-vue + import sort + raw-HTML + raw-`Notice` bans + function-health caps + eslint-comments discipline + prettier compat), `.prettierrc.json`, `.prettierignore`, `.editorconfig` |
 | Ratchets | shared fallow/LOC harness (fallow gates `boundaryViolations` at 0 via `main`/`core`/`ui` zones) plus `scripts/check-css-important.mjs` (+ baseline) and `scripts/check-artifacts.mjs` (presence, version sync, size budgets) |
 | i18n (`src/i18n/`) | `i18n.ts` (`t(key, params)`) + `en.json`; literal/template text in `plugin.notices.info/error` is lint-banned (forced through `t()`) |
-| Agent workflow | `verify` script (chains the whole gate set in CI order), `.claude/settings.json` (SessionStart hook installs deps for Claude Code on the web) |
+| Agent workflow | `verify` script (chains the whole gate set in CI order); `.claude/commands/{add-command,add-setting,new-service,release}.md` (slash commands, always); **opt-in** `.claude/settings.json` — `sessionStart` install hook and/or `qualityGate` Stop hook (typecheck+lint) — written only when a hook is enabled |
+| Pre-commit (opt-in `hooks.preCommit`) | `simple-git-hooks` + `nano-staged` on staged files (eslint --fix + prettier), installed via the `prepare` script |
+| Publishing | `manifest-beta.json` (BRAT-ready, kept in lockstep by sync-version), `docs/publishing.md` (BRAT beta flow + community-plugins submission checklist) — always |
 | Docs | `AGENTS.md` (architecture, services, command types, boundaries, i18n, add-a-feature checklist), `README.md`, `CLAUDE.md` (points at AGENTS.md), `docs/adr/0001-plugin-architecture-baseline.md` (with `docs.scaffold`), plus the generic docs scaffold |
-| CI/CD | `.github/workflows/ci.yml` (lint → loc → css → quality → typecheck → format → coverage → build → artifact smoke), `.github/workflows/release.yml`, `.github/pull_request_template.md` — all only with `github.integrate` |
+| CI/CD | `.github/workflows/ci.yml` (lint → loc → css → quality → typecheck → format → coverage → build → artifact smoke), `.github/workflows/release.yml`, `.github/dependabot.yml` (weekly, grouped), `.github/pull_request_template.md` — all only with `github.integrate` |
 
 ## Architecture the scaffold ships
 
