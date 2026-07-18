@@ -246,6 +246,27 @@ test('pre-commit hook is opt-in (off by default; on wires lint-staged + simple-g
   assert.ok(on.some((a) => a.type === 'notice' && /pre-commit/i.test(a.message)));
 });
 
+test('pre-commit runs eslint --fix only when linting is on (no doomed hook when lint is off)', () => {
+  const sourceGlob = '*.{ts,tsx,vue,js,jsx,mjs,cjs}';
+  // Default (severity-staging on): eslint installed -> eslint --fix + prettier.
+  const on = optionsForHooks({ preCommit: true }).find((a) => a.patch?.['nano-staged']);
+  assert.deepEqual(on.patch['nano-staged'][sourceGlob], ['eslint --fix', 'prettier --write']);
+  // Lint off: planObsidianEslint installs no eslint, so the hook must be prettier-only
+  // (else `npx nano-staged` runs a missing eslint on every commit).
+  const dir = mkdtempSync(join(tmpdir(), 'obs-pc-'));
+  const path = join(dir, 'answers.json');
+  writeFileSync(path, JSON.stringify({ obsidian: BASE, hooks: { preCommit: true }, guardrails: { eslintSeverityStaging: false } }));
+  try {
+    const actions = planObsidian(loadOptions(path), {});
+    const off = actions.find((a) => a.patch?.['nano-staged']);
+    assert.deepEqual(off.patch['nano-staged'][sourceGlob], ['prettier --write']);
+    // The advisory notice matches the actual toolchain (no phantom "eslint --fix").
+    assert.ok(actions.some((a) => a.type === 'notice' && /staged files get prettier before/.test(a.message)));
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
 test('obsidianEntry is the fixed greenfield entry, and esbuild bundles it (explicitly relative)', () => {
   assert.equal(obsidianEntry(), 'src/main.ts');
   assert.match(findWrite(actionsFor(), 'esbuild.config.mjs').content, /entryPoints: \['\.\/src\/main\.ts'\]/);

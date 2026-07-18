@@ -18,7 +18,12 @@ straight from this GitHub repo before it's in the community list.
      `1.3.0-beta.1`) and update `minAppVersion` if needed. Leave `manifest.json`
      (stable) untouched.
   2. Build (`{{run}} build`) and create a GitHub **pre-release** whose tag equals
-     that beta version, attaching `main.js`, `manifest.json`, and `styles.css`.
+     that beta version, attaching `main.js`, `styles.css`, and — as the release's
+     `manifest.json` asset — a **copy of `manifest-beta.json`**. BRAT installs the
+     release's `manifest.json` into the vault, so the asset must carry the beta
+     version (matching the tag); attaching the stable `manifest.json` would install
+     a bundle mislabeled as the stable version. Keep the repo's stable
+     `manifest.json` unchanged.
   3. Testers on the beta channel get the pre-release; stable users are unaffected.
   4. When you promote to stable, run `npm version …` — `sync-version` realigns
      `manifest-beta.json` to the new stable version. (Don't run `npm version`

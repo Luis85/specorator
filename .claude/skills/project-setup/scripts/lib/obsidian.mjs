@@ -443,8 +443,14 @@ function planPublishing(options) {
 // instant local feedback. The `prepare` script installs the git hook on `install`.
 function planPreCommit(options) {
   if (!options.hooks?.preCommit) return [];
+  // `eslint --fix` only when severity-staging is on: planObsidianEslint installs
+  // eslint + the config only then, so an unconditional eslint task would fail every
+  // commit (missing binary/config) when linting is off. prettier always ships.
+  const lint = Boolean(options.guardrails?.eslintSeverityStaging);
+  const sourceTask = lint ? ['eslint --fix', 'prettier --write'] : ['prettier --write'];
+  const summary = lint ? 'eslint --fix + prettier' : 'prettier';
   return [
-    notice('Pre-commit hook enabled (simple-git-hooks + nano-staged): staged files get eslint --fix + prettier before each commit. It installs via the `prepare` script on your next install; run `npx simple-git-hooks` once if you commit before installing.'),
+    notice(`Pre-commit hook enabled (simple-git-hooks + nano-staged): staged files get ${summary} before each commit. It installs via the \`prepare\` script on your next install; run \`npx simple-git-hooks\` once if you commit before installing.`),
     {
       type: 'mergeJson',
       path: 'package.json',
@@ -452,7 +458,7 @@ function planPreCommit(options) {
         scripts: { prepare: 'simple-git-hooks' },
         'simple-git-hooks': { 'pre-commit': 'npx nano-staged' },
         'nano-staged': {
-          '*.{ts,tsx,vue,js,jsx,mjs,cjs}': ['eslint --fix', 'prettier --write'],
+          '*.{ts,tsx,vue,js,jsx,mjs,cjs}': sourceTask,
           '*.{css,json,md,yml,yaml}': ['prettier --write'],
         },
         devDependencies: dep('simple-git-hooks', 'nano-staged'),
