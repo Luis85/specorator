@@ -20,11 +20,7 @@ Commands are shown for this repo's package manager (`{{run}} …`).
 {{run}} build          # production bundle (main.js + styles.css)
 {{run}} test           # Vitest (jsdom; obsidian aliased to tests/__mocks__/obsidian.ts){{coverageLine}}
 {{run}} typecheck      # {{typecheckTool}} --noEmit
-{{run}} lint           # eslint (obsidianmd + type-aware rules, all-error)
-{{run}} format         # prettier --write
-{{run}} check:loc      # per-file LOC ratchet
-{{run}} check:css      # CSS !important ratchet (add -- --update to re-baseline)
-{{run}} check:quality  # fallow metric ratchet (run with ./coverage absent)
+{{run}} format         # prettier --write{{lintLine}}{{locLine}}{{cssLine}}{{qualityLine}}
 {{run}} check:artifacts # post-build artifact smoke (run after build)
 ```
 

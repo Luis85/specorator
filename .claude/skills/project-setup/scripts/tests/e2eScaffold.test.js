@@ -13,7 +13,7 @@
 //
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
-import { existsSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { test } from 'node:test';
@@ -55,6 +55,26 @@ for (const v of VARIANTS) {
       run('apply'); // real npm install + writes + ratchet baselines
       run('verify'); // full gate chain (lint → quality → typecheck → format → coverage → build → artifacts); throws on failure
       assert.ok(existsSync(join(dir, 'main.js')), 'build emitted main.js');
+
+      // Re-apply idempotency + the two re-apply bugs this pass fixed.
+      const readJson = (f) => JSON.parse(readFileSync(join(dir, f), 'utf8'));
+      const floored = () => /statements: [1-9]/.test(readFileSync(join(dir, 'vitest.config.mjs'), 'utf8'));
+      assert.ok(floored(), 'the coverage baseline set a non-zero floor');
+      // Simulate `npm version 0.2.0` (what sync-version writes across the trio).
+      for (const f of ['manifest.json', 'package.json']) {
+        const j = readJson(f);
+        j.version = '0.2.0';
+        writeFileSync(join(dir, f), JSON.stringify(j, null, 2) + '\n');
+      }
+      const versions = readJson('versions.json');
+      versions['0.2.0'] = readJson('manifest.json').minAppVersion;
+      writeFileSync(join(dir, 'versions.json'), JSON.stringify(versions, null, 2) + '\n');
+      run('apply'); // re-apply after the bump
+      // F1: the baselined coverage floor is NOT reset to 0 (overwrite would defeat the gate).
+      assert.ok(floored(), 'coverage floor survived re-apply');
+      // F2: package.json version stays synced to the bumped manifest, not reset to 0.1.0.
+      assert.equal(readJson('package.json').version, '0.2.0', 'version stayed synced to the manifest on re-apply');
+      run('verify'); // still green — check:artifacts proves the version trio agrees
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }

@@ -19,7 +19,7 @@ argument or event, never as an import.
 
 `main.ts` is orchestration-only: it constructs the services and delegates
 every registration (`registerCommands`, `registerStatusBar`, `registerExtras`,
-`registerActivity`, `registerViews`). Add new wiring as its own `register*`
+`registerActivity`{{registerViewsNote}}). Add new wiring as its own `register*`
 module rather than growing `onload`. `registerExtras.ts` is a worked sample of two common
 affordances — a ribbon icon that opens a `SuggestModal` picker
 (`GreetingSuggestModal.ts`) and an `editor-menu` context item — kept UI-only
@@ -96,9 +96,9 @@ leaving Obsidian half-registered.
 is lint-banned — add a key and interpolate with `t('key', { name })`. Add
 locales by keying on Obsidian's `getLanguage()` with an `en` fallback.
 
-**`npm run verify`** runs the whole local gate chain in CI order — one command
-before pushing. A `.claude/` SessionStart hook installs deps so the repo is
-ready for Claude Code on the web out of the box.
+**`{{run}} verify`** runs the whole local gate chain in CI order — one command
+before pushing. If you enabled the **opt-in** `.claude/` SessionStart hook at
+scaffold time, it installs deps so a fresh Claude Code web session is ready.
 
 ## Commands (`src/commands.ts`)
 
@@ -134,9 +134,7 @@ subscriptions like the status bar need no teardown — the bus dies on unload).
   `tests/__mocks__/obsidian.ts`; `tests/setup.ts` polyfills Obsidian's
   `HTMLElement` helpers (`createEl`, `empty`, …). Extend both as you use more
   API surface.
-- Services get plain unit tests. Components mount with `@vue/test-utils` and a
-  **partial plugin double provided under the real `PLUGIN_KEY`** — see
-  `tests/vue/HomePage.test.ts` for the pattern.
+- Services get plain unit tests.{{componentTesting}}
 - The mock `Modal` attaches to `document.body` on open, so dialog flows are
   testable with DOM queries; the mock `Notice` logs to `__noticeLog`.
 - TDD: failing test first in the mirrored `tests/` path, then the

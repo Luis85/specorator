@@ -13,7 +13,8 @@ NoticeService, ModalService, CommandsService, EventBus):
 - Keep it in the `core` boundary zone: `core` may NOT import from `main` or `ui`
   (the fallow boundary gate enforces this at 0). Pure logic + Obsidian APIs only.
 - Construct it in `main.ts`'s `onload` orchestration and expose it as a readonly
-  field, so features and commands reach it through `plugin.<name>Service`.
+  field under a short name, so features and commands reach it through
+  `plugin.<name>` (e.g. `plugin.commands`, `plugin.vault`), not `plugin.<name>Service`.
 - No `console.*` (use the `Logger`); no raw `new Notice()` (use NoticeService);
   no raw HTML sinks.
 

@@ -91,8 +91,11 @@ function sanitizePrds(raw) {
     return {
       id,
       title: str(prd.title).trim() || (i === 0 ? 'Product Vision' : 'Untitled'),
-      status: str(prd.status).trim() || 'draft',
-      created: str(prd.created).trim(),
+      // status/created render RAW into YAML frontmatter (title is JSON-encoded at
+      // render time; these stay plain scalars), so strip anything that could break
+      // the scalar or inject a key — newlines and colons in particular.
+      status: str(prd.status).replace(/[^\w .-]/g, '').trim() || 'draft',
+      created: str(prd.created).replace(/[^\w.+-]/g, '').trim(),
       problem: str(prd.problem).trim(),
       vision: str(prd.vision).trim(),
       goals: Array.isArray(prd.goals) ? prd.goals.map(str).map((g) => g.trim()).filter(Boolean).slice(0, 30) : [],

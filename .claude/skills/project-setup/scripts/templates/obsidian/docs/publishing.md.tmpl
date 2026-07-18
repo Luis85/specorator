@@ -25,6 +25,8 @@ straight from this GitHub repo before it's in the community list.
      a bundle mislabeled as the stable version. Keep the repo's stable
      `manifest.json` unchanged.
   3. Testers on the beta channel get the pre-release; stable users are unaffected.
+     (The generated `release.yml` runs only for stable tags — a `-beta` tag skips
+     it — so attach the beta assets manually as in step 2.)
   4. When you promote to stable, run `npm version …` — `sync-version` realigns
      `manifest-beta.json` to the new stable version. (Don't run `npm version`
      mid-beta, or it will pull `manifest-beta.json` back to stable.)

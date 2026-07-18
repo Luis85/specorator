@@ -16,7 +16,8 @@ instead of eroding them accidentally.
   manifest.json){{mobileConsequence}}
 - **UI:** {{uiChoice}}
 - **Layers:** `main` (entry + settings + `commands.ts`) → `core` (services:
-  Commands, Events, Notices, Modals, Logger, Settings, Vault, Request) ← `ui`
+  Commands, Events, Notices, Modals, Errors, Ribbon, StatusBar, Menus, Timers,
+  VaultEvents, Logger, Settings, Vault, Request) ← `ui`
   (views/components, status bar). `main.ts` orchestrates only, behind an
   `onload` error boundary. Enforced by fallow boundary zones
   (`boundaryViolations` gated at 0).

@@ -113,7 +113,10 @@ export async function cli(argv, io = {}) {
       } else if (result.changed.length === 0) {
         out('No changes — project already converged.\n');
       } else {
-        out(`Applied ${result.changed.length} change(s):\n` + result.changed.map((p) => `  ${p}`).join('\n') + '\n');
+        // Dedupe like the dry-run branch: package.json is patched by several
+        // planners, so it lands in `changed` repeatedly.
+        const applied = [...new Set(result.changed)];
+        out(`Applied ${applied.length} change(s):\n` + applied.map((p) => `  ${p}`).join('\n') + '\n');
       }
       // Separate real collisions (your file/script kept; a gate won't run) from
       // routine next steps (info) so a clean greenfield apply doesn't end with a

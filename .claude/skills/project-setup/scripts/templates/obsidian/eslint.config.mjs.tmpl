@@ -91,14 +91,14 @@ export default [
       'vitest.config.mjs',
     ],
   },
-  // Base ESLint recommended on every source extension we may adopt — a brownfield
-  // JS entry (src/main.js/.jsx) must still get undefined-var/unused checks, not
-  // only the TS files. Config files (*.mjs) are dropped by the global ignores.
+  // Base ESLint recommended on every source extension — a JS/JSX file you add gets
+  // undefined-var/unused checks too, not only the TS sources. Config files (*.mjs)
+  // are dropped by the global ignores.
   { files: ['**/*.{ts,tsx,mts,cts,js,jsx,mjs,cjs}'], ...js.configs.recommended },
   ...obsidianmd.configs.recommended,
-  // Type-aware rules + the TS parser on every TS extension (tsx/mts/cts too, so an
-  // adopted module-TS entry parses and gets the advertised rules; vue-tsc is the
-  // type gate for SFCs).
+  // Type-aware rules + the TS parser on every TS extension (tsx/mts/cts too, so any
+  // TS module you add parses and gets the advertised rules; vue-tsc is the type
+  // gate for SFCs).
   ...tseslint.configs.recommendedTypeChecked.map((c) => ({
     ...c,
     files: ['**/*.{ts,tsx,mts,cts}'],

@@ -319,7 +319,11 @@ function planObsidianVitest(options) {
     coverageThreshold,
   });
   return [
-    write('vitest.config.mjs', config, 'overwrite-backup'),
+    // skip-if-exists (NOT overwrite-backup): initBaselines' applyCoverageFloor writes
+    // the baselined coverage thresholds INTO this file, so an overwrite on re-apply
+    // would reset the floor to 0 (the template renders zeros) and silently defeat the
+    // coverage gate. A fresh scaffold writes it once; edits/floors then survive.
+    write('vitest.config.mjs', config),
     ...actions,
     { type: 'mergeJson', path: 'package.json', patch: { scripts, devDependencies: dep(...deps) } },
   ];
@@ -396,7 +400,11 @@ function planClaudeSettings(options, state) {
   const h = options.hooks ?? {};
   const pm = safePackageManager(options.packageManager ?? state?.packageManager ?? 'npm');
   const run = runPrefix(pm);
-  const command = (name) => write(`.claude/commands/${name}.md`, renderTemplate(loadTemplate(`obsidian/claude/${name}.md.tmpl`), { run }));
+  // `{{run}} version` runs the npm `version` LIFECYCLE script (a no-op sync), not a
+  // real bump, for npm/yarn/bun. The bump+tag command is `<pm> version` for pnpm and
+  // `npm version` otherwise (yarn/bun `version` skip the lifecycle + git tag).
+  const versionCmd = pm === 'bun' || pm === 'yarn' ? 'npm version' : `${pm} version`;
+  const command = (name) => write(`.claude/commands/${name}.md`, renderTemplate(loadTemplate(`obsidian/claude/${name}.md.tmpl`), { run, versionCmd }));
   const actions = [command('add-command'), command('add-setting'), command('new-service'), command('release')];
   const hooks = {};
   if (h.sessionStart) hooks.SessionStart = [{ hooks: [{ type: 'command', command: PM_INSTALL[pm] }] }];
@@ -508,6 +516,12 @@ function planProjectDocs(options, state) {
       // Only list test:coverage when the script exists — coverageFloors off means
       // no such script.
       coverageLine: options.guardrails?.coverageFloors ? `\n${run} test:coverage  # coverage with rise-only floors` : '',
+      // Each ratchet command exists only when its guardrail is on (they're
+      // user-toggleable), so gate the command list like the coverage line.
+      lintLine: options.guardrails?.eslintSeverityStaging ? `\n${run} lint           # eslint (obsidianmd + type-aware rules, all-error)` : '',
+      locLine: options.guardrails?.locGuard ? `\n${run} check:loc      # per-file LOC ratchet` : '',
+      cssLine: options.guardrails?.cssGuard ? `\n${run} check:css      # CSS !important ratchet (add -- --update to re-baseline)` : '',
+      qualityLine: options.guardrails?.fallowRatchet ? `\n${run} check:quality  # fallow metric ratchet (run with ./coverage absent)` : '',
       typecheckTool: o.vue ? 'vue-tsc' : 'tsc',
       mobileLine: `- ${mobileLine}`,
       vueLine: o.vue
@@ -517,7 +531,14 @@ function planProjectDocs(options, state) {
     write('AGENTS.md', renderTemplate(loadTemplate('obsidian/AGENTS.md.tmpl'), {
       name: o.name,
       id: o.id,
+      run,
       mobileLine,
+      // Component-testing guidance is Vue-only; a vanilla scaffold ships no SFCs.
+      componentTesting: o.vue
+        ? '\n- Components mount with `@vue/test-utils` and a **partial plugin double provided under the real `PLUGIN_KEY`** — see `tests/vue/HomePage.test.ts` for the pattern.'
+        : '',
+      // The open-view registration module exists only in the Vue variant.
+      registerViewsNote: o.vue ? ', `registerViews`' : '',
       uiSection: o.vue
         ? loadTemplate('obsidian/agents-vue-section.md.tmpl').trimEnd()
         : loadTemplate('obsidian/agents-novue-section.md.tmpl').trimEnd(),
@@ -553,7 +574,7 @@ function planPackageBasics(options, version) {
     dev: 'node esbuild.config.mjs',
     build: 'node esbuild.config.mjs production',
     typecheck: o.vue ? 'vue-tsc --noEmit' : 'tsc --noEmit',
-    version: 'node scripts/sync-version.mjs && git add manifest.json manifest-beta.json versions.json',
+    version: 'node scripts/sync-version.mjs',
   };
   const patch = {
     name: o.id,
@@ -565,16 +586,20 @@ function planPackageBasics(options, version) {
     devDependencies: dep('obsidian', 'esbuild', 'typescript', ...(o.vue ? ['unplugin-vue', 'vue-tsc'] : [])),
   };
   if (o.vue) patch.dependencies = dep('vue', 'pinia', 'vue-router');
-  // Force `version`: an `npm init` default (1.0.0) must be synced to the canonical
-  // scaffold version (the manifest owns it) or check:artifacts fails on a
-  // manifest/package desync after apply. Other keys stay merge-kept.
+  // Force `version` to the manifest-owned version (INITIAL_VERSION on a fresh
+  // scaffold; the existing manifest's version on re-apply after `npm version`), so
+  // an npm-init 1.0.0 default is normalized and package/manifest never desync for
+  // check:artifacts. Other keys stay merge-kept.
   return [{ type: 'mergeJson', path: 'package.json', patch, force: ['version'] }];
 }
 
 // Ordered composition for obsidian mode. plan() adds the shared planners
 // (fallow, LOC, report, docs, CI, install) around this.
 export function planObsidian(options, state = {}) {
-  const version = INITIAL_VERSION;
+  // On re-apply the manifest already exists (skip-if-exists keeps it) and may have
+  // been bumped by `npm version`; sync package.json to it rather than resetting to
+  // the initial constant. A fresh scaffold (no manifest) uses INITIAL_VERSION.
+  const version = state.manifestVersion ?? INITIAL_VERSION;
   return [
     ...planManifest(options.obsidian, version),
     ...planPackageBasics(options, version),

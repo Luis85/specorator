@@ -9,7 +9,7 @@ Follow the existing patterns exactly:
 - Register through `plugin.commands` (the CommandsService), NOT `this.addCommand`.
   Use the matching helper for the command shape:
   - `addSimple(id, name, callback)` — always available.
-  - `addChecked(id, name, check)` — conditionally available (return `false` to hide).
+  - `addChecked(id, name, when, run)` — conditional (`when` returns `false` to hide; `run` performs it).
   - `addEditor(id, name, editorCallback)` — needs the active editor.
 - Use a **bare** command id (no plugin-id prefix — Obsidian adds it).
 - Never set a default hotkey.

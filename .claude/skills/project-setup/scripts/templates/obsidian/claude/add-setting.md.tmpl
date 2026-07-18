@@ -14,7 +14,7 @@ tested:
    users' saved data upgrades cleanly.
 3. **UI** — render a control for it in the settings tab (`display()`), using
    Obsidian's `Setting` builder. Persist changes through
-   `plugin.settingsService` (or the wired `saveSettings`), not a raw `saveData`.
+   `plugin.saveSettings(patch)`, not a raw `saveData`.
 4. **i18n** — every label/description goes through `t(...)` with keys added to
    `src/i18n/en.json`.
 

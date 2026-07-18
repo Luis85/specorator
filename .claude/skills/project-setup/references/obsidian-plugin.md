@@ -121,8 +121,9 @@ place. Production builds (`npm run build`) never touch the vault.
   ESLint's plain-tsc resolution a fallback type for `.vue` imports.
 - `@typescript-eslint/require-await` is off: Obsidian lifecycle overrides
   (`onOpen`/`onClose`/`onload`) are declared async by the API.
-- `obsidianmd/settings-tab/prefer-setting-definitions` stays a warning — adopt
-  the declarative settings API once you target Obsidian ≥ 1.13.0.
+- `obsidianmd/settings-tab/prefer-setting-definitions` is turned **off** (the
+  imperative `PluginSettingTab` the scaffold ships is correct below 1.13); turn it
+  back on once you target Obsidian ≥ 1.13.0 and adopt the declarative settings API.
 - The CSS `!important` ratchet mirrors the validator's CSS finding; it scans
   `src/**/*.css` **and** SFC `<style>` blocks, so moving CSS into a component
   cannot dodge it.

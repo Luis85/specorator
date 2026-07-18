@@ -190,6 +190,13 @@ export function detect(cwd) {
     jestConfig: hasUnmarkedConfig(cwd, JEST_CONFIGS) || pkg.jest != null,
     vitestConfig: hasUnmarkedConfig(cwd, VITEST_CONFIGS),
     viteConfig: existsAny(cwd, VITE_CONFIGS),
+    // The existing manifest's version (the manifest owns the plugin version). On a
+    // re-apply after `npm version`, this keeps package.json synced to it instead of
+    // being reset to the initial constant (which would desync check:artifacts).
+    manifestVersion: (() => {
+      const v = readJsonSafe(join(cwd, 'manifest.json'))?.version;
+      return typeof v === 'string' && /^\d+\.\d+\.\d+/.test(v) ? v : null;
+    })(),
     docs: {
       context: existsSync(join(cwd, 'CONTEXT.md')),
       dir: existsSync(join(cwd, 'docs')),

@@ -2,7 +2,13 @@
 name: Release
 on:
   push:
-    tags: ['*']
+    # Stable tags only (no pre-release suffix). The beta-ahead flow in
+    # docs/publishing.md tags a pre-release like 1.3.0-beta.1 while manifest.json
+    # stays at the stable version, so running here would fail the tag/manifest
+    # check — beta pre-releases attach their assets manually instead.
+    tags:
+      - '*'
+      - '!*-*'
 jobs:
   release:
     runs-on: ubuntu-latest

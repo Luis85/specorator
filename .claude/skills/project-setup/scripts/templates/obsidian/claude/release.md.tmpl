@@ -8,7 +8,7 @@ Cut a new release. Follow the plugin's release contract exactly:
    release on a red tree.
 2. **Pick the bump** — patch/minor/major per the change. Obsidian plugins are
    not semver-strict, but keep `minAppVersion` honest if you used newer APIs.
-3. **Version + sync** — run `{{run}} version <patch|minor|major>`. This bumps
+3. **Version + sync** — run `{{versionCmd}} <patch|minor|major>`. This bumps
    `package.json`, runs `scripts/sync-version.mjs` (updating `manifest.json` +
    `versions.json`), and creates the git tag WITHOUT a `v` prefix (Obsidian
    matches releases by `tag === manifest.version`; `.npmrc` pins this).

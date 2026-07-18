@@ -211,13 +211,19 @@ test('manifest-beta.json ships mirroring manifest.json (BRAT-ready), and the pub
   assert.match(pub.content, /obsidian-releases/);
 });
 
-test('npm version stages manifest-beta.json alongside manifest.json (BRAT lockstep)', () => {
-  // sync-version.mjs rewrites manifest-beta.json, so the lifecycle script must
-  // stage it too — otherwise the version commit ships a stale beta manifest.
+test('npm version delegates to sync-version.mjs, which stages the beta manifest only when present', () => {
+  // The version script runs sync-version (no inline `git add`); sync-version stages
+  // exactly the files it wrote, so a user who deleted manifest-beta.json can still
+  // cut a release — an unconditional `git add manifest-beta.json` would abort (exit 128).
   const pkg = actionsFor().find(
     (a) => a.type === 'mergeJson' && a.path === 'package.json' && a.patch.scripts?.version,
   );
-  assert.match(pkg.patch.scripts.version, /git add manifest\.json manifest-beta\.json versions\.json/);
+  assert.equal(pkg.patch.scripts.version, 'node scripts/sync-version.mjs');
+  const sync = findWrite(actionsFor(), 'scripts/sync-version.mjs').content;
+  assert.match(sync, /const staged = \['manifest\.json', 'versions\.json'\]/);
+  assert.match(sync, /if \(existsSync\('manifest-beta\.json'\)\)/);
+  assert.match(sync, /staged\.push\('manifest-beta\.json'\)/);
+  assert.match(sync, /execFileSync\('git', \['add', \.\.\.staged\]/);
 });
 
 test('vitest discovers .test and .spec across JS/TS incl. module forms (.mts/.cts), not just *.test.ts', () => {
@@ -312,10 +318,11 @@ test('VueView pushes the start route before mount (memory history has no initial
 
 test('scaffold sources are skip-if-exists (re-apply never clobbers user edits)', () => {
   // Engine-owned files overwrite-backup so a re-apply picks up template updates:
-  // the ratchet/build scripts under scripts/, the marker-identified configs
-  // (vitest/eslint/esbuild), and the tsconfig (the sample app needs its alias/
-  // includes). Everything else — sources, docs — is skip-if-exists.
-  const overwriteOwned = ['vitest.config.mjs', 'eslint.config.mjs', 'esbuild.config.mjs', 'tsconfig.json'];
+  // the ratchet/build scripts under scripts/, the marker-identified eslint/esbuild
+  // configs, and the tsconfig (the sample app needs its alias/includes). Everything
+  // else — sources, docs, and vitest.config (it stores the baselined coverage floor,
+  // so an overwrite would reset the gate) — is skip-if-exists.
+  const overwriteOwned = ['eslint.config.mjs', 'esbuild.config.mjs', 'tsconfig.json'];
   const engineOwned = (p) => p.startsWith('scripts/') || overwriteOwned.includes(p);
   for (const a of actionsFor()) {
     if (a.type !== 'writeFile' || engineOwned(a.path)) continue;
@@ -324,6 +331,9 @@ test('scaffold sources are skip-if-exists (re-apply never clobbers user edits)',
   for (const p of overwriteOwned) {
     assert.equal(findWrite(actionsFor(), p).mode, 'overwrite-backup', `${p} is engine-owned (overwrite-backup)`);
   }
+  // vitest.config holds the applyCoverageFloor baseline — overwriting it on re-apply
+  // would silently reset the coverage gate to 0.
+  assert.equal(findWrite(actionsFor(), 'vitest.config.mjs').mode, 'skip-if-exists');
 });
 
 test('vitest coverage include covers src/** across JS/TS/Vue extensions', () => {
@@ -497,11 +507,19 @@ test('a plugin named "Plugin" avoids `class Plugin extends Plugin` (obsidian imp
   assert.doesNotMatch(main, /class Plugin extends Plugin/);
 });
 
-test('package.json version is force-synced to the initial scaffold version (no check:artifacts desync)', () => {
-  // force syncs a possible `npm init` default (1.0.0) to the manifest-owned 0.1.0.
-  const pkg = actionsFor().find((a) => a.type === 'mergeJson' && a.path === 'package.json' && a.patch.version);
-  assert.deepEqual(pkg.force, ['version']);
-  assert.equal(pkg.patch.version, '0.1.0');
+test('package.json version is force-synced to the manifest-owned version (no check:artifacts desync)', () => {
+  // Fresh scaffold (no manifest yet): force syncs a possible `npm init` default
+  // (1.0.0) to the initial 0.1.0.
+  const fresh = actionsFor().find((a) => a.type === 'mergeJson' && a.path === 'package.json' && a.patch.version);
+  assert.deepEqual(fresh.force, ['version']);
+  assert.equal(fresh.patch.version, '0.1.0');
+  // Re-apply after `npm version` (manifest bumped, kept by skip-if-exists): package
+  // is synced to the EXISTING manifest version, not reset to 0.1.0.
+  const reapply = actionsFor({}, { manifestVersion: '0.4.2' }).find(
+    (a) => a.type === 'mergeJson' && a.path === 'package.json' && a.patch.version,
+  );
+  assert.equal(reapply.patch.version, '0.4.2');
+  assert.equal(JSON.parse(findWrite(actionsFor({}, { manifestVersion: '0.4.2' }), 'manifest.json').content).version, '0.4.2');
 });
 
 test('the src safety/mobile lint globs include JS and module extensions (an adopted JS/module plugin is linted)', () => {
