@@ -311,6 +311,22 @@ describe('marketplaceStore load fallbacks', () => {
     expect(store.loaded).toBe(false);
   });
 
+  it('resets loaded when a later refresh empties a previously loaded catalog', async () => {
+    const store = useMarketplaceStore();
+    store.init(fakePlugin(true));
+    await store.load(); // first load succeeds → loaded true
+    expect(store.loaded).toBe(true);
+
+    // A later Refresh fails with no matching cache → items cleared. `loaded` must
+    // flip back to false (reflect the latest outcome), or a close+reopen would
+    // skip the retry and leave the empty error state indefinitely.
+    fetchIndexSpy.mockRejectedValue(new Error('network down'));
+    cacheRead.mockResolvedValue(null);
+    await store.load();
+    expect(store.items).toEqual([]);
+    expect(store.loaded).toBe(false);
+  });
+
   it('discards a stale installed-scan when a concurrent reload commits first', async () => {
     // load()'s finally clears `loading` before awaiting refreshInstalled, so a
     // second load can commit a replacement catalog while the first scan is still

@@ -189,9 +189,12 @@ export const useMarketplaceStore = defineStore('marketplace', () => {
       }
     } finally {
       loading.value = false;
-      // Mark loaded only when a catalog actually landed (online or cache). A load
-      // that ended empty-and-errored leaves this false so a remount can retry.
-      if (items.value.length > 0) loaded.value = true;
+      // Reflect the LATEST load outcome, not a one-way latch: true when a catalog
+      // landed (online or cache), false when a load ended empty (failed with no
+      // matching cache). A one-way `true` would let a later failed Refresh clear
+      // `items` yet keep `loaded`, so a close+reopen would skip the retry and show
+      // the empty error state forever.
+      loaded.value = items.value.length > 0;
       await refreshInstalled();
     }
   }
