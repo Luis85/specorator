@@ -440,6 +440,10 @@ function planObsidianVitest(options, state) {
     const standdownDeps = o.vue ? ['vitest', 'jsdom', '@vue/test-utils', '@vitejs/plugin-vue'] : ['vitest', 'jsdom'];
     return [
       notice('Existing test config kept — the generated vitest.config.mjs was NOT written and the coverage gate was not wired. Wire the `obsidian` alias to tests/__mocks__/obsidian.ts and jsdom yourself (see references/obsidian-plugin.md).'),
+      // Same as the normal path: if the repo already has a different `test` script
+      // (e.g. jest), mergeJson keeps it, so surface the collision — verify/CI run
+      // `test` and would otherwise silently skip the intended Vitest lane.
+      ...scriptCollision(options, state, 'test', 'vitest run --passWithNoTests'),
       ...actions,
       { type: 'mergeJson', path: 'package.json', patch: { scripts: { test: 'vitest run --passWithNoTests' }, devDependencies: dep(...standdownDeps) } },
     ];

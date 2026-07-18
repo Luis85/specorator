@@ -13,6 +13,10 @@ export interface SettingsStore<T> {
 
 export class SettingsService<T extends object> {
   private value: T;
+  // Serializes persistence so two overlapping update()s can't reorder their
+  // writes and leave stale settings on disk. Kept settled (never left rejected)
+  // so a failed write doesn't block later ones.
+  private writeQueue: Promise<void> = Promise.resolve();
 
   constructor(private readonly store: SettingsStore<T>) {
     this.value = store.defaults;
@@ -25,7 +29,14 @@ export class SettingsService<T extends object> {
 
   async update(patch: Partial<T>): Promise<void> {
     this.value = { ...this.value, ...patch };
-    await this.store.write(this.value);
-    this.store.onChange(this.value);
+    // Chain onto the queue and persist the LATEST value when the write actually
+    // runs, so a burst of updates collapses to the newest state on disk.
+    const done = this.writeQueue
+      .then(() => this.store.write(this.value))
+      .then(() => {
+        this.store.onChange(this.value);
+      });
+    this.writeQueue = done.catch(() => {});
+    await done;
   }
 }

@@ -13,9 +13,14 @@ const ENTRY_BASENAMES = ['index', 'main', 'app'];
 const ENTRY_EXTS = ['ts', 'tsx', 'mts', 'cts', 'js', 'jsx', 'mjs', 'cjs'];
 // Common source dirs (src, lib, app, source) + repo root.
 const ENTRY_DIRS = ['src', 'lib', 'app', 'source', ''];
-const ENTRY_CANDIDATES = ENTRY_DIRS.flatMap((d) =>
-  ENTRY_BASENAMES.flatMap((b) => ENTRY_EXTS.map((e) => (d ? `${d}/${b}.${e}` : `${b}.${e}`))),
-);
+const candidatesFor = (basenames) =>
+  ENTRY_DIRS.flatMap((d) => basenames.flatMap((b) => ENTRY_EXTS.map((e) => (d ? `${d}/${b}.${e}` : `${b}.${e}`))));
+const ENTRY_CANDIDATES = candidatesFor(ENTRY_BASENAMES);
+// Obsidian's source entry is conventionally main.* (the build emits main.js, which
+// the manifest loads). With a manifest present, prefer main over an index.* barrel
+// so the build bundles the file that registers the Plugin, not a helper index that
+// build/check:artifacts would happily bundle into an unloadable release.
+const OBSIDIAN_CANDIDATES = candidatesFor(['main', 'index', 'app']);
 // `main`/`module` often point at BUILD output, not source — skip those roots.
 const BUILD_DIRS = new Set(['dist', 'build', 'out', 'esm', 'cjs', 'umd', 'lib-esm', 'node_modules', '.next']);
 
@@ -36,8 +41,10 @@ export function detectEntry(cwd) {
     const p = strip(src);
     if (withinProject(p) && existsSync(join(cwd, p))) return p;
   }
-  // The first existing common source entry (src/lib/app/source/root).
-  for (const c of ENTRY_CANDIDATES) if (existsSync(join(cwd, c))) return c;
+  // The first existing common source entry (src/lib/app/source/root). A manifest
+  // flips the scan to prefer main.* over index.* (Obsidian convention).
+  const candidates = existsSync(join(cwd, 'manifest.json')) ? OBSIDIAN_CANDIDATES : ENTRY_CANDIDATES;
+  for (const c of candidates) if (existsSync(join(cwd, c))) return c;
   // `module`/`main` may name the source for a build-less package — use it if it
   // exists and its top dir isn't a build-output dir.
   for (const field of ['module', 'main']) {

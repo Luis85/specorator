@@ -116,6 +116,20 @@ test('detectEntry normalizes a leading-slash package source to a project-relativ
   }
 });
 
+test('detectEntry prefers main.* over an index.* barrel when a manifest is present (Obsidian)', () => {
+  // An Obsidian plugin with both a helper src/index.ts and the real src/main.ts:
+  // the manifest flips the scan to main so the build bundles the Plugin entry.
+  const obs = tmpProject({ 'manifest.json': { id: 'x' }, 'src/index.ts': '', 'src/main.ts': 'export default class {}' });
+  const generic = tmpProject({ 'src/index.ts': '', 'src/main.ts': '' });
+  try {
+    assert.equal(detectEntry(obs.dir), 'src/main.ts'); // manifest present -> main wins
+    assert.equal(detectEntry(generic.dir), 'src/index.ts'); // no manifest -> index first
+  } finally {
+    obs.cleanup();
+    generic.cleanup();
+  }
+});
+
 test('detect treats a root-entry repo (no manifest, no src/) as an existing app', () => {
   // package.json#source names a root main.ts that hasSourceFiles (src/-only) misses.
   const rootEntry = tmpProject({ 'package.json': { source: 'main.ts' }, 'main.ts': 'export default class {}' });

@@ -42,4 +42,35 @@ describe('SettingsService', () => {
     expect(writes.at(-1)).toEqual({ schemaVersion: 1, greeting: 'changed' });
     expect(changes.at(-1)?.greeting).toBe('changed');
   });
+
+  it('serializes overlapping updates so the latest value persists last (no stale reorder)', async () => {
+    const { store, writes } = makeStore(null);
+    const releases: Array<() => void> = [];
+    const base = store.write;
+    // Each write blocks until released, so the test drives ordering deterministically.
+    store.write = (data: Sample) =>
+      new Promise<void>((resolve) => releases.push(resolve)).then(() => base(data));
+
+    const service = new SettingsService<Sample>(store);
+    await service.load();
+
+    const a = service.update({ greeting: 'first' });
+    const b = service.update({ greeting: 'second' });
+
+    // Serialized: only the first write is in flight; the second is queued behind it.
+    await new Promise((r) => window.setTimeout(r, 0));
+    expect(releases).toHaveLength(1);
+    releases[0]?.();
+    await a;
+
+    expect(releases).toHaveLength(2); // the second write starts only after the first
+    releases[1]?.();
+    await b;
+
+    // Both writes persist the newest value — a slow earlier write cannot leave stale data.
+    expect(writes).toEqual([
+      { schemaVersion: 1, greeting: 'second' },
+      { schemaVersion: 1, greeting: 'second' },
+    ]);
+  });
 });

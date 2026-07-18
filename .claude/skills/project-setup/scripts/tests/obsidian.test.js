@@ -584,6 +584,17 @@ test('manifest-beta mirrors the KEPT manifest on brownfield adopt (not the answe
   assert.equal(gfBeta.id, 'demo-notes');
 });
 
+test('vitest standdown surfaces a `test` script collision (an existing jest is not silently kept)', () => {
+  // Existing vitest config -> the generated config stands down; a stale `test:
+  // jest` must be flagged so verify/CI do not silently skip the Vitest lane.
+  const state = { obsidianAppPresent: true, vitestConfig: true, scripts: { test: 'jest' } };
+  const actions = planObsidian(optionsWith(BASE), state);
+  assert.ok(
+    actions.some((a) => a.type === 'notice' && /"test" script kept/.test(a.message)),
+    'expected a test-script collision notice on the vitest standdown path',
+  );
+});
+
 test('tsconfig is greenfield-owned (overwrite-backup, replacing a stray one) but kept in brownfield', () => {
   const gf = actionsFor({}, { tsconfigExists: true });
   assert.equal(findWrite(gf, 'tsconfig.json').mode, 'overwrite-backup');
