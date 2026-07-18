@@ -174,9 +174,16 @@ on the generated project is safe and idempotent:
 
 ## Verification
 
-After template or pin changes, re-run the E2E smoke: scaffold into a temp dir
-(one desktop+vue run, one mobile+no-vue run) and require ALL of:
-`format:check`, `lint` (0 errors), `typecheck`, `test`, `test:coverage`,
-`check:loc`, `check:css`, `check:quality`, `build`, `check:artifacts`, a
-converged second `apply` (no changes, no warning notices), and
-`setup.mjs verify` exiting 0.
+After template or pin changes, run the real-install E2E smoke — it scaffolds a
+fresh plugin into a temp dir (one desktop+vue run, one mobile+no-vue run), runs a
+real `npm install`, and requires `setup.mjs verify` to exit 0 (the full gate:
+`lint` at 0 errors, `check:loc`, `check:css`, `check:quality`, `typecheck`,
+`format:check`, `test:coverage`, `build`, `check:artifacts`):
+
+```bash
+PROJECT_SETUP_E2E=1 node --test scripts/tests/e2eScaffold.test.js
+```
+
+The test is skipped in the normal `node --test` suite (it needs network + a few
+minutes), so run it manually. It is the guard that the greenfield guarantee — a
+fresh scaffold is green on day one — does not silently regress.
