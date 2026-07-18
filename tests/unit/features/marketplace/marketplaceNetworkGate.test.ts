@@ -21,4 +21,15 @@ describe('maybeWarnMarketplaceNetwork', () => {
     await maybeWarnMarketplaceNetwork(plugin);
     expect(plugin.saveSettings).not.toHaveBeenCalled();
   });
+
+  it('rolls the flag back when persistence fails so a later opt-in re-warns', async () => {
+    const plugin = {
+      settings: { marketplaceNetworkWarningShown: false },
+      saveSettings: jest.fn().mockRejectedValue(new Error('settings unwritable')),
+    } as unknown as SpecoratorPlugin;
+    // The Notice was shown, but the failed save must not leave the flag "true" —
+    // otherwise the warning is suppressed forever without ever being persisted.
+    await expect(maybeWarnMarketplaceNetwork(plugin)).resolves.toBeUndefined();
+    expect(plugin.settings.marketplaceNetworkWarningShown).toBe(false);
+  });
 });

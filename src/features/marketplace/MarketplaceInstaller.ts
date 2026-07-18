@@ -16,11 +16,27 @@ import { extractString, extractStringArray, parseFrontmatter } from '../../utils
 import type { AgentRosterStore } from '../agents/roster/AgentRosterStore';
 import { rosterIdFromSlug, slugifyRosterName } from '../agents/roster/rosterCapabilities';
 import type { RosterAgent } from '../agents/roster/rosterTypes';
+import { parseQuickActionContent } from '../quickActions/quickActionParse';
 import { QuickActionStorage } from '../quickActions/QuickActionStorage';
 import { LoopNoteStore } from '../tasks/loops/LoopNoteStore';
 import { TemplateNoteStore } from '../tasks/templates/TemplateNoteStore';
 import { isInstallableType,type MarketplaceItem } from './catalogTypes';
 import { MarketplaceError } from './MarketplaceCatalogClient';
+
+/**
+ * Rejects a body its own store can't parse BEFORE we write it, so the Marketplace
+ * never reports `installed` for content that a later `list()` silently drops
+ * (leaving the item marked installed but absent from the Library).
+ */
+function assertInstallableBody(parse: () => unknown, label: string): void {
+  try {
+    parse();
+  } catch (error) {
+    throw new MarketplaceError(
+      `This ${label}'s content is malformed and can't be installed: ${error instanceof Error ? error.message : String(error)}`,
+    );
+  }
+}
 
 export type InstallOutcome = 'installed' | 'skipped';
 
@@ -41,14 +57,18 @@ export async function installMarketplaceItem(
   now: number,
 ): Promise<InstallOutcome> {
   switch (item.type) {
-    case 'loop':
-      return installNoteVerbatim(deps.vault, new LoopNoteStore().getFilePathForName(deps.loopFolder, item.name), body);
-    case 'template':
-      return installNoteVerbatim(
-        deps.vault,
-        new TemplateNoteStore().getFilePathForName(deps.templateFolder, item.name),
-        body,
-      );
+    case 'loop': {
+      const store = new LoopNoteStore();
+      const path = store.getFilePathForName(deps.loopFolder, item.name);
+      assertInstallableBody(() => store.parse(path, body), 'loop');
+      return installNoteVerbatim(deps.vault, path, body);
+    }
+    case 'template': {
+      const store = new TemplateNoteStore();
+      const path = store.getFilePathForName(deps.templateFolder, item.name);
+      assertInstallableBody(() => store.parse(path, body), 'template');
+      return installNoteVerbatim(deps.vault, path, body);
+    }
     case 'quick-action':
       return installQuickAction(deps, item.name, body);
     case 'agent':
@@ -117,6 +137,9 @@ async function installQuickAction(
 ): Promise<InstallOutcome> {
   const storage = new QuickActionStorage(deps.adapter, () => deps.quickActionsFolder);
   const path = storage.getFilePathForName(name);
+  assertInstallableBody(() => {
+    if (parseQuickActionContent(body, path) === null) throw new Error('empty or wrong-type quick action');
+  }, 'quick action');
   if (await storage.exists(path)) return 'skipped';
   // adapter.write auto-creates the parent folder; body is already native
   // `type: quick-action` frontmatter + prompt.

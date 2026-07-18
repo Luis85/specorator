@@ -68,8 +68,24 @@ describe('installMarketplaceItem', () => {
   it('writes a template verbatim', async () => {
     const { deps, notes } = makeDeps();
     const item: MarketplaceItem = { id: 'templates/bug-fix', type: 'template', name: 'Bug fix', description: 'd', path: 'templates/bug-fix.md', tags: [] };
-    expect(await installMarketplaceItem(item, '# tmpl', deps, 1)).toBe('installed');
-    expect(notes.get('Agent Board/templates/bug-fix.md')).toBe('# tmpl');
+    const templateBody = '---\ntype: specorator-work-order-template\nschema_version: 1\nname: "Bug fix"\n---\n\nObjective.\n';
+    expect(await installMarketplaceItem(item, templateBody, deps, 1)).toBe('installed');
+    expect(notes.get('Agent Board/templates/bug-fix.md')).toBe(templateBody);
+  });
+
+  it('rejects a malformed note body instead of reporting installed', async () => {
+    const { deps } = makeDeps();
+    // A loop body its own store can't parse (no frontmatter) must not install as
+    // "installed" only to vanish from the Library on the next list().
+    const loop: MarketplaceItem = { id: 'loops/bad', type: 'loop', name: 'Bad Loop', description: 'd', path: 'loops/bad.md', tags: [] };
+    await expect(installMarketplaceItem(loop, 'no frontmatter here', deps, 1)).rejects.toThrow(/malformed/i);
+
+    const wrongType = '---\ntype: specorator-work-order-template\nschema_version: 1\nname: "X"\n---\n\nx';
+    const loop2: MarketplaceItem = { id: 'loops/x', type: 'loop', name: 'X', description: 'd', path: 'loops/x.md', tags: [] };
+    await expect(installMarketplaceItem(loop2, wrongType, deps, 1)).rejects.toThrow(/malformed/i);
+
+    const qa: MarketplaceItem = { id: 'quick-actions/empty', type: 'quick-action', name: 'Empty', description: 'd', path: 'quick-actions/empty.md', tags: [] };
+    await expect(installMarketplaceItem(qa, '', deps, 1)).rejects.toThrow(/malformed/i);
   });
 
   it('writes a quick action verbatim at its slug and dedups', async () => {

@@ -9,7 +9,14 @@ export async function maybeWarnMarketplaceNetwork(plugin: SpecoratorPlugin): Pro
   if (plugin.settings.marketplaceNetworkWarningShown) {
     return;
   }
-  plugin.settings.marketplaceNetworkWarningShown = true;
-  await plugin.saveSettings();
+  // Show the notice FIRST so a settings-write failure can't skip it, then persist
+  // the flag — rolling it back if the save rejects so a later opt-in re-shows and
+  // re-persists instead of suppressing the warning forever on an in-memory flag.
   new Notice(t('marketplace.warning'), 12000);
+  plugin.settings.marketplaceNetworkWarningShown = true;
+  try {
+    await plugin.saveSettings();
+  } catch {
+    plugin.settings.marketplaceNetworkWarningShown = false;
+  }
 }
