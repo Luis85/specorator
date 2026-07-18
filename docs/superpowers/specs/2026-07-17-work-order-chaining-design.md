@@ -139,17 +139,20 @@ Mirrors `CommitOnAcceptCoordinator`: `start()`/`stop()`, subscribes to
    (synchronous check-and-add, cleared in `finally`) collapses a same-tick duplicate
    event before the persistent `chained_to` guard is written.
 7. **Depth guard:** if `(fm.chain_depth ?? 0) >= readSettings().agentBoardMaxChainDepth`
-   → `showNotice` + `appendLedger` warning on the predecessor + return.
+   → `showNotice` + return (no note-ledger write — see step 10).
 8. Resolve the template by name via `listTemplates()` when `config.template` is set.
    Missing → `showNotice` ("template '<name>' not found; creating a blank successor")
    and proceed with a blank base (never silently drops the chain).
 9. `createSuccessor(...)` (see below) → new `TaskSpec`.
-10. Stamp `chained_to` on the predecessor (idempotency guard + forward link) AND
-    append a `Chained → successor` ledger line, in **one atomic `vault.process`
-    transform**. `vault.process` serializes with `RunSession`'s terminal note
-    finalization (which also writes the predecessor note on the `review` trigger), so a
-    naive read-then-modify can't clobber — or be clobbered by — that finalization.
-11. `showNotice` the spawn.
+10. `markChained`: stamp `chained_to` on the predecessor (idempotency guard + forward
+    link) via a `vault.process` write. The chain's durable audit is **frontmatter only**
+    — `chained_to` on the predecessor plus `chained_from`/`chain_depth` on the successor.
+    The coordinator deliberately does NOT write the note's Run Ledger region: on the
+    `review` trigger, `RunSession` emits `task:status-changed` and then replaces that whole
+    region with its sidecar snapshot (`writeLedgerSnapshot`), which would erase any
+    coordinator-appended ledger line (the append isn't part of the sidecar). Frontmatter
+    survives the snapshot and is the right home for a structural predecessor↔successor link.
+11. `showNotice` the spawn (and, on a depth-cap skip, a Notice — no ledger line).
 
 The in-flight reserve (step 6) happens **after** the trigger check (step 4), and only a
 matching event reserves the path — otherwise a non-matching event (a `review` event for
@@ -161,7 +164,11 @@ The board re-indexes on the new file's vault `create` event, and the queue ticks
 the same event; if auto-run is on, the `ready` successor launches.
 
 Injected deps: `events`, `loadTaskSpec`, `listTemplates`, `createSuccessor`,
-`writeChainLink`, `appendLedger`, `readSettings`, `logger`, `showNotice`.
+`markChained` (stamps `chained_to` via `vault.process`), `readSettings`, `logger`,
+`showNotice`. There is no `appendLedger` dep — the coordinator never writes the note's
+Run Ledger region (its durable audit is frontmatter). Plugin-level wiring is assembled by
+`execution/createWorkOrderChainCoordinator.ts` and called from `main.ts` in a few lines
+(the deps block lives in that module, not inlined into `main.ts`, to respect its LOC gate).
 
 ### Successor creation
 
@@ -355,7 +362,8 @@ user accepts ────────────────► transitionTask 
 ## Files
 
 **New:** `model/workOrderChain.ts`, `execution/WorkOrderChainCoordinator.ts`,
-`ui/ChainConfigModal.ts`, plus the mirrored test files.
+`execution/createWorkOrderChainCoordinator.ts` (plugin-level deps wiring, kept out of
+`main.ts` for its LOC gate), `ui/ChainConfigModal.ts`, plus the mirrored test files.
 
 **Edited:** `commands/taskCommands.ts` (seed fields + `titleOverride` precedence in
 `createWorkOrderFromSeed` + `workOrderFrontmatter` chain/provenance lines +

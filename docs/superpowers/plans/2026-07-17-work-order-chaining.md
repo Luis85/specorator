@@ -795,6 +795,8 @@ git commit -m "feat(tasks): templates declare a default successor, inherited on 
 
 `buildSuccessorPlan` (pure) decides skip-vs-create and computes title/objective/context/provenance. The coordinator wires it to `task:status-changed` with idempotency + in-flight + depth guards, and delegates I/O to injected deps.
 
+> **Revision (post-implementation fix):** the chain's durable audit is **frontmatter-only** — the coordinator stamps `chained_to` (predecessor) + `chained_from`/`chain_depth` (successor) and does NOT write the note's Run Ledger region (a `review`-triggered `writeLedgerSnapshot` replaces that whole region with the sidecar and would erase a coordinator-appended line). So the dep is `markChained(predecessorPath, successorId)` (chained_to only) — there is **no `appendLedger` dep**, and the depth-cap skip surfaces a Notice only. Where the code blocks below still show the older `linkSuccessor(...ledgerEntry)` / `appendLedger` shape, the committed `WorkOrderChainCoordinator.ts` is authoritative.
+
 - [ ] **Step 1: Write the failing test**
 
 ```ts
@@ -1133,8 +1135,11 @@ git commit -m "feat(tasks): WorkOrderChainCoordinator + pure buildSuccessorPlan"
 ## Task 7: Wire the coordinator in `main.ts`
 
 **Files:**
+- Create: `src/features/tasks/execution/createWorkOrderChainCoordinator.ts` (deps-wiring factory)
 - Modify: `src/main.ts` (in the same block that starts `CommitOnAcceptCoordinator`, ~line 173-209)
 - Test: `tests/integration/features/tasks/workOrderChaining.integration.test.ts`
+
+> **Revision (post-implementation fix):** the deps block is NOT inlined into `main.ts` — that grew it past its shrink-only `check:loc` LOC ceiling. It lives in `execution/createWorkOrderChainCoordinator.ts`: `createWorkOrderChainCoordinator(plugin, noteStore)` builds the deps and returns the coordinator; `main.ts` just calls it, `.start()`s it, and `register(() => …stop())` in a few lines. The `markChained` dep does ONE `vault.process` → `noteStore.writeChainLink` (chained_to only); there is **no `appendLedger` wiring** (frontmatter-only audit). Where the inline `main.ts` code block below still shows the older shape, the committed code is authoritative.
 
 - [ ] **Step 1: Write the failing integration test**
 
