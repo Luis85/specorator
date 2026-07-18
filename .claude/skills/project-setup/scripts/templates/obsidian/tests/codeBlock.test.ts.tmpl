@@ -1,0 +1,23 @@
+import { describe, expect, it } from 'vitest';
+
+import { renderPanel } from '@/ui/codeBlock';
+
+describe('renderPanel', () => {
+  it('renders one row per non-empty line', () => {
+    const el = document.createElement('div');
+    renderPanel('alpha\n\n  beta  ', el);
+    const panel = el.firstElementChild;
+    expect(panel).not.toBeNull();
+    expect(panel?.children).toHaveLength(2);
+    expect(panel?.children[0]?.textContent).toBe('alpha');
+    expect(panel?.children[1]?.textContent).toBe('beta');
+  });
+
+  it('shows an empty marker for a blank block', () => {
+    const el = document.createElement('div');
+    renderPanel('   ', el);
+    const panel = el.firstElementChild;
+    expect(panel?.children).toHaveLength(1);
+    expect(panel?.children[0]?.textContent).toBe('(empty)');
+  });
+});

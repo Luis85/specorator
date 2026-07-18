@@ -20,6 +20,7 @@ import { t } from './i18n/i18n';
 import type { {{settingsType}} } from './settings';
 import { {{settingsValueImports}} } from './settings';
 import { registerActivity } from './ui/registerActivity';
+import { registerEditorFeatures } from './ui/registerEditorFeatures';
 import { registerExtras } from './ui/registerExtras';
 {{viewImport}}import { registerStatusBar } from './ui/statusBar';
 
@@ -65,6 +66,7 @@ export default class {{pluginClass}} extends Plugin {
         registerStatusBar(this);
         registerExtras(this);
         registerActivity(this);
+        registerEditorFeatures(this);
 {{viewRegistration}}        this.logger.info('loaded');
       },
       { message: t('notice.loadFailed') },

@@ -11,4 +11,6 @@ declare module 'obsidian' {
   export const __noticeLog: string[];
   /** Sets the JSON the mock `requestUrl` returns (RequestService tests). */
   export function __setRequestJson(json: unknown): void;
+  /** Frontmatter the mock `processFrontMatter` wrote, keyed by path; reset with `.clear()`. */
+  export const __frontmatterStore: Map<string, Record<string, unknown>>;
 }

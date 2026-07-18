@@ -85,14 +85,50 @@ class MockWorkspace {
   trigger(name: string, ...args: unknown[]): void {
     for (const cb of this.handlers.get(name) ?? []) cb(...args);
   }
+
+  getActiveFile(): TFile | null {
+    return null;
+  }
+}
+
+// Frontmatter store keyed by file path, so VaultService.updateFrontmatter tests
+// can read back what processFrontMatter wrote. Reset with `__frontmatterStore.clear()`.
+export const __frontmatterStore = new Map<string, Record<string, unknown>>();
+
+class MockFileManager {
+  processFrontMatter(
+    file: TFile,
+    fn: (frontmatter: Record<string, unknown>) => void,
+  ): Promise<void> {
+    const current = __frontmatterStore.get(file.path) ?? {};
+    fn(current);
+    __frontmatterStore.set(file.path, current);
+    return Promise.resolve();
+  }
 }
 
 export class App {
   vault = new MockVault();
   workspace = new MockWorkspace();
+  fileManager = new MockFileManager();
 }
 
 export class WorkspaceLeaf {}
+
+// Base class for EditorSuggest-derived autocompleters; subclasses override the
+// trigger/suggestion methods, which tests can call directly on an instance.
+export class EditorSuggest<T> {
+  context: { query: string } | null = null;
+  constructor(public app: App) {}
+  onTrigger(_cursor: unknown, _editor: unknown, _file: unknown): unknown {
+    return null;
+  }
+  getSuggestions(_context: { query: string }): T[] | Promise<T[]> {
+    return [];
+  }
+  renderSuggestion(_value: T, _el: HTMLElement): void {}
+  selectSuggestion(_value: T, _evt: unknown): void {}
+}
 
 // Base class for SuggestModal-derived pickers; subclasses override the three
 // suggestion methods, which tests can call directly on an instance.
@@ -144,6 +180,15 @@ export class Plugin {
   }
 
   registerView(_type: string, _factory: (leaf: WorkspaceLeaf) => unknown): void {}
+
+  registerEditorSuggest(_suggest: unknown): void {}
+
+  registerMarkdownCodeBlockProcessor(
+    _lang: string,
+    _handler: (source: string, el: HTMLElement, ctx: unknown) => unknown,
+  ): void {}
+
+  registerEditorExtension(_extension: unknown): void {}
 
   registerDomEvent(el: HTMLElement, type: string, callback: (evt: Event) => unknown): void {
     el.addEventListener(type, callback);

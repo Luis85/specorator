@@ -26,6 +26,17 @@ export class VaultService {
     return file ? this.app.vault.read(file) : null;
   }
 
+  // Merge a patch into a note's YAML frontmatter (adds keys, overwrites scalars)
+  // without touching the body. fileManager.processFrontMatter is the atomic, safe
+  // API — never hand-edit the note text to change frontmatter. No-op if missing.
+  async updateFrontmatter(path: string, patch: Record<string, unknown>): Promise<void> {
+    const file = this.app.vault.getFileByPath(normalizePath(path));
+    if (!file) return;
+    await this.app.fileManager.processFrontMatter(file, (frontmatter: Record<string, unknown>) => {
+      Object.assign(frontmatter, patch);
+    });
+  }
+
   // Atomic append across BOTH paths. Vault.process serializes the read-modify-write
   // on an existing file, so a plain read-then-write can't drop an overlapping
   // append. process() only guards an existing file, so the first-ever append

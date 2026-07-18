@@ -86,6 +86,21 @@ affordances — a ribbon icon that opens a `SuggestModal` picker
   Loading runs `migrateSettings` (`src/settings.ts`) so a vault on an old
   schema is upgraded, never broken — add a branch per `schemaVersion` bump.
 
+### Editor-surface samples (`src/ui/`, wired by `registerEditorFeatures`)
+
+Four common patterns you'll extend or delete — each keeps its testable logic in a
+pure function so it unit-tests without an editor:
+
+- **`EmojiSuggest`** — a `:shortcode` autocomplete (`EditorSuggest`). The match
+  logic is the pure `emojiMatches(query)`.
+- **`codeBlock`** — a reading-view renderer for fenced ` ```{{id}} ` blocks
+  (`registerMarkdownCodeBlockProcessor`). `renderPanel(source, el)` builds the DOM.
+- **`editorHighlight`** — a live TODO/FIXME/HACK highlighter (CodeMirror 6
+  `ViewPlugin` via `registerEditorExtension`; `@codemirror/*` is external at
+  runtime). The scan is the pure `markerRanges(text)`.
+- A **"stamp modified date"** command writing note frontmatter through
+  `plugin.vault.updateFrontmatter(path, patch)` (atomic `processFrontMatter`).
+
 `main.ts` is orchestration-only: it constructs these services and wraps
 `onload` in the `ErrorService` boundary (`this.errors.run('load the plugin', …)`)
 — a thrown load reports via `logger` + `notices` and degrades, instead of

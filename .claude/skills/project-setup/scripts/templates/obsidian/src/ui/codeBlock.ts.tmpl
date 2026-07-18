@@ -1,0 +1,22 @@
+import type {{pluginClass}} from '../main';
+
+// Render the body of a fenced ```{{id}} block into a styled panel — one row per
+// non-empty line. Pure DOM building via Obsidian's createDiv helpers (never
+// innerHTML — that's lint-banned), so it unit-tests with a plain jsdom element.
+export function renderPanel(source: string, el: HTMLElement): void {
+  const panel = el.createDiv({ cls: '{{id}}-panel' });
+  const lines = source
+    .split('\n')
+    .map((line) => line.trim())
+    .filter(Boolean);
+  if (lines.length === 0) {
+    panel.createDiv({ cls: '{{id}}-panel-empty', text: '(empty)' });
+    return;
+  }
+  for (const line of lines) panel.createDiv({ cls: '{{id}}-panel-row', text: line });
+}
+
+// Register a reading-view renderer for fenced ```{{id}} code blocks.
+export function registerCodeBlock(plugin: {{pluginClass}}): void {
+  plugin.registerMarkdownCodeBlockProcessor('{{id}}', (source, el) => renderPanel(source, el));
+}

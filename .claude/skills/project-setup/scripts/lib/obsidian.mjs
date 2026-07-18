@@ -194,6 +194,13 @@ function planSources(options) {
     write('src/ui/GreetingSuggestModal.ts', loadTemplate('obsidian/src/ui/GreetingSuggestModal.ts.tmpl')),
     write('src/ui/registerExtras.ts', renderTemplate(loadTemplate('obsidian/src/ui/registerExtras.ts.tmpl'), shared)),
     write('src/ui/registerActivity.ts', renderTemplate(loadTemplate('obsidian/src/ui/registerActivity.ts.tmpl'), shared)),
+    // Editor-surface samples (both variants): `:emoji` autocomplete (EditorSuggest),
+    // a fenced-block renderer (MarkdownCodeBlockProcessor), a TODO/FIXME highlighter
+    // (CodeMirror 6 view plugin), and a frontmatter-stamp command (VaultService).
+    write('src/ui/EmojiSuggest.ts', renderTemplate(loadTemplate('obsidian/src/ui/EmojiSuggest.ts.tmpl'), shared)),
+    write('src/ui/codeBlock.ts', renderTemplate(loadTemplate('obsidian/src/ui/codeBlock.ts.tmpl'), shared)),
+    write('src/ui/editorHighlight.ts', renderTemplate(loadTemplate('obsidian/src/ui/editorHighlight.ts.tmpl'), shared)),
+    write('src/ui/registerEditorFeatures.ts', renderTemplate(loadTemplate('obsidian/src/ui/registerEditorFeatures.ts.tmpl'), shared)),
   ];
   if (o.vue) {
     actions.push(
@@ -301,6 +308,9 @@ function planObsidianVitest(options) {
     write('tests/unit/vaultEventsService.test.ts', loadTemplate('obsidian/tests/vaultEventsService.test.ts.tmpl')),
     write('tests/unit/registerExtras.test.ts', loadTemplate('obsidian/tests/registerExtras.test.ts.tmpl')),
     write('tests/unit/registerActivity.test.ts', loadTemplate('obsidian/tests/registerActivity.test.ts.tmpl')),
+    write('tests/unit/emojiSuggest.test.ts', loadTemplate('obsidian/tests/emojiSuggest.test.ts.tmpl')),
+    write('tests/unit/codeBlock.test.ts', loadTemplate('obsidian/tests/codeBlock.test.ts.tmpl')),
+    write('tests/unit/editorHighlight.test.ts', loadTemplate('obsidian/tests/editorHighlight.test.ts.tmpl')),
   ];
   if (o.vue) {
     actions.push(
@@ -586,7 +596,9 @@ function planPackageBasics(options, version) {
     main: 'main.js',
     engines: { node: '>=22' },
     scripts,
-    devDependencies: dep('obsidian', 'esbuild', 'typescript', ...(o.vue ? ['unplugin-vue', 'vue-tsc'] : [])),
+    // @codemirror/view + state: types for the editor-highlight sample, and they
+    // are obsidian's own declared peers (needed at the root for strict-peer PMs).
+    devDependencies: dep('obsidian', '@codemirror/view', '@codemirror/state', 'esbuild', 'typescript', ...(o.vue ? ['unplugin-vue', 'vue-tsc'] : [])),
   };
   if (o.vue) patch.dependencies = dep('vue', 'pinia', 'vue-router');
   // Force `version` to the manifest-owned version (INITIAL_VERSION on a fresh
