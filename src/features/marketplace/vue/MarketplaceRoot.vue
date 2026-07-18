@@ -1,16 +1,17 @@
 <script setup lang="ts">
 import { Notice } from 'obsidian';
 import type { Ref } from 'vue';
-import { inject, onMounted, reactive, ref, watch } from 'vue';
+import { computed, inject, onMounted, reactive, ref, shallowRef, watch } from 'vue';
 
 import { t } from '../../../i18n/i18n';
 import LibraryToolbar from '../../library/vue/components/LibraryToolbar.vue';
 import { useLibraryList } from '../../library/vue/useLibraryList';
-import type { MarketplaceItem } from '../catalogTypes';
+import { MARKETPLACE_ITEM_TYPES, type MarketplaceItem, type MarketplaceItemType } from '../catalogTypes';
 import { maybeWarnMarketplaceNetwork } from '../marketplaceNetworkGate';
 import MarketplaceCard from './components/MarketplaceCard.vue';
 import { marketplaceAccessors } from './marketplaceAccessors';
 import { PLUGIN_KEY } from './marketplaceKeys';
+import { marketplaceTypeLabels } from './marketplaceTypeLabels';
 import { useMarketplaceStore } from './stores/marketplaceStore';
 
 const injectedPlugin = inject(PLUGIN_KEY);
@@ -23,9 +24,45 @@ const plugin = injectedPlugin;
 const store = useMarketplaceStore();
 store.init(plugin);
 
+// Marketplace-local type facet: narrows the source BEFORE useLibraryList, so the
+// shared search/sort/tag facet (and its tag chips) operate on the type-filtered
+// subset. Kept out of the shared LibraryToolbar because the Library panels are
+// each already one-type-per-tab and would inherit a facet they can't use.
+const activeTypes = shallowRef<ReadonlySet<MarketplaceItemType>>(new Set<MarketplaceItemType>());
 // Source-based list: rows re-derive from the shared store, so a fetch in ANY
 // Marketplace leaf updates every mounted view (multi-leaf consistency).
-const list = useLibraryList<MarketplaceItem>(() => store.items, marketplaceAccessors);
+const list = useLibraryList<MarketplaceItem>(
+  () => store.items.filter((item) => activeTypes.value.size === 0 || activeTypes.value.has(item.type)),
+  marketplaceAccessors,
+);
+const typeLabels = marketplaceTypeLabels();
+// Only offer chips for types actually present, in canonical order — a fresh vault
+// browsing the whole catalog isn't shown dead filters (e.g. Skill with no items).
+const availableTypes = computed(() =>
+  MARKETPLACE_ITEM_TYPES.filter((type) => store.items.some((item) => item.type === type)),
+);
+function toggleType(type: MarketplaceItemType): void {
+  const next = new Set<MarketplaceItemType>(activeTypes.value);
+  if (next.has(type)) next.delete(type);
+  else next.add(type);
+  activeTypes.value = next;
+}
+function clearTypes(): void {
+  if (activeTypes.value.size > 0) activeTypes.value = new Set<MarketplaceItemType>();
+}
+// Prune a type filter whose type vanished from the (re)loaded catalog, mirroring
+// useLibraryList's tag-prune, so a source switch can't strand the list on an
+// absent type (which would render empty with no visible cause).
+watch(
+  availableTypes,
+  (types) => {
+    if (activeTypes.value.size === 0) return;
+    const allowed = new Set(types);
+    const pruned = new Set([...activeTypes.value].filter((type) => allowed.has(type)));
+    if (pruned.size !== activeTypes.value.size) activeTypes.value = pruned;
+  },
+  { flush: 'sync' },
+);
 
 // Opt-in network gate: the Marketplace is dark until the user enables it, so
 // merely opening the view never touches the network.
@@ -171,6 +208,32 @@ async function install(item: MarketplaceItem): Promise<void> {
     >
       {{ t('marketplace.offline') }}
     </div>
+    <div
+      v-if="availableTypes.length > 1"
+      class="specorator-vue-marketplace-typefilter"
+      role="group"
+      :aria-label="t('marketplace.typeFilterGroupLabel')"
+    >
+      <button
+        type="button"
+        class="specorator-vue-marketplace-typechip"
+        :class="{ 'is-hidden': activeTypes.size === 0 }"
+        @click="clearTypes()"
+      >
+        {{ t('marketplace.allTypes') }}
+      </button>
+      <button
+        v-for="type in availableTypes"
+        :key="type"
+        type="button"
+        class="specorator-vue-marketplace-typechip"
+        :class="{ 'is-on': activeTypes.has(type) }"
+        :aria-pressed="activeTypes.has(type) ? 'true' : 'false'"
+        @click="toggleType(type)"
+      >
+        {{ typeLabels[type] }}
+      </button>
+    </div>
     <LibraryToolbar
       v-if="store.items.length > 0"
       :query="list.query.value"
@@ -238,5 +301,32 @@ async function install(item: MarketplaceItem): Promise<void> {
   font-size: var(--sp-font-smaller);
   color: var(--sp-text-faint);
   user-select: text;
+}
+
+/* Type facet chips: the toolbar's filter-chip styles are scoped to
+   LibraryToolbar, so mirror the same token-based look here for a consistent
+   facet row without threading a second dimension through the shared toolbar. */
+.specorator-vue-marketplace-typefilter {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-space-2xs);
+  margin-bottom: var(--sp-space-s);
+}
+
+.specorator-vue-marketplace-typechip {
+  font-size: var(--sp-font-smaller);
+  padding: var(--sp-space-3xs) var(--sp-space-xs);
+  border-radius: var(--sp-radius-s);
+  border: 1px solid transparent;
+  cursor: pointer;
+}
+
+.specorator-vue-marketplace-typechip.is-on {
+  background: var(--sp-accent);
+  color: var(--sp-text-on-accent);
+}
+
+.specorator-vue-marketplace-typechip.is-hidden {
+  display: none;
 }
 </style>

@@ -24,6 +24,8 @@
     "refresh": "Refresh",
     "loading": "Loading catalog…",
     "empty": "No items match your filters.",
+    "allTypes": "All types",
+    "typeFilterGroupLabel": "Filter by type",
     "offline": "Showing the last cached catalog.",
     "loadError": "Couldn't load the marketplace catalog.",
     "install": "Install",

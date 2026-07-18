@@ -137,6 +137,69 @@ describe('MarketplaceRoot list', () => {
   });
 });
 
+describe('MarketplaceRoot type filter', () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  it('filters the list to the chosen catalog type and restores on toggle-off', async () => {
+    setup(makeStore({ items: [alpha, beta] }), { marketplaceNetworkEnabled: true });
+    await screen.findByText('Alpha Loop');
+    expect(document.querySelectorAll('.marketplace-entry')).toHaveLength(2);
+
+    // Scope to the type group so the chip isn't confused with the same-named
+    // type badge each card renders.
+    const typeGroup = screen.getByRole('group', { name: 'Filter by type' });
+    const agentChip = within(typeGroup).getByRole('button', { name: 'Agent' });
+
+    // Filtering to Agent hides the loop card.
+    await fireEvent.click(agentChip);
+    await waitFor(() => expect(document.querySelectorAll('.marketplace-entry')).toHaveLength(1));
+    expect(screen.queryByText('Alpha Loop')).toBeNull();
+    expect(screen.getByText('Beta Agent')).toBeTruthy();
+
+    // Toggling the same chip off restores both.
+    await fireEvent.click(agentChip);
+    await waitFor(() => expect(document.querySelectorAll('.marketplace-entry')).toHaveLength(2));
+  });
+
+  it('hides the type facet when the catalog has only one type', async () => {
+    setup(makeStore({ items: [alpha] }), { marketplaceNetworkEnabled: true });
+    await screen.findByText('Alpha Loop');
+    expect(screen.queryByRole('group', { name: 'Filter by type' })).toBeNull();
+  });
+
+  it('clears an active type filter via the All types chip', async () => {
+    setup(makeStore({ items: [alpha, beta] }), { marketplaceNetworkEnabled: true });
+    await screen.findByText('Alpha Loop');
+    const typeGroup = screen.getByRole('group', { name: 'Filter by type' });
+    await fireEvent.click(within(typeGroup).getByRole('button', { name: 'Agent' }));
+    await waitFor(() => expect(document.querySelectorAll('.marketplace-entry')).toHaveLength(1));
+
+    await fireEvent.click(within(typeGroup).getByRole('button', { name: 'All types' }));
+    await waitFor(() => expect(document.querySelectorAll('.marketplace-entry')).toHaveLength(2));
+  });
+
+  it('prunes a stranded type filter when its type leaves the reloaded catalog', async () => {
+    const store = reactive(makeStore({ items: [alpha, beta] }));
+    setup(store as StoreFake, {
+      marketplaceNetworkEnabled: true,
+      marketplaceNetworkWarningShown: true,
+    });
+    await screen.findByText('Alpha Loop');
+    const typeGroup = screen.getByRole('group', { name: 'Filter by type' });
+    await fireEvent.click(within(typeGroup).getByRole('button', { name: 'Loop' }));
+    await waitFor(() => expect(screen.queryByText('Beta Agent')).toBeNull());
+
+    // A reload drops every loop; the stranded Loop filter must be pruned so the
+    // list falls back to "all" instead of rendering empty with no visible cause.
+    store.items = [beta];
+    await nextTick();
+    await waitFor(() => {
+      expect(document.querySelectorAll('.marketplace-entry')).toHaveLength(1);
+      expect(screen.getByText('Beta Agent')).toBeTruthy();
+    });
+  });
+});
+
 describe('MarketplaceRoot preview + install', () => {
   beforeEach(() => vi.clearAllMocks());
 

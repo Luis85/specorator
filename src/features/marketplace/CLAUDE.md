@@ -15,8 +15,9 @@ Modeled on — and reuses the components of — `features/library`.
 | `MarketplaceInstaller.ts` | `installMarketplaceItem(item, body, deps, now)` routes to the same vault stores the app uses; `isItemInstalled(item, deps, rosterIds?)` drives the badge |
 | `MarketplaceView.ts` / `activateMarketplace.ts` / `viewType.ts` | `ItemView` host (per-leaf Vue app), leaf activation, view-type constant |
 | `marketplaceNetworkGate.ts` | One-time in-app Notice on first opt-in |
-| `vue/MarketplaceRoot.vue` | Opt-in gate, `LibraryToolbar` + `useLibraryList` reuse, load/preview/install orchestration, offline/error banners |
+| `vue/MarketplaceRoot.vue` | Opt-in gate, type facet, `LibraryToolbar` + `useLibraryList` reuse, load/preview/install orchestration, offline/error banners |
 | `vue/components/MarketplaceCard.vue` | Per-item card (type badge, preview, attribution, gated Install) |
+| `vue/marketplaceTypeLabels.ts` | Localized `type → label` map shared by the card badge and the type facet |
 | `vue/stores/marketplaceStore.ts` | Shared Pinia store over one Pinia per plugin (all leaves share fetched catalog + installed state) |
 
 ## Contracts & invariants
@@ -51,6 +52,14 @@ Modeled on — and reuses the components of — `features/library`.
   cleared when the catalog reloads; an in-flight fetch that resolves after a
   reload is discarded via `catalogGeneration` so a stale body can't repopulate a
   reused id.
+- **The type facet is marketplace-local.** Filtering by asset type is an OUTER
+  pre-filter on the `useLibraryList` source getter (`activeTypes`), so the shared
+  search/sort/tag facet operates on the type-narrowed subset and its tag chips
+  recompute from it. It is deliberately NOT threaded through the shared
+  `LibraryToolbar`/`useLibraryList` — the four Library panels are each already
+  one-type-per-tab and would inherit a facet they can't use. Chips show only the
+  types present in the catalog (hidden entirely below two), and a stranded filter
+  is pruned when its type leaves a reloaded catalog (mirrors the tag prune).
 - **Skills are deferred.** `INSTALLABLE_ITEM_TYPES` excludes `skill`; adding it
   there plus an installer branch is the whole extension point.
 

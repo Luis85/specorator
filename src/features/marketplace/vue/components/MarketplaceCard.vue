@@ -3,8 +3,9 @@ import { computed } from 'vue';
 
 import { t } from '../../../../i18n/i18n';
 import LibraryCard from '../../../library/vue/components/LibraryCard.vue';
-import type { MarketplaceItem, MarketplaceItemType } from '../../catalogTypes';
+import type { MarketplaceItem } from '../../catalogTypes';
 import { isInstallableType } from '../../catalogTypes';
+import { marketplaceTypeLabels } from '../marketplaceTypeLabels';
 
 const props = defineProps<{
   item: MarketplaceItem;
@@ -20,16 +21,7 @@ const emit = defineEmits<{
   install: [];
 }>();
 
-// Built at setup (not module scope) so a locale switch is reflected per mount,
-// mirroring LibraryRoot's TABS. Record keys make the map exhaustive over the
-// catalog's item types.
-const typeLabels: Record<MarketplaceItemType, string> = {
-  'quick-action': t('marketplace.type.quickAction'),
-  agent: t('marketplace.type.agent'),
-  loop: t('marketplace.type.loop'),
-  template: t('marketplace.type.template'),
-  skill: t('marketplace.type.skill'),
-};
+const typeLabels = marketplaceTypeLabels();
 const typeLabel = computed(() => typeLabels[props.item.type]);
 
 // The catalog is untrusted, so `source` must not become a live href unless it

@@ -15,6 +15,8 @@ export type MarketplaceTranslationKey =
   | 'marketplace.refresh'
   | 'marketplace.loading'
   | 'marketplace.empty'
+  | 'marketplace.allTypes'
+  | 'marketplace.typeFilterGroupLabel'
   | 'marketplace.offline'
   | 'marketplace.loadError'
   | 'marketplace.install'
