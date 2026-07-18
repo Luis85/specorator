@@ -390,6 +390,11 @@ describe('createWorkOrderFromSeed — same-second id collision', () => {
 
     createFolder = async (): Promise<void> => undefined;
 
+    /** Plant a file directly, e.g. a concurrent writer that won a path race. */
+    occupy(path: string): void {
+      this.files.set(path, 'concurrent-winner');
+    }
+
     create = jest.fn(async (path: string, content: string): Promise<TFile> => {
       this.files.set(path, content);
       return Object.assign(new TFile(), { path });
@@ -441,5 +446,32 @@ describe('createWorkOrderFromSeed — same-second id collision', () => {
     expect(first!.path).toBe(`${WORK_ORDER_FOLDER}/${firstFm.id}.md`);
     expect(second!.path).toBe(`${WORK_ORDER_FOLDER}/${secondFm.id}.md`);
     expect(secondFm.id).toBe(`${firstFm.id}-2`);
+  });
+
+  it('retries with a fresh id when a concurrent spawn wins the path race (never a lost successor)', async () => {
+    const vault = new FakeVault();
+    const plugin = buildPlugin(vault);
+    const seed = { title: 'Same title', provider: 'claude', model: 'sonnet' };
+
+    // The TOCTOU window uniquePath cannot close: uniquePath saw the base path free, but by
+    // the time create runs a concurrent same-second, same-title spawn already occupies it.
+    // Real Obsidian rejects the losing create; the mock plants the winner's file and throws
+    // once, so the fix must recompute a fresh unique path + id and retry — not return null,
+    // which would strand the chain predecessor without a successor.
+    let raced = false;
+    vault.create.mockImplementationOnce(async (path: string): Promise<TFile> => {
+      raced = true;
+      vault.occupy(path);
+      throw new Error('File already exists.');
+    });
+
+    const created = await createWorkOrderFromSeed(plugin, seed, { reveal: 'none' });
+
+    expect(raced).toBe(true);
+    expect(created).not.toBeNull();
+    const fm = new TaskNoteStore().parse(created!.path, vault.getContent(created!.path)!).task.frontmatter;
+    // Recovered onto the -2 path/id after the lost race rather than bailing to null.
+    expect(created!.path).toBe(`${WORK_ORDER_FOLDER}/${fm.id}.md`);
+    expect(String(fm.id).endsWith('-2')).toBe(true);
   });
 });

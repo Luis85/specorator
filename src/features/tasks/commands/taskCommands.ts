@@ -10,6 +10,7 @@ import type { TaskPriority, TaskSpec, TaskStatus } from '../model/taskTypes';
 import { chainConfigFrontmatterLines, type WorkOrderChainConfig } from '../model/workOrderChain';
 import { CONTEXT_PLACEHOLDER, HANDOFF_END, HANDOFF_START, RUN_LEDGER_END, RUN_LEDGER_START } from '../storage/TaskNoteStore';
 import type { WorkOrderTemplate } from '../templates/templateTypes';
+import { createNoteWithUniqueId, stripMarkdownExtension, uniquePath } from './workOrderNoteFactory';
 import {
   buildWorkOrderMarkdownForSeed,
   resolveRunTarget,
@@ -42,10 +43,6 @@ function slugifyTitle(title: string): string {
     .trim()
     .replace(/[^a-z0-9]+/g, '-')
     .replace(/^-+|-+$/g, '');
-}
-
-function stripMarkdownExtension(path: string): string {
-  return path.replace(/\.md$/i, '');
 }
 
 interface FrontmatterArgs {
@@ -233,16 +230,6 @@ async function ensureFolder(plugin: SpecoratorPlugin, folder: string): Promise<v
   await plugin.app.vault.createFolder(folder);
 }
 
-function uniquePath(plugin: SpecoratorPlugin, basePath: string): string {
-  if (!plugin.app.vault.getAbstractFileByPath(basePath)) return basePath;
-  const withoutExt = stripMarkdownExtension(basePath);
-  let counter = 2;
-  while (plugin.app.vault.getAbstractFileByPath(`${withoutExt}-${counter}.md`)) {
-    counter += 1;
-  }
-  return `${withoutExt}-${counter}.md`;
-}
-
 /** Resolve the board archive folder, defaulting and stripping stray slashes (mirrors the board's folder getter). */
 export function resolveArchiveFolder(setting: string): string {
   return (setting || 'Agent Board/archive').replace(/^\/+|\/+$/g, '');
@@ -391,40 +378,36 @@ export async function createWorkOrderFromSeed(
   // strongest signal of what this work order is "about".
   const title = seed.titleOverride?.trim() || template?.name?.trim() || seed.title || 'New work order';
   const slug = slugifyTitle(title) || 'work-order';
-  // Dedupe the filename first, then derive id from the deduped basename — otherwise two same-second, same-title successors would collide on this id (the board/queue key) despite landing in different files.
-  const filePath = uniquePath(plugin, normalizePath(`${folder}/task-${timestampId(now)}-${slug}.md`));
-  const id = stripMarkdownExtension(filePath.split('/').pop() ?? filePath);
-
   const seedChain = resolveSeedChain(seed, template);
 
-  const markdown = buildWorkOrderMarkdownForSeed(
-    {
-      id,
-      title,
-      status: options?.status ?? seed.status ?? 'inbox',
-      timestamp: now.toISOString(),
-      isoDate: isoDate(now),
-      conversationId: seed.conversationId ?? null,
-      sourcePath: seed.sourcePath ?? null,
-      sourceFolderPath: seed.sourceFolderPath ?? null,
-      objective: seed.objective,
-      contextMarkdown: seed.contextMarkdown,
-      agent: seed.agent,
-      chain: seedChain,
-      chainedFrom: seed.chainedFrom,
-      chainDepth: seed.chainDepth,
-    },
-    target,
-    template,
-    WORK_ORDER_MARKDOWN_BUILDERS,
-  );
-  if (markdown === null) return null;
-
-  // Applied before the single vault.create so a chain successor's context/objective
-  // seed lands in the same write as its `ready` status — see CreateWorkOrderOptions.
-  const finalMarkdown = applyPostProcess(markdown, options);
-  const created = await plugin.app.vault.create(filePath, finalMarkdown);
-  if (!(created instanceof TFile)) return null;
+  const created = await createNoteWithUniqueId(plugin, folder, `task-${timestampId(now)}-${slug}`, (id) => {
+    const markdown = buildWorkOrderMarkdownForSeed(
+      {
+        id,
+        title,
+        status: options?.status ?? seed.status ?? 'inbox',
+        timestamp: now.toISOString(),
+        isoDate: isoDate(now),
+        conversationId: seed.conversationId ?? null,
+        sourcePath: seed.sourcePath ?? null,
+        sourceFolderPath: seed.sourceFolderPath ?? null,
+        objective: seed.objective,
+        contextMarkdown: seed.contextMarkdown,
+        agent: seed.agent,
+        chain: seedChain,
+        chainedFrom: seed.chainedFrom,
+        chainDepth: seed.chainDepth,
+      },
+      target,
+      template,
+      WORK_ORDER_MARKDOWN_BUILDERS,
+    );
+    if (markdown === null) return null;
+    // Post-process (chain successor context/objective seed) runs before the single
+    // vault.create so the note is never `ready`-but-un-seeded — see CreateWorkOrderOptions.
+    return applyPostProcess(markdown, options);
+  });
+  if (!created) return null;
   if ((options?.reveal ?? 'note') === 'note') {
     await plugin.app.workspace.getLeaf('tab').openFile(created);
   }
