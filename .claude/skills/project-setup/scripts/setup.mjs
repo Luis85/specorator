@@ -8,7 +8,7 @@ import { fileURLToPath } from 'node:url';
 import { apply } from './lib/apply.mjs';
 import { initBaselines } from './lib/baseline.mjs';
 import { detect } from './lib/detect.mjs';
-import { freezeOptions, loadOptions } from './lib/options.mjs';
+import { freezeOptions, loadOptions, validateObsidianFields } from './lib/options.mjs';
 import { effectiveOptions, plan } from './lib/plan.mjs';
 import { runGates } from './lib/verify.mjs';
 
@@ -87,6 +87,14 @@ export async function cli(argv, io = {}) {
       // Freeze install-volatile fields so a post-install re-detect can't flip them
       // and break the "second apply is a no-op" contract (see freezeOptions).
       freezeOptions(options, readPriorReport(cwd)?.options, state);
+      // Reject marketplace-invalid manifest answers with guidance BEFORE writing a
+      // scaffold that would fail its own obsidianmd lint on day one (name/id/
+      // description forbidden words + description formatting).
+      const manifestProblems = validateObsidianFields(options.obsidian);
+      if (manifestProblems.length > 0) {
+        err('Fix these manifest answers before scaffolding:\n' + manifestProblems.map((p) => `  - ${p}`).join('\n') + '\n');
+        return 2;
+      }
       const actions = plan(options, state);
       const dryRun = cmd === 'plan' || args.flags.dryRun === true;
       const backupDir = args.flags.backupDir ? resolve(cwd, args.flags.backupDir) : undefined;

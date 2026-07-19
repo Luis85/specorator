@@ -46,7 +46,9 @@ function sanitizeObsidianId(raw) {
     .replace(/[^a-z0-9]+/g, '-')
     .replace(/^-+|-+$/g, '')
     .replace(/-{2,}/g, '-');
-  return id || 'my-plugin';
+  // Fallback must itself be marketplace-valid ("plugin" is a forbidden word), so a
+  // no-id answer doesn't produce a manifest that fails obsidianmd on day one.
+  return id || 'my-notes';
 }
 
 function cleanString(v, fallback) {
@@ -76,6 +78,31 @@ function sanitizeObsidian(raw) {
     mobile: raw.mobile === true,
     vue: raw.vue !== false,
   };
+}
+
+// The community-marketplace manifest rules eslint-plugin-obsidianmd enforces on
+// the generated manifest.json — checked up front so a bad answer is rejected with
+// guidance during the interview, not discovered as a lint failure after the whole
+// scaffold is written. Returns human-readable problems (empty array = valid).
+const FORBIDDEN_MANIFEST_WORD = /obsidian|plugin/i;
+export function validateObsidianFields(o) {
+  if (!isObject(o)) return [];
+  const problems = [];
+  if (FORBIDDEN_MANIFEST_WORD.test(o.name)) {
+    problems.push(`Plugin name ${JSON.stringify(o.name)} can't contain "Obsidian" or "Plugin" — the community marketplace forbids both as redundant. Choose a name without them.`);
+  }
+  if (FORBIDDEN_MANIFEST_WORD.test(o.id)) {
+    problems.push(`Plugin id ${JSON.stringify(o.id)} can't contain "obsidian" or "plugin". Use a short slug like "quick-notes".`);
+  }
+  const d = String(o.description ?? '');
+  // Mirror obsidianmd: a forbidden word is reported instead of (not in addition to)
+  // the format check, matching the rule's else-if ordering.
+  if (FORBIDDEN_MANIFEST_WORD.test(d)) {
+    problems.push('Description can\'t contain "Obsidian" or "plugin" (both are redundant to the marketplace). Rephrase without them.');
+  } else if (d.length < 10 || d.length > 250 || !/^[A-Z]/.test(d) || !d.endsWith('.') || !/^[A-Za-z0-9\s.,!?'"-]+$/.test(d)) {
+    problems.push(`Description must be 10-250 characters, start with a capital letter, end with a period, and use plain text only (no emoji or special characters). Got ${JSON.stringify(d)}.`);
+  }
+  return problems;
 }
 
 // Normalize the PRD list from the questionnaire. id/title are templated into a

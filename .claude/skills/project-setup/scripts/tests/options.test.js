@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { test } from 'node:test';
 
-import { loadOptions } from '../lib/options.mjs';
+import { loadOptions, validateObsidianFields } from '../lib/options.mjs';
 
 function withConfig(content) {
   const dir = mkdtempSync(join(tmpdir(), 'opt-'));
@@ -13,6 +13,23 @@ function withConfig(content) {
   writeFileSync(path, content);
   return { path, cleanup: () => rmSync(dir, { recursive: true, force: true }) };
 }
+
+test('validateObsidianFields accepts a clean manifest and flags marketplace violations', () => {
+  assert.deepEqual(
+    validateObsidianFields({ id: 'quick-notes', name: 'Quick Notes', description: 'Capture quick notes fast.' }),
+    [],
+  );
+  // Forbidden words in name / id / description (obsidianmd rejects "obsidian"/"plugin").
+  assert.ok(validateObsidianFields({ id: 'a', name: 'Cool Obsidian Plugin', description: 'A fine description here.' }).some((p) => /name/i.test(p)));
+  assert.ok(validateObsidianFields({ id: 'my-plugin', name: 'Cool', description: 'A fine description here.' }).some((p) => /id/i.test(p)));
+  assert.ok(validateObsidianFields({ id: 'a', name: 'Cool', description: 'A plugin that helps.' }).some((p) => /redundant|Obsidian/i.test(p)));
+  // Description format: too short / no capital / no period / special chars.
+  const fmt = (d) => validateObsidianFields({ id: 'a', name: 'Cool', description: d });
+  assert.ok(fmt('short').some((p) => /Description must be/.test(p)));
+  assert.ok(fmt('no capital start.').some((p) => /Description must be/.test(p)));
+  assert.ok(fmt('No trailing period').some((p) => /Description must be/.test(p)));
+  assert.ok(fmt('Has an emoji 🎉 here.').some((p) => /Description must be/.test(p)));
+});
 
 test('loadOptions throws a clear error on malformed JSON', () => {
   const c = withConfig('{ not json');
