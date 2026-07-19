@@ -91,15 +91,20 @@ async function fetchSkillFiles(
   item: MarketplaceItem,
   skillMdBody: string,
   sourceUrl: string,
+  assertNetwork: () => void,
 ): Promise<Map<string, string>> {
   const files = new Map<string, string>([['SKILL.md', skillMdBody]]);
   const prefix = skillFolderPrefix(item.path);
   const others = (item.files ?? []).filter((repoPath) => repoPath !== item.path);
   if (prefix !== null && others.length > 0) {
     const client = new MarketplaceCatalogClient(sourceUrl);
-    const contents = await fetchWithConcurrency(others, SKILL_FETCH_CONCURRENCY, (repoPath) =>
-      client.fetchItemBody(repoPath),
-    );
+    const contents = await fetchWithConcurrency(others, SKILL_FETCH_CONCURRENCY, (repoPath) => {
+      // Re-read the opt-in before EVERY request (not just once at install start):
+      // disabling networking mid-install must stop any not-yet-started fetch at
+      // once — the Marketplace's "opt-out stops requestUrl immediately" contract.
+      assertNetwork();
+      return client.fetchItemBody(repoPath);
+    });
     others.forEach((repoPath, index) => {
       const rel = repoPath.startsWith(prefix) ? repoPath.slice(prefix.length) : null;
       if (rel) files.set(rel, contents[index]);
@@ -377,7 +382,7 @@ export const useMarketplaceStore = defineStore('marketplace', () => {
     // Text-only: reject a declared binary by extension before fetching (fast path;
     // fetchSkillFiles also verifies by content). No wasted download, no corruption.
     assertNoBinarySkillFiles(item);
-    const files = await fetchSkillFiles(item, skillMdBody, installSource);
+    const files = await fetchSkillFiles(item, skillMdBody, installSource, assertNetworkEnabled);
     const outcome = await installSkillItem(item, files, target, installDeps());
     if (outcome === 'installed') {
       // Skill dot-folders bypass the vault watcher, so mirror skillLibraryStore's

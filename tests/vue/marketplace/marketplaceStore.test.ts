@@ -613,4 +613,27 @@ describe('marketplaceStore skill install', () => {
     expect(clientCtor).toHaveBeenCalledWith('https://a.example/');
     expect(clientCtor).not.toHaveBeenCalledWith('https://b.example/');
   });
+
+  it('stops starting new supporting-file fetches when networking is disabled mid-install', async () => {
+    const store = useMarketplaceStore();
+    const p = fakePlugin(true);
+    store.init(p);
+    // More files than the concurrency limit, so later fetches start after earlier
+    // ones finish — the window where a mid-install opt-out must take effect.
+    const manyFiles: MarketplaceItem = {
+      ...skillItem,
+      files: ['skills/project-setup/SKILL.md', ...Array.from({ length: 8 }, (_, i) => `skills/project-setup/f${i}.md`)],
+    };
+    let calls = 0;
+    fetchBodySpy.mockImplementation(async () => {
+      calls += 1;
+      if (calls === 1) p.settings.marketplaceNetworkEnabled = false; // opt out mid-install
+      return 'ok';
+    });
+    await expect(
+      store.install(manyFiles, 'SKILL BODY', { provider: 'claude', scope: 'project' }),
+    ).rejects.toThrow(/disabled/i);
+    expect(calls).toBeLessThan(8); // not every file was fetched — later ones were blocked
+    expect(installSkillSpy).not.toHaveBeenCalled();
+  });
 });
