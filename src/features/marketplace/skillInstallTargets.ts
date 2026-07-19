@@ -56,12 +56,22 @@ export function skillRootFor(target: SkillInstallTarget): string {
 }
 
 /**
- * True when a relative path contains a segment that would let it escape its
- * intended folder: `..` traversal, an absolute or Windows drive/UNC prefix, or a
- * backslash separator. The catalog is untrusted, so both the manifest sanitizer
- * (`catalogTypes`) and the installer reject skill files that match — shared here
- * so the two guards can't drift.
+ * True when a relative path contains a segment that is unsafe to write under its
+ * intended folder: `..` traversal, an absolute or Windows drive/UNC prefix, a
+ * backslash separator, or an EMPTY segment (`a//b`, a trailing `/`). An empty
+ * segment matters because its normalized on-disk form differs from its raw form
+ * — `scripts//run.mjs` collapses to `scripts/run.mjs` — which is exactly how two
+ * raw-distinct catalog entries can silently write to one destination. The catalog
+ * is untrusted, so both the manifest sanitizer (`catalogTypes`) and the installer
+ * reject skill files that match — shared here so the two guards can't drift.
  */
 export function hasUnsafePathSegment(path: string): boolean {
-  return path.includes('..') || path.startsWith('/') || path.includes('\\') || /^[A-Za-z]:/.test(path);
+  return (
+    path.includes('..') ||
+    path.startsWith('/') ||
+    path.includes('\\') ||
+    /^[A-Za-z]:/.test(path) ||
+    path.includes('//') ||
+    path.endsWith('/')
+  );
 }

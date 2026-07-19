@@ -186,6 +186,9 @@ describe('parseManifest — skill files', () => {
       '/etc/passwd', // absolute
       'skills/project-setup/a\\b.md', // backslash
       'skills/other/x.md', // different skill's folder
+      'skills/project-setup//evil.md', // empty segment → suffix '/evil.md'
+      'skills/project-setup/C:/evil.md', // drive after prefix → suffix 'C:/evil.md'
+      'skills/project-setup/scripts//run.mjs', // empty interior segment in the suffix
     ]) {
       expect(firstSkill(['skills/project-setup/SKILL.md', bad])).toBeUndefined();
     }

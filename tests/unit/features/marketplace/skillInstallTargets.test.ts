@@ -47,6 +47,13 @@ describe('skillInstallTargets', () => {
       expect(hasUnsafePathSegment('a\\b')).toBe(true);
     });
 
+    it('flags empty segments whose normalized form differs from the raw path', () => {
+      // `a//b` collapses to `a/b` on disk — two raw-distinct entries could then
+      // write to one destination, so an empty segment is unsafe.
+      expect(hasUnsafePathSegment('scripts//run.mjs')).toBe(true);
+      expect(hasUnsafePathSegment('scripts/')).toBe(true);
+    });
+
     it('allows ordinary in-folder relative paths', () => {
       expect(hasUnsafePathSegment('scripts/setup.mjs')).toBe(false);
       expect(hasUnsafePathSegment('references/a.md')).toBe(false);

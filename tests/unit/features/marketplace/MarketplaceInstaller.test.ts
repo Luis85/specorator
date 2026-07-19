@@ -468,15 +468,17 @@ describe('installSkillItem', () => {
 
   it('refuses an unsafe in-skill path (traversal) and writes nothing', async () => {
     const { deps, qaFiles } = makeDeps();
+    // A SAFE supporting file precedes the unsafe one: all paths are validated
+    // up front, so the safe file is never written either — no partial folder for
+    // the pre-existing-folder guard to refuse on a corrected re-install.
     const evil = new Map<string, string>([
       ['SKILL.md', validSkillMd('project-setup')],
+      ['references/ok.md', 'safe'],
       ['../evil.md', 'pwn'],
     ]);
     await expect(
       installSkillItem(skillItem, evil, { provider: 'claude', scope: 'project' }, deps),
     ).rejects.toThrow(/unsafe/);
-    // SKILL.md is written last, and the traversal file is rejected before it, so
-    // nothing lands — no dedup marker to block a corrected re-install.
     expect(qaFiles.size).toBe(0);
   });
 

@@ -442,12 +442,29 @@ export async function installSkillItem(
     );
   }
 
-  for (const [relPath, content] of files) {
-    if (relPath === 'SKILL.md') continue; // written last
-    await adapter.write(normalizePath(`${skillDir}/${assertSafeInSkillPath(relPath)}`), content);
-  }
+  await writeSupportingSkillFiles(skillDir, files, adapter);
   await adapter.write(normalizePath(`${skillDir}/SKILL.md`), skillMd);
   return 'installed';
+}
+
+/**
+ * Writes a skill's supporting files (everything but `SKILL.md`). Validates ALL
+ * in-skill paths BEFORE writing any of them, so a malformed path throws before
+ * the first write — never leaving a half-written folder the pre-existing-folder
+ * guard would then refuse on retry. (The manifest sanitizer already drops such
+ * skills upstream; this keeps the installer's own all-or-nothing promise honest
+ * for direct callers.) `SKILL.md` is written by the caller, last.
+ */
+async function writeSupportingSkillFiles(
+  skillDir: string,
+  files: ReadonlyMap<string, string>,
+  adapter: SkillWriteAdapter,
+): Promise<void> {
+  const supporting = [...files].filter(([relPath]) => relPath !== 'SKILL.md');
+  for (const [relPath] of supporting) assertSafeInSkillPath(relPath);
+  for (const [relPath, content] of supporting) {
+    await adapter.write(normalizePath(`${skillDir}/${relPath}`), content);
+  }
 }
 
 /** True when the skill already exists at a SPECIFIC target (the detail's per-target button). */

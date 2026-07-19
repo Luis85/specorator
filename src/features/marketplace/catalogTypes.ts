@@ -188,18 +188,25 @@ export function isBinarySkillPath(path: string): boolean {
 
 /**
  * A skill file path safe to fetch and write: a string strictly under the skill's
- * own folder, no `..` traversal, no absolute/host/drive path, no backslashes.
- * The catalog is untrusted, so a hostile `files` entry (`../../etc`, `/abs`,
- * `C:\..`) must never escape the skill's install dir. (The catalog client also
- * refuses any fetch that escapes the base URL — this is the write-side guard.)
+ * own folder whose SUFFIX (the part written under the install dir) is itself safe
+ * — no `..` traversal, no absolute/host/drive path, no backslashes, no empty
+ * segment. The catalog is untrusted, so a hostile `files` entry (`../../etc`,
+ * `/abs`, `C:\..`) must never escape the skill's install dir.
+ *
+ * The check is against the suffix (`value.slice(prefix.length)`), NOT the full
+ * repo path, because that suffix is what the installer actually writes (the store
+ * strips `prefix` before handing it a folder-relative path). Full-path-only
+ * validation let `skills/foo//evil.md` and `skills/foo/C:/evil.md` through here —
+ * they slice to `/evil.md` / `C:/evil.md`, which the installer then rejects
+ * mid-write, leaving a partial folder. Validating the suffix drops the whole
+ * skill before any fetch or write. (The catalog client also refuses any fetch
+ * that escapes the base URL — this is the write-side guard.)
  */
 function isSafeSkillFilePath(value: unknown, prefix: string): value is string {
-  return (
-    typeof value === 'string' &&
-    value.startsWith(prefix) &&
-    value.length > prefix.length &&
-    !hasUnsafePathSegment(value)
-  );
+  if (typeof value !== 'string' || !value.startsWith(prefix) || value.length <= prefix.length) {
+    return false;
+  }
+  return !hasUnsafePathSegment(value.slice(prefix.length));
 }
 
 /**
