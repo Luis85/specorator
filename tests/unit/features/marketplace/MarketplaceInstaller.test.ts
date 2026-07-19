@@ -415,6 +415,23 @@ describe('installSkillItem', () => {
     ).rejects.toThrow(/invalid/i);
   });
 
+  it('refuses a Windows reserved device name (portable across platforms)', async () => {
+    // `con`/`nul`/`com1` can't be a directory on Windows; reject on every OS so
+    // installability doesn't silently depend on the platform.
+    const { deps } = makeDeps();
+    for (const reserved of ['con', 'NUL', 'Com1', 'lpt9', 'aux']) {
+      const item: MarketplaceItem = { ...skillItem, name: reserved };
+      await expect(
+        installSkillItem(item, new Map([['SKILL.md', validSkillMd(reserved)]]), { provider: 'claude', scope: 'project' }, deps),
+      ).rejects.toThrow(/invalid/i);
+    }
+    // A near-miss that is NOT reserved installs fine (`com0`, `console`).
+    const ok: MarketplaceItem = { ...skillItem, name: 'console' };
+    expect(
+      await installSkillItem(ok, new Map([['SKILL.md', validSkillMd('console')]]), { provider: 'claude', scope: 'project' }, deps),
+    ).toBe('installed');
+  });
+
   it('refuses a pre-existing folder that lacks SKILL.md (protects existing content)', async () => {
     const { deps, qaFiles } = makeDeps();
     // A hand-made / half-installed folder holding a user file, no SKILL.md.
