@@ -499,8 +499,21 @@ function planClaudeSettings(options, state) {
 
 // Dependabot keeps the exact-pinned deps fresh with weekly PRs that must pass the
 // same gates. Gated on GitHub integration (it lives under .github/).
-function planDependabot(options) {
-  if (!options.github?.integrate) return [];
+function planDependabot(options, state) {
+  if (!options.github?.integrate) {
+    // Toggled off on re-apply: apply is declarative and won't delete the file it wrote,
+    // so a retained .github/dependabot.yml keeps opening weekly dependency/Actions PRs
+    // against the user's opt-out. Warn (a file deletion can't be reconciled), like the
+    // release workflow above.
+    if (state?.priorOptions?.github?.integrate) {
+      return [
+        notice(
+          'GitHub integration was turned off, but the generated .github/dependabot.yml remains and will keep opening weekly dependency/Actions PRs — delete it to fully opt out.',
+        ),
+      ];
+    }
+    return [];
+  }
   return [write('.github/dependabot.yml', loadTemplate('obsidian/dependabot.yml.tmpl'))];
 }
 
@@ -741,7 +754,7 @@ export function planObsidian(options, state = {}) {
     ...planArtifacts(options),
     ...planRelease(options, state),
     ...planGithubTemplates(options),
-    ...planDependabot(options),
+    ...planDependabot(options, state),
     ...planVerifyScript(options, state),
     ...planPreCommit(options, state),
     ...planClaudeSettings(options, state),

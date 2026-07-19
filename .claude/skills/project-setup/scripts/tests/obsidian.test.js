@@ -391,6 +391,16 @@ test('dependabot ships only with github integration', () => {
   assert.equal(findWrite(actionsFor(), '.github/dependabot.yml'), undefined);
 });
 
+test('turning github off on re-apply warns the dependabot config remains (like the release workflow)', () => {
+  // github now off but a prior apply had it on → the retained dependabot.yml keeps
+  // opening weekly PRs, so warn to delete it (a file deletion can't be reconciled).
+  const actions = actionsFor({}, { priorOptions: { github: { integrate: true } } });
+  assert.ok(actions.some((a) => a.type === 'notice' && /dependabot\.yml remains/.test(a.message)));
+  assert.equal(findWrite(actions, '.github/dependabot.yml'), undefined); // nothing re-written
+  // First apply (no prior github) → no stale notice.
+  assert.ok(!actionsFor({}, {}).some((a) => a.type === 'notice' && /dependabot\.yml remains/.test(a.message)));
+});
+
 test('pre-commit hook is opt-in (off by default; on wires lint-staged + simple-git-hooks)', () => {
   assert.equal(
     actionsFor().find((a) => a.type === 'mergeJson' && a.path === 'package.json' && a.patch['simple-git-hooks']),
