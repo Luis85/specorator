@@ -73,9 +73,19 @@ export function isReservedDeviceName(name: string): boolean {
 // would land at a different path than the one we validated and recorded.
 const WINDOWS_ILLEGAL_CHAR = /[<>:"|?*]/;
 
+// Control characters (U+0000–U+001F) are illegal in Windows filenames. Detected
+// by code point rather than a regex range so no raw control byte is embedded in
+// this source file.
+function hasControlChar(segment: string): boolean {
+  for (let i = 0; i < segment.length; i += 1) {
+    if (segment.charCodeAt(i) < 0x20) return true;
+  }
+  return false;
+}
+
 /** True when a single path segment can't be created portably (Windows rules). */
 function isWindowsInvalidSegment(segment: string): boolean {
-  if (WINDOWS_ILLEGAL_CHAR.test(segment)) return true;
+  if (WINDOWS_ILLEGAL_CHAR.test(segment) || hasControlChar(segment)) return true;
   if (segment.endsWith('.') || segment.endsWith(' ')) return true;
   return isReservedDeviceName(segment.split('.')[0]);
 }
@@ -97,7 +107,7 @@ function hasUnsafeStructure(path: string): boolean {
  * intended folder: a structural escape (`..` traversal, an absolute or Windows
  * drive/UNC prefix, a backslash separator, or an EMPTY segment — `a//b`, a
  * trailing `/`), OR a segment no filesystem could portably create: a Windows
- * reserved device name (`con`, `nul.txt`), an illegal character (`<>:"|?*`), or a trailing dot/space. An empty segment matters because its
+ * reserved device name (`con`, `nul.txt`), an illegal character (`<>:"|?*` or a control code), or a trailing dot/space. An empty segment matters because its
  * normalized on-disk form differs from its raw form (`scripts//run.mjs` collapses
  * to `scripts/run.mjs`), which is how two raw-distinct catalog entries can
  * silently write to one destination; the Windows rules keep a skill's

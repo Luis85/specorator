@@ -66,6 +66,10 @@ describe('skillInstallTargets', () => {
       expect(hasUnsafePathSegment('a<b.md')).toBe(true);
       expect(hasUnsafePathSegment('scripts/trailing.')).toBe(true); // trailing dot
       expect(hasUnsafePathSegment('scripts/trailing ')).toBe(true); // trailing space
+      // Control character (U+0001) — built here rather than written literally so
+      // no raw control byte lands in this test file.
+      expect(hasUnsafePathSegment(`scripts/bad${String.fromCharCode(1)}.md`)).toBe(true);
+      expect(hasUnsafePathSegment(`x${String.fromCharCode(0)}y`)).toBe(true); // NUL
     });
 
     it('allows ordinary in-folder relative paths', () => {
