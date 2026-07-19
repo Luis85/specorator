@@ -509,6 +509,19 @@ describe('SpecoratorPlugin', () => {
       await plugin.saveSettings();
       expect(wakes).toHaveLength(2);
     });
+
+    it('emits settings-changed on every save so views can re-read non-reactive settings', async () => {
+      await plugin.onload();
+      const changes: string[] = [];
+      plugin.events.on('settings-changed', () => changes.push('changed'));
+
+      await plugin.saveSettings();
+      expect(changes).toHaveLength(1);
+      // Any settings mutation persists through this one path, so the Marketplace
+      // opt-in gate / install-folder badges can react without a remount.
+      await plugin.saveSettings();
+      expect(changes).toHaveLength(2);
+    });
   });
 
   describe('applyEnvironmentVariables', () => {

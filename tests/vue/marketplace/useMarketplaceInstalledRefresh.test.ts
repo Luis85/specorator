@@ -11,6 +11,8 @@ type VaultHandler = (file: { path?: string }, oldPath?: string) => void;
 function makeFakes() {
   const rosterHandlers: Array<() => void> = [];
   const rosterDisposer = vi.fn();
+  const settingsHandlers: Array<() => void> = [];
+  const settingsDisposer = vi.fn();
   const vaultHandlers: Record<string, VaultHandler[]> = {};
   const offref = vi.fn();
   const plugin = {
@@ -21,8 +23,15 @@ function makeFakes() {
     },
     events: {
       on: vi.fn((name: string, handler: () => void) => {
-        if (name === 'roster:changed') rosterHandlers.push(handler);
-        return rosterDisposer;
+        if (name === 'roster:changed') {
+          rosterHandlers.push(handler);
+          return rosterDisposer;
+        }
+        if (name === 'settings-changed') {
+          settingsHandlers.push(handler);
+          return settingsDisposer;
+        }
+        return vi.fn();
       }),
     },
     app: {
@@ -36,9 +45,10 @@ function makeFakes() {
     },
   };
   const fireRoster = (): void => rosterHandlers.forEach((handler) => handler());
+  const fireSettings = (): void => settingsHandlers.forEach((handler) => handler());
   const fireVault = (name: string, path: string, oldPath?: string): void =>
     (vaultHandlers[name] ?? []).forEach((handler) => handler({ path }, oldPath));
-  return { plugin, fireRoster, fireVault, rosterDisposer, offref };
+  return { plugin, fireRoster, fireSettings, fireVault, rosterDisposer, settingsDisposer, offref };
 }
 
 function mountComposable(plugin: unknown, refresh: () => void) {
@@ -65,6 +75,19 @@ describe('useMarketplaceInstalledRefresh', () => {
 
     fireRoster();
     expect(refresh).not.toHaveBeenCalled(); // still within the debounce window
+    vi.advanceTimersByTime(300);
+    expect(refresh).toHaveBeenCalledTimes(1);
+  });
+
+  it('refreshes (debounced) on settings-changed (a watched install folder moved)', () => {
+    // Changing agentBoardLoopFolder / templateFolder / quickActionsFolder moves
+    // where items live with no vault event, so the badge scan must re-run.
+    const refresh = vi.fn();
+    const { plugin, fireSettings } = makeFakes();
+    mountComposable(plugin, refresh);
+
+    fireSettings();
+    expect(refresh).not.toHaveBeenCalled(); // debounced
     vi.advanceTimersByTime(300);
     expect(refresh).toHaveBeenCalledTimes(1);
   });
@@ -109,13 +132,14 @@ describe('useMarketplaceInstalledRefresh', () => {
 
   it('releases bus + vault subscriptions and cancels a pending refresh on unmount', () => {
     const refresh = vi.fn();
-    const { plugin, fireRoster, rosterDisposer, offref } = makeFakes();
+    const { plugin, fireRoster, rosterDisposer, settingsDisposer, offref } = makeFakes();
     const { unmount } = mountComposable(plugin, refresh);
 
     fireRoster(); // schedules a refresh (timer pending)
     unmount();
 
     expect(rosterDisposer).toHaveBeenCalledTimes(1);
+    expect(settingsDisposer).toHaveBeenCalledTimes(1);
     expect(offref).toHaveBeenCalledTimes(3); // create / delete / rename
     // The pending debounce was cleared on unmount, so nothing fires late.
     vi.advanceTimersByTime(300);

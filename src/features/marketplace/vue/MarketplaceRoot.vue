@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { Notice } from 'obsidian';
 import type { Ref } from 'vue';
-import { computed, inject, onMounted, reactive, ref, shallowRef, watch } from 'vue';
+import { computed, inject, onMounted, onUnmounted, reactive, ref, shallowRef, watch } from 'vue';
 
 import { t } from '../../../i18n/i18n';
 import LibraryToolbar from '../../library/vue/components/LibraryToolbar.vue';
@@ -126,6 +126,36 @@ async function enable(): Promise<void> {
   await maybeWarnMarketplaceNetwork(plugin);
   enabled.value = true;
   await store.load();
+}
+
+// The Settings tab can flip marketplaceNetworkEnabled while this leaf shows the
+// gate, but plugin.settings isn't reactive and Obsidian Settings is a modal over
+// this same leaf (so active-leaf-change doesn't fire on dismiss). Re-read the gate
+// on the settings-changed event: a view enabled from Settings then warns + loads
+// exactly like the mount path, so the catalog appears without a manual Enable
+// click or a remount. Per-leaf teardown keeps the shared-store subscription
+// leak-free.
+let settingsChangedOff: (() => void) | null = null;
+onMounted(() => {
+  settingsChangedOff = plugin.events.on('settings-changed', () => {
+    void syncEnabled();
+  });
+});
+onUnmounted(() => {
+  settingsChangedOff?.();
+  settingsChangedOff = null;
+});
+
+async function syncEnabled(): Promise<void> {
+  const nowEnabled = plugin.settings.marketplaceNetworkEnabled === true;
+  const wasEnabled = enabled.value;
+  enabled.value = nowEnabled;
+  // Only act on the disabled→enabled transition with an empty shared store —
+  // mirror onMounted's gated warn→load (idempotent warning; fire-and-forget load).
+  if (nowEnabled && !wasEnabled && !store.loaded) {
+    await maybeWarnMarketplaceNetwork(plugin);
+    void store.load();
+  }
 }
 
 async function togglePreview(item: MarketplaceItem): Promise<void> {

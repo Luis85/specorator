@@ -75,6 +75,9 @@ function setup(
   saveSettings: ReturnType<typeof vi.fn> = vi.fn().mockResolvedValue(undefined),
 ) {
   hoisted.store = store;
+  // Capture the settings-changed subscribers (the opt-in gate + the install-
+  // refresh composable) so a test can fire the event the Settings tab emits.
+  const settingsChangedHandlers: Array<() => void> = [];
   // One plugin whose settings object is mutated in place by enable() — assert
   // on the same reference the view flipped.
   const plugin = {
@@ -85,12 +88,18 @@ function setup(
     app: { vault: { on: vi.fn(() => ({})), offref: vi.fn() } },
     vaultFileAdapter: {},
     agentRosterStore: {},
-    events: { on: vi.fn(() => vi.fn()) },
+    events: {
+      on: vi.fn((name: string, handler: () => void) => {
+        if (name === 'settings-changed') settingsChangedHandlers.push(handler);
+        return vi.fn();
+      }),
+    },
   };
   const utils = render(MarketplaceRoot, {
     global: { provide: { [PLUGIN_KEY as symbol]: plugin } },
   });
-  return { store, plugin, ...utils };
+  const fireSettingsChanged = (): void => settingsChangedHandlers.forEach((handler) => handler());
+  return { store, plugin, fireSettingsChanged, ...utils };
 }
 
 describe('MarketplaceRoot opt-in gate', () => {
@@ -119,6 +128,26 @@ describe('MarketplaceRoot opt-in gate', () => {
     expect(plugin.settings.marketplaceNetworkEnabled).toBe(true);
     expect(plugin.saveSettings).toHaveBeenCalled();
     // Gate cleared: the enabled chrome (Refresh) is now mounted.
+    expect(screen.getByRole('button', { name: 'Refresh' })).toBeTruthy();
+  });
+
+  it('reacts to enabling networking from the Settings tab (settings-changed), no remount', async () => {
+    const settings: Record<string, unknown> = {
+      marketplaceNetworkEnabled: false,
+      // Warning already shown so the one-time gate no-ops (deterministic flow).
+      marketplaceNetworkWarningShown: true,
+    };
+    const { store, fireSettingsChanged } = setup(makeStore(), settings);
+    // The leaf shows the gate and hasn't loaded.
+    expect(screen.getByText(/Marketplace is off/)).toBeTruthy();
+    expect(store.load).not.toHaveBeenCalled();
+
+    // The user flips the toggle on the Settings tab (a modal over this leaf):
+    // settings mutate and saveSettings fires settings-changed. The open leaf must
+    // re-read the gate and load — no Enable click, no remount.
+    settings.marketplaceNetworkEnabled = true;
+    fireSettingsChanged();
+    await waitFor(() => expect(store.load).toHaveBeenCalled());
     expect(screen.getByRole('button', { name: 'Refresh' })).toBeTruthy();
   });
 });

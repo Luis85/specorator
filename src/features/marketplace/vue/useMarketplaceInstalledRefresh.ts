@@ -8,12 +8,14 @@ const REFRESH_DEBOUNCE_MS = 300;
 /**
  * Keeps the Marketplace "Installed" badges in sync with mutations that happen
  * OUTSIDE the marketplace — an item deleted or renamed from the Library, an agent
- * removed from the roster. Installed-state spans two channels: agents fire
- * `roster:changed` on the event bus, while loops / templates / quick-actions
- * surface only as Obsidian vault create/delete/rename events under their folders
- * (a dot-folder-free, existence-only signal — `modify` is irrelevant to whether
- * an item exists). Both feed one debounced `refresh` (the store's network-free,
- * generation-guarded `refreshInstalled`).
+ * removed from the roster. Installed-state spans three channels: agents fire
+ * `roster:changed` on the event bus; loops / templates / quick-actions surface as
+ * Obsidian vault create/delete/rename events under their folders (a
+ * dot-folder-free, existence-only signal — `modify` is irrelevant to whether an
+ * item exists); and a `settings-changed` event covers a change to the configured
+ * install FOLDERS (which moves where an item lives — and so which items count as
+ * installed — with no accompanying vault event). All feed one debounced `refresh`
+ * (the store's network-free, generation-guarded `refreshInstalled`).
  *
  * Owns its own onMounted/onUnmounted — call once from a component's setup. The
  * Marketplace store is shared across leaves, so every open leaf subscribes
@@ -26,6 +28,7 @@ export function useMarketplaceInstalledRefresh(
 ): void {
   const vaultRefs: EventRef[] = [];
   let rosterOff: (() => void) | null = null;
+  let settingsOff: (() => void) | null = null;
   let timer: number | null = null;
 
   // Live folder resolution (re-read per event) so a settings change to any watched
@@ -62,6 +65,9 @@ export function useMarketplaceInstalledRefresh(
 
   onMounted(() => {
     rosterOff = plugin.events.on('roster:changed', schedule);
+    // A change to a watched install folder moves items without any vault event,
+    // so recompute badges on settings-changed too (debounced, guarded, no I/O).
+    settingsOff = plugin.events.on('settings-changed', schedule);
     vaultRefs.push(plugin.app.vault.on('create', onVaultChange));
     vaultRefs.push(plugin.app.vault.on('delete', onVaultChange));
     vaultRefs.push(plugin.app.vault.on('rename', onVaultChange));
@@ -74,6 +80,8 @@ export function useMarketplaceInstalledRefresh(
     }
     rosterOff?.();
     rosterOff = null;
+    settingsOff?.();
+    settingsOff = null;
     for (const ref of vaultRefs) plugin.app.vault.offref(ref);
     vaultRefs.length = 0;
   });

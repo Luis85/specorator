@@ -99,21 +99,34 @@ Modeled on — and reuses the components of — `features/library`.
   HTTP-redirect following (3xx is auto-followed with no `Location` re-vet). Both
   are bounded to a non-default, user-configured source; closing them means moving
   off `requestUrl` (see the `MarketplaceCatalogClient` class doc).
-- **Installed badges live-sync across two channels.** A mutation OUTSIDE the
-  marketplace (a Library delete/rename, a roster change) recomputes `installedIds`
-  without a manual Refresh, via `useMarketplaceInstalledRefresh`. Installed-state
-  spans two signals: agents fire `roster:changed` on the event bus, while
-  loop/template/quick-action notes surface only as Obsidian vault
-  create/delete/rename events under their folders (existence-only — `modify` is
-  irrelevant). Both feed a debounced `store.refreshInstalled`, which is
-  network-free and double-guarded: a **generation** guard rejects a scan the
-  catalog reloaded under, and a **sequence** guard rejects an older scan a newer
-  overlapping scan already superseded (event-triggered scans can now run
-  concurrently with no reload, so ordering can't rely on generation alone). The
-  composable is owned per-leaf (`onMounted`/
-  `onUnmounted` teardown: disposer + `offref` + timer clear); the shared store
-  means every open leaf subscribes independently and each fires the same
-  idempotent refresh — leak-free because teardown is per-leaf, NOT in `store.init`.
+- **Installed badges live-sync across three channels.** A mutation OUTSIDE the
+  marketplace (a Library delete/rename, a roster change, an install-folder setting
+  change) recomputes `installedIds` without a manual Refresh, via
+  `useMarketplaceInstalledRefresh`. Installed-state spans three signals: agents
+  fire `roster:changed` on the event bus; loop/template/quick-action notes surface
+  as Obsidian vault create/delete/rename events under their folders (existence-only
+  — `modify` is irrelevant); and a `settings-changed` event covers a change to the
+  configured install FOLDERS (which moves where an item lives — and so which items
+  count as installed — with no accompanying vault event). All feed a debounced
+  `store.refreshInstalled`, which is network-free and double-guarded: a
+  **generation** guard rejects a scan the catalog reloaded under, and a
+  **sequence** guard rejects an older scan a newer overlapping scan already
+  superseded (event-triggered scans can now run concurrently with no reload, so
+  ordering can't rely on generation alone). The composable is owned per-leaf
+  (`onMounted`/`onUnmounted` teardown: disposers + `offref` + timer clear); the
+  shared store means every open leaf subscribes independently and each fires the
+  same idempotent refresh — leak-free because teardown is per-leaf, NOT in
+  `store.init`.
+- **Settings changes reach an open leaf via `settings-changed`.** `plugin.settings`
+  is a plain, non-reactive object and Obsidian Settings is a modal over the active
+  leaf (so `active-leaf-change` can't be relied on when a setting is toggled and
+  the modal dismissed). `saveSettings` — the single persistence path for every
+  field (registry renderer + imperative sections) — emits one general
+  `settings-changed` event (`features/settings/events.ts`). `MarketplaceRoot`
+  subscribes to re-read the opt-in gate (`enabled`): flipping
+  `marketplaceNetworkEnabled` on the Settings tab now warns + loads the open leaf
+  without a manual Enable click or remount. The install-refresh composable
+  subscribes for the folder-change case above. Both own per-leaf teardown.
 - **Preview cache is generation-guarded.** Previews are keyed by item id and
   cleared when the catalog reloads; an in-flight fetch that resolves after a
   reload is discarded via `catalogGeneration` so a stale body can't repopulate a
