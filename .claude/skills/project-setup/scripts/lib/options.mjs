@@ -186,6 +186,16 @@ export function freezeOptions(options, frozen, state) {
   if (options.obsidian) {
     options.testFramework = 'vitest';
     options.typescript = true;
+    // vue and mobile are STRUCTURAL — they shape ~dozens of generated files (the
+    // esbuild vue loader, .vue sources, eslint import bans, build externals, the
+    // manifest desktop flag). Changing them on re-apply can't be reconciled
+    // file-by-file (skip-if-exists keeps the old sources while overwrite-backup
+    // files flip, leaving e.g. a non-vue build against retained .vue imports), so
+    // freeze them to the first apply's choice — the variant is immutable.
+    if (isObject(frozen?.obsidian)) {
+      if (typeof frozen.obsidian.vue === 'boolean') options.obsidian.vue = frozen.obsidian.vue;
+      if (typeof frozen.obsidian.mobile === 'boolean') options.obsidian.mobile = frozen.obsidian.mobile;
+    }
   }
   return options;
 }

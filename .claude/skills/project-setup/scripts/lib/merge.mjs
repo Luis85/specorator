@@ -37,10 +37,21 @@ const NPM_INIT_PLACEHOLDER = 'echo "Error: no test specified" && exit 1';
 export function mergeJsonFile(path, patch, current, force = []) {
   const base = current ?? (existsSync(path) ? JSON.parse(readFileSync(path, 'utf8')) : {});
   const merged = deepMerge(base, patch);
-  // `force` lets the patch win over an existing scalar for named top-level keys
-  // (deepMerge otherwise keeps the base). Used so package.json `version` syncs to
-  // the manifest-derived version that check:artifacts requires them to share.
-  for (const k of force) if (k in patch) merged[k] = patch[k];
+  // `force` lets the patch win over an existing scalar for named keys (deepMerge
+  // otherwise keeps the base). A plain key forces a top-level field (e.g. `version`
+  // syncing to the manifest); a dotted `scripts.verify` forces one nested key, so a
+  // recomputed engine-owned script isn't left stale on re-apply.
+  for (const k of force) {
+    if (k.includes('.')) {
+      const [top, sub] = k.split('.');
+      if (isObject(patch[top]) && sub in patch[top]) {
+        if (!isObject(merged[top])) merged[top] = {};
+        merged[top][sub] = patch[top][sub];
+      }
+    } else if (k in patch) {
+      merged[k] = patch[k];
+    }
+  }
   // Overwrite an npm-init placeholder script with the generated one (nested under
   // `scripts`, so `force` — top-level only — can't reach it).
   if (isObject(base.scripts) && isObject(patch.scripts) && isObject(merged.scripts)) {

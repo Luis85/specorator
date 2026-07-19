@@ -7,6 +7,17 @@ import { test } from 'node:test';
 import { backupFile, deepMerge, mergeJsonFile, mergeTextLines } from '../lib/merge.mjs';
 import { tmpProject } from './helpers.js';
 
+test('mergeJsonFile force accepts a dotted scripts.X path (replaces a stale nested scalar)', () => {
+  const { merged } = mergeJsonFile(
+    'x',
+    { scripts: { verify: 'new chain' } },
+    { scripts: { verify: 'old chain', other: 'keep' } },
+    ['scripts.verify'],
+  );
+  assert.equal(merged.scripts.verify, 'new chain', 'the recomputed script must win');
+  assert.equal(merged.scripts.other, 'keep', 'unrelated scripts survive');
+});
+
 test('deepMerge keeps existing scalars, adds missing keys, unions arrays', () => {
   const base = { scripts: { lint: 'mine' }, keywords: ['a'] };
   const patch = { scripts: { lint: 'theirs', test: 'jest' }, keywords: ['a', 'b'] };

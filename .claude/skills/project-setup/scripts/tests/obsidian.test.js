@@ -353,6 +353,13 @@ test('npm version delegates to sync-version.mjs, which stages the beta manifest 
   assert.match(sync, /if \(inGitRepo\) execFileSync\('git', \['add'/);
 });
 
+test('the verify script is force-replaced so a re-apply refreshes it after option changes', () => {
+  // verify is a computed chain of the enabled gates + PM prefix; deepMerge would keep
+  // a stale base scalar, so a toggled-off guardrail or a PM switch would leave it wrong.
+  const action = actionsFor().find((a) => a.type === 'mergeJson' && a.patch.scripts?.verify);
+  assert.ok(action.force?.includes('scripts.verify'), 'verify must be force-replaced, not deep-merged');
+});
+
 test('vitest discovers .test and .spec across JS/TS incl. module forms (.mts/.cts), not just *.test.ts', () => {
   // --passWithNoTests means a repo whose suite is only in tests/*.spec.mts would
   // pass verify/CI without running — the include must cover mts/cts too.

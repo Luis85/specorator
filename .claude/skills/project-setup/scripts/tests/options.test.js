@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { test } from 'node:test';
 
-import { loadOptions, validateObsidianFields } from '../lib/options.mjs';
+import { freezeOptions, loadOptions, validateObsidianFields } from '../lib/options.mjs';
 
 function withConfig(content) {
   const dir = mkdtempSync(join(tmpdir(), 'opt-'));
@@ -42,6 +42,18 @@ test('validateObsidianFields accepts a clean manifest and flags marketplace viol
   assert.deepEqual(validateObsidianFields({ ...base, vue: true, minAppVersion: '1.7.2' }), []);
   assert.deepEqual(validateObsidianFields({ ...base, vue: true, minAppVersion: '1.10.0' }), []);
   assert.deepEqual(validateObsidianFields({ ...base, vue: false, minAppVersion: '1.6.0' }), []);
+});
+
+test('freezeOptions makes the obsidian vue/mobile variant immutable across re-apply', () => {
+  const options = { obsidian: { vue: false, mobile: true } };
+  freezeOptions(options, { obsidian: { vue: true, mobile: false }, packageManager: 'npm' }, {});
+  assert.equal(options.obsidian.vue, true, 'vue is frozen to the first apply');
+  assert.equal(options.obsidian.mobile, false, 'mobile is frozen to the first apply');
+  // A first apply (no prior report) keeps the given choice.
+  const fresh = { obsidian: { vue: false, mobile: true } };
+  freezeOptions(fresh, null, {});
+  assert.equal(fresh.obsidian.vue, false);
+  assert.equal(fresh.obsidian.mobile, true);
 });
 
 test('loadOptions throws a clear error on malformed JSON', () => {

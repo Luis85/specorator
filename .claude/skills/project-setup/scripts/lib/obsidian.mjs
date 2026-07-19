@@ -405,7 +405,10 @@ function planVerifyScript(options, state) {
     cmds.push(`${run} ${s}`);
   }
   const verify = cmds.join(' && ');
-  return [{ type: 'mergeJson', path: 'package.json', patch: { scripts: { verify } } }];
+  // Force scripts.verify: it's a computed aggregate of the enabled gates + the PM
+  // prefix, so a re-apply after toggling a guardrail or switching package manager
+  // must REPLACE the stale chain (deepMerge would keep the base scalar).
+  return [{ type: 'mergeJson', path: 'package.json', patch: { scripts: { verify } }, force: ['scripts.verify'] }];
 }
 
 // Claude Code integration: slash commands (always — inert until invoked) plus
