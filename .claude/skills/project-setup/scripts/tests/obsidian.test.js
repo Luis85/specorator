@@ -360,6 +360,19 @@ test('the verify script is force-replaced so a re-apply refreshes it after optio
   assert.ok(action.force?.includes('scripts.verify'), 'verify must be force-replaced, not deep-merged');
 });
 
+test('the pre-commit nano-staged config is force-replaced so a lint toggle refreshes the staged task', () => {
+  const action = optionsForHooks({ preCommit: true }).find((a) => a.type === 'mergeJson' && a.patch['nano-staged']);
+  assert.ok(action.force?.includes('nano-staged'), 'nano-staged must be force-replaced');
+  assert.ok(action.force?.includes('simple-git-hooks'), 'simple-git-hooks must be force-replaced');
+});
+
+test('turning github off on re-apply warns the release workflow remains (declarative apply can\'t delete it)', () => {
+  const actions = actionsFor({}, { priorOptions: { github: { integrate: true } } });
+  assert.ok(actions.some((a) => a.type === 'notice' && /release\.yml remains/.test(a.message)));
+  // First apply (no prior github) → no notice.
+  assert.ok(!actionsFor({}, {}).some((a) => a.type === 'notice' && /release\.yml remains/.test(a.message)));
+});
+
 test('vitest discovers .test and .spec across JS/TS incl. module forms (.mts/.cts), not just *.test.ts', () => {
   // --passWithNoTests means a repo whose suite is only in tests/*.spec.mts would
   // pass verify/CI without running — the include must cover mts/cts too.

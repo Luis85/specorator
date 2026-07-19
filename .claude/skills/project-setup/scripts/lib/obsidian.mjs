@@ -554,12 +554,28 @@ function planPreCommit(options, state) {
         },
         devDependencies: dep('simple-git-hooks', 'nano-staged'),
       },
+      // Force the engine-owned config: the staged source task depends on whether lint
+      // is on, so a re-apply that toggles eslintSeverityStaging must REPLACE it
+      // (deepMerge would keep the stale [eslint, prettier] array).
+      force: ['nano-staged', 'simple-git-hooks'],
     },
   ];
 }
 
 function planRelease(options, state) {
-  if (!options.github?.integrate) return [];
+  if (!options.github?.integrate) {
+    // Toggled off on re-apply: apply is declarative and won't delete the workflow it
+    // wrote, so .github/workflows/release.yml would keep publishing on a stable tag
+    // against the user's stated opt-out. Warn (a file deletion can't be reconciled).
+    if (state?.priorOptions?.github?.integrate) {
+      return [
+        notice(
+          'GitHub integration was turned off, but the generated .github/workflows/release.yml remains and will still publish a release on the next stable tag — delete it to fully opt out.',
+        ),
+      ];
+    }
+    return [];
+  }
   const pm = CI_PM[options.packageManager ?? state?.packageManager ?? 'npm'];
   if (!pm) return [notice('No built-in release workflow profile for this package manager — wire .github/workflows/release.yml manually.')];
   const content = renderTemplate(loadTemplate('obsidian/release.yml.tmpl'), {
