@@ -23,17 +23,26 @@ const showSkeleton = computed(() => props.loading && props.items.length === 0);
 </script>
 
 <template>
-  <div
-    v-if="showSkeleton"
-    class="specorator-vue-marketplace-grid"
-    aria-hidden="true"
-  >
+  <template v-if="showSkeleton">
+    <!-- The skeleton is decorative (aria-hidden); a visually-hidden live status
+      is the only signal a screen reader gets that the catalog is still loading. -->
     <div
-      v-for="n in props.skeletonCount"
-      :key="n"
-      class="specorator-vue-marketplace-skeleton"
-    />
-  </div>
+      class="specorator-vue-sr-only"
+      role="status"
+    >
+      {{ t('marketplace.loading') }}
+    </div>
+    <div
+      class="specorator-vue-marketplace-grid"
+      aria-hidden="true"
+    >
+      <div
+        v-for="n in props.skeletonCount"
+        :key="n"
+        class="specorator-vue-marketplace-skeleton"
+      />
+    </div>
+  </template>
   <div
     v-else-if="props.items.length > 0"
     class="specorator-vue-marketplace-grid"

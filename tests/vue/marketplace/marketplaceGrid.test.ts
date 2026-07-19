@@ -22,12 +22,16 @@ describe('MarketplaceGrid', () => {
     expect(document.querySelectorAll('.specorator-vue-marketplace-card')).toHaveLength(2);
   });
 
-  it('renders skeleton cells while loading with no items yet', () => {
+  it('renders skeleton cells + a screen-reader load status while loading with no items yet', () => {
     render(MarketplaceGrid, {
       props: { items: [], installedIds: new Set<string>(), typeLabels, loading: true, skeletonCount: 4 },
     });
     expect(document.querySelectorAll('.specorator-vue-marketplace-skeleton')).toHaveLength(4);
     expect(document.querySelectorAll('.specorator-vue-marketplace-card')).toHaveLength(0);
+    // The decorative skeleton is aria-hidden, so a visually-hidden live status
+    // announces the load to assistive tech instead.
+    const status = screen.getByRole('status');
+    expect(status.textContent).toContain('Loading catalog');
   });
 
   it('shows the empty state when not loading and no items', () => {
