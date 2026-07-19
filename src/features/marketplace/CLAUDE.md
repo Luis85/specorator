@@ -31,6 +31,9 @@ Modeled on — and reuses the components of — `features/library`.
   shared store empty (`store.loaded`) — the module-singleton store retains the
   catalog across leaf open/close, so reopening a leaf or opening a second one
   reuses it and refreshes on demand (the Refresh button), not on every mount.
+  `loaded` tracks whether the latest load **landed a catalog** (online or cache),
+  NOT the item count — a valid but empty catalog is loaded (so reopen reuses it);
+  only a hard failure with no matching cache stays unloaded, so that case retries.
   Config lives on the **Marketplace settings tab** (registered in
   `settings/registry/fields/marketplace.ts`; it is a fixed registry-rendered tab
   — see `settingsTabStrip.ts` `FIXED_TAB_IDS` + `featureFlag.ts`
@@ -50,7 +53,10 @@ Modeled on — and reuses the components of — `features/library`.
   badge can't drift from what was written. Installed agents also carry a
   `catalog` provenance block (`{ id, catalogUrl?, source?, author?, license?,
   version? }`) on the `RosterAgent`, populated from the manifest item plus the
-  resolved catalog base URL the install ran against. `isItemInstalled` then
+  committed catalog base URL the displayed catalog loaded from (`source.value`,
+  NOT the live `marketplaceSourceUrl` setting — matching fetchBody/previews, so
+  editing the source without a refresh can't stamp the pending source into an
+  agent installed from the shown one). `isItemInstalled` then
   matches on the roster id **or** the **source-scoped** catalog id
   (`installedAgentKeys` keys it as `<catalogUrl>\0<id>`) — the scoped catalog id
   keeps an agent recognized across a catalog-side display-name rebrand *from the
@@ -72,8 +78,10 @@ Modeled on — and reuses the components of — `features/library`.
   shape (`CATALOG_ID_PATTERN`) — the view keys plain-object caches
   (`bodies`/`previewErrors`/`installing`) by id, so an `Object.prototype` name
   like `__proto__`/`toString` would otherwise read as already-present or pollute
-  a record prototype — and rejects items with a **blank name** (a blank name
-  slugifies to the installer's shared per-type fallback and collides).
+  a record prototype — and rejects any item whose **name doesn't survive
+  normalization to a non-empty install slug** (`hasInstallableName`): a blank,
+  punctuation-only, or non-ASCII name (`计划`) slugifies to the installer's shared
+  ASCII per-type fallback (`loop`/`template`/…) and collides.
   `parseManifest` also dedupes by a **per-type install key**
   (`<type>:<normalized-name-slug>`) on top of the id-dedup: every installer
   derives its target filename / roster id from the normalized name, so two items

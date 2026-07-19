@@ -210,6 +210,25 @@ describe('marketplaceStore install', () => {
     expect(store.installedIds.has('a')).toBe(true);
   });
 
+  it('stamps the committed catalog source into install deps, not the live setting', async () => {
+    // Load commits source A; the user then edits the setting to B without a
+    // refresh, so the displayed catalog still belongs to A. An install must stamp
+    // A (the committed `source.value`) into the agent's provenance — else a later
+    // load of B that reuses the id would treat A's agent as B's and hide Install.
+    fetchIndexSpy.mockResolvedValue(manifest);
+    const p = fakePlugin(true);
+    p.settings.marketplaceSourceUrl = 'https://a.example/';
+    const store = useMarketplaceStore();
+    store.init(p);
+    await store.load();
+    expect(store.source).toBe('https://a.example/');
+
+    p.settings.marketplaceSourceUrl = 'https://b.example/';
+    await store.install(item, 'BODY');
+    const deps = installSpy.mock.calls.at(-1)?.[2] as { catalogUrl: string };
+    expect(deps.catalogUrl).toBe('https://a.example/');
+  });
+
   it('does not optimistically mark installed when the catalog reloaded mid-write', async () => {
     // Hold the install's vault write open until we release it.
     let finishInstall: (v: 'installed') => void = () => {};
@@ -325,6 +344,20 @@ describe('marketplaceStore load fallbacks', () => {
     await store.load();
     expect(store.items).toEqual([]);
     expect(store.loaded).toBe(false);
+  });
+
+  it('marks loaded after a successful but empty catalog load (reuse, no re-fetch on reopen)', async () => {
+    // A valid custom catalog can legitimately have zero items (or all items
+    // dropped as malformed). The fetch succeeded, so the catalog is loaded —
+    // reopening the view must reuse it, not re-fetch index.json every mount.
+    const emptyManifest: MarketplaceManifest = { schemaVersion: 1, catalog: 'x', count: 0, items: [] };
+    fetchIndexSpy.mockResolvedValue(emptyManifest);
+    const store = useMarketplaceStore();
+    store.init(fakePlugin(true));
+    await store.load();
+    expect(store.items).toEqual([]);
+    expect(store.error).toBeNull();
+    expect(store.loaded).toBe(true);
   });
 
   it('discards a stale installed-scan when a concurrent reload commits first', async () => {

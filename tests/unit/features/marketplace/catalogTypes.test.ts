@@ -72,6 +72,22 @@ describe('parseManifest', () => {
     expect(manifest?.items.map((i) => i.id)).toEqual(['loops/x']);
   });
 
+  it('rejects names that normalize to an empty install slug (punctuation/non-ASCII only)', () => {
+    // A non-blank name that slugifies to '' — punctuation-only or non-ASCII like
+    // `计划` — still hits the installer's shared per-type fallback (loop/…) and
+    // collides, exactly like a blank name. The storage slug is ASCII-only, so
+    // require the name to survive normalization to a non-empty slug.
+    const manifest = parseManifest({
+      schemaVersion: 1,
+      items: [
+        validItem,
+        { id: 'loops/cjk', type: 'loop', name: '计划', description: 'd', path: 'loops/cjk.md', tags: [] },
+        { id: 'loops/punct', type: 'loop', name: '!!!', description: 'd', path: 'loops/punct.md', tags: [] },
+      ],
+    });
+    expect(manifest?.items.map((i) => i.id)).toEqual(['loops/x']);
+  });
+
   it('dedupes items by id (first wins) so card v-for keys stay unique', () => {
     const manifest = parseManifest({
       schemaVersion: 1,

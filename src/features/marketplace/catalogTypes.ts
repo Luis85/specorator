@@ -84,30 +84,39 @@ function isNonBlankString(value: unknown): value is string {
   return typeof value === 'string' && value.trim().length > 0;
 }
 
-function isMarketplaceItem(value: unknown): value is MarketplaceItem {
-  if (typeof value !== 'object' || value === null) return false;
-  const item = value as Record<string, unknown>;
-  return (
-    isSafeCatalogId(item.id) &&
-    isNonBlankString(item.name) &&
-    typeof item.path === 'string' &&
-    typeof item.type === 'string' &&
-    (MARKETPLACE_ITEM_TYPES as readonly string[]).includes(item.type) &&
-    (item.tags === undefined || Array.isArray(item.tags))
-  );
-}
-
 /**
  * Shared name→slug normalization every installable store uses to derive its
  * target: the note stores' `slugify`, the roster's `slugifyRosterName`, and
  * quick actions' `getFilePathForName` all lowercase, collapse non-alphanumeric
  * runs to one hyphen, and trim edge hyphens. Kept local (not imported) so this
- * validation module stays store-independent; it's used only for collision
- * detection, where the per-type empty-name fallback the stores add can't change
- * within-type equality, so replicating that fallback is unnecessary.
+ * validation module stays store-independent.
  */
 function normalizeInstallSlug(name: string): string {
   return name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
+}
+
+/**
+ * A name that is both present AND survives normalization to a non-empty install
+ * slug. A punctuation-only or non-ASCII name (e.g. `计划`) is non-blank but
+ * normalizes to '' → every installer substitutes the shared per-type fallback
+ * (`loop`/`template`/…) and collides, so reject it like a blank name. (Supporting
+ * non-ASCII slugs would need every store's slugger to change in lockstep.)
+ */
+function hasInstallableName(value: unknown): value is string {
+  return isNonBlankString(value) && normalizeInstallSlug(value).length > 0;
+}
+
+function isMarketplaceItem(value: unknown): value is MarketplaceItem {
+  if (typeof value !== 'object' || value === null) return false;
+  const item = value as Record<string, unknown>;
+  return (
+    isSafeCatalogId(item.id) &&
+    hasInstallableName(item.name) &&
+    typeof item.path === 'string' &&
+    typeof item.type === 'string' &&
+    (MARKETPLACE_ITEM_TYPES as readonly string[]).includes(item.type) &&
+    (item.tags === undefined || Array.isArray(item.tags))
+  );
 }
 
 /**

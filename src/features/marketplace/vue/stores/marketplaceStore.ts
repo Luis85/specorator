@@ -106,9 +106,12 @@ export const useMarketplaceStore = defineStore('marketplace', () => {
       // installer refuses the install rather than silently writing to a default
       // folder the Library never scans.
       quickActionsFolder: p.settings.quickActionsFolder ?? 'Quick Actions',
-      // The catalog base this install runs against, so an installed agent's
-      // catalog id is scoped to its source (a fork reusing an id can't false-match).
-      catalogUrl: resolveSource(),
+      // The source the DISPLAYED catalog committed to (`source.value`), NOT the
+      // live setting — same as fetchBody/previews. If the user edits
+      // marketplaceSourceUrl without refreshing, an install/scan still belongs to
+      // the shown catalog, so its agent provenance must be stamped/matched
+      // against that source, not the pending new one.
+      catalogUrl: source.value,
     };
   }
 
@@ -171,6 +174,10 @@ export const useMarketplaceStore = defineStore('marketplace', () => {
     loading.value = true;
     error.value = null;
     const src = resolveSource();
+    // Did a catalog LAND (online or from cache)? True even when it's validly
+    // empty; false only on a hard failure with no matching cache. Drives `loaded`
+    // below, so item count never conflates "empty" with "not loaded".
+    let landed = true;
     try {
       assertNetworkEnabled();
       const manifest = await clientFor(src).fetchIndex();
@@ -189,6 +196,7 @@ export const useMarketplaceStore = defineStore('marketplace', () => {
         commitCatalog(cached.manifest.items, src, true);
       } else {
         commitCatalog([], src, false);
+        landed = false;
         error.value =
           fetchError instanceof MarketplaceError || fetchError instanceof Error
             ? fetchError.message
@@ -196,12 +204,12 @@ export const useMarketplaceStore = defineStore('marketplace', () => {
       }
     } finally {
       loading.value = false;
-      // Reflect the LATEST load outcome, not a one-way latch: true when a catalog
-      // landed (online or cache), false when a load ended empty (failed with no
-      // matching cache). A one-way `true` would let a later failed Refresh clear
-      // `items` yet keep `loaded`, so a close+reopen would skip the retry and show
-      // the empty error state forever.
-      loaded.value = items.value.length > 0;
+      // Reflect the LATEST load outcome, not a one-way latch, and key it on
+      // whether a catalog landed — NOT the item count. A valid but empty catalog
+      // is loaded (reopening reuses it instead of re-fetching); only a hard
+      // failure with no matching cache stays false, so that case retries on
+      // close+reopen instead of caching an empty error state forever.
+      loaded.value = landed;
       await refreshInstalled();
     }
   }
