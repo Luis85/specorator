@@ -267,6 +267,20 @@ describe('MarketplaceRoot category nav', () => {
     expect(store.requestView).toHaveBeenCalledWith(null);
   });
 
+  it('falls a deep-link to an already-empty category back to Home', async () => {
+    // The retained catalog has no skills; a Skills deep-link must not strand on an
+    // empty skill grid (there is no skill tab either) — the counts guard, now
+    // watching activeView too, bounces it to Home even though counts don't change.
+    setup(makeStore({ items: [alpha, beta], requestedView: 'skill' }), {
+      marketplaceNetworkEnabled: true,
+    });
+    await screen.findByText('Alpha Loop');
+    await waitFor(() =>
+      expect(document.querySelectorAll('.specorator-vue-marketplace-card')).toHaveLength(2),
+    );
+    expect(screen.queryByText('No items match your filters.')).toBeNull();
+  });
+
   it('falls back to Home when the active category leaves the reloaded catalog', async () => {
     const store = reactive(makeStore({ items: [alpha, beta] }));
     setup(store as StoreFake, {
@@ -418,6 +432,37 @@ describe('MarketplaceRoot network warning + preview invalidation', () => {
     await fireEvent.click(screen.getByRole('button', { name: 'Alpha Loop' }));
     await screen.findByText('FRESH BODY');
     expect(screen.queryByText('STALE BODY')).toBeNull();
+    expect(fetchBody).toHaveBeenCalledTimes(2);
+  });
+
+  it('never enables Install on an unseen body when overlapping preview fetches disagree', async () => {
+    // Open (fetch #1 pending) → Back → reopen (fetch #2). Only the LATEST attempt
+    // may write, so a late FAILURE of #1 can't set previewErrors while #2's body
+    // is shown — otherwise the detail would render the error yet keep Install
+    // enabled on a body the user never saw.
+    let rejectFirst: (reason?: unknown) => void = () => {};
+    const first = new Promise<string>((_res, rej) => {
+      rejectFirst = rej;
+    });
+    const fetchBody = vi.fn().mockReturnValueOnce(first).mockResolvedValueOnce('BODY2');
+    setup(makeStore({ items: [alpha], fetchBody }), {
+      marketplaceNetworkEnabled: true,
+      marketplaceNetworkWarningShown: true,
+    });
+    await screen.findByText('Alpha Loop');
+
+    await fireEvent.click(screen.getByRole('button', { name: 'Alpha Loop' })); // open (fetch #1)
+    await fireEvent.click(screen.getByRole('button', { name: 'Back' })); // back
+    await fireEvent.click(screen.getByRole('button', { name: 'Alpha Loop' })); // reopen (fetch #2)
+    await screen.findByText('BODY2'); // fetch #2 (latest) populated the body
+    rejectFirst(new Error('stale failure')); // fetch #1 fails late — must be discarded
+    await nextTick();
+    await Promise.resolve();
+
+    expect(screen.getByText('BODY2')).toBeTruthy();
+    expect(screen.queryByText("Couldn't load the marketplace catalog.")).toBeNull();
+    const install = (await screen.findByRole('button', { name: 'Install' })) as HTMLButtonElement;
+    expect(install.disabled).toBe(false);
     expect(fetchBody).toHaveBeenCalledTimes(2);
   });
 });

@@ -91,10 +91,15 @@ const showHome = computed(
 const showSkeleton = computed(() => store.loading && store.items.length === 0);
 const detailItem = computed(() => store.items.find((item) => item.id === detailId.value) ?? null);
 
-// If the active category leaves a reloaded catalog (count → 0), fall back to Home
-// so the grid can't strand on an absent type (mirrors useLibraryList's tag-prune).
-watch(counts, (tally) => {
-  if (activeView.value !== 'home' && tally[activeView.value] === 0) activeView.value = 'home';
+// Fall a stranded category back to Home — whether it leaves a reloaded catalog
+// (counts change) OR a deep-link selects a category the RETAINED catalog has zero
+// of (activeView changes but counts don't, so watching counts alone would miss
+// it). Gated on a non-empty catalog so a deep-link applied BEFORE the first load
+// isn't bounced pre-fetch — the post-load counts change re-checks it. Mirrors
+// useLibraryList's tag-prune.
+watch([counts, activeView], ([tally, view]) => {
+  if (view === 'home') return;
+  if (store.items.length > 0 && tally[view] === 0) activeView.value = 'home';
 });
 
 // Opt-in network gate: the Marketplace is dark until the user enables it, so
@@ -109,6 +114,12 @@ const enabled = ref(plugin.settings.marketplaceNetworkEnabled === true);
 const bodies = reactive<Record<string, string>>({});
 const previewErrors = reactive<Record<string, boolean>>({});
 const installing = reactive<Record<string, boolean>>({});
+// Per-item request token: reopening a card while its body is still loading starts
+// a second fetch, so ONLY the latest attempt may write bodies/previewErrors. Two
+// overlapping fetches disagreeing (one succeeds, one fails) would otherwise leave
+// `bodies` populated AND `previewErrors` true — the detail showing the error while
+// Install (which only checks body !== null) stays enabled on a body never shown.
+const previewSeq = new Map<string, number>();
 let catalogGeneration = 0;
 watch(
   () => store.items,
@@ -193,19 +204,23 @@ watch(
 
 async function openItem(item: MarketplaceItem): Promise<void> {
   detailId.value = item.id;
-  if (bodies[item.id] === undefined) {
-    const generation = catalogGeneration;
-    try {
-      previewErrors[item.id] = false;
-      const body = await store.fetchBody(item);
-      // If the catalog reloaded while this fetch was in flight, its body is for a
-      // now-stale item id — discard it so it can't land in the cleared cache.
-      if (generation !== catalogGeneration) return;
-      bodies[item.id] = body;
-    } catch {
-      if (generation !== catalogGeneration) return;
-      previewErrors[item.id] = true;
-    }
+  if (bodies[item.id] !== undefined) return;
+  const seq = (previewSeq.get(item.id) ?? 0) + 1;
+  previewSeq.set(item.id, seq);
+  const generation = catalogGeneration;
+  // A result may only land if the catalog hasn't reloaded under it (generation)
+  // AND this is still the latest fetch for the id (token) — so overlapping
+  // fetches can't both write, and a stale one can't repopulate a cleared cache.
+  const isCurrent = (): boolean =>
+    generation === catalogGeneration && previewSeq.get(item.id) === seq;
+  try {
+    previewErrors[item.id] = false;
+    const body = await store.fetchBody(item);
+    if (!isCurrent()) return;
+    bodies[item.id] = body;
+  } catch {
+    if (!isCurrent()) return;
+    previewErrors[item.id] = true;
   }
 }
 
