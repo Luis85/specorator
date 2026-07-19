@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { test } from 'node:test';
 
-import { freezeOptions, loadOptions, obsidianNodeProblem, OBSIDIAN_NODE_FLOOR, validateObsidianFields } from '../lib/options.mjs';
+import { FALLOW_NODE_FLOOR, freezeOptions, hostNodeProblem, loadOptions, OBSIDIAN_NODE_FLOOR, validateObsidianFields } from '../lib/options.mjs';
 
 function withConfig(content) {
   const dir = mkdtempSync(join(tmpdir(), 'opt-'));
@@ -126,17 +126,39 @@ test('loadOptions sanitizes prds: auto-numbers ids, defaults title/status, coerc
   }
 });
 
-test('obsidianNodeProblem flags a host Node below the scaffold floor, passes at/above it', () => {
-  const floor = OBSIDIAN_NODE_FLOOR.join('.'); // '22.13.0'
-  // Below the floor: too-old majors and the 22.0–22.12 gap jsdom rejects.
-  for (const v of ['18.19.0', '20.11.1', '22.0.0', '22.12.0', '22.12.99']) {
-    const p = obsidianNodeProblem(v);
-    assert.ok(p, `expected a problem for Node ${v}`);
-    assert.match(p, new RegExp(`>=${floor.replace(/\./g, '\\.')}`)); // documents the exact floor
-    assert.match(p, new RegExp(v.replace(/\./g, '\\.'))); // names the offending version
+test('hostNodeProblem enforces the fallow floor generically and the stricter jsdom floor in obsidian mode', () => {
+  assert.deepEqual(FALLOW_NODE_FLOOR, [22, 0, 0]);
+  assert.deepEqual(OBSIDIAN_NODE_FLOOR, [22, 13, 0]);
+  const obs = { obsidian: { id: 'a', name: 'A' } };
+  const generic = {}; // no obsidian block — the generic harness still installs fallow
+  // Obsidian: jsdom's 22.13 floor. Below → problem naming the exact floor + host version.
+  for (const v of ['20.11.1', '22.0.0', '22.12.99']) {
+    const p = hostNodeProblem(obs, v);
+    assert.ok(p, `obsidian expected a problem for Node ${v}`);
+    assert.match(p, />=22\.13\.0/);
+    assert.match(p, new RegExp(v.replace(/\./g, '\\.')));
   }
-  // At or above the floor: clean, including the next major.
-  for (const v of ['22.13.0', '22.13.5', '22.20.0', '23.4.0', '24.2.0']) {
-    assert.equal(obsidianNodeProblem(v), null, `Node ${v} should pass`);
+  for (const v of ['22.13.0', '23.4.0', '24.2.0']) assert.equal(hostNodeProblem(obs, v), null, `obsidian ${v}`);
+  // Generic: fallow still forces >=22 (it is installed on every apply), just not 22.13.
+  for (const v of ['18.19.0', '20.11.1', '21.7.0']) {
+    const p = hostNodeProblem(generic, v);
+    assert.ok(p, `generic expected a problem for Node ${v}`);
+    assert.match(p, />=22\.0\.0/);
   }
+  // The 22.0–22.12 window clears the generic floor but NOT the obsidian one.
+  for (const v of ['22.0.0', '22.12.0', '24.0.0']) assert.equal(hostNodeProblem(generic, v), null, `generic ${v}`);
+  assert.ok(hostNodeProblem(obs, '22.12.0'), 'obsidian still blocks 22.12 (needs 22.13)');
+});
+
+test('freezeOptions freezes obsidian identity (id + name) to the first apply', () => {
+  const options = { obsidian: { id: 'fast-notes', name: 'Fast Notes', vue: false, mobile: false } };
+  // A rename attempt on re-apply is ignored — identity is pinned to the prior report.
+  freezeOptions(options, { obsidian: { id: 'quick-notes', name: 'Quick Notes', vue: false, mobile: false }, packageManager: 'npm' }, {});
+  assert.equal(options.obsidian.id, 'quick-notes', 'id frozen to first apply');
+  assert.equal(options.obsidian.name, 'Quick Notes', 'name frozen to first apply');
+  // First apply (no prior report) keeps the requested identity.
+  const fresh = { obsidian: { id: 'fast-notes', name: 'Fast Notes' } };
+  freezeOptions(fresh, null, {});
+  assert.equal(fresh.obsidian.id, 'fast-notes');
+  assert.equal(fresh.obsidian.name, 'Fast Notes');
 });

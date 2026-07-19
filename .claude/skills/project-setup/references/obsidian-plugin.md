@@ -170,7 +170,15 @@ on the generated project is safe and idempotent:
   `vitest.config.mjs`, `esbuild.config.mjs`, `tsconfig.json`) are
   overwrite-backup, so template updates from a newer skill version reach the
   project (a `.backup` is kept), and apply no-ops when the content already
-  matches.
+  matches. Engine-owned CI (`.github/workflows/ci.yml`, `release.yml`) is
+  refreshed the same way, so a package-manager switch updates their install/run
+  commands; a workflow you wrote yourself (no generated marker) is kept with a
+  notice instead.
+- Identity and structural choices — `id`, `name`, `vue`, `mobile` — are frozen
+  to the first apply. They shape retained skip-if-exists sources (the CSS class
+  prefix, the view title/brand, `.vue` files, import bans) that a re-apply won't
+  rewrite, so changing them in `answers.json` is ignored. A rename or a
+  vue/mobile switch is a deliberate manual refactor, not a re-apply.
 - A converged re-apply changes nothing and emits no warning notices.
 
 ## Verification

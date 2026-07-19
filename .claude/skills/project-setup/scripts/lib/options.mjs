@@ -97,21 +97,27 @@ function isBelowVersion(v, floor) {
   return false;
 }
 
-// The Obsidian scaffold's generated toolchain can't install or run below this Node
-// floor: jsdom (always installed for the Vitest DOM env) requires ^22.13.0 on the 22
-// line and vite (Vue lane) requires >=22.12.0. obsidian.mjs derives the generated
-// `engines.node` from this, so the floor stays single-sourced.
+// Node floors the generated harness demands on the HOST runtime (the engine runs
+// the install + baselining, so it's the host — not just the generated project — that
+// must clear them). fallow 3 (pinned; always installed for the advisory report and
+// the optional ratchet) requires Node >=22, so EVERY apply has a floor. Obsidian
+// raises it: jsdom (always installed for the Vitest DOM env) requires ^22.13.0 on the
+// 22 line and vite (Vue lane) requires >=22.12.0 — 22.13 subsumes fallow's 22.0.
+// obsidian.mjs derives the generated `engines.node` from OBSIDIAN_NODE_FLOOR, so the
+// enforced floor and the documented one stay single-sourced.
+export const FALLOW_NODE_FLOOR = [22, 0, 0];
 export const OBSIDIAN_NODE_FLOOR = [22, 13, 0];
 
-// A human-readable problem when the HOST Node can't run the Obsidian scaffold's
-// toolchain, or null when it can. The engine — not just the generated project —
-// runs the install and gates, so the host runtime must clear the floor. Kept
-// separate from validateObsidianFields (which checks answers, not the environment)
-// so both stay pure and unit-testable.
-export function obsidianNodeProblem(nodeVersion) {
-  if (!isBelowVersion(nodeVersion, OBSIDIAN_NODE_FLOOR)) return null;
-  const floor = OBSIDIAN_NODE_FLOOR.join('.');
-  return `Obsidian mode needs Node >=${floor} (the generated jsdom/vite toolchain requires it); you're on Node ${nodeVersion}. Upgrade Node (nvm install ${OBSIDIAN_NODE_FLOOR[0]}) and re-run.`;
+// A human-readable problem when the HOST Node can't run the resolved harness, or null
+// when it can. Kept separate from validateObsidianFields (which checks answers, not
+// the environment) so both stay pure and unit-testable.
+export function hostNodeProblem(options, nodeVersion) {
+  const [floor, why] = options?.obsidian
+    ? [OBSIDIAN_NODE_FLOOR, 'the generated jsdom/vite toolchain']
+    : [FALLOW_NODE_FLOOR, 'the pinned fallow 3 quality tooling'];
+  if (!isBelowVersion(nodeVersion, floor)) return null;
+  const f = floor.join('.');
+  return `This setup needs Node >=${f} (${why} requires it); you're on Node ${nodeVersion}. Upgrade Node (nvm install ${floor[0]}) and re-run.`;
 }
 
 export function validateObsidianFields(o) {
@@ -212,6 +218,15 @@ export function freezeOptions(options, frozen, state) {
     if (isObject(frozen?.obsidian)) {
       if (typeof frozen.obsidian.vue === 'boolean') options.obsidian.vue = frozen.obsidian.vue;
       if (typeof frozen.obsidian.mobile === 'boolean') options.obsidian.mobile = frozen.obsidian.mobile;
+      // Identity (id + name) also threads into skip-if-exists sources a re-apply won't
+      // rewrite — the id is the CSS class prefix baked into styles.css, the name is the
+      // view's getDisplayText and the eslint sentence-case brand. Letting overwrite-
+      // backup configs flip to a new name while those retained sources keep the old one
+      // breaks the fresh scaffold's own lint, so freeze identity too; a rename is a
+      // manual refactor, like flipping vue/mobile.
+      for (const key of ['id', 'name']) {
+        if (typeof frozen.obsidian[key] === 'string') options.obsidian[key] = frozen.obsidian[key];
+      }
     }
   }
   return options;

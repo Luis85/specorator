@@ -9,7 +9,7 @@
 // engine-owned build/ratchet scripts under scripts/ and the config files are
 // overwrite-backup, so a re-apply picks up template updates and never clobbers the
 // user's own source.
-import { CI_PM, dep, notice } from './harness.mjs';
+import { CI_PM, dep, engineConfigMode, notice } from './harness.mjs';
 import { OBSIDIAN_NODE_FLOOR } from './options.mjs';
 import { runPrefix, safePackageManager } from './packageManager.mjs';
 import { loadTemplate, renderTemplate } from './templates.mjs';
@@ -586,7 +586,14 @@ function planRelease(options, state) {
   const content = renderTemplate(loadTemplate('obsidian/release.yml.tmpl'), {
     pmSetup: pm.setup, pmCache: pm.cache, pmInstall: pm.install, pmRun: pm.run,
   });
-  return [write('.github/workflows/release.yml', content)];
+  // Mirror ci.yml: overwrite our own marked workflow so a re-apply refreshes the
+  // package-manager install/run commands (an npm→pnpm switch otherwise leaves the
+  // release running `npm ci` against a deleted lockfile), but keep a user's own
+  // unmarked release.yml — with a notice — instead of clobbering it.
+  const notices = state?.releaseWorkflow
+    ? [notice('Existing .github/workflows/release.yml kept — its package-manager commands were NOT refreshed. Merge the generated release steps in, or align it with your package manager.')]
+    : [];
+  return [...notices, { type: 'writeFile', path: '.github/workflows/release.yml', mode: engineConfigMode(state?.releaseWorkflow), content }];
 }
 
 function planProjectDocs(options, state) {

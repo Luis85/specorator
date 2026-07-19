@@ -8,7 +8,7 @@ import { fileURLToPath } from 'node:url';
 import { apply } from './lib/apply.mjs';
 import { initBaselines } from './lib/baseline.mjs';
 import { detect } from './lib/detect.mjs';
-import { freezeOptions, loadOptions, obsidianNodeProblem, validateObsidianFields } from './lib/options.mjs';
+import { freezeOptions, hostNodeProblem, loadOptions, validateObsidianFields } from './lib/options.mjs';
 import { effectiveOptions, plan } from './lib/plan.mjs';
 import { runGates } from './lib/verify.mjs';
 
@@ -102,12 +102,13 @@ export async function cli(argv, io = {}) {
       }
       const actions = plan(options, state);
       const dryRun = cmd === 'plan' || args.flags.dryRun === true;
-      // The engine runs the Obsidian scaffold's install and gates, whose pinned
-      // toolchain (jsdom, vite) rejects an old host Node. Refuse before apply writes
-      // files that would then fail mid-install (engine-strict) or at a later gate,
-      // leaving a partial workspace. Only on a real mutation — plan/dry-run preview.
-      if (options.obsidian && !dryRun) {
-        const nodeProblem = obsidianNodeProblem(io.nodeVersion ?? process.versions.node);
+      // The engine runs the harness install and gates, whose pinned tooling rejects an
+      // old host Node: fallow 3 needs >=22 on every apply, and Obsidian's jsdom/vite
+      // raises that to >=22.13. Refuse before apply writes files that would then fail
+      // mid-install (engine-strict) or at a later gate, leaving a partial workspace.
+      // Only on a real mutation — plan/dry-run preview on any Node.
+      if (!dryRun) {
+        const nodeProblem = hostNodeProblem(options, io.nodeVersion ?? process.versions.node);
         if (nodeProblem) {
           err(nodeProblem + '\n');
           return 2;

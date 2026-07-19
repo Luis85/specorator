@@ -193,6 +193,7 @@ export function detect(cwd) {
     // user's own (no marker), so a re-apply of our generated one won't false-fire.
     eslintConfigMjs: hasUnmarkedConfig(cwd, ['eslint.config.mjs']),
     ciWorkflow: hasUnmarkedConfig(cwd, ['.github/workflows/ci.yml']),
+    releaseWorkflow: hasUnmarkedConfig(cwd, ['.github/workflows/release.yml']),
     // Jest also reads a `jest` key in package.json — writing jest.config.mjs beside
     // it makes Jest 30 error "Multiple configurations found".
     jestConfig: hasUnmarkedConfig(cwd, JEST_CONFIGS) || pkg.jest != null,

@@ -98,20 +98,28 @@ test('a supported host Node passes the floor gate and applies the obsidian scaff
   try {
     const code = await cli(['apply', '--config', 'answers.json'], p.io);
     assert.equal(code, 0);
-    assert.doesNotMatch(p.chunks.err, /Obsidian mode needs Node/);
+    assert.doesNotMatch(p.chunks.err, /needs Node/);
     assert.ok(existsSync(join(p.dir, 'manifest.json')), 'scaffold applied');
   } finally {
     p.cleanup();
   }
 });
 
-test('the Node floor is Obsidian-only: a generic apply is never blocked by it', async () => {
-  const p = project({}, '20.0.0'); // generic (non-obsidian) harness, ancient Node
+test('the generic apply is gated by fallow (Node >=22), and obsidian raises it to 22.13', async () => {
+  // fallow 3 is installed on EVERY apply (the advisory report), so a generic apply is
+  // gated too — but only to >=22, not obsidian's stricter jsdom floor.
+  const genBlocked = project({}, '20.11.0'); // generic harness, Node <22 → blocked
+  const genOk = project({}, '22.0.0'); // clears fallow's 22.0 floor
+  const obsBlocked = project(OBS_ANSWERS, '22.0.0'); // same Node, but jsdom needs 22.13
   try {
-    const code = await cli(['apply', '--config', 'answers.json'], p.io);
-    assert.equal(code, 0);
-    assert.doesNotMatch(p.chunks.err, /Obsidian mode needs Node/);
+    assert.equal(await cli(['apply', '--config', 'answers.json'], genBlocked.io), 2);
+    assert.match(genBlocked.chunks.err, />=22\.0\.0/); // the fallow floor, not 22.13
+    assert.equal(await cli(['apply', '--config', 'answers.json'], genOk.io), 0);
+    assert.equal(await cli(['apply', '--config', 'answers.json'], obsBlocked.io), 2);
+    assert.match(obsBlocked.chunks.err, />=22\.13\.0/); // obsidian is stricter
   } finally {
-    p.cleanup();
+    genBlocked.cleanup();
+    genOk.cleanup();
+    obsBlocked.cleanup();
   }
 });

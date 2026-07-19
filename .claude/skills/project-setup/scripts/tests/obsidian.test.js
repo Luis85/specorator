@@ -510,6 +510,17 @@ test('the release workflow fails a tag that disagrees with manifest.version befo
   assert.match(release.content, /exit 1/);
 });
 
+test('the release workflow is engine-owned: overwritten by default, kept-with-notice when user-owned', () => {
+  // Fresh / engine-marked → overwrite-backup, so a re-apply refreshes the package-
+  // manager install/run commands (an npm→pnpm switch otherwise leaves a stale `npm ci`).
+  assert.equal(findWrite(planWithGithub(), '.github/workflows/release.yml').mode, 'overwrite-backup');
+  // A user's own unmarked release.yml (state.releaseWorkflow) is kept — skip-if-exists —
+  // with a notice, exactly like ci.yml, rather than being clobbered.
+  const actions = planWithGithub({}, { releaseWorkflow: true });
+  assert.equal(findWrite(actions, '.github/workflows/release.yml').mode, 'skip-if-exists');
+  assert.ok(actions.some((a) => a.type === 'notice' && /release\.yml kept/.test(a.message)));
+});
+
 // --- core services ----------------------------------------------------------
 
 test('both variants scaffold the core services, command wiring, and the typed event map', () => {
