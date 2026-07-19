@@ -298,6 +298,7 @@ function planObsidianVitest(options) {
     write('tests/unit/noticeService.test.ts', loadTemplate('obsidian/tests/noticeService.test.ts.tmpl')),
     write('tests/unit/modalService.test.ts', loadTemplate('obsidian/tests/modalService.test.ts.tmpl')),
     write('tests/unit/commandsService.test.ts', loadTemplate('obsidian/tests/commandsService.test.ts.tmpl')),
+    write('tests/unit/commands.test.ts', loadTemplate('obsidian/tests/commands.test.ts.tmpl')),
     write('tests/unit/vaultService.test.ts', loadTemplate('obsidian/tests/vaultService.test.ts.tmpl')),
     write('tests/unit/requestService.test.ts', loadTemplate('obsidian/tests/requestService.test.ts.tmpl')),
     write('tests/unit/i18n.test.ts', loadTemplate('obsidian/tests/i18n.test.ts.tmpl')),

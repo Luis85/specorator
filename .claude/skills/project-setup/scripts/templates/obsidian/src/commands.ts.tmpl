@@ -72,25 +72,38 @@ async function clearGreeting(plugin: {{pluginClass}}): Promise<void> {
   plugin.notices.info(t('notice.greetingCleared'));
 }
 
-async function appendGreetingToLog(plugin: {{pluginClass}}): Promise<void> {
+// Exported for a focused regression test (append commits, read-back fails).
+export async function appendGreetingToLog(plugin: {{pluginClass}}): Promise<void> {
   const greeting = plugin.settings.greeting.trim();
   if (!greeting) {
     plugin.notices.error(t('notice.setGreetingFirst'));
     return;
   }
-  // The vault write can fail (permissions, a locked file); run() catches it,
-  // logs, and shows the default error notice instead of an unhandled rejection.
-  await plugin.errors.run('append the greeting to the log note', async () => {
-    const path = 'logs/greeting-log.md';
+  const path = 'logs/greeting-log.md';
+  // Guard ONLY the committed write: run() catches a throw, logs, shows the error
+  // notice, and returns undefined. The write can fail (permissions, a locked
+  // file) — if it does, stop before reporting success.
+  const written = await plugin.errors.run('append the greeting to the log note', async () => {
     await plugin.vault.ensureFolder('logs');
     // Atomic append: a double-tapped hotkey must not read-then-write the same
     // content twice and drop a line (see VaultService.append / Vault.process).
     await plugin.vault.append(path, `${greeting}\n`);
-    // Read back (after the atomic write) to report the running total.
-    const total = (await plugin.vault.read(path))?.split('\n').filter(Boolean).length ?? 0;
-    plugin.logger.debug('appended greeting', path);
-    plugin.notices.info(t('notice.greetingAppended', { count: total }));
+    return true;
   });
+  if (!written) return;
+  plugin.logger.debug('appended greeting', path);
+  // Best-effort running total: the append is already committed, so a read-back
+  // failure must NOT report the command as failed (a retry would append the same
+  // greeting again, duplicating the line). Degrade to a count-less notice.
+  const total = await plugin.vault
+    .read(path)
+    .then((content) => content?.split('\n').filter(Boolean).length ?? null)
+    .catch(() => null);
+  plugin.notices.info(
+    total === null
+      ? t('notice.greetingAppendedNoCount')
+      : t('notice.greetingAppended', { count: total }),
+  );
 }
 
 // The caller wraps this with errors.wrap(…, { level: 'warn' }), so a failed
