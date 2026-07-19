@@ -46,6 +46,11 @@ module.exports = {
     '!src/features/marketplace/vue/**',
     '!src/features/marketplace/MarketplaceView.ts',
     '!src/features/marketplace/activateMarketplace.ts',
+    // src/shared/vue/** (mountLucide, the Lucide function-ref host shared by the
+    // Agent Board + Marketplace islands) is exercised and coverage-gated in the
+    // Vitest lane (vitest.config.mts coverage.include); counting it here at 0%
+    // would sink the Jest global floors.
+    '!src/shared/vue/**',
   ],
   coverageDirectory: 'coverage',
   // Guardrail (Q-3): regression floors, not aspirations. Each floor sits a few

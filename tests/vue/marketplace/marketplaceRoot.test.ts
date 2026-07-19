@@ -1,9 +1,10 @@
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/vue';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { nextTick, reactive } from 'vue';
+import { nextTick, reactive, type Ref,ref } from 'vue';
 
 import type { MarketplaceItem } from '@/features/marketplace/catalogTypes';
-import { PLUGIN_KEY } from '@/features/marketplace/vue/marketplaceKeys';
+import { PLUGIN_KEY, REQUESTED_VIEW_KEY } from '@/features/marketplace/vue/marketplaceKeys';
+import type { MarketplaceView } from '@/features/marketplace/vue/marketplaceView';
 
 interface StoreFake {
   items: MarketplaceItem[];
@@ -73,6 +74,7 @@ function setup(
   store: StoreFake,
   settings: Record<string, unknown>,
   saveSettings: ReturnType<typeof vi.fn> = vi.fn().mockResolvedValue(undefined),
+  requestedViewRef: Ref<MarketplaceView | null> = ref<MarketplaceView | null>(null),
 ) {
   hoisted.store = store;
   // Capture the settings-changed subscribers (the opt-in gate + the install-
@@ -96,10 +98,15 @@ function setup(
     },
   };
   const utils = render(MarketplaceRoot, {
-    global: { provide: { [PLUGIN_KEY as symbol]: plugin } },
+    global: {
+      provide: {
+        [PLUGIN_KEY as symbol]: plugin,
+        [REQUESTED_VIEW_KEY as symbol]: requestedViewRef,
+      },
+    },
   });
   const fireSettingsChanged = (): void => settingsChangedHandlers.forEach((handler) => handler());
-  return { store, plugin, fireSettingsChanged, ...utils };
+  return { store, plugin, requestedViewRef, fireSettingsChanged, ...utils };
 }
 
 describe('MarketplaceRoot opt-in gate', () => {
@@ -160,16 +167,16 @@ describe('MarketplaceRoot list', () => {
       marketplaceNetworkEnabled: true,
     });
     await screen.findByText('Alpha Loop');
-    expect(document.querySelectorAll('.marketplace-entry')).toHaveLength(2);
+    expect(document.querySelectorAll('.specorator-vue-marketplace-card')).toHaveLength(2);
 
-    // Beta is installed → the installed indicator, no Preview button.
+    // Beta is installed → the installed indicator inside its card.
     const betaCard = screen.getByRole('button', { name: 'Beta Agent' });
     expect(within(betaCard).getByText('Installed')).toBeTruthy();
-    expect(within(betaCard).queryByRole('button', { name: 'Preview' })).toBeNull();
 
-    // Alpha is not installed → a Preview button (install is gated behind it).
+    // Alpha is not installed → a clickable card with no Installed indicator
+    // (Install is gated behind opening the detail).
     const alphaCard = screen.getByRole('button', { name: 'Alpha Loop' });
-    expect(within(alphaCard).getByRole('button', { name: 'Preview' })).toBeTruthy();
+    expect(within(alphaCard).queryByText('Installed')).toBeNull();
   });
 
   it('reuses the already-loaded catalog on mount instead of re-fetching', async () => {
@@ -189,64 +196,227 @@ describe('MarketplaceRoot list', () => {
   });
 });
 
-describe('MarketplaceRoot type filter', () => {
+describe('MarketplaceRoot chrome-first + Home sort', () => {
   beforeEach(() => vi.clearAllMocks());
 
-  it('filters the list to the chosen catalog type and restores on toggle-off', async () => {
+  it('keeps the nav + search/sort toolbar mounted during the initial skeleton load', async () => {
+    setup(makeStore({ loading: true, items: [] }), {
+      marketplaceNetworkEnabled: true,
+      marketplaceNetworkWarningShown: true,
+    });
+    // Chrome-first: the category nav and the toolbar render immediately, before
+    // the catalog lands — not only once store.items is populated.
+    expect(screen.getByRole('navigation', { name: 'Marketplace categories' })).toBeTruthy();
+    expect(await screen.findByRole('searchbox')).toBeTruthy();
+    // The skeleton grid stands in for the not-yet-loaded catalog.
+    expect(document.querySelectorAll('.specorator-vue-marketplace-skeleton').length).toBeGreaterThan(0);
+  });
+
+  it('keeps the Home landing for a whitespace-only search (matches list-engine trim)', async () => {
+    // applyLibraryQuery trims before filtering, so "   " selects the whole catalog.
+    // showHome must trim too — otherwise a spaces-only query drops the storefront
+    // Home landing into the flat results grid with no effective filter applied.
     setup(makeStore({ items: [alpha, beta] }), { marketplaceNetworkEnabled: true });
     await screen.findByText('Alpha Loop');
-    expect(document.querySelectorAll('.marketplace-entry')).toHaveLength(2);
+    expect(screen.getByText(/Discover ready-made assets/)).toBeTruthy();
 
-    // Scope to the type group so the chip isn't confused with the same-named
-    // type badge each card renders.
-    const typeGroup = screen.getByRole('group', { name: 'Filter by type' });
-    const agentChip = within(typeGroup).getByRole('button', { name: 'Agent' });
+    await fireEvent.update(screen.getByRole('searchbox'), '   ');
+    await nextTick();
+    // Still Home: the hero + per-type sections, not the flat grid.
+    expect(screen.getByText(/Discover ready-made assets/)).toBeTruthy();
+    expect(
+      document.querySelectorAll('.specorator-vue-marketplace-section').length,
+    ).toBeGreaterThan(0);
+  });
 
-    // Filtering to Agent hides the loop card.
-    await fireEvent.click(agentChip);
-    await waitFor(() => expect(document.querySelectorAll('.marketplace-entry')).toHaveLength(1));
+  it('applies the toolbar sort to the Home sections (sorted rows, not catalog order)', async () => {
+    const zeta: MarketplaceItem = {
+      id: 'z', type: 'loop', name: 'Zeta Loop', description: 'd', path: 'loops/z.md', tags: [],
+    };
+    const aardvark: MarketplaceItem = {
+      id: 'al', type: 'loop', name: 'Aardvark Loop', description: 'd', path: 'loops/al.md', tags: [],
+    };
+    // Catalog order is [Zeta, Aardvark]; the default 'name' sort must reorder the
+    // Home section to [Aardvark, Zeta] — proving sections derive from sorted rows.
+    setup(makeStore({ items: [zeta, aardvark] }), { marketplaceNetworkEnabled: true });
+    await screen.findByText('Zeta Loop');
+    const order = [...document.querySelectorAll('.specorator-vue-marketplace-card')].map((card) =>
+      card.getAttribute('aria-label'),
+    );
+    expect(order).toEqual(['Aardvark Loop', 'Zeta Loop']);
+  });
+});
+
+describe('MarketplaceRoot category nav', () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  it('scopes the grid to the selected category tab and returns to Home', async () => {
+    setup(makeStore({ items: [alpha, beta] }), { marketplaceNetworkEnabled: true });
+    await screen.findByText('Alpha Loop');
+    const nav = screen.getByRole('navigation', { name: 'Marketplace categories' });
+
+    // Selecting the Agent category hides the loop card.
+    await fireEvent.click(within(nav).getByRole('button', { name: /Agent/ }));
+    await waitFor(() =>
+      expect(document.querySelectorAll('.specorator-vue-marketplace-card')).toHaveLength(1),
+    );
     expect(screen.queryByText('Alpha Loop')).toBeNull();
     expect(screen.getByText('Beta Agent')).toBeTruthy();
 
-    // Toggling the same chip off restores both.
-    await fireEvent.click(agentChip);
-    await waitFor(() => expect(document.querySelectorAll('.marketplace-entry')).toHaveLength(2));
+    // Home restores both (rendered in per-type sections).
+    await fireEvent.click(within(nav).getByRole('button', { name: 'Home' }));
+    await waitFor(() =>
+      expect(document.querySelectorAll('.specorator-vue-marketplace-card')).toHaveLength(2),
+    );
   });
 
-  it('hides the type facet when the catalog has only one type', async () => {
-    setup(makeStore({ items: [alpha] }), { marketplaceNetworkEnabled: true });
-    await screen.findByText('Alpha Loop');
-    expect(screen.queryByRole('group', { name: 'Filter by type' })).toBeNull();
-  });
-
-  it('clears an active type filter via the All types chip', async () => {
+  it('hands focus to the active nav button after a "See all" jump', async () => {
+    // "See all" unmounts MarketplaceHome (and the button the user activated), so
+    // without a handoff keyboard focus falls to <body>. The Root moves it to the
+    // now-active category nav button (jsdom doesn't reflect focus in
+    // document.activeElement, so assert the focus() call landed on that button).
     setup(makeStore({ items: [alpha, beta] }), { marketplaceNetworkEnabled: true });
     await screen.findByText('Alpha Loop');
-    const typeGroup = screen.getByRole('group', { name: 'Filter by type' });
-    await fireEvent.click(within(typeGroup).getByRole('button', { name: 'Agent' }));
-    await waitFor(() => expect(document.querySelectorAll('.marketplace-entry')).toHaveLength(1));
 
-    await fireEvent.click(within(typeGroup).getByRole('button', { name: 'All types' }));
-    await waitFor(() => expect(document.querySelectorAll('.marketplace-entry')).toHaveLength(2));
+    // Home renders one "See all" per present type; pick the Loop section's.
+    const loopSection = [...document.querySelectorAll('.specorator-vue-marketplace-section')].find(
+      (section) => section.textContent?.includes('Alpha Loop'),
+    );
+    expect(loopSection).toBeTruthy();
+    const seeAll = within(loopSection as HTMLElement).getByRole('button', { name: 'See all' });
+
+    const focusSpy = vi.spyOn(HTMLElement.prototype, 'focus');
+    try {
+      await fireEvent.click(seeAll);
+      const nav = screen.getByRole('navigation', { name: 'Marketplace categories' });
+      const loopNav = within(nav).getByRole('button', { name: /Loop/ });
+      await waitFor(() => {
+        expect(loopNav.getAttribute('aria-current')).toBe('page');
+        expect(focusSpy.mock.instances.at(-1)).toBe(loopNav);
+      });
+    } finally {
+      focusSpy.mockRestore();
+    }
   });
 
-  it('prunes a stranded type filter when its type leaves the reloaded catalog', async () => {
-    const store = reactive(makeStore({ items: [alpha, beta] }));
+  it('applies a per-leaf deep-link request and consumes it', async () => {
+    // activateMarketplace sets the requested category on THIS leaf's view ref AFTER
+    // it mounts (post loadIfDeferred); the Root applies it and clears the ref.
+    const requestedViewRef = ref<MarketplaceView | null>(null);
+    setup(makeStore({ items: [alpha, beta] }), { marketplaceNetworkEnabled: true }, undefined, requestedViewRef);
+    await screen.findByText('Alpha Loop');
+    requestedViewRef.value = 'agent';
+    await nextTick();
+    // Deep-linked to Agents: only the agent card renders (the loop is scoped out).
+    await waitFor(() =>
+      expect(document.querySelectorAll('.specorator-vue-marketplace-card')).toHaveLength(1),
+    );
+    expect(screen.queryByText('Alpha Loop')).toBeNull();
+    // The request is consumed so a later change can't re-navigate.
+    expect(requestedViewRef.value).toBeNull();
+  });
+
+  it('falls a deep-link to an already-empty category back to Home', async () => {
+    // The retained catalog has no skills; a Skills deep-link must not strand on an
+    // empty skill grid (there is no skill tab either) — the counts guard, now
+    // watching activeView too, bounces it to Home even though counts don't change.
+    const requestedViewRef = ref<MarketplaceView | null>(null);
+    setup(
+      makeStore({ items: [alpha, beta], loaded: true }),
+      { marketplaceNetworkEnabled: true },
+      undefined,
+      requestedViewRef,
+    );
+    await screen.findByText('Alpha Loop');
+    requestedViewRef.value = 'skill';
+    await nextTick();
+    await waitFor(() =>
+      expect(document.querySelectorAll('.specorator-vue-marketplace-card')).toHaveLength(2),
+    );
+    expect(screen.queryByText('No items match your filters.')).toBeNull();
+  });
+
+  it('falls a deep-link back to Home when the loaded catalog is empty', async () => {
+    // A valid but EMPTY catalog (loaded, zero items): a deep-link must land on Home,
+    // not strand on an empty category grid with no tab. Gating the guard on
+    // `store.loaded` (not item count) is what makes this case fall back.
+    const requestedViewRef = ref<MarketplaceView | null>(null);
+    setup(
+      makeStore({ items: [], loaded: true }),
+      { marketplaceNetworkEnabled: true },
+      undefined,
+      requestedViewRef,
+    );
+    requestedViewRef.value = 'agent';
+    await nextTick();
+    // Home landing (the hero) — not the category grid's "No items match".
+    await waitFor(() => expect(screen.getByText(/Discover ready-made assets/)).toBeTruthy());
+    expect(screen.queryByText('No items match your filters.')).toBeNull();
+  });
+
+  it('falls back to Home once an empty catalog finishes loading under a deep-link', async () => {
+    // Deep-link applied BEFORE the (empty) catalog loads: it must stand pre-load,
+    // then fall back to Home when `loaded` flips — the watcher observes `loaded`,
+    // so an empty landing (no counts/activeView change) still corrects itself.
+    const store = reactive(makeStore({ items: [], loaded: false }));
+    const requestedViewRef = ref<MarketplaceView | null>(null);
+    setup(
+      store as StoreFake,
+      { marketplaceNetworkEnabled: true, marketplaceNetworkWarningShown: true },
+      undefined,
+      requestedViewRef,
+    );
+    requestedViewRef.value = 'agent';
+    await nextTick();
+    store.loaded = true; // the empty catalog lands
+    await nextTick();
+    await waitFor(() => expect(screen.getByText(/Discover ready-made assets/)).toBeTruthy());
+    expect(screen.queryByText('No items match your filters.')).toBeNull();
+  });
+
+  it('falls a deep-linked category back to Home after a hard catalog failure', async () => {
+    // A hard failure (fetch throws, no matching cache) leaves `loaded` false by
+    // design so the case retries on reopen. A category deep-link must still fall
+    // back to Home (error banner + landing) instead of stranding on an empty
+    // category grid whose nav button is absent — so the fallback keys on the load
+    // being SETTLED (loaded OR a completed error), not on `loaded` alone.
+    const store = reactive(makeStore({ items: [], loaded: false, loading: true }));
+    const requestedViewRef = ref<MarketplaceView | null>(null);
+    setup(
+      store as StoreFake,
+      { marketplaceNetworkEnabled: true, marketplaceNetworkWarningShown: true },
+      undefined,
+      requestedViewRef,
+    );
+    requestedViewRef.value = 'agent';
+    await nextTick();
+    // The load hard-fails: loading settles, no catalog landed, an error is set.
+    store.loading = false;
+    store.error = 'Network unreachable';
+    await nextTick();
+    // Home landing (the hero) + the error banner — not the empty category grid.
+    await waitFor(() => expect(screen.getByText(/Discover ready-made assets/)).toBeTruthy());
+    expect(screen.getByRole('alert')).toBeTruthy();
+    expect(screen.queryByText('No items match your filters.')).toBeNull();
+  });
+
+  it('falls back to Home when the active category leaves the reloaded catalog', async () => {
+    const store = reactive(makeStore({ items: [alpha, beta], loaded: true }));
     setup(store as StoreFake, {
       marketplaceNetworkEnabled: true,
       marketplaceNetworkWarningShown: true,
     });
     await screen.findByText('Alpha Loop');
-    const typeGroup = screen.getByRole('group', { name: 'Filter by type' });
-    await fireEvent.click(within(typeGroup).getByRole('button', { name: 'Loop' }));
+    const nav = screen.getByRole('navigation', { name: 'Marketplace categories' });
+    await fireEvent.click(within(nav).getByRole('button', { name: /Loop/ }));
     await waitFor(() => expect(screen.queryByText('Beta Agent')).toBeNull());
 
-    // A reload drops every loop; the stranded Loop filter must be pruned so the
-    // list falls back to "all" instead of rendering empty with no visible cause.
+    // A reload drops every loop; the stranded Loop view must fall back to Home so
+    // the grid doesn't render empty with no visible cause.
     store.items = [beta];
     await nextTick();
     await waitFor(() => {
-      expect(document.querySelectorAll('.marketplace-entry')).toHaveLength(1);
+      expect(document.querySelectorAll('.specorator-vue-marketplace-card')).toHaveLength(1);
       expect(screen.getByText('Beta Agent')).toBeTruthy();
     });
   });
@@ -260,28 +430,24 @@ describe('MarketplaceRoot preview + install', () => {
       marketplaceNetworkEnabled: true,
     });
     await screen.findByText('Alpha Loop');
-    // Security contract: no Install button until the preview is opened.
+    // Security contract: no Install button until the detail (preview) is opened.
     expect(screen.queryByRole('button', { name: 'Install' })).toBeNull();
 
-    await fireEvent.click(screen.getByRole('button', { name: 'Preview' }));
-    // The reviewed body renders in the preview...
+    // Opening the card routes to the detail and fetches the body.
+    await fireEvent.click(screen.getByRole('button', { name: 'Alpha Loop' }));
     await screen.findByText('BODY TEXT');
     expect(store.fetchBody).toHaveBeenCalledWith(expect.objectContaining({ id: 'a' }));
 
-    // ...and Install hands that same body straight to the store — the store no
-    // longer re-fetches, so what installs is exactly what was reviewed.
+    // Install hands that same body straight to the store — no re-fetch.
     await fireEvent.click(screen.getByRole('button', { name: 'Install' }));
     await waitFor(() =>
-      expect(store.install).toHaveBeenCalledWith(
-        expect.objectContaining({ id: 'a' }),
-        'BODY TEXT',
-      ),
+      expect(store.install).toHaveBeenCalledWith(expect.objectContaining({ id: 'a' }), 'BODY TEXT'),
     );
   });
 
   it('keeps Install disabled until the previewed body has loaded', async () => {
-    // A body fetch left pending: the preview is open but nothing is shown yet,
-    // so a fast click must not install content the user never saw.
+    // A body fetch left pending: the detail is open but nothing is shown yet, so
+    // a fast click must not install content the user never saw.
     let resolveBody: (v: string) => void = () => {};
     const pending = new Promise<string>((res) => {
       resolveBody = res;
@@ -291,7 +457,7 @@ describe('MarketplaceRoot preview + install', () => {
       { marketplaceNetworkEnabled: true },
     );
     await screen.findByText('Alpha Loop');
-    await fireEvent.click(screen.getByRole('button', { name: 'Preview' }));
+    await fireEvent.click(screen.getByRole('button', { name: 'Alpha Loop' }));
 
     const installBtn = (await screen.findByRole('button', { name: 'Install' })) as HTMLButtonElement;
     expect(installBtn.disabled).toBe(true);
@@ -304,10 +470,7 @@ describe('MarketplaceRoot preview + install', () => {
     await waitFor(() => expect(installBtn.disabled).toBe(false));
     await fireEvent.click(installBtn);
     await waitFor(() =>
-      expect(store.install).toHaveBeenCalledWith(
-        expect.objectContaining({ id: 'a' }),
-        'LATE BODY',
-      ),
+      expect(store.install).toHaveBeenCalledWith(expect.objectContaining({ id: 'a' }), 'LATE BODY'),
     );
   });
 });
@@ -317,8 +480,8 @@ describe('MarketplaceRoot network warning + preview invalidation', () => {
 
   it('awaits the one-time network warning BEFORE loading on an already-enabled mount', async () => {
     // The settings-tab toggle can enable networking without going through the
-    // view's Enable button, so an already-enabled mount must still warn — and
-    // the warning must complete before the first catalog fetch. A deferred
+    // view's Enable button, so an already-enabled mount must still warn — and the
+    // warning must complete before the first catalog fetch. A deferred
     // saveSettings pins the warning open so we can prove load() waits for it.
     let resolveSave: () => void = () => {};
     const savePromise = new Promise<void>((r) => {
@@ -340,7 +503,7 @@ describe('MarketplaceRoot network warning + preview invalidation', () => {
     expect(plugin.settings.marketplaceNetworkWarningShown).toBe(true);
   });
 
-  it('drops cached previews when the catalog reloads (source switch / refresh)', async () => {
+  it('drops the open detail when the catalog reloads (source switch / refresh)', async () => {
     // A reactive store so reassigning items triggers the component's watch.
     const store = reactive(
       makeStore({ items: [alpha], fetchBody: vi.fn().mockResolvedValue('OLD BODY') }),
@@ -350,12 +513,12 @@ describe('MarketplaceRoot network warning + preview invalidation', () => {
       marketplaceNetworkWarningShown: true,
     });
     await screen.findByText('Alpha Loop');
-    await fireEvent.click(screen.getByRole('button', { name: 'Preview' }));
+    await fireEvent.click(screen.getByRole('button', { name: 'Alpha Loop' }));
     await screen.findByText('OLD BODY');
 
-    // A reload (e.g. after changing marketplaceSourceUrl) replaces the catalog;
-    // a fork could reuse id 'a' for different content, so the stale preview must
-    // not survive — the expanded body collapses and Preview must re-fetch.
+    // A reload (e.g. after changing marketplaceSourceUrl) replaces the catalog; a
+    // fork could reuse id 'a' for different content, so the stale preview must not
+    // survive — the detail closes and its body cache is dropped.
     store.items = [{ ...alpha }];
     await nextTick();
     await waitFor(() => expect(screen.queryByText('OLD BODY')).toBeNull());
@@ -367,10 +530,7 @@ describe('MarketplaceRoot network warning + preview invalidation', () => {
     const stalePending = new Promise<string>((r) => {
       resolveStale = r;
     });
-    const fetchBody = vi
-      .fn()
-      .mockReturnValueOnce(stalePending)
-      .mockResolvedValue('FRESH BODY');
+    const fetchBody = vi.fn().mockReturnValueOnce(stalePending).mockResolvedValue('FRESH BODY');
     const store = reactive(makeStore({ items: [alpha], fetchBody }));
     setup(store as StoreFake, {
       marketplaceNetworkEnabled: true,
@@ -378,7 +538,7 @@ describe('MarketplaceRoot network warning + preview invalidation', () => {
     });
     await screen.findByText('Alpha Loop');
 
-    await fireEvent.click(screen.getByRole('button', { name: 'Preview' }));
+    await fireEvent.click(screen.getByRole('button', { name: 'Alpha Loop' }));
     // Catalog reloads while the first fetch is still in flight (generation bumps).
     store.items = [{ ...alpha }];
     await nextTick();
@@ -387,10 +547,41 @@ describe('MarketplaceRoot network warning + preview invalidation', () => {
     await nextTick();
     await Promise.resolve();
 
-    // Re-open the preview: because nothing stale was cached, it re-fetches.
-    await fireEvent.click(screen.getByRole('button', { name: 'Preview' }));
+    // Re-open the detail: because nothing stale was cached, it re-fetches.
+    await fireEvent.click(screen.getByRole('button', { name: 'Alpha Loop' }));
     await screen.findByText('FRESH BODY');
     expect(screen.queryByText('STALE BODY')).toBeNull();
+    expect(fetchBody).toHaveBeenCalledTimes(2);
+  });
+
+  it('never enables Install on an unseen body when overlapping preview fetches disagree', async () => {
+    // Open (fetch #1 pending) → Back → reopen (fetch #2). Only the LATEST attempt
+    // may write, so a late FAILURE of #1 can't set previewErrors while #2's body
+    // is shown — otherwise the detail would render the error yet keep Install
+    // enabled on a body the user never saw.
+    let rejectFirst: (reason?: unknown) => void = () => {};
+    const first = new Promise<string>((_res, rej) => {
+      rejectFirst = rej;
+    });
+    const fetchBody = vi.fn().mockReturnValueOnce(first).mockResolvedValueOnce('BODY2');
+    setup(makeStore({ items: [alpha], fetchBody }), {
+      marketplaceNetworkEnabled: true,
+      marketplaceNetworkWarningShown: true,
+    });
+    await screen.findByText('Alpha Loop');
+
+    await fireEvent.click(screen.getByRole('button', { name: 'Alpha Loop' })); // open (fetch #1)
+    await fireEvent.click(screen.getByRole('button', { name: 'Back' })); // back
+    await fireEvent.click(screen.getByRole('button', { name: 'Alpha Loop' })); // reopen (fetch #2)
+    await screen.findByText('BODY2'); // fetch #2 (latest) populated the body
+    rejectFirst(new Error('stale failure')); // fetch #1 fails late — must be discarded
+    await nextTick();
+    await Promise.resolve();
+
+    expect(screen.getByText('BODY2')).toBeTruthy();
+    expect(screen.queryByText("Couldn't load the marketplace catalog.")).toBeNull();
+    const install = (await screen.findByRole('button', { name: 'Install' })) as HTMLButtonElement;
+    expect(install.disabled).toBe(false);
     expect(fetchBody).toHaveBeenCalledTimes(2);
   });
 });

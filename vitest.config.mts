@@ -45,6 +45,10 @@ export default defineConfig({
         'src/features/tasks/loops/loopLibraryAccessors.ts',
         'src/features/agents/roster/rosterLibraryAccessors.ts',
         'src/features/agents/roster/rosterAgentActions.ts',
+        // Shared Vue helpers (mountLucide, the Lucide function-ref host shared by
+        // the board + marketplace islands) — tested in this lane and excluded
+        // from Jest collection; gate its coverage here where it is exercised.
+        'src/shared/vue/**/*.{ts,vue}',
       ],
       reportsDirectory: 'coverage-vue',
       // Regression floors, not aspirations (repo convention; see jest.config.js).
