@@ -43,9 +43,11 @@ null) — see `references/quality-harness.md`.
 - `vue` — default `true`: a Vue 3 island view (Pinia store, vue-router on
   **memory history**, sample pages + component tests). `false` scaffolds a
   vanilla plugin (settings tab + a Notice command).
-- `minAppVersion` — default `1.7.2`, the floor for `workspace.revealLeaf` used
-  by the scaffold. `obsidianmd/no-unsupported-api` lints API use against it, so
-  raising/lowering it is checked, not guessed.
+- `minAppVersion` — default `1.7.2`. Validated against the newest Obsidian API
+  the generated code calls, so the manifest can't advertise a version its
+  commands can't run on: every variant uses `Vault.getFileByPath` (v1.5.7), and
+  the Vue view awaits `Workspace.revealLeaf` (v1.7.2). A value below the
+  applicable floor is rejected with guidance.
 - Obsidian mode forces `testFramework: "vitest"` and `typescript: true`;
   `guardrails.cssGuard` adds the CSS `!important` ratchet (Obsidian-only).
 - `hooks` — **all opt-in, default off; ask which the user wants**:

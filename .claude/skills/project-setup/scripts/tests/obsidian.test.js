@@ -381,6 +381,16 @@ test('turning github off on re-apply warns the release workflow remains (declara
   assert.ok(!actionsFor({}, {}).some((a) => a.type === 'notice' && /release\.yml remains/.test(a.message)));
 });
 
+test('turning github off on re-apply warns the /release command remains (it would mislead the agent)', () => {
+  // github off now but prior on → the skip-if-exists .claude/commands/release.md stays,
+  // still pointing at the absent workflow. Warn (apply can't delete it), and don't rewrite it.
+  const actions = actionsFor({}, { priorOptions: { github: { integrate: true } } });
+  assert.ok(actions.some((a) => a.type === 'notice' && /release\.md remains/.test(a.message)));
+  assert.equal(findWrite(actions, '.claude/commands/release.md'), undefined, 'not re-written when github is off');
+  // First apply (no prior github) → no stale notice.
+  assert.ok(!actionsFor({}, {}).some((a) => a.type === 'notice' && /release\.md remains/.test(a.message)));
+});
+
 test('vitest discovers .test and .spec across JS/TS incl. module forms (.mts/.cts), not just *.test.ts', () => {
   // --passWithNoTests means a repo whose suite is only in tests/*.spec.mts would
   // pass verify/CI without running — the include must cover mts/cts too.

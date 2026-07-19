@@ -296,10 +296,18 @@ export const CI_PM = {
 };
 
 export function planCi(options, state) {
-  if (!options.guardrails?.ci) return []; // CI not requested — nothing to surface
+  // A prior apply wrote .github/workflows/ci.yml (CI + GitHub both on); if this apply
+  // no longer writes it, apply won't delete it, so it keeps running on push/PR against
+  // the opt-out. Warn like the release/dependabot planners.
+  const wroteCiBefore = state?.priorOptions?.guardrails?.ci && state?.priorOptions?.github?.integrate;
+  const writesCiNow = options.guardrails?.ci && options.github?.integrate;
+  const staleCi = wroteCiBefore && !writesCiNow
+    ? [notice('CI/GitHub integration was turned off, but the generated .github/workflows/ci.yml remains and will keep running on pushes and PRs — delete it to fully opt out.')]
+    : [];
+  if (!options.guardrails?.ci) return staleCi; // CI not requested — nothing to write
   // CI requested but unproducible: say so rather than silently dropping it.
   if (!options.github?.integrate) {
-    return [notice('CI is enabled but GitHub integration is off, so no .github/workflows/ci.yml was written. Re-run with github.integrate:true to add it, or wire CI on your platform manually.')];
+    return [...staleCi, notice('CI is enabled but GitHub integration is off, so no .github/workflows/ci.yml was written. Re-run with github.integrate:true to add it, or wire CI on your platform manually.')];
   }
   const g = options.guardrails ?? {};
   // npm/pnpm/yarn get a working workflow; bun (and any unknown manager) has no

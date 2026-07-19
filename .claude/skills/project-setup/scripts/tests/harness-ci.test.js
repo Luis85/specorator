@@ -26,6 +26,18 @@ test('planCi only emits the workflow when GitHub integration is opted in', () =>
   assert.match(wf.content, /npm run test:coverage/);
 });
 
+test('planCi warns when a previously generated ci.yml is left stale by a CI/GitHub opt-out', () => {
+  const priorOn = { priorOptions: { guardrails: { ci: true }, github: { integrate: true } }, packageManager: 'npm' };
+  // CI turned off on re-apply → ci.yml not rewritten, but the old one keeps running: warn.
+  assert.ok(planCi({ github: { integrate: true }, guardrails: { ci: false } }, priorOn).some((a) => a.type === 'notice' && /ci\.yml remains/.test(a.message)));
+  // GitHub turned off → same stale ci.yml, same warning (alongside the github-off notice).
+  assert.ok(planCi({ github: { integrate: false }, guardrails: { ci: true } }, priorOn).some((a) => a.type === 'notice' && /ci\.yml remains/.test(a.message)));
+  // No prior apply (first run) → no stale warning.
+  assert.ok(!planCi({ github: { integrate: false }, guardrails: { ci: false } }, { packageManager: 'npm' }).some((a) => /ci\.yml remains/.test(a.message)));
+  // Still writing ci.yml (both on) → no stale warning; it's refreshed, not stale.
+  assert.ok(!planCi({ github: { integrate: true }, guardrails: { ci: true } }, priorOn).some((a) => a.type === 'notice' && /ci\.yml remains/.test(a.message)));
+});
+
 test('planCi gates each step on its guardrail flag (no step for a disabled guardrail)', () => {
   const actions = planCi(
     { github: { integrate: true }, guardrails: { ci: true, eslintSeverityStaging: true, locGuard: false, fallowRatchet: false, coverageFloors: false } },

@@ -464,6 +464,14 @@ function planClaudeSettings(options, state) {
   // agent to expect a workflow that was never generated (publishing.md covers the
   // manual path).
   if (options.github?.integrate) actions.push(command('release'));
+  else if (state?.priorOptions?.github?.integrate) {
+    // Toggled off on re-apply: the previously written .claude/commands/release.md is
+    // skip-if-exists, so it stays and still tells the agent to push a tag and await the
+    // now-absent release workflow. Warn (apply can't delete it), like release.yml.
+    actions.push(
+      notice('GitHub integration was turned off, but the generated .claude/commands/release.md remains and still instructs a tag-push release against the now-absent workflow — delete it to avoid misleading /release runs.'),
+    );
+  }
 
   const sessionHook = h.sessionStart ? { hooks: [{ type: 'command', command: PM_INSTALL[pm] }] } : null;
   // Build the Stop gate from scripts that actually generated: typecheck is always

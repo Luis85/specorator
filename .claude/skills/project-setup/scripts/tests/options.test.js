@@ -35,13 +35,18 @@ test('validateObsidianFields accepts a clean manifest and flags marketplace viol
       /start with a letter/.test(p),
     ),
   );
-  // Vue variant below the revealLeaf API floor (1.7.2) is rejected; at/above, or
-  // non-vue, is fine.
+  // Runtime API floors: every variant uses Vault.getFileByPath (v1.5.7); the Vue view
+  // additionally awaits revealLeaf (v1.7.2). The manifest must not advertise below them.
   const base = { id: 'a', name: 'Cool', description: 'A fine description here.' };
+  // Non-vue: floor 1.5.7 (getFileByPath), NOT the vue 1.7.2 floor.
+  assert.ok(validateObsidianFields({ ...base, vue: false, minAppVersion: '1.4.0' }).some((p) => /1\.5\.7/.test(p)));
+  assert.deepEqual(validateObsidianFields({ ...base, vue: false, minAppVersion: '1.5.7' }), []);
+  assert.deepEqual(validateObsidianFields({ ...base, vue: false, minAppVersion: '1.6.0' }), []); // between the floors — fine without vue
+  // Vue: stricter 1.7.2 floor (revealLeaf). 1.6.0 clears getFileByPath but not revealLeaf.
   assert.ok(validateObsidianFields({ ...base, vue: true, minAppVersion: '1.6.0' }).some((p) => /1\.7\.2/.test(p)));
+  assert.ok(validateObsidianFields({ ...base, vue: true, minAppVersion: '1.4.0' }).some((p) => /1\.7\.2/.test(p)));
   assert.deepEqual(validateObsidianFields({ ...base, vue: true, minAppVersion: '1.7.2' }), []);
   assert.deepEqual(validateObsidianFields({ ...base, vue: true, minAppVersion: '1.10.0' }), []);
-  assert.deepEqual(validateObsidianFields({ ...base, vue: false, minAppVersion: '1.6.0' }), []);
 });
 
 test('freezeOptions makes the obsidian vue/mobile variant immutable across re-apply', () => {

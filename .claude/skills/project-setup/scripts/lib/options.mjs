@@ -139,11 +139,19 @@ export function validateObsidianFields(o) {
   if (/^[0-9]/.test(String(o.id))) {
     problems.push(`Plugin id ${JSON.stringify(o.id)} must start with a letter — it becomes a CSS class prefix (".${o.id}-view") and a digit-leading selector is invalid. Reorder it, e.g. "notes-24".`);
   }
-  // The Vue variant's registerViews.ts calls Workspace.revealLeaf (Obsidian ≥ 1.7.2),
-  // which obsidianmd/no-unsupported-api enforces against minAppVersion — a lower but
-  // syntactically valid floor would fail the fresh scaffold's own lint.
-  if (o.vue && isBelowVersion(o.minAppVersion, [1, 7, 2])) {
-    problems.push(`minAppVersion ${JSON.stringify(o.minAppVersion)} is below 1.7.2, which the Vue view's revealLeaf API requires. Set it to 1.7.2 or higher (or scaffold without the Vue view).`);
+  // The generated code calls Obsidian APIs newer than some minAppVersions, so the
+  // manifest must not advertise a minimum below the newest API it uses — those calls
+  // are undefined at runtime on an older host. VaultService uses
+  // Vault.getFileByPath/getFolderByPath (v1.5.7) in EVERY variant; the Vue view
+  // additionally awaits Workspace.revealLeaf's deferred-load behavior (v1.7.2). This is
+  // a runtime floor, not a lint one — obsidianmd/no-unsupported-api only carries @since
+  // for isDeferred/loadIfDeferred, which the scaffold doesn't call, so it never fires.
+  const apiFloor = o.vue ? [1, 7, 2] : [1, 5, 7];
+  if (isBelowVersion(o.minAppVersion, apiFloor)) {
+    const api = o.vue ? 'the Vue view awaits Workspace.revealLeaf (v1.7.2)' : 'VaultService uses Vault.getFileByPath (v1.5.7)';
+    problems.push(
+      `minAppVersion ${JSON.stringify(o.minAppVersion)} is below ${apiFloor.join('.')}, the floor for the Obsidian APIs the generated code calls (${api}). Set it to ${apiFloor.join('.')} or higher${o.vue ? ' (or scaffold without the Vue view)' : ''}.`,
+    );
   }
   const d = String(o.description ?? '');
   // Mirror obsidianmd: a forbidden word is reported instead of (not in addition to)
