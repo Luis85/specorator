@@ -68,6 +68,17 @@ function assertTextOnlySkillContents(files: ReadonlyMap<string, string>): void {
   }
 }
 
+/** Rejects a skill that declares a binary file by extension (a fast pre-fetch
+ *  check; content is re-verified after fetch in assertTextOnlySkillContents). */
+function assertNoBinarySkillFiles(item: MarketplaceItem): void {
+  const binaryFile = (item.files ?? []).find((path) => isBinarySkillPath(path));
+  if (binaryFile) {
+    throw new MarketplaceError(
+      `This skill includes a non-text file ("${binaryFile}"), which can't be installed. Marketplace skills must be text-only.`,
+    );
+  }
+}
+
 /**
  * Marketplace store: fetches the catalog manifest via the client (falling back
  * to the on-disk cache when offline), tracks which items are already installed,
@@ -324,15 +335,14 @@ export const useMarketplaceStore = defineStore('marketplace', () => {
     target: SkillInstallTarget,
   ): Promise<InstallOutcome> {
     assertNetworkEnabled();
-    // Skills are text-only: the plugin fetches every file as text and writes it
-    // back as UTF-8, which would corrupt a binary. Refuse before fetching (no
-    // wasted download, no silent corruption) rather than land a broken asset.
-    const binaryFile = (item.files ?? []).find((path) => isBinarySkillPath(path));
-    if (binaryFile) {
-      throw new MarketplaceError(
-        `This skill includes a non-text file ("${binaryFile}"), which can't be installed. Marketplace skills must be text-only.`,
-      );
-    }
+    // Preflight the target marker before downloading anything: if the skill is
+    // already installed here, skip without fetching the folder — avoids a needless
+    // full-folder download and a misleading "failed" notice if that download errors
+    // for an already-present skill. installSkillItem re-checks race-safely at write.
+    if (await skillInstalledAtTarget(item, target, installDeps())) return 'skipped';
+    // Text-only: reject a declared binary by extension before fetching (fast path;
+    // fetchSkillFiles also verifies by content). No wasted download, no corruption.
+    assertNoBinarySkillFiles(item);
     const files = await fetchSkillFiles(item, skillMdBody);
     const outcome = await installSkillItem(item, files, target, installDeps());
     if (outcome === 'installed') {

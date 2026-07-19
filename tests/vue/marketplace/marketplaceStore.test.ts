@@ -588,4 +588,14 @@ describe('marketplaceStore skill install', () => {
     ).rejects.toThrow(/not text|text-only/i);
     expect(installSkillSpy).not.toHaveBeenCalled();
   });
+
+  it('skips WITHOUT fetching when the target already has the skill (preflight)', async () => {
+    isSkillInstalledAtSpy.mockResolvedValue(true); // preflight: already installed here
+    const store = useMarketplaceStore();
+    store.init(fakePlugin(true));
+    const outcome = await store.install(skillItem, 'SKILL BODY', { provider: 'claude', scope: 'project' });
+    expect(outcome).toBe('skipped');
+    expect(fetchBodySpy).not.toHaveBeenCalled(); // no needless folder download
+    expect(installSkillSpy).not.toHaveBeenCalled(); // installer not reached
+  });
 });
