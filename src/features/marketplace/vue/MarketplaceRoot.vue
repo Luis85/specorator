@@ -1,17 +1,25 @@
 <script setup lang="ts">
 import { Notice } from 'obsidian';
-import type { Ref } from 'vue';
-import { computed, inject, onMounted, onUnmounted, reactive, ref, shallowRef, watch } from 'vue';
+import { computed, inject, onMounted, onUnmounted, reactive, ref, watch } from 'vue';
 
 import { t } from '../../../i18n/i18n';
 import LibraryToolbar from '../../library/vue/components/LibraryToolbar.vue';
 import { useLibraryList } from '../../library/vue/useLibraryList';
-import { MARKETPLACE_ITEM_TYPES, type MarketplaceItem, type MarketplaceItemType } from '../catalogTypes';
+import {
+  isInstallableType,
+  MARKETPLACE_ITEM_TYPES,
+  type MarketplaceItem,
+  type MarketplaceItemType,
+} from '../catalogTypes';
 import { maybeWarnMarketplaceNetwork } from '../marketplaceNetworkGate';
-import MarketplaceCard from './components/MarketplaceCard.vue';
+import MarketplaceDetail from './components/MarketplaceDetail.vue';
+import MarketplaceGrid from './components/MarketplaceGrid.vue';
+import MarketplaceHome from './components/MarketplaceHome.vue';
+import MarketplaceNav from './components/MarketplaceNav.vue';
 import { marketplaceAccessors } from './marketplaceAccessors';
 import { PLUGIN_KEY } from './marketplaceKeys';
 import { marketplaceTypeLabels } from './marketplaceTypeLabels';
+import type { MarketplaceView } from './marketplaceView';
 import { useMarketplaceStore } from './stores/marketplaceStore';
 import { useMarketplaceInstalledRefresh } from './useMarketplaceInstalledRefresh';
 
@@ -32,72 +40,78 @@ useMarketplaceInstalledRefresh(plugin, () => {
   void store.refreshInstalled();
 });
 
-// Marketplace-local type facet: narrows the source BEFORE useLibraryList, so the
-// shared search/sort/tag facet (and its tag chips) operate on the type-filtered
-// subset. Kept out of the shared LibraryToolbar because the Library panels are
-// each already one-type-per-tab and would inherit a facet they can't use.
-const activeTypes = shallowRef<ReadonlySet<MarketplaceItemType>>(new Set<MarketplaceItemType>());
-// Source-based list: rows re-derive from the shared store, so a fetch in ANY
-// Marketplace leaf updates every mounted view (multi-leaf consistency).
+const typeLabels = marketplaceTypeLabels();
+
+// Primary navigation state: the active category (or Home), and which item's
+// detail/preview is open.
+const activeView = ref<MarketplaceView>('home');
+const detailId = ref<string | null>(null);
+
+// Per-type counts feed the nav tabs; derived from the loaded catalog.
+const counts = computed<Record<MarketplaceItemType, number>>(() => {
+  const tally: Record<MarketplaceItemType, number> = {
+    'quick-action': 0,
+    agent: 0,
+    loop: 0,
+    template: 0,
+    skill: 0,
+  };
+  for (const item of store.items) tally[item.type] += 1;
+  return tally;
+});
+
+// Search/sort/tag facet over the ACTIVE scope — all items on Home, else the
+// selected category. A query or tag drops out of the Home sections into a flat
+// results grid (the storefront "search from anywhere" behavior).
 const list = useLibraryList<MarketplaceItem>(
-  () => store.items.filter((item) => activeTypes.value.size === 0 || activeTypes.value.has(item.type)),
+  () =>
+    activeView.value === 'home'
+      ? store.items
+      : store.items.filter((item) => item.type === activeView.value),
   marketplaceAccessors,
 );
-const typeLabels = marketplaceTypeLabels();
-// Only offer chips for types actually present, in canonical order — a fresh vault
-// browsing the whole catalog isn't shown dead filters (e.g. Skill with no items).
-const availableTypes = computed(() =>
-  MARKETPLACE_ITEM_TYPES.filter((type) => store.items.some((item) => item.type === type)),
+
+// Home landing sections: every present type, canonical order.
+const sections = computed(() =>
+  MARKETPLACE_ITEM_TYPES.map((type) => ({
+    type,
+    items: store.items.filter((item) => item.type === type),
+  })).filter((section) => section.items.length > 0),
 );
-function toggleType(type: MarketplaceItemType): void {
-  const next = new Set<MarketplaceItemType>(activeTypes.value);
-  if (next.has(type)) next.delete(type);
-  else next.add(type);
-  activeTypes.value = next;
-}
-function clearTypes(): void {
-  if (activeTypes.value.size > 0) activeTypes.value = new Set<MarketplaceItemType>();
-}
-// Prune a type filter whose type vanished from the (re)loaded catalog, mirroring
-// useLibraryList's tag-prune, so a source switch can't strand the list on an
-// absent type (which would render empty with no visible cause).
-watch(
-  availableTypes,
-  (types) => {
-    if (activeTypes.value.size === 0) return;
-    const allowed = new Set(types);
-    const pruned = new Set([...activeTypes.value].filter((type) => allowed.has(type)));
-    if (pruned.size !== activeTypes.value.size) activeTypes.value = pruned;
-  },
-  { flush: 'sync' },
+
+const showHome = computed(
+  () =>
+    activeView.value === 'home' &&
+    list.query.value === '' &&
+    list.activeFilters.value.length === 0,
 );
+const showSkeleton = computed(() => store.loading && store.items.length === 0);
+const detailItem = computed(() => store.items.find((item) => item.id === detailId.value) ?? null);
+
+// If the active category leaves a reloaded catalog (count → 0), fall back to Home
+// so the grid can't strand on an absent type (mirrors useLibraryList's tag-prune).
+watch(counts, (tally) => {
+  if (activeView.value !== 'home' && tally[activeView.value] === 0) activeView.value = 'home';
+});
 
 // Opt-in network gate: the Marketplace is dark until the user enables it, so
 // merely opening the view never touches the network.
 const enabled = ref(plugin.settings.marketplaceNetworkEnabled === true);
-// Preview is lazy: the body is fetched only when a card is expanded, and the
-// Install action is gated behind opening that preview (a security requirement).
-const expandedId: Ref<string | null> = ref(null);
-// `bodies` holds ONLY successfully-fetched content; a failed preview sets
-// `previewErrors` instead of poisoning `bodies`, so the error banner is never
-// mistaken for reviewable content and can never be installed.
+
+// Generation-guarded preview body cache. Opening the detail fetches the body
+// once; `bodies` holds ONLY successfully-fetched content, a failed fetch sets
+// `previewErrors` instead (so the error banner is never mistaken for reviewable
+// content and can never be installed). A catalog reload clears the cache AND
+// closes the detail so no stale body/id survives a source switch.
 const bodies = reactive<Record<string, string>>({});
 const previewErrors = reactive<Record<string, boolean>>({});
 const installing = reactive<Record<string, boolean>>({});
-
-// Preview bodies are keyed by item id, but a different source (fork/mirror) can
-// reuse an id for different content — and even the same source can update an
-// item in place. Whenever the catalog (re)loads (`store.items` is replaced),
-// drop the cached previews so Preview re-fetches the current path and Install
-// can never write a stale body under a refreshed item. `catalogGeneration` is
-// bumped on each reload so an in-flight preview fetch that started before the
-// reload discards its result instead of repopulating the cleared cache.
 let catalogGeneration = 0;
 watch(
   () => store.items,
   () => {
     catalogGeneration += 1;
-    expandedId.value = null;
+    detailId.value = null;
     for (const key of Object.keys(bodies)) delete bodies[key];
     for (const key of Object.keys(previewErrors)) delete previewErrors[key];
   },
@@ -106,23 +120,17 @@ watch(
 onMounted(async () => {
   // Auto-load only on the FIRST enabled mount that finds the shared store empty.
   // The module-singleton store retains the catalog across leaf open/close, so
-  // reopening a leaf (or opening a second one) reuses it and refreshes on demand
-  // via the Refresh button — no redundant index.json fetch on every mount.
+  // reopening reuses it and refreshes on demand (Refresh) — no redundant fetch.
   if (enabled.value && !store.loaded) {
-    // The one-time network/provenance warning must fire here too — and BEFORE
-    // the first fetch: the settings tab can flip marketplaceNetworkEnabled
-    // without going through enable(), so an already-enabled view would
-    // otherwise dial GitHub before the user sees the notice. Awaited (like
-    // enable()) so load() never races ahead of it; idempotent (persisted flag),
-    // so enable()'s call can't double-show it.
+    // The one-time network/provenance warning fires here too, BEFORE the first
+    // fetch: the settings tab can flip the opt-in without going through enable(),
+    // so an already-enabled view would otherwise dial GitHub before the notice.
     await maybeWarnMarketplaceNetwork(plugin);
     void store.load();
   } else if (enabled.value) {
-    // Reusing a retained catalog (the `!store.loaded` fetch is skipped): while
-    // every leaf was closed no subscription was live, so a Library delete/rename,
-    // a roster change, or an install-folder setting change since the last scan
-    // isn't reflected in the shared `installedIds`. Run one installed-scan now so
-    // badges aren't stale on reopen — network-free and generation/sequence-guarded.
+    // Reusing a retained catalog: while every leaf was closed no subscription was
+    // live, so run one installed-scan now so badges aren't stale on reopen —
+    // network-free and generation/sequence-guarded.
     void store.refreshInstalled();
   }
 });
@@ -137,11 +145,8 @@ async function enable(): Promise<void> {
 
 // The Settings tab can flip marketplaceNetworkEnabled while this leaf shows the
 // gate, but plugin.settings isn't reactive and Obsidian Settings is a modal over
-// this same leaf (so active-leaf-change doesn't fire on dismiss). Re-read the gate
-// on the settings-changed event: a view enabled from Settings then warns + loads
-// exactly like the mount path, so the catalog appears without a manual Enable
-// click or a remount. Per-leaf teardown keeps the shared-store subscription
-// leak-free.
+// this same leaf. Re-read the gate on settings-changed: a view enabled from
+// Settings then warns + loads exactly like the mount path.
 let settingsChangedOff: (() => void) | null = null;
 onMounted(() => {
   settingsChangedOff = plugin.events.on('settings-changed', () => {
@@ -157,27 +162,26 @@ async function syncEnabled(): Promise<void> {
   const nowEnabled = plugin.settings.marketplaceNetworkEnabled === true;
   const wasEnabled = enabled.value;
   enabled.value = nowEnabled;
-  // Only act on the disabled→enabled transition with an empty shared store —
-  // mirror onMounted's gated warn→load (idempotent warning; fire-and-forget load).
   if (nowEnabled && !wasEnabled && !store.loaded) {
     await maybeWarnMarketplaceNetwork(plugin);
     void store.load();
   }
 }
 
-async function togglePreview(item: MarketplaceItem): Promise<void> {
-  if (expandedId.value === item.id) {
-    expandedId.value = null;
-    return;
-  }
-  expandedId.value = item.id;
+function selectView(view: MarketplaceView): void {
+  activeView.value = view;
+  detailId.value = null;
+}
+
+async function openItem(item: MarketplaceItem): Promise<void> {
+  detailId.value = item.id;
   if (bodies[item.id] === undefined) {
     const generation = catalogGeneration;
     try {
       previewErrors[item.id] = false;
       const body = await store.fetchBody(item);
-      // If the catalog reloaded while this fetch was in flight, its body is for
-      // a now-stale item id — discard it so it can't land in the cleared cache.
+      // If the catalog reloaded while this fetch was in flight, its body is for a
+      // now-stale item id — discard it so it can't land in the cleared cache.
       if (generation !== catalogGeneration) return;
       bodies[item.id] = body;
     } catch {
@@ -185,6 +189,10 @@ async function togglePreview(item: MarketplaceItem): Promise<void> {
       previewErrors[item.id] = true;
     }
   }
+}
+
+function backToList(): void {
+  detailId.value = null;
 }
 
 async function install(item: MarketplaceItem): Promise<void> {
@@ -226,6 +234,12 @@ async function install(item: MarketplaceItem): Promise<void> {
   </div>
   <template v-else>
     <div class="specorator-vue-panel-header">
+      <MarketplaceNav
+        :active-view="activeView"
+        :counts="counts"
+        :type-labels="typeLabels"
+        @select="selectView"
+      />
       <div class="specorator-vue-panel-actions">
         <button
           type="button"
@@ -236,13 +250,7 @@ async function install(item: MarketplaceItem): Promise<void> {
         </button>
       </div>
     </div>
-    <div
-      v-if="store.loading"
-      class="specorator-vue-marketplace-banner"
-      role="status"
-    >
-      {{ t('marketplace.loading') }}
-    </div>
+
     <div
       v-if="store.error"
       class="specorator-vue-marketplace-banner is-error"
@@ -257,63 +265,49 @@ async function install(item: MarketplaceItem): Promise<void> {
     >
       {{ t('marketplace.offline') }}
     </div>
-    <div
-      v-if="availableTypes.length > 1"
-      class="specorator-vue-marketplace-typefilter"
-      role="group"
-      :aria-label="t('marketplace.typeFilterGroupLabel')"
-    >
-      <button
-        type="button"
-        class="specorator-vue-marketplace-typechip"
-        :class="{ 'is-hidden': activeTypes.size === 0 }"
-        @click="clearTypes()"
-      >
-        {{ t('marketplace.allTypes') }}
-      </button>
-      <button
-        v-for="type in availableTypes"
-        :key="type"
-        type="button"
-        class="specorator-vue-marketplace-typechip"
-        :class="{ 'is-on': activeTypes.has(type) }"
-        :aria-pressed="activeTypes.has(type) ? 'true' : 'false'"
-        @click="toggleType(type)"
-      >
-        {{ typeLabels[type] }}
-      </button>
-    </div>
-    <LibraryToolbar
-      v-if="store.items.length > 0"
-      :query="list.query.value"
-      :sort="list.sort.value"
-      :tags="list.allTags.value"
-      :active-filters="list.activeFilters.value"
-      @update:query="list.query.value = $event"
-      @update:sort="list.sort.value = $event"
-      @toggle-filter="list.toggleFilter($event)"
-      @clear-filters="list.clearFilters()"
+
+    <MarketplaceDetail
+      v-if="detailItem"
+      :item="detailItem"
+      :type-label="typeLabels[detailItem.type]"
+      :body="bodies[detailItem.id] ?? null"
+      :preview-error="!!previewErrors[detailItem.id]"
+      :installing="!!installing[detailItem.id]"
+      :installed="store.installedIds.has(detailItem.id)"
+      :installable="isInstallableType(detailItem.type)"
+      @back="backToList"
+      @install="install(detailItem)"
     />
-    <div class="specorator-vue-panel-list">
-      <MarketplaceCard
-        v-for="row in list.rows.value"
-        :key="row.id"
-        :item="row"
-        :installed="store.installedIds.has(row.id)"
-        :installing="!!installing[row.id]"
-        :expanded="expandedId === row.id"
-        :body="bodies[row.id] ?? null"
-        :preview-error="!!previewErrors[row.id]"
-        @toggle-preview="togglePreview(row)"
-        @install="install(row)"
+    <template v-else>
+      <LibraryToolbar
+        v-if="store.items.length > 0"
+        :query="list.query.value"
+        :sort="list.sort.value"
+        :tags="list.allTags.value"
+        :active-filters="list.activeFilters.value"
+        @update:query="list.query.value = $event"
+        @update:sort="list.sort.value = $event"
+        @toggle-filter="list.toggleFilter($event)"
+        @clear-filters="list.clearFilters()"
       />
-      <div
-        v-if="list.rows.value.length === 0 && !store.loading"
-        class="specorator-vue-empty-text"
-      >
-        {{ t('marketplace.empty') }}
-      </div>
-    </div>
+      <MarketplaceHome
+        v-if="showHome && !showSkeleton"
+        :sections="sections"
+        :installed-ids="store.installedIds"
+        :type-labels="typeLabels"
+        @open="openItem"
+        @see-all="selectView"
+      />
+      <MarketplaceGrid
+        v-else
+        :items="list.rows.value"
+        :installed-ids="store.installedIds"
+        :type-labels="typeLabels"
+        :loading="showSkeleton"
+        @open="openItem"
+      />
+    </template>
+
     <div class="specorator-vue-marketplace-source">
       {{ t('marketplace.source', { source: store.source }) }}
     </div>
@@ -350,32 +344,5 @@ async function install(item: MarketplaceItem): Promise<void> {
   font-size: var(--sp-font-smaller);
   color: var(--sp-text-faint);
   user-select: text;
-}
-
-/* Type facet chips: the toolbar's filter-chip styles are scoped to
-   LibraryToolbar, so mirror the same token-based look here for a consistent
-   facet row without threading a second dimension through the shared toolbar. */
-.specorator-vue-marketplace-typefilter {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--sp-space-2xs);
-  margin-bottom: var(--sp-space-s);
-}
-
-.specorator-vue-marketplace-typechip {
-  font-size: var(--sp-font-smaller);
-  padding: var(--sp-space-3xs) var(--sp-space-xs);
-  border-radius: var(--sp-radius-s);
-  border: 1px solid transparent;
-  cursor: pointer;
-}
-
-.specorator-vue-marketplace-typechip.is-on {
-  background: var(--sp-accent);
-  color: var(--sp-text-on-accent);
-}
-
-.specorator-vue-marketplace-typechip.is-hidden {
-  display: none;
 }
 </style>
