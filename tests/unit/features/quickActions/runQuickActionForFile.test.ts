@@ -37,7 +37,11 @@ function makeMockTab(lifecycleState: 'blank' | 'active') {
         getAttachedFiles: jest.fn(() => new Set<string>()),
         getAttachedFolders: jest.fn(() => new Set<string>()),
       },
-      imageContextManager: { hasImages: jest.fn(() => false) },
+      imageContextManager: {
+        hasImages: jest.fn(() => false),
+        getAttachedImages: jest.fn(() => []),
+        setImages: jest.fn(),
+      },
     },
     controllers: {
       inputController: { sendMessage: jest.fn() },
@@ -120,9 +124,10 @@ describe('runQuickActionForFile', () => {
     });
   });
 
-  it('carries the active tab user-attached context into a freshly created target tab', async () => {
-    // Active tab holds a user folder (a real draft) plus the passive current
-    // note, so it is NOT reusable and a fresh tab is created for the run.
+  it('carries the active tab user-attached context (files, folders, images) into a freshly created target tab', async () => {
+    // Active tab holds a user folder + file + image (a real draft) plus the
+    // passive current note, so it is NOT reusable and a fresh tab is created.
+    const carriedImage = { id: 'img-1', name: 'shot.png' };
     const activeTab = {
       id: 'active',
       lifecycleState: 'blank',
@@ -134,7 +139,11 @@ describe('runQuickActionForFile', () => {
           getAttachedFiles: jest.fn(() => new Set(['Daily.md', 'notes/keep.md'])),
           getAttachedFolders: jest.fn(() => new Set(['docs'])),
         },
-        imageContextManager: { hasImages: jest.fn(() => false) },
+        imageContextManager: {
+          hasImages: jest.fn(() => true),
+          getAttachedImages: jest.fn(() => [carriedImage]),
+          setImages: jest.fn(),
+        },
       },
       controllers: { inputController: { sendMessage: jest.fn() } },
     };
@@ -147,10 +156,11 @@ describe('runQuickActionForFile', () => {
     await runQuickActionForFile(plugin as any, file, MOCK_ACTION);
 
     expect(tm.createTab).toHaveBeenCalled();
-    // The user's folder + file ride along onto the NEW tab, plus the right-clicked file.
+    // The user's folder + file + image ride along onto the NEW tab, plus the right-clicked file.
     expect(newTab.ui.fileContextManager.attachFolderAsPill).toHaveBeenCalledWith('docs');
     expect(newTab.ui.fileContextManager.attachFileAsPill).toHaveBeenCalledWith('notes/keep.md');
     expect(newTab.ui.fileContextManager.attachFileAsPill).toHaveBeenCalledWith('note.md');
+    expect(newTab.ui.imageContextManager.setImages).toHaveBeenCalledWith([carriedImage]);
     // The passive current note is NOT carried — the new tab auto-attaches its own.
     expect(newTab.ui.fileContextManager.attachFileAsPill).not.toHaveBeenCalledWith('Daily.md');
 

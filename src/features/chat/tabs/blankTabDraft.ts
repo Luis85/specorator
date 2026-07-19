@@ -1,13 +1,16 @@
+import type { ImageAttachment } from '@/core/types';
+
 import type { TabData } from './types';
 
 /**
- * User-attached vault context (files + folders) carried from one tab into
+ * User-attached context (files + folders + images) carried from one tab into
  * another for a quick action / library skill. The passive current-note pill is
  * deliberately excluded — see {@link snapshotUserAttachedContext}.
  */
 export interface AttachedContextSnapshot {
   files: string[];
   folders: string[];
+  images: ImageAttachment[];
 }
 
 /**
@@ -38,11 +41,11 @@ export function blankTabHasAttachedContext(tab: TabData): boolean {
 }
 
 /**
- * Snapshot the files/folders a user has attached to a tab so a quick action /
- * library skill that resolves to a DIFFERENT (usually freshly created) tab can
- * re-apply them and still send the context the user set up. Without this the
- * target tab's welcome reset — or simply being a brand-new tab — drops every
- * pill the user had attached, so the run goes out with no context.
+ * Snapshot the files/folders/images a user has attached to a tab so a quick
+ * action / library skill that resolves to a DIFFERENT (usually freshly created)
+ * tab can re-apply them and still send the context the user set up. Without this
+ * the target tab's welcome reset — or simply being a brand-new tab — drops every
+ * pill/image the user had attached, so the run goes out with no context.
  *
  * The current-note pill is excluded (the destination auto-attaches its own on
  * activation; carrying a stale one would double up or, after a note switch,
@@ -50,23 +53,32 @@ export function blankTabHasAttachedContext(tab: TabData): boolean {
  */
 export function snapshotUserAttachedContext(tab: TabData | null | undefined): AttachedContextSnapshot {
   const fileContext = tab?.ui?.fileContextManager;
-  if (!fileContext) return { files: [], folders: [] };
-  const currentNote = fileContext.getCurrentNotePath?.() ?? null;
+  const currentNote = fileContext?.getCurrentNotePath?.() ?? null;
   return {
-    files: [...(fileContext.getAttachedFiles?.() ?? [])].filter((path) => path !== currentNote),
-    folders: [...(fileContext.getAttachedFolders?.() ?? [])],
+    files: [...(fileContext?.getAttachedFiles?.() ?? [])].filter((path) => path !== currentNote),
+    folders: [...(fileContext?.getAttachedFolders?.() ?? [])],
+    images: [...(tab?.ui?.imageContextManager?.getAttachedImages?.() ?? [])],
   };
 }
 
-/** Re-attach a snapshot's files/folders as pills on `tab`'s context manager. No-op when empty. */
+/**
+ * Re-apply a snapshot's files/folders (as pills) and images onto `tab`'s context
+ * managers. Images are appended to whatever the target already holds (a fresh
+ * target holds none). No-op for empty slices.
+ */
 export function applyUserAttachedContext(
   tab: TabData | null | undefined,
   snapshot: AttachedContextSnapshot,
 ): void {
   const fileContext = tab?.ui?.fileContextManager;
-  if (!fileContext) return;
-  for (const path of snapshot.files) fileContext.attachFileAsPill(path);
-  for (const path of snapshot.folders) fileContext.attachFolderAsPill(path);
+  if (fileContext) {
+    for (const path of snapshot.files) fileContext.attachFileAsPill(path);
+    for (const path of snapshot.folders) fileContext.attachFolderAsPill(path);
+  }
+  const imageContext = tab?.ui?.imageContextManager;
+  if (imageContext && snapshot.images.length > 0) {
+    imageContext.setImages([...(imageContext.getAttachedImages?.() ?? []), ...snapshot.images]);
+  }
 }
 
 /** Unsent composer text on a blank tab. Unlike attached context, the welcome
