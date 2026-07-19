@@ -15,9 +15,15 @@ Modeled on — and reuses the components of — `features/library`.
 | `MarketplaceInstaller.ts` | `installMarketplaceItem(item, body, deps, now)` routes to the same vault stores the app uses; `isItemInstalled(item, deps, rosterIds?)` drives the badge |
 | `MarketplaceView.ts` / `activateMarketplace.ts` / `viewType.ts` | `ItemView` host (per-leaf Vue app), leaf activation, view-type constant |
 | `marketplaceNetworkGate.ts` | One-time in-app Notice on first opt-in |
-| `vue/MarketplaceRoot.vue` | Opt-in gate, type facet, `LibraryToolbar` + `useLibraryList` reuse, load/preview/install orchestration, offline/error banners |
-| `vue/components/MarketplaceCard.vue` | Per-item card (type badge, preview, attribution, gated Install) |
-| `vue/marketplaceTypeLabels.ts` | Localized `type → label` map shared by the card badge and the type facet |
+| `vue/MarketplaceRoot.vue` | Storefront orchestrator: opt-in gate, `activeView`/`detailId` state, per-type counts, `LibraryToolbar` + `useLibraryList` (scoped to the active view), generation-guarded body-fetch cache, install, offline/error banners. Routes the body between skeleton grid → Home sections / category grid → detail |
+| `vue/components/MarketplaceNav.vue` | Primary category tab bar (Home + one tab per present type, with counts); single-select, emits `select` |
+| `vue/components/MarketplaceHome.vue` | Storefront landing: one section per present type (header + count + first `previewLimit` cards + "See all →"); emits `open`/`seeAll` |
+| `vue/components/MarketplaceGrid.vue` | Responsive card grid for a category/search scope; renders skeleton cells while `loading` with no items yet; empty state otherwise |
+| `vue/components/MarketplaceCard.vue` | Per-item **vertical** grid card (type icon + badge + name + clamped description + tags + Installed badge). The whole card emits `open` to route to the detail — no inline preview/install |
+| `vue/components/MarketplaceDetail.vue` | In-island detail/preview: Back, header (icon/name/badge/tags), gated Install, attribution (http(s)-only source link), raw `<pre>` body. Emits `back`/`install` |
+| `vue/marketplaceView.ts` | The `MarketplaceView` union (`'home' \| MarketplaceItemType`) shared by Nav + Root |
+| `vue/marketplaceIcons.ts` | Per-type default Lucide icon map (`iconForItem`); re-exports the shared cross-window-safe `mountLucide` function-ref helper (`src/shared/vue/mountLucide.ts`, shared with the Agent Board) |
+| `vue/marketplaceTypeLabels.ts` | Localized `type → label` map shared by the card/detail badge, the nav tabs, and the Home section headers |
 | `vue/useMarketplaceInstalledRefresh.ts` | Per-leaf composable: debounced `store.refreshInstalled()` on three channels — `roster:changed` (agents), folder-scoped vault create/delete/rename (loops/templates/quick-actions), and `settings-changed` (an install-folder setting change) |
 | `vue/stores/marketplaceStore.ts` | Shared Pinia store over one Pinia per plugin (all leaves share fetched catalog + installed state) |
 
@@ -134,23 +140,40 @@ Modeled on — and reuses the components of — `features/library`.
   `marketplaceNetworkEnabled` on the Settings tab now warns + loads the open leaf
   without a manual Enable click or remount. The install-refresh composable
   subscribes for the folder-change case above. Both own per-leaf teardown.
-- **Preview cache is generation-guarded.** Previews are keyed by item id and
-  cleared when the catalog reloads; an in-flight fetch that resolves after a
-  reload is discarded via `catalogGeneration` so a stale body can't repopulate a
-  reused id.
-- **The type facet is marketplace-local.** Filtering by asset type is an OUTER
-  pre-filter on the `useLibraryList` source getter (`activeTypes`), so the shared
-  search/sort/tag facet operates on the type-narrowed subset and its tag chips
-  recompute from it. It is deliberately NOT threaded through the shared
-  `LibraryToolbar`/`useLibraryList` — the four Library panels are each already
-  one-type-per-tab and would inherit a facet they can't use. Chips show only the
-  types present in the catalog (hidden entirely below two), and a stranded filter
-  is pruned when its type leaves a reloaded catalog (mirrors the tag prune).
+- **Preview/detail cache is generation-guarded.** The reviewed body is fetched
+  once when the detail opens (`openItem`), keyed by item id. A catalog reload
+  bumps `catalogGeneration`, clears the `bodies`/`previewErrors` caches, AND
+  closes the open detail (`detailId = null`) — an in-flight fetch that resolves
+  after the reload is discarded via the generation guard so a stale body can't
+  repopulate a reused id or linger in a detail for different content. Install is
+  reachable ONLY from the detail and stays disabled until that body has loaded
+  (`MarketplaceDetail`), preserving the "review exactly what installs" contract.
+- **Category navigation is a single-select storefront tab bar, not a chip facet.**
+  `activeView` (`'home' | MarketplaceItemType`) is the OUTER scope for the
+  `useLibraryList` source getter, so the shared search/sort/tag facet operates on
+  the active-view subset. `MarketplaceNav` shows Home plus one tab per type
+  **present** in the catalog (never a dead tab). The body routes: `detailId` →
+  `MarketplaceDetail`; else first-load skeleton grid; else Home (only when
+  `activeView==='home'` AND no query AND no tag filters — any of those drops into
+  a flat results grid); else the category/search grid. A query or tag on Home
+  therefore switches to results (the storefront "search from anywhere" behavior).
+  If the active category leaves a reloaded catalog (its count → 0), `activeView`
+  falls back to `'home'` so the grid can't strand on an absent type (mirrors
+  `useLibraryList`'s tag-prune). The type facet is deliberately NOT threaded
+  through the shared `LibraryToolbar` — the four Library panels are each already
+  one-type-per-tab and would inherit a dimension they can't use.
+- **Chrome-first, skeleton loading.** `MarketplaceNav` + `LibraryToolbar` render
+  as soon as the opt-in is on (they depend only on `store.items` for counts/tags,
+  which start empty and fill in reactively), so the network fetch never blanks the
+  surface; `MarketplaceGrid` shows a skeleton grid while `store.loading` with no
+  items yet. The fetch is async (`requestUrl`) and `refreshInstalled`'s per-item
+  vault checks run after load — both off the first-paint path.
 - **Skills are deferred.** `INSTALLABLE_ITEM_TYPES` excludes `skill`; adding it
   there plus an installer branch is the whole extension point.
 
 ## Tests
 
 `tests/unit/features/marketplace/` (catalog types, client, cache, installer) and
-`tests/vue/marketplace/` (root, store, card). The settings-tab rendering
-regression lives in `tests/integration/settings/marketplaceTab.test.ts`.
+`tests/vue/marketplace/` (root, store, and the storefront components: nav, home,
+grid, card, detail, plus the installed-refresh composable). The settings-tab
+rendering regression lives in `tests/integration/settings/marketplaceTab.test.ts`.
