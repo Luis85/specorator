@@ -717,7 +717,7 @@ function planProjectDocs(options, state) {
   return actions;
 }
 
-function planPackageBasics(options, version) {
+function planPackageBasics(options, version, fresh) {
   const o = options.obsidian;
   const scripts = {
     dev: 'node esbuild.config.mjs',
@@ -742,11 +742,16 @@ function planPackageBasics(options, version) {
     devDependencies: dep('obsidian', '@codemirror/view', '@codemirror/state', 'esbuild', 'typescript', ...(o.vue ? ['unplugin-vue', 'vue-tsc'] : [])),
   };
   if (o.vue) patch.dependencies = dep('vue', 'pinia', 'vue-router');
-  // Force `version` to the manifest-owned version (INITIAL_VERSION on a fresh
-  // scaffold; the existing manifest's version on re-apply after `npm version`), so
-  // an npm-init 1.0.0 default is normalized and package/manifest never desync for
-  // check:artifacts. Other keys stay merge-kept.
-  return [{ type: 'mergeJson', path: 'package.json', patch, force: ['version'] }];
+  // `version` and `main` are always engine-owned: version syncs to the manifest
+  // (so an npm-init 1.0.0 default is normalized and package/manifest never desync
+  // for check:artifacts), and an Obsidian plugin's entry is always the esbuild
+  // `main.js` the manifest points at — a stale `index.js` from `npm init` must not
+  // survive. On the INITIAL scaffold, `name`/`description` are forced too so
+  // npm-init defaults (the directory name, an empty description) don't shadow the
+  // selected plugin identity; on RE-APPLY they stay merge-kept so a user's later
+  // edits aren't clobbered.
+  const force = fresh ? ['version', 'main', 'name', 'description'] : ['version', 'main'];
+  return [{ type: 'mergeJson', path: 'package.json', patch, force }];
 }
 
 // Ordered composition for obsidian mode. plan() adds the shared planners
@@ -756,9 +761,13 @@ export function planObsidian(options, state = {}) {
   // been bumped by `npm version`; sync package.json to it rather than resetting to
   // the initial constant. A fresh scaffold (no manifest) uses INITIAL_VERSION.
   const version = state.manifestVersion ?? INITIAL_VERSION;
+  // No prior manifest ⇒ the initial scaffold: force the selected plugin identity
+  // onto package.json (below). A re-apply (manifest present) keeps name/description
+  // merge-safe so user edits survive.
+  const fresh = state.manifestVersion == null;
   return [
     ...planManifest(options.obsidian, version),
-    ...planPackageBasics(options, version),
+    ...planPackageBasics(options, version, fresh),
     ...planBuild(options),
     ...planSources(options),
     ...planTsconfig(options),

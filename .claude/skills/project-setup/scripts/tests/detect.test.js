@@ -1,7 +1,7 @@
 // .claude/skills/project-setup/scripts/tests/detect.test.js
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
-import { join } from 'node:path';
+import { join, resolve, sep } from 'node:path';
 import { test } from 'node:test';
 
 import { detect, detectDefaultBranch, detectEntry, detectGithubRemote, detectPackageManager } from '../lib/detect.mjs';
@@ -114,6 +114,24 @@ test('detectEntry rejects a parent-directory package source (no ".." traversal)'
     assert.equal(detectEntry(join(p.dir, 'plugin')), 'src/index.ts');
   } finally {
     p.cleanup();
+  }
+});
+
+test('detectEntry never returns an entry that escapes cwd, for any hostile source', () => {
+  // Containment invariant, checked on the RESOLVED entry so it holds on every
+  // platform: a POSIX `..`, a Windows `..\` backslash (a `/`-only split would miss
+  // it, and path.join escapes cwd on Windows), and an absolute path must all yield
+  // an entry beneath cwd. The old split-on-`/` guard passed the backslash form
+  // straight through; resolved-path containment closes it.
+  for (const source of ['../shared/main.ts', '..\\shared\\main.ts', '/etc/passwd']) {
+    const p = tmpProject({ 'package.json': { source }, 'src/index.ts': '' });
+    try {
+      const entry = detectEntry(p.dir);
+      const abs = resolve(p.dir, entry);
+      assert.ok(abs === p.dir || abs.startsWith(p.dir + sep), `source ${source} -> ${entry} escaped cwd`);
+    } finally {
+      p.cleanup();
+    }
   }
 });
 

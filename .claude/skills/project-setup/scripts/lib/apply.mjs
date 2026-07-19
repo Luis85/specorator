@@ -27,16 +27,23 @@ export function apply(actions, opts = {}) {
       // NEVER push to `changed`: install is an effect, not a tracked file mutation,
       // so a converged re-apply stays a no-op and the baseline hook does not re-run.
       planned.push('(install)');
-      // Install when package.json changed this run OR a prior install never
-      // completed (the marker is written only AFTER a successful install). So a
-      // re-apply after a failed/interrupted install retries it instead of
-      // converging with missing deps; a fully-converged re-apply (marker present,
-      // no change) stays a no-op.
+      // Install when package.json changed this run OR the recorded install is no
+      // longer current: the marker is absent (never/failed install — written only
+      // AFTER success), it records a DIFFERENT package manager than the one now
+      // selected (a changed `packageManager` needs the new manager's lockfile), or
+      // `node_modules` was removed. So a re-apply after a failed install, a manager
+      // switch, or a deleted `node_modules` reconverges instead of falsely reporting
+      // installed deps; a fully-converged re-apply (marker matches, deps present,
+      // no change) stays a no-op. The marker stores the manager name so the compare
+      // works.
       const marker = join(cwd, '.project-setup-backup', '.installed');
-      if (!dryRun && (changed.includes('package.json') || !existsSync(marker))) {
+      const installedWith = existsSync(marker) ? readFileSync(marker, 'utf8').trim() : null;
+      const installCurrent =
+        installedWith === action.packageManager && existsSync(join(cwd, 'node_modules'));
+      if (!dryRun && (changed.includes('package.json') || !installCurrent)) {
         exec(action.packageManager, ['install'], { cwd });
         mkdirSync(dirname(marker), { recursive: true });
-        writeFileSync(marker, '');
+        writeFileSync(marker, action.packageManager);
       }
       continue;
     }

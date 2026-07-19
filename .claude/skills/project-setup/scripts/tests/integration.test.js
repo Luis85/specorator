@@ -142,7 +142,22 @@ test('apply rejects a --backup-dir outside the project with exit 2', async () =>
     writeFileSync(cfg, JSON.stringify({ guardrails: {}, github: { integrate: false }, docs: {} }));
     const { io, chunks } = capture(p.dir);
     assert.equal(await cli(['apply', '--config', cfg, '--backup-dir', '../escape'], io), 2);
-    assert.match(chunks.err, /backup-dir must be inside/);
+    assert.match(chunks.err, /backup-dir must be a subdirectory/);
+  } finally {
+    p.cleanup();
+  }
+});
+
+test('apply rejects --backup-dir . (the project root) with exit 2', async () => {
+  // `.` resolves to cwd, where backupFile would copy each file onto itself before
+  // the overwrite — no real backup. Must be rejected, not silently accepted.
+  const p = tmpProject({ 'package.json': { name: 'x' } });
+  try {
+    const cfg = join(p.dir, 'answers.json');
+    writeFileSync(cfg, JSON.stringify({ guardrails: {}, github: { integrate: false }, docs: {} }));
+    const { io, chunks } = capture(p.dir);
+    assert.equal(await cli(['apply', '--config', cfg, '--backup-dir', '.'], io), 2);
+    assert.match(chunks.err, /backup-dir must be a subdirectory/);
   } finally {
     p.cleanup();
   }

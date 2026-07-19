@@ -718,7 +718,7 @@ test('package.json version is force-synced to the manifest-owned version (no che
   // Fresh scaffold (no manifest yet): force syncs a possible `npm init` default
   // (1.0.0) to the initial 0.1.0.
   const fresh = actionsFor().find((a) => a.type === 'mergeJson' && a.path === 'package.json' && a.patch.version);
-  assert.deepEqual(fresh.force, ['version']);
+  assert.ok(fresh.force.includes('version'));
   assert.equal(fresh.patch.version, '0.1.0');
   // Re-apply after `npm version` (manifest bumped, kept by skip-if-exists): package
   // is synced to the EXISTING manifest version, not reset to 0.1.0.
@@ -727,6 +727,18 @@ test('package.json version is force-synced to the manifest-owned version (no che
   );
   assert.equal(reapply.patch.version, '0.4.2');
   assert.equal(JSON.parse(findWrite(actionsFor({}, { manifestVersion: '0.4.2' }), 'manifest.json').content).version, '0.4.2');
+});
+
+test('the initial scaffold forces the plugin identity (name/description/main) over npm-init defaults; re-apply keeps name/description', () => {
+  // Fresh scaffold (no manifest): npm-init defaults (dir name, empty description,
+  // main: index.js) must not shadow the selected identity, so force them.
+  const fresh = findMerge(actionsFor(), 'package.json');
+  assert.deepEqual([...fresh.force].sort(), ['description', 'main', 'name', 'version']);
+  assert.equal(fresh.patch.main, 'main.js');
+  // Re-apply (manifest present): name/description are merge-kept so a user's later
+  // edits survive; main stays engine-owned (the manifest always points at main.js).
+  const reapply = findMerge(actionsFor({}, { manifestVersion: '0.4.2' }), 'package.json');
+  assert.deepEqual([...reapply.force].sort(), ['main', 'version']);
 });
 
 test('the src safety/mobile lint globs include JS and module extensions (an adopted JS/module plugin is linted)', () => {

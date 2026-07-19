@@ -1,7 +1,7 @@
 // .claude/skills/project-setup/scripts/lib/detect.mjs
 import { execFileSync } from 'node:child_process';
 import { existsSync, readFileSync } from 'node:fs';
-import { join } from 'node:path';
+import { join, resolve, sep } from 'node:path';
 
 import { MARKER } from './marker.mjs';
 
@@ -24,11 +24,17 @@ export function detectEntry(cwd) {
   // project-relative: a leading-slash "source":"/src/main.ts" would otherwise be
   // returned verbatim and become an absolute esbuild/fallow target at the FS root.
   const strip = (p) => p.replace(/^\.?\/+/, '');
-  // A package.json path field is untrusted: reject `..` segments so a crafted
-  // `source`/`main` (e.g. "../shared/main.ts") can't make the generated build
-  // bundle — or the ratchets scan — files outside the project. (Leading slashes
-  // are stripped above, so the existence check and return stay under cwd.)
-  const withinProject = (p) => !p.split('/').includes('..');
+  // A package.json path field is untrusted: confirm it RESOLVES to a location
+  // beneath cwd so a crafted `source`/`main`/`module` can't make the generated
+  // build bundle — or the ratchets scan — files outside the project. Checking the
+  // resolved absolute path (not `split('/')`) catches every escape form at once:
+  // POSIX `../shared`, a Windows `..\shared` (backslashes a `/`-split would miss),
+  // an absolute path, and a drive/UNC root. Leading slashes are stripped above so
+  // the returned path stays project-relative for the existence check.
+  const withinProject = (p) => {
+    const abs = resolve(cwd, p);
+    return abs === cwd || abs.startsWith(cwd + sep);
+  };
   // A bundler `source` field is unambiguously the source entry.
   const src = pkg?.source;
   if (typeof src === 'string') {

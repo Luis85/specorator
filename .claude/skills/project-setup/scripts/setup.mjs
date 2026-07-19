@@ -115,8 +115,12 @@ export async function cli(argv, io = {}) {
         }
       }
       const backupDir = args.flags.backupDir ? resolve(cwd, args.flags.backupDir) : undefined;
-      if (backupDir && backupDir !== cwd && !backupDir.startsWith(cwd + sep)) {
-        err('--backup-dir must be inside the project directory.\n');
+      // Must be a STRICT subdirectory: `--backup-dir .` resolves to cwd, which would
+      // make `backupFile` copy each file onto itself (no real backup) before the
+      // overwrite. `startsWith(cwd + sep)` is false for cwd itself, so this rejects
+      // the root as well as any path outside the project.
+      if (backupDir && !backupDir.startsWith(cwd + sep)) {
+        err('--backup-dir must be a subdirectory of the project directory.\n');
         return 2;
       }
       const result = apply(actions, { cwd, dryRun, backupDir, exec: io.exec });
