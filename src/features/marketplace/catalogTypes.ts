@@ -153,8 +153,10 @@ function installKeyOf(item: MarketplaceItem): string | null {
 
 /**
  * The `<folder>/<slug>/` prefix a skill's files must all sit under, derived from
- * its `SKILL.md` path (`item.path`). Null when the path isn't a `.../SKILL.md`,
- * so a malformed skill falls back to installing only its previewed body.
+ * its `SKILL.md` path (`item.path`). Null when the path isn't a `.../SKILL.md`
+ * — a skill whose marker path has the wrong shape is malformed and gets dropped
+ * from the catalog (`sanitizeSkillFiles` → null → `normalizeItemFiles` → null),
+ * never installed under a guessed folder.
  */
 export function skillFolderPrefix(skillMdPath: string): string | null {
   const suffix = '/SKILL.md';
@@ -203,15 +205,17 @@ function isSafeSkillFilePath(value: unknown, prefix: string): value is string {
 /**
  * The safe, de-duplicated file list a skill installs — every manifest `files`
  * entry under the skill folder, with the previewed `SKILL.md` (`item.path`)
- * always present. Returns `null` when ANY declared file escapes the skill folder
- * (traversal / out-of-folder / absolute / non-string): the manifest is malformed
- * or hostile, and silently dropping just that entry would install an INCOMPLETE
- * skill (missing a required file) and mark it installed — blocking a later
- * reinstall. Rejecting the whole skill (dropped in `parseManifest`) fails loud.
+ * always present. Returns `null` — dropping the whole skill in `parseManifest` —
+ * when the skill is malformed or hostile: its marker path isn't a `.../SKILL.md`
+ * (no derivable install folder), or ANY declared file escapes the skill folder
+ * (traversal / out-of-folder / absolute / non-string). Silently keeping such a
+ * skill would either install it under a guessed folder or write it INCOMPLETE
+ * (missing a required file) and mark it installed — blocking a later reinstall.
+ * Rejecting the whole skill fails loud instead.
  */
 function sanitizeSkillFiles(item: MarketplaceItem): string[] | null {
   const prefix = skillFolderPrefix(item.path);
-  if (!prefix) return [item.path];
+  if (!prefix) return null;
   const seen = new Set<string>();
   const safe: string[] = [];
   for (const candidate of Array.isArray(item.files) ? item.files : []) {

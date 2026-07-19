@@ -447,6 +447,17 @@ describe('installSkillItem', () => {
     expect(qaFiles.size).toBe(0); // rejected before any write
   });
 
+  it('refuses a SKILL.md with valid frontmatter but no instruction body (would install an empty skill)', async () => {
+    const { deps, qaFiles } = makeDeps();
+    const noBody = new Map<string, string>([
+      ['SKILL.md', '---\nname: project-setup\ndescription: Use when doing the thing.\n---\n\n   \n'],
+    ]);
+    await expect(
+      installSkillItem(skillItem, noBody, { provider: 'claude', scope: 'project' }, deps),
+    ).rejects.toThrow(/no instructions/i);
+    expect(qaFiles.size).toBe(0); // rejected before any write
+  });
+
   it('refuses a SKILL.md whose name identifies a different skill than the catalog entry', async () => {
     const { deps } = makeDeps();
     const mismatched = new Map<string, string>([['SKILL.md', validSkillMd('something-else')]]);

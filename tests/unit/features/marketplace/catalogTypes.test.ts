@@ -211,6 +211,26 @@ describe('parseManifest — skill files', () => {
     expect(firstSkill('nope')).toBeUndefined();
   });
 
+  it('drops a skill whose marker path is not a .../SKILL.md', () => {
+    // No `/SKILL.md` suffix means no derivable install folder, so the skill is
+    // malformed — dropped, not installed under a guessed folder.
+    const manifest = parseManifest({
+      schemaVersion: 1,
+      items: [
+        {
+          id: 'skills/project-setup',
+          type: 'skill',
+          name: 'project-setup',
+          description: 'd',
+          path: 'skills/project-setup/README.md',
+          files: ['skills/project-setup/README.md'],
+          tags: ['x'],
+        },
+      ],
+    });
+    expect(manifest?.items).toHaveLength(0);
+  });
+
   it('strips a files array from non-skill items', () => {
     const manifest = parseManifest({
       schemaVersion: 1,

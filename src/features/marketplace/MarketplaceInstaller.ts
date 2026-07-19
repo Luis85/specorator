@@ -387,16 +387,21 @@ function assertSafeInSkillPath(relPath: string): string {
 /**
  * Guards the reviewed SKILL.md before it becomes the install marker: it must
  * carry the universal `name` + `description` frontmatter every provider reads,
- * and its name must identify the SAME skill as the install slug — the skill
- * parallel of the note stores' `assertPayloadPath`. Without this, a
- * frontmatter-less or misidentified SKILL.md would install and be marked
- * "Installed" (blocking reinstall) even though no provider can load it.
+ * have a non-empty instruction body, and its name must identify the SAME skill
+ * as the install slug — the skill parallel of the note stores' `assertPayloadPath`.
+ * Without this, a frontmatter-less, instruction-less, or misidentified SKILL.md
+ * would install and be marked "Installed" (blocking reinstall) even though no
+ * provider can meaningfully load it.
  */
 function assertInstallableSkillBody(skillMd: string, slug: string): void {
-  const fm = parseFrontmatter(skillMd)?.frontmatter ?? {};
+  const parsed = parseFrontmatter(skillMd);
+  const fm = parsed?.frontmatter ?? {};
   const fmName = extractString(fm, 'name');
   if (!fmName || !extractString(fm, 'description')) {
     throw new MarketplaceError("This skill's SKILL.md needs a `name` and `description` and can't be installed.");
+  }
+  if (!parsed?.body.trim()) {
+    throw new MarketplaceError("This skill's SKILL.md has no instructions below its frontmatter and can't be installed.");
   }
   if (normalizeInstallSlug(fmName) !== slug) {
     throw new MarketplaceError("This skill's SKILL.md names a different skill than its catalog entry, so it can't be installed.");
