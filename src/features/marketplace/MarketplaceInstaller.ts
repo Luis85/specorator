@@ -176,14 +176,32 @@ async function installNoteVerbatim(vault: Vault, path: string, body: string): Pr
 }
 
 /**
- * Installs a loop/template body verbatim after two guards: it parses with its own
- * store (rejecting a body that store can't load), and the payload names the SAME
- * item as the catalog entry. A body whose frontmatter name slugifies to a
- * different path than the manifest's would install under the manifest's filename
- * while the Library displays the payload's name — a provenance mismatch from a
- * malformed/hostile catalog. `pathForName` is the store's own slug-path derivation,
- * so the comparison uses identical rules for both names.
+ * Guards that a payload names the SAME item as its catalog entry and returns the
+ * agreed install path. The body's own parsed name must slugify (via the store's
+ * own `pathForName`) to the SAME path as the manifest name; otherwise the note
+ * would be written under the manifest's filename while the Library displays the
+ * payload's name — a provenance mismatch from a malformed/hostile catalog.
+ * `parseInstallable` first rejects a body the store can't load at all. Shared by
+ * every note type (loop/template/quick-action) so the guard can't drift between
+ * them.
  */
+function assertPayloadPath(
+  pathForName: (name: string) => string,
+  parseName: (path: string) => string,
+  manifestName: string,
+  label: string,
+): string {
+  const path = pathForName(manifestName);
+  const parsedName = parseInstallable(() => parseName(path), label);
+  if (pathForName(parsedName) !== path) {
+    throw new MarketplaceError(
+      `This ${label} names a different item than its catalog entry, so it can't be installed.`,
+    );
+  }
+  return path;
+}
+
+/** Installs a loop/template body verbatim once `assertPayloadPath` clears it. */
 async function installParsedNote(
   vault: Vault,
   body: string,
@@ -192,13 +210,7 @@ async function installParsedNote(
   manifestName: string,
   label: string,
 ): Promise<InstallOutcome> {
-  const path = pathForName(manifestName);
-  const parsedName = parseInstallable(() => parseName(path), label);
-  if (pathForName(parsedName) !== path) {
-    throw new MarketplaceError(
-      `This ${label} names a different item than its catalog entry, so it can't be installed.`,
-    );
-  }
+  const path = assertPayloadPath(pathForName, parseName, manifestName, label);
   return installNoteVerbatim(vault, path, body);
 }
 
@@ -208,10 +220,19 @@ async function installQuickAction(
   body: string,
 ): Promise<InstallOutcome> {
   const storage = new QuickActionStorage(deps.adapter, () => deps.quickActionsFolder);
-  const path = storage.getFilePathForName(name);
-  parseInstallable(() => {
-    if (parseQuickActionContent(body, path) === null) throw new Error('empty or wrong-type quick action');
-  }, 'quick action');
+  // Same identity guard loops/templates get: a body whose frontmatter name
+  // slugifies to a different file than the manifest's is refused, not written
+  // under the manifest filename while the Library shows the payload's name.
+  const path = assertPayloadPath(
+    (candidate) => storage.getFilePathForName(candidate),
+    (candidatePath) => {
+      const parsed = parseQuickActionContent(body, candidatePath);
+      if (parsed === null) throw new Error('empty or wrong-type quick action');
+      return parsed.name;
+    },
+    name,
+    'quick action',
+  );
   if (await storage.exists(path)) return 'skipped';
   // adapter.write auto-creates the parent folder; body is already native
   // `type: quick-action` frontmatter + prompt.

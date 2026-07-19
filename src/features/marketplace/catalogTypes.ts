@@ -98,6 +98,31 @@ function isMarketplaceItem(value: unknown): value is MarketplaceItem {
 }
 
 /**
+ * Shared name→slug normalization every installable store uses to derive its
+ * target: the note stores' `slugify`, the roster's `slugifyRosterName`, and
+ * quick actions' `getFilePathForName` all lowercase, collapse non-alphanumeric
+ * runs to one hyphen, and trim edge hyphens. Kept local (not imported) so this
+ * validation module stays store-independent; it's used only for collision
+ * detection, where the per-type empty-name fallback the stores add can't change
+ * within-type equality, so replicating that fallback is unnecessary.
+ */
+function normalizeInstallSlug(name: string): string {
+  return name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
+}
+
+/**
+ * The install target an item would occupy, as `<type>:<normalized-name-slug>`,
+ * or null for non-installable types (skills never install). Two installable
+ * items sharing an install key collide on one vault file (note types) or roster
+ * id (agents); the type prefix keeps a loop and a same-named template apart,
+ * since each installs under its own folder.
+ */
+function installKeyOf(item: MarketplaceItem): string | null {
+  if (!isInstallableType(item.type)) return null;
+  return `${item.type}:${normalizeInstallSlug(item.name)}`;
+}
+
+/**
  * Validates a fetched manifest, returning it typed or `null` when the payload is
  * malformed or a schema version this build doesn't understand. Individual
  * malformed items are dropped rather than failing the whole catalog.
@@ -114,12 +139,21 @@ export function parseManifest(raw: unknown): MarketplaceManifest | null {
     tags: Array.isArray(item.tags) ? item.tags.map(String) : [],
   }));
 
-  // Dedupe by id (first wins): duplicate ids collide on the `:key` of the view's
-  // card v-for and break Vue list reconciliation.
-  const seen = new Set<string>();
+  // Dedupe by id AND by per-type install key (first wins). Id-dedup keeps the
+  // card v-for `:key` unique; install-key-dedup drops a later item that would
+  // install to the SAME vault file / roster id as an earlier one (a different id
+  // but a name that normalizes to the same slug — only reachable when a custom
+  // catalog decouples the id from the name-slug). Without it, installing either
+  // colliding item marks both cards Installed and permanently hides the other's
+  // Install action.
+  const seenIds = new Set<string>();
+  const seenInstallKeys = new Set<string>();
   const items = parsed.filter((item) => {
-    if (seen.has(item.id)) return false;
-    seen.add(item.id);
+    if (seenIds.has(item.id)) return false;
+    const installKey = installKeyOf(item);
+    if (installKey !== null && seenInstallKeys.has(installKey)) return false;
+    seenIds.add(item.id);
+    if (installKey !== null) seenInstallKeys.add(installKey);
     return true;
   });
 

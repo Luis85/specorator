@@ -86,6 +86,47 @@ describe('parseManifest', () => {
     expect(manifest?.items[0].name).toBe('X'); // first occurrence wins
     expect(manifest?.count).toBe(2);
   });
+
+  it('dedupes installable items colliding on the normalized install key, not just the id', () => {
+    // Two loops with different ids whose names normalize to the same slug
+    // (`foo-bar`) install to the same file. Id-dedup alone keeps both, so
+    // installing either would flip both cards to Installed and hide the other's
+    // Install action. A custom catalog can decouple id from name-slug, so drop
+    // the later collision by type + normalized install key.
+    const manifest = parseManifest({
+      schemaVersion: 1,
+      items: [
+        { id: 'loops/foo-bar-1', type: 'loop', name: 'Foo Bar', description: 'd', path: 'loops/a.md', tags: [] },
+        { id: 'loops/foo-bar-2', type: 'loop', name: 'Foo-Bar', description: 'd', path: 'loops/b.md', tags: [] },
+      ],
+    });
+    expect(manifest?.items.map((i) => i.id)).toEqual(['loops/foo-bar-1']);
+    expect(manifest?.count).toBe(1);
+  });
+
+  it('dedupes agents whose names collide on the roster install key', () => {
+    const manifest = parseManifest({
+      schemaVersion: 1,
+      items: [
+        { id: 'agents/code-reviewer', type: 'agent', name: 'Code Reviewer', description: 'd', path: 'agents/a.md', tags: [] },
+        { id: 'agents/code-reviewer-alt', type: 'agent', name: 'Code-Reviewer', description: 'd', path: 'agents/b.md', tags: [] },
+      ],
+    });
+    expect(manifest?.items.map((i) => i.id)).toEqual(['agents/code-reviewer']);
+  });
+
+  it('keeps same-slug names in different install types (folders differ, no collision)', () => {
+    // A loop and a template with the same name slug live in different folders, so
+    // they never collide — only same-type + same-slug does.
+    const manifest = parseManifest({
+      schemaVersion: 1,
+      items: [
+        { id: 'loops/foo', type: 'loop', name: 'Foo', description: 'd', path: 'loops/foo.md', tags: [] },
+        { id: 'templates/foo', type: 'template', name: 'Foo', description: 'd', path: 'templates/foo.md', tags: [] },
+      ],
+    });
+    expect(manifest?.items.map((i) => i.id)).toEqual(['loops/foo', 'templates/foo']);
+  });
 });
 
 describe('isInstallableType', () => {

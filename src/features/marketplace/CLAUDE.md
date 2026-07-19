@@ -9,7 +9,7 @@ Modeled on — and reuses the components of — `features/library`.
 
 | File | Role |
 |------|------|
-| `catalogTypes.ts` | `MarketplaceItem`/`MarketplaceManifest` types, `parseManifest` (validates `schemaVersion`, drops malformed items, dedupes by id), `INSTALLABLE_ITEM_TYPES` (excludes `skill`) + `isInstallableType` |
+| `catalogTypes.ts` | `MarketplaceItem`/`MarketplaceManifest` types, `parseManifest` (validates `schemaVersion`, drops malformed items, dedupes by id **and** per-type install key), `INSTALLABLE_ITEM_TYPES` (excludes `skill`) + `isInstallableType` |
 | `MarketplaceCatalogClient.ts` | HTTP fetch over Obsidian `requestUrl`; `fetchIndex()` + `fetchItemBody(path)`. Injectable `request`/`vet` seams (default: `requestUrl` + `assertSafeRemoteUrl`) |
 | `MarketplaceCache.ts` | Schema-versioned JSON cache at `.specorator/cache/marketplace-index.json`; cold-safe `read()`/`write()` via `writeAtomic` |
 | `MarketplaceInstaller.ts` | `installMarketplaceItem(item, body, deps, now)` routes to the same vault stores the app uses; `isItemInstalled(item, deps, rosterIds?)` drives the badge |
@@ -64,12 +64,19 @@ Modeled on — and reuses the components of — `features/library`.
   (`bodies`/`previewErrors`/`installing`) by id, so an `Object.prototype` name
   like `__proto__`/`toString` would otherwise read as already-present or pollute
   a record prototype — and rejects items with a **blank name** (a blank name
-  slugifies to the installer's shared per-type fallback and collides). At install,
-  loop/template payloads are additionally identity-checked: the body's frontmatter
-  name must slugify to the SAME path as the manifest name (`installParsedNote`),
-  so a body that names a different item than its catalog entry is refused rather
-  than written under the manifest's filename while the Library shows the payload's
-  name. Two SSRF residuals
+  slugifies to the installer's shared per-type fallback and collides).
+  `parseManifest` also dedupes by a **per-type install key**
+  (`<type>:<normalized-name-slug>`) on top of the id-dedup: every installer
+  derives its target filename / roster id from the normalized name, so two items
+  with different ids whose names normalize to the same slug (only reachable when
+  a custom catalog decouples the id from the name-slug) would install to the SAME
+  target — keeping the first prevents installing one from flipping both cards to
+  Installed and hiding the other's Install action. At install, **every** note
+  payload (loop/template/quick-action) is identity-checked through the shared
+  `assertPayloadPath`: the body's frontmatter name must slugify to the SAME path
+  as the manifest name, so a body that names a different item than its catalog
+  entry is refused rather than written under the manifest's filename while the
+  Library shows the payload's name. Two SSRF residuals
   remain because `requestUrl` is a high-level API with no socket hooks — DNS
   rebinding (the vet is preflight-only; `createPinnedLookup` can't attach) and
   HTTP-redirect following (3xx is auto-followed with no `Location` re-vet). Both

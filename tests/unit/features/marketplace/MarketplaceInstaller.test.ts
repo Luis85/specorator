@@ -99,6 +99,18 @@ describe('installMarketplaceItem', () => {
     expect(notes.size).toBe(0);
   });
 
+  it('rejects a quick action whose body names a different item than the manifest', async () => {
+    const { deps, qaFiles } = makeDeps();
+    // The manifest entry is "Alpha" but the body's frontmatter names "Beta":
+    // writing it at the Alpha slug would show Beta in the Library while the
+    // Marketplace marks Alpha installed — the quick-action parallel of the
+    // loop/template identity guard.
+    const item: MarketplaceItem = { id: 'quick-actions/alpha', type: 'quick-action', name: 'Alpha', description: 'd', path: 'quick-actions/alpha.md', tags: [] };
+    const body = '---\nname: "Beta"\n---\n\nDo the thing.';
+    await expect(installMarketplaceItem(item, body, deps, 1)).rejects.toThrow(/different item/i);
+    expect(qaFiles.size).toBe(0);
+  });
+
   it('writes a quick action verbatim at its slug and dedups', async () => {
     const { deps, qaFiles } = makeDeps();
     const item: MarketplaceItem = { id: 'quick-actions/foo', type: 'quick-action', name: 'Foo bar', description: 'd', path: 'quick-actions/foo.md', tags: [] };
