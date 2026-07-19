@@ -80,6 +80,36 @@ function assertNoBinarySkillFiles(item: MarketplaceItem): void {
 }
 
 /**
+ * Builds the in-skill file map: the reviewed `SKILL.md` verbatim, plus every
+ * other file in `item.files` fetched from `sourceUrl` — the source snapshotted
+ * when the install began, so a concurrent source switch can't split the skill.
+ * Keys are in-skill relative paths (`scripts/setup.mjs`), values the content. A
+ * single fetch failure rejects the whole map, so no partial skill is written;
+ * a NUL-bearing (binary) file is rejected too.
+ */
+async function fetchSkillFiles(
+  item: MarketplaceItem,
+  skillMdBody: string,
+  sourceUrl: string,
+): Promise<Map<string, string>> {
+  const files = new Map<string, string>([['SKILL.md', skillMdBody]]);
+  const prefix = skillFolderPrefix(item.path);
+  const others = (item.files ?? []).filter((repoPath) => repoPath !== item.path);
+  if (prefix !== null && others.length > 0) {
+    const client = new MarketplaceCatalogClient(sourceUrl);
+    const contents = await fetchWithConcurrency(others, SKILL_FETCH_CONCURRENCY, (repoPath) =>
+      client.fetchItemBody(repoPath),
+    );
+    others.forEach((repoPath, index) => {
+      const rel = repoPath.startsWith(prefix) ? repoPath.slice(prefix.length) : null;
+      if (rel) files.set(rel, contents[index]);
+    });
+  }
+  assertTextOnlySkillContents(files);
+  return files;
+}
+
+/**
  * Marketplace store: fetches the catalog manifest via the client (falling back
  * to the on-disk cache when offline), tracks which items are already installed,
  * and routes installs through the shared installer. I/O lives in the client /
@@ -335,6 +365,10 @@ export const useMarketplaceStore = defineStore('marketplace', () => {
     target: SkillInstallTarget,
   ): Promise<InstallOutcome> {
     assertNetworkEnabled();
+    // Snapshot the source at install start: a concurrent leaf refresh/source-switch
+    // must not split one skill across two catalogs (marker from the reviewed source,
+    // scripts from the new one). All this install's fetches use `installSource`.
+    const installSource = source.value;
     // Preflight the target marker before downloading anything: if the skill is
     // already installed here, skip without fetching the folder — avoids a needless
     // full-folder download and a misleading "failed" notice if that download errors
@@ -343,7 +377,7 @@ export const useMarketplaceStore = defineStore('marketplace', () => {
     // Text-only: reject a declared binary by extension before fetching (fast path;
     // fetchSkillFiles also verifies by content). No wasted download, no corruption.
     assertNoBinarySkillFiles(item);
-    const files = await fetchSkillFiles(item, skillMdBody);
+    const files = await fetchSkillFiles(item, skillMdBody, installSource);
     const outcome = await installSkillItem(item, files, target, installDeps());
     if (outcome === 'installed') {
       // Skill dot-folders bypass the vault watcher, so mirror skillLibraryStore's
@@ -357,33 +391,6 @@ export const useMarketplaceStore = defineStore('marketplace', () => {
       await refreshSkillCatalogBestEffort(p, target.provider);
     }
     return outcome;
-  }
-
-  /**
-   * Builds the in-skill file map: the reviewed `SKILL.md` verbatim, plus every
-   * other file in `item.files` fetched from the SAME source the catalog loaded
-   * from. Keys are in-skill relative paths (`scripts/setup.mjs`), values the
-   * content. A single fetch failure rejects the whole map, so no partial skill
-   * is ever written.
-   */
-  async function fetchSkillFiles(item: MarketplaceItem, skillMdBody: string): Promise<Map<string, string>> {
-    const files = new Map<string, string>([['SKILL.md', skillMdBody]]);
-    const prefix = skillFolderPrefix(item.path);
-    const others = (item.files ?? []).filter((repoPath) => repoPath !== item.path);
-    if (prefix !== null && others.length > 0) {
-      const client = clientFor(source.value);
-      const contents = await fetchWithConcurrency(others, SKILL_FETCH_CONCURRENCY, (repoPath) =>
-        client.fetchItemBody(repoPath),
-      );
-      others.forEach((repoPath, index) => {
-        const rel = repoPath.startsWith(prefix) ? repoPath.slice(prefix.length) : null;
-        if (rel) files.set(rel, contents[index]);
-      });
-    }
-    // Text-only, verified by CONTENT (catches binaries the extension pre-check
-    // missed: unlisted/extensionless formats decoded as text and NUL-bearing).
-    assertTextOnlySkillContents(files);
-    return files;
   }
 
   /** Whether the skill already exists at a specific target — drives the detail's per-target button. */

@@ -598,4 +598,19 @@ describe('marketplaceStore skill install', () => {
     expect(fetchBodySpy).not.toHaveBeenCalled(); // no needless folder download
     expect(installSkillSpy).not.toHaveBeenCalled(); // installer not reached
   });
+
+  it('fetches supporting files from the source snapshotted at install start, not a concurrent switch', async () => {
+    const store = useMarketplaceStore();
+    const p = fakePlugin(true);
+    p.settings.marketplaceSourceUrl = 'https://a.example/';
+    store.init(p);
+    await store.load(); // commits source A
+    clientCtor.mockClear();
+    // A source switch happens mid-install; the in-flight install must keep using
+    // the source it snapshotted at start (A), never the newly-set B.
+    p.settings.marketplaceSourceUrl = 'https://b.example/';
+    await store.install(skillItem, 'SKILL BODY', { provider: 'claude', scope: 'project' });
+    expect(clientCtor).toHaveBeenCalledWith('https://a.example/');
+    expect(clientCtor).not.toHaveBeenCalledWith('https://b.example/');
+  });
 });
