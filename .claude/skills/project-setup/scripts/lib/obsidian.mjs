@@ -597,7 +597,10 @@ function planPackageBasics(options, version) {
     version,
     description: o.description,
     main: 'main.js',
-    engines: { node: '>=22' },
+    // jsdom (always installed for the vitest DOM env) requires ^22.13.0 on the 22
+    // line, and vite (Vue lane) requires >=22.12.0 — so >=22 would let a package
+    // manager pick a Node the pinned toolchain rejects at install/test time.
+    engines: { node: '>=22.13.0' },
     scripts,
     // @codemirror/view + state: types for the editor-highlight sample, and they
     // are obsidian's own declared peers (needed at the root for strict-peer PMs).

@@ -211,6 +211,16 @@ test('eslint-plugin-obsidianmd\'s exact @eslint/json peer is provided at the roo
   assert.equal(mergedPackagePatch(actionsFor()).devDependencies['@eslint/json'], '0.14.0');
 });
 
+test('the generated Node engine floor matches the pinned toolchain (jsdom/vite)', () => {
+  // jsdom (always installed for the vitest DOM env) needs ^22.13.0 on the 22 line
+  // and vite (Vue lane) needs >=22.12.0; a >=22 floor would let a package manager
+  // pick a Node the pinned toolchain rejects at install/test time.
+  const pkg = actionsFor().find(
+    (a) => a.type === 'mergeJson' && a.path === 'package.json' && a.patch.engines,
+  );
+  assert.equal(pkg.patch.engines.node, '>=22.13.0');
+});
+
 test('manifest-beta.json ships mirroring manifest.json (BRAT-ready), and the publishing guide lands', () => {
   const actions = actionsFor();
   assert.equal(findWrite(actions, 'manifest-beta.json').content, findWrite(actions, 'manifest.json').content);
