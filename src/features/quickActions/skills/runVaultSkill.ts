@@ -3,13 +3,18 @@ import { Notice, type TAbstractFile, TFile, TFolder } from 'obsidian';
 import { ProviderRegistry } from '@/core/providers/ProviderRegistry';
 import type { ProviderId } from '@/core/providers/types';
 import { asSettingsBag } from '@/core/types/settings';
-import { blankTabHasPendingDraft } from '@/features/chat/tabs/blankTabDraft';
+import {
+  applyUserAttachedContext,
+  blankTabHasPendingDraft,
+  snapshotUserAttachedContext,
+} from '@/features/chat/tabs/blankTabDraft';
 import { getTabProviderId } from '@/features/chat/tabs/providerResolution';
 import type { TabManager } from '@/features/chat/tabs/TabManager';
 import type { TabData } from '@/features/chat/tabs/types';
 import { t } from '@/i18n/i18n';
 import type SpecoratorPlugin from '@/main';
 
+import { ensureChatTabManager } from '../ensureChatTabManager';
 import type { SkillTabEntry } from './types';
 
 /**
@@ -65,15 +70,13 @@ export async function runVaultSkill(
     return;
   }
 
-  let view = plugin.getView();
-  if (!view) {
-    await plugin.activateView();
-    view = plugin.getView();
-  }
-  if (!view) return;
-
-  const tabManager = view.getTabManager();
+  const tabManager = await ensureChatTabManager(plugin);
   if (!tabManager) return;
+
+  // Snapshot the active tab's attached files/folders BEFORE resolving/switching
+  // so a skill that lands in a fresh tab still sends the context the user set up
+  // (switchToTab's welcome reset wipes pills). Mirrors runQuickActionForFile.
+  const carriedContext = snapshotUserAttachedContext(tabManager.getActiveTab());
 
   const target = await resolveTargetTab(tabManager, plugin, entry.providerId);
   if (!target) {
@@ -82,6 +85,8 @@ export async function runVaultSkill(
   }
 
   await tabManager.switchToTab(target.id);
+
+  applyUserAttachedContext(target, carriedContext);
 
   if (file instanceof TFile) {
     target.ui.fileContextManager?.attachFileAsPill(file.path);

@@ -129,6 +129,21 @@ describe('runVaultSkill', () => {
     expect(activeTab.controllers.inputController.sendMessage).toHaveBeenCalled();
   });
 
+  it('carries the active tab attached files into a freshly created target tab', async () => {
+    // The active tab holds a user file, so it is not reusable and a fresh tab is
+    // created — the carry must still land the user's context on that new tab.
+    const activeTab = makeTab({ providerId: 'claude', lifecycleState: 'blank', attachedFiles: ['notes/keep.md'] });
+    const newTab = makeTab({ id: 'tab-2', providerId: 'claude', lifecycleState: 'blank' });
+    const { plugin, tabManager } = makePlugin({ activeTab, newTab });
+    const file = Object.assign(Object.create(TFile.prototype), { path: 'clicked.md' });
+
+    await runVaultSkill(plugin as any, makeEntry({ providerId: 'claude' }), file as any);
+
+    expect(tabManager.createTab).toHaveBeenCalled();
+    expect(newTab.ui.fileContextManager.attachFileAsPill).toHaveBeenCalledWith('notes/keep.md');
+    expect(newTab.ui.fileContextManager.attachFileAsPill).toHaveBeenCalledWith('clicked.md');
+  });
+
   it('refuses a user-scope skill when the provider cannot resolve user scope', async () => {
     (ProviderRegistry.resolvesUserScopeSkills as jest.Mock).mockReturnValue(false);
     const activeTab = makeTab({ providerId: 'claude', lifecycleState: 'blank' });

@@ -2,6 +2,7 @@ import { Notice } from 'obsidian';
 
 import type { ProviderId } from '@/core/providers/types';
 import { resolveOverrideTargetTab } from '@/features/chat/tabs/resolveOverrideTargetTab';
+import { ensureChatTabManager } from '@/features/quickActions/ensureChatTabManager';
 import { launchWithModelPicker } from '@/features/quickActions/launchWithModelPicker';
 import type { LoopDefinition } from '@/features/tasks/loops/loopTypes';
 import { renderLoopPromptText } from '@/features/tasks/loops/renderLoopPromptText';
@@ -45,14 +46,7 @@ async function seedLoopDraft(
   providerId: ProviderId,
   model: string,
 ): Promise<void> {
-  let view = plugin.getView();
-  if (!view) {
-    await plugin.activateView();
-    view = plugin.getView();
-  }
-  if (!view) return;
-
-  const tabManager = view.getTabManager();
+  const tabManager = await ensureChatTabManager(plugin);
   if (!tabManager) return;
 
   // allowDraftBlank: loop seeding is additive — `seedComposerDraft({ keepExisting })`

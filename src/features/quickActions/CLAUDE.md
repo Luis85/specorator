@@ -28,9 +28,11 @@ The chat user-message toolbar exposes a "Capture as quick action" button via the
 2. Else scan the other open tabs for a draft-free blank on the target provider → reuse it (so a bound or draft-bearing active tab doesn't hit the tab cap when a safe background blank exists).
 3. Else → create a new tab with `defaultProviderId: entry.providerId` (null at the cap).
 
-A "blank" tab counts as reusable only when draft-free — no unsent composer text or attached file/folder/image pills — so a library skill send never consumes a user's pending draft. The `resolveOverrideTargetTab` flow (quick actions / loop prompts) shares the same `blankTabHasPendingDraft` guard.
+A "blank" tab counts as reusable only when draft-free — no unsent composer text or attached file/folder/image pills — so a library skill send never consumes a user's pending draft. The `resolveOverrideTargetTab` flow (quick actions / loop prompts) shares the same `blankTabHasPendingDraft` guard. That guard now excludes the passive current-note pill (`blankTabHasAttachedContext` filters out `getCurrentNotePath()`): `autoAttachActiveFile` re-attaches it on the same welcome reset, so it survives a switch and must not count as a draft — otherwise every blank tab opened over an active editor note looked draft-bearing and each run spawned a fresh tab.
 
 **Pill attach order**: `switchToTab` must precede `attachFileAsPill`/`attachFolderAsPill`. A blank tab's `initializeWelcome` wipes any pill attached before the switch.
+
+**Attached-context carry**: because a quick action / library skill usually lands in a FRESH tab (the active tab holds a draft, or the picker's provider/model forces a new one), and a fresh tab does not inherit the files/folders the user attached, both `runQuickActionForFile` and `runVaultSkill` snapshot the active tab's user-attached files/folders via `snapshotUserAttachedContext(getActiveTab())` BEFORE resolving the target, then re-apply them with `applyUserAttachedContext(targetTab, …)` AFTER the switch (so the welcome reset can't wipe them) and BEFORE the right-clicked pill + dispatch. Without this the run went out with the prompt but none of the context the user set up. The snapshot excludes the current note (the destination auto-attaches its own).
 
 ## Skills Tab Caching
 

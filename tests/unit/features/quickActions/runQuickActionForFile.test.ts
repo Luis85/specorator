@@ -120,6 +120,46 @@ describe('runQuickActionForFile', () => {
     });
   });
 
+  it('carries the active tab user-attached context into a freshly created target tab', async () => {
+    // Active tab holds a user folder (a real draft) plus the passive current
+    // note, so it is NOT reusable and a fresh tab is created for the run.
+    const activeTab = {
+      id: 'active',
+      lifecycleState: 'blank',
+      ui: {
+        fileContextManager: {
+          attachFileAsPill: jest.fn(),
+          attachFolderAsPill: jest.fn(),
+          getCurrentNotePath: jest.fn(() => 'Daily.md'),
+          getAttachedFiles: jest.fn(() => new Set(['Daily.md', 'notes/keep.md'])),
+          getAttachedFolders: jest.fn(() => new Set(['docs'])),
+        },
+        imageContextManager: { hasImages: jest.fn(() => false) },
+      },
+      controllers: { inputController: { sendMessage: jest.fn() } },
+    };
+    const newTab = makeMockTab('blank');
+    newTab.id = 'tab-2';
+    const tm = makeMockTabManager({ activeTab: activeTab as any, canCreate: true, newTab });
+    const plugin = makeMockPlugin(tm);
+    const file = Object.assign(Object.create(TFile.prototype), { path: 'note.md' });
+
+    await runQuickActionForFile(plugin as any, file, MOCK_ACTION);
+
+    expect(tm.createTab).toHaveBeenCalled();
+    // The user's folder + file ride along onto the NEW tab, plus the right-clicked file.
+    expect(newTab.ui.fileContextManager.attachFolderAsPill).toHaveBeenCalledWith('docs');
+    expect(newTab.ui.fileContextManager.attachFileAsPill).toHaveBeenCalledWith('notes/keep.md');
+    expect(newTab.ui.fileContextManager.attachFileAsPill).toHaveBeenCalledWith('note.md');
+    // The passive current note is NOT carried — the new tab auto-attaches its own.
+    expect(newTab.ui.fileContextManager.attachFileAsPill).not.toHaveBeenCalledWith('Daily.md');
+
+    // Carry happens AFTER the switch so the welcome reset can't wipe it.
+    const switchOrder = (tm.switchToTab as jest.Mock).mock.invocationCallOrder[0];
+    const carryOrder = (newTab.ui.fileContextManager.attachFolderAsPill as jest.Mock).mock.invocationCallOrder[0];
+    expect(switchOrder).toBeLessThan(carryOrder);
+  });
+
   it('creates a new tab when the active tab is not blank', async () => {
     const active = makeMockTab('active');
     const newTab = makeMockTab('blank');
@@ -205,7 +245,7 @@ describe('runQuickActionForFile usage emission', () => {
     await runQuickActionForFile(plugin as any, file, MOCK_ACTION);
     expect(recorded).toEqual([]);
     expect(scoped.warn).toHaveBeenCalledWith(
-      expect.stringContaining('view unavailable'),
+      expect.stringContaining('unavailable'),
     );
   });
 });
