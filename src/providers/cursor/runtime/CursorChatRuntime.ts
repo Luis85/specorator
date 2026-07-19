@@ -1484,24 +1484,22 @@ function raceApprovalAgainstCancel<T>(
   if (signal.aborted) {
     return Promise.resolve(APPROVAL_CANCELLED);
   }
-  // Race the approval against cancel via Promise.race so `promise`'s rejection
-  // reason forwards unchanged (no manual `reject` of an untyped value); the
-  // cancel branch only resolves. The listener is dropped when either side wins.
+  // Promise.race forwards `promise`'s rejection unchanged; `.catch` consumes the
+  // cleanup chain's duplicate so it can't surface as an unhandled rejection.
   const cancellation = new Promise<typeof APPROVAL_CANCELLED>((resolve) => {
     const onAbort = () => resolve(APPROVAL_CANCELLED);
     signal.addEventListener('abort', onAbort, { once: true });
-    void promise.finally(() => signal.removeEventListener('abort', onAbort));
+    void promise.finally(() => signal.removeEventListener('abort', onAbort)).catch(() => {});
   });
   return Promise.race([promise, cancellation]);
 }
 
 function withTimeout<T>(promise: Promise<T>, ms: number, timeoutError: Error): Promise<T> {
-  // Race the work against a timeout. `timeoutError` is a real Error, and
-  // `promise`'s own rejection forwards unchanged through Promise.race — neither
-  // path rejects with a non-Error. The timer is cleared when the work settles.
+  // Promise.race: the timeout rejects with a real Error and `promise`'s own
+  // rejection forwards unchanged; `.catch` swallows the cleanup chain's duplicate.
   const timeout = new Promise<never>((_resolve, reject) => {
     const timer = window.setTimeout(() => reject(timeoutError), ms);
-    void promise.finally(() => window.clearTimeout(timer));
+    void promise.finally(() => window.clearTimeout(timer)).catch(() => {});
   });
   return Promise.race([promise, timeout]);
 }
