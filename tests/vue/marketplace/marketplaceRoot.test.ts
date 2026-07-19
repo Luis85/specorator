@@ -189,6 +189,40 @@ describe('MarketplaceRoot list', () => {
   });
 });
 
+describe('MarketplaceRoot chrome-first + Home sort', () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  it('keeps the nav + search/sort toolbar mounted during the initial skeleton load', async () => {
+    setup(makeStore({ loading: true, items: [] }), {
+      marketplaceNetworkEnabled: true,
+      marketplaceNetworkWarningShown: true,
+    });
+    // Chrome-first: the category nav and the toolbar render immediately, before
+    // the catalog lands — not only once store.items is populated.
+    expect(screen.getByRole('tablist', { name: 'Marketplace categories' })).toBeTruthy();
+    expect(await screen.findByRole('searchbox')).toBeTruthy();
+    // The skeleton grid stands in for the not-yet-loaded catalog.
+    expect(document.querySelectorAll('.specorator-vue-marketplace-skeleton').length).toBeGreaterThan(0);
+  });
+
+  it('applies the toolbar sort to the Home sections (sorted rows, not catalog order)', async () => {
+    const zeta: MarketplaceItem = {
+      id: 'z', type: 'loop', name: 'Zeta Loop', description: 'd', path: 'loops/z.md', tags: [],
+    };
+    const aardvark: MarketplaceItem = {
+      id: 'al', type: 'loop', name: 'Aardvark Loop', description: 'd', path: 'loops/al.md', tags: [],
+    };
+    // Catalog order is [Zeta, Aardvark]; the default 'name' sort must reorder the
+    // Home section to [Aardvark, Zeta] — proving sections derive from sorted rows.
+    setup(makeStore({ items: [zeta, aardvark] }), { marketplaceNetworkEnabled: true });
+    await screen.findByText('Zeta Loop');
+    const order = [...document.querySelectorAll('.specorator-vue-marketplace-card')].map((card) =>
+      card.getAttribute('aria-label'),
+    );
+    expect(order).toEqual(['Aardvark Loop', 'Zeta Loop']);
+  });
+});
+
 describe('MarketplaceRoot category nav', () => {
   beforeEach(() => vi.clearAllMocks());
 

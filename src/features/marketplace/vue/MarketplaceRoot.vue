@@ -71,11 +71,14 @@ const list = useLibraryList<MarketplaceItem>(
   marketplaceAccessors,
 );
 
-// Home landing sections: every present type, canonical order.
+// Home landing sections: every present type, canonical order. Grouped from the
+// SORTED `list.rows` (not raw store.items) so the toolbar sort applies to the
+// Home sections too — on Home the query/tag facets are empty (showHome requires
+// it), so rows here are the full catalog in the chosen sort order.
 const sections = computed(() =>
   MARKETPLACE_ITEM_TYPES.map((type) => ({
     type,
-    items: store.items.filter((item) => item.type === type),
+    items: list.rows.value.filter((item) => item.type === type),
   })).filter((section) => section.items.length > 0),
 );
 
@@ -280,7 +283,7 @@ async function install(item: MarketplaceItem): Promise<void> {
     />
     <template v-else>
       <LibraryToolbar
-        v-if="store.items.length > 0"
+        v-if="store.items.length > 0 || store.loading"
         :query="list.query.value"
         :sort="list.sort.value"
         :tags="list.allTags.value"
