@@ -385,6 +385,25 @@ function assertSafeInSkillPath(relPath: string): string {
 }
 
 /**
+ * Guards the reviewed SKILL.md before it becomes the install marker: it must
+ * carry the universal `name` + `description` frontmatter every provider reads,
+ * and its name must identify the SAME skill as the install slug — the skill
+ * parallel of the note stores' `assertPayloadPath`. Without this, a
+ * frontmatter-less or misidentified SKILL.md would install and be marked
+ * "Installed" (blocking reinstall) even though no provider can load it.
+ */
+function assertInstallableSkillBody(skillMd: string, slug: string): void {
+  const fm = parseFrontmatter(skillMd)?.frontmatter ?? {};
+  const fmName = extractString(fm, 'name');
+  if (!fmName || !extractString(fm, 'description')) {
+    throw new MarketplaceError("This skill's SKILL.md needs a `name` and `description` and can't be installed.");
+  }
+  if (normalizeInstallSlug(fmName) !== slug) {
+    throw new MarketplaceError("This skill's SKILL.md names a different skill than its catalog entry, so it can't be installed.");
+  }
+}
+
+/**
  * Installs a multi-file skill under the chosen provider root + scope. `files`
  * maps each in-skill relative path (`SKILL.md`, `scripts/setup.mjs`, …) to its
  * already-fetched content — the store fetches them so this stays pure vault/home
@@ -403,6 +422,7 @@ export async function installSkillItem(
     throw new MarketplaceError("This skill is missing its SKILL.md and can't be installed.");
   }
   const name = assertSkillFolderName(item);
+  assertInstallableSkillBody(skillMd, name);
   const adapter = skillAdapterFor(target, deps);
   const skillDir = `${skillRootFor(target)}/${name}`;
   // A present SKILL.md means the skill is already installed here (SKILL.md is

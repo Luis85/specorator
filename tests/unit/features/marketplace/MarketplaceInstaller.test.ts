@@ -334,10 +334,14 @@ const skillItem: MarketplaceItem = {
   tags: [],
 };
 
+/** A minimal valid SKILL.md (name + description frontmatter) for a given skill name. */
+const validSkillMd = (name: string): string =>
+  `---\nname: ${name}\ndescription: Use when doing the thing.\n---\n\nDo the thing.`;
+
 /** The in-skill file map the store hands the installer (keys are folder-relative). */
 function skillFiles(): Map<string, string> {
   return new Map<string, string>([
-    ['SKILL.md', 'SKILL body'],
+    ['SKILL.md', validSkillMd('project-setup')],
     ['references/a.md', 'ref a'],
     ['scripts/run.mjs', 'run'],
   ]);
@@ -348,7 +352,7 @@ describe('installSkillItem', () => {
     const { deps, qaFiles, homeFiles } = makeDeps();
     const outcome = await installSkillItem(skillItem, skillFiles(), { provider: 'claude', scope: 'project' }, deps);
     expect(outcome).toBe('installed');
-    expect(qaFiles.get('.claude/skills/project-setup/SKILL.md')).toBe('SKILL body');
+    expect(qaFiles.get('.claude/skills/project-setup/SKILL.md')).toBe(validSkillMd('project-setup'));
     expect(qaFiles.get('.claude/skills/project-setup/references/a.md')).toBe('ref a');
     expect(qaFiles.get('.claude/skills/project-setup/scripts/run.mjs')).toBe('run');
     expect(homeFiles.size).toBe(0); // project scope never touches home
@@ -357,7 +361,7 @@ describe('installSkillItem', () => {
   it('writes to the home adapter at user scope, under the codex root', async () => {
     const { deps, qaFiles, homeFiles } = makeDeps();
     await installSkillItem(skillItem, skillFiles(), { provider: 'codex', scope: 'user' }, deps);
-    expect(homeFiles.get('.codex/skills/project-setup/SKILL.md')).toBe('SKILL body');
+    expect(homeFiles.get('.codex/skills/project-setup/SKILL.md')).toBe(validSkillMd('project-setup'));
     expect(homeFiles.get('.codex/skills/project-setup/scripts/run.mjs')).toBe('run');
     expect(qaFiles.size).toBe(0); // user scope writes to home only
   });
@@ -377,10 +381,10 @@ describe('installSkillItem', () => {
     const target: SkillInstallTarget = { provider: 'claude', scope: 'project' };
     const alpha: MarketplaceItem = { id: 'skills/alpha', type: 'skill', name: 'alpha', description: 'd', path: 'skills/shared/SKILL.md', files: [], tags: [] };
     const beta: MarketplaceItem = { id: 'skills/beta', type: 'skill', name: 'beta', description: 'd', path: 'skills/shared/SKILL.md', files: [], tags: [] };
-    await installSkillItem(alpha, new Map([['SKILL.md', 'A']]), target, deps);
-    await installSkillItem(beta, new Map([['SKILL.md', 'B']]), target, deps);
-    expect(qaFiles.get('.claude/skills/alpha/SKILL.md')).toBe('A');
-    expect(qaFiles.get('.claude/skills/beta/SKILL.md')).toBe('B');
+    await installSkillItem(alpha, new Map([['SKILL.md', validSkillMd('alpha')]]), target, deps);
+    await installSkillItem(beta, new Map([['SKILL.md', validSkillMd('beta')]]), target, deps);
+    expect(qaFiles.get('.claude/skills/alpha/SKILL.md')).toBe(validSkillMd('alpha'));
+    expect(qaFiles.get('.claude/skills/beta/SKILL.md')).toBe(validSkillMd('beta'));
     // ...and their installed-state is independent.
     expect(await isSkillInstalledAt(alpha, target, deps)).toBe(true);
     expect(await isSkillInstalledAt(beta, target, deps)).toBe(true);
@@ -398,8 +402,8 @@ describe('installSkillItem', () => {
     // parseManifest dedups on — one segment, no nesting, resolvable as a command.
     const { deps, qaFiles } = makeDeps();
     const messy: MarketplaceItem = { ...skillItem, name: 'Foo/Bar Baz' };
-    await installSkillItem(messy, new Map([['SKILL.md', 'x']]), { provider: 'claude', scope: 'project' }, deps);
-    expect(qaFiles.get('.claude/skills/foo-bar-baz/SKILL.md')).toBe('x');
+    await installSkillItem(messy, new Map([['SKILL.md', validSkillMd('foo-bar-baz')]]), { provider: 'claude', scope: 'project' }, deps);
+    expect(qaFiles.get('.claude/skills/foo-bar-baz/SKILL.md')).toBe(validSkillMd('foo-bar-baz'));
     expect(qaFiles.has('.claude/skills/Foo/Bar Baz/SKILL.md')).toBe(false);
   });
 
@@ -431,10 +435,30 @@ describe('installSkillItem', () => {
     ).rejects.toThrow(/SKILL\.md/);
   });
 
+  it('refuses a SKILL.md with no name/description frontmatter (would install an unloadable skill)', async () => {
+    const { deps, qaFiles } = makeDeps();
+    const noFrontmatter = new Map<string, string>([
+      ['SKILL.md', 'just a body, no frontmatter'],
+      ['scripts/run.mjs', 'run'],
+    ]);
+    await expect(
+      installSkillItem(skillItem, noFrontmatter, { provider: 'claude', scope: 'project' }, deps),
+    ).rejects.toThrow(/name.*description/i);
+    expect(qaFiles.size).toBe(0); // rejected before any write
+  });
+
+  it('refuses a SKILL.md whose name identifies a different skill than the catalog entry', async () => {
+    const { deps } = makeDeps();
+    const mismatched = new Map<string, string>([['SKILL.md', validSkillMd('something-else')]]);
+    await expect(
+      installSkillItem(skillItem, mismatched, { provider: 'claude', scope: 'project' }, deps),
+    ).rejects.toThrow(/different skill/i);
+  });
+
   it('refuses an unsafe in-skill path (traversal) and writes nothing', async () => {
     const { deps, qaFiles } = makeDeps();
     const evil = new Map<string, string>([
-      ['SKILL.md', 'x'],
+      ['SKILL.md', validSkillMd('project-setup')],
       ['../evil.md', 'pwn'],
     ]);
     await expect(
