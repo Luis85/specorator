@@ -1,6 +1,7 @@
 import {
   DEFAULT_SKILL_TARGET,
   hasUnsafePathSegment,
+  isReservedDeviceName,
   isSkillInstallScope,
   isSkillProviderTarget,
   SKILL_INSTALL_SCOPES,
@@ -54,11 +55,39 @@ describe('skillInstallTargets', () => {
       expect(hasUnsafePathSegment('scripts/')).toBe(true);
     });
 
+    it('flags segments no filesystem could portably create (Windows rules)', () => {
+      // Reserved device name in a segment base (with or without extension),
+      // illegal characters, and trailing dot/space — all refused by Windows, so a
+      // skill carrying one would install on macOS/Linux but fail on Windows.
+      expect(hasUnsafePathSegment('scripts/con.txt')).toBe(true); // reserved base
+      expect(hasUnsafePathSegment('nul')).toBe(true);
+      expect(hasUnsafePathSegment('scripts/lpt1.md')).toBe(true);
+      expect(hasUnsafePathSegment('scripts/setup?.ps1')).toBe(true); // illegal char
+      expect(hasUnsafePathSegment('a<b.md')).toBe(true);
+      expect(hasUnsafePathSegment('scripts/trailing.')).toBe(true); // trailing dot
+      expect(hasUnsafePathSegment('scripts/trailing ')).toBe(true); // trailing space
+    });
+
     it('allows ordinary in-folder relative paths', () => {
       expect(hasUnsafePathSegment('scripts/setup.mjs')).toBe(false);
       expect(hasUnsafePathSegment('references/a.md')).toBe(false);
       expect(hasUnsafePathSegment('SKILL.md')).toBe(false);
       expect(hasUnsafePathSegment('project-setup')).toBe(false);
+      expect(hasUnsafePathSegment('.gitignore')).toBe(false); // empty base before dot
+      expect(hasUnsafePathSegment('console.md')).toBe(false); // not a reserved base
+      expect(hasUnsafePathSegment('scripts/my-file name.md')).toBe(false); // interior space/hyphen ok
+    });
+  });
+
+  describe('isReservedDeviceName', () => {
+    it('matches Windows device names case-insensitively, not near-misses', () => {
+      expect(isReservedDeviceName('con')).toBe(true);
+      expect(isReservedDeviceName('NUL')).toBe(true);
+      expect(isReservedDeviceName('Com1')).toBe(true);
+      expect(isReservedDeviceName('lpt9')).toBe(true);
+      expect(isReservedDeviceName('com0')).toBe(false);
+      expect(isReservedDeviceName('console')).toBe(false);
+      expect(isReservedDeviceName('project-setup')).toBe(false);
     });
   });
 });

@@ -189,6 +189,8 @@ describe('parseManifest — skill files', () => {
       'skills/project-setup//evil.md', // empty segment → suffix '/evil.md'
       'skills/project-setup/C:/evil.md', // drive after prefix → suffix 'C:/evil.md'
       'skills/project-setup/scripts//run.mjs', // empty interior segment in the suffix
+      'skills/project-setup/scripts/con.txt', // Windows reserved device name
+      'skills/project-setup/scripts/setup?.ps1', // Windows illegal character
     ]) {
       expect(firstSkill(['skills/project-setup/SKILL.md', bad])).toBeUndefined();
     }

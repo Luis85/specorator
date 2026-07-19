@@ -56,16 +56,32 @@ export function skillRootFor(target: SkillInstallTarget): string {
 }
 
 /**
- * True when a relative path contains a segment that is unsafe to write under its
- * intended folder: `..` traversal, an absolute or Windows drive/UNC prefix, a
- * backslash separator, or an EMPTY segment (`a//b`, a trailing `/`). An empty
- * segment matters because its normalized on-disk form differs from its raw form
- * — `scripts//run.mjs` collapses to `scripts/run.mjs` — which is exactly how two
- * raw-distinct catalog entries can silently write to one destination. The catalog
- * is untrusted, so both the manifest sanitizer (`catalogTypes`) and the installer
- * reject skill files that match — shared here so the two guards can't drift.
+ * Windows reserved device names (case-insensitive), matched against a path
+ * segment's base name (before its first dot) — `con`, `nul`, and `com1.txt` all
+ * name the CON/NUL/COM1 device on Windows and can't be a file or folder there.
+ * `com0`/`lpt0` aren't reserved; `com1`-`com9`/`lpt1`-`lpt9` are.
  */
-export function hasUnsafePathSegment(path: string): boolean {
+const RESERVED_DEVICE_NAME = /^(con|prn|aux|nul|com[1-9]|lpt[1-9])$/i;
+
+/** True when `name` (a single path segment, or a slug) is a Windows device name. */
+export function isReservedDeviceName(name: string): boolean {
+  return RESERVED_DEVICE_NAME.test(name);
+}
+
+// Characters Windows forbids in a filename. A segment
+// also can't end in a dot or space — Windows silently trims those, so the file
+// would land at a different path than the one we validated and recorded.
+const WINDOWS_ILLEGAL_CHAR = /[<>:"|?*]/;
+
+/** True when a single path segment can't be created portably (Windows rules). */
+function isWindowsInvalidSegment(segment: string): boolean {
+  if (WINDOWS_ILLEGAL_CHAR.test(segment)) return true;
+  if (segment.endsWith('.') || segment.endsWith(' ')) return true;
+  return isReservedDeviceName(segment.split('.')[0]);
+}
+
+/** Structural escapes: traversal, absolute/drive/UNC prefix, backslash, empty segment. */
+function hasUnsafeStructure(path: string): boolean {
   return (
     path.includes('..') ||
     path.startsWith('/') ||
@@ -74,4 +90,22 @@ export function hasUnsafePathSegment(path: string): boolean {
     path.includes('//') ||
     path.endsWith('/')
   );
+}
+
+/**
+ * True when a relative path contains a segment that is unsafe to write under its
+ * intended folder: a structural escape (`..` traversal, an absolute or Windows
+ * drive/UNC prefix, a backslash separator, or an EMPTY segment — `a//b`, a
+ * trailing `/`), OR a segment no filesystem could portably create: a Windows
+ * reserved device name (`con`, `nul.txt`), an illegal character (`<>:"|?*`), or a trailing dot/space. An empty segment matters because its
+ * normalized on-disk form differs from its raw form (`scripts//run.mjs` collapses
+ * to `scripts/run.mjs`), which is how two raw-distinct catalog entries can
+ * silently write to one destination; the Windows rules keep a skill's
+ * installability from silently depending on the user's OS (a `scripts/con.txt`
+ * file would install on macOS/Linux but fail on Windows). The catalog is
+ * untrusted, so both the manifest sanitizer (`catalogTypes`) and the installer
+ * reject skill files that match — shared here so the two guards can't drift.
+ */
+export function hasUnsafePathSegment(path: string): boolean {
+  return hasUnsafeStructure(path) || path.split('/').some(isWindowsInvalidSegment);
 }

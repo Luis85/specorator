@@ -25,6 +25,7 @@ import { isInstallableType,type MarketplaceItem, normalizeInstallSlug } from './
 import { MarketplaceError } from './MarketplaceCatalogClient';
 import {
   hasUnsafePathSegment,
+  isReservedDeviceName,
   SKILL_INSTALL_SCOPES,
   SKILL_PROVIDER_TARGETS,
   type SkillInstallTarget,
@@ -353,14 +354,6 @@ function skillAdapterFor(target: SkillInstallTarget, deps: MarketplaceInstallDep
 }
 
 /**
- * Windows reserved device names (case-insensitive) — the filesystem refuses to
- * create a directory with any of these as its name, so they're unusable as a
- * skill folder. The manifest slug is already lowercase, so a lowercase match is
- * enough. `com0`/`lpt0` aren't reserved; `com1`-`com9`/`lpt1`-`lpt9` are.
- */
-const RESERVED_DEVICE_NAME = /^(con|prn|aux|nul|com[1-9]|lpt[1-9])$/;
-
-/**
  * The skill's install folder name, from its `SKILL.md` path
  * (`<folder>/<slug>/SKILL.md` → `<slug>`), falling back to the manifest name.
  * Null when it isn't a single safe path segment, so a hostile name can't escape
@@ -379,7 +372,8 @@ function skillFolderNameOrNull(item: MarketplaceItem): string | null {
   // A Windows reserved device name can't be a directory on Windows — the install
   // would fail cryptically there while succeeding on macOS/Linux. Reject it on
   // EVERY platform so a skill's installability doesn't silently depend on the OS.
-  if (!slug || RESERVED_DEVICE_NAME.test(slug)) return null;
+  // (Supporting-file segments get the same check via `hasUnsafePathSegment`.)
+  if (!slug || isReservedDeviceName(slug)) return null;
   return slug;
 }
 

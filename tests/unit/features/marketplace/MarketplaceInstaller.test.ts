@@ -499,6 +499,21 @@ describe('installSkillItem', () => {
     expect(qaFiles.size).toBe(0);
   });
 
+  it('refuses a supporting file with a Windows-invalid segment and writes nothing', async () => {
+    // `scripts/con.txt` (reserved device name) can't be created on Windows; the
+    // pre-pass rejects it before any write so a skill isn't installable on
+    // macOS/Linux but broken on Windows.
+    const { deps, qaFiles } = makeDeps();
+    const bad = new Map<string, string>([
+      ['SKILL.md', validSkillMd('project-setup')],
+      ['scripts/con.txt', 'x'],
+    ]);
+    await expect(
+      installSkillItem(skillItem, bad, { provider: 'claude', scope: 'project' }, deps),
+    ).rejects.toThrow(/unsafe/);
+    expect(qaFiles.size).toBe(0);
+  });
+
   it('writes SKILL.md last so a mid-write failure leaves no dedup marker', async () => {
     const { deps } = makeDeps();
     const order: string[] = [];
