@@ -41,15 +41,24 @@ Modeled on — and reuses the components of — `features/library`.
   re-fetch (no TOCTOU, no re-dial), and the Install button stays disabled until
   that body has loaded. Loops/templates/quick-actions are written **verbatim**
   (provenance frontmatter preserved); agents parse into a `RosterAgent`.
+  Install-target folders resolve with `??` (matching `main.ts`), so an
+  explicitly-blank Quick Actions folder stays blank and the installer refuses the
+  write (`hasConfiguredFolder`) instead of silently landing it in a default
+  folder the Library — also treating blank as unconfigured — never scans.
 - **Agent identity keys on the manifest `item.name`** (via `agentRosterId`),
   used identically by the installer and `isItemInstalled`, so the "Installed"
   badge can't drift from what was written. Installed agents also carry a
-  `catalog` provenance block (`{ id, source?, author?, license?, version? }`) on
-  the `RosterAgent`, populated from the manifest item. `isItemInstalled` then
-  matches on the roster id **or** the stored catalog id (`installedAgentKeys`) —
-  the catalog id keeps an agent recognized across a catalog-side display-name
-  rebrand, while the roster-id fallback keeps pre-provenance/hand-authored agents
-  recognized. The storage/dedup key stays the name-slug roster id (no file
+  `catalog` provenance block (`{ id, catalogUrl?, source?, author?, license?,
+  version? }`) on the `RosterAgent`, populated from the manifest item plus the
+  resolved catalog base URL the install ran against. `isItemInstalled` then
+  matches on the roster id **or** the **source-scoped** catalog id
+  (`installedAgentKeys` keys it as `<catalogUrl>\0<id>`) — the scoped catalog id
+  keeps an agent recognized across a catalog-side display-name rebrand *from the
+  same source*, while the roster-id fallback keeps pre-provenance/hand-authored
+  agents recognized. Scoping to `catalogUrl` is what stops a fork at a different
+  `marketplaceSourceUrl` that **reuses** a catalog id from false-matching a
+  different agent's installed check (the bare id is only meaningful within one
+  catalog). The storage/dedup key stays the name-slug roster id (no file
   churn); cross-rename install idempotency is deferred update-management.
   `cloneRosterAgent` strips `catalog` — a clone is a user-owned derivative, not
   the catalog item, so it must not keep the provenance (else after the original

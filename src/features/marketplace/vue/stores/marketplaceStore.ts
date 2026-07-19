@@ -101,7 +101,14 @@ export const useMarketplaceStore = defineStore('marketplace', () => {
       rosterStore: p.agentRosterStore,
       loopFolder: p.settings.agentBoardLoopFolder || 'Agent Board/loops',
       templateFolder: p.settings.agentBoardTemplateFolder || 'Agent Board/templates',
-      quickActionsFolder: p.settings.quickActionsFolder || 'Quick Actions',
+      // Preserve an explicitly-blank folder with `??` (matching main.ts), not
+      // `||`: a blank means the Quick Actions feature is unconfigured, and the
+      // installer refuses the install rather than silently writing to a default
+      // folder the Library never scans.
+      quickActionsFolder: p.settings.quickActionsFolder ?? 'Quick Actions',
+      // The catalog base this install runs against, so an installed agent's
+      // catalog id is scoped to its source (a fork reusing an id can't false-match).
+      catalogUrl: resolveSource(),
     };
   }
 

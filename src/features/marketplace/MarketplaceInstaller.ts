@@ -62,6 +62,9 @@ export interface MarketplaceInstallDeps {
   loopFolder: string;
   templateFolder: string;
   quickActionsFolder: string;
+  /** Resolved catalog base URL the install ran against (`marketplaceSourceUrl`).
+   *  Scopes agent catalog-id matching to its source. */
+  catalogUrl: string;
 }
 
 /** Installs an item; `'skipped'` means an item with the same natural key already exists. */
@@ -97,7 +100,7 @@ export async function installMarketplaceItem(
     case 'quick-action':
       return installQuickAction(deps, item.name, body);
     case 'agent':
-      return installAgent(deps.rosterStore, item, body, now);
+      return installAgent(deps.rosterStore, item, body, now, deps.catalogUrl);
     default:
       throw new MarketplaceError(`"${item.type}" items can't be installed yet.`);
   }
@@ -113,17 +116,28 @@ function agentRosterId(item: MarketplaceItem): string {
 }
 
 /**
+ * A catalog id scoped to the source it came from. A bare catalog id (`agents/x`)
+ * is only meaningful within one catalog, so a fork that reuses the id under a
+ * different `marketplaceSourceUrl` must not satisfy the original's installed
+ * check. The `\0` separator can't appear in a URL or a catalog id, so the two
+ * parts can't be confused.
+ */
+function scopedAgentCatalogKey(catalogUrl: string | undefined, id: string): string {
+  return `${catalogUrl ?? ''}\u0000${id}`;
+}
+
+/**
  * The identity keys an installed agent can match on: its roster id (name-slug)
- * and, for Marketplace installs, its stored catalog id. The two live in disjoint
- * namespaces (`roster:…` vs `<type>/<slug>`), so one set serves both lookups and
- * a caller checking many agent items can precompute it once (the refresh
- * fast-path) instead of scanning the roster per item.
+ * and, for Marketplace installs, its source-scoped catalog id. The two live in
+ * disjoint namespaces (`roster:…` vs `<url>\0<type>/<slug>`), so one set serves
+ * both lookups and a caller checking many agent items can precompute it once
+ * (the refresh fast-path) instead of scanning the roster per item.
  */
 export function installedAgentKeys(agents: readonly RosterAgent[]): Set<string> {
   const keys = new Set<string>();
   for (const agent of agents) {
     keys.add(agent.id);
-    if (agent.catalog?.id) keys.add(agent.catalog.id);
+    if (agent.catalog?.id) keys.add(scopedAgentCatalogKey(agent.catalog.catalogUrl, agent.catalog.id));
   }
   return keys;
 }
@@ -149,12 +163,13 @@ export async function isItemInstalled(
       return storage.exists(storage.getFilePathForName(item.name));
     }
     case 'agent': {
-      // Match the roster id (name-slug) OR the stored catalog id: the catalog id
-      // keeps an installed agent recognized across a catalog-side display-name
-      // rebrand, while the roster-id fallback keeps pre-provenance and
-      // hand-authored agents recognized.
+      // Match the roster id (name-slug) OR the source-scoped catalog id: the
+      // catalog id keeps an installed agent recognized across a catalog-side
+      // display-name rebrand (same source), while the roster-id fallback keeps
+      // pre-provenance and hand-authored agents recognized. Scoping the catalog
+      // id to `catalogUrl` stops a fork that reuses an id from false-matching.
       const keys = agentKeys ?? installedAgentKeys(await deps.rosterStore.list());
-      return keys.has(agentRosterId(item)) || keys.has(item.id);
+      return keys.has(agentRosterId(item)) || keys.has(scopedAgentCatalogKey(deps.catalogUrl, item.id));
     }
     default:
       return false;
@@ -220,6 +235,14 @@ async function installQuickAction(
   body: string,
 ): Promise<InstallOutcome> {
   const storage = new QuickActionStorage(deps.adapter, () => deps.quickActionsFolder);
+  // A blank folder means the feature is unconfigured (the app preserves the
+  // blank via `??`, and `QuickActionStorage.save` refuses it). Writing to a
+  // default folder would report success and mark the card installed while the
+  // Library — also unconfigured — scans nothing, so the install would be
+  // invisible. Reject it visibly instead, mirroring the store's own backstop.
+  if (!storage.hasConfiguredFolder()) {
+    throw new MarketplaceError('Set a Quick Actions folder in Settings before installing quick actions.');
+  }
   // Same identity guard loops/templates get: a body whose frontmatter name
   // slugifies to a different file than the manifest's is refused, not written
   // under the manifest filename while the Library shows the payload's name.
@@ -243,12 +266,14 @@ async function installQuickAction(
 /**
  * Provenance block stamped onto a Marketplace-installed agent — where it came
  * from, so `.specorator/agents/*.json` records its origin and installed-detection
- * can key on the stable catalog id. Undefined attribution fields drop out of the
- * persisted JSON (JSON.stringify omits them).
+ * can key on the catalog id scoped to `catalogUrl` (the source it was fetched
+ * from). Undefined attribution fields drop out of the persisted JSON
+ * (JSON.stringify omits them).
  */
-function marketplaceProvenance(item: MarketplaceItem): NonNullable<RosterAgent['catalog']> {
+function marketplaceProvenance(item: MarketplaceItem, catalogUrl: string): NonNullable<RosterAgent['catalog']> {
   return {
     id: item.id,
+    catalogUrl,
     source: item.source,
     author: item.author,
     license: item.license,
@@ -261,6 +286,7 @@ async function installAgent(
   item: MarketplaceItem,
   body: string,
   now: number,
+  catalogUrl: string,
 ): Promise<InstallOutcome> {
   const parsed = parseFrontmatter(body);
   const fm = parsed?.frontmatter ?? {};
@@ -283,7 +309,7 @@ async function installAgent(
     initials: extractString(fm, 'initials'),
     icon: extractString(fm, 'icon') ?? item.icon,
     tags: extractStringArray(fm, 'tags'),
-    catalog: marketplaceProvenance(item),
+    catalog: marketplaceProvenance(item, catalogUrl),
     createdAt: now,
     updatedAt: now,
   };

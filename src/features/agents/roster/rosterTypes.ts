@@ -28,6 +28,10 @@ export interface RosterAgent {
    */
   catalog?: {
     id: string;
+    /** Catalog base URL the agent was installed from (`marketplaceSourceUrl`).
+     *  Scopes the catalog `id` to its source so a fork that reuses an id can't
+     *  false-match a different agent. Absent on pre-provenance installs. */
+    catalogUrl?: string;
     source?: string;
     author?: string;
     license?: string;

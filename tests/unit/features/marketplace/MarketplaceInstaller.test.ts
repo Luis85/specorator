@@ -6,7 +6,7 @@ import type { RosterAgent } from '@/features/agents/roster/rosterTypes';
 import type { MarketplaceItem } from '@/features/marketplace/catalogTypes';
 import { installMarketplaceItem, isItemInstalled, type MarketplaceInstallDeps } from '@/features/marketplace/MarketplaceInstaller';
 
-function makeDeps() {
+function makeDeps(overrides: Partial<MarketplaceInstallDeps> = {}) {
   const notes = new Map<string, string>();
   const folders = new Set<string>();
   const vault = {
@@ -43,6 +43,8 @@ function makeDeps() {
     loopFolder: 'Agent Board/loops',
     templateFolder: 'Agent Board/templates',
     quickActionsFolder: 'Quick Actions',
+    catalogUrl: 'https://catalog.test/',
+    ...overrides,
   };
   return { deps, notes, qaFiles, agents };
 }
@@ -119,6 +121,17 @@ describe('installMarketplaceItem', () => {
     expect(await installMarketplaceItem(item, 'prompt body', deps, 1)).toBe('skipped');
   });
 
+  it('refuses a quick-action install when the Quick Actions folder is unconfigured', async () => {
+    // A blank folder means the feature is unconfigured (the rest of the app
+    // preserves the blank with `??`). Writing to a default folder would report
+    // success and mark the card installed while the Library — also unconfigured
+    // — scans nothing, so the install is invisible. Fail visibly instead.
+    const { deps, qaFiles } = makeDeps({ quickActionsFolder: '' });
+    const item: MarketplaceItem = { id: 'quick-actions/foo', type: 'quick-action', name: 'Foo', description: 'd', path: 'quick-actions/foo.md', tags: [] };
+    await expect(installMarketplaceItem(item, 'prompt body', deps, 1)).rejects.toThrow(/folder/i);
+    expect(qaFiles.size).toBe(0);
+  });
+
   it('maps an agent onto a RosterAgent and dedups by id', async () => {
     const { deps, agents } = makeDeps();
     const body = [
@@ -171,13 +184,16 @@ describe('installMarketplaceItem', () => {
       version: 3,
     };
     await installMarketplaceItem(item, body, deps, 1);
-    // The installed roster JSON records where the agent came from.
+    // The installed roster JSON records where the agent came from — including
+    // the catalog base URL it was fetched from, so installed-detection can scope
+    // the catalog id to its source.
     expect(agents[0].catalog).toEqual({
       id: 'agents/code-reviewer',
       author: 'Specorator',
       license: 'MIT',
       source: 'https://example.test/agents',
       version: 3,
+      catalogUrl: 'https://catalog.test/',
     });
   });
 
@@ -236,6 +252,26 @@ describe('isItemInstalled', () => {
     // The catalog later rebrands the display name: the roster id (name slug) now
     // differs, but the stable catalog id still matches → still marked installed.
     const rebranded: MarketplaceItem = { ...original, name: 'New Name' };
+    expect(await isItemInstalled(rebranded, deps)).toBe(true);
+  });
+
+  it('scopes the agent catalog-id match to the catalog source (fork id reuse)', async () => {
+    const { deps } = makeDeps(); // catalogUrl https://catalog.test/
+    const body = '---\ntype: specorator-agent\nname: "Reviewer"\n---\n\nPrompt.';
+    const original: MarketplaceItem = { id: 'agents/reviewer', type: 'agent', name: 'Reviewer', description: 'd', path: 'agents/reviewer.md', tags: [] };
+    await installMarketplaceItem(original, body, deps, 1);
+    expect(await isItemInstalled(original, deps)).toBe(true);
+
+    // A different catalog source reuses the SAME id for a DIFFERENTLY-named agent.
+    // The roster-name fallback doesn't collide (different name), and the stored
+    // catalog id belongs to the other source, so the fork's card is NOT installed
+    // and keeps its Install action.
+    const forkDeps = { ...deps, catalogUrl: 'https://fork.test/' };
+    const forkItem: MarketplaceItem = { id: 'agents/reviewer', type: 'agent', name: 'Auditor', description: 'd', path: 'agents/reviewer.md', tags: [] };
+    expect(await isItemInstalled(forkItem, forkDeps)).toBe(false);
+
+    // Same source, rebranded display name → still recognized by the scoped catalog id.
+    const rebranded: MarketplaceItem = { ...original, name: 'Reviewer Pro' };
     expect(await isItemInstalled(rebranded, deps)).toBe(true);
   });
 
