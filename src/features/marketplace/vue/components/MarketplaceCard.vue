@@ -3,7 +3,7 @@ import { onMounted, ref } from 'vue';
 
 import { t } from '../../../../i18n/i18n';
 import type { MarketplaceItem } from '../../catalogTypes';
-import { iconForItem, mountIcon } from '../marketplaceIcons';
+import { iconForItem, mountLucide } from '../marketplaceIcons';
 
 const props = defineProps<{ item: MarketplaceItem; installed: boolean; typeLabel: string }>();
 const emit = defineEmits<{ open: [] }>();
@@ -11,7 +11,7 @@ const emit = defineEmits<{ open: [] }>();
 const cardEl = ref<HTMLElement | null>(null);
 const iconEl = ref<HTMLElement | null>(null);
 onMounted(() => {
-  if (iconEl.value) mountIcon(iconEl.value, iconForItem(props.item));
+  if (iconEl.value) mountLucide(iconEl.value, iconForItem(props.item));
 });
 
 // Releasing a text selection fires click on the card; selecting the (selectable)
@@ -95,26 +95,6 @@ function onKeydown(e: KeyboardEvent): void {
   gap: var(--sp-space-xs);
 }
 
-.specorator-vue-marketplace-card-icon {
-  display: inline-flex;
-  color: var(--sp-text-muted);
-}
-
-.specorator-vue-marketplace-card-icon :deep(svg) {
-  width: 18px;
-  height: 18px;
-}
-
-.specorator-vue-marketplace-card-badge {
-  font-size: var(--sp-font-smaller);
-  text-transform: uppercase;
-  letter-spacing: 0.03em;
-  color: var(--sp-text-muted);
-  border: 1px solid var(--sp-border);
-  border-radius: var(--sp-radius-s);
-  padding: var(--sp-space-3xs) var(--sp-space-xs);
-}
-
 .specorator-vue-marketplace-card-installed {
   margin-left: auto;
   font-size: var(--sp-font-smaller);
@@ -133,12 +113,5 @@ function onKeydown(e: KeyboardEvent): void {
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
   overflow: hidden;
-}
-
-.specorator-vue-marketplace-card-tags {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--sp-space-2xs);
-  margin-top: var(--sp-space-3xs);
 }
 </style>

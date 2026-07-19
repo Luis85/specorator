@@ -56,12 +56,6 @@ const showSkeleton = computed(() => props.loading && props.items.length === 0);
 </template>
 
 <style scoped>
-.specorator-vue-marketplace-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(14rem, 1fr));
-  gap: var(--sp-space-s);
-}
-
 .specorator-vue-marketplace-skeleton {
   height: 8.5rem;
   border-radius: var(--sp-radius-m);

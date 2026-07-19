@@ -103,6 +103,51 @@
   border: 1px solid var(--sp-border);
 }
 
+/* ── Marketplace storefront (classes rendered by 2+ components) ──
+   The responsive item grid (MarketplaceGrid + the Home sections) and the shared
+   card vocabulary (the icon, type badge, and tag row rendered by both
+   MarketplaceCard and MarketplaceDetail) live here so the two SFCs don't repeat
+   the rules — and so the detail's card-* elements are actually styled. */
+.specorator-vue-marketplace-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(14rem, 1fr));
+  gap: var(--sp-space-s);
+}
+
+.specorator-vue-marketplace-card-icon {
+  display: inline-flex;
+  color: var(--sp-text-muted);
+}
+
+/* setIcon() creates the <svg> imperatively; a global rule (no data-v) sizes it
+   for both the card and the detail header (the latter opts up via .is-lg). */
+.specorator-vue-marketplace-card-icon svg {
+  width: 18px;
+  height: 18px;
+}
+
+.specorator-vue-marketplace-card-icon.is-lg svg {
+  width: 22px;
+  height: 22px;
+}
+
+.specorator-vue-marketplace-card-badge {
+  font-size: var(--sp-font-smaller);
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: var(--sp-text-muted);
+  border: 1px solid var(--sp-border);
+  border-radius: var(--sp-radius-s);
+  padding: var(--sp-space-3xs) var(--sp-space-xs);
+}
+
+.specorator-vue-marketplace-card-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-space-2xs);
+  margin-top: var(--sp-space-3xs);
+}
+
 /* ── Empty/hint copy (LibraryEmptyState + panels' loading/hint copy) ── */
 .specorator-vue-empty-text {
   max-width: 36ch;

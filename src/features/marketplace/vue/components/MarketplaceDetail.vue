@@ -3,7 +3,7 @@ import { computed, onMounted, ref } from 'vue';
 
 import { t } from '../../../../i18n/i18n';
 import type { MarketplaceItem } from '../../catalogTypes';
-import { iconForItem, mountIcon } from '../marketplaceIcons';
+import { iconForItem, mountLucide } from '../marketplaceIcons';
 
 const props = defineProps<{
   item: MarketplaceItem;
@@ -18,7 +18,7 @@ const emit = defineEmits<{ back: []; install: [] }>();
 
 const iconEl = ref<HTMLElement | null>(null);
 onMounted(() => {
-  if (iconEl.value) mountIcon(iconEl.value, iconForItem(props.item));
+  if (iconEl.value) mountLucide(iconEl.value, iconForItem(props.item));
 });
 
 const bodyText = computed(() =>
@@ -45,7 +45,7 @@ const safeSourceUrl = computed(() => {
     <div class="specorator-vue-marketplace-detail-head">
       <div
         ref="iconEl"
-        class="specorator-vue-marketplace-card-icon"
+        class="specorator-vue-marketplace-card-icon is-lg"
       />
       <div class="specorator-vue-marketplace-detail-titles">
         <div class="specorator-vue-marketplace-detail-name">
@@ -123,16 +123,6 @@ const safeSourceUrl = computed(() => {
   display: flex;
   align-items: center;
   gap: var(--sp-space-s);
-}
-
-.specorator-vue-marketplace-card-icon {
-  display: inline-flex;
-  color: var(--sp-text-muted);
-}
-
-.specorator-vue-marketplace-card-icon :deep(svg) {
-  width: 22px;
-  height: 22px;
 }
 
 .specorator-vue-marketplace-detail-titles {

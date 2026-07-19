@@ -18,20 +18,20 @@ const items: MarketplaceItem[] = [
 
 describe('MarketplaceGrid', () => {
   it('renders a card per item', () => {
-    render(MarketplaceGrid, { props: { items, installedIds: new Set(), typeLabels } });
+    render(MarketplaceGrid, { props: { items, installedIds: new Set<string>(), typeLabels } });
     expect(document.querySelectorAll('.specorator-vue-marketplace-card')).toHaveLength(2);
   });
 
   it('renders skeleton cells while loading with no items yet', () => {
     render(MarketplaceGrid, {
-      props: { items: [], installedIds: new Set(), typeLabels, loading: true, skeletonCount: 4 },
+      props: { items: [], installedIds: new Set<string>(), typeLabels, loading: true, skeletonCount: 4 },
     });
     expect(document.querySelectorAll('.specorator-vue-marketplace-skeleton')).toHaveLength(4);
     expect(document.querySelectorAll('.specorator-vue-marketplace-card')).toHaveLength(0);
   });
 
   it('shows the empty state when not loading and no items', () => {
-    render(MarketplaceGrid, { props: { items: [], installedIds: new Set(), typeLabels } });
+    render(MarketplaceGrid, { props: { items: [], installedIds: new Set<string>(), typeLabels } });
     expect(screen.getByText('No items match your filters.')).toBeTruthy();
   });
 });

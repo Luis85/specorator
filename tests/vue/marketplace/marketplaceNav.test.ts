@@ -2,6 +2,7 @@ import { fireEvent, render, screen, within } from '@testing-library/vue';
 import { describe, expect, it } from 'vitest';
 
 import MarketplaceNav from '@/features/marketplace/vue/components/MarketplaceNav.vue';
+import type { MarketplaceView } from '@/features/marketplace/vue/marketplaceView';
 
 const typeLabels = {
   'quick-action': 'Quick Action',
@@ -11,7 +12,7 @@ const typeLabels = {
   skill: 'Skill',
 };
 
-function renderNav(active: string, counts: Record<string, number>) {
+function renderNav(active: MarketplaceView, counts: Record<string, number>) {
   return render(MarketplaceNav, { props: { activeView: active, counts, typeLabels } });
 }
 

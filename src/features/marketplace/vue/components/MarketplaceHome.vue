@@ -116,10 +116,4 @@ function capped(items: MarketplaceItem[]): MarketplaceItem[] {
   border-radius: var(--sp-radius-s);
   cursor: pointer;
 }
-
-.specorator-vue-marketplace-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(14rem, 1fr));
-  gap: var(--sp-space-s);
-}
 </style>

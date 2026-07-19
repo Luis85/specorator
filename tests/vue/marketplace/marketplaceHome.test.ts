@@ -21,7 +21,7 @@ const sections = [
 
 describe('MarketplaceHome', () => {
   it('renders one section per type with its count and cards', () => {
-    render(MarketplaceHome, { props: { sections, installedIds: new Set(), typeLabels } });
+    render(MarketplaceHome, { props: { sections, installedIds: new Set<string>(), typeLabels } });
     expect(screen.getByText('2 items')).toBeTruthy();
     expect(screen.getByText('1 items')).toBeTruthy();
     expect(document.querySelectorAll('.specorator-vue-marketplace-card')).toHaveLength(3);
@@ -29,14 +29,14 @@ describe('MarketplaceHome', () => {
 
   it('caps a section at previewLimit cards', () => {
     render(MarketplaceHome, {
-      props: { sections, installedIds: new Set(), typeLabels, previewLimit: 1 },
+      props: { sections, installedIds: new Set<string>(), typeLabels, previewLimit: 1 },
     });
     expect(document.querySelectorAll('.specorator-vue-marketplace-card')).toHaveLength(2);
   });
 
   it('emits seeAll(type) and open(item)', async () => {
     const { emitted } = render(MarketplaceHome, {
-      props: { sections, installedIds: new Set(), typeLabels },
+      props: { sections, installedIds: new Set<string>(), typeLabels },
     });
     await fireEvent.click(screen.getAllByRole('button', { name: 'See all' })[0]);
     expect(emitted().seeAll?.[0]).toEqual(['agent']);

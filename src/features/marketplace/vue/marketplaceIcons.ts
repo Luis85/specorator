@@ -1,7 +1,8 @@
-import { setIcon } from 'obsidian';
-import type { ComponentPublicInstance } from 'vue';
-
 import type { MarketplaceItemType } from '../catalogTypes';
+
+// The Lucide function-ref host is shared with the Agent Board — re-exported here
+// so marketplace components have a single icon-concerns import surface.
+export { mountLucide } from '../../../shared/vue/mountLucide';
 
 /** Per-type default Lucide glyph, used when a catalog item carries no `icon`. */
 const DEFAULT_TYPE_ICONS: Record<MarketplaceItemType, string> = {
@@ -21,18 +22,4 @@ const DEFAULT_TYPE_ICONS: Record<MarketplaceItemType, string> = {
 export function iconForItem(item: { type: MarketplaceItemType; icon?: string }): string {
   const own = item.icon?.trim();
   return own && own.length > 0 ? own : DEFAULT_TYPE_ICONS[item.type];
-}
-
-/**
- * Function-ref host for a Lucide glyph (mirrors the board's `mountLucide`):
- * records the intent as `data-icon` (the test-lane `setIcon` is a no-op, so this
- * is what component tests assert) and renders the real SVG via `setIcon`.
- * Cross-window-safe: `nodeType === 1` instead of `instanceof HTMLElement`, which
- * is bound to the main window and fails inside an Obsidian popout.
- */
-export function mountIcon(el: Element | ComponentPublicInstance | null, icon: string): void {
-  if (el == null || (el as Partial<Node>).nodeType !== 1) return;
-  const host = el as HTMLElement;
-  host.setAttribute('data-icon', icon);
-  setIcon(host, icon);
 }
