@@ -6,6 +6,19 @@
       "open": "Open Marketplace"
     },
     "source": "Catalog: {source}",
+    "nav": {
+      "home": "Home"
+    },
+    "navGroupLabel": "Marketplace categories",
+    "home": {
+      "heading": "Discover ready-made assets",
+      "subheading": "Browse curated Quick Actions, Agents, Loops, and Templates and install them into your vault."
+    },
+    "seeAll": "See all",
+    "sectionCount": "{count} items",
+    "detail": {
+      "back": "Back"
+    },
     "settings": {
       "tab": "Marketplace",
       "networkSection": "Network",
@@ -24,15 +37,12 @@
     "refresh": "Refresh",
     "loading": "Loading catalog…",
     "empty": "No items match your filters.",
-    "allTypes": "All types",
-    "typeFilterGroupLabel": "Filter by type",
     "offline": "Showing the last cached catalog.",
     "loadError": "Couldn't load the marketplace catalog.",
     "install": "Install",
     "installing": "Installing…",
     "installed": "Installed",
     "notInstallable": "Not yet installable",
-    "preview": "Preview",
     "installedNotice": "Installed \"{name}\".",
     "skippedNotice": "\"{name}\" is already installed.",
     "failedNotice": "Couldn't install \"{name}\".",
