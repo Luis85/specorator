@@ -1,10 +1,12 @@
 import { Notice, type TAbstractFile, TFile, TFolder } from 'obsidian';
 
 import type { ProviderId } from '@/core/providers/types';
+import { applyUserAttachedContext, snapshotUserAttachedContext } from '@/features/chat/tabs/blankTabDraft';
 import { resolveOverrideTargetTab } from '@/features/chat/tabs/resolveOverrideTargetTab';
 import { t } from '@/i18n/i18n';
 import type SpecoratorPlugin from '@/main';
 
+import { ensureChatTabManager } from './ensureChatTabManager';
 import { quickActionStemFromPath } from './quickActionStem';
 import type { QuickAction } from './types';
 
@@ -70,11 +72,20 @@ export async function dispatchQuickActionToTab(
  * favorite items injected into the file/folder right-click menu.
  *
  * Ensures the chat view is open, picks (or creates) a target tab, switches
- * to it FIRST so the welcome reset does not wipe the chip, then attaches
- * the right-clicked file or folder as a pill and fires the action prompt.
+ * to it FIRST so the welcome reset does not wipe the chip, then re-applies the
+ * files/folders the user had attached in their active chat tab, attaches the
+ * right-clicked file or folder as a pill, and fires the action prompt.
  *
- * `file` may be null — no file context (e.g. the Library tab's Run button):
- * the pill attach is skipped and the prompt still dispatches.
+ * The carry step matters: a quick action usually resolves to a FRESH tab (the
+ * active tab holds a draft, or the picker's provider/model forces a new one),
+ * and a fresh tab does not inherit the files/folders the user attached — so
+ * without carrying them forward the run goes out with none of the context the
+ * user set up. Captured before the switch so the target tab's welcome reset
+ * cannot clear it out from under us.
+ *
+ * `file` may be null — no right-clicked file (e.g. the Library tab's Run
+ * button): the extra pill attach is skipped, but any carried context and the
+ * prompt still dispatch.
  */
 export async function runQuickActionForFile(
   plugin: SpecoratorPlugin,
@@ -82,21 +93,15 @@ export async function runQuickActionForFile(
   action: QuickAction,
   override?: QuickActionRunOverride,
 ): Promise<void> {
-  let view = plugin.getView();
-  if (!view) {
-    await plugin.activateView();
-    view = plugin.getView();
-  }
-  if (!view) {
-    plugin.logger.scope('quickActions').warn('view unavailable, skipping dispatch');
+  const tabManager = await ensureChatTabManager(plugin);
+  if (!tabManager) {
+    plugin.logger.scope('quickActions').warn('view/tabManager unavailable, skipping dispatch');
     return;
   }
 
-  const tabManager = view.getTabManager();
-  if (!tabManager) {
-    plugin.logger.scope('quickActions').warn('tabManager unavailable, skipping dispatch');
-    return;
-  }
+  // Snapshot the active tab's user-attached context BEFORE resolving/switching:
+  // the target may be a fresh tab, and switchToTab's welcome reset wipes pills.
+  const carriedContext = snapshotUserAttachedContext(tabManager.getActiveTab());
 
   const targetTab = await resolveOverrideTargetTab(plugin, tabManager, override);
   if (!targetTab) {
@@ -105,9 +110,13 @@ export async function runQuickActionForFile(
   }
 
   // Switch BEFORE attaching so the blank-tab welcome reset does not wipe
-  // the pill. See openContextMenuQuickAction comment block for full
+  // the pills. See openContextMenuQuickAction comment block for full
   // rationale.
   await tabManager.switchToTab(targetTab.id);
+
+  // Re-apply the carried context AFTER the switch (post welcome reset) so the
+  // send carries the files/folders the user attached, not just the prompt.
+  applyUserAttachedContext(targetTab, carriedContext);
 
   if (file instanceof TFile) {
     targetTab.ui.fileContextManager?.attachFileAsPill(file.path);
