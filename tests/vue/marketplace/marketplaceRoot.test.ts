@@ -206,7 +206,7 @@ describe('MarketplaceRoot chrome-first + Home sort', () => {
     });
     // Chrome-first: the category nav and the toolbar render immediately, before
     // the catalog lands — not only once store.items is populated.
-    expect(screen.getByRole('tablist', { name: 'Marketplace categories' })).toBeTruthy();
+    expect(screen.getByRole('navigation', { name: 'Marketplace categories' })).toBeTruthy();
     expect(await screen.findByRole('searchbox')).toBeTruthy();
     // The skeleton grid stands in for the not-yet-loaded catalog.
     expect(document.querySelectorAll('.specorator-vue-marketplace-skeleton').length).toBeGreaterThan(0);
@@ -236,10 +236,10 @@ describe('MarketplaceRoot category nav', () => {
   it('scopes the grid to the selected category tab and returns to Home', async () => {
     setup(makeStore({ items: [alpha, beta] }), { marketplaceNetworkEnabled: true });
     await screen.findByText('Alpha Loop');
-    const nav = screen.getByRole('tablist', { name: 'Marketplace categories' });
+    const nav = screen.getByRole('navigation', { name: 'Marketplace categories' });
 
     // Selecting the Agent category hides the loop card.
-    await fireEvent.click(within(nav).getByRole('tab', { name: /Agent/ }));
+    await fireEvent.click(within(nav).getByRole('button', { name: /Agent/ }));
     await waitFor(() =>
       expect(document.querySelectorAll('.specorator-vue-marketplace-card')).toHaveLength(1),
     );
@@ -247,7 +247,7 @@ describe('MarketplaceRoot category nav', () => {
     expect(screen.getByText('Beta Agent')).toBeTruthy();
 
     // Home restores both (rendered in per-type sections).
-    await fireEvent.click(within(nav).getByRole('tab', { name: 'Home' }));
+    await fireEvent.click(within(nav).getByRole('button', { name: 'Home' }));
     await waitFor(() =>
       expect(document.querySelectorAll('.specorator-vue-marketplace-card')).toHaveLength(2),
     );
@@ -335,8 +335,8 @@ describe('MarketplaceRoot category nav', () => {
       marketplaceNetworkWarningShown: true,
     });
     await screen.findByText('Alpha Loop');
-    const nav = screen.getByRole('tablist', { name: 'Marketplace categories' });
-    await fireEvent.click(within(nav).getByRole('tab', { name: /Loop/ }));
+    const nav = screen.getByRole('navigation', { name: 'Marketplace categories' });
+    await fireEvent.click(within(nav).getByRole('button', { name: /Loop/ }));
     await waitFor(() => expect(screen.queryByText('Beta Agent')).toBeNull());
 
     // A reload drops every loop; the stranded Loop view must fall back to Home so

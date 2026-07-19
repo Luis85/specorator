@@ -16,7 +16,7 @@ Modeled on — and reuses the components of — `features/library`.
 | `MarketplaceView.ts` / `activateMarketplace.ts` / `viewType.ts` | `ItemView` host (per-leaf Vue app), leaf activation (optional `requestedView` deep-link), view-type constant |
 | `marketplaceNetworkGate.ts` | One-time in-app Notice on first opt-in |
 | `vue/MarketplaceRoot.vue` | Storefront orchestrator: opt-in gate, `activeView`/`detailId` state, per-type counts, `LibraryToolbar` + `useLibraryList` (scoped to the active view), generation-guarded body-fetch cache, install, offline/error banners. Routes the body between skeleton grid → Home sections / category grid → detail |
-| `vue/components/MarketplaceNav.vue` | Primary category tab bar (Home + one tab per present type, with counts); single-select, emits `select` |
+| `vue/components/MarketplaceNav.vue` | Primary category nav (Home + one button per present type, with counts). A `role="navigation"` landmark with `aria-current="page"` on the active category (matching `LibraryRoot`) — deliberately NOT an ARIA `tablist`/`role="tab"`, which promises arrow-key roving focus this doesn't implement. Single-select, emits `select` |
 | `vue/components/MarketplaceHome.vue` | Storefront landing: one section per present type (header + count + first `previewLimit` cards + "See all →"); emits `open`/`seeAll` |
 | `vue/components/MarketplaceGrid.vue` | Responsive card grid for a category/search scope; renders skeleton cells while `loading` with no items yet; empty state otherwise |
 | `vue/components/MarketplaceCard.vue` | Per-item **vertical** grid card (type icon + badge + name + clamped description + tags + Installed badge). The whole card emits `open` to route to the detail — no inline preview/install |

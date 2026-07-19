@@ -18,17 +18,20 @@ const presentTypes = computed(() => MARKETPLACE_ITEM_TYPES.filter((type) => prop
 </script>
 
 <template>
+  <!-- Navigation + aria-current (matching LibraryRoot's category nav), NOT an
+    ARIA tablist: a role="tab" set promises roving focus + arrow-key selection
+    that this doesn't implement, so plain nav buttons are the honest, expected
+    keyboard model (normal Tab order). -->
   <div
     class="specorator-vue-marketplace-nav"
-    role="tablist"
+    role="navigation"
     :aria-label="t('marketplace.navGroupLabel')"
   >
     <button
       type="button"
-      role="tab"
       class="specorator-vue-marketplace-navtab"
       :class="{ 'is-on': props.activeView === 'home' }"
-      :aria-selected="props.activeView === 'home' ? 'true' : 'false'"
+      :aria-current="props.activeView === 'home' ? 'page' : undefined"
       @click="emit('select', 'home')"
     >
       {{ t('marketplace.nav.home') }}
@@ -37,10 +40,9 @@ const presentTypes = computed(() => MARKETPLACE_ITEM_TYPES.filter((type) => prop
       v-for="type in presentTypes"
       :key="type"
       type="button"
-      role="tab"
       class="specorator-vue-marketplace-navtab"
       :class="{ 'is-on': props.activeView === type }"
-      :aria-selected="props.activeView === type ? 'true' : 'false'"
+      :aria-current="props.activeView === type ? 'page' : undefined"
       @click="emit('select', type)"
     >
       {{ props.typeLabels[type] }}

@@ -17,20 +17,20 @@ function renderNav(active: MarketplaceView, counts: Record<string, number>) {
 }
 
 describe('MarketplaceNav', () => {
-  it('renders Home plus a tab only for present types, each with its count', () => {
+  it('renders Home plus a nav button only for present types, each with its count', () => {
     renderNav('home', { 'quick-action': 0, agent: 8, loop: 9, template: 0, skill: 0 });
-    const bar = screen.getByRole('tablist', { name: 'Marketplace categories' });
-    expect(within(bar).getByRole('tab', { name: 'Home' })).toBeTruthy();
-    expect(within(bar).getByRole('tab', { name: /Agent/ })).toBeTruthy();
-    expect(within(bar).getByRole('tab', { name: /Loop/ })).toBeTruthy();
-    // Absent types get no tab.
-    expect(within(bar).queryByRole('tab', { name: /Quick Action/ })).toBeNull();
-    expect(within(bar).queryByRole('tab', { name: /Template/ })).toBeNull();
+    const bar = screen.getByRole('navigation', { name: 'Marketplace categories' });
+    expect(within(bar).getByRole('button', { name: 'Home' })).toBeTruthy();
+    expect(within(bar).getByRole('button', { name: /Agent/ })).toBeTruthy();
+    expect(within(bar).getByRole('button', { name: /Loop/ })).toBeTruthy();
+    // Absent types get no button.
+    expect(within(bar).queryByRole('button', { name: /Quick Action/ })).toBeNull();
+    expect(within(bar).queryByRole('button', { name: /Template/ })).toBeNull();
     // The count is shown.
-    expect(within(bar).getByRole('tab', { name: /8/ })).toBeTruthy();
+    expect(within(bar).getByRole('button', { name: /8/ })).toBeTruthy();
   });
 
-  it('marks the active tab and emits select', async () => {
+  it('marks the active category with aria-current and emits select', async () => {
     const { emitted } = renderNav('agent', {
       'quick-action': 0,
       agent: 8,
@@ -38,9 +38,9 @@ describe('MarketplaceNav', () => {
       template: 0,
       skill: 0,
     });
-    const agentTab = screen.getByRole('tab', { name: /Agent/ });
-    expect(agentTab.getAttribute('aria-selected')).toBe('true');
-    await fireEvent.click(screen.getByRole('tab', { name: 'Home' }));
+    const agentTab = screen.getByRole('button', { name: /Agent/ });
+    expect(agentTab.getAttribute('aria-current')).toBe('page');
+    await fireEvent.click(screen.getByRole('button', { name: 'Home' }));
     expect(emitted().select?.[0]).toEqual(['home']);
     await fireEvent.click(agentTab);
     expect(emitted().select?.[1]).toEqual(['agent']);
