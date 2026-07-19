@@ -1,10 +1,10 @@
 <!-- .claude/skills/project-setup/scripts/README.md -->
 # project-setup engine
 
-Deterministic setup engine. Node ≥22 (the pinned fallow 3 tooling is installed
-on every apply); Obsidian mode needs `^22.13.0 || >=24.0.0` (the pinned jsdom
-skips the 23.x line). `apply` refuses on an unsupported host Node. Zero runtime
-deps.
+Deterministic setup engine. A default apply needs Node `^22.13.0 || >=24.0.0`
+(the pinned eslint 10 and, in Obsidian mode, jsdom skip the 23.x line); with lint
+staging off, only fallow's ≥22 applies. `apply` refuses on an unsupported host
+Node. Zero runtime deps.
 
 Dependency versions are exact pins in `pins.json` (loaded by `lib/harness.mjs`
 as `PINNED`); `refresh-pins` is the only sanctioned way to bump them.

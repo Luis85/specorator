@@ -131,32 +131,35 @@ test('loadOptions sanitizes prds: auto-numbers ids, defaults title/status, coerc
   }
 });
 
-test('hostNodeProblem: obsidian enforces jsdom\'s ^22.13 || >=24 range (23.x hole), generic enforces fallow >=22', () => {
+test('hostNodeProblem: eslint/jsdom force ^22.13 || >=24 (23.x hole); a fallow-only apply just needs >=22', () => {
   assert.deepEqual(FALLOW_NODE_FLOOR, [22, 0, 0]);
   assert.deepEqual(OBSIDIAN_NODE_FLOOR, [22, 13, 0]);
   assert.equal(OBSIDIAN_NODE_ENGINES, '^22.13.0 || >=24.0.0');
   const obs = { obsidian: { id: 'a', name: 'A' } };
-  const generic = {}; // no obsidian block — the generic harness still installs fallow
-  // Obsidian rejects below the floor AND the whole 23.x line (jsdom's gap). Each message
-  // states the real supported range and names the host version.
-  for (const v of ['20.11.1', '22.0.0', '22.12.99', '23.0.0', '23.11.5']) {
-    const p = hostNodeProblem(obs, v);
-    assert.ok(p, `obsidian expected a problem for Node ${v}`);
-    assert.match(p, /\^22\.13\.0 \|\| >=24\.0\.0/);
-    assert.match(p, new RegExp(v.replace(/\./g, '\\.')));
+  const genericLint = { guardrails: { eslintSeverityStaging: true } }; // generic default: eslint 10 installed
+  const noLint = { guardrails: { eslintSeverityStaging: false } }; // lint off: only fallow constrains the host
+  // Both obsidian (jsdom) and the eslint-on generic default reject below the floor AND
+  // the whole 23.x line, stating the real range + the host version.
+  for (const opts of [obs, genericLint]) {
+    for (const v of ['20.11.1', '22.0.0', '22.12.99', '23.0.0', '23.11.5']) {
+      const p = hostNodeProblem(opts, v);
+      assert.ok(p, `expected a problem for Node ${v}`);
+      assert.match(p, /\^22\.13\.0 \|\| >=24\.0\.0/);
+      assert.match(p, new RegExp(v.replace(/\./g, '\\.')));
+    }
+    for (const v of ['22.13.0', '22.20.0', '24.0.0', '25.1.0']) assert.equal(hostNodeProblem(opts, v), null, `${JSON.stringify(opts)} ${v}`);
   }
-  // Obsidian accepts the 22.13 line and 24+ (odd 25 too), but not 23.x.
-  for (const v of ['22.13.0', '22.20.0', '24.0.0', '24.2.0', '25.1.0']) assert.equal(hostNodeProblem(obs, v), null, `obsidian ${v}`);
-  // Generic: fallow forces >=22 (installed on every apply), but has NO 23.x hole.
+  // Lint off (no eslint, no jsdom): only fallow's >=22 — no 22.13 floor, no 23.x hole.
   for (const v of ['18.19.0', '20.11.1', '21.7.0']) {
-    const p = hostNodeProblem(generic, v);
-    assert.ok(p, `generic expected a problem for Node ${v}`);
+    const p = hostNodeProblem(noLint, v);
+    assert.ok(p, `no-lint expected a problem for Node ${v}`);
     assert.match(p, />=22\.0\.0/);
   }
-  for (const v of ['22.0.0', '22.12.0', '23.5.0', '24.0.0']) assert.equal(hostNodeProblem(generic, v), null, `generic ${v}`);
-  // The key divergence: Node 23.5 is fine generically (fallow) but rejected in obsidian (jsdom gap).
-  assert.equal(hostNodeProblem(generic, '23.5.0'), null, 'generic allows 23.x');
-  assert.ok(hostNodeProblem(obs, '23.5.0'), 'obsidian rejects 23.x');
+  for (const v of ['22.0.0', '22.12.0', '23.5.0', '24.0.0']) assert.equal(hostNodeProblem(noLint, v), null, `no-lint ${v}`);
+  // The divergence: Node 23.5 clears a fallow-only apply but not an eslint/jsdom one.
+  assert.equal(hostNodeProblem(noLint, '23.5.0'), null);
+  assert.ok(hostNodeProblem(genericLint, '23.5.0'), 'eslint-on generic still blocks 23.x');
+  assert.ok(hostNodeProblem(obs, '22.12.0'), 'obsidian still blocks 22.12 (needs 22.13)');
 });
 
 test('freezeOptions freezes obsidian identity (id + name) to the first apply', () => {

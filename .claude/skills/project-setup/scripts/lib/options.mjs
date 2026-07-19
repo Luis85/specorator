@@ -103,24 +103,31 @@ function isBelowVersion(v, floor) {
 // and the optional ratchet) requires Node >=22, so EVERY apply has a floor.
 export const FALLOW_NODE_FLOOR = [22, 0, 0];
 export const OBSIDIAN_NODE_FLOOR = [22, 13, 0];
-// Obsidian is NOT a bare floor: the pinned jsdom (engines ^20.19 || ^22.13 || >=24)
-// caps its 22 line at <23 and resumes at >=24, so the 23.x major is a hole. Intersected
-// with vite (>=22.12) and fallow (>=22) the supported set is exactly this union.
-// obsidian.mjs emits it verbatim as engines.node and hostNodeProblem enforces the same
-// set, so the advertised range and the enforced one stay single-sourced.
+// The pinned eslint 10 AND jsdom both declare `^20.19 || ^22.13 || >=24`: the 22 line
+// starts at 22.13 and the 23.x major is a hole. So any apply that installs either — the
+// generic default (eslint via lint staging) or Obsidian mode (jsdom) — must clear this
+// union, not just fallow's bare >=22 (which would wrongly admit 22.0–22.12 and 23.x).
+// obsidian.mjs also emits it verbatim as the Obsidian project's engines.node, so the
+// advertised range and the enforced one stay single-sourced.
 export const OBSIDIAN_NODE_ENGINES = '^22.13.0 || >=24.0.0';
 
+// [22.13, 23) ∪ [24, ∞): below the floor OR the 23.x hole is rejected. `why` names the
+// pinned tool that imposes the range so the message is actionable.
+function strictNodeProblem(nodeVersion, why) {
+  const major = Number(/^(\d+)\./.exec(String(nodeVersion))?.[1]);
+  if (!isBelowVersion(nodeVersion, OBSIDIAN_NODE_FLOOR) && major !== 23) return null;
+  return `This setup needs Node ${OBSIDIAN_NODE_ENGINES} (${why} skips the 23.x line); you're on Node ${nodeVersion}. Use Node 22.13+ or 24+ and re-run.`;
+}
+
 // A human-readable problem when the HOST Node can't run the resolved harness, or null
-// when it can. Kept separate from validateObsidianFields (which checks answers, not
-// the environment) so both stay pure and unit-testable.
+// when it can. Enforces the strict eslint/jsdom range whenever either is installed, and
+// otherwise fallow's bare floor. Kept separate from validateObsidianFields (which checks
+// answers, not the environment) so both stay pure and unit-testable.
 export function hostNodeProblem(options, nodeVersion) {
-  if (options?.obsidian) {
-    // Supported: [22.13, 23) ∪ [24, ∞). The only hole above the floor is the 23.x
-    // major, which a floor check alone would wrongly admit.
-    const major = Number(/^(\d+)\./.exec(String(nodeVersion))?.[1]);
-    if (!isBelowVersion(nodeVersion, OBSIDIAN_NODE_FLOOR) && major !== 23) return null;
-    return `Obsidian mode needs Node ${OBSIDIAN_NODE_ENGINES} (the pinned jsdom skips the 23.x line); you're on Node ${nodeVersion}. Use Node 22.13+ or 24+ and re-run.`;
-  }
+  if (options?.obsidian) return strictNodeProblem(nodeVersion, 'the generated jsdom/vite toolchain');
+  // The generic default installs eslint 10 (lint staging), which shares jsdom's range.
+  if (options?.guardrails?.eslintSeverityStaging) return strictNodeProblem(nodeVersion, 'the pinned eslint 10');
+  // No lint, no Obsidian: only fallow (always installed) constrains the host.
   if (!isBelowVersion(nodeVersion, FALLOW_NODE_FLOOR)) return null;
   return `This setup needs Node >=${FALLOW_NODE_FLOOR.join('.')} (the pinned fallow 3 quality tooling requires it); you're on Node ${nodeVersion}. Upgrade Node (nvm install ${FALLOW_NODE_FLOOR[0]}) and re-run.`;
 }

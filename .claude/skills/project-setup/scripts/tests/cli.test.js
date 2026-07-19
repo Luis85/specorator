@@ -105,37 +105,48 @@ test('a supported host Node passes the floor gate and applies the obsidian scaff
   }
 });
 
-test('the generic apply is gated by fallow (Node >=22), and obsidian raises it to 22.13', async () => {
-  // fallow 3 is installed on EVERY apply (the advisory report), so a generic apply is
-  // gated too — but only to >=22, not obsidian's stricter jsdom floor.
-  const genBlocked = project({}, '20.11.0'); // generic harness, Node <22 → blocked
-  const genOk = project({}, '22.0.0'); // clears fallow's 22.0 floor
-  const obsBlocked = project(OBS_ANSWERS, '22.0.0'); // same Node, but jsdom needs 22.13
+test('the host Node floor: a default apply needs ^22.13 || >=24 (eslint/jsdom); fallow-only without lint', async () => {
+  // The generic DEFAULT installs eslint 10 (loadOptions defaults lint staging on), which
+  // shares jsdom's ^22.13 || >=24 range — so a default apply is gated like obsidian.
+  const genBlocked = project({}, '22.0.0'); // eslint on by default → needs 22.13
+  const genOk = project({}, '22.13.0');
+  const obsBlocked = project(OBS_ANSWERS, '22.0.0'); // jsdom → needs 22.13
+  // Lint off → no eslint, so only fallow's bare >=22 applies (22.0 is fine).
+  const noLintOk = project({ guardrails: { eslintSeverityStaging: false } }, '22.0.0');
+  const noLintBlocked = project({ guardrails: { eslintSeverityStaging: false } }, '20.11.0');
   try {
     assert.equal(await cli(['apply', '--config', 'answers.json'], genBlocked.io), 2);
-    assert.match(genBlocked.chunks.err, />=22\.0\.0/); // the fallow floor, not 22.13
+    assert.match(genBlocked.chunks.err, /\^22\.13\.0 \|\| >=24\.0\.0/); // eslint's range, not bare >=22
     assert.equal(await cli(['apply', '--config', 'answers.json'], genOk.io), 0);
     assert.equal(await cli(['apply', '--config', 'answers.json'], obsBlocked.io), 2);
-    assert.match(obsBlocked.chunks.err, /\^22\.13\.0 \|\| >=24\.0\.0/); // obsidian is stricter
+    assert.match(obsBlocked.chunks.err, /\^22\.13\.0 \|\| >=24\.0\.0/);
+    assert.equal(await cli(['apply', '--config', 'answers.json'], noLintOk.io), 0); // fallow allows 22.0
+    assert.equal(await cli(['apply', '--config', 'answers.json'], noLintBlocked.io), 2);
+    assert.match(noLintBlocked.chunks.err, />=22\.0\.0/); // the bare fallow floor
   } finally {
     genBlocked.cleanup();
     genOk.cleanup();
     obsBlocked.cleanup();
+    noLintOk.cleanup();
+    noLintBlocked.cleanup();
   }
 });
 
-test('Node 23.x is rejected for obsidian (jsdom gap) but fine for a generic apply', async () => {
-  // jsdom supports ^22.13 || >=24, so the whole 23.x line is unsupported in obsidian
-  // mode — but generic mode (fallow >=22, no upper bound) runs on 23 fine.
+test('Node 23.x is rejected under eslint/jsdom but fine for a fallow-only (lint-off) apply', async () => {
+  // eslint 10 and jsdom both support ^22.13 || >=24, so the whole 23.x line is out for
+  // obsidian AND the default (eslint-on) generic apply; only a lint-off apply runs on 23.
   const obs = project(OBS_ANSWERS, '23.5.0');
-  const gen = project({}, '23.5.0');
+  const genDefault = project({}, '23.5.0'); // eslint on by default → 23.x rejected
+  const noLint = project({ guardrails: { eslintSeverityStaging: false } }, '23.5.0'); // fallow only → ok
   try {
     assert.equal(await cli(['apply', '--config', 'answers.json'], obs.io), 2);
     assert.match(obs.chunks.err, /skips the 23\.x line/);
     assert.ok(!existsSync(join(obs.dir, 'manifest.json')), 'nothing written on the 23.x block');
-    assert.equal(await cli(['apply', '--config', 'answers.json'], gen.io), 0);
+    assert.equal(await cli(['apply', '--config', 'answers.json'], genDefault.io), 2);
+    assert.equal(await cli(['apply', '--config', 'answers.json'], noLint.io), 0);
   } finally {
     obs.cleanup();
-    gen.cleanup();
+    genDefault.cleanup();
+    noLint.cleanup();
   }
 });
