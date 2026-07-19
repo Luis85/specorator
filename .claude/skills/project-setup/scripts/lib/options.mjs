@@ -94,6 +94,11 @@ export function validateObsidianFields(o) {
   if (FORBIDDEN_MANIFEST_WORD.test(o.id)) {
     problems.push(`Plugin id ${JSON.stringify(o.id)} can't contain "obsidian" or "plugin". Use a short slug like "quick-notes".`);
   }
+  // The id becomes a CSS class prefix (".<id>-view"); a digit-leading class selector
+  // is invalid, so the generated stylesheet would be silently ignored.
+  if (/^[0-9]/.test(String(o.id))) {
+    problems.push(`Plugin id ${JSON.stringify(o.id)} must start with a letter — it becomes a CSS class prefix (".${o.id}-view") and a digit-leading selector is invalid. Reorder it, e.g. "notes-24".`);
+  }
   const d = String(o.description ?? '');
   // Mirror obsidianmd: a forbidden word is reported instead of (not in addition to)
   // the format check, matching the rule's else-if ordering.

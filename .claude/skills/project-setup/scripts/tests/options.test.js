@@ -29,6 +29,12 @@ test('validateObsidianFields accepts a clean manifest and flags marketplace viol
   assert.ok(fmt('no capital start.').some((p) => /Description must be/.test(p)));
   assert.ok(fmt('No trailing period').some((p) => /Description must be/.test(p)));
   assert.ok(fmt('Has an emoji 🎉 here.').some((p) => /Description must be/.test(p)));
+  // Digit-leading id → invalid CSS class prefix (".24-...-view").
+  assert.ok(
+    validateObsidianFields({ id: '24-hour-notes', name: 'Cool', description: 'A fine description here.' }).some((p) =>
+      /start with a letter/.test(p),
+    ),
+  );
 });
 
 test('loadOptions throws a clear error on malformed JSON', () => {

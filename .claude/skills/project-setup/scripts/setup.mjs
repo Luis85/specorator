@@ -84,9 +84,14 @@ export async function cli(argv, io = {}) {
         return 2;
       }
       const state = detect(cwd);
+      // The prior apply's recorded options let planners reconcile engine-owned
+      // config (Claude hooks, pre-commit) against exactly what WE wrote last time,
+      // instead of guessing ownership from command text.
+      const priorOptions = readPriorReport(cwd)?.options;
+      state.priorOptions = priorOptions;
       // Freeze install-volatile fields so a post-install re-detect can't flip them
       // and break the "second apply is a no-op" contract (see freezeOptions).
-      freezeOptions(options, readPriorReport(cwd)?.options, state);
+      freezeOptions(options, priorOptions, state);
       // Reject marketplace-invalid manifest answers with guidance BEFORE writing a
       // scaffold that would fail its own obsidianmd lint on day one (name/id/
       // description forbidden words + description formatting).

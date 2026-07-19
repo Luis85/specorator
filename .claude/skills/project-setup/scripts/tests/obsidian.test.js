@@ -195,14 +195,16 @@ function claudeMergeWith(hooks, state = {}, extra = {}) {
 }
 
 const npmSession = { hooks: [{ type: 'command', command: 'npm install' }] };
+// What a prior apply recorded — reconciliation keys ownership on this, not command text.
+const priorNpm = { hooks: { sessionStart: true }, packageManager: 'npm' };
 
 test('re-applying an unchanged hook is a no-op (reconcile leaves settings.json untouched)', () => {
-  const state = { claudeSettings: { hooks: { SessionStart: [npmSession] } } };
+  const state = { claudeSettings: { hooks: { SessionStart: [npmSession] } }, priorOptions: priorNpm };
   assert.equal(claudeMergeWith({ sessionStart: true }, state), undefined);
 });
 
 test('a package-manager change replaces the stale install hook instead of unioning it', () => {
-  const state = { claudeSettings: { hooks: { SessionStart: [npmSession] } } };
+  const state = { claudeSettings: { hooks: { SessionStart: [npmSession] } }, priorOptions: priorNpm };
   const merge = claudeMergeWith({ sessionStart: true }, state, { packageManager: 'pnpm' });
   // Only pnpm install remains — not both npm and pnpm (which would race lockfiles).
   assert.deepEqual(merge.patch.hooks.SessionStart, [
@@ -212,19 +214,35 @@ test('a package-manager change replaces the stale install hook instead of unioni
 });
 
 test('toggling a hook off removes the previously generated hook', () => {
-  const state = { claudeSettings: { hooks: { SessionStart: [npmSession] } } };
+  const state = { claudeSettings: { hooks: { SessionStart: [npmSession] } }, priorOptions: priorNpm };
   const merge = claudeMergeWith({ sessionStart: false }, state);
   assert.equal(merge.patch.hooks.SessionStart, undefined, 'the stale SessionStart hook should be gone');
 });
 
 test('reconcile preserves the user\'s own hooks while swapping ours', () => {
   const userHook = { hooks: [{ type: 'command', command: 'echo custom' }] };
-  const state = { claudeSettings: { hooks: { SessionStart: [userHook, npmSession] } } };
+  const state = { claudeSettings: { hooks: { SessionStart: [userHook, npmSession] } }, priorOptions: priorNpm };
   const merge = claudeMergeWith({ sessionStart: true }, state, { packageManager: 'pnpm' });
   assert.deepEqual(merge.patch.hooks.SessionStart, [
     userHook,
     { hooks: [{ type: 'command', command: 'pnpm install' }] },
   ]);
+});
+
+test('a user hook sharing a command is NOT removed on a first apply (nothing is ours yet)', () => {
+  // No priorOptions → the byte-exact ownership match finds nothing of ours, so a
+  // user's own `npm install` hook survives even with the option disabled — the exact
+  // false positive command-only matching had.
+  const state = { claudeSettings: { hooks: { SessionStart: [npmSession] } } };
+  assert.equal(claudeMergeWith({ sessionStart: false }, state), undefined);
+});
+
+test('a multi-hook user entry sharing a command is not deleted wholesale', () => {
+  // Our prior entry is a single-command hook; a user entry that also runs a second
+  // command is a different shape, so byte-exact matching keeps it untouched.
+  const multi = { hooks: [{ type: 'command', command: 'npm install' }, { type: 'command', command: 'echo hi' }] };
+  const state = { claudeSettings: { hooks: { SessionStart: [multi] } }, priorOptions: priorNpm };
+  assert.equal(claudeMergeWith({ sessionStart: false }, state), undefined);
 });
 
 // planObsidian actions with all guardrails on and a given detect state.
@@ -255,6 +273,13 @@ test('an existing .npmrc missing tag-version-prefix is flagged (release tag woul
   // A .npmrc that already sets it (e.g. our own) is not flagged.
   assert.ok(!hasNotice(planWithState({ npmrc: 'tag-version-prefix=""\n' }), /tag-version-prefix/));
   assert.ok(!hasNotice(planWithState({}), /tag-version-prefix/));
+});
+
+test('disabling pre-commit on re-apply warns that the installed git hook stays active', () => {
+  // Prior apply had preCommit on; now off → apply can't uninstall the git hook, so warn.
+  assert.ok(hasNotice(planWithState({ priorOptions: { hooks: { preCommit: true } } }, { hooks: { preCommit: false } }), /git hook/));
+  // First apply (no prior pre-commit) → nothing installed, no warning.
+  assert.ok(!hasNotice(planWithState({}, { hooks: { preCommit: false } }), /git hook/));
 });
 
 test('the qualityGate Stop hook omits lint when severity-staging is off (no missing-script failure)', () => {

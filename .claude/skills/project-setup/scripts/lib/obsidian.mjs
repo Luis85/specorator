@@ -412,25 +412,37 @@ function planVerifyScript(options, state) {
 // OPT-IN hooks. sessionStart installs deps on a fresh Claude web session;
 // qualityGate runs the fast gates (typecheck+lint) on Claude's Stop so the agent
 // self-corrects. .claude/settings.json is written only when a hook is enabled.
-// Every command the engine could have written for a hook group, across all PMs
-// and gate combos — so a re-apply can RECOGNIZE and drop OUR previous hook (a
-// changed PM or a toggled-off option) without touching the user's own hooks.
-const ENGINE_SESSION_COMMANDS = new Set(Object.values(PM_INSTALL));
-const ENGINE_STOP_COMMANDS = new Set(
-  ['npm run', 'pnpm', 'yarn', 'bun run'].flatMap((r) => [`${r} typecheck`, `${r} typecheck && ${r} lint`]),
-);
-
 function isPlainObject(value) {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
-// Rebuild one hook group: keep the user's own entries, drop any prior engine
-// entry (matched by command), and append the current engine hook if enabled.
-function reconcileHookGroup(existing, engineCommands, current) {
-  const isEngineEntry = (entry) =>
-    Array.isArray(entry?.hooks) && entry.hooks.some((hk) => engineCommands.has(hk?.command));
-  const kept = (Array.isArray(existing) ? existing : []).filter((e) => !isEngineEntry(e));
-  return current ? [...kept, current] : kept;
+// The EXACT hook entry a PRIOR apply wrote for one group, derived from the recorded
+// options (project-setup.report.json). Reconciliation removes only this — our own
+// previous output — so a user hook that merely shares a command (e.g. `npm install`)
+// is never misclassified, and a first apply (no prior report) removes nothing.
+function priorEngineHook(priorOptions, kind) {
+  const h = isPlainObject(priorOptions) ? priorOptions.hooks : null;
+  if (!isPlainObject(h)) return null;
+  const pm = safePackageManager(priorOptions.packageManager ?? 'npm');
+  if (kind === 'session') {
+    return h.sessionStart ? { hooks: [{ type: 'command', command: PM_INSTALL[pm] }] } : null;
+  }
+  const run = runPrefix(pm);
+  const gates = ['typecheck', ...(priorOptions.guardrails?.eslintSeverityStaging ? ['lint'] : [])];
+  return h.qualityGate
+    ? { hooks: [{ type: 'command', command: gates.map((s) => `${run} ${s}`).join(' && ') }] }
+    : null;
+}
+
+// Rebuild one hook group: drop our own prior engine entry (BYTE-exact, so a user's
+// differently-shaped hook that shares a command survives, and a multi-hook entry is
+// never deleted wholesale), then append the current engine hook — de-duplicated
+// against a matching hook the user already has.
+function reconcileHookGroup(existing, priorEntry, current) {
+  const priorJson = priorEntry ? JSON.stringify(priorEntry) : null;
+  const kept = (Array.isArray(existing) ? existing : []).filter((e) => JSON.stringify(e) !== priorJson);
+  if (!current) return kept;
+  return kept.some((e) => JSON.stringify(e) === JSON.stringify(current)) ? kept : [...kept, current];
 }
 
 function planClaudeSettings(options, state) {
@@ -455,13 +467,12 @@ function planClaudeSettings(options, state) {
 
   // Reconcile OUR groups against any existing .claude/settings.json so a re-apply
   // with a changed PM or a toggled-off hook REPLACES/REMOVES the stale engine hook
-  // rather than unioning it (deepMerge dedups identical entries but not a changed
-  // command, so npm→pnpm would otherwise leave both installers). Unrelated user
-  // hooks and other settings keys survive.
+  // rather than unioning it — keyed on what a PRIOR apply actually wrote, so a
+  // user's own hooks (even one sharing a command) and other settings keys survive.
   const existingHooks = isPlainObject(state?.claudeSettings?.hooks) ? state.claudeSettings.hooks : {};
   const reconciled = { ...existingHooks };
-  const nextSession = reconcileHookGroup(existingHooks.SessionStart, ENGINE_SESSION_COMMANDS, sessionHook);
-  const nextStop = reconcileHookGroup(existingHooks.Stop, ENGINE_STOP_COMMANDS, stopHook);
+  const nextSession = reconcileHookGroup(existingHooks.SessionStart, priorEngineHook(state?.priorOptions, 'session'), sessionHook);
+  const nextStop = reconcileHookGroup(existingHooks.Stop, priorEngineHook(state?.priorOptions, 'stop'), stopHook);
   if (nextSession.length > 0) reconciled.SessionStart = nextSession;
   else delete reconciled.SessionStart;
   if (nextStop.length > 0) reconciled.Stop = nextStop;
@@ -500,8 +511,21 @@ function planPublishing(options) {
 // lint-staged; lint-staged is on the depend/ban-dependencies list the scaffold
 // enforces). Staged source is eslint --fix + prettier before every commit —
 // instant local feedback. The `prepare` script installs the git hook on `install`.
-function planPreCommit(options) {
-  if (!options.hooks?.preCommit) return [];
+function planPreCommit(options, state) {
+  if (!options.hooks?.preCommit) {
+    // Toggled off on re-apply: apply is declarative, so the generated
+    // prepare/simple-git-hooks/nano-staged config and the ALREADY-INSTALLED git
+    // hook aren't auto-removed. Tell the user to clear them rather than leaving the
+    // hook silently active against their stated choice.
+    if (state?.priorOptions?.hooks?.preCommit) {
+      return [
+        notice(
+          'Pre-commit was turned off, but the previously installed git hook stays active — remove the `prepare`, `simple-git-hooks`, and `nano-staged` entries from package.json and delete `.git/hooks/pre-commit` (simple-git-hooks won\'t uninstall it for you).',
+        ),
+      ];
+    }
+    return [];
+  }
   // `eslint --fix` only when severity-staging is on: planObsidianEslint installs
   // eslint + the config only then, so an unconditional eslint task would fail every
   // commit (missing binary/config) when linting is off. prettier always ships.
@@ -682,7 +706,7 @@ export function planObsidian(options, state = {}) {
     ...planGithubTemplates(options),
     ...planDependabot(options),
     ...planVerifyScript(options, state),
-    ...planPreCommit(options),
+    ...planPreCommit(options, state),
     ...planClaudeSettings(options, state),
     ...planPublishing(options),
     ...planProjectDocs(options, state),
