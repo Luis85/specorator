@@ -201,23 +201,44 @@ function isSafeSkillFilePath(value: unknown, prefix: string): value is string {
 }
 
 /**
- * The safe, de-duplicated file list a skill installs: every manifest `files`
- * entry that stays under the skill folder, with the previewed `SKILL.md`
- * (`item.path`) always present so the reviewed body is never dropped.
+ * The safe, de-duplicated file list a skill installs — every manifest `files`
+ * entry under the skill folder, with the previewed `SKILL.md` (`item.path`)
+ * always present. Returns `null` when ANY declared file escapes the skill folder
+ * (traversal / out-of-folder / absolute / non-string): the manifest is malformed
+ * or hostile, and silently dropping just that entry would install an INCOMPLETE
+ * skill (missing a required file) and mark it installed — blocking a later
+ * reinstall. Rejecting the whole skill (dropped in `parseManifest`) fails loud.
  */
-function sanitizeSkillFiles(item: MarketplaceItem): string[] {
+function sanitizeSkillFiles(item: MarketplaceItem): string[] | null {
   const prefix = skillFolderPrefix(item.path);
   if (!prefix) return [item.path];
   const seen = new Set<string>();
   const safe: string[] = [];
   for (const candidate of Array.isArray(item.files) ? item.files : []) {
-    if (isSafeSkillFilePath(candidate, prefix) && !seen.has(candidate)) {
+    if (!isSafeSkillFilePath(candidate, prefix)) return null;
+    if (!seen.has(candidate)) {
       seen.add(candidate);
       safe.push(candidate);
     }
   }
   if (!seen.has(item.path)) safe.unshift(item.path);
   return safe;
+}
+
+/**
+ * Strips `files` from a non-skill item; for a skill, sanitizes its files and
+ * returns null to DROP the skill when any declared file escapes its folder (see
+ * `sanitizeSkillFiles`). Mutates the passed (already-cloned) item.
+ */
+function normalizeItemFiles(item: MarketplaceItem): MarketplaceItem | null {
+  if (item.type !== 'skill') {
+    delete item.files;
+    return item;
+  }
+  const files = sanitizeSkillFiles(item);
+  if (files === null) return null;
+  item.files = files;
+  return item;
 }
 
 /**
@@ -231,18 +252,18 @@ export function parseManifest(raw: unknown): MarketplaceManifest | null {
   if (manifest.schemaVersion !== MARKETPLACE_MANIFEST_SCHEMA_VERSION) return null;
   if (!Array.isArray(manifest.items)) return null;
 
-  const parsed = manifest.items.filter(isMarketplaceItem).map((item) => {
-    const cleaned: MarketplaceItem = {
+  // Normalize description/tags, then resolve `files` per item — a skill whose
+  // declared files escape its folder is dropped (normalizeItemFiles → null)
+  // rather than installed incomplete; non-skills have `files` stripped.
+  const parsed = manifest.items
+    .filter(isMarketplaceItem)
+    .map((item): MarketplaceItem => ({
       ...item,
       description: typeof item.description === 'string' ? item.description : '',
       tags: Array.isArray(item.tags) ? item.tags.map(String) : [],
-    };
-    // `files` is meaningful only for skills; sanitize it there (untrusted paths)
-    // and strip it everywhere else so a stray field can't ride along.
-    if (cleaned.type === 'skill') cleaned.files = sanitizeSkillFiles(cleaned);
-    else delete cleaned.files;
-    return cleaned;
-  });
+    }))
+    .map(normalizeItemFiles)
+    .filter((item): item is MarketplaceItem => item !== null);
 
   // Dedupe by id AND by per-type install key (first wins). Id-dedup keeps the
   // card v-for `:key` unique; install-key-dedup drops a later item that would

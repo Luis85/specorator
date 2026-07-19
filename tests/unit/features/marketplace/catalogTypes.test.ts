@@ -178,13 +178,22 @@ describe('parseManifest — skill files', () => {
     expect(item?.files).toContain('skills/project-setup/scripts/setup.mjs');
   });
 
-  it('drops traversal, absolute, backslash, out-of-folder, and duplicate entries', () => {
-    const item = firstSkill([
-      'skills/project-setup/SKILL.md',
+  it('rejects the WHOLE skill when any declared file is unsafe', () => {
+    // Silently dropping just the bad entry would install an incomplete folder
+    // (missing a required file) and mark it installed, blocking reinstall.
+    for (const bad of [
       'skills/project-setup/../evil.md', // traversal
       '/etc/passwd', // absolute
       'skills/project-setup/a\\b.md', // backslash
       'skills/other/x.md', // different skill's folder
+    ]) {
+      expect(firstSkill(['skills/project-setup/SKILL.md', bad])).toBeUndefined();
+    }
+  });
+
+  it('dedupes safe files (SKILL.md + a duplicate supporting file)', () => {
+    const item = firstSkill([
+      'skills/project-setup/SKILL.md',
       'skills/project-setup/scripts/setup.mjs',
       'skills/project-setup/scripts/setup.mjs', // duplicate
     ]);
