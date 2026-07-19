@@ -160,6 +160,10 @@ export async function isItemInstalled(
       return noteExists(deps.vault, new TemplateNoteStore().getFilePathForName(deps.templateFolder, item.name));
     case 'quick-action': {
       const storage = new QuickActionStorage(deps.adapter, () => deps.quickActionsFolder);
+      // A blank folder is unconfigured (install is refused for it too); don't probe
+      // the vault-root path getFilePathForName would derive, or an unrelated root
+      // note sharing that slug filename would falsely mark the card Installed.
+      if (!storage.hasConfiguredFolder()) return false;
       return storage.exists(storage.getFilePathForName(item.name));
     }
     case 'agent': {

@@ -182,6 +182,10 @@ describe('MarketplaceRoot list', () => {
     await screen.findByText('Alpha Loop');
     await Promise.resolve();
     expect(store.load).not.toHaveBeenCalled();
+    // ...but installed state IS re-scanned on the reuse-mount: mutations made while
+    // every leaf was closed weren't observed by any subscription, so skipping the
+    // scan too would leave stale Installed badges until a later event / Refresh.
+    await waitFor(() => expect(store.refreshInstalled).toHaveBeenCalled());
   });
 });
 

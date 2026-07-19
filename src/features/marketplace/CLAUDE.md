@@ -31,6 +31,10 @@ Modeled on — and reuses the components of — `features/library`.
   shared store empty (`store.loaded`) — the module-singleton store retains the
   catalog across leaf open/close, so reopening a leaf or opening a second one
   reuses it and refreshes on demand (the Refresh button), not on every mount.
+  A reuse-mount still runs one initial `refreshInstalled` (network-free), because
+  no live-sync subscription was active while every leaf was closed — otherwise a
+  mutation made in that window would leave stale Installed badges until the next
+  event or a manual Refresh.
   `loaded` tracks whether the latest load **landed a catalog** (online or cache),
   NOT the item count — a valid but empty catalog is loaded (so reopen reuses it);
   only a hard failure with no matching cache stays unloaded, so that case retries.
@@ -48,6 +52,9 @@ Modeled on — and reuses the components of — `features/library`.
   explicitly-blank Quick Actions folder stays blank and the installer refuses the
   write (`hasConfiguredFolder`) instead of silently landing it in a default
   folder the Library — also treating blank as unconfigured — never scans.
+  `isItemInstalled` guards the same way (returns not-installed for a blank folder
+  rather than probing the vault-root path `getFilePathForName` would derive), so
+  an unrelated root note sharing the slug can't false-mark the badge Installed.
 - **Agent identity keys on the manifest `item.name`** (via `agentRosterId`),
   used identically by the installer and `isItemInstalled`, so the "Installed"
   badge can't drift from what was written. Installed agents also carry a

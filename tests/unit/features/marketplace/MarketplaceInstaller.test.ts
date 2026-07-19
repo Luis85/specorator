@@ -231,6 +231,16 @@ describe('isItemInstalled', () => {
     expect(await isItemInstalled(item, deps)).toBe(false);
   });
 
+  it('is false for a quick action when the folder is unconfigured (badge false-positive)', async () => {
+    const { deps, qaFiles } = makeDeps({ quickActionsFolder: '' });
+    const item: MarketplaceItem = { id: 'quick-actions/foo', type: 'quick-action', name: 'Foo', description: 'd', path: 'quick-actions/foo.md', tags: [] };
+    // A blank folder derives a vault-root path; an unrelated root note with that
+    // filename must NOT make the card read installed (install is refused too).
+    qaFiles.set('foo.md', 'unrelated');
+    qaFiles.set('/foo.md', 'unrelated');
+    expect(await isItemInstalled(item, deps)).toBe(false);
+  });
+
   it('keys agent identity on the manifest name so the check matches after install (badge regression)', async () => {
     const { deps } = makeDeps();
     // Body frontmatter name deliberately differs from the manifest item name.

@@ -117,6 +117,13 @@ onMounted(async () => {
     // so enable()'s call can't double-show it.
     await maybeWarnMarketplaceNetwork(plugin);
     void store.load();
+  } else if (enabled.value) {
+    // Reusing a retained catalog (the `!store.loaded` fetch is skipped): while
+    // every leaf was closed no subscription was live, so a Library delete/rename,
+    // a roster change, or an install-folder setting change since the last scan
+    // isn't reflected in the shared `installedIds`. Run one installed-scan now so
+    // badges aren't stale on reopen — network-free and generation/sequence-guarded.
+    void store.refreshInstalled();
   }
 });
 
