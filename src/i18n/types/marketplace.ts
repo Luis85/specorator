@@ -10,6 +10,7 @@ export type MarketplaceTranslationKey =
   | 'marketplace.seeAll'
   | 'marketplace.sectionCount'
   | 'marketplace.detail.back'
+  | 'marketplace.browseFromLibrary'
   | 'marketplace.settings.tab'
   | 'marketplace.settings.networkSection'
   | 'marketplace.settings.enable.name'

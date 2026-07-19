@@ -16,6 +16,7 @@ import {
   isItemInstalled,
   type MarketplaceInstallDeps,
 } from '../../MarketplaceInstaller';
+import type { MarketplaceView } from '../marketplaceView';
 
 /**
  * Marketplace store: fetches the catalog manifest via the client (falling back
@@ -41,6 +42,13 @@ export const useMarketplaceStore = defineStore('marketplace', () => {
    */
   const loaded = ref(false);
   const source = ref(DEFAULT_MARKETPLACE_BASE_URL);
+  /**
+   * A deep-link target requested from OUTSIDE the view — the Library's "Browse
+   * Marketplace" link routes through `activateMarketplace`, which sets this on
+   * the shared store before the leaf mounts. The Root applies it (on mount via
+   * an immediate watch, or reactively for an already-open leaf) and clears it.
+   */
+  const requestedView = shallowRef<MarketplaceView | null>(null);
   // Bumped whenever a new catalog load begins, so async work (an in-flight install)
   // that started against an older catalog can detect it went stale.
   let loadGeneration = 0;
@@ -52,6 +60,11 @@ export const useMarketplaceStore = defineStore('marketplace', () => {
 
   function init(p: SpecoratorPlugin): void {
     plugin ??= p;
+  }
+
+  /** Set (or clear, with null) the pending deep-link target for the Root. */
+  function requestView(view: MarketplaceView | null): void {
+    requestedView.value = view;
   }
 
   function requirePlugin(): SpecoratorPlugin {
@@ -255,6 +268,8 @@ export const useMarketplaceStore = defineStore('marketplace', () => {
     offline,
     loaded,
     source,
+    requestedView,
+    requestView,
     init,
     load,
     fetchBody,

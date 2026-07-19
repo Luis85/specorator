@@ -2,8 +2,11 @@
 import { inject } from 'vue';
 
 import { t } from '../../../i18n/i18n';
+import { mountLucide } from '../../../shared/vue/mountLucide';
+import { activateMarketplace } from '../../marketplace/activateMarketplace';
+import type { MarketplaceItemType } from '../../marketplace/catalogTypes';
 import type { LibraryTab } from '../viewType';
-import { ACTIVE_TAB_KEY, VIEW_KEY } from './libraryKeys';
+import { ACTIVE_TAB_KEY, PLUGIN_KEY, VIEW_KEY } from './libraryKeys';
 import AgentsPanel from './panels/AgentsPanel.vue';
 import LoopsPanel from './panels/LoopsPanel.vue';
 import QuickActionsPanel from './panels/QuickActionsPanel.vue';
@@ -17,6 +20,9 @@ const activeTab = injected;
 const injectedView = inject(VIEW_KEY);
 if (!injectedView) throw new Error('LibraryRoot.vue mounted without VIEW_KEY');
 const view = injectedView;
+const injectedPlugin = inject(PLUGIN_KEY);
+if (!injectedPlugin) throw new Error('LibraryRoot.vue mounted without PLUGIN_KEY');
+const plugin = injectedPlugin;
 
 const TABS: ReadonlyArray<{ id: LibraryTab; label: string }> = [
   { id: 'agents', label: t('agentRoster.navLabel') },
@@ -30,6 +36,19 @@ function select(tab: LibraryTab): void {
   // Tab-switch policy (panel guard + pending latch) lives in ONE choke point:
   // LibraryView.setActiveTab. The check above is only a cheap same-tab skip.
   void view.setActiveTab(tab);
+}
+
+// The Library tab a user is on maps to the matching Marketplace category, so the
+// "Browse Marketplace" link lands them on the same asset type (Agents → agents).
+const TAB_TO_MARKETPLACE: Record<LibraryTab, MarketplaceItemType> = {
+  agents: 'agent',
+  skills: 'skill',
+  loops: 'loop',
+  'quick-actions': 'quick-action',
+};
+
+function browseMarketplace(): void {
+  void activateMarketplace(plugin, TAB_TO_MARKETPLACE[activeTab.value]);
 }
 </script>
 
@@ -51,6 +70,19 @@ function select(tab: LibraryTab): void {
       {{ tab.label }}
     </button>
   </div>
+  <div class="specorator-vue-lib-discover">
+    <button
+      type="button"
+      class="specorator-vue-lib-discover-link"
+      @click="browseMarketplace()"
+    >
+      <span
+        :ref="(el) => mountLucide(el, 'store')"
+        class="specorator-vue-lib-discover-icon"
+      />
+      {{ t('marketplace.browseFromLibrary') }}
+    </button>
+  </div>
   <LoopsPanel v-if="activeTab === 'loops'" />
   <SkillsPanel v-else-if="activeTab === 'skills'" />
   <QuickActionsPanel v-else-if="activeTab === 'quick-actions'" />
@@ -62,8 +94,39 @@ function select(tab: LibraryTab): void {
   display: flex;
   gap: var(--sp-space-2xs);
   padding-bottom: var(--sp-space-m);
-  margin-bottom: var(--sp-space-m);
+  margin-bottom: var(--sp-space-s);
   border-bottom: 1px solid var(--sp-border);
+}
+
+/* Discovery bridge into the Marketplace, contextual to the active tab. Right-
+   aligned and muted so it reads as a "find more" link, not a fifth tab. */
+.specorator-vue-lib-discover {
+  display: flex;
+  justify-content: flex-end;
+  margin-bottom: var(--sp-space-m);
+}
+
+.specorator-vue-lib-discover-link {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-space-2xs);
+  font-size: var(--sp-font-small);
+  color: var(--sp-text-muted);
+  border: 1px solid transparent;
+  cursor: pointer;
+}
+
+.specorator-vue-lib-discover-link:hover {
+  color: var(--sp-accent);
+}
+
+.specorator-vue-lib-discover-icon {
+  display: inline-flex;
+}
+
+.specorator-vue-lib-discover-icon :deep(svg) {
+  width: 15px;
+  height: 15px;
 }
 
 /* No background/box-shadow here: Obsidian's button rules (0,1,1) styled

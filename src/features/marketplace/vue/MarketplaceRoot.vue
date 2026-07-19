@@ -176,6 +176,21 @@ function selectView(view: MarketplaceView): void {
   detailId.value = null;
 }
 
+// Apply a deep-link requested from outside the view (the Library's "Browse
+// Marketplace" link, via activateMarketplace → store.requestView) and consume it
+// so a later remount doesn't re-navigate. `immediate` covers a fresh leaf that
+// mounts AFTER the request was recorded; the reactive path covers an already-open
+// leaf. The counts guard falls a stranded category back to Home once loaded.
+watch(
+  () => store.requestedView,
+  (view) => {
+    if (!view) return;
+    selectView(view);
+    store.requestView(null);
+  },
+  { immediate: true },
+);
+
 async function openItem(item: MarketplaceItem): Promise<void> {
   detailId.value = item.id;
   if (bodies[item.id] === undefined) {

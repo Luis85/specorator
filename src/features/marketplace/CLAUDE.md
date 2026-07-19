@@ -13,7 +13,7 @@ Modeled on — and reuses the components of — `features/library`.
 | `MarketplaceCatalogClient.ts` | HTTP fetch over Obsidian `requestUrl`; `fetchIndex()` + `fetchItemBody(path)`. Injectable `request`/`vet` seams (default: `requestUrl` + `assertSafeRemoteUrl`) |
 | `MarketplaceCache.ts` | Schema-versioned JSON cache at `.specorator/cache/marketplace-index.json`; cold-safe `read()`/`write()` via `writeAtomic` |
 | `MarketplaceInstaller.ts` | `installMarketplaceItem(item, body, deps, now)` routes to the same vault stores the app uses; `isItemInstalled(item, deps, rosterIds?)` drives the badge |
-| `MarketplaceView.ts` / `activateMarketplace.ts` / `viewType.ts` | `ItemView` host (per-leaf Vue app), leaf activation, view-type constant |
+| `MarketplaceView.ts` / `activateMarketplace.ts` / `viewType.ts` | `ItemView` host (per-leaf Vue app), leaf activation (optional `requestedView` deep-link), view-type constant |
 | `marketplaceNetworkGate.ts` | One-time in-app Notice on first opt-in |
 | `vue/MarketplaceRoot.vue` | Storefront orchestrator: opt-in gate, `activeView`/`detailId` state, per-type counts, `LibraryToolbar` + `useLibraryList` (scoped to the active view), generation-guarded body-fetch cache, install, offline/error banners. Routes the body between skeleton grid → Home sections / category grid → detail |
 | `vue/components/MarketplaceNav.vue` | Primary category tab bar (Home + one tab per present type, with counts); single-select, emits `select` |
@@ -25,7 +25,7 @@ Modeled on — and reuses the components of — `features/library`.
 | `vue/marketplaceIcons.ts` | Per-type default Lucide icon map (`iconForItem`); re-exports the shared cross-window-safe `mountLucide` function-ref helper (`src/shared/vue/mountLucide.ts`, shared with the Agent Board) |
 | `vue/marketplaceTypeLabels.ts` | Localized `type → label` map shared by the card/detail badge, the nav tabs, and the Home section headers |
 | `vue/useMarketplaceInstalledRefresh.ts` | Per-leaf composable: debounced `store.refreshInstalled()` on three channels — `roster:changed` (agents), folder-scoped vault create/delete/rename (loops/templates/quick-actions), and `settings-changed` (an install-folder setting change) |
-| `vue/stores/marketplaceStore.ts` | Shared Pinia store over one Pinia per plugin (all leaves share fetched catalog + installed state) |
+| `vue/stores/marketplaceStore.ts` | Shared Pinia store over one Pinia per plugin (all leaves share fetched catalog + installed state). `requestedView`/`requestView` carry a Library deep-link target to the Root |
 
 ## Contracts & invariants
 
@@ -168,6 +168,16 @@ Modeled on — and reuses the components of — `features/library`.
   surface; `MarketplaceGrid` shows a skeleton grid while `store.loading` with no
   items yet. The fetch is async (`requestUrl`) and `refreshInstalled`'s per-item
   vault checks run after load — both off the first-paint path.
+- **Deep-linkable from the Library.** `activateMarketplace(plugin, requestedView?)`
+  records a target category on the shared store (`requestView`) BEFORE revealing
+  the leaf; `MarketplaceRoot` applies it via an immediate `requestedView` watch (a
+  fresh leaf that mounts after the request) or reactively (an already-open leaf),
+  then consumes it (`requestView(null)`) so a later remount can't re-navigate. The
+  Library's per-tab "Browse Marketplace" link (`LibraryRoot`, `TAB_TO_MARKETPLACE`)
+  routes through it — Agents→agents, Loops→loops, Quick Actions→quick-action,
+  Skills→skill. A stranded category (0 items) falls back to Home via the counts
+  guard. `LibraryRoot` importing `activateMarketplace` is a one-way features→
+  features edge (activateMarketplace pulls in no Library module), so no cycle.
 - **Skills are deferred.** `INSTALLABLE_ITEM_TYPES` excludes `skill`; adding it
   there plus an installer branch is the whole extension point.
 

@@ -7,6 +7,13 @@ import { useLoopLibraryStore } from '@/features/library/vue/stores/loopLibrarySt
 
 import { makePlugin } from './helpers';
 
+// LibraryRoot's "Browse Marketplace" link routes through activateMarketplace;
+// stub it so the click is asserted without opening a real Marketplace leaf.
+const { activateMarketplaceMock } = vi.hoisted(() => ({ activateMarketplaceMock: vi.fn() }));
+vi.mock('@/features/marketplace/activateMarketplace', () => ({
+  activateMarketplace: activateMarketplaceMock,
+}));
+
 function makeLeaf() {
   // Empty stub: LibraryView no longer drives the leaf itself (the flag-off
   // redirect that used setViewState was deleted with the legacy views).
@@ -44,6 +51,16 @@ describe('LibraryView', () => {
     expect(tabs).toHaveLength(4);
     expect(el.querySelector('[aria-current="page"]')?.textContent).toContain('Agents');
     expect(el.querySelector('.specorator-vue-panel-header h2')?.textContent).toContain('Agent Roster');
+  });
+
+  it('deep-links the Browse Marketplace link to the active tab category', async () => {
+    activateMarketplaceMock.mockClear();
+    const view = new LibraryView(makeLeaf(), makePlugin());
+    const el = mountView(view);
+    await view.onOpen();
+    // Default tab is Agents → the link opens the Marketplace scoped to 'agent'.
+    (el.querySelector('.specorator-vue-lib-discover-link') as HTMLElement).click();
+    expect(activateMarketplaceMock).toHaveBeenCalledWith(expect.anything(), 'agent');
   });
 
   it('clicking the Quick actions tab mounts the Quick Actions panel', async () => {

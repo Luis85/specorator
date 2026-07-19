@@ -4,6 +4,7 @@ import { nextTick, reactive } from 'vue';
 
 import type { MarketplaceItem } from '@/features/marketplace/catalogTypes';
 import { PLUGIN_KEY } from '@/features/marketplace/vue/marketplaceKeys';
+import type { MarketplaceView } from '@/features/marketplace/vue/marketplaceView';
 
 interface StoreFake {
   items: MarketplaceItem[];
@@ -13,6 +14,8 @@ interface StoreFake {
   offline: boolean;
   loaded: boolean;
   source: string;
+  requestedView: MarketplaceView | null;
+  requestView: ReturnType<typeof vi.fn>;
   init: ReturnType<typeof vi.fn>;
   load: ReturnType<typeof vi.fn>;
   fetchBody: ReturnType<typeof vi.fn>;
@@ -60,6 +63,8 @@ function makeStore(overrides: Partial<StoreFake> = {}): StoreFake {
     offline: false,
     loaded: false,
     source: 'https://example.test/catalog',
+    requestedView: null,
+    requestView: vi.fn(),
     init: vi.fn(),
     load: vi.fn().mockResolvedValue(undefined),
     fetchBody: vi.fn().mockResolvedValue('BODY TEXT'),
@@ -244,6 +249,22 @@ describe('MarketplaceRoot category nav', () => {
     await waitFor(() =>
       expect(document.querySelectorAll('.specorator-vue-marketplace-card')).toHaveLength(2),
     );
+  });
+
+  it('applies a requested deep-link view on mount and consumes it', async () => {
+    // activateMarketplace records a requested category (the Library "Browse
+    // Marketplace" link) on the store before the leaf mounts; the Root applies it.
+    const { store } = setup(makeStore({ items: [alpha, beta], requestedView: 'agent' }), {
+      marketplaceNetworkEnabled: true,
+    });
+    await screen.findByText('Beta Agent');
+    // Deep-linked to Agents: only the agent card renders (the loop is scoped out).
+    await waitFor(() =>
+      expect(document.querySelectorAll('.specorator-vue-marketplace-card')).toHaveLength(1),
+    );
+    expect(screen.queryByText('Alpha Loop')).toBeNull();
+    // The request is consumed so a later remount doesn't re-navigate.
+    expect(store.requestView).toHaveBeenCalledWith(null);
   });
 
   it('falls back to Home when the active category leaves the reloaded catalog', async () => {
