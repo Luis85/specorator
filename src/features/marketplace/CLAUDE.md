@@ -18,7 +18,7 @@ Modeled on — and reuses the components of — `features/library`.
 | `vue/MarketplaceRoot.vue` | Opt-in gate, type facet, `LibraryToolbar` + `useLibraryList` reuse, load/preview/install orchestration, offline/error banners |
 | `vue/components/MarketplaceCard.vue` | Per-item card (type badge, preview, attribution, gated Install) |
 | `vue/marketplaceTypeLabels.ts` | Localized `type → label` map shared by the card badge and the type facet |
-| `vue/useMarketplaceInstalledRefresh.ts` | Per-leaf composable: debounced `store.refreshInstalled()` on `roster:changed` (agents) + folder-scoped vault create/delete/rename (loops/templates/quick-actions) |
+| `vue/useMarketplaceInstalledRefresh.ts` | Per-leaf composable: debounced `store.refreshInstalled()` on three channels — `roster:changed` (agents), folder-scoped vault create/delete/rename (loops/templates/quick-actions), and `settings-changed` (an install-folder setting change) |
 | `vue/stores/marketplaceStore.ts` | Shared Pinia store over one Pinia per plugin (all leaves share fetched catalog + installed state) |
 
 ## Contracts & invariants
