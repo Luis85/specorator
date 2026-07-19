@@ -1,10 +1,18 @@
 import type { Vault } from 'obsidian';
 
+import type { HomeFileAdapter } from '@/core/storage/HomeFileAdapter';
 import type { VaultFileAdapter } from '@/core/storage/VaultFileAdapter';
 import type { AgentRosterStore } from '@/features/agents/roster/AgentRosterStore';
 import type { RosterAgent } from '@/features/agents/roster/rosterTypes';
 import type { MarketplaceItem } from '@/features/marketplace/catalogTypes';
-import { installMarketplaceItem, isItemInstalled, type MarketplaceInstallDeps } from '@/features/marketplace/MarketplaceInstaller';
+import {
+  installMarketplaceItem,
+  installSkillItem,
+  isItemInstalled,
+  isSkillInstalledAt,
+  type MarketplaceInstallDeps,
+} from '@/features/marketplace/MarketplaceInstaller';
+import type { SkillInstallTarget } from '@/features/marketplace/skillInstallTargets';
 
 function makeDeps(overrides: Partial<MarketplaceInstallDeps> = {}) {
   const notes = new Map<string, string>();
@@ -28,6 +36,16 @@ function makeDeps(overrides: Partial<MarketplaceInstallDeps> = {}) {
     },
   } as unknown as VaultFileAdapter;
 
+  // Home adapter for user-scope skill installs — a separate in-memory map so
+  // tests can assert vault vs. home routing.
+  const homeFiles = new Map<string, string>();
+  const homeAdapter = {
+    exists: async (p: string) => homeFiles.has(p),
+    write: async (p: string, c: string) => {
+      homeFiles.set(p, c);
+    },
+  } as unknown as HomeFileAdapter;
+
   const agents: RosterAgent[] = [];
   const rosterStore = {
     list: async () => agents.slice(),
@@ -39,6 +57,7 @@ function makeDeps(overrides: Partial<MarketplaceInstallDeps> = {}) {
   const deps: MarketplaceInstallDeps = {
     vault,
     adapter,
+    homeAdapter,
     rosterStore,
     loopFolder: 'Agent Board/loops',
     templateFolder: 'Agent Board/templates',
@@ -46,7 +65,7 @@ function makeDeps(overrides: Partial<MarketplaceInstallDeps> = {}) {
     catalogUrl: 'https://catalog.test/',
     ...overrides,
   };
-  return { deps, notes, qaFiles, agents };
+  return { deps, notes, qaFiles, homeFiles, agents };
 }
 
 const loopItem: MarketplaceItem = {
@@ -292,5 +311,109 @@ describe('isItemInstalled', () => {
     expect(await isItemInstalled(item, deps, new Set(['roster:planner']))).toBe(true);
     expect(await isItemInstalled(item, deps, new Set(['roster:other']))).toBe(false);
     expect(listSpy).not.toHaveBeenCalled();
+  });
+});
+
+const skillItem: MarketplaceItem = {
+  id: 'skills/project-setup',
+  type: 'skill',
+  name: 'project-setup',
+  description: 'Use when setting up a project.',
+  path: 'skills/project-setup/SKILL.md',
+  files: [
+    'skills/project-setup/SKILL.md',
+    'skills/project-setup/references/a.md',
+    'skills/project-setup/scripts/run.mjs',
+  ],
+  tags: [],
+};
+
+/** The in-skill file map the store hands the installer (keys are folder-relative). */
+function skillFiles(): Map<string, string> {
+  return new Map<string, string>([
+    ['SKILL.md', 'SKILL body'],
+    ['references/a.md', 'ref a'],
+    ['scripts/run.mjs', 'run'],
+  ]);
+}
+
+describe('installSkillItem', () => {
+  it('writes the whole folder under the vault provider root at project scope', async () => {
+    const { deps, qaFiles, homeFiles } = makeDeps();
+    const outcome = await installSkillItem(skillItem, skillFiles(), { provider: 'claude', scope: 'project' }, deps);
+    expect(outcome).toBe('installed');
+    expect(qaFiles.get('.claude/skills/project-setup/SKILL.md')).toBe('SKILL body');
+    expect(qaFiles.get('.claude/skills/project-setup/references/a.md')).toBe('ref a');
+    expect(qaFiles.get('.claude/skills/project-setup/scripts/run.mjs')).toBe('run');
+    expect(homeFiles.size).toBe(0); // project scope never touches home
+  });
+
+  it('writes to the home adapter at user scope, under the codex root', async () => {
+    const { deps, qaFiles, homeFiles } = makeDeps();
+    await installSkillItem(skillItem, skillFiles(), { provider: 'codex', scope: 'user' }, deps);
+    expect(homeFiles.get('.codex/skills/project-setup/SKILL.md')).toBe('SKILL body');
+    expect(homeFiles.get('.codex/skills/project-setup/scripts/run.mjs')).toBe('run');
+    expect(qaFiles.size).toBe(0); // user scope writes to home only
+  });
+
+  it('maps each provider to its own skill root', async () => {
+    const { deps, qaFiles } = makeDeps();
+    await installSkillItem(skillItem, skillFiles(), { provider: 'cursor', scope: 'project' }, deps);
+    expect(qaFiles.has('.cursor/skills/project-setup/SKILL.md')).toBe(true);
+  });
+
+  it('skips when the target already holds the skill', async () => {
+    const { deps } = makeDeps();
+    const target: SkillInstallTarget = { provider: 'claude', scope: 'project' };
+    expect(await installSkillItem(skillItem, skillFiles(), target, deps)).toBe('installed');
+    expect(await installSkillItem(skillItem, skillFiles(), target, deps)).toBe('skipped');
+  });
+
+  it('refuses a file map without SKILL.md', async () => {
+    const { deps } = makeDeps();
+    const noSkillMd = new Map<string, string>([['references/a.md', 'x']]);
+    await expect(
+      installSkillItem(skillItem, noSkillMd, { provider: 'claude', scope: 'project' }, deps),
+    ).rejects.toThrow(/SKILL\.md/);
+  });
+
+  it('refuses an unsafe in-skill path (traversal) and writes nothing', async () => {
+    const { deps, qaFiles } = makeDeps();
+    const evil = new Map<string, string>([
+      ['SKILL.md', 'x'],
+      ['../evil.md', 'pwn'],
+    ]);
+    await expect(
+      installSkillItem(skillItem, evil, { provider: 'claude', scope: 'project' }, deps),
+    ).rejects.toThrow(/unsafe/);
+    // SKILL.md is written last, and the traversal file is rejected before it, so
+    // nothing lands — no dedup marker to block a corrected re-install.
+    expect(qaFiles.size).toBe(0);
+  });
+
+  it('writes SKILL.md last so a mid-write failure leaves no dedup marker', async () => {
+    const { deps } = makeDeps();
+    const order: string[] = [];
+    jest.spyOn(deps.adapter, 'write').mockImplementation(async (p: string) => {
+      order.push(p);
+    });
+    await installSkillItem(skillItem, skillFiles(), { provider: 'claude', scope: 'project' }, deps);
+    expect(order[order.length - 1]).toBe('.claude/skills/project-setup/SKILL.md');
+  });
+});
+
+describe('skill installed checks', () => {
+  it('isItemInstalled reports installed when present in ANY root', async () => {
+    const { deps } = makeDeps();
+    expect(await isItemInstalled(skillItem, deps)).toBe(false);
+    await installSkillItem(skillItem, skillFiles(), { provider: 'codex', scope: 'user' }, deps);
+    expect(await isItemInstalled(skillItem, deps)).toBe(true); // found in codex/user
+  });
+
+  it('isSkillInstalledAt reflects the SPECIFIC target only', async () => {
+    const { deps } = makeDeps();
+    await installSkillItem(skillItem, skillFiles(), { provider: 'codex', scope: 'user' }, deps);
+    expect(await isSkillInstalledAt(skillItem, { provider: 'codex', scope: 'user' }, deps)).toBe(true);
+    expect(await isSkillInstalledAt(skillItem, { provider: 'claude', scope: 'project' }, deps)).toBe(false);
   });
 });

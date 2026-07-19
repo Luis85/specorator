@@ -2,6 +2,7 @@
 import { Notice } from 'obsidian';
 import { computed, inject, nextTick, onMounted, onUnmounted, reactive, ref, watch } from 'vue';
 
+import { ProviderRegistry } from '../../../core/providers/ProviderRegistry';
 import { t } from '../../../i18n/i18n';
 import LibraryToolbar from '../../library/vue/components/LibraryToolbar.vue';
 import { useLibraryList } from '../../library/vue/useLibraryList';
@@ -12,6 +13,11 @@ import {
   type MarketplaceItemType,
 } from '../catalogTypes';
 import { maybeWarnMarketplaceNetwork } from '../marketplaceNetworkGate';
+import {
+  SKILL_PROVIDER_TARGETS,
+  type SkillInstallTarget,
+  type SkillProviderTarget,
+} from '../skillInstallTargets';
 import MarketplaceDetail from './components/MarketplaceDetail.vue';
 import MarketplaceGrid from './components/MarketplaceGrid.vue';
 import MarketplaceHome from './components/MarketplaceHome.vue';
@@ -251,14 +257,36 @@ function backToList(): void {
   detailId.value = null;
 }
 
-async function install(item: MarketplaceItem): Promise<void> {
+// Skill install targets: the three providers that own a skill root, labeled from
+// the registry (falling back to the id if a provider isn't registered).
+const skillProviderOptions = computed(() =>
+  SKILL_PROVIDER_TARGETS.map((id) => ({ id, label: providerLabel(id) })),
+);
+
+function providerLabel(id: SkillProviderTarget): string {
+  try {
+    return ProviderRegistry.getProviderDisplayName(id);
+  } catch {
+    return id;
+  }
+}
+
+// Passed to the detail so it can reflect whether the CURRENTLY selected target
+// already holds the skill (per-target, unlike the "installed anywhere" badge).
+// Tolerates a null item (vue-tsc doesn't narrow the v-if'd detailItem in bindings).
+function skillInstalledChecker(item: MarketplaceItem | null): (target: SkillInstallTarget) => Promise<boolean> {
+  return (target) =>
+    item ? store.isSkillInstalledAt(item, target.provider, target.scope) : Promise.resolve(false);
+}
+
+async function install(item: MarketplaceItem, target?: SkillInstallTarget): Promise<void> {
   // Install the reviewed body only; if the preview hasn't loaded it yet, there
   // is nothing vetted to install (the button is disabled in this state too).
   const body = bodies[item.id];
   if (body === undefined) return;
   installing[item.id] = true;
   try {
-    const outcome = await store.install(item, body);
+    const outcome = await store.install(item, body, target);
     new Notice(
       outcome === 'installed'
         ? t('marketplace.installedNotice', { name: item.name })
@@ -332,8 +360,10 @@ async function install(item: MarketplaceItem): Promise<void> {
       :installing="!!installing[detailItem.id]"
       :installed="store.installedIds.has(detailItem.id)"
       :installable="isInstallableType(detailItem.type)"
+      :skill-provider-options="skillProviderOptions"
+      :skill-installed-checker="skillInstalledChecker(detailItem)"
       @back="backToList"
-      @install="install(detailItem)"
+      @install="(target) => detailItem && install(detailItem, target)"
     />
     <template v-else>
       <LibraryToolbar

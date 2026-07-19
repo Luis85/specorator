@@ -1,8 +1,9 @@
 import { defineStore } from 'pinia';
 import { ref, shallowRef } from 'vue';
 
+import { HomeFileAdapter } from '../../../../core/storage/HomeFileAdapter';
 import type SpecoratorPlugin from '../../../../main';
-import type { MarketplaceItem } from '../../catalogTypes';
+import { type MarketplaceItem, skillFolderPrefix } from '../../catalogTypes';
 import { MarketplaceCache } from '../../MarketplaceCache';
 import {
   DEFAULT_MARKETPLACE_BASE_URL,
@@ -13,9 +14,42 @@ import {
   installedAgentKeys,
   installMarketplaceItem,
   type InstallOutcome,
+  installSkillItem,
   isItemInstalled,
+  isSkillInstalledAt as skillInstalledAtTarget,
   type MarketplaceInstallDeps,
 } from '../../MarketplaceInstaller';
+import type {
+  SkillInstallScope,
+  SkillInstallTarget,
+  SkillProviderTarget,
+} from '../../skillInstallTargets';
+
+/** Bounded parallelism for fetching a multi-file skill's supporting files. */
+const SKILL_FETCH_CONCURRENCY = 6;
+
+/**
+ * Runs `fn` over `items` with at most `limit` in flight, preserving input order
+ * in the result. Rejects on the first failure (so a skill install writes nothing
+ * when any file can't be fetched). Kept local — no external dependency.
+ */
+async function fetchWithConcurrency<T, R>(
+  items: readonly T[],
+  limit: number,
+  fn: (item: T) => Promise<R>,
+): Promise<R[]> {
+  const results = new Array<R>(items.length);
+  let cursor = 0;
+  const worker = async (): Promise<void> => {
+    while (cursor < items.length) {
+      const index = cursor;
+      cursor += 1;
+      results[index] = await fn(items[index]);
+    }
+  };
+  await Promise.all(Array.from({ length: Math.min(limit, items.length) }, () => worker()));
+  return results;
+}
 
 /**
  * Marketplace store: fetches the catalog manifest via the client (falling back
@@ -98,6 +132,9 @@ export const useMarketplaceStore = defineStore('marketplace', () => {
     return {
       vault: p.app.vault,
       adapter: p.vaultFileAdapter,
+      // User-scope skill installs write outside the vault (home dir). A fresh
+      // HomeFileAdapter is cheap and stateless (rooted at os.homedir()).
+      homeAdapter: new HomeFileAdapter(),
       rosterStore: p.agentRosterStore,
       loopFolder: p.settings.agentBoardLoopFolder || 'Agent Board/loops',
       templateFolder: p.settings.agentBoardTemplateFolder || 'Agent Board/templates',
@@ -228,23 +265,82 @@ export const useMarketplaceStore = defineStore('marketplace', () => {
   /**
    * Installs the exact body the user reviewed in the preview — passed in by the
    * caller rather than re-fetched, so what lands in the vault is what was shown
-   * (no re-dial, no chance the remote changed between preview and install). This
-   * is also why install issues no network request and needs no opt-in guard.
+   * (no re-dial for the reviewed body). Non-skill installs issue no network
+   * request and need no opt-in guard.
+   *
+   * Skills are the exception: they are multi-file, so the reviewed `SKILL.md` is
+   * written verbatim while the supporting files ARE fetched at install time
+   * (guarded by the network opt-in and the same SSRF/containment checks), and a
+   * `target` (provider + scope) selects the root they land under.
    */
-  async function install(item: MarketplaceItem, body: string): Promise<InstallOutcome> {
+  async function install(
+    item: MarketplaceItem,
+    body: string,
+    target?: SkillInstallTarget,
+  ): Promise<InstallOutcome> {
     const generation = loadGeneration;
-    const outcome = await installMarketplaceItem(item, body, installDeps(), Date.now());
-    // If the catalog reloaded during the vault write (Refresh / source switch,
-    // possibly from another leaf), a later refreshInstalled already recomputed
-    // installedIds against the new catalog — blindly adding this id could
-    // falsely mark a reused id installed, so only optimistically mark when the
-    // catalog is still the one this install ran against.
+    const outcome =
+      item.type === 'skill'
+        ? await installSkillAt(item, body, requireSkillTarget(target))
+        : await installMarketplaceItem(item, body, installDeps(), Date.now());
+    // If the catalog reloaded during the write (Refresh / source switch, possibly
+    // from another leaf), a later refreshInstalled already recomputed installedIds
+    // against the new catalog — blindly adding this id could falsely mark a reused
+    // id installed, so only optimistically mark when the catalog is still current.
     if (generation === loadGeneration) {
       const next = new Set(installedIds.value);
       next.add(item.id);
       installedIds.value = next;
     }
     return outcome;
+  }
+
+  function requireSkillTarget(target?: SkillInstallTarget): SkillInstallTarget {
+    if (!target) throw new MarketplaceError('Choose a provider and scope to install this skill.');
+    return target;
+  }
+
+  /** Fetches a skill's supporting files (network) and installs the whole folder. */
+  async function installSkillAt(
+    item: MarketplaceItem,
+    skillMdBody: string,
+    target: SkillInstallTarget,
+  ): Promise<InstallOutcome> {
+    assertNetworkEnabled();
+    const files = await fetchSkillFiles(item, skillMdBody);
+    return installSkillItem(item, files, target, installDeps());
+  }
+
+  /**
+   * Builds the in-skill file map: the reviewed `SKILL.md` verbatim, plus every
+   * other file in `item.files` fetched from the SAME source the catalog loaded
+   * from. Keys are in-skill relative paths (`scripts/setup.mjs`), values the
+   * content. A single fetch failure rejects the whole map, so no partial skill
+   * is ever written.
+   */
+  async function fetchSkillFiles(item: MarketplaceItem, skillMdBody: string): Promise<Map<string, string>> {
+    const files = new Map<string, string>([['SKILL.md', skillMdBody]]);
+    const prefix = skillFolderPrefix(item.path);
+    const others = (item.files ?? []).filter((repoPath) => repoPath !== item.path);
+    if (prefix === null || others.length === 0) return files;
+    const client = clientFor(source.value);
+    const contents = await fetchWithConcurrency(others, SKILL_FETCH_CONCURRENCY, (repoPath) =>
+      client.fetchItemBody(repoPath),
+    );
+    others.forEach((repoPath, index) => {
+      const rel = repoPath.startsWith(prefix) ? repoPath.slice(prefix.length) : null;
+      if (rel) files.set(rel, contents[index]);
+    });
+    return files;
+  }
+
+  /** Whether the skill already exists at a specific target — drives the detail's per-target button. */
+  async function isSkillInstalledAt(
+    item: MarketplaceItem,
+    provider: SkillProviderTarget,
+    scope: SkillInstallScope,
+  ): Promise<boolean> {
+    return skillInstalledAtTarget(item, { provider, scope }, installDeps());
   }
 
   return {
@@ -259,6 +355,7 @@ export const useMarketplaceStore = defineStore('marketplace', () => {
     load,
     fetchBody,
     install,
+    isSkillInstalledAt,
     // Exposed so a per-leaf event subscription can recompute the installed badges
     // when items are mutated OUTSIDE the marketplace (Library delete/rename, roster
     // change). No network, generation-guarded — safe to call anytime.

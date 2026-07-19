@@ -8,16 +8,27 @@ import type SpecoratorPlugin from '@/main';
 // the (hoisted) vi.mock factories below can reference them. The client-ctor spy
 // is what lets us assert the store never even *constructs* a network client when
 // the opt-in is off — the check has to sit at the I/O boundary, not only at mount.
-const { fetchIndexSpy, fetchBodySpy, clientCtor, cacheRead, cacheWrite, installSpy, isInstalledSpy } =
-  vi.hoisted(() => ({
-    fetchIndexSpy: vi.fn(),
-    fetchBodySpy: vi.fn(),
-    clientCtor: vi.fn(),
-    cacheRead: vi.fn(),
-    cacheWrite: vi.fn(),
-    installSpy: vi.fn(),
-    isInstalledSpy: vi.fn(),
-  }));
+const {
+  fetchIndexSpy,
+  fetchBodySpy,
+  clientCtor,
+  cacheRead,
+  cacheWrite,
+  installSpy,
+  isInstalledSpy,
+  installSkillSpy,
+  isSkillInstalledAtSpy,
+} = vi.hoisted(() => ({
+  fetchIndexSpy: vi.fn(),
+  fetchBodySpy: vi.fn(),
+  clientCtor: vi.fn(),
+  cacheRead: vi.fn(),
+  cacheWrite: vi.fn(),
+  installSpy: vi.fn(),
+  isInstalledSpy: vi.fn(),
+  installSkillSpy: vi.fn(),
+  isSkillInstalledAtSpy: vi.fn(),
+}));
 
 // Classes (not arrow factories): the store constructs these with `new`, and an
 // arrow function has no [[Construct]].
@@ -46,7 +57,9 @@ vi.mock('@/features/marketplace/MarketplaceCache', () => ({
 
 vi.mock('@/features/marketplace/MarketplaceInstaller', () => ({
   installMarketplaceItem: installSpy,
+  installSkillItem: installSkillSpy,
   isItemInstalled: isInstalledSpy,
+  isSkillInstalledAt: isSkillInstalledAtSpy,
   // Faithful stand-in: refreshInstalled uses this to precompute the agent key set
   // (roster ids + catalog ids). Kept real so an agent-item test can't silently
   // fall through the try/catch to an empty set.
@@ -450,5 +463,78 @@ describe('marketplaceStore load fallbacks', () => {
     await store.load();
     expect(store.offline).toBe(true);
     expect(store.items).toEqual([item]);
+  });
+});
+
+describe('marketplaceStore skill install', () => {
+  const skillItem: MarketplaceItem = {
+    id: 'skills/project-setup',
+    type: 'skill',
+    name: 'project-setup',
+    description: 'd',
+    path: 'skills/project-setup/SKILL.md',
+    files: [
+      'skills/project-setup/SKILL.md',
+      'skills/project-setup/references/a.md',
+      'skills/project-setup/scripts/setup.mjs',
+    ],
+    tags: [],
+  };
+
+  beforeEach(() => {
+    setActivePinia(createPinia());
+    vi.clearAllMocks();
+    installSkillSpy.mockResolvedValue('installed');
+    isSkillInstalledAtSpy.mockResolvedValue(false);
+    fetchBodySpy.mockResolvedValue('FILE');
+  });
+
+  it('fetches the supporting files and installs the whole folder at the chosen target', async () => {
+    const store = useMarketplaceStore();
+    store.init(fakePlugin(true));
+    const outcome = await store.install(skillItem, 'SKILL BODY', { provider: 'codex', scope: 'user' });
+    expect(outcome).toBe('installed');
+
+    // Only the supporting files are fetched — the reviewed SKILL.md body is used verbatim.
+    expect(fetchBodySpy).toHaveBeenCalledWith('skills/project-setup/references/a.md');
+    expect(fetchBodySpy).toHaveBeenCalledWith('skills/project-setup/scripts/setup.mjs');
+    expect(fetchBodySpy).not.toHaveBeenCalledWith('skills/project-setup/SKILL.md');
+
+    // installSkillItem gets an in-skill-relative file map + the target.
+    const [passedItem, files, target] = installSkillSpy.mock.calls[0];
+    expect(passedItem).toBe(skillItem);
+    expect(target).toEqual({ provider: 'codex', scope: 'user' });
+    expect(files.get('SKILL.md')).toBe('SKILL BODY');
+    expect(files.get('references/a.md')).toBe('FILE');
+    expect(files.get('scripts/setup.mjs')).toBe('FILE');
+    // The "installed anywhere" badge flips on.
+    expect(store.installedIds.has('skills/project-setup')).toBe(true);
+  });
+
+  it('rejects a skill install with no target', async () => {
+    const store = useMarketplaceStore();
+    store.init(fakePlugin(true));
+    await expect(store.install(skillItem, 'SKILL BODY')).rejects.toThrow(/provider and scope/i);
+    expect(installSkillSpy).not.toHaveBeenCalled();
+  });
+
+  it('rejects a skill install (and fetches nothing) when the network opt-in is off', async () => {
+    const store = useMarketplaceStore();
+    store.init(fakePlugin(false));
+    await expect(
+      store.install(skillItem, 'SKILL BODY', { provider: 'claude', scope: 'project' }),
+    ).rejects.toThrow(/disabled/i);
+    expect(fetchBodySpy).not.toHaveBeenCalled();
+    expect(installSkillSpy).not.toHaveBeenCalled();
+  });
+
+  it('isSkillInstalledAt delegates to the installer with the target', async () => {
+    isSkillInstalledAtSpy.mockResolvedValue(true);
+    const store = useMarketplaceStore();
+    store.init(fakePlugin(true));
+    expect(await store.isSkillInstalledAt(skillItem, 'cursor', 'project')).toBe(true);
+    const [item, target] = isSkillInstalledAtSpy.mock.calls[0];
+    expect(item).toBe(skillItem);
+    expect(target).toEqual({ provider: 'cursor', scope: 'project' });
   });
 });

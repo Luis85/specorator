@@ -145,12 +145,80 @@ describe('parseManifest', () => {
   });
 });
 
+describe('parseManifest — skill files', () => {
+  const skill = (files: unknown) => ({
+    id: 'skills/project-setup',
+    type: 'skill',
+    name: 'project-setup',
+    description: 'd',
+    path: 'skills/project-setup/SKILL.md',
+    files,
+    tags: ['x'],
+  });
+
+  const firstSkill = (files: unknown) =>
+    parseManifest({ schemaVersion: 1, items: [skill(files)] })?.items[0];
+
+  it('keeps files under the skill folder, SKILL.md included, in order', () => {
+    const item = firstSkill([
+      'skills/project-setup/SKILL.md',
+      'skills/project-setup/scripts/setup.mjs',
+      'skills/project-setup/references/a.md',
+    ]);
+    expect(item?.files).toEqual([
+      'skills/project-setup/SKILL.md',
+      'skills/project-setup/scripts/setup.mjs',
+      'skills/project-setup/references/a.md',
+    ]);
+  });
+
+  it('prepends SKILL.md when the manifest omitted it from files', () => {
+    const item = firstSkill(['skills/project-setup/scripts/setup.mjs']);
+    expect(item?.files?.[0]).toBe('skills/project-setup/SKILL.md');
+    expect(item?.files).toContain('skills/project-setup/scripts/setup.mjs');
+  });
+
+  it('drops traversal, absolute, backslash, out-of-folder, and duplicate entries', () => {
+    const item = firstSkill([
+      'skills/project-setup/SKILL.md',
+      'skills/project-setup/../evil.md', // traversal
+      '/etc/passwd', // absolute
+      'skills/project-setup/a\\b.md', // backslash
+      'skills/other/x.md', // different skill's folder
+      'skills/project-setup/scripts/setup.mjs',
+      'skills/project-setup/scripts/setup.mjs', // duplicate
+    ]);
+    expect(item?.files).toEqual([
+      'skills/project-setup/SKILL.md',
+      'skills/project-setup/scripts/setup.mjs',
+    ]);
+  });
+
+  it('falls back to just SKILL.md when files is absent', () => {
+    expect(firstSkill(undefined)?.files).toEqual(['skills/project-setup/SKILL.md']);
+  });
+
+  it('drops the whole item when files is present but not an array', () => {
+    expect(firstSkill('nope')).toBeUndefined();
+  });
+
+  it('strips a files array from non-skill items', () => {
+    const manifest = parseManifest({
+      schemaVersion: 1,
+      items: [
+        { id: 'loops/x', type: 'loop', name: 'X', description: 'd', path: 'loops/x.md', tags: ['a'], files: ['loops/x.md', 'loops/evil'] },
+      ],
+    });
+    expect(manifest?.items[0] && 'files' in manifest.items[0]).toBe(false);
+  });
+});
+
 describe('isInstallableType', () => {
-  it('installs the four content types, not skills', () => {
+  it('installs all five content types, including skills', () => {
     expect(isInstallableType('loop')).toBe(true);
     expect(isInstallableType('agent')).toBe(true);
     expect(isInstallableType('template')).toBe(true);
     expect(isInstallableType('quick-action')).toBe(true);
-    expect(isInstallableType('skill')).toBe(false);
+    expect(isInstallableType('skill')).toBe(true);
   });
 });

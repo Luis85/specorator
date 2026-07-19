@@ -3,6 +3,7 @@
  * (`index.json`) fetched from the curated GitHub-hosted catalog. Shapes mirror
  * the manifest produced by the marketplace repo's `scripts/build-index.mjs`.
  */
+import { hasUnsafePathSegment } from './skillInstallTargets';
 
 /** A catalog item's type — the singular form the manifest uses. */
 export type MarketplaceItemType = 'quick-action' | 'agent' | 'loop' | 'template' | 'skill';
@@ -13,8 +14,15 @@ export interface MarketplaceItem {
   type: MarketplaceItemType;
   name: string;
   description: string;
-  /** Repo-relative path to the item's Markdown file, e.g. `loops/ticket-to-pr-ready.md`. */
+  /** Repo-relative path to the item's Markdown file, e.g. `loops/ticket-to-pr-ready.md`.
+   *  For a skill this is its `SKILL.md` (the previewed body). */
   path: string;
+  /**
+   * Skills only — every file in the skill folder as repo-relative paths
+   * (`SKILL.md` included), so the installer can fetch and write the whole
+   * multi-file skill under the chosen root. Absent for single-file types.
+   */
+  files?: string[];
   tags: string[];
   icon?: string;
   /** Agents only — worker/verifier roles. */
@@ -47,15 +55,16 @@ export const MARKETPLACE_ITEM_TYPES: readonly MarketplaceItemType[] = [
 ];
 
 /**
- * Types this version can install. Skills are catalogued but not yet installable
- * (they need a provider-root chooser and have no catalog content today), so the
- * view surfaces them as not-yet-installable rather than silently dropping them.
+ * Types this version can install. Skills install as a multi-file folder into a
+ * provider skill root (Claude/Codex/Cursor) at project or user scope, chosen in
+ * the detail view — see `skillInstallTargets.ts` and `MarketplaceInstaller`.
  */
 export const INSTALLABLE_ITEM_TYPES: readonly MarketplaceItemType[] = [
   'quick-action',
   'agent',
   'loop',
   'template',
+  'skill',
 ];
 
 export function isInstallableType(type: MarketplaceItemType): boolean {
@@ -106,6 +115,16 @@ function hasInstallableName(value: unknown): value is string {
   return isNonBlankString(value) && normalizeInstallSlug(value).length > 0;
 }
 
+/** An optional array field (tags/files): absent, or an array. */
+function isOptionalArray(value: unknown): boolean {
+  return value === undefined || Array.isArray(value);
+}
+
+/** A recognized catalog item type. */
+function isKnownItemType(value: unknown): value is MarketplaceItemType {
+  return typeof value === 'string' && (MARKETPLACE_ITEM_TYPES as readonly string[]).includes(value);
+}
+
 function isMarketplaceItem(value: unknown): value is MarketplaceItem {
   if (typeof value !== 'object' || value === null) return false;
   const item = value as Record<string, unknown>;
@@ -113,9 +132,9 @@ function isMarketplaceItem(value: unknown): value is MarketplaceItem {
     isSafeCatalogId(item.id) &&
     hasInstallableName(item.name) &&
     typeof item.path === 'string' &&
-    typeof item.type === 'string' &&
-    (MARKETPLACE_ITEM_TYPES as readonly string[]).includes(item.type) &&
-    (item.tags === undefined || Array.isArray(item.tags))
+    isKnownItemType(item.type) &&
+    isOptionalArray(item.tags) &&
+    isOptionalArray(item.files)
   );
 }
 
@@ -132,6 +151,53 @@ function installKeyOf(item: MarketplaceItem): string | null {
 }
 
 /**
+ * The `<folder>/<slug>/` prefix a skill's files must all sit under, derived from
+ * its `SKILL.md` path (`item.path`). Null when the path isn't a `.../SKILL.md`,
+ * so a malformed skill falls back to installing only its previewed body.
+ */
+export function skillFolderPrefix(skillMdPath: string): string | null {
+  const suffix = '/SKILL.md';
+  if (!skillMdPath.endsWith(suffix) || skillMdPath.length <= suffix.length) return null;
+  return skillMdPath.slice(0, skillMdPath.length - suffix.length + 1); // keep trailing '/'
+}
+
+/**
+ * A skill file path safe to fetch and write: a string strictly under the skill's
+ * own folder, no `..` traversal, no absolute/host/drive path, no backslashes.
+ * The catalog is untrusted, so a hostile `files` entry (`../../etc`, `/abs`,
+ * `C:\..`) must never escape the skill's install dir. (The catalog client also
+ * refuses any fetch that escapes the base URL — this is the write-side guard.)
+ */
+function isSafeSkillFilePath(value: unknown, prefix: string): value is string {
+  return (
+    typeof value === 'string' &&
+    value.startsWith(prefix) &&
+    value.length > prefix.length &&
+    !hasUnsafePathSegment(value)
+  );
+}
+
+/**
+ * The safe, de-duplicated file list a skill installs: every manifest `files`
+ * entry that stays under the skill folder, with the previewed `SKILL.md`
+ * (`item.path`) always present so the reviewed body is never dropped.
+ */
+function sanitizeSkillFiles(item: MarketplaceItem): string[] {
+  const prefix = skillFolderPrefix(item.path);
+  if (!prefix) return [item.path];
+  const seen = new Set<string>();
+  const safe: string[] = [];
+  for (const candidate of Array.isArray(item.files) ? item.files : []) {
+    if (isSafeSkillFilePath(candidate, prefix) && !seen.has(candidate)) {
+      seen.add(candidate);
+      safe.push(candidate);
+    }
+  }
+  if (!seen.has(item.path)) safe.unshift(item.path);
+  return safe;
+}
+
+/**
  * Validates a fetched manifest, returning it typed or `null` when the payload is
  * malformed or a schema version this build doesn't understand. Individual
  * malformed items are dropped rather than failing the whole catalog.
@@ -142,11 +208,18 @@ export function parseManifest(raw: unknown): MarketplaceManifest | null {
   if (manifest.schemaVersion !== MARKETPLACE_MANIFEST_SCHEMA_VERSION) return null;
   if (!Array.isArray(manifest.items)) return null;
 
-  const parsed = manifest.items.filter(isMarketplaceItem).map((item) => ({
-    ...item,
-    description: typeof item.description === 'string' ? item.description : '',
-    tags: Array.isArray(item.tags) ? item.tags.map(String) : [],
-  }));
+  const parsed = manifest.items.filter(isMarketplaceItem).map((item) => {
+    const cleaned: MarketplaceItem = {
+      ...item,
+      description: typeof item.description === 'string' ? item.description : '',
+      tags: Array.isArray(item.tags) ? item.tags.map(String) : [],
+    };
+    // `files` is meaningful only for skills; sanitize it there (untrusted paths)
+    // and strip it everywhere else so a stray field can't ride along.
+    if (cleaned.type === 'skill') cleaned.files = sanitizeSkillFiles(cleaned);
+    else delete cleaned.files;
+    return cleaned;
+  });
 
   // Dedupe by id AND by per-type install key (first wins). Id-dedup keeps the
   // card v-for `:key` unique; install-key-dedup drops a later item that would

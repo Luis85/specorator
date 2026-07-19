@@ -73,21 +73,73 @@ describe('MarketplaceDetail', () => {
     expect(screen.queryByRole('button', { name: 'Install' })).toBeNull();
   });
 
-  it('shows the not-installable note for non-installable types', () => {
-    renderDetail({
-      item: base({ type: 'skill', id: 'skills/x', path: 'skills/x.md' }),
-      installable: false,
-      typeLabel: 'Skill',
-    });
-    expect(screen.getByText('Not yet installable')).toBeTruthy();
-    expect(screen.queryByRole('button', { name: 'Install' })).toBeNull();
-  });
-
   it('linkifies only http(s) sources', () => {
     const { container: c1 } = renderDetail({ item: base({ source: 'https://example.test/x' }) });
     expect(c1.querySelector('a[href="https://example.test/x"]')).not.toBeNull();
     const { container: c2 } = renderDetail({ item: base({ source: 'javascript:alert(1)' }) });
     expect(c2.querySelector('a')).toBeNull();
     expect(c2.textContent).toContain('javascript:alert(1)');
+  });
+});
+
+describe('MarketplaceDetail — skill install panel', () => {
+  const skillItem = base({
+    type: 'skill',
+    id: 'skills/project-setup',
+    name: 'project-setup',
+    path: 'skills/project-setup/SKILL.md',
+  });
+  const skillProps = (over: Record<string, unknown> = {}) => ({
+    item: skillItem,
+    typeLabel: 'Skill',
+    installable: true,
+    skillProviderOptions: [
+      { id: 'claude', label: 'Claude' },
+      { id: 'codex', label: 'Codex' },
+      { id: 'cursor', label: 'Cursor' },
+    ],
+    skillInstalledChecker: vi.fn().mockResolvedValue(false),
+    ...over,
+  });
+
+  it('renders provider + scope selectors and an Install button (never the not-installable note)', () => {
+    renderDetail(skillProps());
+    expect(screen.getByText('Provider')).toBeTruthy();
+    expect(screen.getByText('Scope')).toBeTruthy();
+    expect(screen.getByRole('option', { name: 'Claude' })).toBeTruthy();
+    expect(screen.getByRole('option', { name: 'Codex' })).toBeTruthy();
+    expect(screen.getByRole('option', { name: 'Cursor' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Install' })).toBeTruthy();
+    expect(screen.queryByText('Not yet installable')).toBeNull();
+  });
+
+  it('emits install with the default target (claude / project)', async () => {
+    const { emitted } = renderDetail(skillProps());
+    await fireEvent.click(screen.getByRole('button', { name: 'Install' }));
+    expect(emitted().install?.[0]).toEqual([{ provider: 'claude', scope: 'project' }]);
+  });
+
+  it('emits the changed target after selecting a different provider and user scope', async () => {
+    const { emitted } = renderDetail(skillProps());
+    const [providerSelect, scopeSelect] = screen.getAllByRole('combobox') as HTMLSelectElement[];
+    await fireEvent.update(providerSelect, 'codex');
+    await fireEvent.update(scopeSelect, 'user');
+    await fireEvent.click(screen.getByRole('button', { name: 'Install' }));
+    expect(emitted().install?.at(-1)).toEqual([{ provider: 'codex', scope: 'user' }]);
+  });
+
+  it('shows the user-scope hint only when user scope is selected', async () => {
+    renderDetail(skillProps());
+    expect(screen.queryByText(/home directory/i)).toBeNull();
+    await fireEvent.update(screen.getAllByRole('combobox')[1] as HTMLSelectElement, 'user');
+    expect(screen.getByText(/home directory/i)).toBeTruthy();
+  });
+
+  it('reflects the per-target installed state (button becomes "Installed here", disabled)', async () => {
+    const checker = vi.fn().mockResolvedValue(true);
+    renderDetail(skillProps({ skillInstalledChecker: checker }));
+    const btn = (await screen.findByRole('button', { name: 'Installed here' })) as HTMLButtonElement;
+    expect(btn.disabled).toBe(true);
+    expect(checker).toHaveBeenCalledWith({ provider: 'claude', scope: 'project' });
   });
 });

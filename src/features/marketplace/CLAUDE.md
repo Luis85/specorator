@@ -9,10 +9,11 @@ Modeled on — and reuses the components of — `features/library`.
 
 | File | Role |
 |------|------|
-| `catalogTypes.ts` | `MarketplaceItem`/`MarketplaceManifest` types, `parseManifest` (validates `schemaVersion`, drops malformed items, dedupes by id **and** per-type install key), `INSTALLABLE_ITEM_TYPES` (excludes `skill`) + `isInstallableType` |
+| `catalogTypes.ts` | `MarketplaceItem`/`MarketplaceManifest` types (skills carry a `files[]`), `parseManifest` (validates `schemaVersion`, drops malformed items, dedupes by id **and** per-type install key, **sanitizes each skill's `files`** to safe under-folder paths with `SKILL.md` always present), `INSTALLABLE_ITEM_TYPES` (**all five types**, skills included) + `isInstallableType`, `skillFolderPrefix` |
+| `skillInstallTargets.ts` | Skill install-target model: `SkillProviderTarget` (`claude`/`codex`/`cursor` — the three that own a skill root; OpenCode reads Claude/Codex, so it's not a separate target), `SkillInstallScope` (`project`/`user`), `skillRootFor(target)` → `.claude/skills` etc. (relative path resolved under vault or home by scope), and `hasUnsafePathSegment` (shared traversal guard). Allowlisted in `noHardcodedProviderList` — a sanctioned enumeration (roots can't come from the registry, features→providers boundary) |
 | `MarketplaceCatalogClient.ts` | HTTP fetch over Obsidian `requestUrl`; `fetchIndex()` + `fetchItemBody(path)`. Injectable `request`/`vet` seams (default: `requestUrl` + `assertSafeRemoteUrl`) |
 | `MarketplaceCache.ts` | Schema-versioned JSON cache at `.specorator/cache/marketplace-index.json`; cold-safe `read()`/`write()` via `writeAtomic` |
-| `MarketplaceInstaller.ts` | `installMarketplaceItem(item, body, deps, now)` routes to the same vault stores the app uses; `isItemInstalled(item, deps, rosterIds?)` drives the badge |
+| `MarketplaceInstaller.ts` | `installMarketplaceItem(item, body, deps, now)` routes notes/agents to the same vault stores the app uses; `installSkillItem(item, files, target, deps)` writes a multi-file skill's folder under the chosen provider root (vault or home adapter by scope), `SKILL.md` last; `isItemInstalled` drives the badge (skills: installed in **any** root), `isSkillInstalledAt(item, target, deps)` the per-target detail button. `deps` now carries a `homeAdapter` for user-scope writes |
 | `MarketplaceView.ts` / `activateMarketplace.ts` / `viewType.ts` | `ItemView` host (per-leaf Vue app), leaf activation (optional `requestedView` deep-link), view-type constant |
 | `marketplaceNetworkGate.ts` | One-time in-app Notice on first opt-in |
 | `vue/MarketplaceRoot.vue` | Storefront orchestrator: opt-in gate, `activeView`/`detailId` state, per-type counts, `LibraryToolbar` + `useLibraryList` (scoped to the active view), generation-guarded body-fetch cache, install, offline/error banners. Routes the body between skeleton grid → Home sections / category grid → detail |
@@ -20,12 +21,12 @@ Modeled on — and reuses the components of — `features/library`.
 | `vue/components/MarketplaceHome.vue` | Storefront landing: one section per present type (header + count + first `previewLimit` cards + "See all →"); emits `open`/`seeAll` |
 | `vue/components/MarketplaceGrid.vue` | Responsive card grid for a category/search scope; renders skeleton cells while `loading` with no items yet; empty state otherwise |
 | `vue/components/MarketplaceCard.vue` | Per-item **vertical** grid card (type icon + badge + name + clamped description + tags + Installed badge). The whole card emits `open` to route to the detail — no inline preview/install |
-| `vue/components/MarketplaceDetail.vue` | In-island detail/preview: Back, header (icon/name/badge/tags), gated Install, attribution (http(s)-only source link), raw `<pre>` body. Emits `back`/`install`. On mount moves focus to the name heading (`tabindex=-1`) and resets the scroll container to the top — view-change a11y so keyboard/SR focus enters the new view and the header isn't opened mid-scroll |
+| `vue/components/MarketplaceDetail.vue` | In-island detail/preview: Back, header (icon/name/badge/tags), gated Install, attribution (http(s)-only source link), raw `<pre>` body. Emits `back`/`install` (skills pass a `{provider, scope}` target). **For skills** it renders a provider + scope selector panel and reflects the CURRENTLY selected target's installed state (button → "Installed here", disabled) via the injected `skillInstalledChecker`, rechecking when the target changes or an install finishes. On mount moves focus to the name heading (`tabindex=-1`) and resets the scroll container to the top — view-change a11y so keyboard/SR focus enters the new view and the header isn't opened mid-scroll |
 | `vue/marketplaceView.ts` | The `MarketplaceView` union (`'home' \| MarketplaceItemType`) shared by Nav + Root |
 | `vue/marketplaceIcons.ts` | Per-type default Lucide icon map (`iconForItem`); re-exports the shared cross-window-safe `mountLucide` function-ref helper (`src/shared/vue/mountLucide.ts`, shared with the Agent Board) |
 | `vue/marketplaceTypeLabels.ts` | Localized `type → label` map shared by the card/detail badge, the nav tabs, and the Home section headers |
 | `vue/useMarketplaceInstalledRefresh.ts` | Per-leaf composable: debounced `store.refreshInstalled()` on three channels — `roster:changed` (agents), folder-scoped vault create/delete/rename (loops/templates/quick-actions), and `settings-changed` (an install-folder setting change) |
-| `vue/stores/marketplaceStore.ts` | Shared Pinia store over one Pinia per plugin (all leaves share fetched catalog + installed state) |
+| `vue/stores/marketplaceStore.ts` | Shared Pinia store over one Pinia per plugin (all leaves share fetched catalog + installed state). `install(item, body, target?)` routes skills through `installSkillAt` — fetches the skill's supporting `files` (bounded concurrency, network-gated) then `installSkillItem`; `isSkillInstalledAt(item, provider, scope)` backs the detail's per-target check |
 
 ## Contracts & invariants
 
@@ -181,12 +182,30 @@ Modeled on — and reuses the components of — `features/library`.
   stranded category (0 items) falls back to Home via the counts+activeView guard.
   `LibraryRoot` importing `activateMarketplace` is a one-way features→features edge
   (activateMarketplace pulls in no Library module), so no cycle.
-- **Skills are deferred.** `INSTALLABLE_ITEM_TYPES` excludes `skill`; adding it
-  there plus an installer branch is the whole extension point.
+- **Skills install as a multi-file folder, with a provider + scope chooser.** A
+  skill's manifest entry carries a `files[]` (every file in the skill folder,
+  `SKILL.md` included). The `SKILL.md` shown in the preview installs verbatim
+  (the "review exactly what installs" contract); the **supporting files are
+  fetched at install time** from the same source (network-gated + SSRF/base-URL
+  constrained, one bounded-concurrency batch, all-or-nothing so no partial skill
+  is written). The user picks a **provider** — Claude, Codex, or Cursor (the
+  three that own a skill root; OpenCode reads Claude's/Codex's and isn't a
+  separate target) — and a **scope**: `project` (the vault's `.claude/skills`,
+  `.codex/skills`, or `.cursor/skills`, written via the vault adapter) or `user`
+  (the same relative path under the home dir, written via `HomeFileAdapter`,
+  outside the vault). The whole folder lands under `<root>/<skill-name>/`,
+  `SKILL.md` written **last** so a mid-write failure leaves no dedup marker.
+  Every skill file path is guarded twice — `parseManifest` sanitizes `files` to
+  stay under the skill folder, and the installer re-checks each in-skill path
+  (`hasUnsafePathSegment`) before writing. The card/grid badge means "installed
+  in **any** root"; the detail button reflects the **selected** target.
 
 ## Tests
 
-`tests/unit/features/marketplace/` (catalog types, client, cache, installer) and
-`tests/vue/marketplace/` (root, store, and the storefront components: nav, home,
-grid, card, detail, plus the installed-refresh composable). The settings-tab
-rendering regression lives in `tests/integration/settings/marketplaceTab.test.ts`.
+`tests/unit/features/marketplace/` (catalog types incl. skill-`files`
+sanitization, client, cache, installer incl. `installSkillItem`/target routing,
+`skillInstallTargets`) and `tests/vue/marketplace/` (root, store incl. skill
+install, and the storefront components: nav, home, grid, card, detail incl. the
+skill provider/scope panel, plus the installed-refresh composable). The
+settings-tab rendering regression lives in
+`tests/integration/settings/marketplaceTab.test.ts`.

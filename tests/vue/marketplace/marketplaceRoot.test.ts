@@ -438,10 +438,11 @@ describe('MarketplaceRoot preview + install', () => {
     await screen.findByText('BODY TEXT');
     expect(store.fetchBody).toHaveBeenCalledWith(expect.objectContaining({ id: 'a' }));
 
-    // Install hands that same body straight to the store — no re-fetch.
+    // Install hands that same body straight to the store — no re-fetch. A
+    // non-skill install passes no target (skills pass a provider+scope target).
     await fireEvent.click(screen.getByRole('button', { name: 'Install' }));
     await waitFor(() =>
-      expect(store.install).toHaveBeenCalledWith(expect.objectContaining({ id: 'a' }), 'BODY TEXT'),
+      expect(store.install).toHaveBeenCalledWith(expect.objectContaining({ id: 'a' }), 'BODY TEXT', undefined),
     );
   });
 
@@ -470,7 +471,7 @@ describe('MarketplaceRoot preview + install', () => {
     await waitFor(() => expect(installBtn.disabled).toBe(false));
     await fireEvent.click(installBtn);
     await waitFor(() =>
-      expect(store.install).toHaveBeenCalledWith(expect.objectContaining({ id: 'a' }), 'LATE BODY'),
+      expect(store.install).toHaveBeenCalledWith(expect.objectContaining({ id: 'a' }), 'LATE BODY', undefined),
     );
   });
 });

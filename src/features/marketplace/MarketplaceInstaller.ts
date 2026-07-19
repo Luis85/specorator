@@ -11,6 +11,7 @@
  */
 import { normalizePath, type Vault } from 'obsidian';
 
+import type { HomeFileAdapter } from '../../core/storage/HomeFileAdapter';
 import type { VaultFileAdapter } from '../../core/storage/VaultFileAdapter';
 import { extractString, extractStringArray, parseFrontmatter } from '../../utils/frontmatter';
 import type { AgentRosterStore } from '../agents/roster/AgentRosterStore';
@@ -22,6 +23,13 @@ import { LoopNoteStore } from '../tasks/loops/LoopNoteStore';
 import { TemplateNoteStore } from '../tasks/templates/TemplateNoteStore';
 import { isInstallableType,type MarketplaceItem } from './catalogTypes';
 import { MarketplaceError } from './MarketplaceCatalogClient';
+import {
+  hasUnsafePathSegment,
+  SKILL_INSTALL_SCOPES,
+  SKILL_PROVIDER_TARGETS,
+  type SkillInstallTarget,
+  skillRootFor,
+} from './skillInstallTargets';
 
 /**
  * Rejects a body its own store can't parse BEFORE we write it, so the Marketplace
@@ -58,6 +66,8 @@ export type InstallOutcome = 'installed' | 'skipped';
 export interface MarketplaceInstallDeps {
   vault: Vault;
   adapter: VaultFileAdapter;
+  /** Home-dir adapter for user-scope skill installs (writes outside the vault). */
+  homeAdapter: HomeFileAdapter;
   rosterStore: AgentRosterStore;
   loopFolder: string;
   templateFolder: string;
@@ -175,6 +185,9 @@ export async function isItemInstalled(
       const keys = agentKeys ?? installedAgentKeys(await deps.rosterStore.list());
       return keys.has(agentRosterId(item)) || keys.has(scopedAgentCatalogKey(deps.catalogUrl, item.id));
     }
+    case 'skill':
+      // The grid/card badge: installed if present in ANY provider root + scope.
+      return isSkillInstalledAnywhere(item, deps);
     default:
       return false;
   }
@@ -324,4 +337,105 @@ async function installAgent(
 function normalizeRoles(raw: string[] | undefined): Array<'worker' | 'verifier'> {
   const valid = (raw ?? []).filter((role): role is 'worker' | 'verifier' => role === 'worker' || role === 'verifier');
   return valid.length > 0 ? valid : ['worker'];
+}
+
+// --- Skills -----------------------------------------------------------------
+// A skill installs as a multi-file folder into a provider skill root (Claude /
+// Codex / Cursor) at project (vault) or user (home) scope, chosen in the detail
+// view. The store fetches the file contents; the functions below own the pure
+// vault/home I/O and the "installed" checks.
+
+/** Both the vault and home adapters satisfy the skill install's write surface. */
+type SkillWriteAdapter = Pick<VaultFileAdapter, 'exists' | 'write'>;
+
+function skillAdapterFor(target: SkillInstallTarget, deps: MarketplaceInstallDeps): SkillWriteAdapter {
+  return target.scope === 'user' ? deps.homeAdapter : deps.adapter;
+}
+
+/**
+ * The skill's install folder name, from its `SKILL.md` path
+ * (`<folder>/<slug>/SKILL.md` → `<slug>`), falling back to the manifest name.
+ * Null when it isn't a single safe path segment, so a hostile name can't escape
+ * the skill root. `assertSkillFolderName` is the throwing variant used at
+ * install; the installed-checks use this nullable one.
+ */
+function skillFolderNameOrNull(item: MarketplaceItem): string | null {
+  // `<folder>/<slug>/SKILL.md` → `<slug>`; fall back to the manifest name.
+  const segments = item.path.split('/');
+  const slug = (segments.length >= 3 ? segments[segments.length - 2] : item.name).trim();
+  // A single safe path segment (`hasUnsafePathSegment` covers `..`/`\`/absolute;
+  // a bare `.` is the remaining dot-dir to reject).
+  return !slug || slug === '.' || hasUnsafePathSegment(slug) ? null : slug;
+}
+
+function assertSkillFolderName(item: MarketplaceItem): string {
+  const name = skillFolderNameOrNull(item);
+  if (!name) throw new MarketplaceError("This skill's name is invalid and can't be installed.");
+  return name;
+}
+
+/** Rejects a skill file whose in-folder path would traverse outside its dir. */
+function assertSafeInSkillPath(relPath: string): string {
+  if (!relPath || hasUnsafePathSegment(relPath)) {
+    throw new MarketplaceError(`This skill contains an unsafe file path ("${relPath}") and can't be installed.`);
+  }
+  return relPath;
+}
+
+/**
+ * Installs a multi-file skill under the chosen provider root + scope. `files`
+ * maps each in-skill relative path (`SKILL.md`, `scripts/setup.mjs`, …) to its
+ * already-fetched content — the store fetches them so this stays pure vault/home
+ * I/O. Skips when the target already holds the skill (its `SKILL.md` is present).
+ * `SKILL.md` is written LAST so a mid-write failure leaves no dedup marker and a
+ * retry re-installs cleanly.
+ */
+export async function installSkillItem(
+  item: MarketplaceItem,
+  files: ReadonlyMap<string, string>,
+  target: SkillInstallTarget,
+  deps: MarketplaceInstallDeps,
+): Promise<InstallOutcome> {
+  const skillMd = files.get('SKILL.md');
+  if (skillMd === undefined) {
+    throw new MarketplaceError("This skill is missing its SKILL.md and can't be installed.");
+  }
+  const name = assertSkillFolderName(item);
+  const adapter = skillAdapterFor(target, deps);
+  const skillDir = `${skillRootFor(target)}/${name}`;
+  if (await adapter.exists(normalizePath(`${skillDir}/SKILL.md`))) return 'skipped';
+
+  for (const [relPath, content] of files) {
+    if (relPath === 'SKILL.md') continue; // written last
+    await adapter.write(normalizePath(`${skillDir}/${assertSafeInSkillPath(relPath)}`), content);
+  }
+  await adapter.write(normalizePath(`${skillDir}/SKILL.md`), skillMd);
+  return 'installed';
+}
+
+/** True when the skill already exists at a SPECIFIC target (the detail's per-target button). */
+export async function isSkillInstalledAt(
+  item: MarketplaceItem,
+  target: SkillInstallTarget,
+  deps: MarketplaceInstallDeps,
+): Promise<boolean> {
+  const name = skillFolderNameOrNull(item);
+  if (!name) return false;
+  try {
+    return await skillAdapterFor(target, deps).exists(normalizePath(`${skillRootFor(target)}/${name}/SKILL.md`));
+  } catch {
+    return false;
+  }
+}
+
+/** True when the skill exists in ANY provider root + scope (the grid/card badge). */
+async function isSkillInstalledAnywhere(item: MarketplaceItem, deps: MarketplaceInstallDeps): Promise<boolean> {
+  const name = skillFolderNameOrNull(item);
+  if (!name) return false;
+  for (const provider of SKILL_PROVIDER_TARGETS) {
+    for (const scope of SKILL_INSTALL_SCOPES) {
+      if (await isSkillInstalledAt(item, { provider, scope }, deps)) return true;
+    }
+  }
+  return false;
 }
