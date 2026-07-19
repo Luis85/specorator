@@ -454,7 +454,12 @@ function planClaudeSettings(options, state) {
   // `npm version` otherwise (yarn/bun `version` skip the lifecycle + git tag).
   const versionCmd = pm === 'bun' || pm === 'yarn' ? 'npm version' : `${pm} version`;
   const command = (name) => write(`.claude/commands/${name}.md`, renderTemplate(loadTemplate(`obsidian/claude/${name}.md.tmpl`), { run, versionCmd }));
-  const actions = [command('add-command'), command('add-setting'), command('new-service'), command('release')];
+  const actions = [command('add-command'), command('add-setting'), command('new-service')];
+  // The /release command's steps assume the tag-push CI workflow, which planRelease
+  // only writes with GitHub integration — omit it otherwise so it can't tell the
+  // agent to expect a workflow that was never generated (publishing.md covers the
+  // manual path).
+  if (options.github?.integrate) actions.push(command('release'));
 
   const sessionHook = h.sessionStart ? { hooks: [{ type: 'command', command: PM_INSTALL[pm] }] } : null;
   // Build the Stop gate from scripts that actually generated: typecheck is always

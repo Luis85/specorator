@@ -89,13 +89,18 @@ test('greenfield apply: full scaffold lands, second apply converges to a no-op',
       'src/core/commands/CommandsService.ts', 'src/core/logging/Logger.ts', 'src/core/settings/SettingsService.ts',
       'src/core/vault/VaultService.ts', 'src/core/http/RequestService.ts',
       'src/commands.ts', 'src/ui/statusBar.ts', 'src/ui/registerViews.ts',
-      'src/i18n/i18n.ts', 'src/i18n/en.json', 'tests/unit/i18n.test.ts', '.claude/settings.json', '.claude/commands/release.md',
+      'src/i18n/i18n.ts', 'src/i18n/en.json', 'tests/unit/i18n.test.ts', '.claude/settings.json',
       'tests/unit/eventBus.test.ts', 'tests/unit/modalService.test.ts', 'tests/unit/commandsService.test.ts',
       'tests/unit/statusBar.test.ts', 'tests/unit/logger.test.ts', 'tests/unit/settingsService.test.ts',
       'tests/unit/vaultService.test.ts', 'tests/unit/requestService.test.ts',
       'CLAUDE.md', 'AGENTS.md', 'README.md', 'docs/adr/0001-plugin-architecture-baseline.md',
     ]) {
       assert.ok(existsSync(join(p.dir, f)), `missing ${f}`);
+    }
+    // GitHub off → neither the release workflow nor the /release command that
+    // assumes it is generated.
+    for (const f of ['.github/workflows/release.yml', '.claude/commands/release.md']) {
+      assert.ok(!existsSync(join(p.dir, f)), `${f} should be gated off without github`);
     }
     const pkg = JSON.parse(readFileSync(join(p.dir, 'package.json'), 'utf8'));
     assert.equal(pkg.scripts.dev, 'node esbuild.config.mjs');

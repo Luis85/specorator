@@ -165,12 +165,16 @@ test('the i18n scaffold ships by default and notice text is lint-forced through 
   assert.match(findWrite(actions, 'eslint.config.mjs').content, /Route user-facing notice text through t\(\)/);
 });
 
-test('hooks are opt-in: no .claude/settings.json by default; slash commands always ship', () => {
+test('hooks are opt-in: no .claude/settings.json by default; slash commands ship (release gated on GitHub)', () => {
   const actions = actionsFor();
   assert.equal(findMerge(actions, '.claude/settings.json'), undefined, 'no hooks -> no settings.json');
-  for (const c of ['add-command', 'add-setting', 'new-service', 'release']) {
+  for (const c of ['add-command', 'add-setting', 'new-service']) {
     assert.ok(findWrite(actions, `.claude/commands/${c}.md`), `missing slash command ${c}`);
   }
+  // /release assumes the tag-push workflow (planRelease), so it ships only with
+  // GitHub integration — not in the default github-off scaffold.
+  assert.equal(findWrite(actions, '.claude/commands/release.md'), undefined, 'release must be gated off without github');
+  assert.ok(findWrite(planWithGithub(), '.claude/commands/release.md'), 'release should ship with github');
   // Opting in wires SessionStart (deps install) and a qualityGate Stop hook,
   // merged (not written) so it survives an existing .claude/settings.json.
   const merge = findMerge(optionsForHooks({ sessionStart: true, qualityGate: true }), '.claude/settings.json');
@@ -343,6 +347,10 @@ test('npm version delegates to sync-version.mjs, which stages the beta manifest 
   assert.match(sync, /if \(existsSync\('manifest-beta\.json'\)\)/);
   assert.match(sync, /staged\.push\('manifest-beta\.json'\)/);
   assert.match(sync, /execFileSync\('git', \['add', \.\.\.staged\]/);
+  // git add only inside a repo — the greenfield empty-dir case has no .git, where an
+  // unconditional `git add` would exit 128 after the version was already bumped.
+  assert.match(sync, /rev-parse.*--is-inside-work-tree/);
+  assert.match(sync, /if \(inGitRepo\) execFileSync\('git', \['add'/);
 });
 
 test('vitest discovers .test and .spec across JS/TS incl. module forms (.mts/.cts), not just *.test.ts', () => {
