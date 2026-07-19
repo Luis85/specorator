@@ -448,7 +448,7 @@ export function planDocs(options, state) {
 // is the product vision, more are numbered from prd-001. Each renders to
 // docs/prds/<id>-<slug>.md (frontmatter + markdown) with an index README.
 // skip-if-exists so a re-apply never clobbers the user's edits.
-export function planPrds(options) {
+export function planPrds(options, state) {
   const prds = Array.isArray(options.prds) ? options.prds : [];
   if (prds.length === 0) return [];
   const slug = (s) =>
@@ -481,5 +481,17 @@ export function planPrds(options) {
     mode: 'skip-if-exists',
     content: renderTemplate(loadTemplate('docs/prds-README.md.tmpl'), { rows }),
   });
+  // The index is skip-if-exists (its rows are hand-linked per the README's own
+  // instructions), so adding a PRD via answers.json + re-apply writes the new file
+  // but never relinks it. Notice when the set grew so the user updates the table
+  // rather than silently losing the link — we can't reconcile without clobbering edits.
+  const priorCount = Array.isArray(state?.priorOptions?.prds) ? state.priorOptions.prds.length : null;
+  if (priorCount !== null && prds.length > priorCount) {
+    actions.push(
+      notice(
+        `${prds.length - priorCount} PRD(s) were added since the last apply — docs/prds/README.md is kept as-is to preserve your links, so add the new row(s) to its index table.`,
+      ),
+    );
+  }
   return actions;
 }

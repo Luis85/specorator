@@ -92,6 +92,6 @@ export function plan(options, state) {
     ...planHarness(opts, st),
     // Product-vision PRDs from the setup questionnaire — mode-agnostic, so both
     // the Obsidian and generic harnesses get docs/prds/ when answers include them.
-    ...planPrds(opts),
+    ...planPrds(opts, st),
   ];
 }

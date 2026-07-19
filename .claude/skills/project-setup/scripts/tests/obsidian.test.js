@@ -747,6 +747,18 @@ test('the fallow main boundary zone always includes the scaffold entry files', (
   }
 });
 
+test('the fallow config ignores nano-staged (flagged) but not simple-git-hooks (a prepare-script no-op)', () => {
+  const rc = JSON.parse(
+    planFallow(optionsWith(BASE), { entry: 'src/main.ts', entryExists: true }).find((a) => a.path === '.fallowrc.json').content,
+  );
+  // nano-staged is referenced only inside the simple-git-hooks config value, never a
+  // script, so fallow reports it unused — it must be ignored or CI warns.
+  assert.ok(rc.ignoreDependencies.includes('nano-staged'), 'nano-staged must be ignored');
+  // simple-git-hooks lives in the `prepare` script, so fallow already sees it used;
+  // ignoring it would be dead config that masks a real future regression.
+  assert.ok(!rc.ignoreDependencies.includes('simple-git-hooks'), 'simple-git-hooks is used via prepare — no ignore');
+});
+
 // --- vue toggle ------------------------------------------------------------
 
 test('vue mode scaffolds the island (view, router, pinia store, SFCs) and runtime deps', () => {
