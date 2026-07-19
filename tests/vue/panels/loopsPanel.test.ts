@@ -8,9 +8,6 @@ import LoopsPanel from '@/features/library/vue/panels/LoopsPanel.vue';
 import { useLoopLibraryStore } from '@/features/library/vue/stores/loopLibraryStore';
 
 vi.mock('@/features/quickActions/launchLoopPrompt', () => ({ launchLoopPrompt: vi.fn() }));
-vi.mock('@/features/tasks/loops/installPresetLoops', () => ({
-  installPresetLoopsWithNotice: vi.fn().mockResolvedValue(undefined),
-}));
 vi.mock('@/features/tasks/ui/LoopEditorModal', () => ({
   // Function expression: tinyspy constructs the implementation with `new`,
   // and arrows are not constructible.
@@ -23,7 +20,6 @@ vi.mock('@/shared/modals/ConfirmModal', () => ({
   confirmDelete: vi.fn(),
 }));
 import { launchLoopPrompt } from '@/features/quickActions/launchLoopPrompt';
-import { installPresetLoopsWithNotice } from '@/features/tasks/loops/installPresetLoops';
 import { LoopEditorModal } from '@/features/tasks/ui/LoopEditorModal';
 import { confirm } from '@/shared/modals/ConfirmModal';
 
@@ -199,14 +195,6 @@ describe('LoopsPanel mutation flows', () => {
     expect(cta).toBeTruthy();
     await fireEvent.click(cta as Element);
     expect(LoopEditorModal).toHaveBeenCalledWith(expect.anything(), null, expect.any(Function));
-  });
-
-  it('Install starter loops runs the preset installer then reloads', async () => {
-    const { noteStore } = setupMutable([loop]);
-    await screen.findByText('A loop');
-    await fireEvent.click(screen.getByRole('button', { name: 'Install starter loops' }));
-    await waitFor(() => expect(installPresetLoopsWithNotice).toHaveBeenCalled());
-    await waitFor(() => expect(noteStore.list.mock.calls.length).toBeGreaterThan(1));
   });
 
   it('query filters cards (incl. no-matches text) and updated-sort stays stable', async () => {

@@ -1,4 +1,49 @@
 {
+  "marketplace": {
+    "viewTitle": "Marketplace",
+    "ribbon": "Open Marketplace",
+    "command": {
+      "open": "Open Marketplace"
+    },
+    "source": "Catalog: {source}",
+    "settings": {
+      "tab": "Marketplace",
+      "networkSection": "Network",
+      "enable": {
+        "name": "Enable the Marketplace",
+        "desc": "Fetch a curated catalog of Quick Actions, Agents, Loops, and Work-Order Templates from GitHub. Off by default; when enabled, opening the Marketplace makes network requests to raw.githubusercontent.com."
+      },
+      "source": {
+        "name": "Catalog source URL",
+        "desc": "Advanced: override the base URL the catalog is fetched from. Leave blank to use the default Specorator marketplace."
+      }
+    },
+    "warning": "The Marketplace fetches content from GitHub. Installed items are prompts, agents, loops, and templates you should review before running them.",
+    "enablePrompt": "The Marketplace is off. Enable it to browse and install curated items.",
+    "enableButton": "Enable the Marketplace",
+    "refresh": "Refresh",
+    "loading": "Loading catalog…",
+    "empty": "No items match your filters.",
+    "allTypes": "All types",
+    "typeFilterGroupLabel": "Filter by type",
+    "offline": "Showing the last cached catalog.",
+    "loadError": "Couldn't load the marketplace catalog.",
+    "install": "Install",
+    "installing": "Installing…",
+    "installed": "Installed",
+    "notInstallable": "Not yet installable",
+    "preview": "Preview",
+    "installedNotice": "Installed \"{name}\".",
+    "skippedNotice": "\"{name}\" is already installed.",
+    "failedNotice": "Couldn't install \"{name}\".",
+    "type": {
+      "quickAction": "Quick Action",
+      "agent": "Agent",
+      "loop": "Loop",
+      "template": "Template",
+      "skill": "Skill"
+    }
+  },
   "common": {
     "save": "保存",
     "cancel": "取消",
@@ -551,15 +596,8 @@
       }
     },
     "agentBoard": {
-      "commonTemplates": "Common work-order templates: {templates}.",
-      "commonTemplatesEmpty": "Common work-order templates: nothing to do.",
-      "installFailed": "Install failed: {error}",
-      "commonLoops": "Common loops: {loops}.",
-      "commonLoopsEmpty": "Common loops: nothing to do.",
       "loopFolderName": "Loop folder",
-      "loopFolderDesc": "Folder where loop notes are stored.",
-      "installLoopsName": "Install common loops",
-      "installLoopsDesc": "Add a starter set of loop notes to the loop folder."
+      "loopFolderDesc": "Folder where loop notes are stored."
     },
     "maxChatTabs": {
       "name": "Max chat tabs",
@@ -1126,9 +1164,6 @@
     "save": "Save",
     "startChat": "与此代理开始聊天",
     "chattingWith": "正在与 {name} 聊天",
-    "installStarter": "Install starter agents",
-    "installStarterDone": "Installed starter agents ({installed} new, {skipped} skipped).",
-    "installStarterNone": "All starter agents are already installed.",
     "fieldName": "Name",
     "fieldDescription": "Description",
     "delete": "Delete",
@@ -1226,7 +1261,6 @@
     "navLabel": "Loops",
     "title": "Loop library",
     "newLoop": "New loop",
-    "installStarter": "Install starter loops",
     "empty": "No loops yet. Create one to reuse a playbook across work orders.",
     "edit": "Edit",
     "delete": "Delete",
@@ -1252,7 +1286,6 @@
     "createWorkOrderFromCurrentNote": "Create work order from current note",
     "createWorkOrderFromSelection": "Create work order from selection",
     "createWorkOrderTemplate": "Create work-order template",
-    "installCommonWorkOrderTemplates": "Install common work-order templates",
     "createWorkOrderFromBrowserSelection": "Create work order from browser selection",
     "createWorkOrderFromChatConversation": "Create work order from current chat conversation",
     "copyDiagnosticLogs": "Copy diagnostic logs",

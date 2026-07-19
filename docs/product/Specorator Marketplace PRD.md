@@ -3,9 +3,10 @@ type: prd
 name: Specorator Marketplace
 title: Specorator Marketplace — a curated catalog of Quick Actions, Agents, Loops, and Work-Order Templates, installable from inside the plugin
 version: 0.2
-status: draft
+status: implemented
 date: 2026-07-06
 owner: Luis
+realized-by: docs/adr/0007-remote-marketplace-replaces-bundled-presets.md
 product: "[[Specorator - Product Vision]]"
 scope: features/quickActions, features/agents/roster, features/tasks/loops, features/tasks/templates, new features/marketplace, docs/product
 tags:
@@ -26,6 +27,13 @@ related:
 ---
 
 # Specorator Marketplace PRD
+
+> **Status — implemented (with changes).** Shipped in PR #494; the accepted decision record is [ADR 0007](../adr/0007-remote-marketplace-replaces-bundled-presets.md), which governs where it and this draft conflict. This PRD is retained as the original planning record; three points were decided differently during design/build:
+> - **Presets were removed, not layered on.** ADR 0007 supersedes **G5** — the Marketplace *replaces* the deleted bundled starter presets (`PRESET_LOOPS` / `PRESET_AGENT_SPECS` / `presetTemplates` and their install UI); a fresh vault now starts empty and opt-in.
+> - **A configurable catalog source shipped** — `marketplaceSourceUrl` makes the base URL overridable for forks/mirrors, realizing what **NG5** deferred.
+> - **The catalog repo is `specorator-marketplace`** (`Luis85/specorator-marketplace`), not the working name `specorator-ecosystem` used throughout this draft.
+>
+> Skills remain deferred (matches **NG2**) — catalogued but not installable (`INSTALLABLE_ITEM_TYPES` excludes `skill`).
 
 ## 1. Overview
 

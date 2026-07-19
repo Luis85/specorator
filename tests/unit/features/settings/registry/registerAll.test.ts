@@ -49,6 +49,7 @@ describe('registerAllSettings', () => {
       'opencode',
       'cursor',
       'agentBoard',
+      'marketplace',
       'diagnostics',
     ]);
   });

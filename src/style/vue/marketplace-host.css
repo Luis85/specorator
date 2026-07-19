@@ -1,0 +1,14 @@
+/* Host-level rules for the Marketplace view. These target workspace chrome
+   OUTSIDE the island's contentEl, so they cannot be scoped SFC styles. */
+
+/* Hide the redundant per-view title bar — the island renders its own header,
+   matching the Library host sheet. */
+.workspace-leaf-content[data-type="specorator-marketplace"] .view-header {
+  display: none;
+}
+
+/* Island padding — contentEl carries `.specorator-vue`, so `--sp-*` resolves
+   here. Mirrors `.specorator-library-vue-root`. */
+.specorator-marketplace-vue-root {
+  padding: var(--sp-space-l);
+}

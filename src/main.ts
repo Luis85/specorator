@@ -494,6 +494,11 @@ export default class SpecoratorPlugin extends Plugin implements PluginContext {
     // chat/status/run/vault event ticks it. tick() is idempotent and cheap, so
     // an unrelated settings change is a harmless no-op re-evaluation.
     this.events.emit('task:queue-cap-changed');
+    // `plugin.settings` is not reactive, so views that snapshot a setting can't
+    // observe a change made on the Settings tab (a modal over their leaf). This
+    // is the single persistence path for every field (registry renderer +
+    // imperative sections), so one event here lets any subscriber re-read live.
+    this.events.emit('settings-changed');
   }
 
   /** Updates and persists environment variables, restarting processes to apply changes. */

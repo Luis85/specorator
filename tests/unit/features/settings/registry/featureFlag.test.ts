@@ -15,6 +15,7 @@ describe('settings featureFlag', () => {
       'cursor',
       'diagnostics',
       'general',
+      'marketplace',
       'opencode',
     ]);
   });
@@ -23,6 +24,7 @@ describe('settings featureFlag', () => {
     const removedTabId = ['orch', 'estrator'].join('');
 
     expect(useRegistryRenderer('agentBoard')).toBe(true);
+    expect(useRegistryRenderer('marketplace')).toBe(true);
     expect(useRegistryRenderer('diagnostics')).toBe(true);
     expect(useRegistryRenderer(removedTabId)).toBe(false);
   });

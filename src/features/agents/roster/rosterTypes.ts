@@ -21,6 +21,22 @@ export interface RosterAgent {
   color?: string;
   initials?: string;
   icon?: string;
+  /**
+   * Set only on agents installed from the Marketplace (absent on hand-authored
+   * ones). Records where the agent came from; `id` is the stable catalog id,
+   * which survives a catalog-side display-name rebrand.
+   */
+  catalog?: {
+    id: string;
+    /** Catalog base URL the agent was installed from (`marketplaceSourceUrl`).
+     *  Scopes the catalog `id` to its source so a fork that reuses an id can't
+     *  false-match a different agent. Absent on pre-provenance installs. */
+    catalogUrl?: string;
+    source?: string;
+    author?: string;
+    license?: string;
+    version?: number;
+  };
   createdAt: number;
   updatedAt: number;
 }

@@ -12,8 +12,17 @@ import {
 // enabled provider ids resolved at render time.
 export type SettingsTabId = string;
 
-// Fixed tabs that always lead the strip, in display order.
-const FIXED_TAB_IDS: readonly SettingsTabId[] = ['general', 'agentBoard', 'diagnostics'];
+// Fixed tabs that always lead the strip, in display order. Marketplace sits
+// with the app-level feature tabs (it is not a provider), before diagnostics.
+const FIXED_TAB_IDS: readonly SettingsTabId[] = [
+  'general',
+  'agentBoard',
+  'marketplace',
+  'diagnostics',
+];
+
+/** Set form of the fixed tabs for O(1) "is this a non-provider tab?" checks. */
+export const FIXED_TAB_ID_SET: ReadonlySet<SettingsTabId> = new Set(FIXED_TAB_IDS);
 
 /**
  * Resolve the ordered tab id list for the current settings: the three fixed
@@ -32,6 +41,7 @@ export function computeTabIds(settings: SpecoratorSettings): SettingsTabId[] {
 export function tabLabelFor(id: SettingsTabId): string {
   if (id === 'general') return t('settings.tabs.general' as TranslationKey);
   if (id === 'agentBoard') return 'Agent Board';
+  if (id === 'marketplace') return t('marketplace.settings.tab');
   if (id === 'diagnostics') return 'Diagnostics';
   return ProviderRegistry.getProviderDisplayName(id);
 }

@@ -6,7 +6,6 @@ import { t } from '../../../../i18n/i18n';
 import { confirm } from '../../../../shared/modals/ConfirmModal';
 import { withErrorNotice } from '../../../../shared/uiAction';
 import { launchLoopPrompt } from '../../../quickActions/launchLoopPrompt';
-import { installPresetLoopsWithNotice } from '../../../tasks/loops/installPresetLoops';
 import { loopLibraryAccessors } from '../../../tasks/loops/loopLibraryAccessors';
 import type { LoopDefinition } from '../../../tasks/loops/loopTypes';
 import { LoopEditorModal } from '../../../tasks/ui/LoopEditorModal';
@@ -88,14 +87,6 @@ function onDelete(loop: LoopDefinition): void {
       new Notice(t('loopLibrary.deleted', { name: loop.name }));
     }, t('loopLibrary.actionFailed'), fail));
 }
-
-function onInstallStarters(): void {
-  void withErrorNotice(async () => {
-    if (!plugin) return;
-    await installPresetLoopsWithNotice(plugin);
-    await store.load();
-  }, t('loopLibrary.actionFailed'), fail);
-}
 </script>
 
 <template>
@@ -108,12 +99,6 @@ function onInstallStarters(): void {
         @click="openEditor(null)"
       >
         {{ t('loopLibrary.newLoop') }}
-      </button>
-      <button
-        type="button"
-        @click="onInstallStarters"
-      >
-        {{ t('loopLibrary.installStarter') }}
       </button>
     </div>
   </div>

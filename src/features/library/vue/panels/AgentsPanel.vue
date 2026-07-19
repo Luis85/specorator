@@ -7,7 +7,7 @@ import { asSettingsBag } from '../../../../core/types/settings';
 import { t } from '../../../../i18n/i18n';
 import { confirm } from '../../../../shared/modals/ConfirmModal';
 import { withErrorNotice } from '../../../../shared/uiAction';
-import { installPresetAgentsWithNotice, startChatWithRosterAgent, syncRosterAgentsWithNotice } from '../../../agents/roster/rosterAgentActions';
+import { startChatWithRosterAgent, syncRosterAgentsWithNotice } from '../../../agents/roster/rosterAgentActions';
 import { rosterLibraryAccessors, rosterRoleLabel } from '../../../agents/roster/rosterLibraryAccessors';
 import type { RosterAgent } from '../../../agents/roster/rosterTypes';
 import { AgentDetailEditor } from '../../../agents/roster/view/AgentDetailEditor';
@@ -197,14 +197,6 @@ function onNewAgent(): void {
   }, t('agentRoster.actionFailed'), fail);
 }
 
-function onInstallStarters(): void {
-  void withErrorNotice(async () => {
-    if (!plugin) return;
-    await installPresetAgentsWithNotice(plugin);
-    await reload();
-  }, t('agentRoster.actionFailed'), fail);
-}
-
 function onSync(): void {
   void withErrorNotice(async () => {
     if (!plugin) return;
@@ -244,12 +236,6 @@ function hasCaps(agent: RosterAgent): boolean {
           @click="onNewAgent"
         >
           {{ t('agentRoster.newAgent') }}
-        </button>
-        <button
-          type="button"
-          @click="onInstallStarters"
-        >
-          {{ t('agentRoster.installStarter') }}
         </button>
         <button
           type="button"

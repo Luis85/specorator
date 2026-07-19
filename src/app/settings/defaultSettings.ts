@@ -84,4 +84,8 @@ export const DEFAULT_SPECORATOR_SETTINGS: SpecoratorSettings = {
   quickActionsFolder: 'Quick Actions',
   loggingEnabled: false,
   logLevel: 'warn',
+
+  marketplaceNetworkEnabled: false,
+  marketplaceSourceUrl: '',
+  marketplaceNetworkWarningShown: false,
 };

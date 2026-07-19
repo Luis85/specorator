@@ -75,8 +75,8 @@
       "reason": "Grandfathered hotspot. Track the split in docs/tech-debt/2026-06-07-oversized-modules-and-test-files.md; shrink only."
     },
     "src/features/settings/SpecoratorSettings.ts": {
-      "loc": 539,
-      "reason": "Grandfathered hotspot. Track the split in docs/tech-debt/2026-06-07-oversized-modules-and-test-files.md; shrink only."
+      "loc": 546,
+      "reason": "Grandfathered hotspot. Track the split in docs/tech-debt/2026-06-07-oversized-modules-and-test-files.md; shrink only. +7 (Codex PR#494 P2): render the Marketplace settings tab through the registry (renderFixedTabBodies marketplace host + FIXED_TAB_ID_SET-derived provider-loop skip) so marketplaceSourceUrl is configurable — it was registered but never built into the strip."
     },
     "src/providers/codex/runtime/codexAppServerTypes.ts": {
       "loc": 535,

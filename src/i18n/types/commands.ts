@@ -7,7 +7,6 @@ export type CommandsTranslationKey =
   | 'commands.createWorkOrderFromCurrentNote'
   | 'commands.createWorkOrderFromSelection'
   | 'commands.createWorkOrderTemplate'
-  | 'commands.installCommonWorkOrderTemplates'
   | 'commands.createWorkOrderFromBrowserSelection'
   | 'commands.createWorkOrderFromChatConversation'
   | 'commands.copyDiagnosticLogs'

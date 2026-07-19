@@ -5,18 +5,9 @@ export type SettingsTranslationKey =
   | 'settings.mcp.modal.commandRequired'
   | 'settings.mcp.modal.urlRequired'
 
-  // Settings - Agent Board (Q-1 chunk 15)
-  | 'settings.agentBoard.commonTemplates'
-  | 'settings.agentBoard.commonTemplatesEmpty'
-  | 'settings.agentBoard.installFailed'
-
   // Settings - Agent Board loop library (agent-loops Task 14)
-  | 'settings.agentBoard.commonLoops'
-  | 'settings.agentBoard.commonLoopsEmpty'
   | 'settings.agentBoard.loopFolderName'
   | 'settings.agentBoard.loopFolderDesc'
-  | 'settings.agentBoard.installLoopsName'
-  | 'settings.agentBoard.installLoopsDesc'
 
   // Settings - Section Headings
   | 'settings.title'

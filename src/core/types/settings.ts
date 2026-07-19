@@ -234,6 +234,14 @@ export interface SpecoratorSettings {
   /** Global log threshold. */
   logLevel?: LogLevel;
 
+  // Marketplace
+  /** Opt-in for Marketplace network fetches. */
+  marketplaceNetworkEnabled?: boolean;
+  /** Optional catalog base URL override; blank = default. */
+  marketplaceSourceUrl?: string;
+  /** One-time enable-warning flag. */
+  marketplaceNetworkWarningShown?: boolean;
+
   // Allow provider-specific extension fields
   [key: string]: unknown;
 }

@@ -6,13 +6,13 @@ import { ProviderWorkspaceRegistry } from '@/core/providers/ProviderWorkspaceReg
 import { type InlineEditContext, InlineEditModal } from '@/features/inline-edit/ui/InlineEditModal';
 import { activateLibrary } from '@/features/library/activateLibrary';
 import type { LibraryTab } from '@/features/library/viewType';
+import { activateMarketplace } from '@/features/marketplace/activateMarketplace';
 import {
   createWorkOrderFromBrowserSelection,
   createWorkOrderTemplate,
 } from '@/features/tasks/commands/taskCommands';
 import type { ChatTabExecutionSurface } from '@/features/tasks/execution/ChatTabExecutionSurface';
 import type { ChatWorkOrderLinker } from '@/features/tasks/execution/ChatWorkOrderLinker';
-import { installPresetTemplatesWithNotice } from '@/features/tasks/templates/installPresetTemplates';
 import {
   createWorkOrderAndOpenModal,
   createWorkOrderFromCurrentNoteAndOpenModal,
@@ -62,6 +62,12 @@ function registerViewCommands(plugin: SpecoratorPlugin, register: RegisterComman
     callback: () => {
       void plugin.runNextReadyWorkOrder();
     },
+  });
+
+  register({
+    id: 'open-marketplace',
+    name: t('marketplace.command.open'),
+    callback: () => void activateMarketplace(plugin),
   });
 }
 
@@ -119,14 +125,6 @@ function registerWorkOrderCommands(
     name: t('commands.createWorkOrderTemplate'),
     callback: () => {
       void createWorkOrderTemplate(plugin);
-    },
-  });
-
-  register({
-    id: 'install-common-work-order-templates',
-    name: t('commands.installCommonWorkOrderTemplates'),
-    callback: () => {
-      void installPresetTemplatesWithNotice(plugin);
     },
   });
 

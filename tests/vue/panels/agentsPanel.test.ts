@@ -28,9 +28,6 @@ vi.mock('@/shared/modals/ConfirmModal', () => ({
   confirm: vi.fn().mockResolvedValue(true),
   confirmDelete: vi.fn(),
 }));
-vi.mock('@/features/agents/roster/presetAgents', () => ({
-  installPresetAgents: vi.fn().mockResolvedValue({ installed: ['a'], skipped: [] }),
-}));
 vi.mock('@/core/providers/ProviderRegistry', () => ({
   ProviderRegistry: {
     isEnabled: vi.fn().mockReturnValue(true),
@@ -40,7 +37,6 @@ vi.mock('@/core/providers/ProviderRegistry', () => ({
     }),
   },
 }));
-import { installPresetAgents } from '@/features/agents/roster/presetAgents';
 import { AgentDetailEditor } from '@/features/agents/roster/view/AgentDetailEditor';
 import { confirm } from '@/shared/modals/ConfirmModal';
 
@@ -240,17 +236,6 @@ describe('AgentsPanel mutation flows', () => {
     ));
     const p = plugin as { agentRosterStore: { save: ReturnType<typeof vi.fn> } };
     expect(p.agentRosterStore.save).not.toHaveBeenCalled();
-  });
-
-  it('Install starter agents runs the preset installer against the plugin store, then reloads', async () => {
-    const { plugin, p } = setupMutable([agent]);
-    await screen.findByText('Alice');
-    await fireEvent.click(screen.getByRole('button', { name: 'Install starter agents' }));
-    await waitFor(() => expect(installPresetAgents).toHaveBeenCalledWith(
-      (plugin as { agentRosterStore: unknown }).agentRosterStore,
-    ));
-    expect(Notice).toHaveBeenCalled();
-    await waitFor(() => expect(p.agentRosterStore.list.mock.calls.length).toBeGreaterThan(1));
   });
 
   it('Sync to providers routes through the plugin service and notices the result', async () => {
