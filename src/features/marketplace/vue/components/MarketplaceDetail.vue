@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue';
+import { computed } from 'vue';
 
 import { t } from '../../../../i18n/i18n';
 import type { MarketplaceItem } from '../../catalogTypes';
@@ -15,11 +15,6 @@ const props = defineProps<{
   installable: boolean;
 }>();
 const emit = defineEmits<{ back: []; install: [] }>();
-
-const iconEl = ref<HTMLElement | null>(null);
-onMounted(() => {
-  if (iconEl.value) mountLucide(iconEl.value, iconForItem(props.item));
-});
 
 const bodyText = computed(() =>
   props.previewError ? t('marketplace.loadError') : (props.body ?? t('marketplace.loading')),
@@ -44,7 +39,7 @@ const safeSourceUrl = computed(() => {
     </button>
     <div class="specorator-vue-marketplace-detail-head">
       <div
-        ref="iconEl"
+        :ref="(el) => mountLucide(el, iconForItem(props.item))"
         class="specorator-vue-marketplace-card-icon is-lg"
       />
       <div class="specorator-vue-marketplace-detail-titles">

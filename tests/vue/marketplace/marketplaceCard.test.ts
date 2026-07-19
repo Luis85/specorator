@@ -45,4 +45,15 @@ describe('MarketplaceCard', () => {
     const { container } = renderCard();
     expect(container.querySelector('[data-icon="repeat"]')).not.toBeNull();
   });
+
+  it('repaints the icon when the item metadata changes without a remount', async () => {
+    // The card is keyed by item.id, so a catalog refresh that reuses an id with a
+    // changed icon patches THIS instance rather than remounting it. A re-running
+    // function-ref must repaint the glyph (an onMounted hook would leave it stale).
+    const { container, rerender } = renderCard();
+    expect(container.querySelector('[data-icon="repeat"]')).not.toBeNull();
+    await rerender({ item: { ...item, icon: 'bug' }, installed: false, typeLabel: 'Loop' });
+    expect(container.querySelector('[data-icon="bug"]')).not.toBeNull();
+    expect(container.querySelector('[data-icon="repeat"]')).toBeNull();
+  });
 });

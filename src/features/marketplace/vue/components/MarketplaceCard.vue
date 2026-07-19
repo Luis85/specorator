@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onMounted, ref } from 'vue';
+import { ref } from 'vue';
 
 import { t } from '../../../../i18n/i18n';
 import type { MarketplaceItem } from '../../catalogTypes';
@@ -9,10 +9,6 @@ const props = defineProps<{ item: MarketplaceItem; installed: boolean; typeLabel
 const emit = defineEmits<{ open: [] }>();
 
 const cardEl = ref<HTMLElement | null>(null);
-const iconEl = ref<HTMLElement | null>(null);
-onMounted(() => {
-  if (iconEl.value) mountLucide(iconEl.value, iconForItem(props.item));
-});
 
 // Releasing a text selection fires click on the card; selecting the (selectable)
 // description must not open the detail. Click-path only — keyboard activation
@@ -42,8 +38,12 @@ function onKeydown(e: KeyboardEvent): void {
     @keydown="onKeydown"
   >
     <div class="specorator-vue-marketplace-card-top">
+      <!-- Function-ref (not onMounted): the card is keyed by item.id, so a
+        catalog refresh reusing an id with a changed icon/type reuses THIS
+        instance — a re-running ref repaints the glyph, an onMounted hook would
+        not. Mirrors the Agent Board's mountLucide usage. -->
       <div
-        ref="iconEl"
+        :ref="(el) => mountLucide(el, iconForItem(props.item))"
         class="specorator-vue-marketplace-card-icon"
       />
       <span class="specorator-vue-marketplace-card-badge">{{ props.typeLabel }}</span>
