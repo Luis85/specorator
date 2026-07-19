@@ -576,4 +576,16 @@ describe('marketplaceStore skill install', () => {
     expect(fetchBodySpy).not.toHaveBeenCalled();
     expect(installSkillSpy).not.toHaveBeenCalled();
   });
+
+  it('refuses a fetched file that is not text (NUL byte), even with a text extension', async () => {
+    const store = useMarketplaceStore();
+    store.init(fakePlugin(true));
+    // A supporting file with a text extension but binary bytes slips the extension
+    // pre-check; the content check after fetch (NUL byte) catches it.
+    fetchBodySpy.mockResolvedValue(`corrupt${String.fromCharCode(0)}bytes`);
+    await expect(
+      store.install(skillItem, 'SKILL BODY', { provider: 'claude', scope: 'project' }),
+    ).rejects.toThrow(/not text|text-only/i);
+    expect(installSkillSpy).not.toHaveBeenCalled();
+  });
 });

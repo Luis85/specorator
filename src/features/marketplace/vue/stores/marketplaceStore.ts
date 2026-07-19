@@ -53,6 +53,22 @@ async function fetchWithConcurrency<T, R>(
 }
 
 /**
+ * Rejects a skill file map whose content isn't text — a NUL byte means a binary
+ * was decoded as text (the plugin's UTF-8 write would corrupt it). Mirrors the
+ * marketplace validator's source-side rule and catches binaries the extension
+ * denylist can't (unlisted/extensionless formats).
+ */
+function assertTextOnlySkillContents(files: ReadonlyMap<string, string>): void {
+  for (const [rel, content] of files) {
+    if (content.includes(String.fromCharCode(0))) {
+      throw new MarketplaceError(
+        `This skill's file "${rel}" is not text (contains a NUL byte). Marketplace skills must be text-only.`,
+      );
+    }
+  }
+}
+
+/**
  * Marketplace store: fetches the catalog manifest via the client (falling back
  * to the on-disk cache when offline), tracks which items are already installed,
  * and routes installs through the shared installer. I/O lives in the client /
@@ -344,15 +360,19 @@ export const useMarketplaceStore = defineStore('marketplace', () => {
     const files = new Map<string, string>([['SKILL.md', skillMdBody]]);
     const prefix = skillFolderPrefix(item.path);
     const others = (item.files ?? []).filter((repoPath) => repoPath !== item.path);
-    if (prefix === null || others.length === 0) return files;
-    const client = clientFor(source.value);
-    const contents = await fetchWithConcurrency(others, SKILL_FETCH_CONCURRENCY, (repoPath) =>
-      client.fetchItemBody(repoPath),
-    );
-    others.forEach((repoPath, index) => {
-      const rel = repoPath.startsWith(prefix) ? repoPath.slice(prefix.length) : null;
-      if (rel) files.set(rel, contents[index]);
-    });
+    if (prefix !== null && others.length > 0) {
+      const client = clientFor(source.value);
+      const contents = await fetchWithConcurrency(others, SKILL_FETCH_CONCURRENCY, (repoPath) =>
+        client.fetchItemBody(repoPath),
+      );
+      others.forEach((repoPath, index) => {
+        const rel = repoPath.startsWith(prefix) ? repoPath.slice(prefix.length) : null;
+        if (rel) files.set(rel, contents[index]);
+      });
+    }
+    // Text-only, verified by CONTENT (catches binaries the extension pre-check
+    // missed: unlisted/extensionless formats decoded as text and NUL-bearing).
+    assertTextOnlySkillContents(files);
     return files;
   }
 
