@@ -88,10 +88,14 @@ const sections = computed(() =>
   })).filter((section) => section.items.length > 0),
 );
 
+// Route to Home only when NO effective facet is active. Trim the query to match
+// applyLibraryQuery, which trims before filtering — a whitespace-only search
+// returns the full catalog, so it must keep the Home landing rather than drop
+// into the flat results grid.
 const showHome = computed(
   () =>
     activeView.value === 'home' &&
-    list.query.value === '' &&
+    list.query.value.trim() === '' &&
     list.activeFilters.value.length === 0,
 );
 const showSkeleton = computed(() => store.loading && store.items.length === 0);

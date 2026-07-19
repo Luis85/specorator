@@ -212,6 +212,23 @@ describe('MarketplaceRoot chrome-first + Home sort', () => {
     expect(document.querySelectorAll('.specorator-vue-marketplace-skeleton').length).toBeGreaterThan(0);
   });
 
+  it('keeps the Home landing for a whitespace-only search (matches list-engine trim)', async () => {
+    // applyLibraryQuery trims before filtering, so "   " selects the whole catalog.
+    // showHome must trim too — otherwise a spaces-only query drops the storefront
+    // Home landing into the flat results grid with no effective filter applied.
+    setup(makeStore({ items: [alpha, beta] }), { marketplaceNetworkEnabled: true });
+    await screen.findByText('Alpha Loop');
+    expect(screen.getByText(/Discover ready-made assets/)).toBeTruthy();
+
+    await fireEvent.update(screen.getByRole('searchbox'), '   ');
+    await nextTick();
+    // Still Home: the hero + per-type sections, not the flat grid.
+    expect(screen.getByText(/Discover ready-made assets/)).toBeTruthy();
+    expect(
+      document.querySelectorAll('.specorator-vue-marketplace-section').length,
+    ).toBeGreaterThan(0);
+  });
+
   it('applies the toolbar sort to the Home sections (sorted rows, not catalog order)', async () => {
     const zeta: MarketplaceItem = {
       id: 'z', type: 'loop', name: 'Zeta Loop', description: 'd', path: 'loops/z.md', tags: [],
