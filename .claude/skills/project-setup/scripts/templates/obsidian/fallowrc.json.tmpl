@@ -31,6 +31,7 @@
     "prettier",
     "eslint",
     "@eslint/js",
+    "@eslint/json",
     "typescript-eslint",
     "eslint-plugin-obsidianmd",
     "eslint-plugin-vue",
@@ -47,7 +48,15 @@
       "extends": "ItemView",
       "members": ["getViewType", "getDisplayText", "getIcon", "onOpen", "onClose"]
     },
-    { "extends": "Modal", "members": ["onOpen", "onClose"] }
+    { "extends": "Modal", "members": ["onOpen", "onClose"] },
+    {
+      "extends": "SuggestModal",
+      "members": ["getSuggestions", "renderSuggestion", "onChooseSuggestion"]
+    },
+    {
+      "extends": "EditorSuggest",
+      "members": ["onTrigger", "getSuggestions", "renderSuggestion", "selectSuggestion"]
+    }
   ],
   "duplicates": {
     "minOccurrences": 2,
