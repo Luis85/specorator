@@ -18,6 +18,7 @@ const {
   isInstalledSpy,
   installSkillSpy,
   isSkillInstalledAtSpy,
+  refreshCatalogSpy,
 } = vi.hoisted(() => ({
   fetchIndexSpy: vi.fn(),
   fetchBodySpy: vi.fn(),
@@ -28,6 +29,7 @@ const {
   isInstalledSpy: vi.fn(),
   installSkillSpy: vi.fn(),
   isSkillInstalledAtSpy: vi.fn(),
+  refreshCatalogSpy: vi.fn(),
 }));
 
 // Classes (not arrow factories): the store constructs these with `new`, and an
@@ -73,6 +75,10 @@ vi.mock('@/features/marketplace/MarketplaceInstaller', () => ({
   },
 }));
 
+vi.mock('@/features/skills/refreshSkillCatalogBestEffort', () => ({
+  refreshSkillCatalogBestEffort: refreshCatalogSpy,
+}));
+
 import { DEFAULT_MARKETPLACE_BASE_URL } from '@/features/marketplace/MarketplaceCatalogClient';
 import { useMarketplaceStore } from '@/features/marketplace/vue/stores/marketplaceStore';
 
@@ -103,6 +109,7 @@ function fakePlugin(networkEnabled: boolean): SpecoratorPlugin {
     app: { vault: {} },
     vaultFileAdapter: {},
     agentRosterStore: {},
+    events: { emit: vi.fn(), on: vi.fn(() => vi.fn()) },
   } as unknown as SpecoratorPlugin;
 }
 
@@ -487,11 +494,13 @@ describe('marketplaceStore skill install', () => {
     installSkillSpy.mockResolvedValue('installed');
     isSkillInstalledAtSpy.mockResolvedValue(false);
     fetchBodySpy.mockResolvedValue('FILE');
+    refreshCatalogSpy.mockResolvedValue(undefined);
   });
 
   it('fetches the supporting files and installs the whole folder at the chosen target', async () => {
     const store = useMarketplaceStore();
-    store.init(fakePlugin(true));
+    const plugin = fakePlugin(true);
+    store.init(plugin);
     const outcome = await store.install(skillItem, 'SKILL BODY', { provider: 'codex', scope: 'user' });
     expect(outcome).toBe('installed');
 
@@ -509,6 +518,22 @@ describe('marketplaceStore skill install', () => {
     expect(files.get('scripts/setup.mjs')).toBe('FILE');
     // The "installed anywhere" badge flips on.
     expect(store.installedIds.has('skills/project-setup')).toBe(true);
+
+    // Skill dot-folders bypass the vault watcher, so a successful install must
+    // invalidate the listing caches for the owning provider (aggregator bucket +
+    // provider catalog), or the Library/dropdown/run surfaces stay stale for a TTL.
+    expect(plugin.events.emit).toHaveBeenCalledWith('vaultSkill.changed', { providerId: 'codex' });
+    expect(refreshCatalogSpy).toHaveBeenCalledWith(plugin, 'codex');
+  });
+
+  it('does NOT invalidate caches when the skill was already installed (skipped)', async () => {
+    installSkillSpy.mockResolvedValue('skipped');
+    const store = useMarketplaceStore();
+    const plugin = fakePlugin(true);
+    store.init(plugin);
+    await store.install(skillItem, 'SKILL BODY', { provider: 'claude', scope: 'project' });
+    expect(plugin.events.emit).not.toHaveBeenCalled();
+    expect(refreshCatalogSpy).not.toHaveBeenCalled();
   });
 
   it('rejects a skill install with no target', async () => {

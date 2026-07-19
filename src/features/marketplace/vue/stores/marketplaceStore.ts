@@ -3,6 +3,7 @@ import { ref, shallowRef } from 'vue';
 
 import { HomeFileAdapter } from '../../../../core/storage/HomeFileAdapter';
 import type SpecoratorPlugin from '../../../../main';
+import { refreshSkillCatalogBestEffort } from '../../../skills/refreshSkillCatalogBestEffort';
 import { type MarketplaceItem, skillFolderPrefix } from '../../catalogTypes';
 import { MarketplaceCache } from '../../MarketplaceCache';
 import {
@@ -308,7 +309,19 @@ export const useMarketplaceStore = defineStore('marketplace', () => {
   ): Promise<InstallOutcome> {
     assertNetworkEnabled();
     const files = await fetchSkillFiles(item, skillMdBody);
-    return installSkillItem(item, files, target, installDeps());
+    const outcome = await installSkillItem(item, files, target, installDeps());
+    if (outcome === 'installed') {
+      // Skill dot-folders bypass the vault watcher, so mirror skillLibraryStore's
+      // post-write sequence: invalidate the aggregator's TTL bucket AND force-reload
+      // the owning provider's catalog (Codex serves a short listing cache the event
+      // alone can't clear), so the new skill shows in the Library / dropdown / run
+      // surfaces immediately instead of after a TTL. This also drives the
+      // marketplace's own badge refresh (useMarketplaceInstalledRefresh subscribes).
+      const p = requirePlugin();
+      p.events.emit('vaultSkill.changed', { providerId: target.provider });
+      await refreshSkillCatalogBestEffort(p, target.provider);
+    }
+    return outcome;
   }
 
   /**

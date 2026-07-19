@@ -387,6 +387,18 @@ describe('installSkillItem', () => {
     expect(await installSkillItem(skillItem, skillFiles(), target, deps)).toBe('skipped');
   });
 
+  it('refuses a skill whose name is not a single path segment (contains a slash)', async () => {
+    // A custom-catalog name like `foo/bar` would nest the skill at `<root>/foo/bar/`,
+    // where the provider scanners (direct children only) never find it — reject it.
+    const { deps, qaFiles } = makeDeps();
+    const nested: MarketplaceItem = { ...skillItem, name: 'foo/bar' };
+    await expect(
+      installSkillItem(nested, skillFiles(), { provider: 'claude', scope: 'project' }, deps),
+    ).rejects.toThrow(/invalid/i);
+    expect(qaFiles.size).toBe(0);
+    expect(await isSkillInstalledAt(nested, { provider: 'claude', scope: 'project' }, deps)).toBe(false);
+  });
+
   it('refuses a file map without SKILL.md', async () => {
     const { deps } = makeDeps();
     const noSkillMd = new Map<string, string>([['references/a.md', 'x']]);

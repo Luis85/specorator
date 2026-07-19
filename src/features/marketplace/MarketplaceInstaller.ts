@@ -367,9 +367,12 @@ function skillFolderNameOrNull(item: MarketplaceItem): string | null {
   // `<folder>/SKILL.md` parent install to the SAME dir while surviving dedup as
   // distinct — so installing one would mark both installed and block the other.
   const name = item.name.trim();
-  // A single safe path segment (`hasUnsafePathSegment` covers `..`/`\`/absolute;
-  // a bare `.` is the remaining dot-dir to reject).
-  return !name || name === '.' || hasUnsafePathSegment(name) ? null : name;
+  // Must be a single, safe folder segment. `hasUnsafePathSegment` covers
+  // `..`/`\`/absolute/drive; a bare `.` and a mid-string `/` are the remaining
+  // rejects — a `/` in the name (`foo/bar`) would nest the skill a level too
+  // deep (`<root>/foo/bar/SKILL.md`), where the provider scanners (direct
+  // children only) never find it.
+  return !name || name === '.' || name.includes('/') || hasUnsafePathSegment(name) ? null : name;
 }
 
 function assertSkillFolderName(item: MarketplaceItem): string {
