@@ -30,8 +30,7 @@ export function renderAgentBoardLaneEditor(container: HTMLElement, plugin: Speco
   // Resolve the container's own document (popout-safe) once — used for both the
   // mount child and the detach observer.
   const doc = container.ownerDocument;
-  const mountEl = doc.createElement('div');
-  container.appendChild(mountEl);
+  const mountEl = container.createDiv();
   const island = new VueIsland();
   island.mount(LaneEditorRoot, mountEl, (app) => {
     app.provide(LANE_EDITOR_PLUGIN_KEY, markRaw(plugin));

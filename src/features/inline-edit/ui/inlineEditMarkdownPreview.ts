@@ -22,10 +22,10 @@ function emptyElement(container: HTMLElement): void {
 }
 
 function appendFallback(container: HTMLElement, markdown: string): void {
-  const fallback = container.ownerDocument.createElement('div');
-  fallback.className = 'specorator-inline-markdown-fallback';
-  fallback.textContent = markdown;
-  container.appendChild(fallback);
+  container.createEl('div', {
+    cls: 'specorator-inline-markdown-fallback',
+    text: markdown,
+  });
 }
 
 export async function renderInlineEditMarkdownPreview({

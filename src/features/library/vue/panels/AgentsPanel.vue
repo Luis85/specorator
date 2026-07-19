@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { Notice } from 'obsidian';
-import { inject, nextTick, onMounted, onUnmounted, ref } from 'vue';
+import { inject, nextTick, onMounted, onUnmounted, ref, watch } from 'vue';
 
 import { ProviderRegistry } from '../../../../core/providers/ProviderRegistry';
 import { asSettingsBag } from '../../../../core/types/settings';
@@ -15,7 +15,7 @@ import AvatarSlot from '../components/AvatarSlot.vue';
 import LibraryCard from '../components/LibraryCard.vue';
 import LibraryEmptyState from '../components/LibraryEmptyState.vue';
 import LibraryToolbar from '../components/LibraryToolbar.vue';
-import { PLUGIN_KEY, TAB_GUARD_KEY } from '../libraryKeys';
+import { PLUGIN_KEY, TAB_GUARD_KEY, VIEW_KEY } from '../libraryKeys';
 import { useRosterStore } from '../stores/rosterStore';
 import { useLibraryList } from '../useLibraryList';
 import { useRowActionPending } from '../useRowActionPending';
@@ -41,6 +41,17 @@ const list = useLibraryList<RosterAgent>(() => store.agents, rosterLibraryAccess
 const pending = useRowActionPending();
 
 const tabGuard = inject(TAB_GUARD_KEY, null);
+
+// The detail editor renders as a direct child of the library root (contentEl).
+// While it is open, that root's bottom padding is zeroed so the editor's sticky
+// footer sits flush. Drive it with an explicit state class rather than a
+// `:has(> .specorator-roster-detail)` selector — CSS `:has` triggers broad
+// style invalidation (see src/style/vue/library-host.css). `view` is absent in
+// unit tests (no VIEW_KEY provider), so the toggle is a safe no-op there.
+const view = inject(VIEW_KEY, null);
+watch(detailOpen, (open) => {
+  view?.contentEl.toggleClass('is-detail-open', open);
+});
 
 onMounted(() => void withErrorNotice(() => store.load(), t('agentRoster.actionFailed'), fail));
 
@@ -77,6 +88,9 @@ onUnmounted(() => {
   }
   rosterOff?.();
   rosterOff = null;
+  // Safety net: a non-close unmount path (panel replaced while the detail editor
+  // is open) must not leave the state class on the shared library root.
+  view?.contentEl.removeClass('is-detail-open');
 });
 
 function fail(error: unknown): void {

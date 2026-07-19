@@ -18,7 +18,11 @@
 
 /* The detail editor's sticky footer pins to the scrollport minus the
    scroller's bottom padding — zero that padding while the embedded editor
-   is open so the footer sits flush; the footer supplies its own spacing. */
-.specorator-library-vue-root:has(> .specorator-roster-detail) {
+   is open so the footer sits flush; the footer supplies its own spacing.
+   AgentsPanel.vue toggles the `is-detail-open` state class on this root
+   (contentEl) as the detail editor opens/closes — an explicit signal, chosen
+   over a relational child selector whose broad style invalidation the CSS
+   lint flags. */
+.specorator-library-vue-root.is-detail-open {
   padding-bottom: 0;
 }

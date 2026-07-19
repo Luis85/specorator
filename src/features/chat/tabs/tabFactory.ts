@@ -172,7 +172,7 @@ function buildTabDOM(contentEl: HTMLElement): TabDOMElements {
   // its class/dir/rows/placeholder) and hands the raw node back; this bare node
   // only satisfies the non-null `HTMLTextAreaElement` type between `createTab`
   // and mount, and is GC'd once the register repoints `tab.dom.inputEl`.
-  const inputEl = contentEl.ownerDocument.createElement('textarea');
+  const inputEl = createEl('textarea');
 
   return {
     contentEl,

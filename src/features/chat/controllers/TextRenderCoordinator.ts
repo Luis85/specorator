@@ -42,7 +42,7 @@ export class TextRenderCoordinator {
     if (!state.currentTextEl) {
       // Detached sentinel — marks "a text block is open" for blockState(); never
       // rendered into.
-      state.currentTextEl = state.currentContentEl.ownerDocument.createElement('div');
+      state.currentTextEl = createDiv();
       state.currentTextContent = '';
       this.currentBlockCollapsed = this.deps.shouldCollapseStreamingResponse();
       this.openReactiveTextBlock(msg);

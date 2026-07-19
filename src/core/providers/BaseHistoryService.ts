@@ -142,23 +142,17 @@ export abstract class BaseHistoryService<
     if (!signal) return pending;
     if (signal.aborted) return Promise.resolve(this.cancelledOutcome());
 
-    return new Promise<HistoryLoadOutcome>((resolve, reject) => {
-      const onAbort = () => {
-        signal.removeEventListener('abort', onAbort);
-        resolve(this.cancelledOutcome());
-      };
+    // Race the load against the caller's abort. Forwarding `pending`'s rejection
+    // through Promise.race preserves its original reason unchanged (no manual
+    // `reject(error)` of an `unknown`); the cancellation branch only ever
+    // resolves. `pending.finally` drops the abort listener when the load settles
+    // first; `{ once: true }` drops it when abort fires first.
+    const cancellation = new Promise<HistoryLoadOutcome>((resolve) => {
+      const onAbort = () => resolve(this.cancelledOutcome());
       signal.addEventListener('abort', onAbort, { once: true });
-      void pending.then(
-        (outcome) => {
-          signal.removeEventListener('abort', onAbort);
-          resolve(outcome);
-        },
-        (error: unknown) => {
-          signal.removeEventListener('abort', onAbort);
-          reject(error);
-        },
-      );
+      void pending.finally(() => signal.removeEventListener('abort', onAbort));
     });
+    return Promise.race([pending, cancellation]);
   }
 
   private cancelledOutcome(): HistoryLoadOutcome {

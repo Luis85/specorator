@@ -7,6 +7,8 @@
 // methods here; no global type augmentation, so we do not clash with Obsidian's
 // own DomElementInfo signature.
 
+import { createMockEl } from '../helpers/mockElement';
+
 interface CreateOpts {
   cls?: string | string[];
   text?: string;
@@ -164,4 +166,53 @@ export function installObsidianDom(): void {
   }
 }
 
+// Obsidian also exposes `createEl`/`createDiv`/`createSpan`/`createFragment` as
+// GLOBAL functions that build a DETACHED element (no parent append) — distinct
+// from the instance methods above. Production code uses the global form for
+// detached roots/sentinels (e.g. codeBlockFormatter, InlineEditModal widget
+// roots, the streaming content sentinel). Install them so those paths run in
+// BOTH test lanes: the jsdom lane creates real elements, and the DOM-less Jest
+// node lane falls back to `createMockEl` — mirroring how the mock element's own
+// `ownerDocument.createElement` resolves (helpers/mockElement.ts).
+function createDetachedElement(tag: string): HTMLElement {
+  const doc = (globalThis as { document?: Document }).document;
+  return (doc ? doc.createElement(tag) : createMockEl(tag)) as HTMLElement;
+}
+
+export function installObsidianGlobals(): void {
+  const globalRecord = globalThis as Record<string, unknown>;
+
+  if (typeof globalRecord.createEl !== 'function') {
+    globalRecord.createEl = function createEl(tag: string, opts?: CreateOpts | string): HTMLElement {
+      const el = createDetachedElement(tag);
+      applyCreateOpts(el, opts);
+      return el;
+    };
+  }
+
+  if (typeof globalRecord.createDiv !== 'function') {
+    globalRecord.createDiv = function createDiv(opts?: CreateOpts | string): HTMLElement {
+      const el = createDetachedElement('div');
+      applyCreateOpts(el, opts);
+      return el;
+    };
+  }
+
+  if (typeof globalRecord.createSpan !== 'function') {
+    globalRecord.createSpan = function createSpan(opts?: CreateOpts | string): HTMLElement {
+      const el = createDetachedElement('span');
+      applyCreateOpts(el, opts);
+      return el;
+    };
+  }
+
+  if (typeof globalRecord.createFragment !== 'function') {
+    globalRecord.createFragment = function createFragment(): DocumentFragment {
+      const doc = (globalThis as { document?: Document }).document;
+      return (doc ? doc.createDocumentFragment() : createMockEl('fragment')) as unknown as DocumentFragment;
+    };
+  }
+}
+
 installObsidianDom();
+installObsidianGlobals();
