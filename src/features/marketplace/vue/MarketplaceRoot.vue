@@ -3,6 +3,7 @@ import { Notice } from 'obsidian';
 import { computed, inject, nextTick, onMounted, onUnmounted, reactive, ref, watch } from 'vue';
 
 import { ProviderRegistry } from '../../../core/providers/ProviderRegistry';
+import { asSettingsBag } from '../../../core/types';
 import { t } from '../../../i18n/i18n';
 import LibraryToolbar from '../../library/vue/components/LibraryToolbar.vue';
 import { useLibraryList } from '../../library/vue/useLibraryList';
@@ -260,7 +261,7 @@ function backToList(): void {
 // Skill install targets: the three providers that own a skill root, labeled from
 // the registry (falling back to the id if a provider isn't registered).
 const skillProviderOptions = computed(() =>
-  SKILL_PROVIDER_TARGETS.map((id) => ({ id, label: providerLabel(id) })),
+  SKILL_PROVIDER_TARGETS.map((id) => ({ id, label: providerLabel(id), userScope: providerResolvesUserScope(id) })),
 );
 
 function providerLabel(id: SkillProviderTarget): string {
@@ -268,6 +269,20 @@ function providerLabel(id: SkillProviderTarget): string {
     return ProviderRegistry.getProviderDisplayName(id);
   } catch {
     return id;
+  }
+}
+
+// Whether a user-scope (`~/.<provider>/skills`) install would actually resolve for
+// this provider under the LIVE settings. Claude ties it to `loadUserSettings`, so
+// offering User there when it's off writes a skill the runtime silently won't load
+// (the run path refuses it too) — so the detail hides User scope when this is false.
+// Defaults to true (offer User) if the provider isn't registered or settings can't
+// be read, matching the prior always-offer behavior.
+function providerResolvesUserScope(id: SkillProviderTarget): boolean {
+  try {
+    return ProviderRegistry.resolvesUserScopeSkills(id, asSettingsBag(plugin.settings));
+  } catch {
+    return true;
   }
 }
 

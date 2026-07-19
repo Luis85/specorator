@@ -135,6 +135,29 @@ describe('MarketplaceDetail — skill install panel', () => {
     expect(screen.getByText(/home directory/i)).toBeTruthy();
   });
 
+  const scopedProviderOptions = [
+    { id: 'claude', label: 'Claude', userScope: false }, // e.g. loadUserSettings off
+    { id: 'codex', label: 'Codex', userScope: true },
+  ];
+
+  it('hides User scope for a provider that cannot resolve user-scope skills', async () => {
+    renderDetail(skillProps({ skillProviderOptions: scopedProviderOptions }));
+    const [providerSelect, scopeSelect] = screen.getAllByRole('combobox') as HTMLSelectElement[];
+    expect(scopeSelect.options.length).toBe(1); // default provider claude → only Project
+    await fireEvent.update(providerSelect, 'codex');
+    expect(scopeSelect.options.length).toBe(2); // codex resolves user scope → Project + User
+  });
+
+  it('snaps scope back to project when switching to a provider without user scope', async () => {
+    const { emitted } = renderDetail(skillProps({ skillProviderOptions: scopedProviderOptions }));
+    const [providerSelect, scopeSelect] = screen.getAllByRole('combobox') as HTMLSelectElement[];
+    await fireEvent.update(providerSelect, 'codex');
+    await fireEvent.update(scopeSelect, 'user');
+    await fireEvent.update(providerSelect, 'claude'); // claude can't resolve user scope
+    await fireEvent.click(screen.getByRole('button', { name: 'Install' }));
+    expect(emitted().install?.at(-1)).toEqual([{ provider: 'claude', scope: 'project' }]);
+  });
+
   it('reflects the per-target installed state (button becomes "Installed here", disabled)', async () => {
     const checker = vi.fn().mockResolvedValue(true);
     renderDetail(skillProps({ skillInstalledChecker: checker }));

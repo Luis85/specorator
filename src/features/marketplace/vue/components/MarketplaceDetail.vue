@@ -20,8 +20,11 @@ const props = defineProps<{
   installing: boolean;
   installed: boolean;
   installable: boolean;
-  /** Skills only — the provider targets to offer, labeled from the registry. */
-  skillProviderOptions?: { id: SkillProviderTarget; label: string }[];
+  /** Skills only — the provider targets to offer, labeled from the registry.
+   *  `userScope` is whether a user-scope install resolves for that provider under
+   *  the live settings (Claude ties it to `loadUserSettings`); User scope is hidden
+   *  when it's false so a skill isn't written where the runtime won't load it. */
+  skillProviderOptions?: { id: SkillProviderTarget; label: string; userScope?: boolean }[];
   /** Skills only — resolves whether the skill already exists at a given target. */
   skillInstalledChecker?: (target: SkillInstallTarget) => Promise<boolean>;
   /** Skills only — a value whose identity changes when the store recomputes its
@@ -39,7 +42,21 @@ const nameEl = ref<HTMLElement | null>(null);
 const isSkill = computed(() => props.item.type === 'skill');
 const provider = ref<SkillProviderTarget>(DEFAULT_SKILL_TARGET.provider);
 const scope = ref<SkillInstallScope>(DEFAULT_SKILL_TARGET.scope);
-const scopeOptions = SKILL_INSTALL_SCOPES;
+// User scope is offered only when the SELECTED provider can actually resolve a
+// user-scope skill under the live settings (default true when the option carries
+// no flag, e.g. in tests). Otherwise a `user` install would write a skill the
+// runtime silently won't load.
+const selectedProviderUserScope = computed(
+  () => props.skillProviderOptions?.find((o) => o.id === provider.value)?.userScope ?? true,
+);
+const scopeOptions = computed<readonly SkillInstallScope[]>(() =>
+  selectedProviderUserScope.value ? SKILL_INSTALL_SCOPES : SKILL_INSTALL_SCOPES.filter((s) => s !== 'user'),
+);
+// Switching to a provider that can't resolve user scope while User is selected
+// snaps the scope back to project, so a hidden option can't stay the target.
+watch(selectedProviderUserScope, (allowed) => {
+  if (!allowed && scope.value === 'user') scope.value = 'project';
+});
 const selectedTarget = computed<SkillInstallTarget>(() => ({ provider: provider.value, scope: scope.value }));
 // Whether the skill is already installed at the CURRENTLY selected target (not
 // "anywhere" — that is the `installed` prop). Drives the per-target button.
