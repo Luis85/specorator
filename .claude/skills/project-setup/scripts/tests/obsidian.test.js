@@ -286,6 +286,14 @@ test('obsidianEntry is the fixed greenfield entry, and esbuild bundles it (expli
   assert.match(findWrite(actionsFor(), 'esbuild.config.mjs').content, /entryPoints: \['\.\/src\/main\.ts'\]/);
 });
 
+test('the dev esbuild config splits .env.local CRLF-safely (no dropped OBSIDIAN_VAULT on Windows)', () => {
+  // Splitting a CRLF .env.local on bare \n left a trailing \r that the anchored
+  // assignment regex rejected, so OBSIDIAN_VAULT never set and the dev build
+  // silently skipped deploying to the test vault. Split on /\r?\n/ instead.
+  const cfg = findWrite(actionsFor(), 'esbuild.config.mjs').content;
+  assert.match(cfg, /readFileSync\('\.env\.local', 'utf8'\)\.split\(\/\\r\?\\n\/\)/);
+});
+
 test('the docs render with the selected package manager (no hardcoded npm)', () => {
   const opts = { ...optionsWith(BASE), packageManager: 'pnpm' };
   const actions = planObsidian(opts, { packageManager: 'pnpm' });

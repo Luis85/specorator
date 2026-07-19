@@ -21,9 +21,11 @@ import process from 'node:process';
 const prod = process.argv[2] === 'production';
 const manifest = JSON.parse(readFileSync('manifest.json', 'utf8'));
 
-// .env.local (gitignored) can point OBSIDIAN_VAULT at a test vault.
+// .env.local (gitignored) can point OBSIDIAN_VAULT at a test vault. Split on
+// /\r?\n/ so a Windows CRLF file doesn't leave a trailing \r that the anchored
+// regex would reject (silently dropping OBSIDIAN_VAULT and skipping the deploy).
 if (existsSync('.env.local')) {
-  for (const line of readFileSync('.env.local', 'utf8').split('\n')) {
+  for (const line of readFileSync('.env.local', 'utf8').split(/\r?\n/)) {
     const m = line.match(/^([^#=]+)=["']?(.*?)["']?$/);
     if (m && !process.env[m[1].trim()]) process.env[m[1].trim()] = m[2];
   }
