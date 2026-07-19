@@ -97,14 +97,16 @@ const showSkeleton = computed(() => store.loading && store.items.length === 0);
 const detailItem = computed(() => store.items.find((item) => item.id === detailId.value) ?? null);
 
 // Fall a stranded category back to Home — whether it leaves a reloaded catalog
-// (counts change) OR a deep-link selects a category the RETAINED catalog has zero
-// of (activeView changes but counts don't, so watching counts alone would miss
-// it). Gated on a non-empty catalog so a deep-link applied BEFORE the first load
-// isn't bounced pre-fetch — the post-load counts change re-checks it. Mirrors
-// useLibraryList's tag-prune.
-watch([counts, activeView], ([tally, view]) => {
+// (counts change), a deep-link selects a category the loaded catalog has zero of
+// (activeView changes but counts don't), or a valid but EMPTY catalog just landed
+// (neither counts nor activeView change, only `loaded`). Gated on `store.loaded`
+// (NOT item count) so a deep-link applied BEFORE the first load isn't bounced
+// pre-fetch; observing `loaded` re-checks the instant a catalog — even an empty
+// one — lands. Mirrors useLibraryList's tag-prune.
+watch([counts, activeView, () => store.loaded], () => {
+  const view = activeView.value;
   if (view === 'home') return;
-  if (store.items.length > 0 && tally[view] === 0) activeView.value = 'home';
+  if (store.loaded && counts.value[view] === 0) activeView.value = 'home';
 });
 
 // Opt-in network gate: the Marketplace is dark until the user enables it, so

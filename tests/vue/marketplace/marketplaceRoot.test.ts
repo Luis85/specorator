@@ -275,7 +275,12 @@ describe('MarketplaceRoot category nav', () => {
     // empty skill grid (there is no skill tab either) — the counts guard, now
     // watching activeView too, bounces it to Home even though counts don't change.
     const requestedViewRef = ref<MarketplaceView | null>(null);
-    setup(makeStore({ items: [alpha, beta] }), { marketplaceNetworkEnabled: true }, undefined, requestedViewRef);
+    setup(
+      makeStore({ items: [alpha, beta], loaded: true }),
+      { marketplaceNetworkEnabled: true },
+      undefined,
+      requestedViewRef,
+    );
     await screen.findByText('Alpha Loop');
     requestedViewRef.value = 'skill';
     await nextTick();
@@ -285,8 +290,46 @@ describe('MarketplaceRoot category nav', () => {
     expect(screen.queryByText('No items match your filters.')).toBeNull();
   });
 
+  it('falls a deep-link back to Home when the loaded catalog is empty', async () => {
+    // A valid but EMPTY catalog (loaded, zero items): a deep-link must land on Home,
+    // not strand on an empty category grid with no tab. Gating the guard on
+    // `store.loaded` (not item count) is what makes this case fall back.
+    const requestedViewRef = ref<MarketplaceView | null>(null);
+    setup(
+      makeStore({ items: [], loaded: true }),
+      { marketplaceNetworkEnabled: true },
+      undefined,
+      requestedViewRef,
+    );
+    requestedViewRef.value = 'agent';
+    await nextTick();
+    // Home landing (the hero) — not the category grid's "No items match".
+    await waitFor(() => expect(screen.getByText(/Discover ready-made assets/)).toBeTruthy());
+    expect(screen.queryByText('No items match your filters.')).toBeNull();
+  });
+
+  it('falls back to Home once an empty catalog finishes loading under a deep-link', async () => {
+    // Deep-link applied BEFORE the (empty) catalog loads: it must stand pre-load,
+    // then fall back to Home when `loaded` flips — the watcher observes `loaded`,
+    // so an empty landing (no counts/activeView change) still corrects itself.
+    const store = reactive(makeStore({ items: [], loaded: false }));
+    const requestedViewRef = ref<MarketplaceView | null>(null);
+    setup(
+      store as StoreFake,
+      { marketplaceNetworkEnabled: true, marketplaceNetworkWarningShown: true },
+      undefined,
+      requestedViewRef,
+    );
+    requestedViewRef.value = 'agent';
+    await nextTick();
+    store.loaded = true; // the empty catalog lands
+    await nextTick();
+    await waitFor(() => expect(screen.getByText(/Discover ready-made assets/)).toBeTruthy());
+    expect(screen.queryByText('No items match your filters.')).toBeNull();
+  });
+
   it('falls back to Home when the active category leaves the reloaded catalog', async () => {
-    const store = reactive(makeStore({ items: [alpha, beta] }));
+    const store = reactive(makeStore({ items: [alpha, beta], loaded: true }));
     setup(store as StoreFake, {
       marketplaceNetworkEnabled: true,
       marketplaceNetworkWarningShown: true,
