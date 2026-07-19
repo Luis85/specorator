@@ -1,5 +1,5 @@
 import { fireEvent, render, screen } from '@testing-library/vue';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
 import type { MarketplaceItem } from '@/features/marketplace/catalogTypes';
 import MarketplaceDetail from '@/features/marketplace/vue/components/MarketplaceDetail.vue';
@@ -35,6 +35,20 @@ describe('MarketplaceDetail', () => {
     const { emitted } = renderDetail();
     await fireEvent.click(screen.getByRole('button', { name: 'Back' }));
     expect(emitted().back).toHaveLength(1);
+  });
+
+  it('moves focus to the detail heading on mount (view-change a11y)', () => {
+    // Focusing the name heading on the list→detail swap keeps keyboard focus in
+    // the new view (not <body>) and lets screen readers announce the change.
+    // (jsdom doesn't reliably reflect focus in document.activeElement, so assert
+    // the focus() call landed on the heading.)
+    const focusSpy = vi.spyOn(HTMLElement.prototype, 'focus');
+    try {
+      renderDetail();
+      expect(focusSpy.mock.instances.at(-1)).toBe(screen.getByText('Alpha'));
+    } finally {
+      focusSpy.mockRestore();
+    }
   });
 
   it('shows the reviewed body and enables Install once it loads', async () => {

@@ -20,7 +20,7 @@ Modeled on — and reuses the components of — `features/library`.
 | `vue/components/MarketplaceHome.vue` | Storefront landing: one section per present type (header + count + first `previewLimit` cards + "See all →"); emits `open`/`seeAll` |
 | `vue/components/MarketplaceGrid.vue` | Responsive card grid for a category/search scope; renders skeleton cells while `loading` with no items yet; empty state otherwise |
 | `vue/components/MarketplaceCard.vue` | Per-item **vertical** grid card (type icon + badge + name + clamped description + tags + Installed badge). The whole card emits `open` to route to the detail — no inline preview/install |
-| `vue/components/MarketplaceDetail.vue` | In-island detail/preview: Back, header (icon/name/badge/tags), gated Install, attribution (http(s)-only source link), raw `<pre>` body. Emits `back`/`install` |
+| `vue/components/MarketplaceDetail.vue` | In-island detail/preview: Back, header (icon/name/badge/tags), gated Install, attribution (http(s)-only source link), raw `<pre>` body. Emits `back`/`install`. On mount moves focus to the name heading (`tabindex=-1`) and resets the scroll container to the top — view-change a11y so keyboard/SR focus enters the new view and the header isn't opened mid-scroll |
 | `vue/marketplaceView.ts` | The `MarketplaceView` union (`'home' \| MarketplaceItemType`) shared by Nav + Root |
 | `vue/marketplaceIcons.ts` | Per-type default Lucide icon map (`iconForItem`); re-exports the shared cross-window-safe `mountLucide` function-ref helper (`src/shared/vue/mountLucide.ts`, shared with the Agent Board) |
 | `vue/marketplaceTypeLabels.ts` | Localized `type → label` map shared by the card/detail badge, the nav tabs, and the Home section headers |

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed } from 'vue';
+import { computed, onMounted, ref } from 'vue';
 
 import { t } from '../../../../i18n/i18n';
 import type { MarketplaceItem } from '../../catalogTypes';
@@ -16,6 +16,31 @@ const props = defineProps<{
 }>();
 const emit = defineEmits<{ back: []; install: [] }>();
 
+const rootEl = ref<HTMLElement | null>(null);
+const nameEl = ref<HTMLElement | null>(null);
+
+// Nearest scrollable ancestor (Obsidian's `.view-content` in practice), found by
+// overflow rather than a hardcoded host class.
+function scrollableAncestor(el: HTMLElement | null): HTMLElement | null {
+  let node = el?.parentElement ?? null;
+  while (node) {
+    const overflowY = getComputedStyle(node).overflowY;
+    if (overflowY === 'auto' || overflowY === 'scroll') return node;
+    node = node.parentElement;
+  }
+  return null;
+}
+
+onMounted(() => {
+  // A view change: reset the scroll container to the top (opening a card from a
+  // scrolled list would otherwise hide the Back button / header), and move focus
+  // into the new view so keyboard + screen-reader users don't fall back to
+  // <body> with no announcement.
+  const scroller = scrollableAncestor(rootEl.value);
+  if (scroller) scroller.scrollTop = 0;
+  nameEl.value?.focus({ preventScroll: true });
+});
+
 const bodyText = computed(() =>
   props.previewError ? t('marketplace.loadError') : (props.body ?? t('marketplace.loading')),
 );
@@ -29,7 +54,10 @@ const safeSourceUrl = computed(() => {
 </script>
 
 <template>
-  <div class="specorator-vue-marketplace-detail">
+  <div
+    ref="rootEl"
+    class="specorator-vue-marketplace-detail"
+  >
     <button
       type="button"
       class="specorator-vue-marketplace-back"
@@ -43,7 +71,13 @@ const safeSourceUrl = computed(() => {
         class="specorator-vue-marketplace-card-icon is-lg"
       />
       <div class="specorator-vue-marketplace-detail-titles">
-        <div class="specorator-vue-marketplace-detail-name">
+        <!-- tabindex -1 + programmatic focus on mount announces the view change
+          to screen readers and keeps keyboard focus inside the detail. -->
+        <div
+          ref="nameEl"
+          tabindex="-1"
+          class="specorator-vue-marketplace-detail-name"
+        >
           {{ props.item.name }}
         </div>
         <span class="specorator-vue-marketplace-card-badge">{{ props.typeLabel }}</span>
