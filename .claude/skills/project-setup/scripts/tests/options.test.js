@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { test } from 'node:test';
 
-import { freezeOptions, loadOptions, validateObsidianFields } from '../lib/options.mjs';
+import { freezeOptions, loadOptions, obsidianNodeProblem, OBSIDIAN_NODE_FLOOR, validateObsidianFields } from '../lib/options.mjs';
 
 function withConfig(content) {
   const dir = mkdtempSync(join(tmpdir(), 'opt-'));
@@ -123,5 +123,20 @@ test('loadOptions sanitizes prds: auto-numbers ids, defaults title/status, coerc
     assert.equal(prds[2].title, 'Untitled');
   } finally {
     c.cleanup();
+  }
+});
+
+test('obsidianNodeProblem flags a host Node below the scaffold floor, passes at/above it', () => {
+  const floor = OBSIDIAN_NODE_FLOOR.join('.'); // '22.13.0'
+  // Below the floor: too-old majors and the 22.0–22.12 gap jsdom rejects.
+  for (const v of ['18.19.0', '20.11.1', '22.0.0', '22.12.0', '22.12.99']) {
+    const p = obsidianNodeProblem(v);
+    assert.ok(p, `expected a problem for Node ${v}`);
+    assert.match(p, new RegExp(`>=${floor.replace(/\./g, '\\.')}`)); // documents the exact floor
+    assert.match(p, new RegExp(v.replace(/\./g, '\\.'))); // names the offending version
+  }
+  // At or above the floor: clean, including the next major.
+  for (const v of ['22.13.0', '22.13.5', '22.20.0', '23.4.0', '24.2.0']) {
+    assert.equal(obsidianNodeProblem(v), null, `Node ${v} should pass`);
   }
 });

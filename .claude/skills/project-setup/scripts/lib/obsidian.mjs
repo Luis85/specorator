@@ -10,6 +10,7 @@
 // overwrite-backup, so a re-apply picks up template updates and never clobbers the
 // user's own source.
 import { CI_PM, dep, notice } from './harness.mjs';
+import { OBSIDIAN_NODE_FLOOR } from './options.mjs';
 import { runPrefix, safePackageManager } from './packageManager.mjs';
 import { loadTemplate, renderTemplate } from './templates.mjs';
 
@@ -697,8 +698,9 @@ function planPackageBasics(options, version) {
     main: 'main.js',
     // jsdom (always installed for the vitest DOM env) requires ^22.13.0 on the 22
     // line, and vite (Vue lane) requires >=22.12.0 — so >=22 would let a package
-    // manager pick a Node the pinned toolchain rejects at install/test time.
-    engines: { node: '>=22.13.0' },
+    // manager pick a Node the pinned toolchain rejects at install/test time. The
+    // engine enforces the same floor on the HOST runtime before applying.
+    engines: { node: `>=${OBSIDIAN_NODE_FLOOR.join('.')}` },
     scripts,
     // @codemirror/view + state: types for the editor-highlight sample, and they
     // are obsidian's own declared peers (needed at the root for strict-peer PMs).

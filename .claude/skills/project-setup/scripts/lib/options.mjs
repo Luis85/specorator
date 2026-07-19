@@ -97,6 +97,23 @@ function isBelowVersion(v, floor) {
   return false;
 }
 
+// The Obsidian scaffold's generated toolchain can't install or run below this Node
+// floor: jsdom (always installed for the Vitest DOM env) requires ^22.13.0 on the 22
+// line and vite (Vue lane) requires >=22.12.0. obsidian.mjs derives the generated
+// `engines.node` from this, so the floor stays single-sourced.
+export const OBSIDIAN_NODE_FLOOR = [22, 13, 0];
+
+// A human-readable problem when the HOST Node can't run the Obsidian scaffold's
+// toolchain, or null when it can. The engine — not just the generated project —
+// runs the install and gates, so the host runtime must clear the floor. Kept
+// separate from validateObsidianFields (which checks answers, not the environment)
+// so both stay pure and unit-testable.
+export function obsidianNodeProblem(nodeVersion) {
+  if (!isBelowVersion(nodeVersion, OBSIDIAN_NODE_FLOOR)) return null;
+  const floor = OBSIDIAN_NODE_FLOOR.join('.');
+  return `Obsidian mode needs Node >=${floor} (the generated jsdom/vite toolchain requires it); you're on Node ${nodeVersion}. Upgrade Node (nvm install ${OBSIDIAN_NODE_FLOOR[0]}) and re-run.`;
+}
+
 export function validateObsidianFields(o) {
   if (!isObject(o)) return [];
   const problems = [];
