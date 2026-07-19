@@ -362,6 +362,24 @@ describe('installSkillItem', () => {
     expect(qaFiles.has('.cursor/skills/project-setup/SKILL.md')).toBe(true);
   });
 
+  it('installs by NAME so distinct-name items sharing a path parent get distinct folders', async () => {
+    // The install folder + dedup key must agree (both name-based). Two differently
+    // named items that share one `<folder>/SKILL.md` parent (only reachable via a
+    // custom manifest) must install to DISTINCT dirs, not collide — else installing
+    // one would mark both installed and block the other.
+    const { deps, qaFiles } = makeDeps();
+    const target: SkillInstallTarget = { provider: 'claude', scope: 'project' };
+    const alpha: MarketplaceItem = { id: 'skills/alpha', type: 'skill', name: 'alpha', description: 'd', path: 'skills/shared/SKILL.md', files: [], tags: [] };
+    const beta: MarketplaceItem = { id: 'skills/beta', type: 'skill', name: 'beta', description: 'd', path: 'skills/shared/SKILL.md', files: [], tags: [] };
+    await installSkillItem(alpha, new Map([['SKILL.md', 'A']]), target, deps);
+    await installSkillItem(beta, new Map([['SKILL.md', 'B']]), target, deps);
+    expect(qaFiles.get('.claude/skills/alpha/SKILL.md')).toBe('A');
+    expect(qaFiles.get('.claude/skills/beta/SKILL.md')).toBe('B');
+    // ...and their installed-state is independent.
+    expect(await isSkillInstalledAt(alpha, target, deps)).toBe(true);
+    expect(await isSkillInstalledAt(beta, target, deps)).toBe(true);
+  });
+
   it('skips when the target already holds the skill', async () => {
     const { deps } = makeDeps();
     const target: SkillInstallTarget = { provider: 'claude', scope: 'project' };

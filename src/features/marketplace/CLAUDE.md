@@ -25,7 +25,7 @@ Modeled on — and reuses the components of — `features/library`.
 | `vue/marketplaceView.ts` | The `MarketplaceView` union (`'home' \| MarketplaceItemType`) shared by Nav + Root |
 | `vue/marketplaceIcons.ts` | Per-type default Lucide icon map (`iconForItem`); re-exports the shared cross-window-safe `mountLucide` function-ref helper (`src/shared/vue/mountLucide.ts`, shared with the Agent Board) |
 | `vue/marketplaceTypeLabels.ts` | Localized `type → label` map shared by the card/detail badge, the nav tabs, and the Home section headers |
-| `vue/useMarketplaceInstalledRefresh.ts` | Per-leaf composable: debounced `store.refreshInstalled()` on three channels — `roster:changed` (agents), folder-scoped vault create/delete/rename (loops/templates/quick-actions), and `settings-changed` (an install-folder setting change) |
+| `vue/useMarketplaceInstalledRefresh.ts` | Per-leaf composable: debounced `store.refreshInstalled()` on four channels — `roster:changed` (agents), folder-scoped vault create/delete/rename (loops/templates/quick-actions), `settings-changed` (an install-folder setting change), and `vaultSkill.changed` (project skills — their dot-folder roots emit no vault events, so the bus is the only in-app signal) |
 | `vue/stores/marketplaceStore.ts` | Shared Pinia store over one Pinia per plugin (all leaves share fetched catalog + installed state). `install(item, body, target?)` routes skills through `installSkillAt` — fetches the skill's supporting `files` (bounded concurrency, network-gated) then `installSkillItem`; `isSkillInstalledAt(item, provider, scope)` backs the detail's per-target check |
 
 ## Contracts & invariants
@@ -113,15 +113,22 @@ Modeled on — and reuses the components of — `features/library`.
   HTTP-redirect following (3xx is auto-followed with no `Location` re-vet). Both
   are bounded to a non-default, user-configured source; closing them means moving
   off `requestUrl` (see the `MarketplaceCatalogClient` class doc).
-- **Installed badges live-sync across three channels.** A mutation OUTSIDE the
+- **Installed badges live-sync across four channels.** A mutation OUTSIDE the
   marketplace (a Library delete/rename, a roster change, an install-folder setting
-  change) recomputes `installedIds` without a manual Refresh, via
-  `useMarketplaceInstalledRefresh`. Installed-state spans three signals: agents
-  fire `roster:changed` on the event bus; loop/template/quick-action notes surface
-  as Obsidian vault create/delete/rename events under their folders (existence-only
-  — `modify` is irrelevant); and a `settings-changed` event covers a change to the
-  configured install FOLDERS (which moves where an item lives — and so which items
-  count as installed — with no accompanying vault event). All feed a debounced
+  change, a Library skill save/delete) recomputes `installedIds` without a manual
+  Refresh, via `useMarketplaceInstalledRefresh`. Installed-state spans four
+  signals: agents fire `roster:changed` on the event bus; loop/template/quick-action
+  notes surface as Obsidian vault create/delete/rename events under their folders
+  (existence-only — `modify` is irrelevant); a `settings-changed` event covers a
+  change to the configured install FOLDERS (which moves where an item lives — and
+  so which items count as installed — with no accompanying vault event); and
+  **project skills** fire `vaultSkill.changed` on the event bus. Skills MUST use
+  the bus, not vault events: their roots (`.claude/skills`, `.codex/skills`,
+  `.cursor/skills`) are dot-folders Obsidian excludes from its vault index, so no
+  create/delete/rename fires for a `SKILL.md` (the Library skill store + provider
+  catalogs emit `vaultSkill.changed` on save/delete — the same signal
+  `VaultSkillAggregator` invalidates on). User-scope skills live outside the vault
+  (no watcher) and stay TTL/reopen-refreshed. All feed a debounced
   `store.refreshInstalled`, which is network-free and double-guarded: a
   **generation** guard rejects a scan the catalog reloaded under, and a
   **sequence** guard rejects an older scan a newer overlapping scan already

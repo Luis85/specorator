@@ -13,6 +13,8 @@ function makeFakes() {
   const rosterDisposer = vi.fn();
   const settingsHandlers: Array<() => void> = [];
   const settingsDisposer = vi.fn();
+  const vaultSkillHandlers: Array<() => void> = [];
+  const vaultSkillDisposer = vi.fn();
   const vaultHandlers: Record<string, VaultHandler[]> = {};
   const offref = vi.fn();
   const plugin = {
@@ -31,6 +33,10 @@ function makeFakes() {
           settingsHandlers.push(handler);
           return settingsDisposer;
         }
+        if (name === 'vaultSkill.changed') {
+          vaultSkillHandlers.push(handler);
+          return vaultSkillDisposer;
+        }
         return vi.fn();
       }),
     },
@@ -46,9 +52,20 @@ function makeFakes() {
   };
   const fireRoster = (): void => rosterHandlers.forEach((handler) => handler());
   const fireSettings = (): void => settingsHandlers.forEach((handler) => handler());
+  const fireVaultSkill = (): void => vaultSkillHandlers.forEach((handler) => handler());
   const fireVault = (name: string, path: string, oldPath?: string): void =>
     (vaultHandlers[name] ?? []).forEach((handler) => handler({ path }, oldPath));
-  return { plugin, fireRoster, fireSettings, fireVault, rosterDisposer, settingsDisposer, offref };
+  return {
+    plugin,
+    fireRoster,
+    fireSettings,
+    fireVaultSkill,
+    fireVault,
+    rosterDisposer,
+    settingsDisposer,
+    vaultSkillDisposer,
+    offref,
+  };
 }
 
 function mountComposable(plugin: unknown, refresh: () => void) {
@@ -87,6 +104,19 @@ describe('useMarketplaceInstalledRefresh', () => {
     mountComposable(plugin, refresh);
 
     fireSettings();
+    expect(refresh).not.toHaveBeenCalled(); // debounced
+    vi.advanceTimersByTime(300);
+    expect(refresh).toHaveBeenCalledTimes(1);
+  });
+
+  it('refreshes (debounced) on vaultSkill.changed (a project skill added/removed)', () => {
+    // Skill roots are dot-folders Obsidian doesn't emit vault events for, so a
+    // Library skill delete/rename reaches the badge scan via the event bus.
+    const refresh = vi.fn();
+    const { plugin, fireVaultSkill } = makeFakes();
+    mountComposable(plugin, refresh);
+
+    fireVaultSkill();
     expect(refresh).not.toHaveBeenCalled(); // debounced
     vi.advanceTimersByTime(300);
     expect(refresh).toHaveBeenCalledTimes(1);
@@ -132,7 +162,8 @@ describe('useMarketplaceInstalledRefresh', () => {
 
   it('releases bus + vault subscriptions and cancels a pending refresh on unmount', () => {
     const refresh = vi.fn();
-    const { plugin, fireRoster, rosterDisposer, settingsDisposer, offref } = makeFakes();
+    const { plugin, fireRoster, rosterDisposer, settingsDisposer, vaultSkillDisposer, offref } =
+      makeFakes();
     const { unmount } = mountComposable(plugin, refresh);
 
     fireRoster(); // schedules a refresh (timer pending)
@@ -140,6 +171,7 @@ describe('useMarketplaceInstalledRefresh', () => {
 
     expect(rosterDisposer).toHaveBeenCalledTimes(1);
     expect(settingsDisposer).toHaveBeenCalledTimes(1);
+    expect(vaultSkillDisposer).toHaveBeenCalledTimes(1);
     expect(offref).toHaveBeenCalledTimes(3); // create / delete / rename
     // The pending debounce was cleared on unmount, so nothing fires late.
     vi.advanceTimersByTime(300);

@@ -360,12 +360,16 @@ function skillAdapterFor(target: SkillInstallTarget, deps: MarketplaceInstallDep
  * install; the installed-checks use this nullable one.
  */
 function skillFolderNameOrNull(item: MarketplaceItem): string | null {
-  // `<folder>/<slug>/SKILL.md` → `<slug>`; fall back to the manifest name.
-  const segments = item.path.split('/');
-  const slug = (segments.length >= 3 ? segments[segments.length - 2] : item.name).trim();
+  // The install folder is the skill NAME — matching both the SKILL.md standard
+  // (folder === frontmatter name) and parseManifest's per-type install-key dedup
+  // (which keys skills on the normalized name). Deriving it from item.path instead
+  // would let a custom manifest with two differently-named items that share one
+  // `<folder>/SKILL.md` parent install to the SAME dir while surviving dedup as
+  // distinct — so installing one would mark both installed and block the other.
+  const name = item.name.trim();
   // A single safe path segment (`hasUnsafePathSegment` covers `..`/`\`/absolute;
   // a bare `.` is the remaining dot-dir to reject).
-  return !slug || slug === '.' || hasUnsafePathSegment(slug) ? null : slug;
+  return !name || name === '.' || hasUnsafePathSegment(name) ? null : name;
 }
 
 function assertSkillFolderName(item: MarketplaceItem): string {
