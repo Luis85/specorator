@@ -1,4 +1,4 @@
-import { isInstallableType, parseManifest } from '@/features/marketplace/catalogTypes';
+import { isBinarySkillPath, isInstallableType, parseManifest } from '@/features/marketplace/catalogTypes';
 
 const validItem = {
   id: 'loops/x',
@@ -210,6 +210,18 @@ describe('parseManifest — skill files', () => {
       ],
     });
     expect(manifest?.items[0] && 'files' in manifest.items[0]).toBe(false);
+  });
+});
+
+describe('isBinarySkillPath', () => {
+  it('flags known binary extensions (case-insensitive) and allows text files', () => {
+    expect(isBinarySkillPath('skills/x/logo.png')).toBe(true);
+    expect(isBinarySkillPath('skills/x/doc.PDF')).toBe(true);
+    expect(isBinarySkillPath('skills/x/font.woff2')).toBe(true);
+    expect(isBinarySkillPath('skills/x/SKILL.md')).toBe(false);
+    expect(isBinarySkillPath('skills/x/scripts/setup.mjs')).toBe(false);
+    expect(isBinarySkillPath('skills/x/data.json')).toBe(false);
+    expect(isBinarySkillPath('skills/x/Makefile')).toBe(false); // no extension
   });
 });
 

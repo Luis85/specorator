@@ -204,8 +204,15 @@ Modeled on — and reuses the components of — `features/library`.
   `SKILL.md` written **last** so a mid-write failure leaves no dedup marker.
   Every skill file path is guarded twice — `parseManifest` sanitizes `files` to
   stay under the skill folder, and the installer re-checks each in-skill path
-  (`hasUnsafePathSegment`) before writing. The card/grid badge means "installed
-  in **any** root"; the detail button reflects the **selected** target.
+  (`hasUnsafePathSegment`) before writing. The reviewed `SKILL.md` is also
+  validated before it's written as the completion marker
+  (`assertInstallableSkillBody`: needs `name`+`description` frontmatter, name must
+  slugify to the install slug). Skills are **text-only** — the plugin fetches each
+  file as `requestUrl().text` and writes UTF-8, so a binary would corrupt; the
+  store refuses a skill whose `files[]` carries a binary extension
+  (`isBinarySkillPath`) before fetching, and the marketplace repo's validator
+  enforces the same rule by content at the source. The card/grid badge means
+  "installed in **any** root"; the detail button reflects the **selected** target.
 
 ## Tests
 

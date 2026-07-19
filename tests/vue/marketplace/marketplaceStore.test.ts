@@ -562,4 +562,18 @@ describe('marketplaceStore skill install', () => {
     expect(item).toBe(skillItem);
     expect(target).toEqual({ provider: 'cursor', scope: 'project' });
   });
+
+  it('refuses a skill with a binary file before fetching or installing anything', async () => {
+    const store = useMarketplaceStore();
+    store.init(fakePlugin(true));
+    const withBinary: MarketplaceItem = {
+      ...skillItem,
+      files: [...(skillItem.files ?? []), 'skills/project-setup/logo.png'],
+    };
+    await expect(
+      store.install(withBinary, 'SKILL BODY', { provider: 'claude', scope: 'project' }),
+    ).rejects.toThrow(/text-only/i);
+    expect(fetchBodySpy).not.toHaveBeenCalled();
+    expect(installSkillSpy).not.toHaveBeenCalled();
+  });
 });

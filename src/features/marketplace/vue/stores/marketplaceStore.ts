@@ -4,7 +4,7 @@ import { ref, shallowRef } from 'vue';
 import { HomeFileAdapter } from '../../../../core/storage/HomeFileAdapter';
 import type SpecoratorPlugin from '../../../../main';
 import { refreshSkillCatalogBestEffort } from '../../../skills/refreshSkillCatalogBestEffort';
-import { type MarketplaceItem, skillFolderPrefix } from '../../catalogTypes';
+import { isBinarySkillPath, type MarketplaceItem, skillFolderPrefix } from '../../catalogTypes';
 import { MarketplaceCache } from '../../MarketplaceCache';
 import {
   DEFAULT_MARKETPLACE_BASE_URL,
@@ -308,6 +308,15 @@ export const useMarketplaceStore = defineStore('marketplace', () => {
     target: SkillInstallTarget,
   ): Promise<InstallOutcome> {
     assertNetworkEnabled();
+    // Skills are text-only: the plugin fetches every file as text and writes it
+    // back as UTF-8, which would corrupt a binary. Refuse before fetching (no
+    // wasted download, no silent corruption) rather than land a broken asset.
+    const binaryFile = (item.files ?? []).find((path) => isBinarySkillPath(path));
+    if (binaryFile) {
+      throw new MarketplaceError(
+        `This skill includes a non-text file ("${binaryFile}"), which can't be installed. Marketplace skills must be text-only.`,
+      );
+    }
     const files = await fetchSkillFiles(item, skillMdBody);
     const outcome = await installSkillItem(item, files, target, installDeps());
     if (outcome === 'installed') {

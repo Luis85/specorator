@@ -163,6 +163,28 @@ export function skillFolderPrefix(skillMdPath: string): string | null {
 }
 
 /**
+ * File extensions that indicate a binary asset. Marketplace skills are text
+ * (a `SKILL.md` plus supporting text files); the plugin fetches every file as
+ * `requestUrl().text` and writes it back as UTF-8, which would silently corrupt
+ * a binary — so the installer refuses a skill that declares one. The marketplace
+ * repo's validator enforces the same text-only rule by content at the source.
+ */
+const BINARY_SKILL_EXTENSIONS = new Set([
+  '.png', '.jpg', '.jpeg', '.gif', '.webp', '.bmp', '.ico', '.icns',
+  '.pdf', '.zip', '.gz', '.tar', '.tgz', '.7z', '.rar',
+  '.woff', '.woff2', '.ttf', '.otf', '.eot',
+  '.mp3', '.mp4', '.wav', '.ogg', '.mov', '.avi', '.webm',
+  '.exe', '.dll', '.so', '.dylib', '.bin', '.jar', '.class', '.wasm',
+  '.db', '.sqlite', '.sqlite3',
+]);
+
+/** True when a skill file path carries a known-binary extension. */
+export function isBinarySkillPath(path: string): boolean {
+  const dot = path.lastIndexOf('.');
+  return dot >= 0 && BINARY_SKILL_EXTENSIONS.has(path.slice(dot).toLowerCase());
+}
+
+/**
  * A skill file path safe to fetch and write: a string strictly under the skill's
  * own folder, no `..` traversal, no absolute/host/drive path, no backslashes.
  * The catalog is untrusted, so a hostile `files` entry (`../../etc`, `/abs`,
