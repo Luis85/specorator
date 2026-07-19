@@ -85,6 +85,18 @@ function sanitizeObsidian(raw) {
 // guidance during the interview, not discovered as a lint failure after the whole
 // scaffold is written. Returns human-readable problems (empty array = valid).
 const FORBIDDEN_MANIFEST_WORD = /obsidian|plugin/i;
+
+// True when semver `v` (x.y.z) is strictly below the [maj, min, patch] floor.
+function isBelowVersion(v, floor) {
+  const m = /^(\d+)\.(\d+)\.(\d+)/.exec(String(v));
+  if (!m) return false; // shape is validated/defaulted elsewhere
+  const parts = [Number(m[1]), Number(m[2]), Number(m[3])];
+  for (let i = 0; i < 3; i++) {
+    if (parts[i] !== floor[i]) return parts[i] < floor[i];
+  }
+  return false;
+}
+
 export function validateObsidianFields(o) {
   if (!isObject(o)) return [];
   const problems = [];
@@ -98,6 +110,12 @@ export function validateObsidianFields(o) {
   // is invalid, so the generated stylesheet would be silently ignored.
   if (/^[0-9]/.test(String(o.id))) {
     problems.push(`Plugin id ${JSON.stringify(o.id)} must start with a letter — it becomes a CSS class prefix (".${o.id}-view") and a digit-leading selector is invalid. Reorder it, e.g. "notes-24".`);
+  }
+  // The Vue variant's registerViews.ts calls Workspace.revealLeaf (Obsidian ≥ 1.7.2),
+  // which obsidianmd/no-unsupported-api enforces against minAppVersion — a lower but
+  // syntactically valid floor would fail the fresh scaffold's own lint.
+  if (o.vue && isBelowVersion(o.minAppVersion, [1, 7, 2])) {
+    problems.push(`minAppVersion ${JSON.stringify(o.minAppVersion)} is below 1.7.2, which the Vue view's revealLeaf API requires. Set it to 1.7.2 or higher (or scaffold without the Vue view).`);
   }
   const d = String(o.description ?? '');
   // Mirror obsidianmd: a forbidden word is reported instead of (not in addition to)

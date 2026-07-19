@@ -35,6 +35,13 @@ test('validateObsidianFields accepts a clean manifest and flags marketplace viol
       /start with a letter/.test(p),
     ),
   );
+  // Vue variant below the revealLeaf API floor (1.7.2) is rejected; at/above, or
+  // non-vue, is fine.
+  const base = { id: 'a', name: 'Cool', description: 'A fine description here.' };
+  assert.ok(validateObsidianFields({ ...base, vue: true, minAppVersion: '1.6.0' }).some((p) => /1\.7\.2/.test(p)));
+  assert.deepEqual(validateObsidianFields({ ...base, vue: true, minAppVersion: '1.7.2' }), []);
+  assert.deepEqual(validateObsidianFields({ ...base, vue: true, minAppVersion: '1.10.0' }), []);
+  assert.deepEqual(validateObsidianFields({ ...base, vue: false, minAppVersion: '1.6.0' }), []);
 });
 
 test('loadOptions throws a clear error on malformed JSON', () => {
