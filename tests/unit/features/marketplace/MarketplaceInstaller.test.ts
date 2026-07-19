@@ -28,9 +28,15 @@ function makeDeps(overrides: Partial<MarketplaceInstallDeps> = {}) {
     },
   } as unknown as Vault;
 
+  // `exists` is folder-aware: a directory "exists" when any file lives under it
+  // (mirrors real adapters), so the installer's pre-existing-folder guard can be
+  // exercised by seeding a non-SKILL file.
+  const dirAware = (files: Map<string, string>) => async (p: string) =>
+    files.has(p) || [...files.keys()].some((k) => k.startsWith(`${p}/`));
+
   const qaFiles = new Map<string, string>();
   const adapter = {
-    exists: async (p: string) => qaFiles.has(p),
+    exists: dirAware(qaFiles),
     write: async (p: string, c: string) => {
       qaFiles.set(p, c);
     },
@@ -40,7 +46,7 @@ function makeDeps(overrides: Partial<MarketplaceInstallDeps> = {}) {
   // tests can assert vault vs. home routing.
   const homeFiles = new Map<string, string>();
   const homeAdapter = {
-    exists: async (p: string) => homeFiles.has(p),
+    exists: dirAware(homeFiles),
     write: async (p: string, c: string) => {
       homeFiles.set(p, c);
     },
@@ -387,16 +393,34 @@ describe('installSkillItem', () => {
     expect(await installSkillItem(skillItem, skillFiles(), target, deps)).toBe('skipped');
   });
 
-  it('refuses a skill whose name is not a single path segment (contains a slash)', async () => {
-    // A custom-catalog name like `foo/bar` would nest the skill at `<root>/foo/bar/`,
-    // where the provider scanners (direct children only) never find it — reject it.
+  it('slugifies a slashed / spaced / uppercase name to one safe provider-valid segment', async () => {
+    // A messy custom-catalog name normalizes to the same [a-z0-9-] slug
+    // parseManifest dedups on — one segment, no nesting, resolvable as a command.
     const { deps, qaFiles } = makeDeps();
-    const nested: MarketplaceItem = { ...skillItem, name: 'foo/bar' };
+    const messy: MarketplaceItem = { ...skillItem, name: 'Foo/Bar Baz' };
+    await installSkillItem(messy, new Map([['SKILL.md', 'x']]), { provider: 'claude', scope: 'project' }, deps);
+    expect(qaFiles.get('.claude/skills/foo-bar-baz/SKILL.md')).toBe('x');
+    expect(qaFiles.has('.claude/skills/Foo/Bar Baz/SKILL.md')).toBe(false);
+  });
+
+  it('refuses a name that normalizes to an empty slug', async () => {
+    const { deps } = makeDeps();
+    const empty: MarketplaceItem = { ...skillItem, name: '!!!' };
     await expect(
-      installSkillItem(nested, skillFiles(), { provider: 'claude', scope: 'project' }, deps),
+      installSkillItem(empty, new Map([['SKILL.md', 'x']]), { provider: 'claude', scope: 'project' }, deps),
     ).rejects.toThrow(/invalid/i);
-    expect(qaFiles.size).toBe(0);
-    expect(await isSkillInstalledAt(nested, { provider: 'claude', scope: 'project' }, deps)).toBe(false);
+  });
+
+  it('refuses a pre-existing folder that lacks SKILL.md (protects existing content)', async () => {
+    const { deps, qaFiles } = makeDeps();
+    // A hand-made / half-installed folder holding a user file, no SKILL.md.
+    qaFiles.set('.claude/skills/project-setup/notes.md', 'user content');
+    await expect(
+      installSkillItem(skillItem, skillFiles(), { provider: 'claude', scope: 'project' }, deps),
+    ).rejects.toThrow(/already exists/i);
+    // Nothing was overwritten and no SKILL.md was written.
+    expect(qaFiles.get('.claude/skills/project-setup/notes.md')).toBe('user content');
+    expect(qaFiles.has('.claude/skills/project-setup/SKILL.md')).toBe(false);
   });
 
   it('refuses a file map without SKILL.md', async () => {

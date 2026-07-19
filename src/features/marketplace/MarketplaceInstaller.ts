@@ -21,7 +21,7 @@ import { parseQuickActionContent } from '../quickActions/quickActionParse';
 import { QuickActionStorage } from '../quickActions/QuickActionStorage';
 import { LoopNoteStore } from '../tasks/loops/LoopNoteStore';
 import { TemplateNoteStore } from '../tasks/templates/TemplateNoteStore';
-import { isInstallableType,type MarketplaceItem } from './catalogTypes';
+import { isInstallableType,type MarketplaceItem, normalizeInstallSlug } from './catalogTypes';
 import { MarketplaceError } from './MarketplaceCatalogClient';
 import {
   hasUnsafePathSegment,
@@ -360,19 +360,14 @@ function skillAdapterFor(target: SkillInstallTarget, deps: MarketplaceInstallDep
  * install; the installed-checks use this nullable one.
  */
 function skillFolderNameOrNull(item: MarketplaceItem): string | null {
-  // The install folder is the skill NAME — matching both the SKILL.md standard
-  // (folder === frontmatter name) and parseManifest's per-type install-key dedup
-  // (which keys skills on the normalized name). Deriving it from item.path instead
-  // would let a custom manifest with two differently-named items that share one
-  // `<folder>/SKILL.md` parent install to the SAME dir while surviving dedup as
-  // distinct — so installing one would mark both installed and block the other.
-  const name = item.name.trim();
-  // Must be a single, safe folder segment. `hasUnsafePathSegment` covers
-  // `..`/`\`/absolute/drive; a bare `.` and a mid-string `/` are the remaining
-  // rejects — a `/` in the name (`foo/bar`) would nest the skill a level too
-  // deep (`<root>/foo/bar/SKILL.md`), where the provider scanners (direct
-  // children only) never find it.
-  return !name || name === '.' || name.includes('/') || hasUnsafePathSegment(name) ? null : name;
+  // The install folder is the skill name normalized to the SAME slug
+  // parseManifest keys its per-type dedup on (`skill:<slug>`) — so install target
+  // and dedup key stay exactly aligned — and the lowercase `[a-z0-9-]` shape the
+  // Claude/Codex/Cursor scanners resolve as a single command token. Slugify also
+  // fully sanitizes (case, spaces, separators, `..`, dots all collapse or trim),
+  // so the result is always one safe segment: no traversal, no nesting. Empty
+  // (a punctuation-only name) → null; parseManifest already drops those upstream.
+  return normalizeInstallSlug(item.name) || null;
 }
 
 function assertSkillFolderName(item: MarketplaceItem): string {
@@ -410,7 +405,17 @@ export async function installSkillItem(
   const name = assertSkillFolderName(item);
   const adapter = skillAdapterFor(target, deps);
   const skillDir = `${skillRootFor(target)}/${name}`;
+  // A present SKILL.md means the skill is already installed here (SKILL.md is
+  // written LAST, so its presence guarantees a COMPLETE install) — skip.
   if (await adapter.exists(normalizePath(`${skillDir}/SKILL.md`))) return 'skipped';
+  // The folder exists but has no SKILL.md — a hand-made or half-installed dir.
+  // Writing into it would overwrite files we didn't put there, so refuse rather
+  // than silently clobber the user's content; they can remove it and retry.
+  if (await adapter.exists(normalizePath(skillDir))) {
+    throw new MarketplaceError(
+      `A folder already exists at "${skillDir}" but has no SKILL.md. Remove it before installing this skill.`,
+    );
+  }
 
   for (const [relPath, content] of files) {
     if (relPath === 'SKILL.md') continue; // written last

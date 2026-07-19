@@ -97,10 +97,11 @@ function isNonBlankString(value: unknown): value is string {
  * Shared name→slug normalization every installable store uses to derive its
  * target: the note stores' `slugify`, the roster's `slugifyRosterName`, and
  * quick actions' `getFilePathForName` all lowercase, collapse non-alphanumeric
- * runs to one hyphen, and trim edge hyphens. Kept local (not imported) so this
- * validation module stays store-independent.
+ * runs to one hyphen, and trim edge hyphens. Exported so the skill installer
+ * derives its folder from the SAME slug this module's per-type dedup keys on —
+ * keeping install target and dedup key exactly aligned.
  */
-function normalizeInstallSlug(name: string): string {
+export function normalizeInstallSlug(name: string): string {
   return name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
 }
 
