@@ -12,9 +12,12 @@ const cardEl = ref<HTMLElement | null>(null);
 
 // Releasing a text selection fires click on the card; selecting the (selectable)
 // description must not open the detail. Click-path only — keyboard activation
-// never carries a selection.
+// never carries a selection. Read the selection from the card's OWN window: in
+// an Obsidian popout the module-global `window` is the main window, whose
+// selection is always empty, so a popout text-selection would wrongly open.
 function onClick(): void {
-  if (window.getSelection()?.toString()) return;
+  const selection = cardEl.value?.ownerDocument.defaultView?.getSelection();
+  if (selection?.toString()) return;
   emit('open');
 }
 

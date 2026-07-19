@@ -1,9 +1,9 @@
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/vue';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { nextTick, reactive } from 'vue';
+import { nextTick, reactive, type Ref,ref } from 'vue';
 
 import type { MarketplaceItem } from '@/features/marketplace/catalogTypes';
-import { PLUGIN_KEY } from '@/features/marketplace/vue/marketplaceKeys';
+import { PLUGIN_KEY, REQUESTED_VIEW_KEY } from '@/features/marketplace/vue/marketplaceKeys';
 import type { MarketplaceView } from '@/features/marketplace/vue/marketplaceView';
 
 interface StoreFake {
@@ -14,8 +14,6 @@ interface StoreFake {
   offline: boolean;
   loaded: boolean;
   source: string;
-  requestedView: MarketplaceView | null;
-  requestView: ReturnType<typeof vi.fn>;
   init: ReturnType<typeof vi.fn>;
   load: ReturnType<typeof vi.fn>;
   fetchBody: ReturnType<typeof vi.fn>;
@@ -63,8 +61,6 @@ function makeStore(overrides: Partial<StoreFake> = {}): StoreFake {
     offline: false,
     loaded: false,
     source: 'https://example.test/catalog',
-    requestedView: null,
-    requestView: vi.fn(),
     init: vi.fn(),
     load: vi.fn().mockResolvedValue(undefined),
     fetchBody: vi.fn().mockResolvedValue('BODY TEXT'),
@@ -78,6 +74,7 @@ function setup(
   store: StoreFake,
   settings: Record<string, unknown>,
   saveSettings: ReturnType<typeof vi.fn> = vi.fn().mockResolvedValue(undefined),
+  requestedViewRef: Ref<MarketplaceView | null> = ref<MarketplaceView | null>(null),
 ) {
   hoisted.store = store;
   // Capture the settings-changed subscribers (the opt-in gate + the install-
@@ -101,10 +98,15 @@ function setup(
     },
   };
   const utils = render(MarketplaceRoot, {
-    global: { provide: { [PLUGIN_KEY as symbol]: plugin } },
+    global: {
+      provide: {
+        [PLUGIN_KEY as symbol]: plugin,
+        [REQUESTED_VIEW_KEY as symbol]: requestedViewRef,
+      },
+    },
   });
   const fireSettingsChanged = (): void => settingsChangedHandlers.forEach((handler) => handler());
-  return { store, plugin, fireSettingsChanged, ...utils };
+  return { store, plugin, requestedViewRef, fireSettingsChanged, ...utils };
 }
 
 describe('MarketplaceRoot opt-in gate', () => {
@@ -251,30 +253,32 @@ describe('MarketplaceRoot category nav', () => {
     );
   });
 
-  it('applies a requested deep-link view on mount and consumes it', async () => {
-    // activateMarketplace records a requested category (the Library "Browse
-    // Marketplace" link) on the store before the leaf mounts; the Root applies it.
-    const { store } = setup(makeStore({ items: [alpha, beta], requestedView: 'agent' }), {
-      marketplaceNetworkEnabled: true,
-    });
-    await screen.findByText('Beta Agent');
+  it('applies a per-leaf deep-link request and consumes it', async () => {
+    // activateMarketplace sets the requested category on THIS leaf's view ref AFTER
+    // it mounts (post loadIfDeferred); the Root applies it and clears the ref.
+    const requestedViewRef = ref<MarketplaceView | null>(null);
+    setup(makeStore({ items: [alpha, beta] }), { marketplaceNetworkEnabled: true }, undefined, requestedViewRef);
+    await screen.findByText('Alpha Loop');
+    requestedViewRef.value = 'agent';
+    await nextTick();
     // Deep-linked to Agents: only the agent card renders (the loop is scoped out).
     await waitFor(() =>
       expect(document.querySelectorAll('.specorator-vue-marketplace-card')).toHaveLength(1),
     );
     expect(screen.queryByText('Alpha Loop')).toBeNull();
-    // The request is consumed so a later remount doesn't re-navigate.
-    expect(store.requestView).toHaveBeenCalledWith(null);
+    // The request is consumed so a later change can't re-navigate.
+    expect(requestedViewRef.value).toBeNull();
   });
 
   it('falls a deep-link to an already-empty category back to Home', async () => {
     // The retained catalog has no skills; a Skills deep-link must not strand on an
     // empty skill grid (there is no skill tab either) — the counts guard, now
     // watching activeView too, bounces it to Home even though counts don't change.
-    setup(makeStore({ items: [alpha, beta], requestedView: 'skill' }), {
-      marketplaceNetworkEnabled: true,
-    });
+    const requestedViewRef = ref<MarketplaceView | null>(null);
+    setup(makeStore({ items: [alpha, beta] }), { marketplaceNetworkEnabled: true }, undefined, requestedViewRef);
     await screen.findByText('Alpha Loop');
+    requestedViewRef.value = 'skill';
+    await nextTick();
     await waitFor(() =>
       expect(document.querySelectorAll('.specorator-vue-marketplace-card')).toHaveLength(2),
     );

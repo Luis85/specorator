@@ -1,8 +1,6 @@
 import type SpecoratorPlugin from '../../main';
 import { VIEW_TYPE_MARKETPLACE } from './viewType';
-import { getMarketplacePinia } from './vue/globalPinia';
 import type { MarketplaceView } from './vue/marketplaceView';
-import { useMarketplaceStore } from './vue/stores/marketplaceStore';
 
 /**
  * Reveals (or opens) the Marketplace leaf. An optional `requestedView` deep-links
@@ -13,11 +11,6 @@ export async function activateMarketplace(
   plugin: SpecoratorPlugin,
   requestedView?: MarketplaceView,
 ): Promise<void> {
-  // Record the deep-link target on the shared store BEFORE the leaf mounts, so a
-  // fresh view applies it on its first render and an already-open view reacts to
-  // the change (see MarketplaceRoot's requestedView watch). If the requested
-  // category has no items, the Root's counts guard falls back to Home.
-  if (requestedView) useMarketplaceStore(getMarketplacePinia()).requestView(requestedView);
   const { workspace } = plugin.app;
   let leaf = workspace.getLeavesOfType(VIEW_TYPE_MARKETPLACE)[0] ?? null;
   if (!leaf) {
@@ -26,6 +19,14 @@ export async function activateMarketplace(
   }
   await workspace.revealLeaf(leaf);
   // A workspace-restored leaf may hold a DeferredView placeholder (Obsidian
-  // >= 1.7.2) — load it so the real view is live.
+  // >= 1.7.2) — load it so the real view is live BEFORE we deep-link it.
   await leaf.loadIfDeferred();
+  // Apply the deep-link to the REVEALED leaf's view ONLY — not a shared-store
+  // broadcast every mounted Root races to consume (which, with a second live
+  // leaf, would navigate the wrong one). Duck-typed so this module needn't import
+  // the view class. If the requested category has no items, the Root's counts
+  // guard falls it back to Home.
+  if (requestedView) {
+    (leaf.view as { requestView?: (view: MarketplaceView) => void }).requestView?.(requestedView);
+  }
 }

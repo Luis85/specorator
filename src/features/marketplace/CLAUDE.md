@@ -25,7 +25,7 @@ Modeled on — and reuses the components of — `features/library`.
 | `vue/marketplaceIcons.ts` | Per-type default Lucide icon map (`iconForItem`); re-exports the shared cross-window-safe `mountLucide` function-ref helper (`src/shared/vue/mountLucide.ts`, shared with the Agent Board) |
 | `vue/marketplaceTypeLabels.ts` | Localized `type → label` map shared by the card/detail badge, the nav tabs, and the Home section headers |
 | `vue/useMarketplaceInstalledRefresh.ts` | Per-leaf composable: debounced `store.refreshInstalled()` on three channels — `roster:changed` (agents), folder-scoped vault create/delete/rename (loops/templates/quick-actions), and `settings-changed` (an install-folder setting change) |
-| `vue/stores/marketplaceStore.ts` | Shared Pinia store over one Pinia per plugin (all leaves share fetched catalog + installed state). `requestedView`/`requestView` carry a Library deep-link target to the Root |
+| `vue/stores/marketplaceStore.ts` | Shared Pinia store over one Pinia per plugin (all leaves share fetched catalog + installed state) |
 
 ## Contracts & invariants
 
@@ -168,16 +168,19 @@ Modeled on — and reuses the components of — `features/library`.
   surface; `MarketplaceGrid` shows a skeleton grid while `store.loading` with no
   items yet. The fetch is async (`requestUrl`) and `refreshInstalled`'s per-item
   vault checks run after load — both off the first-paint path.
-- **Deep-linkable from the Library.** `activateMarketplace(plugin, requestedView?)`
-  records a target category on the shared store (`requestView`) BEFORE revealing
-  the leaf; `MarketplaceRoot` applies it via an immediate `requestedView` watch (a
-  fresh leaf that mounts after the request) or reactively (an already-open leaf),
-  then consumes it (`requestView(null)`) so a later remount can't re-navigate. The
-  Library's per-tab "Browse Marketplace" link (`LibraryRoot`, `TAB_TO_MARKETPLACE`)
-  routes through it — Agents→agents, Loops→loops, Quick Actions→quick-action,
-  Skills→skill. A stranded category (0 items) falls back to Home via the counts
-  guard. `LibraryRoot` importing `activateMarketplace` is a one-way features→
-  features edge (activateMarketplace pulls in no Library module), so no cycle.
+- **Deep-linkable from the Library, scoped per leaf.** `activateMarketplace(plugin,
+  requestedView?)` reveals the target leaf, loads it, THEN calls `requestView` on
+  THAT leaf's `MarketplaceView` (duck-typed, no class import) — which sets a
+  per-leaf ref (`REQUESTED_VIEW_KEY`, owned + provided by the view) that the leaf's
+  `MarketplaceRoot` watches and consumes (resets to null). Per-leaf, NOT a
+  shared-store broadcast every mounted Root races to consume — that is what stops a
+  second live Marketplace leaf from swallowing another leaf's request (e.g. the
+  revealed leaf still deferred while another is live). The Library's per-tab
+  "Browse Marketplace" link (`LibraryRoot`, `TAB_TO_MARKETPLACE`) routes through it
+  — Agents→agents, Loops→loops, Quick Actions→quick-action, Skills→skill. A
+  stranded category (0 items) falls back to Home via the counts+activeView guard.
+  `LibraryRoot` importing `activateMarketplace` is a one-way features→features edge
+  (activateMarketplace pulls in no Library module), so no cycle.
 - **Skills are deferred.** `INSTALLABLE_ITEM_TYPES` excludes `skill`; adding it
   there plus an installer branch is the whole extension point.
 

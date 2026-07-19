@@ -186,19 +186,6 @@ describe('marketplaceStore network opt-in guard', () => {
   });
 });
 
-describe('marketplaceStore deep-link request', () => {
-  beforeEach(() => setActivePinia(createPinia()));
-
-  it('requestView records and clears the pending deep-link target', () => {
-    const store = useMarketplaceStore();
-    expect(store.requestedView).toBeNull();
-    store.requestView('agent');
-    expect(store.requestedView).toBe('agent');
-    store.requestView(null);
-    expect(store.requestedView).toBeNull();
-  });
-});
-
 describe('marketplaceStore install', () => {
   beforeEach(() => {
     setActivePinia(createPinia());

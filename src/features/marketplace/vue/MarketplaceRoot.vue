@@ -17,7 +17,7 @@ import MarketplaceGrid from './components/MarketplaceGrid.vue';
 import MarketplaceHome from './components/MarketplaceHome.vue';
 import MarketplaceNav from './components/MarketplaceNav.vue';
 import { marketplaceAccessors } from './marketplaceAccessors';
-import { PLUGIN_KEY } from './marketplaceKeys';
+import { PLUGIN_KEY, REQUESTED_VIEW_KEY } from './marketplaceKeys';
 import { marketplaceTypeLabels } from './marketplaceTypeLabels';
 import type { MarketplaceView } from './marketplaceView';
 import { useMarketplaceStore } from './stores/marketplaceStore';
@@ -32,6 +32,11 @@ const plugin = injectedPlugin;
 
 const store = useMarketplaceStore();
 store.init(plugin);
+
+// Per-leaf deep-link target, owned + provided by THIS leaf's MarketplaceView (null
+// when opened normally). Scoping it per leaf is what stops another Marketplace
+// leaf from consuming this leaf's request.
+const requestedView = inject(REQUESTED_VIEW_KEY, null);
 
 // Live-sync the Installed badges with mutations OUTSIDE the marketplace (a
 // Library delete/rename, a roster change) — the shared store means each leaf
@@ -187,19 +192,18 @@ function selectView(view: MarketplaceView): void {
   detailId.value = null;
 }
 
-// Apply a deep-link requested from outside the view (the Library's "Browse
-// Marketplace" link, via activateMarketplace → store.requestView) and consume it
-// so a later remount doesn't re-navigate. `immediate` covers a fresh leaf that
-// mounts AFTER the request was recorded; the reactive path covers an already-open
-// leaf. The counts guard falls a stranded category back to Home once loaded.
+// Apply a deep-link requested for THIS leaf (the Library "Browse Marketplace"
+// link → activateMarketplace → the revealed leaf's view.requestView, provided as
+// a per-leaf ref) and consume it so a later change can't re-navigate. Non-
+// immediate: the request is always set AFTER this Root mounts (post
+// loadIfDeferred). The counts guard falls a stranded category back to Home.
 watch(
-  () => store.requestedView,
+  () => requestedView?.value ?? null,
   (view) => {
     if (!view) return;
     selectView(view);
-    store.requestView(null);
+    if (requestedView) requestedView.value = null;
   },
-  { immediate: true },
 );
 
 async function openItem(item: MarketplaceItem): Promise<void> {
