@@ -57,7 +57,7 @@ test('brownfield idempotency: install flips detection, but a re-apply stays a no
         writeFileSync(pkgPath, JSON.stringify(pkg, null, 2) + '\n');
       }
     };
-    const io = (sink) => ({ cwd: p.dir, exec, stdout: (s) => sink.push(s), stderr: () => {} });
+    const io = (sink) => ({ cwd: p.dir, exec, stdout: (s) => sink.push(s), stderr: () => {}, nodeVersion: '22.13.0' });
     await cli(['apply', '--config', cfg], io([]));
     assert.equal(detect(p.dir).typescript, true); // install flipped detection
 

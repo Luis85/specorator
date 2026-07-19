@@ -632,6 +632,12 @@ function planProjectDocs(options, state) {
   const mobileLine = o.mobile
     ? '**Mobile-ready** (`isDesktopOnly: false`): never import Node/Electron modules (lint-enforced and non-external in the build); test flows on iOS/Android or the mobile emulator before release.'
     : '**Desktop-only** (`isDesktopOnly: true`): Node builtins are available, but prefer Vault/adapter APIs so a later mobile port stays possible.';
+  // The tag-push automation only exists when planRelease wrote release.yml (GitHub
+  // integration on). Without it, describe the manual path instead of pointing the
+  // agent at a workflow that was never generated.
+  const releaseFlow = options.github?.integrate
+    ? `\`${versionCmd}\` (or \`minor\`/\`major\`) syncs \`manifest.json\` and \`versions.json\` via \`scripts/sync-version.mjs\`; \`git push --follow-tags\` triggers the release workflow, which attaches \`main.js\`, \`manifest.json\`, and \`styles.css\`.`
+    : `\`${versionCmd}\` (or \`minor\`/\`major\`) syncs \`manifest.json\` and \`versions.json\` via \`scripts/sync-version.mjs\`. GitHub integration is off, so there is no release workflow — run \`${run} build\` and attach \`main.js\`, \`manifest.json\`, and \`styles.css\` to your release manually (see \`docs/publishing.md\`).`;
   const actions = [
     write('README.md', renderTemplate(loadTemplate('obsidian/README.md.tmpl'), {
       name: o.name,
@@ -644,7 +650,7 @@ function planProjectDocs(options, state) {
       name: o.name,
       id: o.id,
       run,
-      versionCmd,
+      releaseFlow,
       // Only list test:coverage when the script exists — coverageFloors off means
       // no such script.
       coverageLine: options.guardrails?.coverageFloors ? `\n${run} test:coverage  # coverage with rise-only floors` : '',

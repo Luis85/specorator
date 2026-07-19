@@ -479,6 +479,19 @@ test('yarn release docs use `npm version` (yarn version skips the sync lifecycle
   assert.doesNotMatch(findWrite(actions, 'README.md').content, /yarn version/);
 });
 
+test('CLAUDE.md release flow matches github integration (no phantom workflow when off)', () => {
+  // github on: describe the tag-push automation planRelease actually generated.
+  const on = findWrite(planWithGithub(), 'CLAUDE.md').content;
+  assert.match(on, /git push --follow-tags/);
+  assert.match(on, /triggers the release workflow/);
+  // github off (default): manual path only — no claim that a workflow runs.
+  const off = findWrite(actionsFor(), 'CLAUDE.md').content;
+  assert.doesNotMatch(off, /git push --follow-tags/);
+  assert.doesNotMatch(off, /triggers the release workflow/);
+  assert.match(off, /no release workflow/);
+  assert.match(off, /docs\/publishing\.md/); // points at the manual guide instead
+});
+
 test('CLAUDE.md documents test:coverage only when coverage floors are on (no phantom command)', () => {
   // Default (coverageFloors on): the script exists, so the docs list it.
   assert.match(findWrite(actionsFor(), 'CLAUDE.md').content, /\btest:coverage\b/);
