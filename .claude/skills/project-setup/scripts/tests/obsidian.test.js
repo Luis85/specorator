@@ -181,6 +181,52 @@ test('hooks are opt-in: no .claude/settings.json by default; slash commands alwa
   assert.equal(findMerge(optionsForHooks({}), '.claude/settings.json'), undefined);
 });
 
+// The .claude/settings.json merge for a hooks config, given an existing settings
+// file (state.claudeSettings) and optional extra answers (e.g. packageManager).
+function claudeMergeWith(hooks, state = {}, extra = {}) {
+  const dir = mkdtempSync(join(tmpdir(), 'obs-hk-'));
+  const path = join(dir, 'answers.json');
+  writeFileSync(path, JSON.stringify({ obsidian: BASE, hooks, ...extra }));
+  try {
+    return findMerge(planObsidian(loadOptions(path), state), '.claude/settings.json');
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+}
+
+const npmSession = { hooks: [{ type: 'command', command: 'npm install' }] };
+
+test('re-applying an unchanged hook is a no-op (reconcile leaves settings.json untouched)', () => {
+  const state = { claudeSettings: { hooks: { SessionStart: [npmSession] } } };
+  assert.equal(claudeMergeWith({ sessionStart: true }, state), undefined);
+});
+
+test('a package-manager change replaces the stale install hook instead of unioning it', () => {
+  const state = { claudeSettings: { hooks: { SessionStart: [npmSession] } } };
+  const merge = claudeMergeWith({ sessionStart: true }, state, { packageManager: 'pnpm' });
+  // Only pnpm install remains — not both npm and pnpm (which would race lockfiles).
+  assert.deepEqual(merge.patch.hooks.SessionStart, [
+    { hooks: [{ type: 'command', command: 'pnpm install' }] },
+  ]);
+  assert.ok(merge.force?.includes('hooks'), 'must force-replace hooks, not deep-merge (union) them');
+});
+
+test('toggling a hook off removes the previously generated hook', () => {
+  const state = { claudeSettings: { hooks: { SessionStart: [npmSession] } } };
+  const merge = claudeMergeWith({ sessionStart: false }, state);
+  assert.equal(merge.patch.hooks.SessionStart, undefined, 'the stale SessionStart hook should be gone');
+});
+
+test('reconcile preserves the user\'s own hooks while swapping ours', () => {
+  const userHook = { hooks: [{ type: 'command', command: 'echo custom' }] };
+  const state = { claudeSettings: { hooks: { SessionStart: [userHook, npmSession] } } };
+  const merge = claudeMergeWith({ sessionStart: true }, state, { packageManager: 'pnpm' });
+  assert.deepEqual(merge.patch.hooks.SessionStart, [
+    userHook,
+    { hooks: [{ type: 'command', command: 'pnpm install' }] },
+  ]);
+});
+
 test('the qualityGate Stop hook omits lint when severity-staging is off (no missing-script failure)', () => {
   // eslintSeverityStaging off => planObsidianEslint writes no `lint` script, so the
   // hook must not run `${run} lint` or every Claude Stop fails on a missing script.

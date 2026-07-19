@@ -190,6 +190,11 @@ export function detect(cwd) {
     jestConfig: hasUnmarkedConfig(cwd, JEST_CONFIGS) || pkg.jest != null,
     vitestConfig: hasUnmarkedConfig(cwd, VITEST_CONFIGS),
     viteConfig: existsAny(cwd, VITE_CONFIGS),
+    // Existing .claude/settings.json (Claude Code hooks + permissions), so
+    // planClaudeSettings can reconcile OUR engine-owned hook group on re-apply
+    // (a changed package manager or a toggled-off hook) instead of unioning a
+    // stale one — while preserving the user's own hooks and other settings keys.
+    claudeSettings: readJsonSafe(join(cwd, '.claude', 'settings.json')),
     // The existing manifest's version (the manifest owns the plugin version). On a
     // re-apply after `npm version`, this keeps package.json synced to it instead of
     // being reset to the initial constant (which would desync check:artifacts).

@@ -412,6 +412,27 @@ function planVerifyScript(options, state) {
 // OPT-IN hooks. sessionStart installs deps on a fresh Claude web session;
 // qualityGate runs the fast gates (typecheck+lint) on Claude's Stop so the agent
 // self-corrects. .claude/settings.json is written only when a hook is enabled.
+// Every command the engine could have written for a hook group, across all PMs
+// and gate combos — so a re-apply can RECOGNIZE and drop OUR previous hook (a
+// changed PM or a toggled-off option) without touching the user's own hooks.
+const ENGINE_SESSION_COMMANDS = new Set(Object.values(PM_INSTALL));
+const ENGINE_STOP_COMMANDS = new Set(
+  ['npm run', 'pnpm', 'yarn', 'bun run'].flatMap((r) => [`${r} typecheck`, `${r} typecheck && ${r} lint`]),
+);
+
+function isPlainObject(value) {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+// Rebuild one hook group: keep the user's own entries, drop any prior engine
+// entry (matched by command), and append the current engine hook if enabled.
+function reconcileHookGroup(existing, engineCommands, current) {
+  const isEngineEntry = (entry) =>
+    Array.isArray(entry?.hooks) && entry.hooks.some((hk) => engineCommands.has(hk?.command));
+  const kept = (Array.isArray(existing) ? existing : []).filter((e) => !isEngineEntry(e));
+  return current ? [...kept, current] : kept;
+}
+
 function planClaudeSettings(options, state) {
   const h = options.hooks ?? {};
   const pm = safePackageManager(options.packageManager ?? state?.packageManager ?? 'npm');
@@ -422,22 +443,36 @@ function planClaudeSettings(options, state) {
   const versionCmd = pm === 'bun' || pm === 'yarn' ? 'npm version' : `${pm} version`;
   const command = (name) => write(`.claude/commands/${name}.md`, renderTemplate(loadTemplate(`obsidian/claude/${name}.md.tmpl`), { run, versionCmd }));
   const actions = [command('add-command'), command('add-setting'), command('new-service'), command('release')];
-  const hooks = {};
-  if (h.sessionStart) hooks.SessionStart = [{ hooks: [{ type: 'command', command: PM_INSTALL[pm] }] }];
-  if (h.qualityGate) {
-    // Build from gates that actually generated a script: typecheck is always
-    // written; lint only when severity-staging is on (planObsidianEslint gates on
-    // it), so an unconditional `${run} lint` would fail every Stop hook with a
-    // missing script when the user turned linting off.
-    const gates = ['typecheck', ...(options.guardrails?.eslintSeverityStaging ? ['lint'] : [])];
-    hooks.Stop = [{ hooks: [{ type: 'command', command: gates.map((s) => `${run} ${s}`).join(' && ') }] }];
-  }
-  if (Object.keys(hooks).length > 0) {
-    // mergeJson (not a plain write) so an opted-in hook actually lands when the
-    // repo already has a .claude/settings.json — skip-if-exists would silently
-    // drop it while apply still reports success. Additive: existing permissions
-    // and hooks survive, our hook groups union in.
-    actions.push({ type: 'mergeJson', path: '.claude/settings.json', patch: { hooks } });
+
+  const sessionHook = h.sessionStart ? { hooks: [{ type: 'command', command: PM_INSTALL[pm] }] } : null;
+  // Build the Stop gate from scripts that actually generated: typecheck is always
+  // written; lint only when severity-staging is on (planObsidianEslint gates on it),
+  // so an unconditional `${run} lint` would fail every Stop with a missing script.
+  const gates = ['typecheck', ...(options.guardrails?.eslintSeverityStaging ? ['lint'] : [])];
+  const stopHook = h.qualityGate
+    ? { hooks: [{ type: 'command', command: gates.map((s) => `${run} ${s}`).join(' && ') }] }
+    : null;
+
+  // Reconcile OUR groups against any existing .claude/settings.json so a re-apply
+  // with a changed PM or a toggled-off hook REPLACES/REMOVES the stale engine hook
+  // rather than unioning it (deepMerge dedups identical entries but not a changed
+  // command, so npm→pnpm would otherwise leave both installers). Unrelated user
+  // hooks and other settings keys survive.
+  const existingHooks = isPlainObject(state?.claudeSettings?.hooks) ? state.claudeSettings.hooks : {};
+  const reconciled = { ...existingHooks };
+  const nextSession = reconcileHookGroup(existingHooks.SessionStart, ENGINE_SESSION_COMMANDS, sessionHook);
+  const nextStop = reconcileHookGroup(existingHooks.Stop, ENGINE_STOP_COMMANDS, stopHook);
+  if (nextSession.length > 0) reconciled.SessionStart = nextSession;
+  else delete reconciled.SessionStart;
+  if (nextStop.length > 0) reconciled.Stop = nextStop;
+  else delete reconciled.Stop;
+
+  // Emit only when the reconciled hooks differ from disk — so a first apply with no
+  // hooks writes nothing and a converged re-apply stays a no-op. force:['hooks']
+  // REPLACES the hooks key with the reconciled value (deepMerge would union the
+  // arrays); permissions and other keys are preserved by the surrounding merge.
+  if (JSON.stringify(reconciled) !== JSON.stringify(existingHooks)) {
+    actions.push({ type: 'mergeJson', path: '.claude/settings.json', patch: { hooks: reconciled }, force: ['hooks'] });
   }
   return actions;
 }
