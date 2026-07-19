@@ -759,6 +759,17 @@ test('the fallow config ignores nano-staged (flagged) but not simple-git-hooks (
   assert.ok(!rc.ignoreDependencies.includes('simple-git-hooks'), 'simple-git-hooks is used via prepare — no ignore');
 });
 
+test('the fallow config ignores src/styles.css (the base stylesheet only esbuild reads)', () => {
+  const rc = JSON.parse(
+    planFallow(optionsWith(BASE), { entry: 'src/main.ts', entryExists: true }).find((a) => a.path === '.fallowrc.json').content,
+  );
+  // src/styles.css is read only by esbuild.config.mjs (itself ignored), never imported
+  // by the TS graph, so fallow reports it as an unused file and the day-one baseline
+  // banks a "delete the base stylesheet" recommendation unless it is ignored here.
+  // (The bare `styles.css` pattern only covers the built root output, not the source.)
+  assert.ok(rc.ignorePatterns.includes('src/styles.css'), 'src/styles.css must be ignored');
+});
+
 // --- vue toggle ------------------------------------------------------------
 
 test('vue mode scaffolds the island (view, router, pinia store, SFCs) and runtime deps', () => {
