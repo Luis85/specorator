@@ -24,6 +24,11 @@ const props = defineProps<{
   skillProviderOptions?: { id: SkillProviderTarget; label: string }[];
   /** Skills only — resolves whether the skill already exists at a given target. */
   skillInstalledChecker?: (target: SkillInstallTarget) => Promise<boolean>;
+  /** Skills only — a value whose identity changes when the store recomputes its
+   *  installed state (an external Library skill delete/rename fires
+   *  `vaultSkill.changed` → `refreshInstalled`); the per-target check reruns on it
+   *  so the button doesn't stay "Installed here" after the skill is removed. */
+  installedSignal?: unknown;
 }>();
 const emit = defineEmits<{ back: []; install: [target?: SkillInstallTarget] }>();
 
@@ -52,10 +57,11 @@ async function recheckSelectedInstalled(): Promise<void> {
   if (seq === checkSeq) selectedInstalled.value = result; // ignore a superseded check
 }
 
-// Re-check when the target changes, the item changes, or an install finishes
-// (installing true→false) — so the button flips to "Installed here" right after.
+// Re-check when the target changes, the item changes, an install finishes
+// (installing true→false), or the store recomputes installed state (installedSignal
+// — e.g. an external Library skill delete). Keeps the button honest without a reopen.
 watch(
-  [provider, scope, () => props.item.id, () => props.installing],
+  [provider, scope, () => props.item.id, () => props.installing, () => props.installedSignal],
   () => void recheckSelectedInstalled(),
 );
 

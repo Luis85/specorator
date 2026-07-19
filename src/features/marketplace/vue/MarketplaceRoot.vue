@@ -362,6 +362,7 @@ async function install(item: MarketplaceItem, target?: SkillInstallTarget): Prom
       :installable="isInstallableType(detailItem.type)"
       :skill-provider-options="skillProviderOptions"
       :skill-installed-checker="skillInstalledChecker(detailItem)"
+      :installed-signal="store.installedIds"
       @back="backToList"
       @install="(target) => detailItem && install(detailItem, target)"
     />

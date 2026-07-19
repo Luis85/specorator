@@ -142,4 +142,16 @@ describe('MarketplaceDetail — skill install panel', () => {
     expect(btn.disabled).toBe(true);
     expect(checker).toHaveBeenCalledWith({ provider: 'claude', scope: 'project' });
   });
+
+  it('rechecks the target when the installed signal changes (external Library delete)', async () => {
+    const checker = vi.fn().mockResolvedValue(true);
+    const { rerender } = renderDetail(
+      skillProps({ skillInstalledChecker: checker, installedSignal: new Set(['a']) }),
+    );
+    await screen.findByRole('button', { name: 'Installed here' }); // initially installed here
+    // The skill is deleted from the target; the store refreshes → a new signal.
+    checker.mockResolvedValue(false);
+    await rerender({ installedSignal: new Set() });
+    await screen.findByRole('button', { name: 'Install' }); // button flips back, no reopen needed
+  });
 });
