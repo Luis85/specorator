@@ -122,9 +122,23 @@ export function planFallow(options, state) {
           content: renderTemplate(loadTemplate(fallowTemplate), { entry, mainPatterns }),
         },
       ];
+  // A stale .fallowrc.json (e.g. from an earlier generic run) is kept by
+  // skip-if-exists but lacks the obsidian main/core/ui boundary zones the
+  // architecture gate enforces — flag it instead of silently ratcheting the wrong
+  // graph. Silent on a normal obsidian re-apply (our config carries those zones).
+  const keptZones = state?.fallowrcJson?.boundaries?.zones;
+  const staleObsidianFallowrc =
+    options.obsidian &&
+    !state?.fallowConfig &&
+    state?.fallowrcJson &&
+    !(Array.isArray(keptZones) && keptZones.some((z) => z?.name === 'core' || z?.name === 'ui'));
+  const fallowNotices = staleObsidianFallowrc
+    ? [notice('An existing .fallowrc.json was kept (skip-if-exists) but lacks the obsidian main/core/ui boundary zones, so check:quality can\'t gate the layered architecture. Delete it and re-apply, or copy the boundaries block from the generated obsidian config.')]
+    : [];
   return [
     ...scriptCollision(options, state, 'check:quality', 'node scripts/check-quality.mjs'),
     ...fallowrc,
+    ...fallowNotices,
     {
       type: 'writeFile',
       path: 'scripts/check-quality.mjs',

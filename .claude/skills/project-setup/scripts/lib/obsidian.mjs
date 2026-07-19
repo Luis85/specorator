@@ -616,6 +616,17 @@ function planProjectDocs(options, state) {
       })),
     );
   }
+  // The .npmrc write is skip-if-exists; a pre-existing .npmrc without
+  // tag-version-prefix silently keeps npm's default "v" tag prefix, which breaks
+  // the release workflow's tag===manifest-version match. Flag it rather than
+  // shipping a repo whose releases Obsidian can't find.
+  if (state?.npmrc != null && !/tag-version-prefix/.test(state.npmrc)) {
+    actions.push(
+      notice(
+        'An existing .npmrc was kept (skip-if-exists) without `tag-version-prefix=""` — `npm version` then tags `v<x>` and Obsidian\'s release matcher (tag === manifest version) won\'t find it. Add `tag-version-prefix=""` to your .npmrc.',
+      ),
+    );
+  }
   return actions;
 }
 

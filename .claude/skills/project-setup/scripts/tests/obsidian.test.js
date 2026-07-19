@@ -227,6 +227,36 @@ test('reconcile preserves the user\'s own hooks while swapping ours', () => {
   ]);
 });
 
+// planObsidian actions with all guardrails on and a given detect state.
+function planWithState(state, extra = {}) {
+  const dir = mkdtempSync(join(tmpdir(), 'obs-st-'));
+  const path = join(dir, 'answers.json');
+  writeFileSync(
+    path,
+    JSON.stringify({
+      obsidian: BASE,
+      github: { integrate: true },
+      guardrails: { fallowRatchet: true, eslintSeverityStaging: true, locGuard: true, coverageFloors: true, ci: true, cssGuard: true },
+      docs: { scaffold: true },
+      ...extra,
+    }),
+  );
+  try {
+    return planObsidian(loadOptions(path), state);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+}
+
+const hasNotice = (actions, re) => actions.some((a) => a.type === 'notice' && re.test(a.message));
+
+test('an existing .npmrc missing tag-version-prefix is flagged (release tag would mismatch)', () => {
+  assert.ok(hasNotice(planWithState({ npmrc: 'registry=https://example.test\n' }), /tag-version-prefix/));
+  // A .npmrc that already sets it (e.g. our own) is not flagged.
+  assert.ok(!hasNotice(planWithState({ npmrc: 'tag-version-prefix=""\n' }), /tag-version-prefix/));
+  assert.ok(!hasNotice(planWithState({}), /tag-version-prefix/));
+});
+
 test('the qualityGate Stop hook omits lint when severity-staging is off (no missing-script failure)', () => {
   // eslintSeverityStaging off => planObsidianEslint writes no `lint` script, so the
   // hook must not run `${run} lint` or every Claude Stop fails on a missing script.

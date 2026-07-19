@@ -181,6 +181,14 @@ export function detect(cwd) {
     // generated .fallowrc.json would take precedence and shadow it, so planFallow
     // stands down and ratchets THEIR config instead.
     fallowConfig: existsAny(cwd, FALLOW_CONFIGS),
+    // The .fallowrc.json form the obsidian scaffold writes (skip-if-exists),
+    // parsed so planFallow can notice a stale one (e.g. from a prior generic run)
+    // that lacks the obsidian main/core/ui boundary zones.
+    fallowrcJson: readJsonSafe(join(cwd, '.fallowrc.json')),
+    // Existing .npmrc text — the obsidian .npmrc write is skip-if-exists, so a
+    // pre-existing file without tag-version-prefix silently drops the setting
+    // Obsidian's release matcher needs; surfaced so planProjectDocs can notice.
+    npmrc: existsSync(join(cwd, '.npmrc')) ? readFileSync(join(cwd, '.npmrc'), 'utf8') : null,
     // The same-name config we write (skip-if-exists) — flagged only when it's the
     // user's own (no marker), so a re-apply of our generated one won't false-fire.
     eslintConfigMjs: hasUnmarkedConfig(cwd, ['eslint.config.mjs']),
