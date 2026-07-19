@@ -210,6 +210,11 @@ export function detect(cwd) {
     // (a changed package manager or a toggled-off hook) instead of unioning a
     // stale one — while preserving the user's own hooks and other settings keys.
     claudeSettings: readJsonSafe(join(cwd, '.claude', 'settings.json')),
+    // Whether manifest.json exists AT ALL, tracked separately from its parsed
+    // version: a re-apply onto a malformed/versionless manifest is still a re-apply
+    // (not a fresh scaffold), so the obsidian planner must not force-overwrite an
+    // existing package.json identity just because the version couldn't be parsed.
+    manifestExists: existsSync(join(cwd, 'manifest.json')),
     // The existing manifest's version (the manifest owns the plugin version). On a
     // re-apply after `npm version`, this keeps package.json synced to it instead of
     // being reset to the initial constant (which would desync check:artifacts).

@@ -722,11 +722,11 @@ test('package.json version is force-synced to the manifest-owned version (no che
   assert.equal(fresh.patch.version, '0.1.0');
   // Re-apply after `npm version` (manifest bumped, kept by skip-if-exists): package
   // is synced to the EXISTING manifest version, not reset to 0.1.0.
-  const reapply = actionsFor({}, { manifestVersion: '0.4.2' }).find(
+  const reapply = actionsFor({}, { manifestVersion: '0.4.2', manifestExists: true }).find(
     (a) => a.type === 'mergeJson' && a.path === 'package.json' && a.patch.version,
   );
   assert.equal(reapply.patch.version, '0.4.2');
-  assert.equal(JSON.parse(findWrite(actionsFor({}, { manifestVersion: '0.4.2' }), 'manifest.json').content).version, '0.4.2');
+  assert.equal(JSON.parse(findWrite(actionsFor({}, { manifestVersion: '0.4.2', manifestExists: true }), 'manifest.json').content).version, '0.4.2');
 });
 
 test('the initial scaffold forces the plugin identity (name/description/main) over npm-init defaults; re-apply keeps name/description', () => {
@@ -737,8 +737,16 @@ test('the initial scaffold forces the plugin identity (name/description/main) ov
   assert.equal(fresh.patch.main, 'main.js');
   // Re-apply (manifest present): name/description are merge-kept so a user's later
   // edits survive; main stays engine-owned (the manifest always points at main.js).
-  const reapply = findMerge(actionsFor({}, { manifestVersion: '0.4.2' }), 'package.json');
+  const reapply = findMerge(actionsFor({}, { manifestVersion: '0.4.2', manifestExists: true }), 'package.json');
   assert.deepEqual([...reapply.force].sort(), ['main', 'version']);
+});
+
+test('a re-apply onto a malformed manifest (exists but unparseable version) is NOT treated as fresh', () => {
+  // manifestExists true + manifestVersion null (bad/missing version) is still a
+  // re-apply: forcing name/description would clobber the user's package.json
+  // identity even though the manifest is kept by skip-if-exists. Key on existence.
+  const merge = findMerge(actionsFor({}, { manifestExists: true, manifestVersion: null }), 'package.json');
+  assert.deepEqual([...merge.force].sort(), ['main', 'version']); // name/description NOT forced
 });
 
 test('the src safety/mobile lint globs include JS and module extensions (an adopted JS/module plugin is linted)', () => {

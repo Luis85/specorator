@@ -24,6 +24,19 @@ test('planCi only emits the workflow when GitHub integration is opted in', () =>
   assert.match(wf.content, /npm run check:loc/);
   assert.match(wf.content, /npm run check:quality/);
   assert.match(wf.content, /npm run test:coverage/);
+  // The default branch renders as a QUOTED YAML scalar so it stays a single filter.
+  assert.match(wf.content, /branches: \["main"\]/);
+});
+
+test('planCi quotes the detected default branch so YAML flow chars stay one filter', () => {
+  // A git-legal branch name can carry YAML flow syntax: `release,prod` bare would
+  // split into two filters, `foo]bar` would close the sequence early and break the
+  // file. JSON-stringifying it yields one correctly-escaped YAML scalar.
+  const branchy = planCi(
+    { github: { integrate: true }, guardrails: { ci: true } },
+    { packageManager: 'npm', defaultBranch: 'release,prod' },
+  ).find((a) => a.path === '.github/workflows/ci.yml');
+  assert.match(branchy.content, /branches: \["release,prod"\]/); // one quoted filter, not two
 });
 
 test('planCi warns when a previously generated ci.yml is left stale by a CI/GitHub opt-out', () => {
@@ -85,8 +98,8 @@ test('planCi targets the detected default branch, not a hardcoded main', () => {
     { github: { integrate: true }, guardrails: { ci: true, fallowRatchet: true } },
     { packageManager: 'npm', defaultBranch: 'develop' },
   ).find((a) => a.path === '.github/workflows/ci.yml');
-  assert.match(wf.content, /branches: \[develop\]/); // push targets the detected trunk
-  assert.doesNotMatch(wf.content, /\[main\]/);
+  assert.match(wf.content, /branches: \["develop"\]/); // push targets the detected trunk (quoted)
+  assert.doesNotMatch(wf.content, /\["main"\]/);
   // pull_request is unfiltered so PRs to the real trunk run even if detection is off.
   assert.doesNotMatch(wf.content, /pull_request:\s*\n\s*branches:/);
 });

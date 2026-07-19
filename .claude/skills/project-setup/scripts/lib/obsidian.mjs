@@ -761,10 +761,12 @@ export function planObsidian(options, state = {}) {
   // been bumped by `npm version`; sync package.json to it rather than resetting to
   // the initial constant. A fresh scaffold (no manifest) uses INITIAL_VERSION.
   const version = state.manifestVersion ?? INITIAL_VERSION;
-  // No prior manifest ⇒ the initial scaffold: force the selected plugin identity
-  // onto package.json (below). A re-apply (manifest present) keeps name/description
-  // merge-safe so user edits survive.
-  const fresh = state.manifestVersion == null;
+  // No manifest FILE ⇒ the initial scaffold: force the selected plugin identity
+  // onto package.json (below). A re-apply (manifest present, even if its version is
+  // malformed/missing) keeps name/description merge-safe so user edits survive —
+  // key on existence, not the parsed version, so an unparseable manifest doesn't
+  // masquerade as fresh and clobber an existing package.json identity.
+  const fresh = !state.manifestExists;
   return [
     ...planManifest(options.obsidian, version),
     ...planPackageBasics(options, version, fresh),

@@ -349,7 +349,11 @@ export function planCi(options, state) {
   }
   const content = renderTemplate(loadTemplate('ci.yml.tmpl'), {
     pmSetup: pm.setup, pmCache: pm.cache, pmInstall: pm.install, steps: steps.join('\n'),
-    defaultBranch: state?.defaultBranch ?? 'main',
+    // JSON-stringify the branch into the `branches: [...]` flow sequence: a git-legal
+    // branch name can contain YAML flow syntax (a comma splits into two filters, a
+    // `]` closes the sequence early and breaks the file). JSON is a YAML subset, so a
+    // JSON string literal is a valid, correctly-escaped single YAML scalar.
+    defaultBranch: JSON.stringify(state?.defaultBranch ?? 'main'),
   });
   // Upgrade a marked generic CI (Obsidian mode adds check:css/build/check:artifacts
   // gates); an unmarked user workflow stood down above with a notice.
