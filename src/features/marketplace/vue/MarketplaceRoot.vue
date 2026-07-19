@@ -99,15 +99,19 @@ const detailItem = computed(() => store.items.find((item) => item.id === detailI
 
 // Fall a stranded category back to Home — whether it leaves a reloaded catalog
 // (counts change), a deep-link selects a category the loaded catalog has zero of
-// (activeView changes but counts don't), or a valid but EMPTY catalog just landed
-// (neither counts nor activeView change, only `loaded`). Gated on `store.loaded`
-// (NOT item count) so a deep-link applied BEFORE the first load isn't bounced
-// pre-fetch; observing `loaded` re-checks the instant a catalog — even an empty
-// one — lands. Mirrors useLibraryList's tag-prune.
-watch([counts, activeView, () => store.loaded], () => {
+// (activeView changes but counts don't), a valid but EMPTY catalog just landed,
+// or a hard load FAILURE finished (an error, no catalog). Keyed on the load being
+// SETTLED (not on item count) so a deep-link applied BEFORE the first load isn't
+// bounced pre-fetch. "Settled" = not loading AND (a catalog landed OR a hard
+// failure set an error): a hard failure leaves `loaded` false by design (so it
+// retries on reopen), but a deep-linked category must still fall back to the
+// error banner + Home instead of stranding on an empty category grid whose nav
+// button is absent. Mirrors useLibraryList's tag-prune.
+watch([counts, activeView, () => store.loaded, () => store.error, () => store.loading], () => {
   const view = activeView.value;
   if (view === 'home') return;
-  if (store.loaded && counts.value[view] === 0) activeView.value = 'home';
+  const settled = !store.loading && (store.loaded || store.error !== null);
+  if (settled && counts.value[view] === 0) activeView.value = 'home';
 });
 
 // Opt-in network gate: the Marketplace is dark until the user enables it, so

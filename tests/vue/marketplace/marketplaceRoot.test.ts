@@ -357,6 +357,32 @@ describe('MarketplaceRoot category nav', () => {
     expect(screen.queryByText('No items match your filters.')).toBeNull();
   });
 
+  it('falls a deep-linked category back to Home after a hard catalog failure', async () => {
+    // A hard failure (fetch throws, no matching cache) leaves `loaded` false by
+    // design so the case retries on reopen. A category deep-link must still fall
+    // back to Home (error banner + landing) instead of stranding on an empty
+    // category grid whose nav button is absent — so the fallback keys on the load
+    // being SETTLED (loaded OR a completed error), not on `loaded` alone.
+    const store = reactive(makeStore({ items: [], loaded: false, loading: true }));
+    const requestedViewRef = ref<MarketplaceView | null>(null);
+    setup(
+      store as StoreFake,
+      { marketplaceNetworkEnabled: true, marketplaceNetworkWarningShown: true },
+      undefined,
+      requestedViewRef,
+    );
+    requestedViewRef.value = 'agent';
+    await nextTick();
+    // The load hard-fails: loading settles, no catalog landed, an error is set.
+    store.loading = false;
+    store.error = 'Network unreachable';
+    await nextTick();
+    // Home landing (the hero) + the error banner — not the empty category grid.
+    await waitFor(() => expect(screen.getByText(/Discover ready-made assets/)).toBeTruthy());
+    expect(screen.getByRole('alert')).toBeTruthy();
+    expect(screen.queryByText('No items match your filters.')).toBeNull();
+  });
+
   it('falls back to Home when the active category leaves the reloaded catalog', async () => {
     const store = reactive(makeStore({ items: [alpha, beta], loaded: true }));
     setup(store as StoreFake, {
