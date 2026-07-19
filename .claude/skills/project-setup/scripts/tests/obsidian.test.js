@@ -360,10 +360,13 @@ test('the verify script is force-replaced so a re-apply refreshes it after optio
   assert.ok(action.force?.includes('scripts.verify'), 'verify must be force-replaced, not deep-merged');
 });
 
-test('the pre-commit nano-staged config is force-replaced so a lint toggle refreshes the staged task', () => {
+test('the pre-commit staged-source task covers .mts/.cts and is force-refreshed (only that key)', () => {
+  const SOURCE_GLOB = '*.{ts,tsx,mts,cts,vue,js,jsx,mjs,cjs}';
   const action = optionsForHooks({ preCommit: true }).find((a) => a.type === 'mergeJson' && a.patch['nano-staged']);
-  assert.ok(action.force?.includes('nano-staged'), 'nano-staged must be force-replaced');
-  assert.ok(action.force?.includes('simple-git-hooks'), 'simple-git-hooks must be force-replaced');
+  assert.ok(SOURCE_GLOB in action.patch['nano-staged'], 'the source glob must cover .mts/.cts module forms');
+  // Force ONLY the source-glob value, not the whole objects, so a user's own
+  // simple-git-hooks entry or extra nano-staged pattern survives a re-apply.
+  assert.deepEqual(action.force, [`nano-staged.${SOURCE_GLOB}`]);
 });
 
 test('turning github off on re-apply warns the release workflow remains (declarative apply can\'t delete it)', () => {
@@ -400,7 +403,7 @@ test('pre-commit hook is opt-in (off by default; on wires lint-staged + simple-g
 });
 
 test('pre-commit runs eslint --fix only when linting is on (no doomed hook when lint is off)', () => {
-  const sourceGlob = '*.{ts,tsx,vue,js,jsx,mjs,cjs}';
+  const sourceGlob = '*.{ts,tsx,mts,cts,vue,js,jsx,mjs,cjs}';
   // Default (severity-staging on): eslint installed -> eslint --fix + prettier.
   const on = optionsForHooks({ preCommit: true }).find((a) => a.patch?.['nano-staged']);
   assert.deepEqual(on.patch['nano-staged'][sourceGlob], ['eslint --fix', 'prettier --write']);

@@ -42,8 +42,13 @@ export function mergeJsonFile(path, patch, current, force = []) {
   // syncing to the manifest); a dotted `scripts.verify` forces one nested key, so a
   // recomputed engine-owned script isn't left stale on re-apply.
   for (const k of force) {
-    if (k.includes('.')) {
-      const [top, sub] = k.split('.');
+    const dot = k.indexOf('.');
+    if (dot !== -1) {
+      // Force ONE nested key, splitting on the FIRST dot so a sub-key that itself
+      // contains dots (e.g. a nano-staged glob "*.{ts,...}") stays intact — and so
+      // sibling keys the user added under the same top-level object survive.
+      const top = k.slice(0, dot);
+      const sub = k.slice(dot + 1);
       if (isObject(patch[top]) && sub in patch[top]) {
         if (!isObject(merged[top])) merged[top] = {};
         merged[top][sub] = patch[top][sub];

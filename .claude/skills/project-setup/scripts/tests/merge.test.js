@@ -18,6 +18,17 @@ test('mergeJsonFile force accepts a dotted scripts.X path (replaces a stale nest
   assert.equal(merged.scripts.other, 'keep', 'unrelated scripts survive');
 });
 
+test('mergeJsonFile force splits on the first dot, so a glob sub-key with dots is forced and siblings survive', () => {
+  const { merged } = mergeJsonFile(
+    'x',
+    { 'nano-staged': { '*.{ts,mts}': ['prettier'] } },
+    { 'nano-staged': { '*.{ts,mts}': ['eslint', 'prettier'], '*.py': ['black'] } },
+    ['nano-staged.*.{ts,mts}'],
+  );
+  assert.deepEqual(merged['nano-staged']['*.{ts,mts}'], ['prettier'], 'the engine glob value is forced');
+  assert.deepEqual(merged['nano-staged']['*.py'], ['black'], "the user's unrelated pattern survives");
+});
+
 test('deepMerge keeps existing scalars, adds missing keys, unions arrays', () => {
   const base = { scripts: { lint: 'mine' }, keywords: ['a'] };
   const patch = { scripts: { lint: 'theirs', test: 'jest' }, keywords: ['a', 'b'] };

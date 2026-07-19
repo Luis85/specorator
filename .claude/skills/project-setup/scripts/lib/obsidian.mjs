@@ -540,6 +540,9 @@ function planPreCommit(options, state) {
   const lint = Boolean(options.guardrails?.eslintSeverityStaging);
   const sourceTask = lint ? ['eslint --fix', 'prettier --write'] : ['prettier --write'];
   const summary = lint ? 'eslint --fix + prettier' : 'prettier';
+  // Cover every source extension the ESLint/Vitest/LOC/coverage configs do, incl.
+  // the .mts/.cts module forms — a staged file outside this glob skips the hook.
+  const sourceGlob = '*.{ts,tsx,mts,cts,vue,js,jsx,mjs,cjs}';
   return [
     notice(`Pre-commit hook enabled (simple-git-hooks + nano-staged): staged files get ${summary} before each commit. It installs via the \`prepare\` script on your next install; run \`npx simple-git-hooks\` once if you commit before installing.`),
     {
@@ -549,15 +552,16 @@ function planPreCommit(options, state) {
         scripts: { prepare: 'simple-git-hooks' },
         'simple-git-hooks': { 'pre-commit': 'npx nano-staged' },
         'nano-staged': {
-          '*.{ts,tsx,vue,js,jsx,mjs,cjs}': sourceTask,
+          [sourceGlob]: sourceTask,
           '*.{css,json,md,yml,yaml}': ['prettier --write'],
         },
         devDependencies: dep('simple-git-hooks', 'nano-staged'),
       },
-      // Force the engine-owned config: the staged source task depends on whether lint
-      // is on, so a re-apply that toggles eslintSeverityStaging must REPLACE it
-      // (deepMerge would keep the stale [eslint, prettier] array).
-      force: ['nano-staged', 'simple-git-hooks'],
+      // Only the source task's VALUE changes across re-applies (lint on/off), so
+      // force just that one glob key — leaving a user's own simple-git-hooks entry
+      // (e.g. commit-msg) or extra nano-staged patterns untouched (deepMerge keeps
+      // them; it would otherwise leave the stale [eslint, prettier] task).
+      force: [`nano-staged.${sourceGlob}`],
     },
   ];
 }
