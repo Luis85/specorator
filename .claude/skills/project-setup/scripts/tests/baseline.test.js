@@ -64,6 +64,48 @@ test('initBaselines does NOT re-baseline a guardrail that already has its baseli
   }
 });
 
+test('initBaselines re-baselines quality when .fallowrc.json was upgraded (analysis graph changed)', () => {
+  // A generic->Obsidian conversion swaps the fallow config; the old baseline
+  // measured a different graph, so re-measure even though the file exists.
+  const p = tmpProject({
+    'package.json': { name: 'x' },
+    'scripts/quality-baseline.json': '{"metrics":{}}',
+    'scripts/loc-baseline.json': '{"files":{}}',
+  });
+  const order = [];
+  try {
+    initBaselines(
+      p.dir,
+      { guardrails: { fallowRatchet: true, locGuard: true, coverageFloors: false } },
+      (cmd, args) => order.push(`${cmd} ${args.join(' ')}`),
+      ['.fallowrc.json', '.github/workflows/ci.yml'], // apply()'s changed list
+    );
+    // Quality re-runs (config changed); LOC does NOT (its baseline is untouched).
+    assert.deepEqual(order, ['node scripts/check-quality.mjs --update']);
+  } finally {
+    p.cleanup();
+  }
+});
+
+test('initBaselines does NOT re-baseline quality when .fallowrc.json was unchanged (converged re-apply)', () => {
+  const p = tmpProject({
+    'package.json': { name: 'x' },
+    'scripts/quality-baseline.json': '{"metrics":{}}',
+  });
+  const order = [];
+  try {
+    initBaselines(
+      p.dir,
+      { guardrails: { fallowRatchet: true, coverageFloors: false } },
+      (cmd, args) => order.push(`${cmd} ${args.join(' ')}`),
+      ['CLAUDE.md'], // an unrelated change; fallowrc not in the list
+    );
+    assert.deepEqual(order, []); // ratchet preserved
+  } finally {
+    p.cleanup();
+  }
+});
+
 test('initBaselines skips coverage when already baselined (marker present, even a 0% floor)', () => {
   const p = tmpProject({
     'package.json': { name: 'x' },

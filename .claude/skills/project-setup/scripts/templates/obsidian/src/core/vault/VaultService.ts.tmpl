@@ -1,0 +1,65 @@
+import type { App } from 'obsidian';
+import { normalizePath } from 'obsidian';
+
+// Thin wrapper over the Vault API (preferred over the Adapter API for
+// performance + caching) with normalizePath baked in, so call sites never
+// hand-build cross-platform paths or race their own reads and writes.
+export class VaultService {
+  constructor(private readonly app: App) {}
+
+  async ensureFolder(path: string): Promise<void> {
+    const normalized = normalizePath(path);
+    if (!normalized || normalized === '/' || this.app.vault.getFolderByPath(normalized)) return;
+    try {
+      await this.app.vault.createFolder(normalized);
+    } catch (error) {
+      // A concurrent ensureFolder can create it between our check and this call,
+      // so createFolder throws "already exists". That's the goal state — swallow it.
+      // Any other failure (permission/adapter) leaves the folder missing, so re-throw
+      // for the caller's ErrorService instead of proceeding to a doomed write.
+      if (!this.app.vault.getFolderByPath(normalized)) throw error;
+    }
+  }
+
+  async read(path: string): Promise<string | null> {
+    const file = this.app.vault.getFileByPath(normalizePath(path));
+    return file ? this.app.vault.read(file) : null;
+  }
+
+  // Merge a patch into a note's YAML frontmatter (adds keys, overwrites scalars)
+  // without touching the body. fileManager.processFrontMatter is the atomic, safe
+  // API — never hand-edit the note text to change frontmatter. No-op if missing.
+  async updateFrontmatter(path: string, patch: Record<string, unknown>): Promise<void> {
+    const file = this.app.vault.getFileByPath(normalizePath(path));
+    if (!file) return;
+    await this.app.fileManager.processFrontMatter(file, (frontmatter: Record<string, unknown>) => {
+      Object.assign(frontmatter, patch);
+    });
+  }
+
+  // Atomic append across BOTH paths. Vault.process serializes the read-modify-write
+  // on an existing file, so a plain read-then-write can't drop an overlapping
+  // append. process() only guards an existing file, so the first-ever append
+  // creates it — and a concurrent first append loses the create race (Vault.create
+  // throws when the file already exists), then appends through process() too, so no
+  // initial line is dropped.
+  async append(path: string, content: string): Promise<void> {
+    const normalized = normalizePath(path);
+    const existing = this.app.vault.getFileByPath(normalized);
+    if (existing) {
+      await this.app.vault.process(existing, (data) => data + content);
+      return;
+    }
+    try {
+      await this.app.vault.create(normalized, content);
+    } catch (error) {
+      // Only the concurrent-create race is recoverable: the file now exists, so
+      // append through process(). Any other failure (adapter/permission) left no
+      // file — re-throw so the caller's ErrorService reports it instead of the
+      // command showing a false success on a dropped write.
+      const created = this.app.vault.getFileByPath(normalized);
+      if (!created) throw error;
+      await this.app.vault.process(created, (data) => data + content);
+    }
+  }
+}

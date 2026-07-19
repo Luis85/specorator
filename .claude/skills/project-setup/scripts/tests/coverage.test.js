@@ -40,7 +40,7 @@ test('applyCoverageFloor rewrites OUR generated config, skips a user config', ()
   try {
     const r1 = applyCoverageFloor(ours.dir, 'jest');
     assert.equal(r1.updated, true);
-    assert.match(readFileSync(join(ours.dir, 'jest.config.mjs'), 'utf8'), /"statements":\s*80/);
+    assert.match(readFileSync(join(ours.dir, 'jest.config.mjs'), 'utf8'), /statements: 80/);
 
     const r2 = applyCoverageFloor(theirs.dir, 'jest');
     assert.equal(r2.updated, false); // no marker -> left alone
@@ -60,7 +60,7 @@ test('applyCoverageFloor updates only the threshold, preserving a customized mar
     assert.equal(applyCoverageFloor(p.dir, 'jest').updated, true);
     const out = readFileSync(join(p.dir, 'jest.config.mjs'), 'utf8');
     assert.match(out, /setupFiles: \["\.\/setup\.js"\]/); // user customization preserved
-    assert.match(out, /"statements":\s*80/); // threshold updated in place
+    assert.match(out, /statements: 80/); // threshold updated in place
   } finally {
     p.cleanup();
   }
@@ -75,7 +75,7 @@ test('applyCoverageFloor updates the vitest thresholds block in place', () => {
     assert.equal(applyCoverageFloor(p.dir, 'vitest').updated, true);
     const out = readFileSync(join(p.dir, 'vitest.config.mjs'), 'utf8');
     assert.match(out, /setupFiles: \["x"\]/);
-    assert.match(out, /"lines":\s*42/);
+    assert.match(out, /lines: 42/);
   } finally {
     p.cleanup();
   }

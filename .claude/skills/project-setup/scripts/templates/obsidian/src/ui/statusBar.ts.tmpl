@@ -1,0 +1,15 @@
+import type {{pluginClass}} from '../main';
+
+// A status-bar item that mirrors the greeting and follows `settings:changed`,
+// built through `plugin.statusBar` so item creation and the auto-cleaned click
+// binding live in one seam. The EventBus subscription is dropped on unload, so
+// there is no manual teardown here either.
+export function registerStatusBar(plugin: {{pluginClass}}): void {
+  const item = plugin.statusBar
+    .add()
+    .setText(plugin.settings.greeting)
+    .onClick(() => plugin.notices.info(plugin.settings.greeting));
+  plugin.events.on('settings:changed', ({ settings }) => {
+    item.setText(settings.greeting);
+  });
+}

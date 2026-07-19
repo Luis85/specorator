@@ -1,0 +1,75 @@
+import type { WorkspaceLeaf } from 'obsidian';
+import { ItemView } from 'obsidian';
+import type { App as VueApp } from 'vue';
+import { createApp, markRaw } from 'vue';
+
+import type {{pluginClass}} from '../main';
+import App from './vue/App.vue';
+import { PLUGIN_KEY } from './vue/keys';
+import { createIslandPinia } from './vue/pinia';
+import { createIslandRouter } from './vue/router';
+
+export const VIEW_TYPE = '{{id}}-main';
+
+export class VueView extends ItemView {
+  private vueApp: VueApp | null = null;
+  // Marks the current onOpen. A continuation that resumes after its await checks
+  // this and bails if a re-open or onClose superseded it — otherwise it would
+  // mount an app that nothing tracks or tears down.
+  private openToken: symbol | null = null;
+
+  constructor(
+    leaf: WorkspaceLeaf,
+    private readonly plugin: {{pluginClass}},
+  ) {
+    super(leaf);
+  }
+
+  getViewType(): string {
+    return VIEW_TYPE;
+  }
+
+  getDisplayText(): string {
+    return {{nameLiteral}};
+  }
+
+  getIcon(): string {
+    return 'layout-dashboard';
+  }
+
+  async onOpen(): Promise<void> {
+    // Popout/move flows can run onOpen twice on one view instance — drop the
+    // previous (mounted) island and mark this open as the current one.
+    const token = Symbol();
+    this.openToken = token;
+    this.vueApp?.unmount();
+    this.vueApp = null;
+    this.contentEl.empty();
+    this.contentEl.addClass('{{id}}-view');
+    const app = createApp(App);
+    app.use(createIslandPinia());
+    const router = createIslandRouter();
+    app.use(router);
+    // markRaw: Obsidian objects are large and cyclic — never deep-proxy them.
+    app.provide(PLUGIN_KEY, markRaw(this.plugin));
+    // Memory history has no initial navigation — push the start route explicitly
+    // and await it, so the first paint renders the matched page rather than an
+    // empty RouterView.
+    await router.push('/');
+    // A newer onOpen or an onClose ran while we awaited. This app was never
+    // mounted (Vue runs setup on mount), so it has no effects to clean up — drop it.
+    if (this.openToken !== token) return;
+    app.mount(this.contentEl);
+    this.vueApp = app;
+  }
+
+  async onClose(): Promise<void> {
+    // Supersede any in-flight onOpen, then tear down the mounted island.
+    // unmount() runs onUnmounted hooks; empty() drops detached DOM + listeners.
+    this.openToken = null;
+    this.vueApp?.unmount();
+    this.vueApp = null;
+    this.contentEl.removeClass('{{id}}-view');
+    this.contentEl.empty();
+  }
+}

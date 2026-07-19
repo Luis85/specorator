@@ -1,0 +1,29 @@
+/* Base stylesheet for {{name}}. The build assembles styles.css from this file
+   (plus any extracted component styles), so edit here — never styles.css.
+   Style with Obsidian's CSS variables and avoid `!important` (ratcheted by the
+   check:css gate); raise specificity or use variables instead. */
+
+.{{id}}-view {
+  padding: var(--size-4-3);
+}
+
+/* Rendered by the ```{{id}} code-block processor (src/ui/codeBlock.ts). */
+.{{id}}-panel {
+  border: 1px solid var(--background-modifier-border);
+  border-radius: var(--radius-m);
+  padding: var(--size-4-2);
+}
+
+.{{id}}-panel-row {
+  padding: var(--size-2-1) 0;
+}
+
+.{{id}}-panel-empty {
+  color: var(--text-muted);
+}
+
+/* Applied by the editor-highlight view plugin (src/ui/editorHighlight.ts). */
+.{{id}}-marker {
+  background-color: var(--text-highlight-bg);
+  border-radius: var(--radius-s);
+}

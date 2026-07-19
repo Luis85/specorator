@@ -1,0 +1,21 @@
+import type { TAbstractFile } from 'obsidian';
+
+import type {{pluginClass}} from '../main';
+
+// Demonstrates VaultEventsService + TimersService: react to the vault's file
+// lifecycle (the modify handler debounced so a burst of saves logs once) plus a
+// periodic heartbeat. Every listener and timer is torn down on unload by its
+// owning service — nothing to clean up here.
+export function registerActivity(plugin: {{pluginClass}}): void {
+  const log = plugin.logger.child('activity');
+
+  plugin.vaultEvents.onModify(
+    plugin.timers.debounce(500, (file: TAbstractFile) => log.debug('modified', file.path)),
+  );
+  plugin.vaultEvents.onCreate((file) => log.debug('created', file.path));
+  plugin.vaultEvents.onDelete((file) => log.debug('deleted', file.path));
+  plugin.vaultEvents.onRename((file, oldPath) => log.debug('renamed', oldPath, '->', file.path));
+
+  // A heartbeat while the plugin is loaded (cleared on unload by registerInterval).
+  plugin.timers.every(5 * 60_000, () => log.debug('heartbeat'));
+}

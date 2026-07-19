@@ -1,0 +1,16 @@
+// Test-only type augmentation. tests/__mocks__/obsidian.ts (aliased to
+// `obsidian` in vitest.config.mjs) adds helpers the real module has no types
+// for. Declare them here so tests import them from 'obsidian' with full types
+// and without reaching into the __mocks__ path. The `import 'obsidian'` makes
+// this a module so `declare module` augments the real types instead of
+// replacing them.
+import 'obsidian';
+
+declare module 'obsidian' {
+  /** Messages recorded by the mock Notice; reset with `__noticeLog.length = 0`. */
+  export const __noticeLog: string[];
+  /** Sets the JSON the mock `requestUrl` returns (RequestService tests). */
+  export function __setRequestJson(json: unknown): void;
+  /** Frontmatter the mock `processFrontMatter` wrote, keyed by path; reset with `.clear()`. */
+  export const __frontmatterStore: Map<string, Record<string, unknown>>;
+}

@@ -53,6 +53,13 @@ test('planLoc check-loc tracks modern module extensions (.mts/.cts/.cjs)', () =>
   assert.match(file.content, /\|cjs\)/);
 });
 
+test('planLoc counts .vue in Obsidian mode (SFCs are source) but not in generic mode', () => {
+  const obs = planLoc({ guardrails: { locGuard: true }, obsidian: { vue: true } }, {}).find((a) => a.path === 'scripts/check-loc.mjs');
+  assert.match(obs.content, /mts\|cts\|vue\|js/); // .vue folded into the ratchet's extension set
+  const generic = planLoc({ guardrails: { locGuard: true } }, {}).find((a) => a.path === 'scripts/check-loc.mjs');
+  assert.doesNotMatch(generic.content, /vue/);
+});
+
 test('planTest(jest) renders jest config + jest deps + test scripts', () => {
   const actions = planTest({ testFramework: 'jest', guardrails: { coverageFloors: true } });
   const cfg = actions.find((a) => a.path === 'jest.config.mjs');

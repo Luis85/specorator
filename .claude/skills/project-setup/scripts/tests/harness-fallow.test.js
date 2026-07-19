@@ -14,6 +14,26 @@ test('planFallow renders .fallowrc.json with the detected entry and copies the r
   assert.equal(pkg.patch.scripts.quality, 'fallow');
 });
 
+test('planFallow flags a stale obsidian .fallowrc.json that lost the boundary zones', () => {
+  const opts = { guardrails: { fallowRatchet: true }, obsidian: { id: 'x' } };
+  const flagged = (state) =>
+    planFallow(opts, { entry: 'src/main.ts', ...state }).some(
+      (a) => a.type === 'notice' && /boundary zones/.test(a.message),
+    );
+  // A prior generic run's config has no core/ui zones → the architecture gate is inert.
+  assert.ok(flagged({ fallowrcJson: { boundaries: { zones: [] } } }));
+  // Our own obsidian config (main/core/ui) is not flagged on a normal re-apply.
+  assert.ok(!flagged({ fallowrcJson: { boundaries: { zones: [{ name: 'main' }, { name: 'core' }, { name: 'ui' }] } } }));
+  // Fresh (no existing .fallowrc.json) → no notice.
+  assert.ok(!flagged({}));
+  // Generic (non-obsidian) mode never flags it.
+  assert.ok(
+    !planFallow({ guardrails: { fallowRatchet: true } }, { entry: 'src/index.ts', fallowrcJson: { boundaries: { zones: [] } } }).some(
+      (a) => a.type === 'notice' && /boundary zones/.test(a.message),
+    ),
+  );
+});
+
 test('planFallow JSON-escapes the entry (no .fallowrc injection from a crafted filename)', () => {
   const rc = planFallow({ guardrails: { fallowRatchet: true } }, { entry: 'src/a"], "evil": ["b.ts' }).find((a) => a.path === '.fallowrc.json');
   const parsed = JSON.parse(rc.content); // still valid JSON

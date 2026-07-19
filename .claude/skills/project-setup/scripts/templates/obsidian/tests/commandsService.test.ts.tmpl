@@ -1,0 +1,56 @@
+import type { Command } from 'obsidian';
+import { describe, expect, it, vi } from 'vitest';
+
+import { CommandsService } from '@/core/commands/CommandsService';
+
+function fakePlugin() {
+  const added: Command[] = [];
+  return { added, addCommand: vi.fn((command: Command) => added.push(command)) };
+}
+
+describe('CommandsService', () => {
+  it('registers a simple command with a callback and bare id', () => {
+    const plugin = fakePlugin();
+    new CommandsService(plugin as never).addSimple('do-thing', 'Do thing', () => {});
+    expect(plugin.addCommand).toHaveBeenCalledOnce();
+    const cmd = plugin.added[0];
+    if (!cmd) throw new Error('no command registered');
+    expect(cmd.id).toBe('do-thing');
+    expect(typeof cmd.callback).toBe('function');
+  });
+
+  it('checkCallback probes with `when` and runs only when executing', () => {
+    const plugin = fakePlugin();
+    const run = vi.fn();
+    let ready = false;
+    new CommandsService(plugin as never).addChecked('go', 'Go', () => ready, run);
+    const check = plugin.added[0]?.checkCallback;
+    if (!check) throw new Error('no checkCallback registered');
+
+    expect(check(true)).toBe(false); // not ready → command hidden
+    ready = true;
+    expect(check(true)).toBe(true); // ready + probing → shown, not run
+    expect(run).not.toHaveBeenCalled();
+    expect(check(false)).toBe(true); // ready + executing → runs
+    expect(run).toHaveBeenCalledOnce();
+  });
+
+  it('editorCheckCallback passes the editor through both phases', () => {
+    const plugin = fakePlugin();
+    const run = vi.fn();
+    const editor = { id: 'ed' } as never;
+    new CommandsService(plugin as never).addEditorChecked(
+      'edit',
+      'Edit',
+      (ed) => ed === editor,
+      run,
+    );
+    const check = plugin.added[0]?.editorCheckCallback;
+    if (!check) throw new Error('no editorCheckCallback registered');
+
+    expect(check(true, editor, null as never)).toBe(true); // probing → shown, not run
+    expect(run).not.toHaveBeenCalled();
+    expect(check(false, editor, null as never)).toBe(true); // executing → runs with editor
+    expect(run).toHaveBeenCalledWith(editor);
+  });
+});

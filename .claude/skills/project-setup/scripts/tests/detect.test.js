@@ -1,6 +1,7 @@
 // .claude/skills/project-setup/scripts/tests/detect.test.js
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
+import { join } from 'node:path';
 import { test } from 'node:test';
 
 import { detect, detectDefaultBranch, detectEntry, detectGithubRemote, detectPackageManager } from '../lib/detect.mjs';
@@ -89,6 +90,44 @@ test('detectEntry returns src/main.ts when it exists, falling back to src/index.
   }
 });
 
+test('detectEntry prefers an index barrel over main in the generic scan order', () => {
+  // With both present and no bundler `source` field, the scan order (index before
+  // main within a dir) returns src/index.ts.
+  const both = tmpProject({ 'src/index.ts': '// barrel\n', 'src/main.ts': '// entry\n' });
+  try {
+    assert.equal(detectEntry(both.dir), 'src/index.ts');
+    assert.equal(detect(both.dir).entry, 'src/index.ts');
+  } finally {
+    both.cleanup();
+  }
+});
+
+test('detectEntry rejects a parent-directory package source (no ".." traversal)', () => {
+  // plugin/package.json points source one level up to an existing file; the `..`
+  // segment must be rejected so the build/ratchets stay inside the project.
+  const p = tmpProject({
+    'plugin/package.json': { source: '../shared/main.ts' },
+    'shared/main.ts': '', // exists relative to plugin/ via ..
+    'plugin/src/index.ts': '', // the safe fallback
+  });
+  try {
+    assert.equal(detectEntry(join(p.dir, 'plugin')), 'src/index.ts');
+  } finally {
+    p.cleanup();
+  }
+});
+
+test('detectEntry normalizes a leading-slash package source to a project-relative path', () => {
+  // "source":"/src/main.ts" resolves under cwd (path.join drops the leading
+  // slash) but must be RETURNED relative, else esbuild/fallow target the FS root.
+  const p = tmpProject({ 'package.json': { source: '/src/main.ts' }, 'src/main.ts': '' });
+  try {
+    assert.equal(detectEntry(p.dir), 'src/main.ts'); // not '/src/main.ts'
+  } finally {
+    p.cleanup();
+  }
+});
+
 test('detectEntry finds a JS/JSX app entrypoint, not only the .ts variant', () => {
   const jsApp = tmpProject({ 'src/app.jsx': '' });
   try {
@@ -161,9 +200,11 @@ test('detect flags a user eslint.config.mjs but not the engine\'s own (marker)',
   }
 });
 
-test('detect surfaces brownfield collision signals', () => {
+test('detect surfaces config/script collision signals', () => {
   const p = tmpProject({
-    'package.json': { scripts: { lint: 'eslint src' } },
+    'package.json': {
+      scripts: { lint: 'eslint src' },
+    },
     '.eslintrc.json': '{}',
     '.github/workflows/ci.yml': 'name: ci\n',
     'jest.config.js': 'module.exports = {};\n',
@@ -234,3 +275,4 @@ test('detect exposes per-runner config signals (scoped standdown is decided at p
     viteP.cleanup();
   }
 });
+

@@ -1,0 +1,20 @@
+import { describe, expect, it, vi } from 'vitest';
+
+import { RibbonService } from '@/core/ribbon/RibbonService';
+
+describe('RibbonService', () => {
+  it('delegates to plugin.addRibbonIcon and returns the ribbon element', () => {
+    const el = document.createElement('div');
+    const addRibbonIcon = vi.fn(() => el);
+    const onClick = () => {};
+
+    const result = new RibbonService({ addRibbonIcon } as never).add(
+      'dice',
+      'Pick a greeting',
+      onClick,
+    );
+
+    expect(addRibbonIcon).toHaveBeenCalledWith('dice', 'Pick a greeting', onClick);
+    expect(result).toBe(el);
+  });
+});

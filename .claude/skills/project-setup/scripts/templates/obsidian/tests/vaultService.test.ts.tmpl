@@ -1,0 +1,80 @@
+import { __frontmatterStore, App } from 'obsidian';
+import { describe, expect, it } from 'vitest';
+
+import { VaultService } from '@/core/vault/VaultService';
+
+describe('VaultService', () => {
+  it('creates the folder, then appends and reads a note', async () => {
+    const service = new VaultService(new App());
+    await service.ensureFolder('logs');
+    await service.append('logs/a.md', 'hello');
+    expect(await service.read('logs/a.md')).toBe('hello');
+  });
+
+  it('read returns null for a missing file', async () => {
+    const service = new VaultService(new App());
+    expect(await service.read('missing.md')).toBeNull();
+  });
+
+  it('append creates the file, then adds to it without clobbering', async () => {
+    const service = new VaultService(new App());
+    await service.append('log.md', 'a\n');
+    await service.append('log.md', 'b\n');
+    expect(await service.read('log.md')).toBe('a\nb\n');
+  });
+
+  it('append re-throws a genuine create failure instead of reporting false success', async () => {
+    const app = new App();
+    const failure = new Error('disk full');
+    // A non-race create failure leaves no file, so append must propagate — the
+    // command's ErrorService relies on the rejection to notice the dropped write.
+    app.vault.create = () => Promise.reject(failure);
+    const service = new VaultService(app);
+    await expect(service.append('log.md', 'x')).rejects.toThrow('disk full');
+  });
+
+  it('ensureFolder tolerates a concurrent create (the folder now exists)', async () => {
+    const app = new App();
+    let exists = false;
+    // Our create loses the race: it rejects "already exists", but the folder a
+    // concurrent call made is now present, so ensureFolder resolves rather than
+    // throwing and dropping the follow-up append.
+    app.vault.getFolderByPath = () => (exists ? ({ path: 'logs' } as never) : null);
+    app.vault.createFolder = () => {
+      exists = true;
+      return Promise.reject(new Error('Folder already exists.'));
+    };
+    // Resolves (does not throw) because the folder is present after the race.
+    await expect(new VaultService(app).ensureFolder('logs')).resolves.toBeUndefined();
+  });
+
+  it('ensureFolder re-throws a genuine create failure (folder still missing)', async () => {
+    const app = new App();
+    app.vault.getFolderByPath = () => null; // never created
+    app.vault.createFolder = () => Promise.reject(new Error('permission denied'));
+    await expect(new VaultService(app).ensureFolder('logs')).rejects.toThrow('permission denied');
+  });
+
+  it('append is atomic even on the first write: concurrent appends to a new file keep every line', async () => {
+    const service = new VaultService(new App());
+    // No pre-created file: overlapping first appends race Vault.create; the loser
+    // catches the "already exists" reject and appends through process() instead, so
+    // no initial line is dropped.
+    await Promise.all(Array.from({ length: 20 }, (_, i) => service.append('log.md', `${i}\n`)));
+    const lines = (await service.read('log.md'))!
+      .trim()
+      .split('\n')
+      .sort((a, b) => Number(a) - Number(b));
+    expect(lines).toEqual(Array.from({ length: 20 }, (_, i) => String(i)));
+  });
+
+  it('updateFrontmatter merges a patch into the note frontmatter; a missing file is a no-op', async () => {
+    __frontmatterStore.clear();
+    const app = new App();
+    await app.vault.create('note.md', 'body');
+    const service = new VaultService(app);
+    await service.updateFrontmatter('note.md', { tags: ['x'], done: true });
+    expect(__frontmatterStore.get('note.md')).toEqual({ tags: ['x'], done: true });
+    await expect(service.updateFrontmatter('missing.md', { a: 1 })).resolves.toBeUndefined();
+  });
+});

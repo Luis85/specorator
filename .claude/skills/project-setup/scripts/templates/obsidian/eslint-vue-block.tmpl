@@ -1,0 +1,28 @@
+  // Vue SFC lint. Three of flat/recommended's sub-configs ship without a
+  // `files` restriction and would otherwise run 100+ vue/* rules against every
+  // .ts file — scope them all to .vue.
+  ...pluginVue.configs['flat/recommended'].map((c) =>
+    c.files ? c : { ...c, files: ['**/*.vue'] },
+  ),
+  {
+    files: ['**/*.vue'],
+    languageOptions: {
+      parserOptions: {
+        // vue-eslint-parser stays the outer parser (set by the configs above);
+        // the TS parser handles <script lang="ts"> blocks.
+        parser: tseslint.parser,
+        extraFileExtensions: ['.vue'],
+        sourceType: 'module',
+      },
+    },
+    plugins: { 'simple-import-sort': simpleImportSort },
+    rules: {
+      // v-html sets el.innerHTML under the hood — the SFC analogue of the src
+      // raw-HTML ban. Render markdown through Obsidian's MarkdownRenderer.
+      'vue/no-v-html': 'error',
+      // vue-tsc owns undefined-identifier checking for <script lang="ts">.
+      'no-undef': 'off',
+      'simple-import-sort/imports': 'error',
+      'simple-import-sort/exports': 'error',
+    },
+  },

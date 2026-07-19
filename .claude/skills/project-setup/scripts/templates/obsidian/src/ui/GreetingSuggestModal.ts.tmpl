@@ -1,0 +1,30 @@
+import { type App, SuggestModal } from 'obsidian';
+
+import { t } from '../i18n/i18n';
+
+// A fuzzy picker (SuggestModal) over a few preset greetings. It stays UI-only:
+// the chosen value is handed back through `onPick`, so the modal never touches
+// plugin state directly.
+export class GreetingSuggestModal extends SuggestModal<string> {
+  constructor(
+    app: App,
+    private readonly presets: readonly string[],
+    private readonly onPick: (greeting: string) => void,
+  ) {
+    super(app);
+    this.setPlaceholder(t('picker.placeholder'));
+  }
+
+  getSuggestions(query: string): string[] {
+    const needle = query.toLowerCase();
+    return this.presets.filter((preset) => preset.toLowerCase().includes(needle));
+  }
+
+  renderSuggestion(value: string, el: HTMLElement): void {
+    el.setText(value);
+  }
+
+  onChooseSuggestion(value: string): void {
+    this.onPick(value);
+  }
+}

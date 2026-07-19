@@ -1,0 +1,26 @@
+---
+description: Add an Obsidian command following this plugin's patterns
+---
+
+Add a new Obsidian command to `src/commands.ts`.
+
+Follow the existing patterns exactly:
+
+- Register through `plugin.commands` (the CommandsService), NOT `this.addCommand`.
+  Use the matching helper for the command shape:
+  - `addSimple(id, name, callback)` — always available.
+  - `addChecked(id, name, when, run)` — conditional (`when` returns `false` to hide; `run` performs it).
+  - `addEditor(id, name, editorCallback)` — needs the active editor.
+- Use a **bare** command id (no plugin-id prefix — Obsidian adds it).
+- Never set a default hotkey.
+- All user-facing text (command name, notices, modal copy) goes through `t(...)`
+  with a new key added to `src/i18n/en.json` — literal strings fail the i18n
+  lint rule.
+- User feedback goes through `plugin.notices` / `plugin.modals`, never a raw
+  `new Notice(...)`.
+
+Then add a unit test in `tests/unit/commands.test.ts` asserting the command is
+registered (assert against the obsidian mock's recorded commands), and run
+`{{run}} typecheck && {{run}} lint && {{run}} test` before finishing.
+
+$ARGUMENTS

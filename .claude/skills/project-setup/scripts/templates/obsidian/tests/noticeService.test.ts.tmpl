@@ -1,0 +1,22 @@
+// __noticeLog is added by the mock (aliased to `obsidian`) and typed via
+// tests/obsidian-augment.d.ts, so it imports cleanly from 'obsidian'.
+import { __noticeLog } from 'obsidian';
+import { beforeEach, describe, expect, it } from 'vitest';
+
+import { NoticeService } from '@/core/notices/NoticeService';
+
+describe('NoticeService', () => {
+  beforeEach(() => {
+    __noticeLog.length = 0;
+  });
+
+  it('shows an info notice with the message', () => {
+    new NoticeService().info('Saved');
+    expect(__noticeLog).toEqual(['Saved']);
+  });
+
+  it('prefixes errors so they are recognizable', () => {
+    new NoticeService().error('Vault unreadable');
+    expect(__noticeLog).toEqual(['Error: Vault unreadable']);
+  });
+});

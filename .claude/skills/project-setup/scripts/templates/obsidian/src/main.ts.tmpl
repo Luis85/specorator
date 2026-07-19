@@ -1,0 +1,80 @@
+import { Plugin } from 'obsidian';
+
+import { registerCommands } from './commands';
+import { CommandsService } from './core/commands/CommandsService';
+import { ErrorService } from './core/errors/ErrorService';
+import type { AppEvents } from './core/events/AppEvents';
+import { EventBus } from './core/events/EventBus';
+import { RequestService } from './core/http/RequestService';
+import { Logger } from './core/logging/Logger';
+import { MenuService } from './core/menus/MenuService';
+import { ModalService } from './core/modals/ModalService';
+import { NoticeService } from './core/notices/NoticeService';
+import { RibbonService } from './core/ribbon/RibbonService';
+import { SettingsService } from './core/settings/SettingsService';
+import { StatusBarService } from './core/statusbar/StatusBarService';
+import { TimersService } from './core/timers/TimersService';
+import { VaultService } from './core/vault/VaultService';
+import { VaultEventsService } from './core/vaultEvents/VaultEventsService';
+import { t } from './i18n/i18n';
+import type { {{settingsType}} } from './settings';
+import { {{settingsValueImports}} } from './settings';
+import { registerActivity } from './ui/registerActivity';
+import { registerEditorFeatures } from './ui/registerEditorFeatures';
+import { registerExtras } from './ui/registerExtras';
+{{viewImport}}import { registerStatusBar } from './ui/statusBar';
+
+// main.ts orchestrates only: it constructs the plugin-owned services, then
+// delegates load + every registration to focused modules (see AGENTS.md §
+// architecture). New behavior goes in a service or a register* module, not here.
+export default class {{pluginClass}} extends Plugin {
+  settings: {{settingsType}} = { ...DEFAULT_SETTINGS };
+  readonly logger = new Logger('{{id}}', () => this.settings.debugLogging);
+  readonly events = new EventBus<AppEvents>();
+  readonly notices = new NoticeService();
+  readonly errors = new ErrorService(this.logger, this.notices);
+  readonly modals = new ModalService(this.app);
+  readonly commands = new CommandsService(this);
+  readonly ribbon = new RibbonService(this);
+  readonly statusBar = new StatusBarService(this);
+  readonly menus = new MenuService(this);
+  readonly timers = new TimersService(this);
+  readonly vault = new VaultService(this.app);
+  readonly vaultEvents = new VaultEventsService(this);
+  readonly requests = new RequestService();
+  private readonly settingsService = new SettingsService<{{settingsType}}>({
+    defaults: DEFAULT_SETTINGS,
+    read: () => this.loadData(),
+    write: (data) => this.saveData(data),
+    migrate: migrateSettings,
+    onChange: (settings) => {
+      this.settings = settings;
+      this.events.emit('settings:changed', { settings });
+    },
+  });
+
+  async onload(): Promise<void> {
+    // Error boundary through the ErrorService: a thrown onload leaves Obsidian
+    // with a half-registered plugin and no feedback, so catch → log → notice and
+    // degrade instead of failing silently.
+    await this.errors.run(
+      'load the plugin',
+      async () => {
+        await this.settingsService.load();
+        this.addSettingTab(new {{settingsTab}}(this.app, this));
+        registerCommands(this);
+        registerStatusBar(this);
+        registerExtras(this);
+        registerActivity(this);
+        registerEditorFeatures(this);
+{{viewRegistration}}        this.logger.info('loaded');
+      },
+      { message: t('notice.loadFailed') },
+    );
+  }
+
+  // Persist a settings change and notify subscribers (through SettingsService).
+  saveSettings(patch: Partial<{{settingsType}}>): Promise<void> {
+    return this.settingsService.update(patch);
+  }
+}

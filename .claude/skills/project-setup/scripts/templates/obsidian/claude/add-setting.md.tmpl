@@ -1,0 +1,25 @@
+---
+description: Add a plugin setting following this plugin's patterns
+---
+
+Add a new setting to this plugin.
+
+Do all of the following so the setting is type-safe, persisted, migratable, and
+tested:
+
+1. **Type + default** — add the field to the settings interface and
+   `DEFAULT_SETTINGS` in `src/settings.ts`.
+2. **Migration** — bump `schemaVersion` and handle the new field in
+   `migrateSettings` (coerce with the `asString`/`asBoolean` helpers) so existing
+   users' saved data upgrades cleanly.
+3. **UI** — render a control for it in the settings tab (`display()`), using
+   Obsidian's `Setting` builder. Persist changes through
+   `plugin.saveSettings(patch)`, not a raw `saveData`.
+4. **i18n** — every label/description goes through `t(...)` with keys added to
+   `src/i18n/en.json`.
+
+Add/extend `tests/unit/settings.test.ts` to cover the new default and a migration
+from the previous `schemaVersion`, then run
+`{{run}} typecheck && {{run}} lint && {{run}} test`.
+
+$ARGUMENTS

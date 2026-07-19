@@ -1,0 +1,25 @@
+---
+description: Scaffold a new plugin service following this plugin's architecture
+---
+
+Create a new service under `src/core/<area>/<Name>Service.ts`.
+
+Match the existing services (Logger, SettingsService, VaultService, RequestService,
+NoticeService, ModalService, CommandsService, EventBus):
+
+- A focused class with constructor-injected dependencies — no reaching for the
+  global `app`; take what it needs (`Plugin`, `Vault`, the `Logger`, …) as
+  constructor args.
+- Keep it in the `core` boundary zone: `core` may NOT import from `main` or `ui`
+  (the fallow boundary gate enforces this at 0). Pure logic + Obsidian APIs only.
+- Construct it in `main.ts`'s `onload` orchestration and expose it as a readonly
+  field under a short name, so features and commands reach it through
+  `plugin.<name>` (e.g. `plugin.commands`, `plugin.vault`), not `plugin.<name>Service`.
+- No `console.*` (use the `Logger`); no raw `new Notice()` (use NoticeService);
+  no raw HTML sinks.
+
+Add a unit test `tests/unit/<name>Service.test.ts` that drives its public methods
+against the obsidian mock, then run `{{run}} typecheck && {{run}} lint && {{run}} test`.
+Keep `main.ts` orchestration-only — logic lives in the service, not the entry.
+
+$ARGUMENTS

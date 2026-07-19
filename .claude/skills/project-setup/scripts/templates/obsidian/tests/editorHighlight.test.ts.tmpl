@@ -1,0 +1,14 @@
+import { describe, expect, it } from 'vitest';
+
+import { markerRanges } from '@/ui/editorHighlight';
+
+describe('markerRanges', () => {
+  it('finds TODO/FIXME/HACK offsets and ignores non-markers', () => {
+    expect(markerRanges('a TODO b FIXME')).toEqual([
+      { from: 2, to: 6 },
+      { from: 9, to: 14 },
+    ]);
+    expect(markerRanges('nothing to see')).toEqual([]);
+    expect(markerRanges('TODOlist is not a marker')).toEqual([]);
+  });
+});

@@ -1,0 +1,85 @@
+{
+  "$schema": "https://raw.githubusercontent.com/fallow-rs/fallow/main/schema.json",
+  "entry": {{entry}},
+  "ignorePatterns": [
+    "**/docs/**",
+    "**/coverage/**",
+    "**/.fallow/**",
+    "**/scripts/**",
+    "**/tests/**",
+    "**/*.test.*",
+    "**/*.spec.*",
+    "main.js",
+    "main.css",
+    "styles.css",
+    "src/styles.css",
+    "esbuild.config.mjs",
+    "eslint.config.mjs",
+    "vitest.config.mjs"
+  ],
+  "ignoreDependencies": [
+    "obsidian",
+    "esbuild",
+    "typescript",
+    "vue-tsc",
+    "unplugin-vue",
+    "@vitejs/plugin-vue",
+    "@vitest/coverage-istanbul",
+    "@vitest/eslint-plugin",
+    "jsdom",
+    "@vue/test-utils",
+    "vitest",
+    "prettier",
+    "eslint",
+    "@eslint/js",
+    "@eslint/json",
+    "typescript-eslint",
+    "eslint-plugin-obsidianmd",
+    "eslint-plugin-vue",
+    "vue-eslint-parser",
+    "eslint-plugin-simple-import-sort",
+    "@eslint-community/eslint-plugin-eslint-comments",
+    "eslint-config-prettier",
+    "nano-staged",
+    "fallow"
+  ],
+  "usedClassMembers": [
+    { "extends": "Plugin", "members": ["onload", "onunload"] },
+    { "extends": "PluginSettingTab", "members": ["display", "hide"] },
+    {
+      "extends": "ItemView",
+      "members": ["getViewType", "getDisplayText", "getIcon", "onOpen", "onClose"]
+    },
+    { "extends": "Modal", "members": ["onOpen", "onClose"] },
+    {
+      "extends": "SuggestModal",
+      "members": ["getSuggestions", "renderSuggestion", "onChooseSuggestion"]
+    },
+    {
+      "extends": "EditorSuggest",
+      "members": ["onTrigger", "getSuggestions", "renderSuggestion", "selectSuggestion"]
+    }
+  ],
+  "duplicates": {
+    "minOccurrences": 2,
+    "ignore": ["**/tests/**", "**/*.test.*"]
+  },
+  "boundaries": {
+    "zones": [
+      {
+        "name": "main",
+        "patterns": [{{mainPatterns}}]
+      },
+      { "name": "core", "patterns": ["src/core/**", "src/i18n/**"] },
+      { "name": "ui", "patterns": ["src/ui/**"] }
+    ],
+    "rules": [
+      { "from": "main", "allow": ["core", "ui"] },
+      { "from": "ui", "allow": ["core"], "allowTypeOnly": ["main"] },
+      { "from": "core", "allow": [], "allowTypeOnly": ["main"] }
+    ]
+  },
+  "rules": {
+    "unused-dependencies": "warn"
+  }
+}

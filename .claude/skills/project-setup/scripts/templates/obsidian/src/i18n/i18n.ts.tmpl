@@ -1,0 +1,15 @@
+import en from './en.json';
+
+type MessageKey = keyof typeof en;
+
+// Minimal i18n: resolve a key from the bundled locale and interpolate `{param}`
+// placeholders. All user-facing text goes through here (lint-enforced for
+// notices) so it can be localized. Add locales by keying on Obsidian's
+// `getLanguage()` and falling back to `en`.
+export function t(key: MessageKey, params?: Record<string, string | number>): string {
+  let text: string = en[key];
+  for (const [name, value] of Object.entries(params ?? {})) {
+    text = text.split(`{${name}}`).join(String(value));
+  }
+  return text;
+}

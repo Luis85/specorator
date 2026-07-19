@@ -1,0 +1,50 @@
+import type {{pluginClass}} from '../../main';
+
+// A handle over one status-bar item: chainable text/tooltip setters, a click
+// binding that auto-cleans, and explicit removal.
+export interface StatusBarItem {
+  readonly el: HTMLElement;
+  setText(text: string): this;
+  setTooltip(text: string): this;
+  onClick(handler: (evt: MouseEvent) => void): this;
+  remove(): void;
+}
+
+// Ergonomic seam over `plugin.addStatusBarItem`. Obsidian removes the items on
+// unload, so there is no manual teardown; click listeners go through
+// `registerDomEvent` so they are dropped on unload even though the element
+// outlives a reload (never a raw `addEventListener` here).
+export class StatusBarService {
+  constructor(private readonly plugin: {{pluginClass}}) {}
+
+  add(): StatusBarItem {
+    return new StatusBarItemHandle(this.plugin, this.plugin.addStatusBarItem());
+  }
+}
+
+class StatusBarItemHandle implements StatusBarItem {
+  constructor(
+    private readonly plugin: {{pluginClass}},
+    readonly el: HTMLElement,
+  ) {}
+
+  setText(text: string): this {
+    this.el.setText(text);
+    return this;
+  }
+
+  // Status-bar tooltips are conventionally the element's aria-label.
+  setTooltip(text: string): this {
+    this.el.setAttribute('aria-label', text);
+    return this;
+  }
+
+  onClick(handler: (evt: MouseEvent) => void): this {
+    this.plugin.registerDomEvent(this.el, 'click', handler);
+    return this;
+  }
+
+  remove(): void {
+    this.el.remove();
+  }
+}

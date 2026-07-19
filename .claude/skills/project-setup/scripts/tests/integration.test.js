@@ -11,7 +11,9 @@ function capture(cwd) {
   const chunks = { out: '', err: '' };
   // Stub exec so installDeps and initBaselines never touch the network in tests.
   const exec = () => {};
-  return { io: { stdout: (s) => (chunks.out += s), stderr: (s) => (chunks.err += s), cwd, exec }, chunks };
+  // Pin a supported host Node so the apply floor gate is deterministic regardless of
+  // the version the test runner happens to use (fallow needs >=22 on every apply).
+  return { io: { stdout: (s) => (chunks.out += s), stderr: (s) => (chunks.err += s), cwd, exec, nodeVersion: '22.13.0' }, chunks };
 }
 
 test('detect prints state JSON for the cwd', async () => {
@@ -72,7 +74,7 @@ test('apply re-runs baseline init on a converged apply (recovers a baseline left
   try {
     const cfg = join(p.dir, 'answers.json');
     writeFileSync(cfg, JSON.stringify({ guardrails: { fallowRatchet: true, locGuard: true, coverageFloors: false, eslintSeverityStaging: false, ci: false }, github: { integrate: false }, docs: { scaffold: false } }));
-    const rec = (sink, out) => ({ cwd: p.dir, exec: (cmd, args) => sink.push(`${cmd} ${args.join(' ')}`), stdout: (s) => out.push(s), stderr: () => {} });
+    const rec = (sink, out) => ({ cwd: p.dir, exec: (cmd, args) => sink.push(`${cmd} ${args.join(' ')}`), stdout: (s) => out.push(s), stderr: () => {}, nodeVersion: '22.13.0' });
     await cli(['apply', '--config', cfg], rec([], [])); // apply #1
     const calls = []; const out = [];
     await cli(['apply', '--config', cfg], rec(calls, out)); // apply #2: converged

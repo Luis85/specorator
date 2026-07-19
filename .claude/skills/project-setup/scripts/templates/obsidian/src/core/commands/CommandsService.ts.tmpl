@@ -1,0 +1,82 @@
+import type { Command, Editor } from 'obsidian';
+
+import type {{pluginClass}} from '../../main';
+
+// Extras a caller may pass through (icon, mobile, repeatable). The command
+// verbs and id/name are set by the helper, and hotkeys are deliberately
+// excluded — hardcoded default hotkeys collide across plugins and override the
+// user's config (Obsidian plugin guidelines), so let users bind their own.
+type CommandExtras = Omit<
+  Command,
+  | 'id'
+  | 'name'
+  | 'callback'
+  | 'checkCallback'
+  | 'editorCallback'
+  | 'editorCheckCallback'
+  | 'hotkeys'
+>;
+
+// Ergonomic wrappers over `plugin.addCommand`, one per Obsidian command type.
+// Obsidian auto-prefixes command ids with the plugin id, so pass a BARE id — no
+// plugin id, no the word "command" (both lint-enforced by obsidianmd), and keep
+// ids stable after release (they key user hotkeys). Names are sentence case and
+// omit the plugin name. Registration in onload(); Obsidian removes commands on
+// unload, so no manual teardown.
+export class CommandsService {
+  constructor(private readonly plugin: {{pluginClass}}) {}
+
+  // callback — always available in the palette.
+  addSimple(id: string, name: string, callback: () => void, extra?: CommandExtras): void {
+    this.plugin.addCommand({ id, name, callback, ...extra });
+  }
+
+  // checkCallback — `when()` gates palette visibility; `run()` performs the
+  // action. Obsidian calls it with checking=true to probe (does it apply?) and
+  // checking=false to execute — this wrapper handles both from one predicate.
+  addChecked(
+    id: string,
+    name: string,
+    when: () => boolean,
+    run: () => void,
+    extra?: CommandExtras,
+  ): void {
+    this.plugin.addCommand({
+      id,
+      name,
+      ...extra,
+      checkCallback: (checking: boolean) => {
+        if (!when()) return false;
+        if (!checking) run();
+        return true;
+      },
+    });
+  }
+
+  // editorCallback — only offered when a Markdown editor is focused; receives
+  // the active Editor.
+  addEditor(id: string, name: string, run: (editor: Editor) => void, extra?: CommandExtras): void {
+    this.plugin.addCommand({ id, name, ...extra, editorCallback: run });
+  }
+
+  // editorCheckCallback — an editor command that is also conditional: the same
+  // two-phase probe as addChecked, but `when`/`run` receive the active editor.
+  addEditorChecked(
+    id: string,
+    name: string,
+    when: (editor: Editor) => boolean,
+    run: (editor: Editor) => void,
+    extra?: CommandExtras,
+  ): void {
+    this.plugin.addCommand({
+      id,
+      name,
+      ...extra,
+      editorCheckCallback: (checking: boolean, editor: Editor) => {
+        if (!when(editor)) return false;
+        if (!checking) run(editor);
+        return true;
+      },
+    });
+  }
+}

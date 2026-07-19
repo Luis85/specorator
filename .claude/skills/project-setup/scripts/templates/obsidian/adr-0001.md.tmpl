@@ -1,0 +1,38 @@
+---
+title: 'ADR-0001: Plugin architecture baseline'
+date: {{date}}
+status: accepted
+---
+
+## Context
+
+{{name}} was scaffolded by project-setup with an opinionated baseline. This
+record captures the choices so later ADRs can supersede them deliberately
+instead of eroding them accidentally.
+
+## Decision
+
+- **Target:** {{mobileChoice}} (`isDesktopOnly: {{isDesktopOnly}}` in
+  manifest.json){{mobileConsequence}}
+- **UI:** {{uiChoice}}
+- **Layers:** `main` (entry + settings + `commands.ts`) → `core` (services:
+  Commands, Events, Notices, Modals, Errors, Ribbon, StatusBar, Menus, Timers,
+  VaultEvents, Logger, Settings, Vault, Request) ← `ui`
+  (views/components, status bar). `main.ts` orchestrates only, behind an
+  `onload` error boundary. Enforced by fallow boundary zones
+  (`boundaryViolations` gated at 0).
+- **Settings:** owned by `SettingsService` with versioned `migrateSettings`, so
+  old vaults upgrade rather than break.
+- **Tests:** single Vitest lane (jsdom) with an `obsidian` test double;
+  rise-only coverage floors.
+- **Quality gates:** ESLint (obsidianmd + type-aware, all-error), Prettier,
+  LOC ratchet, CSS `!important` ratchet, fallow metric ratchet, build +
+  artifact smoke.
+- **Release:** `npm version` syncs manifest/versions; tag push builds and
+  attaches `main.js`/`manifest.json`/`styles.css`.
+
+## Consequences
+
+New capabilities start in `core/` behind the services; UI subscribes via the
+event bus. Changing any baseline above (e.g. going mobile-ready, adopting the
+declarative settings API at minAppVersion ≥ 1.13) gets its own ADR.

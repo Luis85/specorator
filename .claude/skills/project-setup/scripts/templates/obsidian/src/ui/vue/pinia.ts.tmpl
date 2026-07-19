@@ -1,0 +1,8 @@
+import { createPinia } from 'pinia';
+
+// One Pinia per mounted island keeps leaves isolated (Obsidian can open the
+// same view in several leaves). Switch to a module-level singleton if you want
+// state shared across every open leaf.
+export function createIslandPinia() {
+  return createPinia();
+}

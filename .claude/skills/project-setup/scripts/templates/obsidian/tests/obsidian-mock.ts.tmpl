@@ -1,0 +1,353 @@
+// Minimal test double for the `obsidian` module, served through the
+// resolve.alias in vitest.config.mjs. Only what the scaffold exercises —
+// extend as your plugin grows. Kept dependency-free on purpose: real Obsidian
+// only exists inside the app.
+
+// Message log so tests can assert notices without spying on a constructor.
+// Reset it in beforeEach (`__noticeLog.length = 0`).
+export const __noticeLog: string[] = [];
+
+export class Notice {
+  constructor(
+    public message?: string | DocumentFragment,
+    public timeout?: number,
+  ) {
+    if (typeof message === 'string') __noticeLog.push(message);
+  }
+}
+
+// Minimal in-memory Vault so VaultService (and code that reads/writes notes)
+// runs under tests. Files/folders live in maps; getFileByPath returns a
+// TFile-shaped stub keyed by path.
+export interface TFile {
+  path: string;
+}
+
+class MockVault {
+  private readonly files = new Map<string, string>();
+  private readonly folders = new Set<string>();
+
+  getFileByPath(path: string): TFile | null {
+    return this.files.has(path) ? { path } : null;
+  }
+
+  getFolderByPath(path: string): { path: string } | null {
+    return this.folders.has(path) ? { path } : null;
+  }
+
+  createFolder(path: string): Promise<void> {
+    this.folders.add(path);
+    return Promise.resolve();
+  }
+
+  create(path: string, data: string): Promise<TFile> {
+    // Obsidian's Vault.create rejects when the path already exists — model that so
+    // tests exercise VaultService.append's first-append create-race handling.
+    if (this.files.has(path)) return Promise.reject(new Error(`File already exists: ${path}`));
+    this.files.set(path, data);
+    return Promise.resolve({ path });
+  }
+
+  modify(file: TFile, data: string): Promise<void> {
+    this.files.set(file.path, data);
+    return Promise.resolve();
+  }
+
+  read(file: TFile): Promise<string> {
+    return Promise.resolve(this.files.get(file.path) ?? '');
+  }
+
+  // Atomic read-modify-write, mirroring Obsidian's Vault.process: the whole
+  // transform runs to completion before any other write is observed.
+  process(file: TFile, fn: (data: string) => string): Promise<string> {
+    const next = fn(this.files.get(file.path) ?? '');
+    this.files.set(file.path, next);
+    return Promise.resolve(next);
+  }
+
+  on(name: string, _callback: (...args: unknown[]) => unknown): { name: string } {
+    return { name };
+  }
+}
+
+// Minimal workspace event bus: on() records handlers, trigger() fires them so
+// tests can drive events like 'editor-menu' the way Obsidian would.
+class MockWorkspace {
+  private readonly handlers = new Map<string, Array<(...args: unknown[]) => unknown>>();
+
+  on(name: string, cb: (...args: unknown[]) => unknown): { name: string } {
+    const list = this.handlers.get(name) ?? [];
+    list.push(cb);
+    this.handlers.set(name, list);
+    return { name };
+  }
+
+  trigger(name: string, ...args: unknown[]): void {
+    for (const cb of this.handlers.get(name) ?? []) cb(...args);
+  }
+
+  getActiveFile(): TFile | null {
+    return null;
+  }
+}
+
+// Frontmatter store keyed by file path, so VaultService.updateFrontmatter tests
+// can read back what processFrontMatter wrote. Reset with `__frontmatterStore.clear()`.
+export const __frontmatterStore = new Map<string, Record<string, unknown>>();
+
+class MockFileManager {
+  processFrontMatter(
+    file: TFile,
+    fn: (frontmatter: Record<string, unknown>) => void,
+  ): Promise<void> {
+    const current = __frontmatterStore.get(file.path) ?? {};
+    fn(current);
+    __frontmatterStore.set(file.path, current);
+    return Promise.resolve();
+  }
+}
+
+export class App {
+  vault = new MockVault();
+  workspace = new MockWorkspace();
+  fileManager = new MockFileManager();
+}
+
+export class WorkspaceLeaf {}
+
+// Base class for EditorSuggest-derived autocompleters; subclasses override the
+// trigger/suggestion methods, which tests can call directly on an instance.
+export class EditorSuggest<T> {
+  context: { query: string } | null = null;
+  constructor(public app: App) {}
+  onTrigger(_cursor: unknown, _editor: unknown, _file: unknown): unknown {
+    return null;
+  }
+  getSuggestions(_context: { query: string }): T[] | Promise<T[]> {
+    return [];
+  }
+  renderSuggestion(_value: T, _el: HTMLElement): void {}
+  selectSuggestion(_value: T, _evt: unknown): void {}
+}
+
+// Base class for SuggestModal-derived pickers; subclasses override the three
+// suggestion methods, which tests can call directly on an instance.
+export class SuggestModal<T> {
+  constructor(public app: App) {}
+
+  setPlaceholder(_text: string): void {}
+
+  open(): void {}
+
+  close(): void {}
+
+  getSuggestions(_query: string): T[] | Promise<T[]> {
+    return [];
+  }
+
+  renderSuggestion(_value: T, _el: HTMLElement): void {}
+
+  onChooseSuggestion(_value: T, _evt: unknown): void {}
+}
+
+export class Plugin {
+  app: unknown;
+  manifest: { id: string; version: string };
+
+  constructor(app?: unknown, manifest?: { id: string; version: string }) {
+    this.app = app;
+    this.manifest = manifest ?? { id: 'test-plugin', version: '0.0.0' };
+  }
+
+  loadData(): Promise<unknown> {
+    return Promise.resolve(null);
+  }
+
+  saveData(_data: unknown): Promise<void> {
+    return Promise.resolve();
+  }
+
+  addCommand<T>(command: T): T {
+    return command;
+  }
+
+  addRibbonIcon(
+    _icon: string,
+    _title: string,
+    _callback: (evt: MouseEvent) => unknown,
+  ): HTMLElement {
+    return document.createElement('div');
+  }
+
+  registerView(_type: string, _factory: (leaf: WorkspaceLeaf) => unknown): void {}
+
+  registerEditorSuggest(_suggest: unknown): void {}
+
+  registerMarkdownCodeBlockProcessor(
+    _lang: string,
+    _handler: (source: string, el: HTMLElement, ctx: unknown) => unknown,
+  ): void {}
+
+  registerEditorExtension(_extension: unknown): void {}
+
+  registerDomEvent(el: HTMLElement, type: string, callback: (evt: Event) => unknown): void {
+    el.addEventListener(type, callback);
+  }
+
+  addStatusBarItem(): HTMLElement {
+    return document.createElement('div');
+  }
+
+  addSettingTab(_tab: unknown): void {}
+
+  registerEvent(_eventRef: unknown): void {}
+
+  registerInterval(id: number): number {
+    return id;
+  }
+
+  register(_callback: () => unknown): void {}
+}
+
+export class ItemView {
+  contentEl: HTMLElement = document.createElement('div');
+  containerEl: HTMLElement = document.createElement('div');
+
+  constructor(public leaf: WorkspaceLeaf) {}
+}
+
+export class PluginSettingTab {
+  containerEl: HTMLElement = document.createElement('div');
+
+  constructor(
+    public app: unknown,
+    public plugin: unknown,
+  ) {}
+
+  display(): void {}
+
+  hide(): void {}
+}
+
+export class Modal {
+  contentEl: HTMLElement = document.createElement('div');
+  titleEl: HTMLElement = document.createElement('div');
+
+  constructor(public app: App) {}
+
+  onOpen(): void {}
+
+  onClose(): void {}
+
+  // Attach to the document like the app does, so tests can reach the dialog's
+  // controls with plain DOM queries.
+  open(): void {
+    document.body.appendChild(this.contentEl);
+    this.onOpen();
+  }
+
+  close(): void {
+    this.onClose();
+    this.contentEl.remove();
+  }
+}
+
+interface TextComponentLike {
+  setValue(value: string): TextComponentLike;
+  onChange(callback: (value: string) => unknown): TextComponentLike;
+}
+
+interface ButtonComponentLike {
+  buttonEl: HTMLButtonElement;
+  setButtonText(text: string): ButtonComponentLike;
+  setCta(): ButtonComponentLike;
+  onClick(callback: () => unknown): ButtonComponentLike;
+}
+
+interface ToggleComponentLike {
+  setValue(value: boolean): ToggleComponentLike;
+  onChange(callback: (value: boolean) => unknown): ToggleComponentLike;
+}
+
+export class Setting {
+  settingEl: HTMLElement;
+
+  constructor(containerEl: HTMLElement) {
+    this.settingEl = document.createElement('div');
+    containerEl.appendChild(this.settingEl);
+  }
+
+  setName(_name: string): this {
+    return this;
+  }
+
+  setDesc(_desc: string): this {
+    return this;
+  }
+
+  setHeading(): this {
+    return this;
+  }
+
+  addText(callback: (text: TextComponentLike) => unknown): this {
+    const component: TextComponentLike = {
+      setValue: () => component,
+      onChange: () => component,
+    };
+    callback(component);
+    return this;
+  }
+
+  addButton(callback: (button: ButtonComponentLike) => unknown): this {
+    const buttonEl = document.createElement('button');
+    this.settingEl.appendChild(buttonEl);
+    const component: ButtonComponentLike = {
+      buttonEl,
+      setButtonText: (text) => {
+        buttonEl.textContent = text;
+        return component;
+      },
+      setCta: () => component,
+      onClick: (cb) => {
+        buttonEl.addEventListener('click', () => void cb());
+        return component;
+      },
+    };
+    callback(component);
+    return this;
+  }
+
+  addToggle(callback: (toggle: ToggleComponentLike) => unknown): this {
+    const component: ToggleComponentLike = {
+      setValue: () => component,
+      onChange: () => component,
+    };
+    callback(component);
+    return this;
+  }
+}
+
+export const Platform = {
+  isMobile: false,
+  isDesktop: true,
+  isDesktopApp: true,
+  isMobileApp: false,
+};
+
+export function normalizePath(path: string): string {
+  return path.replace(/\\/g, '/');
+}
+
+// Controllable requestUrl for RequestService tests: set the JSON with
+// __setRequestJson(...) before the call. Returns the Obsidian response shape.
+let __requestJson: unknown = {};
+
+export function __setRequestJson(json: unknown): void {
+  __requestJson = json;
+}
+
+export function requestUrl(
+  _options: unknown,
+): Promise<{ json: unknown; text: string; status: number }> {
+  return Promise.resolve({ json: __requestJson, text: JSON.stringify(__requestJson), status: 200 });
+}

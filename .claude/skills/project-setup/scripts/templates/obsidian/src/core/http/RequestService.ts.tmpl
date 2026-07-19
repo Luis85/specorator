@@ -1,0 +1,11 @@
+import { requestUrl } from 'obsidian';
+
+// Wrapper over Obsidian's requestUrl (NOT fetch): it bypasses CORS and works on
+// desktop and mobile alike. Add auth headers / other verbs here as the plugin
+// needs them.
+export class RequestService {
+  async getJson<T>(url: string): Promise<T> {
+    const response = await requestUrl({ url, method: 'GET' });
+    return response.json as T;
+  }
+}

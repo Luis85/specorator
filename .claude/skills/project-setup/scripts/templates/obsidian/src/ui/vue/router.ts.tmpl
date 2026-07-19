@@ -1,0 +1,16 @@
+import { createMemoryHistory, createRouter } from 'vue-router';
+
+import AboutPage from './pages/AboutPage.vue';
+import HomePage from './pages/HomePage.vue';
+
+// Obsidian views have no URL bar: memory history keeps routing internal to the
+// island, one independent history per mounted view.
+export function createIslandRouter() {
+  return createRouter({
+    history: createMemoryHistory(),
+    routes: [
+      { path: '/', name: 'home', component: HomePage },
+      { path: '/about', name: 'about', component: AboutPage },
+    ],
+  });
+}

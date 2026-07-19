@@ -1,0 +1,19 @@
+import { mount } from '@vue/test-utils';
+import { createPinia } from 'pinia';
+import { describe, expect, it } from 'vitest';
+
+import App from '@/ui/vue/App.vue';
+import { createIslandRouter } from '@/ui/vue/router';
+
+// Guards the memory-history routing the view relies on: pushing the start route
+// resolves and RouterView renders the home page (an empty render here means the
+// initial navigation regressed).
+describe('App routing', () => {
+  it('renders the home route through RouterView', async () => {
+    const router = createIslandRouter();
+    const wrapper = mount(App, { global: { plugins: [createPinia(), router] } });
+    await router.push('/');
+    await router.isReady();
+    expect(wrapper.find('[data-testid="count"]').exists()).toBe(true);
+  });
+});

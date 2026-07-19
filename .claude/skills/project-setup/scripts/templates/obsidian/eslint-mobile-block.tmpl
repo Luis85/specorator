@@ -1,0 +1,23 @@
+  {
+    // Mobile-ready plugin: Node and Electron APIs do not exist on iOS/Android.
+    files: [{{vueSrcFiles}}],
+    rules: {
+      'no-restricted-imports': [
+        'error',
+        {
+          patterns: [
+            {
+              // gitignore-style, so bare names match a path SEGMENT — keep this list
+              // to builtins that aren't also src/core/ dir names (e.g. `events`,
+              // `http`, `timers` would wrongly flag ./core/events, ./core/http). The
+              // esbuild build (browser platform, minimal externals) is the real,
+              // complete guard: any node builtin import fails to resolve loudly.
+              group: ['node:*', 'fs', 'path', 'os', 'child_process', 'electron'],
+              message:
+                'Mobile-ready plugin: Node/Electron modules are unavailable on mobile. Use Vault/adapter APIs, or make the plugin desktop-only (manifest isDesktopOnly).',
+            },
+          ],
+        },
+      ],
+    },
+  },

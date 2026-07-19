@@ -1,0 +1,69 @@
+import type {
+  Editor,
+  EditorPosition,
+  EditorSuggestContext,
+  EditorSuggestTriggerInfo,
+  TFile,
+} from 'obsidian';
+import { EditorSuggest } from 'obsidian';
+
+import type {{pluginClass}} from '../main';
+
+// A small demo dictionary — replace or extend with your own source.
+const EMOJI: Record<string, string> = {
+  bug: '🐛',
+  check: '✅',
+  rocket: '🚀',
+  smile: '🙂',
+  tada: '🎉',
+  warning: '⚠️',
+};
+
+// Pure + unit-testable: the shortcodes whose name starts with `query` (sorted,
+// capped). Keeping the match logic out of the Obsidian class means it tests
+// without an editor.
+export function emojiMatches(query: string): string[] {
+  const q = query.toLowerCase();
+  return Object.keys(EMOJI)
+    .filter((name) => name.startsWith(q))
+    .sort()
+    .slice(0, 20);
+}
+
+// Autocomplete `:shortcode` → emoji as you type. Registered via
+// plugin.registerEditorSuggest (see registerEditorFeatures). The trigger fires on
+// a `:word` at the cursor; selecting replaces it with the emoji.
+export class EmojiSuggest extends EditorSuggest<string> {
+  constructor(plugin: {{pluginClass}}) {
+    super(plugin.app);
+  }
+
+  onTrigger(
+    cursor: EditorPosition,
+    editor: Editor,
+    _file: TFile | null,
+  ): EditorSuggestTriggerInfo | null {
+    const match = /:([a-z0-9_]*)$/i.exec(editor.getLine(cursor.line).slice(0, cursor.ch));
+    if (!match) return null;
+    return {
+      start: { line: cursor.line, ch: cursor.ch - match[0].length },
+      end: cursor,
+      query: match[1] ?? '',
+    };
+  }
+
+  getSuggestions(context: EditorSuggestContext): string[] {
+    return emojiMatches(context.query);
+  }
+
+  renderSuggestion(name: string, el: HTMLElement): void {
+    el.setText(`${EMOJI[name]}  :${name}:`);
+  }
+
+  selectSuggestion(name: string, _evt: MouseEvent | KeyboardEvent): void {
+    const ctx = this.context;
+    const emoji = EMOJI[name];
+    if (!ctx || !emoji) return;
+    ctx.editor.replaceRange(emoji, ctx.start, ctx.end);
+  }
+}

@@ -1,0 +1,50 @@
+# CLAUDE.md
+
+## Project overview
+
+{{name}} (`{{id}}`) is an Obsidian plugin. `src/main.ts` is the entry;
+`manifest.json` + `versions.json` describe the release; `main.js` and
+`styles.css` are build artifacts (never edit or commit them).
+
+**Architecture, services (EventBus/NoticeService/ModalService), boundaries,
+and the add-a-feature checklist live in [`AGENTS.md`](AGENTS.md) — read it
+before structural changes.**
+
+## Commands
+
+Commands are shown for this repo's package manager (`{{run}} …`).
+
+```bash
+{{run}} verify         # the whole local gate set in CI order (run before pushing)
+{{run}} dev            # watch build; deploys into $OBSIDIAN_VAULT (hot reload)
+{{run}} build          # production bundle (main.js + styles.css)
+{{run}} test           # Vitest (jsdom; obsidian aliased to tests/__mocks__/obsidian.ts){{coverageLine}}
+{{run}} typecheck      # {{typecheckTool}} --noEmit
+{{run}} format         # prettier --write{{lintLine}}{{locLine}}{{cssLine}}{{qualityLine}}
+{{run}} check:artifacts # post-build artifact smoke (run after build)
+```
+
+## Development notes
+
+- **Obsidian-native first**: build DOM with `createEl`/`createDiv`/`createSpan`/
+  `setText`/`.empty()`; render markdown through `MarkdownRenderer`. Raw HTML
+  sinks (`innerHTML`/`outerHTML`/`insertAdjacentHTML`) are lint-banned (XSS).
+- No `console.*` in production code (lint-enforced); UI copy is sentence case.
+- User feedback goes through `plugin.notices` / `plugin.modals` — raw
+  `new Notice()` outside NoticeService is lint-banned.
+- Register commands via `plugin.commands` in `src/commands.ts`
+  (`addSimple`/`addChecked`/`addEditor`); keep `main.ts` orchestration-only.
+- {{mobileLine}}
+- {{vueLine}}
+- Style with Obsidian CSS variables in `src/styles.css`; avoid `!important`
+  (ratcheted by `check:css`).
+- **TDD workflow**: for new behavior or bug fixes, write the failing test first
+  under `tests/`, make it pass, then refactor.
+- Ratchets (`check:loc`, `check:css`, `check:quality`, coverage floors) may
+  improve but never regress; lock improvements in with each gate's `--update`
+  in the same PR.
+- Run `{{run}} verify` before pushing.
+
+## Release flow
+
+{{releaseFlow}}

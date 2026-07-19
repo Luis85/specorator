@@ -1,0 +1,46 @@
+<script setup lang="ts">
+import { inject } from 'vue';
+
+import { t } from '../../../i18n/i18n';
+import { PLUGIN_KEY } from '../keys';
+import { useCounterStore } from '../stores/counter';
+
+const counter = useCounterStore();
+const plugin = inject(PLUGIN_KEY);
+
+// Service wiring demo: confirm through ModalService, report through
+// NoticeService (text via t()). Without a plugin (bare component test) it
+// degrades to a plain reset.
+async function resetWithConfirm(): Promise<void> {
+  const confirmed = plugin
+    ? await plugin.modals.confirm(t('modal.resetCounter.title'), t('modal.resetCounter.body'))
+    : true;
+  if (!confirmed) return;
+  counter.reset();
+  plugin?.notices.info(t('notice.counterReset'));
+}
+</script>
+
+<template>
+  <section class="page">
+    <p data-testid="count">Count: {{ counter.count }} (doubled: {{ counter.double }})</p>
+    <div class="actions">
+      <button type="button" data-testid="increment" @click="counter.increment()">Increment</button>
+      <button type="button" data-testid="reset" @click="resetWithConfirm">Reset</button>
+    </div>
+  </section>
+</template>
+
+<style scoped>
+.page {
+  display: flex;
+  flex-direction: column;
+  gap: var(--size-4-2);
+  align-items: flex-start;
+}
+
+.actions {
+  display: flex;
+  gap: var(--size-4-2);
+}
+</style>

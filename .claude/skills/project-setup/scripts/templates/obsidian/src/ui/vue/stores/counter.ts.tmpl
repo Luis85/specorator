@@ -1,0 +1,22 @@
+import { defineStore } from 'pinia';
+import { computed, ref } from 'vue';
+
+// Setup store (recommended for island apps — it can hold watchers, call
+// composables, and inject the router/route, which option stores can't). Map:
+// ref() → state, computed() → getters, function() → actions. Return EVERY state
+// ref or devtools/plugins break; destructure with `storeToRefs()` to keep
+// reactivity (actions can be destructured directly).
+export const useCounterStore = defineStore('counter', () => {
+  const count = ref(0);
+  const double = computed(() => count.value * 2);
+
+  function increment() {
+    count.value += 1;
+  }
+
+  function reset() {
+    count.value = 0;
+  }
+
+  return { count, double, increment, reset };
+});

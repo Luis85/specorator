@@ -1,0 +1,210 @@
+# AGENTS.md
+
+Architecture and working agreements for {{name}} (`{{id}}`), an Obsidian
+plugin. Read this before adding features; commands and gate details live in
+`CLAUDE.md` and `docs/quality-integration-guide.md`.
+
+## Architecture
+
+| Layer | Path                                                | Purpose                                                                                | May import                                             |
+| ----- | --------------------------------------------------- | -------------------------------------------------------------------------------------- | ------------------------------------------------------ |
+| main  | `src/main.ts`, `src/settings.ts`, `src/commands.ts` | Plugin entry + registration. `main.ts` orchestrates only; `commands.ts` wires commands | core, ui                                               |
+| core  | `src/core/`                                         | Provider-neutral services, no UI: commands, event bus, notices, modals                 | nothing app-internal (type-only edges to main allowed) |
+| ui    | `src/ui/`                                           | Views, components, status bar                                                          | core (type-only edges to main allowed)                 |
+
+These boundaries are **machine-enforced**: fallow's zone rules gate
+`boundaryViolations` at 0 in `check:quality`. Keep core leaf-ward — a core
+module that needs something from main/ui receives it as a constructor
+argument or event, never as an import.
+
+`main.ts` is orchestration-only: it constructs the services and delegates
+every registration (`registerCommands`, `registerStatusBar`, `registerExtras`,
+`registerActivity`{{registerViewsNote}}). Add new wiring as its own `register*`
+module rather than growing `onload`. `registerExtras.ts` is a worked sample of two common
+affordances — a ribbon icon that opens a `SuggestModal` picker
+(`GreetingSuggestModal.ts`) and an `editor-menu` context item — kept UI-only
+(the picker hands its choice back through a callback; state lands via
+`saveSettings`).
+
+## Services (owned by the plugin instance)
+
+- **`plugin.commands` — `CommandsService`** (`src/core/commands/`): register
+  commands through `addSimple` / `addChecked` / `addEditor` instead of calling
+  `addCommand` directly. Command ids are **bare** — Obsidian prefixes the plugin
+  id, and both the plugin id and the word "command" in an id are lint-banned;
+  names are sentence case without the plugin name. All command wiring lives in
+  `src/commands.ts`.
+- **`plugin.events` — `EventBus<AppEvents>`** (`src/core/events/`): typed
+  pub/sub scoped to the plugin. Add every event to the `AppEvents` map so
+  payloads stay typed end-to-end. `on()` returns the unsubscribe function —
+  always pair it with a lifecycle hook (`onUnmounted`, `onunload`).
+- **`plugin.notices` — `NoticeService`** (`src/core/notices/`): the single
+  seam for user-facing notices. Raw `new Notice()` is lint-banned outside the
+  service; this keeps notices testable (the test double logs them), durations
+  consistent, and gives i18n one place to land later. UI copy stays sentence
+  case.
+- **`plugin.modals` — `ModalService`** (`src/core/modals/`): async wrappers
+  over Obsidian modals (`await plugin.modals.confirm(title, message)`).
+  Extend it with new dialog kinds instead of scattering `Modal` subclasses.
+- **`plugin.errors` — `ErrorService`** (`src/core/errors/`): the catch/log/notice
+  seam. `run(context, op, opts?)` runs a fallible op and, on throw, logs via
+  `Logger` and shows a notice (returning `undefined`); `wrap(context, fn, opts?)`
+  wraps a callback so a throw or rejection never becomes a dead command. `opts`
+  takes a user `message` and a `level` (`'warn'` for expected/transient failures
+  like an offline check, `'error'` by default). `onload` and the network/vault
+  command demos route through it — reach for this instead of a bare `try/catch`.
+- **`plugin.ribbon` — `RibbonService`** (`src/core/ribbon/`): `add(icon, title, onClick)`
+  over `addRibbonIcon`. Obsidian removes ribbon items on unload (no teardown); the
+  returned element lets you toggle a state class. `registerExtras` uses it for the
+  greeting picker.
+- **`plugin.statusBar` — `StatusBarService`** (`src/core/statusbar/`): `add()`
+  returns a chainable item handle (`setText`/`setTooltip`/`onClick`/`remove`).
+  Clicks bind through `registerDomEvent`, so they are dropped on unload — never a
+  raw `addEventListener`. `registerStatusBar` builds the greeting mirror with it.
+- **`plugin.menus` — `MenuService`** (`src/core/menus/`): `onEditorMenu(cb)` /
+  `onFileMenu(cb)` over the workspace context-menu events, registered through
+  `registerEvent`. Build items in the handler with `menu.addItem(...)`;
+  `registerExtras` adds both an editor and a file item.
+- **`plugin.timers` — `TimersService`** (`src/core/timers/`): `every(ms, cb)` (a
+  `registerInterval` Obsidian clears on unload) and `debounce(ms, fn)` (coalesce a
+  burst — auto-save, search-as-you-type; pending timers are cleared on unload via
+  `plugin.register`). Never a raw `setInterval`/`setTimeout` in feature code.
+- **`plugin.vaultEvents` — `VaultEventsService`** (`src/core/vaultEvents/`): typed
+  `onModify`/`onCreate`/`onDelete`/`onRename` over `vault.on(...)`, each through
+  `registerEvent`. `registerActivity` reacts to all four (modify debounced).
+- **`plugin.logger` — `Logger`** (`src/core/logging/`): the only sanctioned
+  `console` user (raw `console.*` is lint-banned). `debug`/`info` are gated by
+  the `debugLogging` setting; `warn`/`error` always print. `child('name')`
+  namespaces a subsystem.
+- **`plugin.vault` — `VaultService`** (`src/core/vault/`): Vault-API wrapper
+  (preferred over the Adapter API) with `normalizePath` baked in —
+  `ensureFolder` / `read` / `write` without hand-building paths.
+- **`plugin.requests` — `RequestService`** (`src/core/http/`): wraps
+  `requestUrl` (NOT `fetch`) so calls are CORS-safe and work on mobile.
+- **Settings** are owned by `SettingsService` (`src/core/settings/`):
+  `saveSettings(patch)` persists a partial change and emits `settings:changed`.
+  Loading runs `migrateSettings` (`src/settings.ts`) so a vault on an old
+  schema is upgraded, never broken — add a branch per `schemaVersion` bump.
+
+### Editor-surface samples (`src/ui/`, wired by `registerEditorFeatures`)
+
+Four common patterns you'll extend or delete — each keeps its testable logic in a
+pure function so it unit-tests without an editor:
+
+- **`EmojiSuggest`** — a `:shortcode` autocomplete (`EditorSuggest`). The match
+  logic is the pure `emojiMatches(query)`.
+- **`codeBlock`** — a reading-view renderer for fenced ` ```{{id}} ` blocks
+  (`registerMarkdownCodeBlockProcessor`). `renderPanel(source, el)` builds the DOM.
+- **`editorHighlight`** — a live TODO/FIXME/HACK highlighter (CodeMirror 6
+  `ViewPlugin` via `registerEditorExtension`; `@codemirror/*` is external at
+  runtime). The scan is the pure `markerRanges(text)`.
+- A **"stamp modified date"** command writing note frontmatter through
+  `plugin.vault.updateFrontmatter(path, patch)` (atomic `processFrontMatter`).
+
+`main.ts` is orchestration-only: it constructs these services and wraps
+`onload` in the `ErrorService` boundary (`this.errors.run('load the plugin', …)`)
+— a thrown load reports via `logger` + `notices` and degrades, instead of
+leaving Obsidian half-registered.
+
+**i18n:** all user-facing text goes through `t('key')` (`src/i18n/`), backed by
+`en.json`. A literal or template string passed to `plugin.notices.info/error`
+is lint-banned — add a key and interpolate with `t('key', { name })`. Add
+locales by keying on Obsidian's `getLanguage()` with an `en` fallback.
+
+**`{{run}} verify`** runs the whole local gate chain in CI order — one command
+before pushing. If you enabled the **opt-in** `.claude/` SessionStart hook at
+scaffold time, it installs deps so a fresh Claude Code web session is ready.
+
+## Commands (`src/commands.ts`)
+
+Pick the helper by how the command should behave:
+
+| Helper             | Obsidian mechanism    | Use when                                                     |
+| ------------------ | --------------------- | ------------------------------------------------------------ |
+| `addSimple`        | `callback`            | The command is always runnable.                              |
+| `addChecked`       | `checkCallback`       | The command only applies in some state — it hides otherwise. |
+| `addEditor`        | `editorCallback`      | The command acts on the active Markdown editor.              |
+| `addEditorChecked` | `editorCheckCallback` | An editor command that is also conditional.                  |
+
+`checkCallback`/`editorCheckCallback` are called twice: with `checking: true`
+to ask "does this apply?" (return a boolean, do nothing) and `checking: false`
+to run it. The `addChecked`/`addEditorChecked` wrappers collapse that into one
+`when()` predicate plus a `run()`. Command ids are stable after release (they
+key user hotkeys), and the service intentionally forbids caller-supplied
+hotkeys — hardcoded defaults collide across plugins.
+
+## Event flow (worked example)
+
+Settings save → `saveSettings()` emits `settings:changed` on the bus → the
+status-bar item and (Vue) the `useGreeting` composable update. Follow this
+shape for new cross-cutting state: emit from the owner, subscribe where
+rendered, unsubscribe on teardown (`onUnmounted` in components; plugin-lifetime
+subscriptions like the status bar need no teardown — the bus dies on unload).
+
+{{uiSection}}
+
+## Testing strategy
+
+- One Vitest lane (jsdom). `obsidian` resolves to the test double in
+  `tests/__mocks__/obsidian.ts`; `tests/setup.ts` polyfills Obsidian's
+  `HTMLElement` helpers (`createEl`, `empty`, …). Extend both as you use more
+  API surface.
+- Services get plain unit tests.{{componentTesting}}
+- The mock `Modal` attaches to `document.body` on open, so dialog flows are
+  testable with DOM queries; the mock `Notice` logs to `__noticeLog`.
+- TDD: failing test first in the mirrored `tests/` path, then the
+  implementation, then refactor.
+
+## Adding a feature (checklist)
+
+1. Model state/events first: extend settings (`migrateSettings` keeps old vaults
+   safe) and `AppEvents` if other surfaces must react.
+2. Put logic in `src/core/` (unit-tested), rendering in `src/ui/`.
+3. Register commands in `src/commands.ts` via `plugin.commands`; register
+   views/listeners in their `register*` module.
+4. User feedback goes through `plugin.notices` / `plugin.modals`; wrap fallible
+   async work (I/O, network) in `plugin.errors.run` / `plugin.errors.wrap`.
+5. Style via `src/styles.css` (Obsidian CSS variables, no `!important`) or
+   scoped SFC styles.
+6. Run the local gate set before pushing (see `CLAUDE.md`).
+
+## Lifecycle & cleanup (Obsidian rules)
+
+Let Obsidian own teardown — it auto-cleans anything registered through the
+plugin, and manual cleanup is where leaks and layout bugs come from.
+
+- **Register, don't hand-roll.** Obsidian events → `this.registerEvent(...)`
+  (see `registerExtras.ts` for the `editor-menu` handler); DOM listeners →
+  `this.registerDomEvent(el, type, cb)` (see `statusBar.ts`);
+  timers → `this.registerInterval(window.setInterval(...))`; commands/views via
+  `addCommand`/`registerView`. All are removed on unload — a raw
+  `addEventListener`/`setInterval`/`vault.on()` leaks past unload.
+- **Don't detach leaves in `onunload()`.** On update, Obsidian reinitializes
+  open leaves at their position; detaching them breaks the user's layout. Just
+  register the view type. (The scaffold has no `onunload` for this reason.)
+- **Don't store view instances.** Look them up on demand —
+  `app.workspace.getLeavesOfType(TYPE)` (see `registerViews.ts`) — never keep a
+  `this.view = leaf.view` reference (stale state + leaks).
+- **Use `this.app`, not the global `app`/`window.app`** (debug-only), and reach
+  the active view via `app.workspace.getActiveViewOfType(...)`, not
+  `workspace.activeLeaf`.
+
+## Files & paths
+
+- `normalizePath()` every constructed/user-supplied vault path (cross-platform).
+- Prefer the Vault API (`vault.getFileByPath`, `vault.process`,
+  `fileManager.processFrontMatter`) over the Adapter API and over iterating all
+  files; use the Editor API for the active note.
+
+## Constraints worth remembering
+
+- {{mobileLine}}
+- Also avoid regex lookbehind (unsupported on some mobile engines).
+- Build artifacts (`main.js`, `styles.css`) are generated — never edit or
+  commit them; `src/styles.css` is the stylesheet source.
+- `manifest.json`/`versions.json` change only through `npm version` (the
+  `sync-version` script) — `check:artifacts` fails on desync. Release tags must
+  equal the version with **no** leading `v` (`.npmrc` sets
+  `tag-version-prefix=""`).
+- Ratchets (`check:loc`, `check:css`, `check:quality`, coverage floors) only
+  tighten: lock improvements in with each gate's `--update` in the same PR.

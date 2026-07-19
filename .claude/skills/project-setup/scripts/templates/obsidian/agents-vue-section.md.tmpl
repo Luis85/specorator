@@ -1,0 +1,22 @@
+## Vue island (`src/ui/`)
+
+One Vue app per leaf. `VueView.onOpen` creates the app, installs a **fresh
+`createPinia()` and memory-history router per mount** (never module-level
+singletons — a reopened leaf would inherit stale state), pushes the start route
+(`await router.push('/')` — memory history has no initial navigation) so the
+first paint renders the matched route, provides the `markRaw`'d plugin under
+`PLUGIN_KEY`, and mounts. `onClose` calls
+`app.unmount()` + `contentEl.empty()` — the #1 Obsidian+Vue leak is a view that
+never unmounts.
+
+- Use `<script setup lang="ts">`; type props with `defineProps<Props>()` and
+  emits with the tuple form; template refs via `useTemplateRef()`.
+- Inject the plugin through the typed `PLUGIN_KEY` (`keys.ts`) — don't
+  prop-drill it.
+- **Pinia**: setup stores (`counter.ts`); return every state ref and
+  destructure with `storeToRefs()` to keep reactivity (actions destructure
+  directly).
+- **Composables** that create effects outliving a component wrap them in
+  `effectScope()` / `onScopeDispose()`; `useGreeting` shows the simpler case —
+  an event subscription cleaned up in `onUnmounted`.
+- SFC `<style scoped>` blocks are merged into `styles.css` by the build.

@@ -12,18 +12,29 @@ const ENTRY_BASENAMES = ['index', 'main', 'app'];
 const ENTRY_EXTS = ['ts', 'tsx', 'mts', 'cts', 'js', 'jsx', 'mjs', 'cjs'];
 // Common source dirs (src, lib, app, source) + repo root.
 const ENTRY_DIRS = ['src', 'lib', 'app', 'source', ''];
-const ENTRY_CANDIDATES = ENTRY_DIRS.flatMap((d) =>
-  ENTRY_BASENAMES.flatMap((b) => ENTRY_EXTS.map((e) => (d ? `${d}/${b}.${e}` : `${b}.${e}`))),
-);
+const candidatesFor = (basenames) =>
+  ENTRY_DIRS.flatMap((d) => basenames.flatMap((b) => ENTRY_EXTS.map((e) => (d ? `${d}/${b}.${e}` : `${b}.${e}`))));
+const ENTRY_CANDIDATES = candidatesFor(ENTRY_BASENAMES);
 // `main`/`module` often point at BUILD output, not source — skip those roots.
 const BUILD_DIRS = new Set(['dist', 'build', 'out', 'esm', 'cjs', 'umd', 'lib-esm', 'node_modules', '.next']);
 
 export function detectEntry(cwd) {
   const pkg = readJsonSafe(join(cwd, 'package.json'));
-  const strip = (p) => p.replace(/^\.\//, ''); // normalize a leading ./ so roots derive correctly
+  // Normalize a leading ./ or / so roots derive correctly and the entry stays
+  // project-relative: a leading-slash "source":"/src/main.ts" would otherwise be
+  // returned verbatim and become an absolute esbuild/fallow target at the FS root.
+  const strip = (p) => p.replace(/^\.?\/+/, '');
+  // A package.json path field is untrusted: reject `..` segments so a crafted
+  // `source`/`main` (e.g. "../shared/main.ts") can't make the generated build
+  // bundle — or the ratchets scan — files outside the project. (Leading slashes
+  // are stripped above, so the existence check and return stay under cwd.)
+  const withinProject = (p) => !p.split('/').includes('..');
   // A bundler `source` field is unambiguously the source entry.
   const src = pkg?.source;
-  if (typeof src === 'string' && existsSync(join(cwd, src))) return strip(src);
+  if (typeof src === 'string') {
+    const p = strip(src);
+    if (withinProject(p) && existsSync(join(cwd, p))) return p;
+  }
   // The first existing common source entry (src/lib/app/source/root).
   for (const c of ENTRY_CANDIDATES) if (existsSync(join(cwd, c))) return c;
   // `module`/`main` may name the source for a build-less package — use it if it
@@ -32,7 +43,7 @@ export function detectEntry(cwd) {
     const raw = pkg?.[field];
     if (typeof raw !== 'string') continue;
     const p = strip(raw);
-    if (existsSync(join(cwd, p)) && !BUILD_DIRS.has(p.split('/')[0])) return p;
+    if (withinProject(p) && existsSync(join(cwd, p)) && !BUILD_DIRS.has(p.split('/')[0])) return p;
   }
   return 'src/index.ts';
 }
@@ -146,6 +157,8 @@ export function detect(cwd) {
   const deps = { ...(pkg.dependencies ?? {}), ...(pkg.devDependencies ?? {}) };
   const has = (name) => Object.prototype.hasOwnProperty.call(deps, name);
   const testFramework = has('vitest') ? 'vitest' : has('jest') ? 'jest' : null;
+  const entry = detectEntry(cwd);
+  const entryExists = existsSync(join(cwd, entry));
   return {
     packageManager: detectPackageManager(cwd),
     typescript: has('typescript') || existsSync(join(cwd, 'tsconfig.json')),
@@ -155,9 +168,12 @@ export function detect(cwd) {
     git: existsSync(join(cwd, '.git')),
     github: detectGithubRemote(cwd),
     defaultBranch: detectDefaultBranch(cwd),
-    entry: detectEntry(cwd),
-    // Brownfield collision signals — planners turn these into user-facing notices
-    // instead of silently no-op'ing on a pre-existing config/script/workflow.
+    entry,
+    // detectEntry returns src/index.ts as a syntactic fallback even when nothing
+    // exists; entryExists lets the fallow planner zone only a real entry.
+    entryExists,
+    // Collision signals — planners turn these into user-facing notices instead of
+    // silently no-op'ing on a pre-existing config/script/workflow.
     scripts: pkg.scripts ?? {},
     legacyEslintrc: existsAny(cwd, ESLINTRC),
     eslintFlatConfig: existsAny(cwd, ESLINT_FLAT),
@@ -165,15 +181,36 @@ export function detect(cwd) {
     // generated .fallowrc.json would take precedence and shadow it, so planFallow
     // stands down and ratchets THEIR config instead.
     fallowConfig: existsAny(cwd, FALLOW_CONFIGS),
+    // The .fallowrc.json form the obsidian scaffold writes (skip-if-exists),
+    // parsed so planFallow can notice a stale one (e.g. from a prior generic run)
+    // that lacks the obsidian main/core/ui boundary zones.
+    fallowrcJson: readJsonSafe(join(cwd, '.fallowrc.json')),
+    // Existing .npmrc text — the obsidian .npmrc write is skip-if-exists, so a
+    // pre-existing file without tag-version-prefix silently drops the setting
+    // Obsidian's release matcher needs; surfaced so planProjectDocs can notice.
+    npmrc: existsSync(join(cwd, '.npmrc')) ? readFileSync(join(cwd, '.npmrc'), 'utf8') : null,
     // The same-name config we write (skip-if-exists) — flagged only when it's the
     // user's own (no marker), so a re-apply of our generated one won't false-fire.
     eslintConfigMjs: hasUnmarkedConfig(cwd, ['eslint.config.mjs']),
-    ciWorkflow: existsSync(join(cwd, '.github', 'workflows', 'ci.yml')),
+    ciWorkflow: hasUnmarkedConfig(cwd, ['.github/workflows/ci.yml']),
+    releaseWorkflow: hasUnmarkedConfig(cwd, ['.github/workflows/release.yml']),
     // Jest also reads a `jest` key in package.json — writing jest.config.mjs beside
     // it makes Jest 30 error "Multiple configurations found".
     jestConfig: hasUnmarkedConfig(cwd, JEST_CONFIGS) || pkg.jest != null,
     vitestConfig: hasUnmarkedConfig(cwd, VITEST_CONFIGS),
     viteConfig: existsAny(cwd, VITE_CONFIGS),
+    // Existing .claude/settings.json (Claude Code hooks + permissions), so
+    // planClaudeSettings can reconcile OUR engine-owned hook group on re-apply
+    // (a changed package manager or a toggled-off hook) instead of unioning a
+    // stale one — while preserving the user's own hooks and other settings keys.
+    claudeSettings: readJsonSafe(join(cwd, '.claude', 'settings.json')),
+    // The existing manifest's version (the manifest owns the plugin version). On a
+    // re-apply after `npm version`, this keeps package.json synced to it instead of
+    // being reset to the initial constant (which would desync check:artifacts).
+    manifestVersion: (() => {
+      const v = readJsonSafe(join(cwd, 'manifest.json'))?.version;
+      return typeof v === 'string' && /^\d+\.\d+\.\d+/.test(v) ? v : null;
+    })(),
     docs: {
       context: existsSync(join(cwd, 'CONTEXT.md')),
       dir: existsSync(join(cwd, 'docs')),

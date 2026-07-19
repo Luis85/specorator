@@ -1,19 +1,24 @@
 // .claude/skills/project-setup/scripts/lib/plan.mjs
 import {
   planCi, planDocs, planEslint, planFallow, planGithubMcp,
-  planInstall, planLoc, planReport, planTest,
+  planInstall, planLoc, planPrds, planReport, planTest,
 } from './harness.mjs';
+import { obsidianEntry, planObsidian } from './obsidian.mjs';
 import { standsDownTestConfig } from './testConfig.mjs';
 
-const ENGINE_VERSION = '0.1.0';
+const ENGINE_VERSION = '0.2.0';
 
-function planGitignore() {
+function planGitignore(options) {
+  const lines = ['.project-setup-backup/', '.fallow/', 'coverage/'];
+  // Obsidian build artifacts (main.js/main.css/styles.css are generated), the
+  // per-vault settings file, and the local vault pointer never belong in git.
+  if (options?.obsidian) lines.push('node_modules/', 'main.js', 'main.css', 'styles.css', 'data.json', '.env.local');
   return [
     {
       type: 'mergeText',
       path: '.gitignore',
       marker: 'project-setup',
-      lines: ['.project-setup-backup/', '.fallow/', 'coverage/'],
+      lines,
     },
   ];
 }
@@ -38,6 +43,20 @@ function planRunReport(options) {
 }
 
 function planHarness(options, state) {
+  // Obsidian mode swaps the generic eslint/test planners for the plugin-aware
+  // ones inside planObsidian; the ratchets, docs, CI, and install are shared.
+  if (options.obsidian) {
+    return [
+      ...planObsidian(options, state),
+      ...planFallow(options, state),
+      ...planLoc(options, state),
+      ...planReport(options, state),
+      ...planDocs(options, state),
+      ...planCi(options, state),
+      ...planGithubMcp(options, state),
+      ...planInstall(options, state), // last: deps in package.json first
+    ];
+  }
   return [
     ...planEslint(options, state),
     ...planFallow(options, state),
@@ -62,9 +81,17 @@ export function effectiveOptions(options, state) {
 // Ordered composition of pure sub-planners.
 export function plan(options, state) {
   const opts = effectiveOptions(options, state);
+  // Obsidian mode is greenfield: the entry is always src/main.ts, which the shared
+  // fallow/LOC planners target. A fresh repo's detected entry may be a src/index.ts
+  // fallback that never gets written, so override it (and mark it existing — the
+  // scaffold writes it) for those planners.
+  const st = opts.obsidian ? { ...state, entry: obsidianEntry(), entryExists: true } : state;
   return [
-    ...planGitignore(opts, state),
+    ...planGitignore(opts, st),
     ...planRunReport(opts),
-    ...planHarness(opts, state),
+    ...planHarness(opts, st),
+    // Product-vision PRDs from the setup questionnaire — mode-agnostic, so both
+    // the Obsidian and generic harnesses get docs/prds/ when answers include them.
+    ...planPrds(opts, st),
   ];
 }

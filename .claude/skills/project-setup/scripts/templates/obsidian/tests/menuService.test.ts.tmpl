@@ -1,0 +1,25 @@
+import { describe, expect, it, vi } from 'vitest';
+
+import { MenuService } from '@/core/menus/MenuService';
+
+function fakePlugin() {
+  const on = vi.fn((name: string, cb: (...args: unknown[]) => unknown) => ({ name, cb }));
+  const registerEvent = vi.fn();
+  return { plugin: { app: { workspace: { on } }, registerEvent }, on, registerEvent };
+}
+
+describe('MenuService', () => {
+  it('subscribes editor-menu and file-menu through registerEvent', () => {
+    const { plugin, on, registerEvent } = fakePlugin();
+    const svc = new MenuService(plugin as never);
+    const editorHandler = vi.fn();
+    const fileHandler = vi.fn();
+
+    svc.onEditorMenu(editorHandler);
+    svc.onFileMenu(fileHandler);
+
+    expect(on).toHaveBeenCalledWith('editor-menu', editorHandler);
+    expect(on).toHaveBeenCalledWith('file-menu', fileHandler);
+    expect(registerEvent).toHaveBeenCalledTimes(2);
+  });
+});

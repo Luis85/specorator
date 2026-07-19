@@ -1,0 +1,40 @@
+import { describe, expect, it, vi } from 'vitest';
+
+import { StatusBarService } from '@/core/statusbar/StatusBarService';
+
+// The real Plugin.addStatusBarItem returns an HTMLElement and registerDomEvent
+// binds a listener Obsidian drops on unload; the fakes mirror both.
+function fakePlugin() {
+  const el = document.createElement('div');
+  const addStatusBarItem = vi.fn(() => el);
+  const registerDomEvent = vi.fn((target: HTMLElement, type: string, cb: (e: Event) => unknown) =>
+    target.addEventListener(type, cb),
+  );
+  return { plugin: { addStatusBarItem, registerDomEvent }, el, addStatusBarItem, registerDomEvent };
+}
+
+describe('StatusBarService', () => {
+  it('creates an item and sets text/tooltip chainably', () => {
+    const { plugin, el } = fakePlugin();
+
+    const item = new StatusBarService(plugin as never).add().setText('Hi').setTooltip('Greeting');
+
+    expect(item.el).toBe(el);
+    expect(el.textContent).toBe('Hi');
+    expect(el.getAttribute('aria-label')).toBe('Greeting');
+  });
+
+  it('binds clicks through registerDomEvent (auto-cleaned) and removes the item', () => {
+    const { plugin, el, registerDomEvent } = fakePlugin();
+    const onClick = vi.fn();
+
+    const item = new StatusBarService(plugin as never).add().onClick(onClick);
+    expect(registerDomEvent).toHaveBeenCalledWith(el, 'click', onClick);
+    el.dispatchEvent(new Event('click'));
+    expect(onClick).toHaveBeenCalledTimes(1);
+
+    document.body.appendChild(el);
+    item.remove();
+    expect(el.isConnected).toBe(false);
+  });
+});

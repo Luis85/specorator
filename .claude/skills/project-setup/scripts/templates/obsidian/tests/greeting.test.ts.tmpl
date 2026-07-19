@@ -1,0 +1,34 @@
+import { mount } from '@vue/test-utils';
+import { describe, expect, it } from 'vitest';
+import { nextTick } from 'vue';
+
+import type { AppEvents } from '@/core/events/AppEvents';
+import { EventBus } from '@/core/events/EventBus';
+import { DEFAULT_SETTINGS } from '@/settings';
+import { PLUGIN_KEY } from '@/ui/vue/keys';
+import AboutPage from '@/ui/vue/pages/AboutPage.vue';
+
+// End-to-end over the event bus: a settings:changed emission updates the
+// mounted view, and unmounting drops the subscription.
+describe('AboutPage greeting', () => {
+  it('follows settings:changed events and unsubscribes on unmount', async () => {
+    const events = new EventBus<AppEvents>();
+    const plugin = {
+      events,
+      settings: { ...DEFAULT_SETTINGS, greeting: 'Hello' },
+      manifest: { id: 'test', version: '1.2.3' },
+    };
+    const wrapper = mount(AboutPage, {
+      global: { provide: { [PLUGIN_KEY as symbol]: plugin } },
+    });
+    expect(wrapper.get('[data-testid="greeting"]').text()).toBe('Hello');
+
+    events.emit('settings:changed', { settings: { ...DEFAULT_SETTINGS, greeting: 'Servus' } });
+    await nextTick();
+    expect(wrapper.get('[data-testid="greeting"]').text()).toBe('Servus');
+
+    wrapper.unmount();
+    // Emitting after unmount must not throw — the handler set is empty again.
+    events.emit('settings:changed', { settings: { ...DEFAULT_SETTINGS, greeting: 'Gone' } });
+  });
+});

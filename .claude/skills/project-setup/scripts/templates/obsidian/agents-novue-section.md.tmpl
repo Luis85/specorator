@@ -1,0 +1,6 @@
+## UI (`src/ui/`)
+
+UI is built imperatively with Obsidian's `createEl`/`createDiv`/`setText`
+helpers (never `innerHTML`). Keep rendering in `src/ui/` and logic in
+`src/core/` so views stay thin, and wire DOM listeners through
+`registerDomEvent` (see `statusBar.ts`) so they clean up on unload.

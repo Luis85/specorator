@@ -1,0 +1,73 @@
+import type { App } from 'obsidian';
+import { PluginSettingTab, Setting } from 'obsidian';
+
+import type {{pluginClass}} from './main';
+
+const CURRENT_SCHEMA_VERSION = 1;
+
+export interface {{settingsType}} {
+  schemaVersion: number;
+  greeting: string;
+  debugLogging: boolean;
+}
+
+export const DEFAULT_SETTINGS: {{settingsType}} = {
+  schemaVersion: CURRENT_SCHEMA_VERSION,
+  greeting: 'Hello from {{id}}',
+  debugLogging: false,
+};
+
+const asString = (value: unknown, fallback: string): string =>
+  typeof value === 'string' ? value : fallback;
+const asBoolean = (value: unknown, fallback: boolean): boolean =>
+  typeof value === 'boolean' ? value : fallback;
+
+// Coerce persisted data of ANY past shape into the current settings, so a vault
+// on an old version never breaks. Add a branch per schema bump; each field is
+// validated, and unknown keys are dropped. SettingsService runs this on load.
+export function migrateSettings(raw: unknown): {{settingsType}} {
+  const data = (raw ?? {}) as Record<string, unknown>;
+  return {
+    schemaVersion: CURRENT_SCHEMA_VERSION,
+    // v0 (pre-schemaVersion): the greeting was stored under `message`.
+    greeting: asString(data.greeting, asString(data.message, DEFAULT_SETTINGS.greeting)),
+    debugLogging: asBoolean(data.debugLogging, DEFAULT_SETTINGS.debugLogging),
+  };
+}
+
+export class {{settingsTab}} extends PluginSettingTab {
+  constructor(
+    app: App,
+    private readonly plugin: {{pluginClass}},
+  ) {
+    super(app, plugin);
+  }
+
+  display(): void {
+    this.containerEl.empty();
+
+    new Setting(this.containerEl)
+      .setName('Greeting')
+      .setDesc('Shown by the sample command and view.')
+      .addText((text) =>
+        // Route the save through ErrorService so a rejected write (adapter/disk
+        // failure) surfaces a notice instead of an unhandled rejection.
+        text.setValue(this.plugin.settings.greeting).onChange((value) => {
+          void this.plugin.errors.run('save the greeting', () =>
+            this.plugin.saveSettings({ greeting: value }),
+          );
+        }),
+      );
+
+    new Setting(this.containerEl)
+      .setName('Debug logging')
+      .setDesc('Log debug and info messages to the developer console.')
+      .addToggle((toggle) =>
+        toggle.setValue(this.plugin.settings.debugLogging).onChange((value) => {
+          void this.plugin.errors.run('save the debug-logging setting', () =>
+            this.plugin.saveSettings({ debugLogging: value }),
+          );
+        }),
+      );
+  }
+}

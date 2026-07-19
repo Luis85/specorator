@@ -1,0 +1,63 @@
+import { describe, expect, it, vi } from 'vitest';
+
+import { appendGreetingToLog } from '@/commands';
+
+// A faithful fake of the slice of the plugin appendGreetingToLog touches. run()
+// mirrors ErrorService.run: it returns the op's value, or undefined plus an
+// error notice when the op throws.
+function fakePlugin(readImpl: () => Promise<string | null>) {
+  const appended: string[] = [];
+  const notices = { info: vi.fn(), error: vi.fn() };
+  const plugin = {
+    settings: { greeting: 'Hello' },
+    notices,
+    logger: { debug: vi.fn() },
+    vault: {
+      ensureFolder: vi.fn(async () => {}),
+      append: vi.fn(async (_path: string, data: string) => {
+        appended.push(data);
+      }),
+      read: vi.fn(readImpl),
+    },
+    errors: {
+      run: vi.fn(async (_context: string, op: () => Promise<unknown>) => {
+        try {
+          return await op();
+        } catch {
+          notices.error('failed');
+          return undefined;
+        }
+      }),
+    },
+  };
+  return { plugin, appended, notices };
+}
+
+describe('appendGreetingToLog', () => {
+  it('reports the running total when the read-back succeeds', async () => {
+    const { plugin, appended, notices } = fakePlugin(() => Promise.resolve('Hello\n'));
+    await appendGreetingToLog(plugin as never);
+    expect(appended).toEqual(['Hello\n']);
+    expect(notices.info).toHaveBeenCalledOnce();
+    expect(notices.error).not.toHaveBeenCalled();
+  });
+
+  it('still reports success (not failure) when the post-write read rejects', async () => {
+    // The append already committed; a read-back failure must not report the
+    // command as failed, or a user retry would append the greeting twice.
+    const { plugin, appended, notices } = fakePlugin(() => Promise.reject(new Error('read blip')));
+    await appendGreetingToLog(plugin as never);
+    expect(appended).toEqual(['Hello\n']); // appended exactly once
+    expect(notices.info).toHaveBeenCalledOnce(); // success still reported
+    expect(notices.error).not.toHaveBeenCalled(); // NOT flagged as failed
+  });
+
+  it('errors without appending when no greeting is set', async () => {
+    const { plugin, appended, notices } = fakePlugin(() => Promise.resolve(''));
+    plugin.settings.greeting = '   ';
+    await appendGreetingToLog(plugin as never);
+    expect(appended).toEqual([]);
+    expect(notices.error).toHaveBeenCalledOnce();
+    expect(notices.info).not.toHaveBeenCalled();
+  });
+});

@@ -96,7 +96,7 @@ test('planEslint installs the test-lint plugin dep it imports (so lint resolves 
   const jestDeps = planEslint({ testFramework: 'jest', guardrails: { eslintSeverityStaging: true } }).find((a) => a.type === 'mergeJson').patch.devDependencies;
   assert.ok('eslint-plugin-jest' in jestDeps);
   const vitestDeps = planEslint({ testFramework: 'vitest', guardrails: { eslintSeverityStaging: true } }).find((a) => a.type === 'mergeJson').patch.devDependencies;
-  assert.ok('eslint-plugin-vitest' in vitestDeps);
+  assert.ok('@vitest/eslint-plugin' in vitestDeps);
 });
 
 test('planEslint emits no collision notice on a clean greenfield repo', () => {
@@ -118,7 +118,7 @@ test('planEslint wires the test-lint plugin for the resolved framework', () => {
   assert.match(jestCfg.content, /eslint-plugin-jest/);
   const vitestCfg = planEslint({ testFramework: 'vitest', guardrails: { eslintSeverityStaging: true } })
     .find((a) => a.path === 'eslint.config.mjs');
-  assert.match(vitestCfg.content, /eslint-plugin-vitest/);
+  assert.match(vitestCfg.content, /@vitest\/eslint-plugin/);
 });
 
 test('planEslint(vitest) declares the Vitest globals so no-undef passes on describe/it/expect', () => {

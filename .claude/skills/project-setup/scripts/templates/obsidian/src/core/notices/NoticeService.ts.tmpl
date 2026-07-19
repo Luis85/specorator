@@ -1,0 +1,21 @@
+import { Notice } from 'obsidian';
+
+// The single seam for user-facing notices: consistent durations, one place to
+// route through i18n later, and something tests can assert against. Raw
+// `new Notice()` anywhere else in src/ is lint-banned (see eslint.config.mjs).
+export class NoticeService {
+  constructor(private readonly timeoutMs = 5000) {}
+
+  info(message: string): void {
+    this.show(message, this.timeoutMs);
+  }
+
+  // Errors linger longer so they are not missed mid-flow.
+  error(message: string): void {
+    this.show(`Error: ${message}`, 10_000);
+  }
+
+  private show(message: string, timeoutMs: number): void {
+    new Notice(message, timeoutMs);
+  }
+}

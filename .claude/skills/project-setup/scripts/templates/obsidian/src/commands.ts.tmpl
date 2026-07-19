@@ -1,0 +1,116 @@
+import { t } from './i18n/i18n';
+import type {{pluginClass}} from './main';
+{{activateViewImport}}
+// All command wiring lives here so main.ts stays orchestration-only. Each
+// helper demonstrates one Obsidian command type; see AGENTS.md for when to use
+// which. User-facing text goes through t() (src/i18n).
+export function registerCommands(plugin: {{pluginClass}}): void {
+  const log = plugin.logger.child('commands');
+
+  // callback — always available.
+  plugin.commands.addSimple('show-greeting', 'Show greeting', () => {
+    const greeting = plugin.settings.greeting.trim();
+    if (greeting) plugin.notices.info(greeting);
+    else plugin.notices.error(t('notice.setGreetingFirst'));
+  });
+
+  // editorCallback — only offered with a Markdown editor focused.
+  plugin.commands.addEditor('insert-greeting', 'Insert greeting at cursor', (editor) => {
+    editor.replaceSelection(plugin.settings.greeting);
+  });
+
+  // editorCheckCallback — an editor command that is also conditional: hidden
+  // unless the editor has a selection.
+  plugin.commands.addEditorChecked(
+    'uppercase-selection',
+    'Uppercase the selection',
+    (editor) => editor.getSelection().length > 0,
+    (editor) => {
+      editor.replaceSelection(editor.getSelection().toUpperCase());
+    },
+  );
+
+  // checkCallback — hidden from the palette unless a greeting is set.
+  plugin.commands.addChecked(
+    'clear-greeting',
+    'Clear greeting',
+    () => plugin.settings.greeting.trim().length > 0,
+    () => {
+      // Route the fallible confirm+save through ErrorService so a rejected save
+      // surfaces a notice instead of an unhandled rejection swallowed by Obsidian.
+      void plugin.errors.run('clear the greeting', () => clearGreeting(plugin));
+    },
+  );
+
+  // VaultService demo — read + write a note through the Vault API.
+  plugin.commands.addSimple('append-greeting-to-log', 'Append greeting to log note', () => {
+    void appendGreetingToLog(plugin);
+  });
+
+  // RequestService + ErrorService demo — fetch JSON over requestUrl (CORS-safe,
+  // mobile-friendly), with the whole callback wrapped so a network failure logs
+  // and notices instead of becoming a dead command.
+  plugin.commands.addSimple(
+    'check-latest-obsidian',
+    'Check the latest Obsidian release',
+    plugin.errors.wrap('check the latest Obsidian release', () => checkLatestObsidian(plugin), {
+      message: t('notice.updateFailed'),
+      level: 'warn', // a network blip is expected, not a code fault
+    }),
+  );
+{{openViewCommand}}
+  log.debug('commands registered');
+}
+
+async function clearGreeting(plugin: {{pluginClass}}): Promise<void> {
+  const confirmed = await plugin.modals.confirm(
+    t('modal.clearGreeting.title'),
+    t('modal.clearGreeting.body'),
+  );
+  if (!confirmed) return;
+  await plugin.saveSettings({ greeting: '' });
+  plugin.notices.info(t('notice.greetingCleared'));
+}
+
+// Exported for a focused regression test (append commits, read-back fails).
+export async function appendGreetingToLog(plugin: {{pluginClass}}): Promise<void> {
+  const greeting = plugin.settings.greeting.trim();
+  if (!greeting) {
+    plugin.notices.error(t('notice.setGreetingFirst'));
+    return;
+  }
+  const path = 'logs/greeting-log.md';
+  // Guard ONLY the committed write: run() catches a throw, logs, shows the error
+  // notice, and returns undefined. The write can fail (permissions, a locked
+  // file) — if it does, stop before reporting success.
+  const written = await plugin.errors.run('append the greeting to the log note', async () => {
+    await plugin.vault.ensureFolder('logs');
+    // Atomic append: a double-tapped hotkey must not read-then-write the same
+    // content twice and drop a line (see VaultService.append / Vault.process).
+    await plugin.vault.append(path, `${greeting}\n`);
+    return true;
+  });
+  if (!written) return;
+  plugin.logger.debug('appended greeting', path);
+  // Best-effort running total: the append is already committed, so a read-back
+  // failure must NOT report the command as failed (a retry would append the same
+  // greeting again, duplicating the line). Degrade to a count-less notice.
+  const total = await plugin.vault
+    .read(path)
+    .then((content) => content?.split('\n').filter(Boolean).length ?? null)
+    .catch(() => null);
+  plugin.notices.info(
+    total === null
+      ? t('notice.greetingAppendedNoCount')
+      : t('notice.greetingAppended', { count: total }),
+  );
+}
+
+// The caller wraps this with errors.wrap(…, { level: 'warn' }), so a failed
+// fetch is caught and logged as a warning there — the happy path stays linear.
+async function checkLatestObsidian(plugin: {{pluginClass}}): Promise<void> {
+  const release = await plugin.requests.getJson<{ name: string }>(
+    'https://api.github.com/repos/obsidianmd/obsidian-releases/releases/latest',
+  );
+  plugin.notices.info(t('notice.latestRelease', { name: release.name }));
+}

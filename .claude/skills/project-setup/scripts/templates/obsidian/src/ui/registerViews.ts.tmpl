@@ -1,0 +1,27 @@
+import type {{pluginClass}} from '../main';
+import { VIEW_TYPE, VueView } from './VueView';
+
+// View + ribbon wiring, kept out of main.ts so onload reads as orchestration.
+export function registerViews(plugin: {{pluginClass}}): void {
+  plugin.registerView(VIEW_TYPE, (leaf) => new VueView(leaf, plugin));
+  // errors.wrap: if activateView rejects (a view mount/route failure), the user
+  // sees a notice instead of a ribbon click that silently does nothing.
+  plugin.addRibbonIcon(
+    'layout-dashboard',
+    {{nameLiteral}},
+    plugin.errors.wrap('open the view', () => activateView(plugin)),
+  );
+}
+
+// Reveal the plugin's leaf, creating it in the right sidebar if absent.
+export async function activateView(plugin: {{pluginClass}}): Promise<void> {
+  const existing = plugin.app.workspace.getLeavesOfType(VIEW_TYPE)[0];
+  if (existing) {
+    await plugin.app.workspace.revealLeaf(existing);
+    return;
+  }
+  const leaf = plugin.app.workspace.getRightLeaf(false);
+  if (!leaf) return;
+  await leaf.setViewState({ type: VIEW_TYPE, active: true });
+  await plugin.app.workspace.revealLeaf(leaf);
+}

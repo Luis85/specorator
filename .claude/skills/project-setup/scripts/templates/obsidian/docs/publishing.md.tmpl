@@ -1,0 +1,66 @@
+# Publishing {{name}}
+
+How to ship this plugin: beta-test with BRAT, then submit to Obsidian's community
+plugin list. Cut releases with `npm version …` (see the root README / `/release`).
+
+## Beta testing with BRAT
+
+[BRAT](https://github.com/TfTHacker/obsidian42-brat) lets testers install a plugin
+straight from this GitHub repo before it's in the community list.
+
+- **Ready out of the box.** This repo ships `manifest-beta.json` (kept in lockstep
+  with `manifest.json` by `scripts/sync-version.mjs`). A tester runs
+  _BRAT: Add a beta plugin_ and points it at this repo's URL — they get the latest
+  release.
+- **A beta channel ahead of stable.** To ship a beta that is newer than the stable
+  release:
+  1. Set `manifest-beta.json`'s `version` to the pre-release version (e.g.
+     `1.3.0-beta.1`) and update `minAppVersion` if needed. Leave `manifest.json`
+     (stable) untouched.
+  2. Build (`{{run}} build`) and create a GitHub **pre-release** whose tag equals
+     that beta version, attaching `main.js`, `styles.css`, and — as the release's
+     `manifest.json` asset — a **copy of `manifest-beta.json`**. BRAT installs the
+     release's `manifest.json` into the vault, so the asset must carry the beta
+     version (matching the tag); attaching the stable `manifest.json` would install
+     a bundle mislabeled as the stable version. Keep the repo's stable
+     `manifest.json` unchanged.
+  3. Testers on the beta channel get the pre-release; stable users are unaffected.
+     (The generated `release.yml` runs only for stable tags — a `-beta` tag skips
+     it — so attach the beta assets manually as in step 2.)
+  4. When you promote to stable, run `npm version …` — `sync-version` realigns
+     `manifest-beta.json` to the new stable version. (Don't run `npm version`
+     mid-beta, or it will pull `manifest-beta.json` back to stable.)
+
+## Submitting to the community plugin list
+
+One-time, to get `{{id}}` into Obsidian's in-app browser. Full rules:
+<https://docs.obsidian.md/Plugins/Releases/Submit+your+plugin>.
+
+Checklist before you open the submission PR:
+
+- [ ] A GitHub **release** exists whose tag **exactly equals** `manifest.json`'s
+      `version` (no `v` prefix — `.npmrc` already pins this), with `main.js`,
+      `manifest.json`, and `styles.css` attached individually (not zipped). The
+      generated release workflow does this on `git push --follow-tags`.
+- [ ] `manifest.json` `id` is unique, lowercase, and does **not** contain
+      "obsidian" or "plugin"; `name` does not contain "Obsidian".
+- [ ] `minAppVersion` matches the oldest Obsidian version you actually support.
+- [ ] `isDesktopOnly` is correct for the build (the mobile answer set this).
+- [ ] No `innerHTML`/`outerHTML`/`insertAdjacentHTML`, no `var`, no leftover
+      sample names — `{{run}} lint` (obsidianmd rules) enforces these.
+- [ ] `onunload` cleans up: no detached leaves, intervals, or DOM listeners left
+      behind (use `register*` so Obsidian tears them down).
+- [ ] Optional but recommended: add `fundingUrl` to `manifest.json`, and a
+      `LICENSE`.
+
+Then fork [`obsidianmd/obsidian-releases`](https://github.com/obsidianmd/obsidian-releases),
+add `{{id}}` to `community-plugins.json`, and open a PR. A bot + a human review
+follow; address feedback and it gets merged.
+
+## After you're listed
+
+- Every subsequent release is just `npm version …` + `git push --follow-tags` —
+  the community browser picks up the new version from `versions.json` +
+  `manifest.json`.
+- Keep `minAppVersion` honest when you adopt newer APIs, or older-app users get a
+  broken update.

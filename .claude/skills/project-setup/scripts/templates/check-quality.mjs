@@ -57,6 +57,13 @@ const METRICS = {
     read: (r) => r.check.summary.circular_dependencies,
     label: 'circular dependencies (fallow dead-code)',
   },
+  // 0 without configured boundary zones; with zones (e.g. the Obsidian
+  // scaffold's main/core/ui) this gates the architecture at 0 violations.
+  boundaryViolations: {
+    direction: 'max',
+    read: (r) => r.check.summary.boundary_violations,
+    label: 'architecture boundary violations (fallow check)',
+  },
   cloneGroups: {
     direction: 'max',
     read: (r) => r.dupes.stats.clone_groups,
@@ -166,15 +173,15 @@ try {
 
 const regressions = [];
 const improvements = [];
+const newlyTracked = [];
 
 for (const [name, metric] of Object.entries(METRICS)) {
   const base = baseline.metrics?.[name];
   if (typeof base !== 'number') {
-    regressions.push({
-      name,
-      message:
-        `  ${name}: missing from baseline — run \`check:quality --update (via your package manager)\``,
-    });
+    // A metric this tool added AFTER the baseline was written (e.g. a repo
+    // bootstrapped by an older skill version). Adopt the current value rather
+    // than failing — a `--update` locks it into the ratchet from here.
+    newlyTracked.push(`  ${name}: ${current[name]} (new metric — run \`--update\` to start ratcheting it)`);
     continue;
   }
   const value = current[name];
@@ -229,5 +236,12 @@ if (improvements.length > 0) {
       'and commit the baseline so the gain cannot regress:',
   );
   for (const line of improvements) console.log(line);
+}
+if (newlyTracked.length > 0) {
+  console.log(
+    'New metric(s) not yet in the baseline — run `check:quality --update (via your package manager)` ' +
+      'to start ratcheting them:',
+  );
+  for (const line of newlyTracked) console.log(line);
 }
 process.exit(0);

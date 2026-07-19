@@ -1,0 +1,36 @@
+// The single diagnostic seam. `console.*` is lint-banned everywhere else so log
+// output is consistent and easy to strip; this file carries the one sanctioned
+// exception (see eslint.config.mjs). By Obsidian convention the console shows
+// only warnings/errors by default — debug/info are gated behind the
+// `debugLogging` setting via the `enabled` predicate.
+export class Logger {
+  constructor(
+    private readonly namespace: string,
+    private readonly enabled: () => boolean,
+  ) {}
+
+  debug(message: string, ...args: unknown[]): void {
+    if (this.enabled()) console.debug(this.tag(message), ...args);
+  }
+
+  info(message: string, ...args: unknown[]): void {
+    if (this.enabled()) console.info(this.tag(message), ...args);
+  }
+
+  warn(message: string, ...args: unknown[]): void {
+    console.warn(this.tag(message), ...args);
+  }
+
+  error(message: string, ...args: unknown[]): void {
+    console.error(this.tag(message), ...args);
+  }
+
+  // A namespaced child, e.g. `plugin.logger.child('view')` → "[plugin:view]".
+  child(namespace: string): Logger {
+    return new Logger(`${this.namespace}:${namespace}`, this.enabled);
+  }
+
+  private tag(message: string): string {
+    return `[${this.namespace}] ${message}`;
+  }
+}

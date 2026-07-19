@@ -1,0 +1,43 @@
+import { describe, expect, it, vi } from 'vitest';
+
+import { registerActivity } from '@/ui/registerActivity';
+
+// registerActivity only wires services; the deep behavior (debounce coalescing,
+// event registration) is covered by the service unit tests, so the fakes here
+// just record that each seam was used.
+function fakePlugin() {
+  const seams = {
+    onModify: vi.fn(),
+    onCreate: vi.fn(),
+    onDelete: vi.fn(),
+    onRename: vi.fn(),
+    every: vi.fn(),
+    debounce: vi.fn((_ms: number, fn: (...args: unknown[]) => void) => fn),
+  };
+  const plugin = {
+    logger: { child: () => ({ debug: vi.fn() }) },
+    vaultEvents: {
+      onModify: seams.onModify,
+      onCreate: seams.onCreate,
+      onDelete: seams.onDelete,
+      onRename: seams.onRename,
+    },
+    timers: { debounce: seams.debounce, every: seams.every },
+  };
+  return { plugin, seams };
+}
+
+describe('registerActivity', () => {
+  it('subscribes to every vault event and starts a heartbeat, with modify debounced', () => {
+    const { plugin, seams } = fakePlugin();
+
+    registerActivity(plugin as never);
+
+    expect(seams.onModify).toHaveBeenCalledOnce();
+    expect(seams.onCreate).toHaveBeenCalledOnce();
+    expect(seams.onDelete).toHaveBeenCalledOnce();
+    expect(seams.onRename).toHaveBeenCalledOnce();
+    expect(seams.every).toHaveBeenCalledOnce();
+    expect(seams.debounce).toHaveBeenCalledOnce(); // the modify handler is debounced
+  });
+});

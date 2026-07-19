@@ -1,0 +1,43 @@
+import { describe, expect, it, vi } from 'vitest';
+
+import type { AppEvents } from '@/core/events/AppEvents';
+import { EventBus } from '@/core/events/EventBus';
+import { StatusBarService } from '@/core/statusbar/StatusBarService';
+import { DEFAULT_SETTINGS } from '@/settings';
+import { registerStatusBar } from '@/ui/statusBar';
+
+function fakePlugin(greeting: string) {
+  const item = document.createElement('div');
+  const events = new EventBus<AppEvents>();
+  const info = vi.fn();
+  // registerStatusBar builds its item through plugin.statusBar, so the fake
+  // wires a real StatusBarService over the fake's Obsidian methods.
+  const base = {
+    events,
+    settings: { ...DEFAULT_SETTINGS, greeting },
+    notices: { info },
+    addStatusBarItem: () => item,
+    registerDomEvent: (el: HTMLElement, type: string, cb: (e: Event) => unknown) =>
+      el.addEventListener(type, cb),
+  };
+  const plugin = { ...base, statusBar: new StatusBarService(base as never) };
+  return { plugin, item, events, info };
+}
+
+describe('registerStatusBar', () => {
+  it('mirrors the greeting and follows settings:changed', () => {
+    const { plugin, item, events } = fakePlugin('Hi');
+    registerStatusBar(plugin as never);
+    expect(item.textContent).toBe('Hi');
+
+    events.emit('settings:changed', { settings: { ...DEFAULT_SETTINGS, greeting: 'Servus' } });
+    expect(item.textContent).toBe('Servus');
+  });
+
+  it('shows the greeting when the item is clicked (registerDomEvent)', () => {
+    const { plugin, item, info } = fakePlugin('Hi');
+    registerStatusBar(plugin as never);
+    item.dispatchEvent(new Event('click'));
+    expect(info).toHaveBeenCalledWith('Hi');
+  });
+});

@@ -7,6 +7,28 @@ import { test } from 'node:test';
 import { backupFile, deepMerge, mergeJsonFile, mergeTextLines } from '../lib/merge.mjs';
 import { tmpProject } from './helpers.js';
 
+test('mergeJsonFile force accepts a dotted scripts.X path (replaces a stale nested scalar)', () => {
+  const { merged } = mergeJsonFile(
+    'x',
+    { scripts: { verify: 'new chain' } },
+    { scripts: { verify: 'old chain', other: 'keep' } },
+    ['scripts.verify'],
+  );
+  assert.equal(merged.scripts.verify, 'new chain', 'the recomputed script must win');
+  assert.equal(merged.scripts.other, 'keep', 'unrelated scripts survive');
+});
+
+test('mergeJsonFile force splits on the first dot, so a glob sub-key with dots is forced and siblings survive', () => {
+  const { merged } = mergeJsonFile(
+    'x',
+    { 'nano-staged': { '*.{ts,mts}': ['prettier'] } },
+    { 'nano-staged': { '*.{ts,mts}': ['eslint', 'prettier'], '*.py': ['black'] } },
+    ['nano-staged.*.{ts,mts}'],
+  );
+  assert.deepEqual(merged['nano-staged']['*.{ts,mts}'], ['prettier'], 'the engine glob value is forced');
+  assert.deepEqual(merged['nano-staged']['*.py'], ['black'], "the user's unrelated pattern survives");
+});
+
 test('deepMerge keeps existing scalars, adds missing keys, unions arrays', () => {
   const base = { scripts: { lint: 'mine' }, keywords: ['a'] };
   const patch = { scripts: { lint: 'theirs', test: 'jest' }, keywords: ['a', 'b'] };
@@ -14,6 +36,13 @@ test('deepMerge keeps existing scalars, adds missing keys, unions arrays', () =>
     scripts: { lint: 'mine', test: 'jest' }, // existing 'lint' preserved
     keywords: ['a', 'b'],
   });
+});
+
+test('mergeJsonFile force makes the patch win over an existing scalar (version sync)', () => {
+  const r = mergeJsonFile('x', { version: '3.2.1', name: 'keep' }, { version: '1.0.0', name: 'mine', extra: 1 }, ['version']);
+  assert.equal(r.merged.version, '3.2.1'); // forced key -> patch wins
+  assert.equal(r.merged.name, 'mine'); // unforced scalar -> base kept
+  assert.equal(r.merged.extra, 1); // untouched
 });
 
 test('mergeJsonFile is idempotent', () => {
@@ -28,6 +57,20 @@ test('mergeJsonFile is idempotent', () => {
   } finally {
     p.cleanup();
   }
+});
+
+test('mergeJsonFile overwrites the npm-init placeholder test script (day-one gate not dead on arrival)', () => {
+  const placeholder = 'echo "Error: no test specified" && exit 1';
+  const r = mergeJsonFile(
+    'x',
+    { scripts: { test: 'vitest run --passWithNoTests', build: 'esbuild' } },
+    { name: 'fresh', scripts: { test: placeholder } },
+  );
+  assert.equal(r.merged.scripts.test, 'vitest run --passWithNoTests'); // placeholder overwritten
+  assert.equal(r.merged.scripts.build, 'esbuild'); // added
+  // A REAL user script (not the placeholder) is still kept, not clobbered.
+  const kept = mergeJsonFile('x', { scripts: { test: 'vitest run' } }, { scripts: { test: 'my-runner' } });
+  assert.equal(kept.merged.scripts.test, 'my-runner');
 });
 
 test('mergeTextLines appends only missing lines', () => {

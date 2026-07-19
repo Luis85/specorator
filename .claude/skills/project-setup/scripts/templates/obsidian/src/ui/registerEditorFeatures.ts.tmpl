@@ -1,0 +1,33 @@
+import { t } from '../i18n/i18n';
+import type {{pluginClass}} from '../main';
+import { registerCodeBlock } from './codeBlock';
+import { markerHighlighter } from './editorHighlight';
+import { EmojiSuggest } from './EmojiSuggest';
+
+// Editor-surface samples, kept out of main.ts so onload stays orchestration:
+//  - `:shortcode` emoji autocomplete (EditorSuggest)
+//  - a ```{{id}} fenced-block renderer (MarkdownCodeBlockProcessor)
+//  - a live TODO/FIXME/HACK highlighter (CodeMirror 6 view plugin)
+//  - a "stamp modified date" command that writes note frontmatter (VaultService)
+export function registerEditorFeatures(plugin: {{pluginClass}}): void {
+  plugin.registerEditorSuggest(new EmojiSuggest(plugin));
+  registerCodeBlock(plugin);
+  plugin.registerEditorExtension([markerHighlighter]);
+
+  // checkCallback: only offered when a markdown note is active; stamps an ISO
+  // date into its frontmatter through the atomic VaultService helper.
+  plugin.commands.addChecked(
+    'stamp-modified',
+    t('command.stampModified'),
+    () => plugin.app.workspace.getActiveFile()?.extension === 'md',
+    () => {
+      const file = plugin.app.workspace.getActiveFile();
+      if (!file) return;
+      void plugin.errors.run('stamp the modified date', () =>
+        plugin.vault.updateFrontmatter(file.path, {
+          '{{id}}-modified': new Date().toISOString(),
+        }),
+      );
+    },
+  );
+}

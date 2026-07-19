@@ -1,0 +1,73 @@
+import { describe, expect, it, vi } from 'vitest';
+
+import { ErrorService } from '@/core/errors/ErrorService';
+
+// ErrorService takes the Logger and NoticeService directly; the fakes record the
+// three channels it drives (warn, error, and the notice).
+function fakeDeps() {
+  const warn = vi.fn();
+  const error = vi.fn();
+  const noticeError = vi.fn();
+  return { logger: { warn, error }, notices: { error: noticeError }, warn, error, noticeError };
+}
+
+describe('ErrorService', () => {
+  it('run returns the value on success, without logging or noticing', async () => {
+    const { logger, notices, error, noticeError } = fakeDeps();
+    const svc = new ErrorService(logger as never, notices as never);
+
+    await expect(svc.run('load', () => 42)).resolves.toBe(42);
+    expect(error).not.toHaveBeenCalled();
+    expect(noticeError).not.toHaveBeenCalled();
+  });
+
+  it('run logs at error by default, shows the message, resolves undefined on throw', async () => {
+    const { logger, notices, error, noticeError } = fakeDeps();
+    const svc = new ErrorService(logger as never, notices as never);
+    const boom = new Error('boom');
+
+    await expect(
+      svc.run(
+        'do the thing',
+        () => {
+          throw boom;
+        },
+        { message: 'Could not do the thing' },
+      ),
+    ).resolves.toBeUndefined();
+    expect(error).toHaveBeenCalledWith('do the thing failed', boom);
+    expect(noticeError).toHaveBeenCalledWith('Could not do the thing');
+  });
+
+  it('run honors level: "warn" for an expected failure', async () => {
+    const { logger, notices, warn, error } = fakeDeps();
+    const svc = new ErrorService(logger as never, notices as never);
+
+    await svc.run(
+      'check for updates',
+      () => {
+        throw new Error('offline');
+      },
+      { level: 'warn' },
+    );
+    expect(warn).toHaveBeenCalledOnce();
+    expect(error).not.toHaveBeenCalled();
+  });
+
+  it('wrap catches a throw from the callback so none reaches Obsidian', () => {
+    const { logger, notices, error, noticeError } = fakeDeps();
+    const svc = new ErrorService(logger as never, notices as never);
+    const boom = new Error('x');
+
+    const handler = svc.wrap(
+      'handler',
+      () => {
+        throw boom;
+      },
+      { message: 'Wrapped message' },
+    );
+    expect(() => handler()).not.toThrow();
+    expect(error).toHaveBeenCalledWith('handler failed', boom);
+    expect(noticeError).toHaveBeenCalledWith('Wrapped message');
+  });
+});

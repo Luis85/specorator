@@ -1,0 +1,54 @@
+import { mount } from '@vue/test-utils';
+import { createPinia } from 'pinia';
+import { describe, expect, it, vi } from 'vitest';
+
+import { PLUGIN_KEY } from '@/ui/vue/keys';
+import HomePage from '@/ui/vue/pages/HomePage.vue';
+import { createIslandRouter } from '@/ui/vue/router';
+
+// A partial plugin double provided under the real injection key — the pattern
+// for testing components that call plugin services.
+function fakePlugin(confirmResult: boolean) {
+  return {
+    modals: { confirm: vi.fn().mockResolvedValue(confirmResult) },
+    notices: { info: vi.fn() },
+  };
+}
+
+function mountHome(plugin: ReturnType<typeof fakePlugin>) {
+  return mount(HomePage, {
+    global: {
+      plugins: [createPinia(), createIslandRouter()],
+      provide: { [PLUGIN_KEY as symbol]: plugin },
+    },
+  });
+}
+
+describe('HomePage', () => {
+  it('renders the count and increments on click', async () => {
+    const wrapper = mountHome(fakePlugin(true));
+    expect(wrapper.get('[data-testid="count"]').text()).toContain('Count: 0');
+    await wrapper.get('[data-testid="increment"]').trigger('click');
+    expect(wrapper.get('[data-testid="count"]').text()).toContain('Count: 1');
+  });
+
+  it('resets after a confirmed dialog and posts a notice', async () => {
+    const plugin = fakePlugin(true);
+    const wrapper = mountHome(plugin);
+    await wrapper.get('[data-testid="increment"]').trigger('click');
+    await wrapper.get('[data-testid="reset"]').trigger('click');
+    await vi.waitFor(() =>
+      expect(wrapper.get('[data-testid="count"]').text()).toContain('Count: 0'),
+    );
+    expect(plugin.notices.info).toHaveBeenCalledWith('Counter reset');
+  });
+
+  it('keeps the count when the dialog is cancelled', async () => {
+    const plugin = fakePlugin(false);
+    const wrapper = mountHome(plugin);
+    await wrapper.get('[data-testid="increment"]').trigger('click');
+    await wrapper.get('[data-testid="reset"]').trigger('click');
+    expect(wrapper.get('[data-testid="count"]').text()).toContain('Count: 1');
+    expect(plugin.notices.info).not.toHaveBeenCalled();
+  });
+});

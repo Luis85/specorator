@@ -1,0 +1,45 @@
+// The persistence + migration seam for plugin settings. The plugin owns the
+// live `settings` object; this service loads it (running versioned migrations
+// so old vaults never break), writes changes, and notifies on every change.
+// Generic + I/O-injected, so it unit-tests without Obsidian.
+export interface SettingsStore<T> {
+  read(): Promise<unknown>;
+  write(data: T): Promise<void>;
+  // Coerce raw persisted data (any past schema) into the current shape.
+  migrate(raw: unknown): T;
+  onChange(settings: T): void;
+  defaults: T;
+}
+
+export class SettingsService<T extends object> {
+  private value: T;
+  // Serializes persistence so two overlapping update()s can't reorder their
+  // writes and leave stale settings on disk. Kept settled (never left rejected)
+  // so a failed write doesn't block later ones.
+  private writeQueue: Promise<void> = Promise.resolve();
+
+  constructor(private readonly store: SettingsStore<T>) {
+    this.value = store.defaults;
+  }
+
+  async load(): Promise<void> {
+    this.value = this.store.migrate(await this.store.read());
+    this.store.onChange(this.value);
+  }
+
+  async update(patch: Partial<T>): Promise<void> {
+    // Serialize writes and build the next value INSIDE the queued task, from the
+    // last successfully persisted state — so overlapping updates apply in order and
+    // a rejected write leaves `value` (and disk) unchanged. That failure isolation
+    // is the point: a patch whose write failed must not ride along on a later
+    // update's write, silently resurfacing a change the caller was told had failed.
+    const done = this.writeQueue.then(async () => {
+      const next = { ...this.value, ...patch };
+      await this.store.write(next);
+      this.value = next;
+      this.store.onChange(this.value);
+    });
+    this.writeQueue = done.catch(() => {});
+    await done;
+  }
+}

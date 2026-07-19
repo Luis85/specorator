@@ -1,0 +1,35 @@
+# {{name}}
+
+{{description}}
+
+## Development
+
+```bash
+{{installCmd}}
+cp .env.example .env.local
+{{run}} dev
+```
+
+`{{run}} dev` watch-builds and deploys into `$OBSIDIAN_VAULT`. Install the
+community **Hot Reload** plugin in the test vault once — dev builds write a
+`.hotreload` marker so every rebuild reloads the plugin in place.
+
+## Quality gates
+
+Run the whole local gate set with one command:
+
+```bash
+{{run}} verify
+```
+
+See `docs/quality-integration-guide.md` for how the ratchets work.
+
+## Release
+
+```bash
+{{versionCmd}}   # bumps package.json + manifest.json + versions.json
+git push --follow-tags
+```
+
+The tag push builds and attaches `main.js`, `manifest.json`, and `styles.css`
+to a GitHub release (when the release workflow is enabled).

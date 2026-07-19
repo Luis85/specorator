@@ -1,0 +1,33 @@
+# Release-managed data: normalized by scripts/sync-version.mjs and validated by
+# scripts/check-artifacts.mjs, not prettier.
+manifest.json
+manifest-beta.json
+versions.json
+# Build artifacts and caches
+node_modules/
+main.js
+main.css
+styles.css
+coverage/
+.fallow/
+.project-setup-backup/
+package-lock.json
+pnpm-lock.yaml
+yarn.lock
+# Generated workflows (engine-owned YAML layout)
+.github/
+# Engine-owned files project-setup rewrites on re-apply — formatting them would
+# fight the engine's idempotency. Everything else it scaffolds is yours to format.
+scripts/check-loc.mjs
+scripts/check-quality.mjs
+scripts/check-css-important.mjs
+scripts/check-artifacts.mjs
+scripts/quality-report.mjs
+scripts/sync-version.mjs
+project-setup.report.json
+quality-report.md
+quality-report.json
+answers.json
+# Product-vision PRDs are user prose (dynamic titles + index table) — kept out of
+# the formatter so editing a PRD never trips format:check.
+docs/prds/

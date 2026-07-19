@@ -41,7 +41,7 @@ Branch protection rules (require PR reviews, require status checks, restrict for
 
 After applying, advise the user to enable branch protection manually:
 1. Go to `Settings → Branches → Add rule` for the default branch.
-2. Enable **"Require status checks to pass before merging"** and add the CI job name (typically `ci`).
+2. Enable **"Require status checks to pass before merging"** and add the CI job name (`quality` — the job id in the generated `ci.yml`, not the workflow name "CI").
 3. Enable **"Require a pull request before merging"** with at least one approval.
 4. Enable **"Restrict who can push to matching branches"** if the team uses a push model.
 

@@ -1,0 +1,24 @@
+<script setup lang="ts">
+import { inject } from 'vue';
+
+import { useGreeting } from '../composables/useGreeting';
+import { PLUGIN_KEY } from '../keys';
+
+// The view provides the plugin (markRaw'd) — inject it instead of prop-drilling.
+const plugin = inject(PLUGIN_KEY);
+const greeting = useGreeting(plugin);
+const version = plugin?.manifest.version ?? 'dev';
+</script>
+
+<template>
+  <section class="page">
+    <p data-testid="greeting">{{ greeting }}</p>
+    <p>Version: {{ version }}</p>
+  </section>
+</template>
+
+<style scoped>
+.page {
+  color: var(--text-muted);
+}
+</style>

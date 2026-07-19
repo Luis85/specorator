@@ -1,0 +1,66 @@
+// Obsidian extends HTMLElement.prototype (createEl/createDiv/empty/addClass/…)
+// at runtime. jsdom knows nothing about that, so install minimal equivalents
+// before any test runs — production code can then execute unchanged under
+// Vitest. Extend this list as your plugin uses more of the DOM helpers.
+
+interface CreateOpts {
+  cls?: string | string[];
+  text?: string;
+  attr?: Record<string, string | number | boolean | null | undefined>;
+}
+
+function applyCreateOpts(el: HTMLElement, opts?: CreateOpts | string): void {
+  if (!opts) return;
+  if (typeof opts === 'string') {
+    el.className = opts;
+    return;
+  }
+  if (opts.cls) el.className = Array.isArray(opts.cls) ? opts.cls.join(' ') : opts.cls;
+  if (opts.text !== undefined) el.textContent = opts.text;
+  for (const [name, value] of Object.entries(opts.attr ?? {})) {
+    if (value !== null && value !== undefined) el.setAttribute(name, String(value));
+  }
+}
+
+const proto = HTMLElement.prototype as unknown as Record<string, unknown>;
+
+function install(name: string, fn: unknown): void {
+  if (typeof proto[name] !== 'function') proto[name] = fn;
+}
+
+install('createEl', function createEl(this: HTMLElement, tag: string, opts?: CreateOpts | string) {
+  const child = this.ownerDocument.createElement(tag);
+  applyCreateOpts(child, opts);
+  this.appendChild(child);
+  return child;
+});
+install('createDiv', function createDiv(this: HTMLElement, opts?: CreateOpts | string) {
+  const child = this.ownerDocument.createElement('div');
+  applyCreateOpts(child, opts);
+  this.appendChild(child);
+  return child;
+});
+install('createSpan', function createSpan(this: HTMLElement, opts?: CreateOpts | string) {
+  const child = this.ownerDocument.createElement('span');
+  applyCreateOpts(child, opts);
+  this.appendChild(child);
+  return child;
+});
+install('empty', function empty(this: HTMLElement) {
+  while (this.firstChild) this.removeChild(this.firstChild);
+});
+install('addClass', function addClass(this: HTMLElement, cls: string) {
+  this.classList.add(cls);
+});
+install('removeClass', function removeClass(this: HTMLElement, cls: string) {
+  this.classList.remove(cls);
+});
+install('hasClass', function hasClass(this: HTMLElement, cls: string) {
+  return this.classList.contains(cls);
+});
+install('toggleClass', function toggleClass(this: HTMLElement, cls: string, force?: boolean) {
+  this.classList.toggle(cls, force);
+});
+install('setText', function setText(this: HTMLElement, value: string) {
+  this.textContent = value;
+});

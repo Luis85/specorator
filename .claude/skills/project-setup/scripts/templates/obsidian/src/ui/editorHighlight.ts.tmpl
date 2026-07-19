@@ -1,0 +1,54 @@
+import { RangeSetBuilder } from '@codemirror/state';
+import {
+  Decoration,
+  type DecorationSet,
+  type EditorView,
+  ViewPlugin,
+  type ViewUpdate,
+} from '@codemirror/view';
+
+// Pure + unit-testable: the [from, to) offsets of TODO/FIXME/HACK markers in
+// `text`. Keeping the scan out of the CodeMirror plumbing lets it test without an
+// EditorView (which needs a real editor).
+const MARKER = /\b(?:TODO|FIXME|HACK)\b/g;
+export function markerRanges(text: string): Array<{ from: number; to: number }> {
+  const ranges: Array<{ from: number; to: number }> = [];
+  for (const match of text.matchAll(MARKER)) {
+    if (match.index === undefined) continue;
+    ranges.push({ from: match.index, to: match.index + match[0].length });
+  }
+  return ranges;
+}
+
+// A CodeMirror 6 view plugin that highlights TODO/FIXME/HACK in the live editor.
+// Obsidian exposes the editor's CM6 instance; register this via
+// plugin.registerEditorExtension (see registerEditorFeatures). @codemirror/* is
+// provided by Obsidian at runtime (esbuild marks it external).
+const MARKER_DECORATION = Decoration.mark({ class: '{{id}}-marker' });
+
+function buildDecorations(view: EditorView): DecorationSet {
+  const builder = new RangeSetBuilder<Decoration>();
+  for (const visible of view.visibleRanges) {
+    const text = view.state.sliceDoc(visible.from, visible.to);
+    for (const range of markerRanges(text)) {
+      builder.add(visible.from + range.from, visible.from + range.to, MARKER_DECORATION);
+    }
+  }
+  return builder.finish();
+}
+
+export const markerHighlighter = ViewPlugin.fromClass(
+  class {
+    decorations: DecorationSet;
+
+    constructor(view: EditorView) {
+      this.decorations = buildDecorations(view);
+    }
+
+    update(update: ViewUpdate): void {
+      if (update.docChanged || update.viewportChanged)
+        this.decorations = buildDecorations(update.view);
+    }
+  },
+  { decorations: (value) => value.decorations },
+);

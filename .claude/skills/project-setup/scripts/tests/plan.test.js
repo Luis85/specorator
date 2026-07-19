@@ -7,6 +7,21 @@ import { effectiveOptions, plan } from '../lib/plan.mjs';
 const options = { guardrails: {}, github: { integrate: false }, docs: {} };
 const state = { packageManager: 'npm', github: false };
 
+test('plan targets the greenfield src/main.ts entry for obsidian mode (build + fallow)', () => {
+  const opts = {
+    obsidian: { id: 'art', name: 'Art', description: 'd', author: 'a', authorUrl: '', minAppVersion: '1.7.2', mobile: false, vue: false },
+    guardrails: { fallowRatchet: true }, github: { integrate: false }, docs: {},
+  };
+  // A fresh repo whose detected entry is a phantom src/index.ts fallback: plan
+  // overrides it to the scaffold's src/main.ts so build/fallow target a real file.
+  const st = { entry: 'src/index.ts', entryExists: false };
+  const actions = plan(opts, st);
+  const esbuild = actions.find((a) => a.path === 'esbuild.config.mjs');
+  assert.match(esbuild.content, /entryPoints: \['\.\/src\/main\.ts'\]/);
+  const fallowrc = actions.find((a) => a.path === '.fallowrc.json');
+  assert.match(fallowrc.content, /"src\/main\.ts"/);
+});
+
 test('plan returns an ordered array of known action types', () => {
   const actions = plan(options, state);
   assert.ok(Array.isArray(actions) && actions.length >= 2);

@@ -14,8 +14,8 @@ test('SKILL.md has name + description frontmatter', () => {
   assert.match(md, /description:\s*.+/);
 });
 
-test('all four reference docs exist', () => {
-  for (const ref of ['quality-harness.md', 'docs-taxonomy.md', 'grill.md', 'github-integration.md']) {
+test('all five reference docs exist', () => {
+  for (const ref of ['quality-harness.md', 'docs-taxonomy.md', 'grill.md', 'github-integration.md', 'obsidian-plugin.md']) {
     assert.ok(existsSync(join(SKILL_ROOT, 'references', ref)), `missing references/${ref}`);
   }
 });

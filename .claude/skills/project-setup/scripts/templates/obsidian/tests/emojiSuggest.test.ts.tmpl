@@ -1,0 +1,11 @@
+import { describe, expect, it } from 'vitest';
+
+import { emojiMatches } from '@/ui/EmojiSuggest';
+
+describe('emojiMatches', () => {
+  it('prefix-filters the shortcodes and sorts them', () => {
+    expect(emojiMatches('r')).toEqual(['rocket']);
+    expect(emojiMatches('')).toContain('smile');
+    expect(emojiMatches('zzz')).toEqual([]);
+  });
+});

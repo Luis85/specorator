@@ -1,0 +1,40 @@
+import { t } from '../i18n/i18n';
+import type {{pluginClass}} from '../main';
+import { GreetingSuggestModal } from './GreetingSuggestModal';
+
+// A ribbon icon that opens a greeting picker, plus two context-menu items via
+// MenuService: insert the greeting from the editor menu, and show a file's path
+// from its file menu. All are torn down on unload by their owning services
+// (registerEvent for the menus; the ribbon element is plugin-owned).
+const PRESETS = ['Hello there', 'Good morning', 'Welcome back', 'Happy writing'] as const;
+
+export function registerExtras(plugin: {{pluginClass}}): void {
+  plugin.ribbon.add('dice', t('ribbon.pickGreeting'), () => {
+    new GreetingSuggestModal(plugin.app, PRESETS, (greeting) => {
+      // Persist first; only report success once the save resolves. ErrorService
+      // logs + notices (and skips the success notice) if storage rejects.
+      void plugin.errors.run('save the greeting', async () => {
+        await plugin.saveSettings({ greeting });
+        plugin.notices.info(t('notice.greetingSet', { greeting }));
+      });
+    }).open();
+  });
+
+  plugin.menus.onEditorMenu((menu, editor) => {
+    menu.addItem((item) =>
+      item
+        .setTitle(t('menu.insertGreeting'))
+        .setIcon('dice')
+        .onClick(() => editor.replaceSelection(plugin.settings.greeting)),
+    );
+  });
+
+  plugin.menus.onFileMenu((menu, file) => {
+    menu.addItem((item) =>
+      item
+        .setTitle(t('menu.showFilePath'))
+        .setIcon('info')
+        .onClick(() => plugin.notices.info(t('notice.filePath', { path: file.path }))),
+    );
+  });
+}

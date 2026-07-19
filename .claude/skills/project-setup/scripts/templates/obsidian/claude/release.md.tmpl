@@ -1,0 +1,23 @@
+---
+description: Cut a release for this Obsidian plugin
+---
+
+Cut a new release. Follow the plugin's release contract exactly:
+
+1. **Green first** — run `{{run}} verify` and stop if anything fails. Never
+   release on a red tree.
+2. **Pick the bump** — patch/minor/major per the change. Obsidian plugins are
+   not semver-strict, but keep `minAppVersion` honest if you used newer APIs.
+3. **Version + sync** — run `{{versionCmd}} <patch|minor|major>`. This bumps
+   `package.json`, runs `scripts/sync-version.mjs` (updating `manifest.json` +
+   `versions.json`), and creates the git tag WITHOUT a `v` prefix (Obsidian
+   matches releases by `tag === manifest.version`; `.npmrc` pins this).
+4. **Push** — `git push --follow-tags`. The release workflow validates the tag
+   against `manifest.version`, runs `check:artifacts`, and attaches `main.js`,
+   `manifest.json`, and `styles.css` to the GitHub Release.
+5. **Beta (optional)** — for a BRAT beta channel, see `docs/publishing.md`; do
+   NOT advance stable `manifest.json` for a beta.
+
+Confirm the GitHub Release published with all three assets before reporting done.
+
+$ARGUMENTS

@@ -1,0 +1,109 @@
+import { App } from 'obsidian';
+import { describe, expect, it, vi } from 'vitest';
+
+import { MenuService } from '@/core/menus/MenuService';
+import { RibbonService } from '@/core/ribbon/RibbonService';
+import { GreetingSuggestModal } from '@/ui/GreetingSuggestModal';
+import { registerExtras } from '@/ui/registerExtras';
+
+describe('GreetingSuggestModal', () => {
+  it('filters presets case-insensitively', () => {
+    const modal = new GreetingSuggestModal(new App(), ['Hello there', 'Good morning'], () => {});
+    expect(modal.getSuggestions('GOOD')).toEqual(['Good morning']);
+    expect(modal.getSuggestions('o')).toEqual(['Hello there', 'Good morning']);
+    expect(modal.getSuggestions('')).toEqual(['Hello there', 'Good morning']);
+  });
+
+  it('hands the chosen greeting back through onPick', () => {
+    const onPick = vi.fn();
+    new GreetingSuggestModal(new App(), ['Hello there'], onPick).onChooseSuggestion('Hello there');
+    expect(onPick).toHaveBeenCalledWith('Hello there');
+  });
+});
+
+// A typed stand-in for the plugin — registerExtras only touches these members,
+// so the fake stays small and is cast `as never` at the call site.
+function fakePlugin() {
+  const app = new App();
+  const ribbonCalls: Array<{ icon: string; title: string; cb: () => void }> = [];
+  const registered: unknown[] = [];
+  const info = vi.fn();
+  // registerExtras adds its ribbon icon through plugin.ribbon and its menu items
+  // through plugin.menus, so the fake wires real services over the fake's
+  // addRibbonIcon / workspace.on / registerEvent.
+  const base = {
+    app,
+    settings: { greeting: 'Saved greeting' },
+    notices: { info },
+    saveSettings: vi.fn(),
+    addRibbonIcon: (icon: string, title: string, cb: () => void) => {
+      ribbonCalls.push({ icon, title, cb });
+      return document.createElement('div');
+    },
+    registerEvent: (ref: unknown) => registered.push(ref),
+  };
+  const plugin = {
+    ...base,
+    ribbon: new RibbonService(base as never),
+    menus: new MenuService(base as never),
+  };
+  return { plugin, app, ribbonCalls, registered, info };
+}
+
+describe('registerExtras', () => {
+  it('registers a ribbon icon that opens the greeting picker', () => {
+    const { plugin, ribbonCalls } = fakePlugin();
+    registerExtras(plugin as never);
+    expect(ribbonCalls).toHaveLength(1);
+    const [entry] = ribbonCalls;
+    if (!entry) throw new Error('ribbon icon was not registered');
+    expect(entry.icon).toBe('dice');
+    // The mock SuggestModal.open() is a no-op; opening must not throw.
+    expect(() => entry.cb()).not.toThrow();
+  });
+
+  it('adds an editor-menu item that inserts the saved greeting', () => {
+    const { plugin, app, registered } = fakePlugin();
+    registerExtras(plugin as never);
+    // editor-menu + file-menu both register through MenuService
+    expect(registered).toHaveLength(2);
+
+    const inserted: string[] = [];
+    const editor = { replaceSelection: (text: string) => inserted.push(text) };
+    const { menu, click } = fakeMenu();
+
+    app.workspace.trigger('editor-menu', menu, editor);
+    click();
+    expect(inserted).toEqual(['Saved greeting']);
+  });
+
+  it('adds a file-menu item that notices the file path', () => {
+    const { plugin, app, info } = fakePlugin();
+    registerExtras(plugin as never);
+
+    const { menu, click } = fakeMenu();
+    app.workspace.trigger('file-menu', menu, { path: 'notes/todo.md' });
+    click();
+    // notice.filePath is "{path}", so the notice is the path itself
+    expect(info).toHaveBeenCalledWith('notes/todo.md');
+  });
+});
+
+// A menu whose single item captures its onClick, so tests can fire it.
+function fakeMenu() {
+  let clickCb: (() => void) | undefined;
+  const item = {
+    setTitle: () => item,
+    setIcon: () => item,
+    onClick: (cb: () => void) => {
+      clickCb = cb;
+      return item;
+    },
+  };
+  const menu = {
+    addItem: (cb: (i: typeof item) => void): void => {
+      cb(item);
+    },
+  };
+  return { menu, click: () => clickCb?.() };
+}
