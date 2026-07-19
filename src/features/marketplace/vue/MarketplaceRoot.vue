@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { Notice } from 'obsidian';
-import { computed, inject, onMounted, onUnmounted, reactive, ref, watch } from 'vue';
+import { computed, inject, nextTick, onMounted, onUnmounted, reactive, ref, watch } from 'vue';
 
 import { t } from '../../../i18n/i18n';
 import LibraryToolbar from '../../library/vue/components/LibraryToolbar.vue';
@@ -51,6 +51,7 @@ const typeLabels = marketplaceTypeLabels();
 // detail/preview is open.
 const activeView = ref<MarketplaceView>('home');
 const detailId = ref<string | null>(null);
+const navRef = ref<InstanceType<typeof MarketplaceNav> | null>(null);
 
 // Per-type counts feed the nav tabs; derived from the loaded catalog.
 const counts = computed<Record<MarketplaceItemType, number>>(() => {
@@ -194,6 +195,14 @@ function selectView(view: MarketplaceView): void {
   detailId.value = null;
 }
 
+// "See all" on a Home section unmounts MarketplaceHome (and the button the user
+// activated), which would strand keyboard focus on <body>. After the category
+// renders, hand focus to the now-active nav button so Tab order stays sensible.
+function openCategory(view: MarketplaceView): void {
+  selectView(view);
+  void nextTick(() => navRef.value?.focusActive());
+}
+
 // Apply a deep-link requested for THIS leaf (the Library "Browse Marketplace"
 // link → activateMarketplace → the revealed leaf's view.requestView, provided as
 // a per-leaf ref) and consume it so a later change can't re-navigate. Non-
@@ -274,6 +283,7 @@ async function install(item: MarketplaceItem): Promise<void> {
   <template v-else>
     <div class="specorator-vue-panel-header">
       <MarketplaceNav
+        ref="navRef"
         :active-view="activeView"
         :counts="counts"
         :type-labels="typeLabels"
@@ -335,7 +345,7 @@ async function install(item: MarketplaceItem): Promise<void> {
         :installed-ids="store.installedIds"
         :type-labels="typeLabels"
         @open="openItem"
-        @see-all="selectView"
+        @see-all="openCategory"
       />
       <MarketplaceGrid
         v-else

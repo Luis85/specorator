@@ -253,6 +253,35 @@ describe('MarketplaceRoot category nav', () => {
     );
   });
 
+  it('hands focus to the active nav button after a "See all" jump', async () => {
+    // "See all" unmounts MarketplaceHome (and the button the user activated), so
+    // without a handoff keyboard focus falls to <body>. The Root moves it to the
+    // now-active category nav button (jsdom doesn't reflect focus in
+    // document.activeElement, so assert the focus() call landed on that button).
+    setup(makeStore({ items: [alpha, beta] }), { marketplaceNetworkEnabled: true });
+    await screen.findByText('Alpha Loop');
+
+    // Home renders one "See all" per present type; pick the Loop section's.
+    const loopSection = [...document.querySelectorAll('.specorator-vue-marketplace-section')].find(
+      (section) => section.textContent?.includes('Alpha Loop'),
+    );
+    expect(loopSection).toBeTruthy();
+    const seeAll = within(loopSection as HTMLElement).getByRole('button', { name: 'See all' });
+
+    const focusSpy = vi.spyOn(HTMLElement.prototype, 'focus');
+    try {
+      await fireEvent.click(seeAll);
+      const nav = screen.getByRole('navigation', { name: 'Marketplace categories' });
+      const loopNav = within(nav).getByRole('button', { name: /Loop/ });
+      await waitFor(() => {
+        expect(loopNav.getAttribute('aria-current')).toBe('page');
+        expect(focusSpy.mock.instances.at(-1)).toBe(loopNav);
+      });
+    } finally {
+      focusSpy.mockRestore();
+    }
+  });
+
   it('applies a per-leaf deep-link request and consumes it', async () => {
     // activateMarketplace sets the requested category on THIS leaf's view ref AFTER
     // it mounts (post loadIfDeferred); the Root applies it and clears the ref.

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed } from 'vue';
+import { computed, ref } from 'vue';
 
 import { t } from '../../../../i18n/i18n';
 import { MARKETPLACE_ITEM_TYPES, type MarketplaceItemType } from '../../catalogTypes';
@@ -15,6 +15,14 @@ const emit = defineEmits<{ select: [view: MarketplaceView] }>();
 // A category tab appears only when the catalog has items of that type, in
 // canonical order — a fresh/empty catalog isn't shown dead tabs.
 const presentTypes = computed(() => MARKETPLACE_ITEM_TYPES.filter((type) => props.counts[type] > 0));
+
+const navEl = ref<HTMLElement | null>(null);
+// Exposed so the Root can restore keyboard focus to the now-active category
+// button after a "See all" jump unmounts the Home button the user activated.
+function focusActive(): void {
+  navEl.value?.querySelector<HTMLElement>('.specorator-vue-marketplace-navtab.is-on')?.focus();
+}
+defineExpose({ focusActive });
 </script>
 
 <template>
@@ -23,6 +31,7 @@ const presentTypes = computed(() => MARKETPLACE_ITEM_TYPES.filter((type) => prop
     that this doesn't implement, so plain nav buttons are the honest, expected
     keyboard model (normal Tab order). -->
   <div
+    ref="navEl"
     class="specorator-vue-marketplace-nav"
     role="navigation"
     :aria-label="t('marketplace.navGroupLabel')"
