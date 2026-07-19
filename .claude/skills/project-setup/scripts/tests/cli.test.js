@@ -69,7 +69,7 @@ test('obsidian apply on an unsupported host Node exits 2 before writing any file
   try {
     const code = await cli(['apply', '--config', 'answers.json'], p.io);
     assert.equal(code, 2);
-    assert.match(p.chunks.err, />=22\.13\.0/); // documents the exact floor
+    assert.match(p.chunks.err, /\^22\.13\.0 \|\| >=24\.0\.0/); // documents the real range
     assert.match(p.chunks.err, /22\.12\.0/); // names the host version
     // The gate runs after the (pure) plan but before apply, so nothing is scaffolded.
     assert.ok(!existsSync(join(p.dir, 'manifest.json')), 'no manifest written');
@@ -116,10 +116,26 @@ test('the generic apply is gated by fallow (Node >=22), and obsidian raises it t
     assert.match(genBlocked.chunks.err, />=22\.0\.0/); // the fallow floor, not 22.13
     assert.equal(await cli(['apply', '--config', 'answers.json'], genOk.io), 0);
     assert.equal(await cli(['apply', '--config', 'answers.json'], obsBlocked.io), 2);
-    assert.match(obsBlocked.chunks.err, />=22\.13\.0/); // obsidian is stricter
+    assert.match(obsBlocked.chunks.err, /\^22\.13\.0 \|\| >=24\.0\.0/); // obsidian is stricter
   } finally {
     genBlocked.cleanup();
     genOk.cleanup();
     obsBlocked.cleanup();
+  }
+});
+
+test('Node 23.x is rejected for obsidian (jsdom gap) but fine for a generic apply', async () => {
+  // jsdom supports ^22.13 || >=24, so the whole 23.x line is unsupported in obsidian
+  // mode — but generic mode (fallow >=22, no upper bound) runs on 23 fine.
+  const obs = project(OBS_ANSWERS, '23.5.0');
+  const gen = project({}, '23.5.0');
+  try {
+    assert.equal(await cli(['apply', '--config', 'answers.json'], obs.io), 2);
+    assert.match(obs.chunks.err, /skips the 23\.x line/);
+    assert.ok(!existsSync(join(obs.dir, 'manifest.json')), 'nothing written on the 23.x block');
+    assert.equal(await cli(['apply', '--config', 'answers.json'], gen.io), 0);
+  } finally {
+    obs.cleanup();
+    gen.cleanup();
   }
 });

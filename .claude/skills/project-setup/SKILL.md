@@ -94,9 +94,10 @@ engine owns every mutation; you detect, interview, then invoke it.
 - The engine is idempotent and non-destructive (merge + backup). Re-running is
   safe; a converged re-apply prints no warnings.
 - **Requires Node ≥22** (the pinned fallow 3 quality tooling, installed on every
-  apply); **Obsidian mode requires ≥22.13.0** (jsdom's 22-line floor plus vite;
-  the generated `engines`/CI pin it). `apply` refuses on an older host Node
-  before writing anything, so the exact floor is enforced, not just documented.
+  apply); **Obsidian mode requires `^22.13.0 || >=24.0.0`** — the pinned jsdom
+  skips the 23.x line, so Node 23 is unsupported (the generated `engines`/CI pin
+  the same range). `apply` refuses on an unsupported host Node before writing
+  anything, so the range is enforced, not just documented.
 - Dependency versions come from `scripts/pins.json` (exact pins for
   reproducibility). Update them only via `refresh-pins` (step 2), never by
   hand-editing to a guess.

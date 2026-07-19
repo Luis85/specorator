@@ -97,27 +97,32 @@ function isBelowVersion(v, floor) {
   return false;
 }
 
-// Node floors the generated harness demands on the HOST runtime (the engine runs
-// the install + baselining, so it's the host — not just the generated project — that
-// must clear them). fallow 3 (pinned; always installed for the advisory report and
-// the optional ratchet) requires Node >=22, so EVERY apply has a floor. Obsidian
-// raises it: jsdom (always installed for the Vitest DOM env) requires ^22.13.0 on the
-// 22 line and vite (Vue lane) requires >=22.12.0 — 22.13 subsumes fallow's 22.0.
-// obsidian.mjs derives the generated `engines.node` from OBSIDIAN_NODE_FLOOR, so the
-// enforced floor and the documented one stay single-sourced.
+// Node requirements the generated harness imposes on the HOST runtime (the engine
+// runs the install + baselining, so it's the host — not just the generated project —
+// that must clear them). fallow 3 (pinned; always installed for the advisory report
+// and the optional ratchet) requires Node >=22, so EVERY apply has a floor.
 export const FALLOW_NODE_FLOOR = [22, 0, 0];
 export const OBSIDIAN_NODE_FLOOR = [22, 13, 0];
+// Obsidian is NOT a bare floor: the pinned jsdom (engines ^20.19 || ^22.13 || >=24)
+// caps its 22 line at <23 and resumes at >=24, so the 23.x major is a hole. Intersected
+// with vite (>=22.12) and fallow (>=22) the supported set is exactly this union.
+// obsidian.mjs emits it verbatim as engines.node and hostNodeProblem enforces the same
+// set, so the advertised range and the enforced one stay single-sourced.
+export const OBSIDIAN_NODE_ENGINES = '^22.13.0 || >=24.0.0';
 
 // A human-readable problem when the HOST Node can't run the resolved harness, or null
 // when it can. Kept separate from validateObsidianFields (which checks answers, not
 // the environment) so both stay pure and unit-testable.
 export function hostNodeProblem(options, nodeVersion) {
-  const [floor, why] = options?.obsidian
-    ? [OBSIDIAN_NODE_FLOOR, 'the generated jsdom/vite toolchain']
-    : [FALLOW_NODE_FLOOR, 'the pinned fallow 3 quality tooling'];
-  if (!isBelowVersion(nodeVersion, floor)) return null;
-  const f = floor.join('.');
-  return `This setup needs Node >=${f} (${why} requires it); you're on Node ${nodeVersion}. Upgrade Node (nvm install ${floor[0]}) and re-run.`;
+  if (options?.obsidian) {
+    // Supported: [22.13, 23) ∪ [24, ∞). The only hole above the floor is the 23.x
+    // major, which a floor check alone would wrongly admit.
+    const major = Number(/^(\d+)\./.exec(String(nodeVersion))?.[1]);
+    if (!isBelowVersion(nodeVersion, OBSIDIAN_NODE_FLOOR) && major !== 23) return null;
+    return `Obsidian mode needs Node ${OBSIDIAN_NODE_ENGINES} (the pinned jsdom skips the 23.x line); you're on Node ${nodeVersion}. Use Node 22.13+ or 24+ and re-run.`;
+  }
+  if (!isBelowVersion(nodeVersion, FALLOW_NODE_FLOOR)) return null;
+  return `This setup needs Node >=${FALLOW_NODE_FLOOR.join('.')} (the pinned fallow 3 quality tooling requires it); you're on Node ${nodeVersion}. Upgrade Node (nvm install ${FALLOW_NODE_FLOOR[0]}) and re-run.`;
 }
 
 export function validateObsidianFields(o) {

@@ -10,7 +10,7 @@
 // overwrite-backup, so a re-apply picks up template updates and never clobbers the
 // user's own source.
 import { CI_PM, dep, engineConfigMode, notice } from './harness.mjs';
-import { OBSIDIAN_NODE_FLOOR } from './options.mjs';
+import { OBSIDIAN_NODE_ENGINES } from './options.mjs';
 import { runPrefix, safePackageManager } from './packageManager.mjs';
 import { loadTemplate, renderTemplate } from './templates.mjs';
 
@@ -716,11 +716,12 @@ function planPackageBasics(options, version) {
     version,
     description: o.description,
     main: 'main.js',
-    // jsdom (always installed for the vitest DOM env) requires ^22.13.0 on the 22
-    // line, and vite (Vue lane) requires >=22.12.0 — so >=22 would let a package
-    // manager pick a Node the pinned toolchain rejects at install/test time. The
-    // engine enforces the same floor on the HOST runtime before applying.
-    engines: { node: `>=${OBSIDIAN_NODE_FLOOR.join('.')}` },
+    // jsdom (always installed for the vitest DOM env) supports ^20.19 || ^22.13 ||
+    // >=24, so its 22 line stops at <23 and the 23.x major is unsupported; intersected
+    // with vite (>=22.12) and fallow (>=22) the scaffold's range is this union, not a
+    // bare >=22.13 (which would wrongly admit Node 23). The engine enforces the same
+    // set on the HOST runtime before applying.
+    engines: { node: OBSIDIAN_NODE_ENGINES },
     scripts,
     // @codemirror/view + state: types for the editor-highlight sample, and they
     // are obsidian's own declared peers (needed at the root for strict-peer PMs).

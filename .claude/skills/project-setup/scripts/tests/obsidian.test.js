@@ -7,7 +7,7 @@ import { test } from 'node:test';
 
 import { PINNED, planFallow } from '../lib/harness.mjs';
 import { obsidianEntry, planObsidian } from '../lib/obsidian.mjs';
-import { loadOptions, OBSIDIAN_NODE_FLOOR } from '../lib/options.mjs';
+import { loadOptions, OBSIDIAN_NODE_ENGINES } from '../lib/options.mjs';
 
 function optionsWith(obsidian) {
   const dir = mkdtempSync(join(tmpdir(), 'obs-opt-'));
@@ -323,10 +323,12 @@ test('the generated Node engine floor matches the pinned toolchain (jsdom/vite)'
   const pkg = actionsFor().find(
     (a) => a.type === 'mergeJson' && a.path === 'package.json' && a.patch.engines,
   );
-  assert.equal(pkg.patch.engines.node, '>=22.13.0');
-  // Single-sourced: the generated floor is derived from OBSIDIAN_NODE_FLOOR, which
-  // the engine also enforces on the host runtime — so the two can never drift.
-  assert.equal(pkg.patch.engines.node, `>=${OBSIDIAN_NODE_FLOOR.join('.')}`);
+  // jsdom skips the 23.x line (^20.19 || ^22.13 || >=24), so a bare >=22.13 would
+  // wrongly advertise Node 23 — the engines field is the real range union.
+  assert.equal(pkg.patch.engines.node, '^22.13.0 || >=24.0.0');
+  // Single-sourced from OBSIDIAN_NODE_ENGINES, which hostNodeProblem also enforces on
+  // the host runtime — so the advertised range and the enforced one can never drift.
+  assert.equal(pkg.patch.engines.node, OBSIDIAN_NODE_ENGINES);
 });
 
 test('manifest-beta.json ships mirroring manifest.json (BRAT-ready), and the publishing guide lands', () => {
