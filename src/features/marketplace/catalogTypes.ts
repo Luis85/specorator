@@ -233,7 +233,22 @@ function sanitizeSkillFiles(item: MarketplaceItem): string[] | null {
     }
   }
   if (!seen.has(item.path)) safe.unshift(item.path);
+  // Reject a set where one declared file is a directory prefix of another (e.g.
+  // `.../SKILL.md` AND `.../SKILL.md/readme.txt`): the installer would create the
+  // first as a directory while writing the second, then fail writing the first as a
+  // file — leaving a partial skill folder that blocks every retry. Covers the SKILL.md
+  // marker too, since it's in `safe`.
+  if (hasFilePrefixCollision(safe)) return null;
   return safe;
+}
+
+/**
+ * True when any path is a strict directory-prefix ancestor of another in the set —
+ * i.e. one entry is used as both a file and a folder (`a/b` and `a/b/c`), which no
+ * filesystem can create.
+ */
+function hasFilePrefixCollision(paths: string[]): boolean {
+  return paths.some((a) => paths.some((b) => b !== a && b.startsWith(`${a}/`)));
 }
 
 /**

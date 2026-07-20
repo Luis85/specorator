@@ -196,6 +196,21 @@ describe('parseManifest — skill files', () => {
     }
   });
 
+  it('rejects the WHOLE skill when one declared file is a directory prefix of another', () => {
+    // Each path is safe alone, but the installer would create the ancestor as a
+    // directory while writing the descendant, then fail writing the ancestor as a
+    // file — a partial folder that blocks retry. Needs a cross-path check.
+    expect(firstSkill([
+      'skills/project-setup/SKILL.md',
+      'skills/project-setup/SKILL.md/readme.txt', // SKILL.md marker used as a folder
+    ])).toBeUndefined();
+    expect(firstSkill([
+      'skills/project-setup/SKILL.md',
+      'skills/project-setup/scripts/setup.mjs',
+      'skills/project-setup/scripts/setup.mjs/extra.txt', // a supporting file used as a folder
+    ])).toBeUndefined();
+  });
+
   it('dedupes safe files (SKILL.md + a duplicate supporting file)', () => {
     const item = firstSkill([
       'skills/project-setup/SKILL.md',

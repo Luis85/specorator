@@ -42,7 +42,7 @@ residuals. Each fix lands with a unit test under
   guards and then fails at the filesystem write, potentially after partial writes.
   Fix: include the superscript-digit variants in the device-name predicate.
 
-- [ ] **8. Reject file/directory path collisions in a skill's `files[]`.**
+- [x] **8. Reject file/directory path collisions in a skill's `files[]`.**
   `isSafeSkillFilePath` (`catalogTypes.ts`) validates each path in isolation, so a
   manifest declaring both `skills/foo/SKILL.md` and `skills/foo/SKILL.md/readme.txt`
   is accepted; the installer then creates `SKILL.md` as a directory and later fails
