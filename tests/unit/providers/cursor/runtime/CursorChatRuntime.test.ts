@@ -2025,24 +2025,8 @@ describe('CursorChatRuntime.captureAdvertisedModelValues', () => {
   });
 });
 
-describe('CursorChatRuntime capture naming', () => {
-  it('allocates a distinct capture directory for repeated writers in one runtime', () => {
-    const runtime = makeRuntime({
-      settings: {
-        permissionMode: 'normal',
-        providerConfigs: { cursor: { captureAcpTraffic: true } },
-      },
-    }) as unknown as Record<string, unknown>;
-    const build = (runtime.buildCaptureWriter as (cliPath: string) => unknown).bind(runtime);
-
-    const first = build('/bin/cursor-agent') as Record<string, unknown>;
-    const second = build('/bin/cursor-agent') as Record<string, unknown>;
-
-    expect(first).toBeTruthy();
-    expect(second).toBeTruthy();
-    expect(first.sessionDir).not.toBe(second.sessionDir);
-  });
-});
+// Capture-directory naming (distinct session dir per writer) moved to the
+// CursorAcpCaptureSink and is covered by CursorAcpCaptureSink.test.ts.
 
 describe('CursorChatRuntime.handleSessionNotification plan-content gate', () => {
   beforeEach(stubProviderSnapshot);
