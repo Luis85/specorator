@@ -25,6 +25,17 @@ describe('MarketplaceCatalogClient', () => {
     expect(request).toHaveBeenCalledWith('https://example.test/base/loops/x.md');
   });
 
+  it('percent-encodes URL-significant characters in a path (per segment, slashes kept)', async () => {
+    // `#` would otherwise be parsed as a URL fragment, truncating the path to
+    // `references/C` and fetching the wrong file; a space would break the request too.
+    const request = jest.fn(async () => ({ status: 200, text: '# body' }));
+    const client = new MarketplaceCatalogClient('https://example.test/base/', request, noVet);
+    expect(await client.fetchItemBody('skills/foo/references/C#.md')).toBe('# body');
+    expect(request).toHaveBeenCalledWith('https://example.test/base/skills/foo/references/C%23.md');
+    await client.fetchItemBody('skills/foo/a b.md');
+    expect(request).toHaveBeenCalledWith('https://example.test/base/skills/foo/a%20b.md');
+  });
+
   it('throws a MarketplaceError on a non-2xx status', async () => {
     const client = new MarketplaceCatalogClient('https://example.test/base/', async () => ({ status: 404, text: '' }), noVet);
     await expect(client.fetchIndex()).rejects.toBeInstanceOf(MarketplaceError);

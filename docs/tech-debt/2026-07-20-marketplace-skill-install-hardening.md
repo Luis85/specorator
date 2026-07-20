@@ -27,7 +27,7 @@ residuals. Each fix lands with a unit test under
   enforce per-file and aggregate byte limits during the fetch (abort past the
   threshold) rather than buffering unboundedly.
 
-- [ ] **6. Encode URL-significant characters in supporting-file paths.**
+- [x] **6. Encode URL-significant characters in supporting-file paths.**
   A path with a URL-significant char such as `references/C#.md` passes the path
   sanitizer (which guards traversal / Windows-illegal / control chars, not `#`),
   then `MarketplaceCatalogClient.resolve()` does `new URL(rel, base)` where `#`

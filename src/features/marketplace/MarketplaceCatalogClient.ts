@@ -118,15 +118,21 @@ export class MarketplaceCatalogClient {
   }
 
   private resolve(relativePath: string): string {
-    const resolved = new URL(relativePath, this.base).toString();
-    // An absolute or `../`-laden item path could resolve to a different origin
-    // or repo while still passing the SSRF vet (both public) — a provenance
-    // spoof. Require the resolved URL to stay under the configured base URL.
-    if (!resolved.startsWith(this.base)) {
+    // Containment check on the UN-encoded resolution: an absolute or `../`-laden item
+    // path could resolve to a different origin or repo while still passing the SSRF vet
+    // (both public) — a provenance spoof. Require it to stay under the configured base
+    // URL. Done before encoding so a real escape isn't silently neutralized into an
+    // under-base path by percent-encoding its `:`/`/`.
+    if (!new URL(relativePath, this.base).toString().startsWith(this.base)) {
       throw new MarketplaceError(
         `Refusing to fetch "${relativePath}" — it escapes the marketplace base URL.`,
       );
     }
-    return resolved;
+    // Then encode each path segment so a URL-significant character in a filename (`#`, a
+    // space, `%`, …) becomes a literal path byte rather than a fragment/query — otherwise
+    // `references/C#.md` would fetch `references/C`. The `/` separators are preserved, and
+    // the path is now known under-base and traversal-free, so encoding stays under base.
+    const encodedPath = relativePath.split('/').map(encodeURIComponent).join('/');
+    return new URL(encodedPath, this.base).toString();
   }
 }
