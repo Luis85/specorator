@@ -76,7 +76,7 @@
     "esbuild": "^0.28.0",
     "eslint": "^10.2.0",
     "eslint-plugin-jest": "^29.15.1",
-    "eslint-plugin-obsidianmd": "^0.3.0",
+    "eslint-plugin-obsidianmd": "^0.4.1",
     "eslint-plugin-simple-import-sort": "^12.1.1",
     "eslint-plugin-vue": "^10.9.2",
     "fallow": "^2.91.0",
