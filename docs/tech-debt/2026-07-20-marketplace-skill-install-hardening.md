@@ -25,7 +25,10 @@ residuals. Each fix lands with a unit test under
   declaring thousands of files or very large bodies could exhaust renderer
   memory / bandwidth. Fix: reject a manifest exceeding a file-count cap, and
   enforce per-file and aggregate byte limits during the fetch (abort past the
-  threshold) rather than buffering unboundedly.
+  threshold) rather than buffering unboundedly. (Follow-up: the file-count cap
+  also runs at parse time in `sanitizeSkillFiles`, so a huge `files[]` is dropped
+  at catalog load and can't drive item 8's O(n²) collision scan into a renderer
+  freeze before an install is ever attempted.)
 
 - [x] **6. Encode URL-significant characters in supporting-file paths.**
   A path with a URL-significant char such as `references/C#.md` passes the path

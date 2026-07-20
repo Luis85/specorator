@@ -210,19 +210,31 @@ function isSafeSkillFilePath(value: unknown, prefix: string): value is string {
 }
 
 /**
+ * The most files a single skill may declare. Enforced at PARSE time (here) so a
+ * custom catalog's huge `files[]` is dropped while loading the catalog — before the
+ * O(n²) collision scan below can run hundreds of millions of comparisons and freeze
+ * the renderer. Sized well above the first-party catalog (project-setup: 138 files);
+ * the install path (`marketplaceStore`) re-checks it as a backstop.
+ */
+export const MAX_SKILL_FILES = 500;
+
+/**
  * The safe, de-duplicated file list a skill installs — every manifest `files`
  * entry under the skill folder, with the previewed `SKILL.md` (`item.path`)
  * always present. Returns `null` — dropping the whole skill in `parseManifest` —
  * when the skill is malformed or hostile: its marker path isn't a `.../SKILL.md`
- * (no derivable install folder), or ANY declared file escapes the skill folder
- * (traversal / out-of-folder / absolute / non-string). Silently keeping such a
- * skill would either install it under a guessed folder or write it INCOMPLETE
- * (missing a required file) and mark it installed — blocking a later reinstall.
- * Rejecting the whole skill fails loud instead.
+ * (no derivable install folder), it declares more than `MAX_SKILL_FILES` files, or
+ * ANY declared file escapes the skill folder (traversal / out-of-folder / absolute /
+ * non-string). Silently keeping such a skill would either install it under a guessed
+ * folder or write it INCOMPLETE (missing a required file) and mark it installed —
+ * blocking a later reinstall. Rejecting the whole skill fails loud instead.
  */
 function sanitizeSkillFiles(item: MarketplaceItem): string[] | null {
   const prefix = skillFolderPrefix(item.path);
   if (!prefix) return null;
+  // Bound the count BEFORE the O(n²) collision check so a huge files[] can't freeze
+  // the renderer at catalog load (drops the skill entirely, not just at install time).
+  if (Array.isArray(item.files) && item.files.length > MAX_SKILL_FILES) return null;
   const seen = new Set<string>();
   const safe: string[] = [];
   for (const candidate of Array.isArray(item.files) ? item.files : []) {

@@ -80,9 +80,9 @@ vi.mock('@/features/skills/refreshSkillCatalogBestEffort', () => ({
 }));
 
 import { DEFAULT_MARKETPLACE_BASE_URL } from '@/features/marketplace/MarketplaceCatalogClient';
+import { MAX_SKILL_FILES } from '@/features/marketplace/catalogTypes';
 import {
   MAX_SKILL_FILE_CHARS,
-  MAX_SKILL_FILES,
   MAX_SKILL_TOTAL_CHARS,
   useMarketplaceStore,
 } from '@/features/marketplace/vue/stores/marketplaceStore';

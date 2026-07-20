@@ -1,4 +1,4 @@
-import { isBinarySkillPath, isInstallableType, parseManifest } from '@/features/marketplace/catalogTypes';
+import { isBinarySkillPath, isInstallableType, MAX_SKILL_FILES, parseManifest } from '@/features/marketplace/catalogTypes';
 
 const validItem = {
   id: 'loops/x',
@@ -194,6 +194,14 @@ describe('parseManifest — skill files', () => {
     ]) {
       expect(firstSkill(['skills/project-setup/SKILL.md', bad])).toBeUndefined();
     }
+  });
+
+  it('drops a skill declaring more than MAX_SKILL_FILES files, before the O(n²) collision scan', () => {
+    const over = Array.from({ length: MAX_SKILL_FILES + 1 }, (_unused, i) => `skills/project-setup/f${i}.md`);
+    expect(firstSkill(['skills/project-setup/SKILL.md', ...over])).toBeUndefined();
+    // At the cap it's still accepted (safe, no collisions).
+    const atCap = Array.from({ length: MAX_SKILL_FILES - 1 }, (_unused, i) => `skills/project-setup/g${i}.md`);
+    expect(firstSkill(['skills/project-setup/SKILL.md', ...atCap])).toBeDefined();
   });
 
   it('rejects the WHOLE skill when one declared file is a directory prefix of another', () => {

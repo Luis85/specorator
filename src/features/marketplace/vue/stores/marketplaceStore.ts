@@ -4,7 +4,7 @@ import { ref, shallowRef } from 'vue';
 import { HomeFileAdapter } from '../../../../core/storage/HomeFileAdapter';
 import type SpecoratorPlugin from '../../../../main';
 import { refreshSkillCatalogBestEffort } from '../../../skills/refreshSkillCatalogBestEffort';
-import { isBinarySkillPath, type MarketplaceItem, skillFolderPrefix } from '../../catalogTypes';
+import { isBinarySkillPath, MAX_SKILL_FILES, type MarketplaceItem, skillFolderPrefix } from '../../catalogTypes';
 import { MarketplaceCache } from '../../MarketplaceCache';
 import {
   DEFAULT_MARKETPLACE_BASE_URL,
@@ -33,7 +33,6 @@ const SKILL_FETCH_CONCURRENCY = 6;
 // manifest declaring thousands of files or very large bodies can't exhaust renderer
 // memory or bandwidth. Sized well above the first-party catalog's skills (project-setup:
 // 138 files, ~370 KB). Measured in string length (≈ bytes for the UTF-8 text these must be).
-export const MAX_SKILL_FILES = 500;
 export const MAX_SKILL_FILE_CHARS = 1_000_000;
 export const MAX_SKILL_TOTAL_CHARS = 10_000_000;
 
