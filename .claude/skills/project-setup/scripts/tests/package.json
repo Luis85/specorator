@@ -1,0 +1,4 @@
+{
+  "//": "Marks the skill's node:test suite as ESM so the .js test files load without the typeless-package reparse warning. Not distributed — the marketplace copy omits tests/.",
+  "type": "module"
+}
