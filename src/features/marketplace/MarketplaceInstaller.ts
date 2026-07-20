@@ -347,7 +347,7 @@ function normalizeRoles(raw: string[] | undefined): Array<'worker' | 'verifier'>
 // vault/home I/O and the "installed" checks.
 
 /** Both the vault and home adapters satisfy the skill install's write surface. */
-type SkillWriteAdapter = Pick<VaultFileAdapter, 'exists' | 'write' | 'deleteFolderRecursive'>;
+type SkillWriteAdapter = Pick<VaultFileAdapter, 'exists' | 'read' | 'write' | 'deleteFolderRecursive'>;
 
 function skillAdapterFor(target: SkillInstallTarget, deps: MarketplaceInstallDeps): SkillWriteAdapter {
   return target.scope === 'user' ? deps.homeAdapter : deps.adapter;
@@ -467,15 +467,14 @@ export async function installSkillItem(
     await writeSupportingSkillFiles(skillDir, files, adapter);
     await adapter.write(normalizePath(`${skillDir}/SKILL.md`), skillMd);
   } catch (err) {
-    // Best-effort cleanup of OUR partial write — but NOT if a SKILL.md is now present:
-    // a concurrent install of the same target completed it in the meantime, and a
-    // recursive delete would destroy the peer's finished skill. (A full guarantee against
-    // the concurrent-write race needs per-target serialization — see the follow-up note in
-    // docs/tech-debt; this removes the destructive case of deleting a completed install.)
-    const peerCompleted = await adapter
-      .exists(normalizePath(`${skillDir}/SKILL.md`))
-      .catch(() => false);
-    if (!peerCompleted) await adapter.deleteFolderRecursive(normalizePath(skillDir)).catch(() => {});
+    // Best-effort cleanup of OUR partial write — but NOT if a COMPLETE marker (byte-identical
+    // to what we meant to write) is now present: that means a concurrent peer finished this
+    // exact install, and a recursive delete would destroy their skill. Compare the CONTENT,
+    // not mere existence: our own final marker write can create-then-truncate on a mid-write
+    // failure (disk full), and an exists-only check would misread that partial SKILL.md as a
+    // peer's completion — leaving a broken marker the preflight later reports as installed.
+    const existingMarker = await adapter.read(normalizePath(`${skillDir}/SKILL.md`)).catch(() => null);
+    if (existingMarker !== skillMd) await adapter.deleteFolderRecursive(normalizePath(skillDir)).catch(() => {});
     throw err;
   }
   return 'installed';

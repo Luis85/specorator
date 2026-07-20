@@ -239,6 +239,28 @@ describe('parseManifest — skill files', () => {
     ]);
   });
 
+  it('rejects the WHOLE skill on a case-insensitive file collision (Windows / default macOS)', () => {
+    // Two paths differing only in case are distinct on Linux but the SAME file on
+    // Windows / default macOS, where one silently overwrites the other. Reject the skill
+    // on all platforms so the catalog parse stays deterministic and portable.
+    expect(firstSkill([
+      'skills/project-setup/SKILL.md',
+      'skills/project-setup/scripts/Setup.mjs',
+      'skills/project-setup/scripts/setup.mjs', // collides with Setup.mjs case-insensitively
+    ])).toBeUndefined();
+    // A supporting file that case-folds to the injected SKILL.md marker also collides.
+    expect(firstSkill([
+      'skills/project-setup/SKILL.md',
+      'skills/project-setup/skill.md', // == SKILL.md on a case-insensitive filesystem
+    ])).toBeUndefined();
+    // A case-folded directory-prefix collision is caught too.
+    expect(firstSkill([
+      'skills/project-setup/SKILL.md',
+      'skills/project-setup/Scripts', // ancestor of scripts/... after folding
+      'skills/project-setup/scripts/run.mjs',
+    ])).toBeUndefined();
+  });
+
   it('falls back to just SKILL.md when files is absent', () => {
     expect(firstSkill(undefined)?.files).toEqual(['skills/project-setup/SKILL.md']);
   });

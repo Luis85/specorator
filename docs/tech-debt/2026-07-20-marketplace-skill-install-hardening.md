@@ -128,3 +128,23 @@ residuals. Each fix lands with a unit test under
   (Plugin-side defense-in-depth for a custom source; the first-party catalog authors
   valid slugs. The marketplace validator enforcing the same rule at the source is a
   possible cross-repo follow-up.)
+
+- [x] **13. Reject case-insensitive file collisions in a skill's `files[]`.**
+  `sanitizeSkillFiles`'s dedup + prefix-collision scan compared paths CASE-SENSITIVELY,
+  so `scripts/Foo.md` and `scripts/foo.md`, or a supporting `skill.md` vs the injected
+  `SKILL.md`, are distinct on Linux but the SAME file on Windows / default macOS — one
+  silently overwrites the other (the marker write runs last, so it clobbers a colliding
+  supporting file) yet the skill still reports installed. Fix: fold to lowercase before
+  the duplicate + prefix-collision check and reject the whole skill (fail loud), on all
+  platforms so the catalog parse stays deterministic and portable. Case-insensitive
+  completion of item 8.
+
+- [x] **14. Don't treat our own partial marker write as a peer's completion.**
+  Item 9's rollback suppressed cleanup whenever a `SKILL.md` was PRESENT at cleanup time,
+  to avoid deleting a concurrent peer's finished install. But our own final marker write
+  can create-then-truncate on a mid-write failure (disk full), and an exists-only check
+  misreads that partial `SKILL.md` as a peer's completion — leaving a broken marker the
+  preflight later reports as installed and skips reinstalling. Fix: compare the existing
+  marker's CONTENT to the full body we meant to write; only a byte-identical marker counts
+  as a completed (peer or self) install worth keeping — a truncated/different one is rolled
+  back. Avoids the atomic-rename dependency (no cross-adapter move capability needed).

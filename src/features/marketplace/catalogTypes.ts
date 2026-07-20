@@ -238,11 +238,12 @@ function sanitizeSkillFiles(item: MarketplaceItem): string[] | null {
   const safe = declared.includes(item.path) ? declared : [item.path, ...declared];
   // Drop when the NORMALIZED list (SKILL.md included) exceeds the file cap — the install
   // path caps this same list, so a raw list that crosses only once SKILL.md is added would
-  // otherwise display but always fail Install — OR when one declared file is a directory
-  // prefix of another (`.../SKILL.md` AND `.../SKILL.md/readme.txt`), which would make the
-  // installer create the marker as a folder and leave a partial dir that blocks retry. The
-  // `||` short-circuits so the O(n²) collision scan never runs on an over-cap list.
-  if (safe.length > MAX_SKILL_FILES || hasFilePrefixCollision(safe)) return null;
+  // otherwise display but always fail Install — OR when two paths would resolve to the same
+  // file / one is a directory prefix of another (case-insensitively, so `skill.md` vs the
+  // injected `SKILL.md`, or `.../SKILL.md` AND `.../SKILL.md/readme.txt`, are caught on the
+  // case-insensitive filesystems where they collide). The `||` short-circuits so the O(n²)
+  // collision scan never runs on an over-cap list.
+  if (safe.length > MAX_SKILL_FILES || hasFilePathCollision(safe)) return null;
   return safe;
 }
 
@@ -268,12 +269,18 @@ function collectSafeSkillFiles(rawFiles: unknown, prefix: string): string[] | nu
 }
 
 /**
- * True when any path is a strict directory-prefix ancestor of another in the set —
- * i.e. one entry is used as both a file and a folder (`a/b` and `a/b/c`), which no
- * filesystem can create.
+ * True when two paths would resolve to the same file, or one is a strict
+ * directory-prefix ancestor of another (`a/b` and `a/b/c`) — compared
+ * CASE-INSENSITIVELY. `scripts/Foo.md` vs `scripts/foo.md`, or a supporting
+ * `skill.md` vs the injected `SKILL.md`, are distinct on Linux but the SAME file on
+ * Windows / default macOS, where one silently overwrites the other (the marker write
+ * runs last, so it clobbers a colliding supporting file yet still reports installed).
+ * Rejecting the whole skill fails loud instead of installing an incomplete folder;
+ * folding on all platforms keeps the catalog parse deterministic and portable.
  */
-function hasFilePrefixCollision(paths: string[]): boolean {
-  return paths.some((a) => paths.some((b) => b !== a && b.startsWith(`${a}/`)));
+function hasFilePathCollision(paths: string[]): boolean {
+  const folded = paths.map((p) => p.toLowerCase());
+  return folded.some((a, i) => folded.some((b, j) => j !== i && (b === a || b.startsWith(`${a}/`))));
 }
 
 /**

@@ -39,10 +39,17 @@ function makeDeps(overrides: Partial<MarketplaceInstallDeps> = {}) {
       if (k === p || k.startsWith(`${p}/`)) files.delete(k);
     }
   };
+  // Read: returns stored content, rejecting a missing path like the real adapters.
+  const readAware = (files: Map<string, string>) => async (p: string) => {
+    const v = files.get(p);
+    if (v === undefined) throw new Error(`ENOENT: ${p}`);
+    return v;
+  };
 
   const qaFiles = new Map<string, string>();
   const adapter = {
     exists: dirAware(qaFiles),
+    read: readAware(qaFiles),
     write: async (p: string, c: string) => {
       qaFiles.set(p, c);
     },
@@ -54,6 +61,7 @@ function makeDeps(overrides: Partial<MarketplaceInstallDeps> = {}) {
   const homeFiles = new Map<string, string>();
   const homeAdapter = {
     exists: dirAware(homeFiles),
+    read: readAware(homeFiles),
     write: async (p: string, c: string) => {
       homeFiles.set(p, c);
     },
@@ -385,6 +393,11 @@ describe('installSkillItem', () => {
     const removed: string[] = [];
     const failing = {
       exists: async (p: string) => files.has(p) || [...files.keys()].some((k) => k.startsWith(`${p}/`)),
+      read: async (p: string) => {
+        const v = files.get(p);
+        if (v === undefined) throw new Error(`ENOENT: ${p}`);
+        return v;
+      },
       write: async (p: string, c: string) => {
         if (p.endsWith('/SKILL.md')) throw new Error('disk full'); // the LAST write fails
         files.set(p, c);
@@ -405,20 +418,38 @@ describe('installSkillItem', () => {
     expect(removed).toContain('.claude/skills/project-setup');
   });
 
-  it('does NOT delete the folder on rollback when a concurrent peer completed the SKILL.md', async () => {
-    // SKILL.md is absent at the pre-write guard (line 442) but present by cleanup time —
-    // a peer install finished mid-write. Rollback must not destroy the peer's skill.
-    let skillMdSeen = false;
+  it('does NOT delete the folder on rollback when a peer completed the COMPLETE SKILL.md', async () => {
+    // SKILL.md is absent at the pre-write guard but present — and byte-identical to what we
+    // meant to write — by cleanup time: a peer install of the same skill finished mid-write.
+    // Rollback compares content, sees a complete peer marker, and must not destroy the skill.
     const removed: string[] = [];
     const failing = {
-      exists: async (p: string) => {
-        if (p.endsWith('/SKILL.md')) {
-          const was = skillMdSeen; // false on the pre-write check, true afterwards
-          skillMdSeen = true;
-          return was;
-        }
-        return false;
+      exists: async () => false, // nothing present at the pre-write guards
+      read: async (p: string) => (p.endsWith('/SKILL.md') ? validSkillMd('project-setup') : ''),
+      write: async (p: string) => {
+        if (p.endsWith('/SKILL.md')) throw new Error('disk full'); // our own marker write fails
       },
+      deleteFolderRecursive: async (p: string) => {
+        removed.push(p);
+      },
+    } as unknown as VaultFileAdapter;
+    const { deps } = makeDeps({ adapter: failing });
+
+    await expect(
+      installSkillItem(skillItem, skillFiles(), { provider: 'claude', scope: 'project' }, deps),
+    ).rejects.toThrow(/disk full/);
+    expect(removed).toEqual([]); // the peer's COMPLETE marker (== skillMd) was left intact
+  });
+
+  it('DOES roll back when our own final marker write leaves a truncated SKILL.md', async () => {
+    // The final SKILL.md write creates/truncates then fails (disk full mid-write), leaving a
+    // partial marker. A content compare recognizes it as OUR broken write — not a peer's
+    // completion — and rolls the folder back, so a retry starts clean and the preflight never
+    // reports the truncated skill as installed.
+    const removed: string[] = [];
+    const failing = {
+      exists: async () => false,
+      read: async (p: string) => (p.endsWith('/SKILL.md') ? 'truncated par' : ''), // partial, != skillMd
       write: async (p: string) => {
         if (p.endsWith('/SKILL.md')) throw new Error('disk full');
       },
@@ -431,7 +462,7 @@ describe('installSkillItem', () => {
     await expect(
       installSkillItem(skillItem, skillFiles(), { provider: 'claude', scope: 'project' }, deps),
     ).rejects.toThrow(/disk full/);
-    expect(removed).toEqual([]); // the peer's completed install was left intact
+    expect(removed).toEqual(['.claude/skills/project-setup']); // our partial marker rolled back
   });
 
   it('installs by NAME so distinct-name items sharing a path parent get distinct folders', async () => {
