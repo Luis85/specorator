@@ -19,6 +19,7 @@ const {
   installSkillSpy,
   isSkillInstalledAtSpy,
   refreshCatalogSpy,
+  installsUserScopeSpy,
 } = vi.hoisted(() => ({
   fetchIndexSpy: vi.fn(),
   fetchBodySpy: vi.fn(),
@@ -30,6 +31,7 @@ const {
   installSkillSpy: vi.fn(),
   isSkillInstalledAtSpy: vi.fn(),
   refreshCatalogSpy: vi.fn(),
+  installsUserScopeSpy: vi.fn(),
 }));
 
 // Classes (not arrow factories): the store constructs these with `new`, and an
@@ -77,6 +79,11 @@ vi.mock('@/features/marketplace/MarketplaceInstaller', () => ({
 
 vi.mock('@/features/skills/refreshSkillCatalogBestEffort', () => ({
   refreshSkillCatalogBestEffort: refreshCatalogSpy,
+}));
+
+// Only the user-scope install-capability check is needed from ProviderRegistry here.
+vi.mock('@/core/providers/ProviderRegistry', () => ({
+  ProviderRegistry: { installsUserScopeSkills: installsUserScopeSpy },
 }));
 
 import { MAX_SKILL_FILES } from '@/features/marketplace/catalogTypes';
@@ -507,6 +514,7 @@ describe('marketplaceStore skill install', () => {
     isSkillInstalledAtSpy.mockResolvedValue(false);
     fetchBodySpy.mockResolvedValue('FILE');
     refreshCatalogSpy.mockResolvedValue(undefined);
+    installsUserScopeSpy.mockReturnValue(true); // capability present unless a test says otherwise
   });
 
   it('fetches the supporting files and installs the whole folder at the chosen target', async () => {
@@ -692,6 +700,30 @@ describe('marketplaceStore skill install', () => {
     store.init(fakePlugin(true));
     await expect(store.install(skillItem, 'SKILL BODY')).rejects.toThrow(/provider and scope/i);
     expect(installSkillSpy).not.toHaveBeenCalled();
+  });
+
+  it('aborts a user-scope install whose provider lost the capability before the write', async () => {
+    // e.g. Codex switched native→WSL, or Claude's loadUserSettings was disabled, while the
+    // install was queued/downloading. The captured target would otherwise write to host home
+    // the runtime no longer scans — a silent "installed" the provider can't discover.
+    installsUserScopeSpy.mockReturnValue(false);
+    const store = useMarketplaceStore();
+    store.init(fakePlugin(true));
+    mockSkillSource('SKILL BODY');
+    await expect(
+      store.install(skillItem, 'SKILL BODY', { provider: 'codex', scope: 'user' }),
+    ).rejects.toThrow(/no longer install user-scope|choose a target again/i);
+    expect(installSkillSpy).not.toHaveBeenCalled(); // nothing written
+  });
+
+  it('does NOT gate a project-scope install on the user-scope capability', async () => {
+    installsUserScopeSpy.mockReturnValue(false); // user-scope off — but this is a project install
+    const store = useMarketplaceStore();
+    store.init(fakePlugin(true));
+    mockSkillSource('SKILL BODY');
+    const outcome = await store.install(skillItem, 'SKILL BODY', { provider: 'claude', scope: 'project' });
+    expect(outcome).toBe('installed'); // project scope is unaffected by the user-scope gate
+    expect(installSkillSpy).toHaveBeenCalled();
   });
 
   it('rejects a skill declaring more files than the count cap, before any fetch', async () => {

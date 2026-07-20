@@ -1,7 +1,9 @@
 import { defineStore } from 'pinia';
 import { ref, shallowRef } from 'vue';
 
+import { ProviderRegistry } from '../../../../core/providers/ProviderRegistry';
 import { HomeFileAdapter } from '../../../../core/storage/HomeFileAdapter';
+import { asSettingsBag } from '../../../../core/types';
 import type SpecoratorPlugin from '../../../../main';
 import { refreshSkillCatalogBestEffort } from '../../../skills/refreshSkillCatalogBestEffort';
 import { type MarketplaceItem, normalizeInstallSlug } from '../../catalogTypes';
@@ -26,6 +28,24 @@ import type {
   SkillInstallTarget,
   SkillProviderTarget,
 } from '../../skillInstallTargets';
+
+/**
+ * Aborts a user-scope install whose provider no longer supports installing user-scope
+ * skills under the CURRENT settings (Codex switching to WSL, Claude's `loadUserSettings`
+ * disabled). The detail selector blocks NEW user-scope picks reactively; this is the
+ * write-time parallel — a target captured while it was supported must not silently write
+ * to host home the runtime no longer scans. Project-scope installs are never gated.
+ */
+function assertUserScopeStillInstallable(target: SkillInstallTarget, plugin: SpecoratorPlugin): void {
+  if (
+    target.scope === 'user' &&
+    !ProviderRegistry.installsUserScopeSkills(target.provider, asSettingsBag(plugin.settings))
+  ) {
+    throw new MarketplaceError(
+      `${target.provider} can no longer install user-scope skills with the current settings — re-open the skill and choose a target again.`,
+    );
+  }
+}
 
 /**
  * Marketplace store: fetches the catalog manifest via the client (falling back
@@ -344,6 +364,7 @@ export const useMarketplaceStore = defineStore('marketplace', () => {
     // fetchSkillFiles also verifies by content). No wasted download, no corruption.
     assertNoBinarySkillFiles(item);
     const files = await fetchSkillFiles(item, skillMdBody, installSource, assertNetworkEnabled);
+    assertUserScopeStillInstallable(target, requirePlugin());
     const outcome = await installSkillItem(item, files, target, installDeps());
     if (outcome === 'installed') {
       // Skill dot-folders bypass the vault watcher, so mirror skillLibraryStore's

@@ -212,8 +212,13 @@ Modeled on — and reuses the components of — `features/library`.
   separate target) — and a **scope**: `project` (the vault's `.claude/skills`,
   `.codex/skills`, or `.cursor/skills`, written via the vault adapter) or `user`
   (the same relative path under the home dir, written via `HomeFileAdapter`,
-  outside the vault). The whole folder lands under `<root>/<skill-name>/`,
-  `SKILL.md` written **last** so a mid-write failure leaves no dedup marker.
+  outside the vault). A **user-scope** target is re-checked against live settings at
+  write time (`ProviderRegistry.installsUserScopeSkills`, the write-time parallel of the
+  network re-check): a target captured while supported aborts rather than writes if the
+  provider lost the capability mid-install (Codex→WSL, Claude `loadUserSettings` off), so
+  it can't silently land in a host home the runtime no longer scans. The whole folder
+  lands under `<root>/<skill-name>/`, `SKILL.md` written **last** so a mid-write failure
+  leaves no dedup marker.
   Every skill file path is guarded twice — `parseManifest` sanitizes `files` to
   stay under the skill folder, and the installer re-checks each in-skill path
   (`hasUnsafePathSegment`) before writing. The reviewed `SKILL.md` is also

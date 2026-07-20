@@ -160,3 +160,14 @@ residuals. Each fix lands with a unit test under
   marker's CONTENT to the full body we meant to write; only a byte-identical marker counts
   as a completed (peer or self) install worth keeping — a truncated/different one is rolled
   back. Avoids the atomic-rename dependency (no cross-adapter move capability needed).
+
+- [x] **15. Re-check the user-scope install capability at write time.**
+  The detail selector blocks NEW user-scope picks when a provider loses that capability
+  (`ProviderRegistry.installsUserScopeSkills` → false: Codex switching to WSL, Claude's
+  `loadUserSettings` disabled), but a target CAPTURED while it was supported still wrote to
+  host home even if settings changed during the queued wait / download — a silent
+  "installed" the runtime (which now resolves a different home, e.g. the WSL distro's) never
+  discovers. `runSkillInstall` re-checked only the network gate. Fix: re-evaluate
+  `installsUserScopeSkills` against LIVE settings immediately before `installSkillItem` and
+  abort an obsolete user target (project scope is never gated) — the write-time parallel of
+  the existing network re-check.
