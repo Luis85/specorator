@@ -55,11 +55,15 @@ residuals. Each fix lands with a unit test under
 
 ## Residuals / follow-ups (bounded to a non-default custom source)
 
-- **Full per-target install serialization.** Item 9's rollback now skips deleting a
-  dir a concurrent peer has already completed (no destroying a finished install), but
-  two concurrent installs of the SAME target that both fail mid-write can still race.
-  A complete guarantee needs per-target serialization (an in-flight lock in the store)
-  or staging each install in a uniquely-owned dir before an atomic publish.
+- **Per-destination install serialization — DONE.** The store now queues skill
+  installs by DESTINATION folder (`provider + scope + normalizeInstallSlug(name)`, the
+  real write-collision boundary — NOT `item.id`, which a catalog refresh can reuse for
+  changed content or decouple from a name that maps to the same slug). Installs to one
+  folder chain instead of racing, and each runs its own install (a later one hits the
+  "already installed" preflight skip), so two writers never touch or roll back one
+  directory concurrently and no request rides another's outcome. A fully atomic
+  guarantee would still stage each install in a uniquely-owned dir before an atomic
+  publish, but the queue closes the concurrent-writer race this backlog was about.
 - **Pre-buffer streaming size limit.** The per-file size cap runs after
   `requestUrl().text` has already materialized the whole body — `requestUrl` is a
   high-level API with no socket/stream hooks, so a truly pre-buffer bound needs a

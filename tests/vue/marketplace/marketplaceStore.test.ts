@@ -567,37 +567,74 @@ describe('marketplaceStore skill install', () => {
     expect(files.get('SKILL.md')).toBe('SKILL BODY');
   });
 
-  it('serializes concurrent installs of the same skill+target into one actual install', async () => {
+  /** Holds the first install's write open and flags when a second write starts. */
+  function heldFirstThenFlag(): { finishFirst: () => void; startedSecond: () => boolean } {
+    let finish: (v: 'installed') => void = () => {};
+    let started = false;
+    installSkillSpy
+      .mockImplementationOnce(
+        () =>
+          new Promise<'installed'>((resolve) => {
+            finish = resolve;
+          }),
+      )
+      .mockImplementationOnce(() => {
+        started = true;
+        return Promise.resolve('installed');
+      });
+    return { finishFirst: () => finish('installed'), startedSecond: () => started };
+  }
+
+  it('serializes concurrent installs to the same destination so writers never overlap', async () => {
     const store = useMarketplaceStore();
     store.init(fakePlugin(true));
     mockSkillSource('SKILL BODY');
-    // Hold the (single) real install open so the second call arrives mid-flight.
-    let finish: (v: 'installed') => void = () => {};
-    installSkillSpy.mockReturnValueOnce(
-      new Promise<'installed'>((resolve) => {
-        finish = resolve;
-      }),
-    );
+    const { finishFirst, startedSecond } = heldFirstThenFlag();
     const target = { provider: 'claude', scope: 'project' } as const;
     const first = store.install(skillItem, 'SKILL BODY', target);
-    const second = store.install(skillItem, 'SKILL BODY', target); // rides the in-flight first
-    finish('installed');
+    const second = store.install(skillItem, 'SKILL BODY', target);
+    await new Promise((resolve) => setTimeout(resolve)); // let the first reach its held write
+    expect(startedSecond()).toBe(false); // queued behind the first, not racing it
+    finishFirst();
     expect(await first).toBe('installed');
     expect(await second).toBe('installed');
-    // The second call deduped onto the first — exactly one folder was written.
-    expect(installSkillSpy).toHaveBeenCalledTimes(1);
+    expect(startedSecond()).toBe(true); // it ran only after the first finished
   });
 
-  it('re-runs a later install of the same target once the first has settled', async () => {
+  it('serializes by destination folder, so a different id whose name maps to the same slug still queues', async () => {
+    // A catalog refresh can bring a different id/name that normalizes to the SAME
+    // destination folder. Keying by id would let them write concurrently (the item-9
+    // rollback racing two writers on one folder); the destination key queues them.
+    const store = useMarketplaceStore();
+    store.init(fakePlugin(true));
+    mockSkillSource('SKILL BODY');
+    const { finishFirst, startedSecond } = heldFirstThenFlag();
+    const target = { provider: 'claude', scope: 'project' } as const;
+    const a: MarketplaceItem = { ...skillItem, id: 'skills/project-setup', name: 'project-setup' };
+    const b: MarketplaceItem = { ...skillItem, id: 'skills/project-setup-v2', name: 'Project Setup' }; // → same slug
+    const first = store.install(a, 'SKILL BODY', target);
+    const second = store.install(b, 'SKILL BODY', target);
+    await new Promise((resolve) => setTimeout(resolve));
+    expect(startedSecond()).toBe(false); // b waits for a — same destination folder, not same id
+    finishFirst();
+    await first;
+    await second;
+    expect(startedSecond()).toBe(true);
+    // b ran its OWN install (its item), never riding a's promise — no coalescing misreport.
+    expect(installSkillSpy).toHaveBeenCalledTimes(2);
+    expect(installSkillSpy.mock.calls[1][0]).toBe(b);
+  });
+
+  it('runs a later install of the same destination fresh once the first has settled', async () => {
     const store = useMarketplaceStore();
     store.init(fakePlugin(true));
     mockSkillSource('SKILL BODY');
     const target = { provider: 'claude', scope: 'project' } as const;
     await store.install(skillItem, 'SKILL BODY', target);
-    await new Promise((resolve) => setTimeout(resolve)); // let the in-flight key clear
+    await new Promise((resolve) => setTimeout(resolve)); // let the queued tail clear
     await store.install(skillItem, 'SKILL BODY', target);
-    // The key is freed on settlement, so a genuinely later install runs fresh —
-    // it is NOT deduped onto the first's already-settled promise.
+    // The tail promise is freed on settlement, so a genuinely later install runs its
+    // own install rather than chaining onto a settled one.
     expect(installSkillSpy).toHaveBeenCalledTimes(2);
   });
 

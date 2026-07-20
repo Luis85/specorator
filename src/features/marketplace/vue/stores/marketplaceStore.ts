@@ -4,7 +4,7 @@ import { ref, shallowRef } from 'vue';
 import { HomeFileAdapter } from '../../../../core/storage/HomeFileAdapter';
 import type SpecoratorPlugin from '../../../../main';
 import { refreshSkillCatalogBestEffort } from '../../../skills/refreshSkillCatalogBestEffort';
-import type { MarketplaceItem } from '../../catalogTypes';
+import { type MarketplaceItem, normalizeInstallSlug } from '../../catalogTypes';
 import { MarketplaceCache } from '../../MarketplaceCache';
 import {
   DEFAULT_MARKETPLACE_BASE_URL,
@@ -59,12 +59,13 @@ export const useMarketplaceStore = defineStore('marketplace', () => {
   // catalog reload (same loadGeneration), so the generation guard alone can't
   // order them; only the latest-started scan commits its result.
   let installedScanSeq = 0;
-  // In-flight skill installs, keyed by provider+scope+id. The store is shared
-  // across every open leaf, so a double-click OR two live Marketplace leaves could
-  // otherwise install the SAME skill+target twice concurrently — duplicate
-  // downloads, and (with item 9's rollback) two writers racing to clean up the same
-  // folder. A second call for a key already in flight rides the first's result.
-  const skillInstallsInFlight = new Map<string, Promise<InstallOutcome>>();
+  // Serializes skill installs by DESTINATION folder (provider+scope+normalized name) —
+  // the real write-collision boundary, NOT `item.id`. The store is shared across every
+  // open leaf, so a double-click, two live leaves, or a catalog refresh that reuses an
+  // id (changed content) or maps a new name to the same slug could otherwise write and
+  // roll back the same folder concurrently. Installs to one folder chain (tail promise
+  // kept here); each runs its own install, so none rides another's outcome.
+  const skillInstallQueue = new Map<string, Promise<InstallOutcome>>();
 
   function init(p: SpecoratorPlugin): void {
     plugin ??= p;
@@ -285,27 +286,35 @@ export const useMarketplaceStore = defineStore('marketplace', () => {
   }
 
   /**
-   * Serializes concurrent installs of the SAME skill+target (across every leaf,
-   * since the store is shared): a second click or second live leaf rides the
-   * in-flight install's result instead of racing it. The map entry is cleared when
-   * the install settles, so a genuinely later install re-runs fresh (re-preflights,
-   * re-fetches) rather than replaying a stale outcome.
+   * Serializes installs that target the SAME destination folder (provider + scope +
+   * normalized skill name) — the real write-collision boundary, not `item.id`. Two
+   * installs can hit one folder with different ids/content across a catalog refresh
+   * (a replacement item reusing an id, or a different id whose name normalizes to the
+   * same slug), so an id key would let them write and roll back the same directory
+   * concurrently. Each queued install runs its OWN runSkillInstall — a later one hits
+   * the "already installed" preflight skip — so no request rides another's result: the
+   * reviewed content each caller picked is what its own run installs (or skips), never
+   * silently swapped for a peer's. The `item.id`-keyed installed mark still happens per
+   * caller in `install()`.
    */
   function installSkillAt(
     item: MarketplaceItem,
     skillMdBody: string,
     target: SkillInstallTarget,
   ): Promise<InstallOutcome> {
-    const key = `${target.provider} ${target.scope} ${item.id}`;
-    const inFlight = skillInstallsInFlight.get(key);
-    if (inFlight) return inFlight;
-    const run = runSkillInstall(item, skillMdBody, target);
-    skillInstallsInFlight.set(key, run);
-    // Clear on settlement (not in a finally awaited by only the first caller) so the
-    // key is freed the instant the install resolves/rejects. `catch` swallows the
-    // rejection for THIS cleanup chain only — the original `run` is returned to the
-    // caller, which still sees the rejection.
-    void run.catch(() => {}).finally(() => skillInstallsInFlight.delete(key));
+    const key = `${target.provider} ${target.scope} ${normalizeInstallSlug(item.name)}`;
+    const prior: Promise<unknown> = skillInstallQueue.get(key) ?? Promise.resolve();
+    // Chain after any in-flight install to this folder; swallow the prior's error so
+    // one failed install doesn't reject the whole queue waiting behind it.
+    const run = prior.catch(() => {}).then(() => runSkillInstall(item, skillMdBody, target));
+    skillInstallQueue.set(key, run);
+    // Free the slot on settlement, but only if we're still the tail (a later enqueue
+    // may have replaced us) so we never drop someone else's in-flight chain.
+    void run
+      .catch(() => {})
+      .finally(() => {
+        if (skillInstallQueue.get(key) === run) skillInstallQueue.delete(key);
+      });
     return run;
   }
 
