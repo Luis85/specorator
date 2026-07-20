@@ -71,6 +71,27 @@ test('installDeps REINSTALLS when node_modules was removed even though the marke
   }
 });
 
+test('installDeps treats a Yarn PnP layout (.pnp.cjs, no node_modules) as converged', () => {
+  // Yarn PnP installs create the .pnp.cjs loader instead of node_modules, so a
+  // node_modules-only "deps present" check would reinstall on every converged
+  // re-apply (and fail offline). The .pnp.cjs artifact counts as installed.
+  const p = tmpProject({
+    'package.json': { name: 'x', devDependencies: { left: '1.0.0' } },
+    '.project-setup-backup/.installed': 'yarn',
+    '.pnp.cjs': '/* pnp loader */', // Yarn PnP artifact; no node_modules dir
+  });
+  const calls = [];
+  try {
+    apply([
+      { type: 'mergeJson', path: 'package.json', patch: { devDependencies: { left: '1.0.0' } } },
+      { type: 'installDeps', packageManager: 'yarn' },
+    ], { cwd: p.dir, exec: (...a) => calls.push(a) });
+    assert.equal(calls.length, 0); // marker matches + PnP artifact present -> no reinstall
+  } finally {
+    p.cleanup();
+  }
+});
+
 test('installDeps REINSTALLS when the selected package manager changed', () => {
   // The marker records `npm`, but the plan now selects `pnpm` (e.g. answers.json
   // changed) — pnpm needs its own lockfile, so the stale npm marker must not skip.

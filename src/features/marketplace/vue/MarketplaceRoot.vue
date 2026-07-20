@@ -128,6 +128,11 @@ watch([counts, activeView, () => store.loaded, () => store.error, () => store.lo
 // Opt-in network gate: the Marketplace is dark until the user enables it, so
 // merely opening the view never touches the network.
 const enabled = ref(plugin.settings.marketplaceNetworkEnabled === true);
+// Bumped on `settings-changed` so computeds that read the non-reactive
+// `plugin.settings` (e.g. `skillProviderOptions`' per-provider user-scope check,
+// which depends on Claude's `loadUserSettings`) recompute when a setting changes
+// while a leaf stays mounted — without it the cached value would go stale.
+const settingsVersion = ref(0);
 
 // Generation-guarded preview body cache. Opening the detail fetches the body
 // once; `bodies` holds ONLY successfully-fetched content, a failed fetch sets
@@ -187,6 +192,7 @@ async function enable(): Promise<void> {
 let settingsChangedOff: (() => void) | null = null;
 onMounted(() => {
   settingsChangedOff = plugin.events.on('settings-changed', () => {
+    settingsVersion.value += 1; // invalidate settings-derived computeds (scope options)
     void syncEnabled();
   });
 });
@@ -260,9 +266,10 @@ function backToList(): void {
 
 // Skill install targets: the three providers that own a skill root, labeled from
 // the registry (falling back to the id if a provider isn't registered).
-const skillProviderOptions = computed(() =>
-  SKILL_PROVIDER_TARGETS.map((id) => ({ id, label: providerLabel(id), userScope: providerResolvesUserScope(id) })),
-);
+const skillProviderOptions = computed(() => {
+  void settingsVersion.value; // recompute when settings change (userScope reads live, non-reactive settings)
+  return SKILL_PROVIDER_TARGETS.map((id) => ({ id, label: providerLabel(id), userScope: providerResolvesUserScope(id) }));
+});
 
 function providerLabel(id: SkillProviderTarget): string {
   try {
