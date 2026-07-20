@@ -2268,9 +2268,9 @@ describe('CursorChatRuntime lifecycle + accessor methods', () => {
     const seen: boolean[] = [];
     const off = runtime.onReadyStateChange((ready) => seen.push(ready));
 
-    (bag.setReady as (r: boolean) => void).call(runtime, true);
+    (bag.readyState as { set: (r: boolean) => void }).set(true);
     off();
-    (bag.setReady as (r: boolean) => void).call(runtime, false);
+    (bag.readyState as { set: (r: boolean) => void }).set(false);
 
     expect(seen).toEqual([true]);
   });
@@ -2281,7 +2281,7 @@ describe('CursorChatRuntime lifecycle + accessor methods', () => {
     const seen: boolean[] = [];
     runtime.onReadyStateChange((ready) => seen.push(ready));
 
-    (bag.setReady as (r: boolean) => void).call(runtime, false);
+    (bag.readyState as { set: (r: boolean) => void }).set(false);
     expect(seen).toEqual([]);
   });
 
@@ -2364,7 +2364,7 @@ describe('CursorChatRuntime lifecycle + accessor methods', () => {
     const runtime = makeRuntime();
     const bag = runtime as unknown as Record<string, unknown>;
     expect(runtime.isReady()).toBe(false);
-    (bag.setReady as (r: boolean) => void).call(runtime, true);
+    (bag.readyState as { set: (r: boolean) => void }).set(true);
     expect(runtime.isReady()).toBe(true);
   });
 

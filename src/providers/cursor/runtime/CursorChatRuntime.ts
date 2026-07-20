@@ -76,6 +76,7 @@ import { mapCursorToolInput } from './cursorToolInputMapping';
 import { MAX_CURSOR_TOOL_RESULT_CHARS } from './cursorToolNormalization';
 import { APPROVAL_CANCELLED, raceApprovalAgainstCancel, withTimeout } from './cursorTurnRaces';
 import { extractCursorUsage } from './cursorUsageMapping';
+import { ReadyStateNotifier } from './readyStateNotifier';
 
 interface ActiveTurn {
   queue: AcpStreamChunkQueue;
@@ -154,8 +155,7 @@ export class CursorChatRuntime implements ChatRuntime {
   private lastStartupErrorMessage: string | null = null;
   private loadedSessionId: string | null = null;
   private process: AcpSubprocess | null = null;
-  private ready = false;
-  private readonly readyListeners = new Set<(ready: boolean) => void>();
+  private readonly readyState = new ReadyStateNotifier();
   private sessionId: string | null = null;
   private sessionInvalidated = false;
   // External-context roots the live ACP session was opened with. A turn whose
@@ -200,10 +200,7 @@ export class CursorChatRuntime implements ChatRuntime {
   }
 
   onReadyStateChange(listener: (ready: boolean) => void): () => void {
-    this.readyListeners.add(listener);
-    return () => {
-      this.readyListeners.delete(listener);
-    };
+    return this.readyState.subscribe(listener);
   }
 
   setResumeCheckpoint(_checkpointId: string | undefined): void {}
@@ -228,7 +225,7 @@ export class CursorChatRuntime implements ChatRuntime {
   async ensureReady(options?: ChatRuntimeEnsureReadyOptions): Promise<boolean> {
     const cli = this.plugin.getResolvedProviderCliPath('cursor');
     if (!cli) {
-      this.setReady(false);
+      this.readyState.set(false);
       return false;
     }
 
@@ -259,7 +256,7 @@ export class CursorChatRuntime implements ChatRuntime {
           await this.startProcess(cli);
           return true;
         } catch (error) {
-          this.setReady(false);
+          this.readyState.set(false);
           this.plugin.logger.scope('cursor.acp').warn('startup failed', error);
           return false;
         } finally {
@@ -547,7 +544,7 @@ export class CursorChatRuntime implements ChatRuntime {
   }
 
   isReady(): boolean {
-    return this.ready;
+    return this.readyState.get();
   }
 
   async getSupportedCommands(): Promise<SlashCommand[]> {
@@ -567,7 +564,7 @@ export class CursorChatRuntime implements ChatRuntime {
       this.askQuestionAbortController?.abort();
       this.askQuestionAbortController = null;
       await this.shutdownProcess();
-      this.readyListeners.clear();
+      this.readyState.clear();
     });
   }
 
@@ -713,7 +710,7 @@ export class CursorChatRuntime implements ChatRuntime {
       localConnection = null;
       unregisterLocalTransportClose = null;
       unregisterLocalExtensions = null;
-      this.setReady(true);
+      this.readyState.set(true);
     } catch (error) {
       if (generation === this.processGeneration) {
         this.lastStartupErrorMessage = this.describeStartupFailure(error, localProcess);
@@ -758,7 +755,7 @@ export class CursorChatRuntime implements ChatRuntime {
       return;
     }
     this.capture.event('transport_close');
-    this.setReady(false);
+    this.readyState.set(false);
     // The agent behind any pending blocking ask/approval is gone: abort the
     // in-flight cursor/ask_question (which unmounts its card and restores the
     // composer) and drop the approval card, or both stay stranded.
@@ -1325,18 +1322,8 @@ export class CursorChatRuntime implements ChatRuntime {
     return formatCursorRuntimeError(error, this.process?.getStderrSnapshot());
   }
 
-  private setReady(ready: boolean): void {
-    if (this.ready === ready) {
-      return;
-    }
-    this.ready = ready;
-    for (const listener of this.readyListeners) {
-      listener(ready);
-    }
-  }
-
   private async shutdownProcess(): Promise<void> {
-    this.setReady(false);
+    this.readyState.set(false);
     this.unregisterExtensions?.();
     this.unregisterExtensions = null;
     this.unregisterTransportClose?.();
