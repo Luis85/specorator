@@ -3,7 +3,7 @@ type: tech-debt
 title: "Marketplace multi-file skill install — untrusted-source hardening"
 date: 2026-07-20
 updated: 2026-07-20
-status: in-progress
+status: resolved
 priority: "2 - medium"
 severity: medium
 scope: src/features/marketplace
@@ -65,10 +65,14 @@ residuals. Each fix lands with a unit test under
   high-level API with no socket/stream hooks, so a truly pre-buffer bound needs a
   streaming transport (same limitation as the documented DNS-rebinding / redirect
   SSRF residuals). The cap still refuses to WRITE an oversized body.
-- **Revision pinning (item 10).** Supporting files are fetched at install time from
-  the mutable source while `SKILL.md` is the preview-time body, so a catalog update in
-  that window can yield a hybrid skill. Closing it means pinning to an immutable
-  revision or validating per-file content hashes from the reviewed index (cross-repo).
+- **Full revision pinning (item 10 residual).** The plugin now re-fetches `SKILL.md`
+  at install and refuses to install if it no longer matches the reviewed body (see
+  item 10 below), which catches a catalog bump that touches the marker. It does NOT
+  catch a bump that rewrites a supporting file while leaving `SKILL.md` byte-identical
+  — there the reviewed marker is still accurate but a script moved. Closing that narrow
+  residual needs per-file content hashes carried in the reviewed index, or pinning all
+  of an item's fetches to an immutable revision (both cross-repo, touching the
+  marketplace index format).
 
 ---
 
@@ -80,12 +84,18 @@ residuals. Each fix lands with a unit test under
   Marketplace even after the cause is resolved. Fix: on a write failure, remove the
   skill folder we just created (recursively) so a retry starts clean.
 
-- [ ] **10. Pin skill supporting-file fetches to the reviewed catalog revision.**
+- [x] **10. Pin skill supporting-file fetches to the reviewed catalog revision.**
+  (Plugin-only re-verify — narrows the window; full pinning stays a residual above.)
   Supporting files are fetched at install time from the mutable source (GitHub
   `main`), while the reviewed `SKILL.md` is from preview time — so a catalog update
   in that window can yield a hybrid skill (marker and scripts from different
-  revisions). Fix: pin all of an item's requests to an immutable revision, or
-  validate fetched content against hashes carried in the reviewed index.
+  revisions). Fix: after fetching a multi-file skill's supporting files, re-fetch its
+  `SKILL.md` and require it still equals the reviewed body; a mismatch aborts the
+  install with a "catalog changed — re-review" error so the reviewed marker is never
+  paired with newer supporting files. The reviewed body is still what's written (the
+  re-fetch is a guard, not the source of truth), and a marker-only skill skips the
+  re-fetch entirely (no supporting files, no hybrid). Full immutable-revision or
+  content-hash pinning (cross-repo) remains the residual noted above.
 
 - [x] **11. Stop peer fetch workers after the first failure.**
   `fetchWithConcurrency` used `Promise.all`, which rejects the instant one worker

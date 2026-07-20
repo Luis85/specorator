@@ -130,6 +130,14 @@ function assertSkillFileWithinCaps(content: string, label: string, budget: { tot
  * single fetch failure rejects the whole map, so no partial skill is written;
  * a NUL-bearing (binary) file is rejected too, and every file (SKILL.md included)
  * is size-capped.
+ *
+ * Revision-consistency (item 10): the supporting files are fetched at install
+ * time from the mutable source, while `skillMdBody` is the marker reviewed at
+ * preview time. For a multi-file skill the marker is re-fetched after the batch
+ * and must still equal what was reviewed — a catalog bump in that window would
+ * otherwise pair the reviewed marker with newer supporting files (a hybrid
+ * skill), so a drift aborts the install and asks for a re-review. The reviewed
+ * body is still what's written; the re-fetch is a guard, not the source of truth.
  */
 async function fetchSkillFiles(
   item: MarketplaceItem,
@@ -163,6 +171,7 @@ async function fetchSkillFiles(
       assertSkillFileWithinCaps(content, repoPath, budget);
       return content;
     });
+    await assertReviewedMarkerUnchanged(client, item.path, skillMdBody, assertNetwork);
     others.forEach((repoPath, index) => {
       const rel = repoPath.startsWith(prefix) ? repoPath.slice(prefix.length) : null;
       if (rel) files.set(rel, contents[index]);
@@ -170,6 +179,31 @@ async function fetchSkillFiles(
   }
   assertTextOnlySkillContents(files);
   return files;
+}
+
+/**
+ * Re-fetches the skill's `SKILL.md` from the source and requires it still equals
+ * the reviewed body — the plugin-only revision guard (item 10). It only narrows,
+ * not closes, the hybrid window: a bump that rewrites a supporting file WITHOUT
+ * touching `SKILL.md` still passes (the reviewed marker is then still accurate,
+ * only the scripts moved). Closing that residual needs per-file content hashes in
+ * the reviewed index or pinning to an immutable revision (cross-repo) — see the
+ * tech-debt note. The re-fetch isn't size-capped: on a match it equals the
+ * already-counted reviewed body; on a mismatch the install aborts regardless.
+ */
+async function assertReviewedMarkerUnchanged(
+  client: MarketplaceCatalogClient,
+  markerPath: string,
+  reviewedBody: string,
+  assertNetwork: () => void,
+): Promise<void> {
+  assertNetwork();
+  const currentMarker = await client.fetchItemBody(markerPath);
+  if (currentMarker !== reviewedBody) {
+    throw new MarketplaceError(
+      'This skill changed in the catalog since you reviewed it. Refresh the Marketplace and review it again before installing.',
+    );
+  }
 }
 
 /**
@@ -391,8 +425,10 @@ export const useMarketplaceStore = defineStore('marketplace', () => {
    *
    * Skills are the exception: they are multi-file, so the reviewed `SKILL.md` is
    * written verbatim while the supporting files ARE fetched at install time
-   * (guarded by the network opt-in and the same SSRF/containment checks), and a
-   * `target` (provider + scope) selects the root they land under.
+   * (guarded by the network opt-in and the same SSRF/containment checks). For a
+   * multi-file skill the marker is also re-fetched and must still match the
+   * reviewed body, so a mid-window catalog change can't pair the reviewed marker
+   * with newer supporting files. A `target` (provider + scope) selects the root.
    */
   async function install(
     item: MarketplaceItem,

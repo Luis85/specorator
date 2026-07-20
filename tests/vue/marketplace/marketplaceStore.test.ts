@@ -493,6 +493,16 @@ describe('marketplaceStore skill install', () => {
     tags: [],
   };
 
+  // The install re-fetches SKILL.md to verify it still matches the reviewed body
+  // (item 10 revision guard). Wire fetchItemBody so the marker re-fetch returns the
+  // reviewed body and supporting files return `supporting`, so a happy-path install
+  // doesn't trip the drift guard.
+  function mockSkillSource(reviewedMarker: string, supporting = 'FILE'): void {
+    fetchBodySpy.mockImplementation(async (repoPath: string) =>
+      repoPath === skillItem.path ? reviewedMarker : supporting,
+    );
+  }
+
   beforeEach(() => {
     setActivePinia(createPinia());
     vi.clearAllMocks();
@@ -506,13 +516,15 @@ describe('marketplaceStore skill install', () => {
     const store = useMarketplaceStore();
     const plugin = fakePlugin(true);
     store.init(plugin);
+    mockSkillSource('SKILL BODY');
     const outcome = await store.install(skillItem, 'SKILL BODY', { provider: 'codex', scope: 'user' });
     expect(outcome).toBe('installed');
 
-    // Only the supporting files are fetched — the reviewed SKILL.md body is used verbatim.
+    // Supporting files are fetched, and the marker is re-fetched to verify it hasn't
+    // drifted since preview — but the reviewed SKILL.md body is what gets written.
     expect(fetchBodySpy).toHaveBeenCalledWith('skills/project-setup/references/a.md');
     expect(fetchBodySpy).toHaveBeenCalledWith('skills/project-setup/scripts/setup.mjs');
-    expect(fetchBodySpy).not.toHaveBeenCalledWith('skills/project-setup/SKILL.md');
+    expect(fetchBodySpy).toHaveBeenCalledWith('skills/project-setup/SKILL.md');
 
     // installSkillItem gets an in-skill-relative file map + the target.
     const [passedItem, files, target] = installSkillSpy.mock.calls[0];
@@ -531,11 +543,39 @@ describe('marketplaceStore skill install', () => {
     expect(refreshCatalogSpy).toHaveBeenCalledWith(plugin, 'codex');
   });
 
+  it('aborts (writes nothing) when the marker drifted in the catalog since preview', async () => {
+    const store = useMarketplaceStore();
+    store.init(fakePlugin(true));
+    // The reviewed body is 'SKILL BODY', but the marker re-fetched at install time
+    // comes back changed — a catalog bump landed between preview and install, so the
+    // supporting files just fetched could be from a newer revision than the marker.
+    mockSkillSource('SKILL BODY CHANGED');
+    await expect(
+      store.install(skillItem, 'SKILL BODY', { provider: 'claude', scope: 'project' }),
+    ).rejects.toThrow(/changed in the catalog|review it again/i);
+    // The whole install is refused rather than landing a hybrid skill.
+    expect(installSkillSpy).not.toHaveBeenCalled();
+  });
+
+  it('installs a marker-only skill without re-fetching the marker (no supporting files)', async () => {
+    const markerOnly: MarketplaceItem = { ...skillItem, files: ['skills/project-setup/SKILL.md'] };
+    const store = useMarketplaceStore();
+    store.init(fakePlugin(true));
+    const outcome = await store.install(markerOnly, 'SKILL BODY', { provider: 'claude', scope: 'project' });
+    expect(outcome).toBe('installed');
+    // A marker-only skill has no supporting files, so there's no hybrid to guard
+    // against — the reviewed body is written verbatim with no network request at all.
+    expect(fetchBodySpy).not.toHaveBeenCalled();
+    const [, files] = installSkillSpy.mock.calls[0];
+    expect(files.get('SKILL.md')).toBe('SKILL BODY');
+  });
+
   it('does NOT invalidate caches when the skill was already installed (skipped)', async () => {
     installSkillSpy.mockResolvedValue('skipped');
     const store = useMarketplaceStore();
     const plugin = fakePlugin(true);
     store.init(plugin);
+    mockSkillSource('SKILL BODY');
     await store.install(skillItem, 'SKILL BODY', { provider: 'claude', scope: 'project' });
     expect(plugin.events.emit).not.toHaveBeenCalled();
     expect(refreshCatalogSpy).not.toHaveBeenCalled();
@@ -663,8 +703,9 @@ describe('marketplaceStore skill install', () => {
     const store = useMarketplaceStore();
     store.init(fakePlugin(true));
     // A supporting file with a text extension but binary bytes slips the extension
-    // pre-check; the content check after fetch (NUL byte) catches it.
-    fetchBodySpy.mockResolvedValue(`corrupt${String.fromCharCode(0)}bytes`);
+    // pre-check; the content check after fetch (NUL byte) catches it. The marker
+    // re-fetch still matches the reviewed body, so the flow reaches the text check.
+    mockSkillSource('SKILL BODY', `corrupt${String.fromCharCode(0)}bytes`);
     await expect(
       store.install(skillItem, 'SKILL BODY', { provider: 'claude', scope: 'project' }),
     ).rejects.toThrow(/not text|text-only/i);
@@ -691,6 +732,7 @@ describe('marketplaceStore skill install', () => {
     // A source switch happens mid-install; the in-flight install must keep using
     // the source it snapshotted at start (A), never the newly-set B.
     p.settings.marketplaceSourceUrl = 'https://b.example/';
+    mockSkillSource('SKILL BODY');
     await store.install(skillItem, 'SKILL BODY', { provider: 'claude', scope: 'project' });
     expect(clientCtor).toHaveBeenCalledWith('https://a.example/');
     expect(clientCtor).not.toHaveBeenCalledWith('https://b.example/');

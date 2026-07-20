@@ -52,9 +52,12 @@ Modeled on — and reuses the components of — `features/library`.
   renders) and, for the toggle only, the view's Enable button.
 - **Install writes the reviewed body.** `MarketplaceRoot` passes the
   already-previewed body into `store.install(item, body)`; the store does NOT
-  re-fetch (no TOCTOU, no re-dial), and the Install button stays disabled until
-  that body has loaded. Loops/templates/quick-actions are written **verbatim**
-  (provenance frontmatter preserved); agents parse into a `RosterAgent`.
+  re-fetch the body it writes (no TOCTOU, no re-dial), and the Install button stays
+  disabled until that body has loaded. Loops/templates/quick-actions are written
+  **verbatim** (provenance frontmatter preserved); agents parse into a `RosterAgent`.
+  (Multi-file skills re-fetch `SKILL.md` only to *verify* it hasn't drifted before
+  writing the reviewed body — see the skills contract below — never to change what's
+  written.)
   Install-target folders resolve with `??` (matching `main.ts`), so an
   explicitly-blank Quick Actions folder stays blank and the installer refuses the
   write (`hasConfiguredFolder`) instead of silently landing it in a default
@@ -195,7 +198,16 @@ Modeled on — and reuses the components of — `features/library`.
   (the "review exactly what installs" contract); the **supporting files are
   fetched at install time** from the same source (network-gated + SSRF/base-URL
   constrained, one bounded-concurrency batch, all-or-nothing so no partial skill
-  is written). The user picks a **provider** — Claude, Codex, or Cursor (the
+  is written). For a multi-file skill the reviewed `SKILL.md` is **re-fetched after
+  that batch and must still equal the reviewed body** — a mismatch aborts the
+  install with a "catalog changed — re-review" error, so a mid-window catalog bump
+  can't pair the reviewed marker with newer supporting files (the reviewed body is
+  still what's written; the re-fetch is a consistency guard). It narrows but doesn't
+  close the window — a bump that rewrites a supporting file while leaving `SKILL.md`
+  byte-identical still passes; full immutable-revision / content-hash pinning is a
+  documented cross-repo residual (`docs/tech-debt/2026-07-20-marketplace-skill-install-hardening.md`).
+  A marker-only skill has no supporting files, so it skips the re-fetch. The user
+  picks a **provider** — Claude, Codex, or Cursor (the
   three that own a skill root; OpenCode reads Claude's/Codex's and isn't a
   separate target) — and a **scope**: `project` (the vault's `.claude/skills`,
   `.codex/skills`, or `.cursor/skills`, written via the vault adapter) or `user`
