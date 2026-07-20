@@ -204,6 +204,14 @@ describe('parseManifest — skill files', () => {
     expect(firstSkill(['skills/project-setup/SKILL.md', ...atCap])).toBeDefined();
   });
 
+  it('drops a skill when injecting the SKILL.md marker pushes the count over the cap', () => {
+    // Exactly MAX_SKILL_FILES safe supporting paths but item.path omitted: injecting
+    // SKILL.md normalizes to MAX_SKILL_FILES+1, which the install path caps — so the
+    // parse-time count must include the injected marker or Install would always fail.
+    const supporting = Array.from({ length: MAX_SKILL_FILES }, (_unused, i) => `skills/project-setup/h${i}.md`);
+    expect(firstSkill(supporting)).toBeUndefined();
+  });
+
   it('rejects the WHOLE skill when one declared file is a directory prefix of another', () => {
     // Each path is safe alone, but the installer would create the ancestor as a
     // directory while writing the descendant, then fail writing the ancestor as a

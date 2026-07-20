@@ -79,8 +79,8 @@ vi.mock('@/features/skills/refreshSkillCatalogBestEffort', () => ({
   refreshSkillCatalogBestEffort: refreshCatalogSpy,
 }));
 
-import { DEFAULT_MARKETPLACE_BASE_URL } from '@/features/marketplace/MarketplaceCatalogClient';
 import { MAX_SKILL_FILES } from '@/features/marketplace/catalogTypes';
+import { DEFAULT_MARKETPLACE_BASE_URL } from '@/features/marketplace/MarketplaceCatalogClient';
 import {
   MAX_SKILL_FILE_CHARS,
   MAX_SKILL_TOTAL_CHARS,
@@ -573,6 +573,17 @@ describe('marketplaceStore skill install', () => {
       store.install(skillItem, 'SKILL BODY', { provider: 'claude', scope: 'project' }),
     ).rejects.toThrow(/too large to install/i);
     expect(installSkillSpy).not.toHaveBeenCalled(); // nothing written on an over-cap file
+  });
+
+  it('applies the per-file size cap to the SKILL.md body too (even a marker-only skill)', async () => {
+    const markerOnly: MarketplaceItem = { ...skillItem, files: ['skills/project-setup/SKILL.md'] };
+    const store = useMarketplaceStore();
+    store.init(fakePlugin(true));
+    await expect(
+      store.install(markerOnly, 'x'.repeat(MAX_SKILL_FILE_CHARS + 1), { provider: 'claude', scope: 'project' }),
+    ).rejects.toThrow(/too large to install/i);
+    expect(fetchBodySpy).not.toHaveBeenCalled(); // marker-only: no supporting fetch ran
+    expect(installSkillSpy).not.toHaveBeenCalled();
   });
 
   it('rejects a skill whose supporting files exceed the aggregate size cap', async () => {

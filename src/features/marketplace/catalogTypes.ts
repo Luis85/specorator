@@ -232,25 +232,38 @@ export const MAX_SKILL_FILES = 500;
 function sanitizeSkillFiles(item: MarketplaceItem): string[] | null {
   const prefix = skillFolderPrefix(item.path);
   if (!prefix) return null;
-  // Bound the count BEFORE the O(n²) collision check so a huge files[] can't freeze
-  // the renderer at catalog load (drops the skill entirely, not just at install time).
-  if (Array.isArray(item.files) && item.files.length > MAX_SKILL_FILES) return null;
+  const declared = collectSafeSkillFiles(item.files, prefix);
+  if (!declared) return null;
+  // Inject the previewed SKILL.md (`item.path`) if the manifest omitted it.
+  const safe = declared.includes(item.path) ? declared : [item.path, ...declared];
+  // Drop when the NORMALIZED list (SKILL.md included) exceeds the file cap — the install
+  // path caps this same list, so a raw list that crosses only once SKILL.md is added would
+  // otherwise display but always fail Install — OR when one declared file is a directory
+  // prefix of another (`.../SKILL.md` AND `.../SKILL.md/readme.txt`), which would make the
+  // installer create the marker as a folder and leave a partial dir that blocks retry. The
+  // `||` short-circuits so the O(n²) collision scan never runs on an over-cap list.
+  if (safe.length > MAX_SKILL_FILES || hasFilePrefixCollision(safe)) return null;
+  return safe;
+}
+
+/**
+ * Validates and de-duplicates a skill's raw `files` under its folder `prefix`, returning
+ * the safe list (SKILL.md not yet injected) or `null` if any entry escapes the folder or
+ * the count exceeds `MAX_SKILL_FILES`. The count is bounded here — before the caller's
+ * O(n²) collision scan — so a huge `files[]` can't freeze the renderer at catalog load.
+ */
+function collectSafeSkillFiles(rawFiles: unknown, prefix: string): string[] | null {
+  const declared = Array.isArray(rawFiles) ? rawFiles : [];
+  if (declared.length > MAX_SKILL_FILES) return null;
   const seen = new Set<string>();
   const safe: string[] = [];
-  for (const candidate of Array.isArray(item.files) ? item.files : []) {
+  for (const candidate of declared) {
     if (!isSafeSkillFilePath(candidate, prefix)) return null;
     if (!seen.has(candidate)) {
       seen.add(candidate);
       safe.push(candidate);
     }
   }
-  if (!seen.has(item.path)) safe.unshift(item.path);
-  // Reject a set where one declared file is a directory prefix of another (e.g.
-  // `.../SKILL.md` AND `.../SKILL.md/readme.txt`): the installer would create the
-  // first as a directory while writing the second, then fail writing the first as a
-  // file — leaving a partial skill folder that blocks every retry. Covers the SKILL.md
-  // marker too, since it's in `safe`.
-  if (hasFilePrefixCollision(safe)) return null;
   return safe;
 }
 

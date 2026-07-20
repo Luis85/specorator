@@ -4,7 +4,7 @@ import { ref, shallowRef } from 'vue';
 import { HomeFileAdapter } from '../../../../core/storage/HomeFileAdapter';
 import type SpecoratorPlugin from '../../../../main';
 import { refreshSkillCatalogBestEffort } from '../../../skills/refreshSkillCatalogBestEffort';
-import { isBinarySkillPath, MAX_SKILL_FILES, type MarketplaceItem, skillFolderPrefix } from '../../catalogTypes';
+import { isBinarySkillPath, type MarketplaceItem, MAX_SKILL_FILES, skillFolderPrefix } from '../../catalogTypes';
 import { MarketplaceCache } from '../../MarketplaceCache';
 import {
   DEFAULT_MARKETPLACE_BASE_URL,
@@ -104,12 +104,32 @@ function assertNoBinarySkillFiles(item: MarketplaceItem): void {
 }
 
 /**
+ * Enforces the per-file and running-aggregate size caps on one skill file's content
+ * (`SKILL.md` included, so a marker-only skill can't slip a huge body past the bounds).
+ * `budget.total` accumulates across calls; throws past either cap.
+ */
+function assertSkillFileWithinCaps(content: string, label: string, budget: { total: number }): void {
+  if (content.length > MAX_SKILL_FILE_CHARS) {
+    throw new MarketplaceError(
+      `This skill's file "${label}" is too large to install (over ${MAX_SKILL_FILE_CHARS.toLocaleString()} characters).`,
+    );
+  }
+  budget.total += content.length;
+  if (budget.total > MAX_SKILL_TOTAL_CHARS) {
+    throw new MarketplaceError(
+      `This skill's files exceed the ${MAX_SKILL_TOTAL_CHARS.toLocaleString()}-character total limit for a marketplace install.`,
+    );
+  }
+}
+
+/**
  * Builds the in-skill file map: the reviewed `SKILL.md` verbatim, plus every
  * other file in `item.files` fetched from `sourceUrl` — the source snapshotted
  * when the install began, so a concurrent source switch can't split the skill.
  * Keys are in-skill relative paths (`scripts/setup.mjs`), values the content. A
  * single fetch failure rejects the whole map, so no partial skill is written;
- * a NUL-bearing (binary) file is rejected too.
+ * a NUL-bearing (binary) file is rejected too, and every file (SKILL.md included)
+ * is size-capped.
  */
 async function fetchSkillFiles(
   item: MarketplaceItem,
@@ -123,32 +143,24 @@ async function fetchSkillFiles(
       `This skill declares ${declared.length} files, over the ${MAX_SKILL_FILES}-file limit for a marketplace install.`,
     );
   }
+  // SKILL.md counts toward the caps first — a marker-only skill never runs the fetch
+  // callback below, so its size must be checked here or it would bypass the bounds.
+  const budget = { total: 0 };
+  assertSkillFileWithinCaps(skillMdBody, 'SKILL.md', budget);
   const files = new Map<string, string>([['SKILL.md', skillMdBody]]);
   const prefix = skillFolderPrefix(item.path);
   const others = declared.filter((repoPath) => repoPath !== item.path);
   if (prefix !== null && others.length > 0) {
     const client = new MarketplaceCatalogClient(sourceUrl);
-    let totalChars = skillMdBody.length;
     const contents = await fetchWithConcurrency(others, SKILL_FETCH_CONCURRENCY, async (repoPath) => {
       // Re-read the opt-in before EVERY request (not just once at install start):
       // disabling networking mid-install must stop any not-yet-started fetch at
       // once — the Marketplace's "opt-out stops requestUrl immediately" contract.
       assertNetwork();
       const content = await client.fetchItemBody(repoPath);
-      // Bound per-file and running-aggregate size so an oversized body from a custom
-      // source fails the install instead of buffering unboundedly (abort past the cap;
-      // with SKILL_FETCH_CONCURRENCY in flight the overshoot is bounded).
-      if (content.length > MAX_SKILL_FILE_CHARS) {
-        throw new MarketplaceError(
-          `This skill's file "${repoPath}" is too large to install (over ${MAX_SKILL_FILE_CHARS.toLocaleString()} characters).`,
-        );
-      }
-      totalChars += content.length;
-      if (totalChars > MAX_SKILL_TOTAL_CHARS) {
-        throw new MarketplaceError(
-          `This skill's files exceed the ${MAX_SKILL_TOTAL_CHARS.toLocaleString()}-character total limit for a marketplace install.`,
-        );
-      }
+      // Abort past the cap (with SKILL_FETCH_CONCURRENCY in flight the overshoot is
+      // bounded) rather than buffering an oversized body from a custom source.
+      assertSkillFileWithinCaps(content, repoPath, budget);
       return content;
     });
     others.forEach((repoPath, index) => {
