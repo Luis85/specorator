@@ -19,7 +19,7 @@ custom-source hardening, the same tier as the documented `requestUrl` SSRF
 residuals. Each fix lands with a unit test under
 `tests/unit/features/marketplace/`.
 
-- [ ] **5. Bound multi-file skill downloads.**
+- [x] **5. Bound multi-file skill downloads.**
   `fetchSkillFiles` fetches every `files[]` entry (bounded only in concurrency)
   and retains all decoded bodies in memory before the first write, so a catalog
   declaring thousands of files or very large bodies could exhaust renderer

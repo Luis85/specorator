@@ -29,6 +29,14 @@ import type {
 /** Bounded parallelism for fetching a multi-file skill's supporting files. */
 const SKILL_FETCH_CONCURRENCY = 6;
 
+// Bounds on a multi-file skill download from an (untrusted) custom catalog source, so a
+// manifest declaring thousands of files or very large bodies can't exhaust renderer
+// memory or bandwidth. Sized well above the first-party catalog's skills (project-setup:
+// 138 files, ~370 KB). Measured in string length (≈ bytes for the UTF-8 text these must be).
+export const MAX_SKILL_FILES = 500;
+export const MAX_SKILL_FILE_CHARS = 1_000_000;
+export const MAX_SKILL_TOTAL_CHARS = 10_000_000;
+
 /**
  * Runs `fn` over `items` with at most `limit` in flight, preserving input order
  * in the result. Rejects on the first failure (so a skill install writes nothing
@@ -93,17 +101,39 @@ async function fetchSkillFiles(
   sourceUrl: string,
   assertNetwork: () => void,
 ): Promise<Map<string, string>> {
+  const declared = item.files ?? [];
+  if (declared.length > MAX_SKILL_FILES) {
+    throw new MarketplaceError(
+      `This skill declares ${declared.length} files, over the ${MAX_SKILL_FILES}-file limit for a marketplace install.`,
+    );
+  }
   const files = new Map<string, string>([['SKILL.md', skillMdBody]]);
   const prefix = skillFolderPrefix(item.path);
-  const others = (item.files ?? []).filter((repoPath) => repoPath !== item.path);
+  const others = declared.filter((repoPath) => repoPath !== item.path);
   if (prefix !== null && others.length > 0) {
     const client = new MarketplaceCatalogClient(sourceUrl);
-    const contents = await fetchWithConcurrency(others, SKILL_FETCH_CONCURRENCY, (repoPath) => {
+    let totalChars = skillMdBody.length;
+    const contents = await fetchWithConcurrency(others, SKILL_FETCH_CONCURRENCY, async (repoPath) => {
       // Re-read the opt-in before EVERY request (not just once at install start):
       // disabling networking mid-install must stop any not-yet-started fetch at
       // once — the Marketplace's "opt-out stops requestUrl immediately" contract.
       assertNetwork();
-      return client.fetchItemBody(repoPath);
+      const content = await client.fetchItemBody(repoPath);
+      // Bound per-file and running-aggregate size so an oversized body from a custom
+      // source fails the install instead of buffering unboundedly (abort past the cap;
+      // with SKILL_FETCH_CONCURRENCY in flight the overshoot is bounded).
+      if (content.length > MAX_SKILL_FILE_CHARS) {
+        throw new MarketplaceError(
+          `This skill's file "${repoPath}" is too large to install (over ${MAX_SKILL_FILE_CHARS.toLocaleString()} characters).`,
+        );
+      }
+      totalChars += content.length;
+      if (totalChars > MAX_SKILL_TOTAL_CHARS) {
+        throw new MarketplaceError(
+          `This skill's files exceed the ${MAX_SKILL_TOTAL_CHARS.toLocaleString()}-character total limit for a marketplace install.`,
+        );
+      }
+      return content;
     });
     others.forEach((repoPath, index) => {
       const rel = repoPath.startsWith(prefix) ? repoPath.slice(prefix.length) : null;

@@ -80,7 +80,12 @@ vi.mock('@/features/skills/refreshSkillCatalogBestEffort', () => ({
 }));
 
 import { DEFAULT_MARKETPLACE_BASE_URL } from '@/features/marketplace/MarketplaceCatalogClient';
-import { useMarketplaceStore } from '@/features/marketplace/vue/stores/marketplaceStore';
+import {
+  MAX_SKILL_FILE_CHARS,
+  MAX_SKILL_FILES,
+  MAX_SKILL_TOTAL_CHARS,
+  useMarketplaceStore,
+} from '@/features/marketplace/vue/stores/marketplaceStore';
 
 const item: MarketplaceItem = {
   id: 'a',
@@ -540,6 +545,52 @@ describe('marketplaceStore skill install', () => {
     const store = useMarketplaceStore();
     store.init(fakePlugin(true));
     await expect(store.install(skillItem, 'SKILL BODY')).rejects.toThrow(/provider and scope/i);
+    expect(installSkillSpy).not.toHaveBeenCalled();
+  });
+
+  it('rejects a skill declaring more files than the count cap, before any fetch', async () => {
+    const store = useMarketplaceStore();
+    store.init(fakePlugin(true));
+    const tooMany: MarketplaceItem = {
+      ...skillItem,
+      files: [
+        'skills/project-setup/SKILL.md',
+        ...Array.from({ length: MAX_SKILL_FILES }, (_unused, i) => `skills/project-setup/f${i}.md`),
+      ],
+    };
+    await expect(
+      store.install(tooMany, 'SKILL BODY', { provider: 'claude', scope: 'project' }),
+    ).rejects.toThrow(/files, over the .*limit/i);
+    expect(fetchBodySpy).not.toHaveBeenCalled(); // rejected before downloading anything
+    expect(installSkillSpy).not.toHaveBeenCalled();
+  });
+
+  it('rejects a skill whose supporting file exceeds the per-file size cap', async () => {
+    fetchBodySpy.mockResolvedValue('x'.repeat(MAX_SKILL_FILE_CHARS + 1));
+    const store = useMarketplaceStore();
+    store.init(fakePlugin(true));
+    await expect(
+      store.install(skillItem, 'SKILL BODY', { provider: 'claude', scope: 'project' }),
+    ).rejects.toThrow(/too large to install/i);
+    expect(installSkillSpy).not.toHaveBeenCalled(); // nothing written on an over-cap file
+  });
+
+  it('rejects a skill whose supporting files exceed the aggregate size cap', async () => {
+    // Each file is at (not over) the per-file cap; their running total crosses the aggregate.
+    fetchBodySpy.mockResolvedValue('x'.repeat(MAX_SKILL_FILE_CHARS));
+    const count = Math.floor(MAX_SKILL_TOTAL_CHARS / MAX_SKILL_FILE_CHARS) + 1;
+    const many: MarketplaceItem = {
+      ...skillItem,
+      files: [
+        'skills/project-setup/SKILL.md',
+        ...Array.from({ length: count }, (_unused, i) => `skills/project-setup/big${i}.md`),
+      ],
+    };
+    const store = useMarketplaceStore();
+    store.init(fakePlugin(true));
+    await expect(
+      store.install(many, 'SKILL BODY', { provider: 'claude', scope: 'project' }),
+    ).rejects.toThrow(/total limit/i);
     expect(installSkillSpy).not.toHaveBeenCalled();
   });
 
