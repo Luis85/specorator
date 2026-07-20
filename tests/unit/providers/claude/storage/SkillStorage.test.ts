@@ -31,6 +31,23 @@ function createMockHomeAdapter(files: Record<string, string> = {}, homeRoot = '/
   } as unknown as HomeFileAdapter;
 }
 
+/** Minimal PluginInfo for discovery tests. */
+function plugin(
+  name: string,
+  installPath: string,
+  enabled = true,
+): { id: string; name: string; enabled: boolean; scope: 'user' | 'project'; installPath: string } {
+  return { id: `${name}@marketplace`, name, enabled, scope: 'user', installPath };
+}
+
+/**
+ * Factory that hands each plugin install path its own rooted read adapter, so a
+ * plugin's `skills/` dir resolves to host-absolute paths under its install path.
+ */
+function createPluginAdapterFactory(byRoot: Record<string, Record<string, string>>) {
+  return (root: string) => createMockHomeAdapter(byRoot[root] ?? {}, root);
+}
+
 function createMockAdapter(files: Record<string, string> = {}): VaultFileAdapter {
   const mockAdapter = {
     exists: jest.fn(async (path: string) => path in files || Object.keys(files).some(k => k.startsWith(path + '/'))),
@@ -299,6 +316,86 @@ Prompt`,
       (home.listFolders as jest.Mock).mockRejectedValue(new Error('nope'));
       const storage = new SkillStorage(createMockAdapter({}), home);
       expect(await storage.loadUserAll()).toEqual([]);
+    });
+  });
+
+  describe('loadPluginAll', () => {
+    it('returns [] for no plugins', async () => {
+      const storage = new SkillStorage(createMockAdapter({}));
+      expect(await storage.loadPluginAll([])).toEqual([]);
+    });
+
+    it('skips disabled plugins', async () => {
+      const factory = createPluginAdapterFactory({
+        '/plugins/formatter': { 'skills/fix/SKILL.md': '---\ndescription: Fix\n---\nFix' },
+      });
+      const storage = new SkillStorage(createMockAdapter({}), undefined, factory);
+      const loaded = await storage.loadPluginAll([plugin('formatter', '/plugins/formatter', false)]);
+      expect(loaded).toEqual([]);
+    });
+
+    it('discovers enabled plugin skills from <installPath>/skills, namespaced and read-only', async () => {
+      const factory = createPluginAdapterFactory({
+        '/plugins/formatter': {
+          'skills/review/SKILL.md': '---\ndescription: Plugin review\n---\nReview',
+        },
+      });
+      const storage = new SkillStorage(createMockAdapter({}), undefined, factory);
+      const loaded = await storage.loadPluginAll([plugin('formatter', '/plugins/formatter')]);
+
+      expect(loaded).toHaveLength(1);
+      // Namespaced `plugin:skill` name — the exact `/name` the runtime resolves.
+      expect(loaded[0].skill.name).toBe('formatter:review');
+      expect(loaded[0].skill.description).toBe('Plugin review');
+      // Distinct, plugin-namespaced id so two plugins' same-named skills don't collide.
+      expect(loaded[0].skill.id).toBe('plugin-skill-formatter-review');
+      expect(loaded[0].readOnly).toBe(true);
+      // Host-absolute path under the plugin install dir → clone/delete gate rejects it.
+      expect(loaded[0].filePath).toBe('/plugins/formatter/skills/review/SKILL.md');
+    });
+
+    it('namespaces two plugins independently so same-named skills do not collide', async () => {
+      const factory = createPluginAdapterFactory({
+        '/plugins/a': { 'skills/deploy/SKILL.md': '---\ndescription: A deploy\n---\nA' },
+        '/plugins/b': { 'skills/deploy/SKILL.md': '---\ndescription: B deploy\n---\nB' },
+      });
+      const storage = new SkillStorage(createMockAdapter({}), undefined, factory);
+      const loaded = await storage.loadPluginAll([
+        plugin('a', '/plugins/a'),
+        plugin('b', '/plugins/b'),
+      ]);
+
+      expect(loaded.map((l) => l.skill.name).sort()).toEqual(['a:deploy', 'b:deploy']);
+      expect(loaded.map((l) => l.skill.id).sort()).toEqual([
+        'plugin-skill-a-deploy',
+        'plugin-skill-b-deploy',
+      ]);
+    });
+
+    it('returns [] for a plugin whose skills dir is absent (no throw)', async () => {
+      const factory = createPluginAdapterFactory({}); // no files for any root
+      const storage = new SkillStorage(createMockAdapter({}), undefined, factory);
+      const loaded = await storage.loadPluginAll([plugin('empty', '/plugins/empty')]);
+      expect(loaded).toEqual([]);
+    });
+
+    it('reads plugin skills independently of vault and user skills', async () => {
+      const vault = createMockAdapter({
+        '.claude/skills/vault-only/SKILL.md': '---\ndescription: Vault\n---\nV',
+      });
+      const home = createMockHomeAdapter({
+        '.claude/skills/home-only/SKILL.md': '---\ndescription: Home\n---\nH',
+      });
+      const factory = createPluginAdapterFactory({
+        '/plugins/p': { 'skills/plug-only/SKILL.md': '---\ndescription: Plugin\n---\nP' },
+      });
+      const storage = new SkillStorage(vault, home, factory);
+
+      expect((await storage.loadAll()).map((s) => s.skill.name)).toEqual(['vault-only']);
+      expect((await storage.loadUserAll()).map((s) => s.skill.name)).toEqual(['home-only']);
+      expect((await storage.loadPluginAll([plugin('p', '/plugins/p')])).map((s) => s.skill.name)).toEqual([
+        'p:plug-only',
+      ]);
     });
   });
 

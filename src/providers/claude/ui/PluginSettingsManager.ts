@@ -11,6 +11,12 @@ export interface PluginSettingsManagerDeps {
   pluginManager: AppPluginManager;
   agentManager: Pick<AppAgentManager, 'loadAgents'>;
   restartTabs: () => Promise<void>;
+  /**
+   * Fired after the enabled-plugin set changes (toggle or refresh). Lets the
+   * host invalidate the skill catalog so a plugin's skills appear/disappear in
+   * the Library without waiting out the aggregator TTL.
+   */
+  onPluginsChanged?: () => void;
 }
 
 export class PluginSettingsManager {
@@ -18,12 +24,14 @@ export class PluginSettingsManager {
   private pluginManager: AppPluginManager;
   private agentManager: Pick<AppAgentManager, 'loadAgents'>;
   private restartTabs: () => Promise<void>;
+  private onPluginsChanged?: () => void;
 
   constructor(containerEl: HTMLElement, deps: PluginSettingsManagerDeps) {
     this.containerEl = containerEl;
     this.pluginManager = deps.pluginManager;
     this.agentManager = deps.agentManager;
     this.restartTabs = deps.restartTabs;
+    this.onPluginsChanged = deps.onPluginsChanged;
     this.render();
   }
 
@@ -113,6 +121,9 @@ export class PluginSettingsManager {
     try {
       await this.pluginManager.togglePlugin(pluginId);
       await this.agentManager.loadAgents();
+      // A toggled plugin gains/loses its skills; refresh the catalog cache so
+      // the Library reflects it immediately.
+      this.onPluginsChanged?.();
 
       try {
         await this.restartTabs();
@@ -137,6 +148,8 @@ export class PluginSettingsManager {
     try {
       await this.pluginManager.loadPlugins();
       await this.agentManager.loadAgents();
+      // Re-scan may have surfaced newly-installed plugins (and their skills).
+      this.onPluginsChanged?.();
 
       new Notice(t('provider.claude.plugin.listRefreshed'));
     } catch (err) {

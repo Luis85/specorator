@@ -15,6 +15,14 @@ import {
   type SlashCommandType,
 } from './slashCommandEntryBuilder';
 
+// The settings manager edits/deletes vault-authored entries only. Read-only
+// scopes — global `~/.claude/skills` (`user`) and plugin `<installPath>/skills`
+// (`plugin`) — carry a host-absolute path the vault adapter can't write, so
+// they surface in the Library (view/run) instead, never here.
+function isVaultManageableEntry(entry: ProviderCommandEntry): boolean {
+  return entry.scope !== 'user' && entry.scope !== 'plugin';
+}
+
 export class SlashCommandModal extends Modal {
   private entries: ProviderCommandEntry[];
   private existingEntry: ProviderCommandEntry | null;
@@ -285,9 +293,7 @@ export class SlashCommandSettings {
       return;
     }
 
-    // The manager edits/deletes vault-authored entries; read-only user-scope
-    // skills (`~/.claude/skills`) are surfaced in the Library, not here.
-    this.commands = (await this.catalog.listVaultEntries()).filter((e) => e.scope !== 'user');
+    this.commands = (await this.catalog.listVaultEntries()).filter(isVaultManageableEntry);
     this.render();
   }
 
@@ -479,8 +485,7 @@ export class SlashCommandSettings {
       return;
     }
 
-    // Vault-authored entries only — read-only user-scope skills live in the Library.
-    this.commands = (await this.catalog.listVaultEntries()).filter((e) => e.scope !== 'user');
+    this.commands = (await this.catalog.listVaultEntries()).filter(isVaultManageableEntry);
   }
 
   public refresh(): void {

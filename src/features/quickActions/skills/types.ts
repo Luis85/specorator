@@ -25,7 +25,8 @@ export interface SkillTabEntry {
   /**
    * Provider scope of the source entry. `runVaultSkill` uses `'user'` to gate
    * global (`~/.claude/skills`) skills whose provider can't currently resolve
-   * them (e.g. Claude with `loadUserSettings` off).
+   * them (e.g. Claude with `loadUserSettings` off). `'plugin'` entries are
+   * read-only Claude Code plugin skills (invoked namespaced as `/<plugin>:<skill>`).
    */
   scope: ProviderCommandScope;
   /**

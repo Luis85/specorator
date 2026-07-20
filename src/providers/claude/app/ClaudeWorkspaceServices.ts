@@ -111,6 +111,7 @@ export async function createClaudeWorkspaceServices(
     claudeStorage.skills,
     () => probeRuntimeCommands(plugin),
     plugin.events,
+    pluginManager,
   );
 
   return {

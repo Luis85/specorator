@@ -1,14 +1,15 @@
 import type { ProviderCommandEntry } from '../../../core/providers/commands/ProviderCommandEntry';
 import type { ProviderId } from '../../../core/providers/types';
 
-// v2: the persisted shape now carries user-scope (`~/.claude/skills`) entries
-// and redacts their host-absolute paths. A v1 index (written before user-skill
-// discovery) holds vault skills but no user skills; hydrating it serves that
-// stale set for the TTL, so the Library — which loads once on mount, unlike the
-// refreshable quick-actions tab — could show vault skills while omitting global
-// ones until a manual reload. Rejecting v1 forces a cold, complete refetch on
-// upgrade. Bump this whenever the persisted entry shape or its redaction changes.
-export const PERSISTED_SCHEMA_VERSION = 2;
+// v3: the persisted shape now also carries plugin-scope (`<installPath>/skills`)
+// entries and redacts their host-absolute paths alongside user-scope ones. A v2
+// index (written before plugin-skill discovery) holds vault + user skills but no
+// plugin skills; hydrating it serves that stale set for the TTL, so the Library
+// — which loads once on mount, unlike the refreshable quick-actions tab — could
+// show vault/user skills while omitting plugin ones until a manual reload.
+// Rejecting older versions forces a cold, complete refetch on upgrade. Bump this
+// whenever the persisted entry shape or its redaction changes.
+export const PERSISTED_SCHEMA_VERSION = 3;
 
 interface PersistedShape {
   schemaVersion: number;
@@ -22,11 +23,11 @@ interface PersistedShape {
  * before write — they are large and the Skills tab only renders metadata.
  * `runVaultSkill` re-reads the actual `SKILL.md` at execution time anyway.
  *
- * User-scope entries (e.g. `~/.claude/skills/`) carry a host-absolute
- * `sourceFilePath` such as `/Users/alice/.claude/...`. This index can sync or
- * back up with the vault, so that home path is redacted before write; the entry
- * is re-discovered with its real path in memory on the next fetch, and being
- * read-only it never needs the path persisted.
+ * User-scope (`~/.claude/skills/`) and plugin-scope (`<installPath>/skills/`)
+ * entries carry a host-absolute `sourceFilePath` such as `/Users/alice/.claude/...`.
+ * This index can sync or back up with the vault, so that host path is redacted
+ * before write; the entry is re-discovered with its real path in memory on the
+ * next fetch, and being read-only it never needs the path persisted.
  */
 export function serializePersistedSkillIndex(
   buckets: Map<ProviderId, ProviderCommandEntry[]>,
@@ -39,7 +40,7 @@ export function serializePersistedSkillIndex(
   };
   for (const [providerId, entries] of buckets) {
     out.buckets[providerId] = entries.map((e) =>
-      e.scope === 'user'
+      e.scope === 'user' || e.scope === 'plugin'
         ? { ...e, content: '', sourceFilePath: undefined }
         : { ...e, content: '' },
     );

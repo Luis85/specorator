@@ -200,6 +200,11 @@ export const mountClaudePluginsSection: ProviderSettingsWidgetMount = (host, con
   new PluginSettingsManager(pluginsContainer, {
     pluginManager: claudeWorkspace.pluginManager,
     agentManager: claudeWorkspace.agentManager,
+    // Enabled plugins contribute skills to `listVaultEntries()`; nudge the skill
+    // catalog's `vaultSkill.changed` seam so the Library re-scans on toggle.
+    onPluginsChanged: () => {
+      context.plugin.events.emit('vaultSkill.changed', { providerId: 'claude' });
+    },
     restartTabs: async () => {
       const view = context.plugin.getView();
       const tabManager = view?.getTabManager();
