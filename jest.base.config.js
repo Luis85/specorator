@@ -16,6 +16,10 @@ module.exports = {
   setupFilesAfterEnv: ['<rootDir>/tests/setupWindow.ts'],
   moduleNameMapper: {
     '\\.vue$': '<rootDir>/tests/__mocks__/vueComponentStub.ts',
+    // Pinia is ESM-only since v4 (no CJS build); the CommonJS ts-jest lane can't
+    // require it. It's part of the Vue-island surface the Jest lane already
+    // stubs — the Vitest lane owns real store behavior. See the mock header.
+    '^pinia$': '<rootDir>/tests/__mocks__/pinia.ts',
     // The Jest lane never renders Vue; stub the per-tab transcript mount so
     // tab-construction tests don't drive `createApp(...).mount()` on a mock
     // element (the Vitest lane owns the real mount — mountTranscript.test.ts).

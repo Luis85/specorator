@@ -1,15 +1,15 @@
 {
   "description": "Fallow quality baseline. Counters may shrink but not grow; averageMaintainability may rise but not drop. Regenerate with `npm run check:quality -- --update` (commit the diff in the same PR that moves the metric).",
-  "fallowVersion": "2.91.0",
+  "fallowVersion": "3.7.1",
   "metrics": {
-    "deadCodeIssues": 0,
+    "deadCodeIssues": 1,
     "circularDependencies": 0,
     "reExportCycles": 0,
     "boundaryViolations": 0,
     "cloneGroups": 35,
-    "duplicatedLines": 859,
-    "complexFunctions": 241,
-    "criticalComplexity": 5,
-    "averageMaintainability": 90.2
+    "duplicatedLines": 861,
+    "complexFunctions": 263,
+    "criticalComplexity": 8,
+    "averageMaintainability": 90.1
   }
 }

@@ -22,7 +22,7 @@ function emptyElement(container: HTMLElement): void {
 }
 
 function appendFallback(container: HTMLElement, markdown: string): void {
-  container.createEl('div', {
+  container.createDiv({
     cls: 'specorator-inline-markdown-fallback',
     text: markdown,
   });

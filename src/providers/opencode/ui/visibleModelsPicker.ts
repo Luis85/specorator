@@ -240,11 +240,11 @@ function renderCatalogRow(
   const textEl = rowEl.createDiv({ cls: 'specorator-opencode-model-picker-row-text' });
 
   const headerEl = textEl.createDiv({ cls: 'specorator-opencode-model-picker-row-header' });
-  headerEl.createEl('span', {
+  headerEl.createSpan({
     cls: 'specorator-opencode-model-picker-row-name',
     text: model.modelLabel,
   });
-  const badgeEl = headerEl.createEl('span', {
+  const badgeEl = headerEl.createSpan({
     cls: 'specorator-opencode-model-picker-row-badge',
     text: model.providerLabel,
   });
