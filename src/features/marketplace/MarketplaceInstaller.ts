@@ -347,7 +347,7 @@ function normalizeRoles(raw: string[] | undefined): Array<'worker' | 'verifier'>
 // vault/home I/O and the "installed" checks.
 
 /** Both the vault and home adapters satisfy the skill install's write surface. */
-type SkillWriteAdapter = Pick<VaultFileAdapter, 'exists' | 'write'>;
+type SkillWriteAdapter = Pick<VaultFileAdapter, 'exists' | 'write' | 'deleteFolderRecursive'>;
 
 function skillAdapterFor(target: SkillInstallTarget, deps: MarketplaceInstallDeps): SkillWriteAdapter {
   return target.scope === 'user' ? deps.homeAdapter : deps.adapter;
@@ -449,8 +449,17 @@ export async function installSkillItem(
     );
   }
 
-  await writeSupportingSkillFiles(skillDir, files, adapter);
-  await adapter.write(normalizePath(`${skillDir}/SKILL.md`), skillMd);
+  // We verified skillDir didn't exist above, so anything written below is ours. If a
+  // write fails partway (transient I/O, exhausted disk), remove the partial folder so a
+  // retry isn't permanently blocked by the pre-existing-folder guard above. The cleanup
+  // is best-effort (a failure there must not mask the original write error).
+  try {
+    await writeSupportingSkillFiles(skillDir, files, adapter);
+    await adapter.write(normalizePath(`${skillDir}/SKILL.md`), skillMd);
+  } catch (err) {
+    await adapter.deleteFolderRecursive(normalizePath(skillDir)).catch(() => {});
+    throw err;
+  }
   return 'installed';
 }
 

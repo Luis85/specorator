@@ -50,7 +50,7 @@ residuals. Each fix lands with a unit test under
   Fix: reject a `files[]` set where any path is an ancestor of another (a declared
   file used as a directory prefix), including descendants of the `SKILL.md` marker.
 
-- [ ] **9. Clean up a partial skill directory after a write failure.**
+- [x] **9. Clean up a partial skill directory after a write failure.**
   If a supporting-file write succeeds and a later one fails (transient I/O, disk
   full), the new skill folder is left without `SKILL.md`, and every retry then hits
   the installer's pre-existing-folder refusal — so the user can't reinstall through

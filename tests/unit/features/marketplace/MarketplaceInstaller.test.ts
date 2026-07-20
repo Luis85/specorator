@@ -33,6 +33,12 @@ function makeDeps(overrides: Partial<MarketplaceInstallDeps> = {}) {
   // exercised by seeding a non-SKILL file.
   const dirAware = (files: Map<string, string>) => async (p: string) =>
     files.has(p) || [...files.keys()].some((k) => k.startsWith(`${p}/`));
+  // Recursive delete: drop the path and everything under it (mirrors the real adapters).
+  const deleteAware = (files: Map<string, string>) => async (p: string) => {
+    for (const k of [...files.keys()]) {
+      if (k === p || k.startsWith(`${p}/`)) files.delete(k);
+    }
+  };
 
   const qaFiles = new Map<string, string>();
   const adapter = {
@@ -40,6 +46,7 @@ function makeDeps(overrides: Partial<MarketplaceInstallDeps> = {}) {
     write: async (p: string, c: string) => {
       qaFiles.set(p, c);
     },
+    deleteFolderRecursive: deleteAware(qaFiles),
   } as unknown as VaultFileAdapter;
 
   // Home adapter for user-scope skill installs — a separate in-memory map so
@@ -50,6 +57,7 @@ function makeDeps(overrides: Partial<MarketplaceInstallDeps> = {}) {
     write: async (p: string, c: string) => {
       homeFiles.set(p, c);
     },
+    deleteFolderRecursive: deleteAware(homeFiles),
   } as unknown as HomeFileAdapter;
 
   const agents: RosterAgent[] = [];
@@ -370,6 +378,31 @@ describe('installSkillItem', () => {
     const { deps, qaFiles } = makeDeps();
     await installSkillItem(skillItem, skillFiles(), { provider: 'cursor', scope: 'project' }, deps);
     expect(qaFiles.has('.cursor/skills/project-setup/SKILL.md')).toBe(true);
+  });
+
+  it('removes the partial skill folder when a write fails, so a retry is not blocked', async () => {
+    const files = new Map<string, string>();
+    const removed: string[] = [];
+    const failing = {
+      exists: async (p: string) => files.has(p) || [...files.keys()].some((k) => k.startsWith(`${p}/`)),
+      write: async (p: string, c: string) => {
+        if (p.endsWith('/SKILL.md')) throw new Error('disk full'); // the LAST write fails
+        files.set(p, c);
+      },
+      deleteFolderRecursive: async (p: string) => {
+        removed.push(p);
+        for (const k of [...files.keys()]) if (k === p || k.startsWith(`${p}/`)) files.delete(k);
+      },
+    } as unknown as VaultFileAdapter;
+    const { deps } = makeDeps({ adapter: failing });
+
+    await expect(
+      installSkillItem(skillItem, skillFiles(), { provider: 'claude', scope: 'project' }, deps),
+    ).rejects.toThrow(/disk full/);
+    // The supporting files were written then removed with the folder — nothing lingers to
+    // trip the pre-existing-folder guard, so the user can retry through Marketplace.
+    expect([...files.keys()].some((k) => k.startsWith('.claude/skills/project-setup'))).toBe(false);
+    expect(removed).toContain('.claude/skills/project-setup');
   });
 
   it('installs by NAME so distinct-name items sharing a path parent get distinct folders', async () => {

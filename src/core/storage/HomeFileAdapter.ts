@@ -10,7 +10,7 @@ import type { VaultFileAdapter } from './VaultFileAdapter';
  * classes (like CodexSkillStorage) can scan home-level paths.
  */
 export class HomeFileAdapter implements Pick<VaultFileAdapter,
-  'exists' | 'read' | 'write' | 'delete' | 'deleteFolder' | 'listFiles' | 'listFolders' | 'ensureFolder'
+  'exists' | 'read' | 'write' | 'delete' | 'deleteFolder' | 'deleteFolderRecursive' | 'listFiles' | 'listFolders' | 'ensureFolder'
 > {
   private readonly root: string;
 
@@ -65,6 +65,20 @@ export class HomeFileAdapter implements Pick<VaultFileAdapter,
     } catch {
       // Non-critical
     }
+  }
+
+  /**
+   * Removes a folder tree (native recursive rm). Mirrors
+   * `VaultFileAdapter.deleteFolderRecursive` for deliberate whole-folder deletes
+   * (e.g. cleaning up a partially-written skill dir). Refuses root-ish paths so a
+   * caller bug can't wipe the home root; a no-op when the path is absent (`force`).
+   */
+  async deleteFolderRecursive(p: string): Promise<void> {
+    const trimmed = p.replace(/\/+$/, '');
+    if (!trimmed || trimmed === '.') {
+      throw new Error(`deleteFolderRecursive refuses root-ish path "${p}"`);
+    }
+    await fs.promises.rm(this.resolve(trimmed), { recursive: true, force: true });
   }
 
   async listFiles(folder: string): Promise<string[]> {
