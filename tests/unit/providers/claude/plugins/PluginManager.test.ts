@@ -34,6 +34,7 @@ function createMockCCSettingsStorage() {
 const installedPluginsPath = path.join(homeDir, '.claude', 'plugins', 'installed_plugins.json');
 const globalSettingsPath = path.join(homeDir, '.claude', 'settings.json');
 const projectSettingsPath = path.join(vaultPath, '.claude', 'settings.json');
+const localSettingsPath = path.join(vaultPath, '.claude', 'settings.local.json');
 
 describe('PluginManager', () => {
   beforeEach(() => {
@@ -830,6 +831,21 @@ describe('PluginManager', () => {
     it('is enabled when an effective source enables it despite a withheld disable', () => {
       expect(isPluginEffectivelyEnabled({ project: false, user: true }, { project: false, user: true })).toBe(true);
     });
+
+    it('honors an effective user enable even when project disables (project withheld) — finding A', () => {
+      // Untrusted vault withholds project; the runtime reads only user, which
+      // enables it. Raw project-over-user (false) must NOT veto it.
+      expect(isPluginEffectivelyEnabled({ project: false, user: true }, { project: false, user: true })).toBe(true);
+    });
+
+    it('lets local override project and user (runtime precedence local > project > user)', () => {
+      expect(isPluginEffectivelyEnabled({ local: false, project: true, user: true }, BOTH)).toBe(false);
+      expect(isPluginEffectivelyEnabled({ local: true, project: false, user: false }, BOTH)).toBe(true);
+    });
+
+    it('is NOT enabled when enabled only via a withheld local source', () => {
+      expect(isPluginEffectivelyEnabled({ local: true }, { project: false, user: true })).toBe(false);
+    });
   });
 
   describe('getEffectivelyEnabledPlugins', () => {
@@ -895,6 +911,61 @@ describe('PluginManager', () => {
       const manager = new PluginManager(vaultPath, createMockCCSettingsStorage());
       await manager.loadPlugins();
       expect(manager.getEffectivelyEnabledPlugins().map((p) => p.id)).toEqual(['p@marketplace']);
+    });
+
+    it('includes a plugin disabled in project but enabled in user when project is withheld (finding A)', async () => {
+      // Untrusted vault: project source withheld. project disables, user (global)
+      // enables → the runtime loads it, so discovery must include it.
+      const installedPlugins = {
+        version: 2,
+        plugins: {
+          'p@marketplace': [{
+            scope: 'user', installPath: '/path/to/p',
+            version: '1.0.0', installedAt: 'x', lastUpdated: 'x',
+          }],
+        },
+      };
+      const globalSettings = { enabledPlugins: { 'p@marketplace': true } };
+      const projectSettings = { enabledPlugins: { 'p@marketplace': false } };
+      mockFs.existsSync.mockReturnValue(true);
+      mockFs.readFileSync.mockImplementation((p: fs.PathOrFileDescriptor) => {
+        if (String(p) === installedPluginsPath) return JSON.stringify(installedPlugins);
+        if (String(p) === globalSettingsPath) return JSON.stringify(globalSettings);
+        if (String(p) === projectSettingsPath) return JSON.stringify(projectSettings);
+        return '{}';
+      });
+      const manager = new PluginManager(vaultPath, createMockCCSettingsStorage(), () => ({ project: false, user: true }));
+      await manager.loadPlugins();
+      // Raw enabled is false (project-over-user), but effective discovery includes it.
+      expect(manager.getPlugins()[0].enabled).toBe(false);
+      expect(manager.getEffectivelyEnabledPlugins().map((p) => p.id)).toEqual(['p@marketplace']);
+    });
+
+    it('honors .claude/settings.local.json with highest precedence (finding B)', async () => {
+      // local disables what project enables; project source effective (trusted).
+      const installedPlugins = {
+        version: 2,
+        plugins: {
+          'p@marketplace': [{
+            scope: 'user', installPath: '/path/to/p',
+            version: '1.0.0', installedAt: 'x', lastUpdated: 'x',
+          }],
+        },
+      };
+      const projectSettings = { enabledPlugins: { 'p@marketplace': true } };
+      const localSettings = { enabledPlugins: { 'p@marketplace': false } };
+      mockFs.existsSync.mockReturnValue(true);
+      mockFs.readFileSync.mockImplementation((p: fs.PathOrFileDescriptor) => {
+        if (String(p) === installedPluginsPath) return JSON.stringify(installedPlugins);
+        if (String(p) === projectSettingsPath) return JSON.stringify(projectSettings);
+        if (String(p) === localSettingsPath) return JSON.stringify(localSettings);
+        return '{}';
+      });
+      const manager = new PluginManager(vaultPath, createMockCCSettingsStorage(), () => ({ project: true, user: true }));
+      await manager.loadPlugins();
+      // local (false) overrides project (true).
+      expect(manager.getPlugins()[0].enabled).toBe(false);
+      expect(manager.getEffectivelyEnabledPlugins()).toEqual([]);
     });
 
     it('reflects a freshly-enabled plugin after toggle (enableSources kept in sync)', async () => {
