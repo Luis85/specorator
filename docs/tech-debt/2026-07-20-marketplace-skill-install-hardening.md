@@ -61,9 +61,18 @@ residuals. Each fix lands with a unit test under
   changed content or decouple from a name that maps to the same slug). Installs to one
   folder chain instead of racing, and each runs its own install (a later one hits the
   "already installed" preflight skip), so two writers never touch or roll back one
-  directory concurrently and no request rides another's outcome. A fully atomic
-  guarantee would still stage each install in a uniquely-owned dir before an atomic
-  publish, but the queue closes the concurrent-writer race this backlog was about.
+  directory concurrently and no request rides another's outcome. The committed source
+  is snapshotted at ENQUEUE (not read after the queued wait), so a catalog switch during
+  the wait can't pair a queued install's reviewed marker with supporting files from a new
+  source. A fully atomic guarantee would still stage each install in a uniquely-owned dir
+  before an atomic publish, but the queue closes the concurrent-writer race.
+- **Dangling-symlink rollback (user scope).** `HomeFileAdapter.exists()` uses `fs.access`,
+  which FOLLOWS symlinks — so a pre-existing DANGLING symlink at the user-scope skill dir
+  reads as absent, the pre-existing-folder guard misses it, the write fails through the
+  broken link, and item 9's rollback then removes the user's (already-broken) symlink.
+  Narrow and low-harm (an already-dangling link), but the clean fix is a symlink-aware
+  (`lstat`) existence check threaded through both adapters + the installer, or the atomic
+  uniquely-staged-dir approach above — deferred as disproportionate to the risk.
 - **Pre-buffer streaming size limit.** The per-file size cap runs after
   `requestUrl().text` has already materialized the whole body — `requestUrl` is a
   high-level API with no socket/stream hooks, so a truly pre-buffer bound needs a

@@ -303,10 +303,15 @@ export const useMarketplaceStore = defineStore('marketplace', () => {
     target: SkillInstallTarget,
   ): Promise<InstallOutcome> {
     const key = `${target.provider} ${target.scope} ${normalizeInstallSlug(item.name)}`;
+    // Snapshot the committed source NOW, at enqueue — a queued install can wait here
+    // while another leaf reloads/switches the catalog, and its fetches must use the
+    // source its reviewed item/body came from, not whatever is committed after the wait
+    // (else the reviewed marker pairs with supporting files from a different catalog).
+    const installSource = source.value;
     const prior: Promise<unknown> = skillInstallQueue.get(key) ?? Promise.resolve();
     // Chain after any in-flight install to this folder; swallow the prior's error so
     // one failed install doesn't reject the whole queue waiting behind it.
-    const run = prior.catch(() => {}).then(() => runSkillInstall(item, skillMdBody, target));
+    const run = prior.catch(() => {}).then(() => runSkillInstall(item, skillMdBody, target, installSource));
     skillInstallQueue.set(key, run);
     // Free the slot on settlement, but only if we're still the tail (a later enqueue
     // may have replaced us) so we never drop someone else's in-flight chain.
@@ -323,12 +328,13 @@ export const useMarketplaceStore = defineStore('marketplace', () => {
     item: MarketplaceItem,
     skillMdBody: string,
     target: SkillInstallTarget,
+    installSource: string,
   ): Promise<InstallOutcome> {
+    // `installSource` was snapshotted at enqueue (installSkillAt), so a concurrent leaf
+    // refresh/source-switch during a queued wait can't split one skill across two
+    // catalogs (marker from the reviewed source, scripts from the new one). The network
+    // opt-in is still re-checked HERE (run time), so an opt-out during the wait aborts.
     assertNetworkEnabled();
-    // Snapshot the source at install start: a concurrent leaf refresh/source-switch
-    // must not split one skill across two catalogs (marker from the reviewed source,
-    // scripts from the new one). All this install's fetches use `installSource`.
-    const installSource = source.value;
     // Preflight the target marker before downloading anything: if the skill is
     // already installed here, skip without fetching the folder — avoids a needless
     // full-folder download and a misleading "failed" notice if that download errors

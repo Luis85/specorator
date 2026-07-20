@@ -625,6 +625,44 @@ describe('marketplaceStore skill install', () => {
     expect(installSkillSpy.mock.calls[1][0]).toBe(b);
   });
 
+  it('a queued install keeps the source it was enqueued under, even if the catalog switches during the wait', async () => {
+    // Destination serialization introduces a WAIT before the queued run reads the
+    // source. The source must be snapshotted at ENQUEUE — otherwise a leaf that reloads
+    // to a new source during the wait would make the queued install fetch supporting
+    // files from the new catalog while its reviewed marker came from the old one.
+    const store = useMarketplaceStore();
+    const p = fakePlugin(true);
+    p.settings.marketplaceSourceUrl = 'https://a.example/';
+    fetchIndexSpy.mockResolvedValue(manifest);
+    store.init(p);
+    await store.load(); // commit source A
+    mockSkillSource('SKILL BODY');
+
+    // Hold the first install (folder X) open so the second (same folder) queues under A.
+    let finishFirst: (v: 'installed') => void = () => {};
+    installSkillSpy.mockImplementationOnce(
+      () =>
+        new Promise<'installed'>((resolve) => {
+          finishFirst = resolve;
+        }),
+    );
+    const target = { provider: 'claude', scope: 'project' } as const;
+    const first = store.install(skillItem, 'SKILL BODY', target);
+    const second = store.install(skillItem, 'SKILL BODY', target); // enqueued under source A
+    await new Promise((resolve) => setTimeout(resolve)); // first reaches its held write; second waits
+
+    // A concurrent leaf reloads to source B while the queued second still waits.
+    p.settings.marketplaceSourceUrl = 'https://b.example/';
+    await store.load(); // commits source B (source.value → B)
+    clientCtor.mockClear();
+
+    finishFirst('installed');
+    await first;
+    await second; // runs now, AFTER the switch — its fetches must still target A
+    expect(clientCtor).toHaveBeenCalledWith('https://a.example/');
+    expect(clientCtor).not.toHaveBeenCalledWith('https://b.example/');
+  });
+
   it('runs a later install of the same destination fresh once the first has settled', async () => {
     const store = useMarketplaceStore();
     store.init(fakePlugin(true));
