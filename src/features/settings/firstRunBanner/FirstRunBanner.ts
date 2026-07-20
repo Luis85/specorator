@@ -25,7 +25,7 @@ export class FirstRunBanner {
       this.rows.push({ id, cb });
       const text = row.createDiv();
       text.createEl('strong', { text: name });
-      text.createEl('span', { text: ` — ${ProviderRegistry.getFirstRunBlurb(id)}. Requires this command on your path: ` });
+      text.createSpan({ text: ` — ${ProviderRegistry.getFirstRunBlurb(id)}. Requires this command on your path: ` });
       text.createEl('code', { text: ProviderRegistry.getCliCommand(id) });
     }
     const actions = card.createDiv({ cls: 'specorator-first-run-actions' });

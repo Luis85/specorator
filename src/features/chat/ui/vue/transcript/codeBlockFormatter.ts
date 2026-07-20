@@ -9,7 +9,7 @@ export function formatCodeBlocks(el: HTMLElement): void {
     // Skip if already wrapped
     if (pre.parentElement?.classList.contains('specorator-code-wrapper')) return;
 
-    const wrapper = createEl('div', { cls: 'specorator-code-wrapper' });
+    const wrapper = createDiv({ cls: 'specorator-code-wrapper' });
     pre.parentElement?.insertBefore(wrapper, pre);
     wrapper.appendChild(pre);
 
@@ -18,7 +18,7 @@ export function formatCodeBlocks(el: HTMLElement): void {
       const match = code.className.match(/language-(\w+)/);
       if (match) {
         wrapper.classList.add('has-language');
-        const label = createEl('span', {
+        const label = createSpan({
           cls: 'specorator-code-lang-label',
           text: match[1],
         });

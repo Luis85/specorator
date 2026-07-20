@@ -73,6 +73,23 @@ const srcSafetyRules = {
       message:
         'insertAdjacentHTML is banned (XSS risk). Use createEl/createDiv/createSpan/setText, or MarkdownRenderer for markdown. See docs/issues/audit-innerhtml-rendering.md (OBS-B).',
     },
+    // obsidianmd/prefer-create-el shorthand. The marketplace validator flags
+    // `createEl('div'|'span', …)` and wants the `createDiv()`/`createSpan()`
+    // shorthand; the installed eslint-plugin-obsidianmd@0.3.0 does not export
+    // that rule, so guard it here (global + instance forms) so a regression
+    // fails `npm run lint` locally instead of resurfacing at submission.
+    {
+      selector:
+        'CallExpression[callee.name="createEl"][arguments.0.value=/^(div|span)$/]',
+      message:
+        "Use createDiv()/createSpan() instead of createEl('div'|'span') — the obsidianmd/prefer-create-el shorthand the Obsidian marketplace validator flags.",
+    },
+    {
+      selector:
+        'CallExpression[callee.property.name="createEl"][arguments.0.value=/^(div|span)$/]',
+      message:
+        "Use .createDiv()/.createSpan() instead of .createEl('div'|'span') — the obsidianmd/prefer-create-el shorthand the Obsidian marketplace validator flags.",
+    },
   ],
 };
 

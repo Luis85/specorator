@@ -67,16 +67,16 @@ export class CustomModelsTable {
       const rowEl = table.createDiv({ cls: 'specorator-customModels-row' });
       rowEl.dataset.row = String(i);
       rowEl.dataset.source = row.source;
-      rowEl.createEl('span', { cls: 'specorator-customModels-id', text: row.id });
-      rowEl.createEl('span', {
+      rowEl.createSpan({ cls: 'specorator-customModels-id', text: row.id });
+      rowEl.createSpan({
         cls: 'specorator-customModels-label',
         text: row.label ?? '',
       });
-      rowEl.createEl('span', {
+      rowEl.createSpan({
         cls: 'specorator-customModels-ctxWindow',
         text: row.contextWindow !== undefined ? String(row.contextWindow) : '',
       });
-      rowEl.createEl('span', {
+      rowEl.createSpan({
         cls: 'specorator-customModels-source',
         text: row.source === 'env' ? 'env' : 'user',
       });
