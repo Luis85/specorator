@@ -8,16 +8,31 @@ import type SpecoratorPlugin from '@/main';
 // the (hoisted) vi.mock factories below can reference them. The client-ctor spy
 // is what lets us assert the store never even *constructs* a network client when
 // the opt-in is off — the check has to sit at the I/O boundary, not only at mount.
-const { fetchIndexSpy, fetchBodySpy, clientCtor, cacheRead, cacheWrite, installSpy, isInstalledSpy } =
-  vi.hoisted(() => ({
-    fetchIndexSpy: vi.fn(),
-    fetchBodySpy: vi.fn(),
-    clientCtor: vi.fn(),
-    cacheRead: vi.fn(),
-    cacheWrite: vi.fn(),
-    installSpy: vi.fn(),
-    isInstalledSpy: vi.fn(),
-  }));
+const {
+  fetchIndexSpy,
+  fetchBodySpy,
+  clientCtor,
+  cacheRead,
+  cacheWrite,
+  installSpy,
+  isInstalledSpy,
+  installSkillSpy,
+  isSkillInstalledAtSpy,
+  refreshCatalogSpy,
+  installsUserScopeSpy,
+} = vi.hoisted(() => ({
+  fetchIndexSpy: vi.fn(),
+  fetchBodySpy: vi.fn(),
+  clientCtor: vi.fn(),
+  cacheRead: vi.fn(),
+  cacheWrite: vi.fn(),
+  installSpy: vi.fn(),
+  isInstalledSpy: vi.fn(),
+  installSkillSpy: vi.fn(),
+  isSkillInstalledAtSpy: vi.fn(),
+  refreshCatalogSpy: vi.fn(),
+  installsUserScopeSpy: vi.fn(),
+}));
 
 // Classes (not arrow factories): the store constructs these with `new`, and an
 // arrow function has no [[Construct]].
@@ -46,7 +61,9 @@ vi.mock('@/features/marketplace/MarketplaceCache', () => ({
 
 vi.mock('@/features/marketplace/MarketplaceInstaller', () => ({
   installMarketplaceItem: installSpy,
+  installSkillItem: installSkillSpy,
   isItemInstalled: isInstalledSpy,
+  isSkillInstalledAt: isSkillInstalledAtSpy,
   // Faithful stand-in: refreshInstalled uses this to precompute the agent key set
   // (roster ids + catalog ids). Kept real so an agent-item test can't silently
   // fall through the try/catch to an empty set.
@@ -60,7 +77,18 @@ vi.mock('@/features/marketplace/MarketplaceInstaller', () => ({
   },
 }));
 
+vi.mock('@/features/skills/refreshSkillCatalogBestEffort', () => ({
+  refreshSkillCatalogBestEffort: refreshCatalogSpy,
+}));
+
+// Only the user-scope install-capability check is needed from ProviderRegistry here.
+vi.mock('@/core/providers/ProviderRegistry', () => ({
+  ProviderRegistry: { installsUserScopeSkills: installsUserScopeSpy },
+}));
+
+import { MAX_SKILL_FILES } from '@/features/marketplace/catalogTypes';
 import { DEFAULT_MARKETPLACE_BASE_URL } from '@/features/marketplace/MarketplaceCatalogClient';
+import { MAX_SKILL_FILE_CHARS, MAX_SKILL_TOTAL_CHARS } from '@/features/marketplace/skillFileFetch';
 import { useMarketplaceStore } from '@/features/marketplace/vue/stores/marketplaceStore';
 
 const item: MarketplaceItem = {
@@ -90,6 +118,7 @@ function fakePlugin(networkEnabled: boolean): SpecoratorPlugin {
     app: { vault: {} },
     vaultFileAdapter: {},
     agentRosterStore: {},
+    events: { emit: vi.fn(), on: vi.fn(() => vi.fn()) },
   } as unknown as SpecoratorPlugin;
 }
 
@@ -450,5 +479,423 @@ describe('marketplaceStore load fallbacks', () => {
     await store.load();
     expect(store.offline).toBe(true);
     expect(store.items).toEqual([item]);
+  });
+});
+
+describe('marketplaceStore skill install', () => {
+  const skillItem: MarketplaceItem = {
+    id: 'skills/project-setup',
+    type: 'skill',
+    name: 'project-setup',
+    description: 'd',
+    path: 'skills/project-setup/SKILL.md',
+    files: [
+      'skills/project-setup/SKILL.md',
+      'skills/project-setup/references/a.md',
+      'skills/project-setup/scripts/setup.mjs',
+    ],
+    tags: [],
+  };
+
+  // The install re-fetches SKILL.md to verify it still matches the reviewed body
+  // (item 10 revision guard). Wire fetchItemBody so the marker re-fetch returns the
+  // reviewed body and supporting files return `supporting`, so a happy-path install
+  // doesn't trip the drift guard.
+  function mockSkillSource(reviewedMarker: string, supporting = 'FILE'): void {
+    fetchBodySpy.mockImplementation(async (repoPath: string) =>
+      repoPath === skillItem.path ? reviewedMarker : supporting,
+    );
+  }
+
+  beforeEach(() => {
+    setActivePinia(createPinia());
+    vi.clearAllMocks();
+    installSkillSpy.mockResolvedValue('installed');
+    isSkillInstalledAtSpy.mockResolvedValue(false);
+    fetchBodySpy.mockResolvedValue('FILE');
+    refreshCatalogSpy.mockResolvedValue(undefined);
+    installsUserScopeSpy.mockReturnValue(true); // capability present unless a test says otherwise
+  });
+
+  it('fetches the supporting files and installs the whole folder at the chosen target', async () => {
+    const store = useMarketplaceStore();
+    const plugin = fakePlugin(true);
+    store.init(plugin);
+    mockSkillSource('SKILL BODY');
+    const outcome = await store.install(skillItem, 'SKILL BODY', { provider: 'codex', scope: 'user' });
+    expect(outcome).toBe('installed');
+
+    // Supporting files are fetched, and the marker is re-fetched to verify it hasn't
+    // drifted since preview — but the reviewed SKILL.md body is what gets written.
+    expect(fetchBodySpy).toHaveBeenCalledWith('skills/project-setup/references/a.md');
+    expect(fetchBodySpy).toHaveBeenCalledWith('skills/project-setup/scripts/setup.mjs');
+    expect(fetchBodySpy).toHaveBeenCalledWith('skills/project-setup/SKILL.md');
+
+    // installSkillItem gets an in-skill-relative file map + the target.
+    const [passedItem, files, target] = installSkillSpy.mock.calls[0];
+    expect(passedItem).toBe(skillItem);
+    expect(target).toEqual({ provider: 'codex', scope: 'user' });
+    expect(files.get('SKILL.md')).toBe('SKILL BODY');
+    expect(files.get('references/a.md')).toBe('FILE');
+    expect(files.get('scripts/setup.mjs')).toBe('FILE');
+    // The "installed anywhere" badge flips on.
+    expect(store.installedIds.has('skills/project-setup')).toBe(true);
+
+    // Skill dot-folders bypass the vault watcher, so a successful install must
+    // invalidate the listing caches for the owning provider (aggregator bucket +
+    // provider catalog), or the Library/dropdown/run surfaces stay stale for a TTL.
+    expect(plugin.events.emit).toHaveBeenCalledWith('vaultSkill.changed', { providerId: 'codex' });
+    expect(refreshCatalogSpy).toHaveBeenCalledWith(plugin, 'codex');
+  });
+
+  it('aborts (writes nothing) when the marker drifted in the catalog since preview', async () => {
+    const store = useMarketplaceStore();
+    store.init(fakePlugin(true));
+    // The reviewed body is 'SKILL BODY', but the marker re-fetched at install time
+    // comes back changed — a catalog bump landed between preview and install, so the
+    // supporting files just fetched could be from a newer revision than the marker.
+    mockSkillSource('SKILL BODY CHANGED');
+    await expect(
+      store.install(skillItem, 'SKILL BODY', { provider: 'claude', scope: 'project' }),
+    ).rejects.toThrow(/changed in the catalog|review it again/i);
+    // The whole install is refused rather than landing a hybrid skill.
+    expect(installSkillSpy).not.toHaveBeenCalled();
+  });
+
+  it('installs a marker-only skill without re-fetching the marker (no supporting files)', async () => {
+    const markerOnly: MarketplaceItem = { ...skillItem, files: ['skills/project-setup/SKILL.md'] };
+    const store = useMarketplaceStore();
+    store.init(fakePlugin(true));
+    const outcome = await store.install(markerOnly, 'SKILL BODY', { provider: 'claude', scope: 'project' });
+    expect(outcome).toBe('installed');
+    // A marker-only skill has no supporting files, so there's no hybrid to guard
+    // against — the reviewed body is written verbatim with no network request at all.
+    expect(fetchBodySpy).not.toHaveBeenCalled();
+    const [, files] = installSkillSpy.mock.calls[0];
+    expect(files.get('SKILL.md')).toBe('SKILL BODY');
+  });
+
+  /** Holds the first install's write open and flags when a second write starts. */
+  function heldFirstThenFlag(): { finishFirst: () => void; startedSecond: () => boolean } {
+    let finish: (v: 'installed') => void = () => {};
+    let started = false;
+    installSkillSpy
+      .mockImplementationOnce(
+        () =>
+          new Promise<'installed'>((resolve) => {
+            finish = resolve;
+          }),
+      )
+      .mockImplementationOnce(() => {
+        started = true;
+        return Promise.resolve('installed');
+      });
+    return { finishFirst: () => finish('installed'), startedSecond: () => started };
+  }
+
+  it('serializes concurrent installs to the same destination so writers never overlap', async () => {
+    const store = useMarketplaceStore();
+    store.init(fakePlugin(true));
+    mockSkillSource('SKILL BODY');
+    const { finishFirst, startedSecond } = heldFirstThenFlag();
+    const target = { provider: 'claude', scope: 'project' } as const;
+    const first = store.install(skillItem, 'SKILL BODY', target);
+    const second = store.install(skillItem, 'SKILL BODY', target);
+    await new Promise((resolve) => setTimeout(resolve)); // let the first reach its held write
+    expect(startedSecond()).toBe(false); // queued behind the first, not racing it
+    finishFirst();
+    expect(await first).toBe('installed');
+    expect(await second).toBe('installed');
+    expect(startedSecond()).toBe(true); // it ran only after the first finished
+  });
+
+  it('serializes by destination folder, so a different id whose name maps to the same slug still queues', async () => {
+    // A catalog refresh can bring a different id/name that normalizes to the SAME
+    // destination folder. Keying by id would let them write concurrently (the item-9
+    // rollback racing two writers on one folder); the destination key queues them.
+    const store = useMarketplaceStore();
+    store.init(fakePlugin(true));
+    mockSkillSource('SKILL BODY');
+    const { finishFirst, startedSecond } = heldFirstThenFlag();
+    const target = { provider: 'claude', scope: 'project' } as const;
+    const a: MarketplaceItem = { ...skillItem, id: 'skills/project-setup', name: 'project-setup' };
+    const b: MarketplaceItem = { ...skillItem, id: 'skills/project-setup-v2', name: 'Project Setup' }; // → same slug
+    const first = store.install(a, 'SKILL BODY', target);
+    const second = store.install(b, 'SKILL BODY', target);
+    await new Promise((resolve) => setTimeout(resolve));
+    expect(startedSecond()).toBe(false); // b waits for a — same destination folder, not same id
+    finishFirst();
+    await first;
+    await second;
+    expect(startedSecond()).toBe(true);
+    // b ran its OWN install (its item), never riding a's promise — no coalescing misreport.
+    expect(installSkillSpy).toHaveBeenCalledTimes(2);
+    expect(installSkillSpy.mock.calls[1][0]).toBe(b);
+  });
+
+  it('a queued install keeps the source it was enqueued under, even if the catalog switches during the wait', async () => {
+    // Destination serialization introduces a WAIT before the queued run reads the
+    // source. The source must be snapshotted at ENQUEUE — otherwise a leaf that reloads
+    // to a new source during the wait would make the queued install fetch supporting
+    // files from the new catalog while its reviewed marker came from the old one.
+    const store = useMarketplaceStore();
+    const p = fakePlugin(true);
+    p.settings.marketplaceSourceUrl = 'https://a.example/';
+    fetchIndexSpy.mockResolvedValue(manifest);
+    store.init(p);
+    await store.load(); // commit source A
+    mockSkillSource('SKILL BODY');
+
+    // Hold the first install (folder X) open so the second (same folder) queues under A.
+    let finishFirst: (v: 'installed') => void = () => {};
+    installSkillSpy.mockImplementationOnce(
+      () =>
+        new Promise<'installed'>((resolve) => {
+          finishFirst = resolve;
+        }),
+    );
+    const target = { provider: 'claude', scope: 'project' } as const;
+    const first = store.install(skillItem, 'SKILL BODY', target);
+    const second = store.install(skillItem, 'SKILL BODY', target); // enqueued under source A
+    await new Promise((resolve) => setTimeout(resolve)); // first reaches its held write; second waits
+
+    // A concurrent leaf reloads to source B while the queued second still waits.
+    p.settings.marketplaceSourceUrl = 'https://b.example/';
+    await store.load(); // commits source B (source.value → B)
+    clientCtor.mockClear();
+
+    finishFirst('installed');
+    await first;
+    await second; // runs now, AFTER the switch — its fetches must still target A
+    expect(clientCtor).toHaveBeenCalledWith('https://a.example/');
+    expect(clientCtor).not.toHaveBeenCalledWith('https://b.example/');
+  });
+
+  it('runs a later install of the same destination fresh once the first has settled', async () => {
+    const store = useMarketplaceStore();
+    store.init(fakePlugin(true));
+    mockSkillSource('SKILL BODY');
+    const target = { provider: 'claude', scope: 'project' } as const;
+    await store.install(skillItem, 'SKILL BODY', target);
+    await new Promise((resolve) => setTimeout(resolve)); // let the queued tail clear
+    await store.install(skillItem, 'SKILL BODY', target);
+    // The tail promise is freed on settlement, so a genuinely later install runs its
+    // own install rather than chaining onto a settled one.
+    expect(installSkillSpy).toHaveBeenCalledTimes(2);
+  });
+
+  it('does NOT invalidate caches when the skill was already installed (skipped)', async () => {
+    installSkillSpy.mockResolvedValue('skipped');
+    const store = useMarketplaceStore();
+    const plugin = fakePlugin(true);
+    store.init(plugin);
+    mockSkillSource('SKILL BODY');
+    await store.install(skillItem, 'SKILL BODY', { provider: 'claude', scope: 'project' });
+    expect(plugin.events.emit).not.toHaveBeenCalled();
+    expect(refreshCatalogSpy).not.toHaveBeenCalled();
+  });
+
+  it('rejects a skill install with no target', async () => {
+    const store = useMarketplaceStore();
+    store.init(fakePlugin(true));
+    await expect(store.install(skillItem, 'SKILL BODY')).rejects.toThrow(/provider and scope/i);
+    expect(installSkillSpy).not.toHaveBeenCalled();
+  });
+
+  it('aborts a user-scope install whose provider lost the capability before the write', async () => {
+    // e.g. Codex switched native→WSL, or Claude's loadUserSettings was disabled, while the
+    // install was queued/downloading. The captured target would otherwise write to host home
+    // the runtime no longer scans — a silent "installed" the provider can't discover.
+    installsUserScopeSpy.mockReturnValue(false);
+    const store = useMarketplaceStore();
+    store.init(fakePlugin(true));
+    mockSkillSource('SKILL BODY');
+    await expect(
+      store.install(skillItem, 'SKILL BODY', { provider: 'codex', scope: 'user' }),
+    ).rejects.toThrow(/no longer install user-scope|choose a target again/i);
+    expect(installSkillSpy).not.toHaveBeenCalled(); // nothing written
+  });
+
+  it('does NOT gate a project-scope install on the user-scope capability', async () => {
+    installsUserScopeSpy.mockReturnValue(false); // user-scope off — but this is a project install
+    const store = useMarketplaceStore();
+    store.init(fakePlugin(true));
+    mockSkillSource('SKILL BODY');
+    const outcome = await store.install(skillItem, 'SKILL BODY', { provider: 'claude', scope: 'project' });
+    expect(outcome).toBe('installed'); // project scope is unaffected by the user-scope gate
+    expect(installSkillSpy).toHaveBeenCalled();
+  });
+
+  it('rejects a skill declaring more files than the count cap, before any fetch', async () => {
+    const store = useMarketplaceStore();
+    store.init(fakePlugin(true));
+    const tooMany: MarketplaceItem = {
+      ...skillItem,
+      files: [
+        'skills/project-setup/SKILL.md',
+        ...Array.from({ length: MAX_SKILL_FILES }, (_unused, i) => `skills/project-setup/f${i}.md`),
+      ],
+    };
+    await expect(
+      store.install(tooMany, 'SKILL BODY', { provider: 'claude', scope: 'project' }),
+    ).rejects.toThrow(/files, over the .*limit/i);
+    expect(fetchBodySpy).not.toHaveBeenCalled(); // rejected before downloading anything
+    expect(installSkillSpy).not.toHaveBeenCalled();
+  });
+
+  it('rejects a skill whose supporting file exceeds the per-file size cap', async () => {
+    fetchBodySpy.mockResolvedValue('x'.repeat(MAX_SKILL_FILE_CHARS + 1));
+    const store = useMarketplaceStore();
+    store.init(fakePlugin(true));
+    await expect(
+      store.install(skillItem, 'SKILL BODY', { provider: 'claude', scope: 'project' }),
+    ).rejects.toThrow(/too large to install/i);
+    expect(installSkillSpy).not.toHaveBeenCalled(); // nothing written on an over-cap file
+  });
+
+  it('applies the per-file size cap to the SKILL.md body too (even a marker-only skill)', async () => {
+    const markerOnly: MarketplaceItem = { ...skillItem, files: ['skills/project-setup/SKILL.md'] };
+    const store = useMarketplaceStore();
+    store.init(fakePlugin(true));
+    await expect(
+      store.install(markerOnly, 'x'.repeat(MAX_SKILL_FILE_CHARS + 1), { provider: 'claude', scope: 'project' }),
+    ).rejects.toThrow(/too large to install/i);
+    expect(fetchBodySpy).not.toHaveBeenCalled(); // marker-only: no supporting fetch ran
+    expect(installSkillSpy).not.toHaveBeenCalled();
+  });
+
+  it('rejects a skill whose supporting files exceed the aggregate size cap', async () => {
+    // Each file is at (not over) the per-file cap; their running total crosses the aggregate.
+    fetchBodySpy.mockResolvedValue('x'.repeat(MAX_SKILL_FILE_CHARS));
+    const count = Math.floor(MAX_SKILL_TOTAL_CHARS / MAX_SKILL_FILE_CHARS) + 1;
+    const many: MarketplaceItem = {
+      ...skillItem,
+      files: [
+        'skills/project-setup/SKILL.md',
+        ...Array.from({ length: count }, (_unused, i) => `skills/project-setup/big${i}.md`),
+      ],
+    };
+    const store = useMarketplaceStore();
+    store.init(fakePlugin(true));
+    await expect(
+      store.install(many, 'SKILL BODY', { provider: 'claude', scope: 'project' }),
+    ).rejects.toThrow(/total limit/i);
+    expect(installSkillSpy).not.toHaveBeenCalled();
+  });
+
+  it('stops pulling new fetch work after the first failure (no overlapping in-flight batch)', async () => {
+    const many: MarketplaceItem = {
+      ...skillItem,
+      files: [
+        'skills/project-setup/SKILL.md',
+        ...Array.from({ length: 19 }, (_unused, i) => `skills/project-setup/f${i}.md`),
+      ],
+    };
+    fetchBodySpy.mockRejectedValueOnce(new Error('boom')); // the first supporting fetch fails
+    const store = useMarketplaceStore();
+    store.init(fakePlugin(true));
+    await expect(
+      store.install(many, 'SKILL BODY', { provider: 'claude', scope: 'project' }),
+    ).rejects.toThrow(/boom/);
+    // Workers stop pulling after the first failure — far fewer than all 19 are fetched
+    // (the old Promise.all left the other workers running the whole batch).
+    expect(fetchBodySpy.mock.calls.length).toBeLessThan(19);
+    expect(installSkillSpy).not.toHaveBeenCalled();
+  });
+
+  it('rejects a skill install (and fetches nothing) when the network opt-in is off', async () => {
+    const store = useMarketplaceStore();
+    store.init(fakePlugin(false));
+    await expect(
+      store.install(skillItem, 'SKILL BODY', { provider: 'claude', scope: 'project' }),
+    ).rejects.toThrow(/disabled/i);
+    expect(fetchBodySpy).not.toHaveBeenCalled();
+    expect(installSkillSpy).not.toHaveBeenCalled();
+  });
+
+  it('isSkillInstalledAt delegates to the installer with the target', async () => {
+    isSkillInstalledAtSpy.mockResolvedValue(true);
+    const store = useMarketplaceStore();
+    store.init(fakePlugin(true));
+    expect(await store.isSkillInstalledAt(skillItem, 'cursor', 'project')).toBe(true);
+    const [item, target] = isSkillInstalledAtSpy.mock.calls[0];
+    expect(item).toBe(skillItem);
+    expect(target).toEqual({ provider: 'cursor', scope: 'project' });
+  });
+
+  it('refuses a skill with a binary file before fetching or installing anything', async () => {
+    const store = useMarketplaceStore();
+    store.init(fakePlugin(true));
+    const withBinary: MarketplaceItem = {
+      ...skillItem,
+      files: [...(skillItem.files ?? []), 'skills/project-setup/logo.png'],
+    };
+    await expect(
+      store.install(withBinary, 'SKILL BODY', { provider: 'claude', scope: 'project' }),
+    ).rejects.toThrow(/text-only/i);
+    expect(fetchBodySpy).not.toHaveBeenCalled();
+    expect(installSkillSpy).not.toHaveBeenCalled();
+  });
+
+  it('refuses a fetched file that is not text (NUL byte), even with a text extension', async () => {
+    const store = useMarketplaceStore();
+    store.init(fakePlugin(true));
+    // A supporting file with a text extension but binary bytes slips the extension
+    // pre-check; the content check after fetch (NUL byte) catches it. The marker
+    // re-fetch still matches the reviewed body, so the flow reaches the text check.
+    mockSkillSource('SKILL BODY', `corrupt${String.fromCharCode(0)}bytes`);
+    await expect(
+      store.install(skillItem, 'SKILL BODY', { provider: 'claude', scope: 'project' }),
+    ).rejects.toThrow(/not text|text-only/i);
+    expect(installSkillSpy).not.toHaveBeenCalled();
+  });
+
+  it('skips WITHOUT fetching when the target already has the skill (preflight)', async () => {
+    isSkillInstalledAtSpy.mockResolvedValue(true); // preflight: already installed here
+    const store = useMarketplaceStore();
+    store.init(fakePlugin(true));
+    const outcome = await store.install(skillItem, 'SKILL BODY', { provider: 'claude', scope: 'project' });
+    expect(outcome).toBe('skipped');
+    expect(fetchBodySpy).not.toHaveBeenCalled(); // no needless folder download
+    expect(installSkillSpy).not.toHaveBeenCalled(); // installer not reached
+  });
+
+  it('fetches supporting files from the source snapshotted at install start, not a concurrent switch', async () => {
+    const store = useMarketplaceStore();
+    const p = fakePlugin(true);
+    p.settings.marketplaceSourceUrl = 'https://a.example/';
+    store.init(p);
+    await store.load(); // commits source A
+    clientCtor.mockClear();
+    // A source switch happens mid-install; the in-flight install must keep using
+    // the source it snapshotted at start (A), never the newly-set B.
+    p.settings.marketplaceSourceUrl = 'https://b.example/';
+    mockSkillSource('SKILL BODY');
+    await store.install(skillItem, 'SKILL BODY', { provider: 'claude', scope: 'project' });
+    expect(clientCtor).toHaveBeenCalledWith('https://a.example/');
+    expect(clientCtor).not.toHaveBeenCalledWith('https://b.example/');
+  });
+
+  it('stops starting new supporting-file fetches when networking is disabled mid-install', async () => {
+    const store = useMarketplaceStore();
+    const p = fakePlugin(true);
+    store.init(p);
+    // More files than the concurrency limit, so later fetches start after earlier
+    // ones finish — the window where a mid-install opt-out must take effect.
+    const manyFiles: MarketplaceItem = {
+      ...skillItem,
+      files: ['skills/project-setup/SKILL.md', ...Array.from({ length: 8 }, (_, i) => `skills/project-setup/f${i}.md`)],
+    };
+    let calls = 0;
+    fetchBodySpy.mockImplementation(async () => {
+      calls += 1;
+      if (calls === 1) p.settings.marketplaceNetworkEnabled = false; // opt out mid-install
+      return 'ok';
+    });
+    await expect(
+      store.install(manyFiles, 'SKILL BODY', { provider: 'claude', scope: 'project' }),
+    ).rejects.toThrow(/disabled/i);
+    expect(calls).toBeLessThan(8); // not every file was fetched — later ones were blocked
+    expect(installSkillSpy).not.toHaveBeenCalled();
   });
 });

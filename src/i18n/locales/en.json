@@ -12,7 +12,7 @@
     "navGroupLabel": "Marketplace categories",
     "home": {
       "heading": "Discover ready-made assets",
-      "subheading": "Browse curated Quick Actions, Agents, Loops, and Templates and install them into your vault."
+      "subheading": "Browse curated Quick Actions, Agents, Loops, Templates, and Skills and install them into your vault."
     },
     "seeAll": "See all",
     "sectionCount": "{count} items",
@@ -25,7 +25,7 @@
       "networkSection": "Network",
       "enable": {
         "name": "Enable the Marketplace",
-        "desc": "Fetch a curated catalog of Quick Actions, Agents, Loops, and Work-Order Templates from GitHub. Off by default; when enabled, opening the Marketplace makes network requests to raw.githubusercontent.com."
+        "desc": "Fetch a curated catalog of Quick Actions, Agents, Loops, Work-Order Templates, and Skills from GitHub. Off by default; when enabled, opening the Marketplace makes network requests to raw.githubusercontent.com."
       },
       "source": {
         "name": "Catalog source URL",
@@ -53,6 +53,14 @@
       "loop": "Loop",
       "template": "Template",
       "skill": "Skill"
+    },
+    "skill": {
+      "providerLabel": "Provider",
+      "scopeLabel": "Scope",
+      "scopeProject": "Project (this vault)",
+      "scopeUser": "User (all vaults)",
+      "installedHere": "Installed here",
+      "userScopeHint": "User scope installs to your home directory (outside this vault), shared across all your vaults."
     }
   },
   "common": {

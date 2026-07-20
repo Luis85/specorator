@@ -86,10 +86,10 @@ export interface ProviderRegistration {
   cliCommand: string;
   blankTabOrder: number;
   isEnabled: (settings: Record<string, unknown>) => boolean;
-  /** Whether the provider resolves user-scope (global, e.g. `~/.claude/skills`) skills
-   * given live settings; default `true`. Claude ties it to `loadUserSettings`, so the
-   * run path can refuse a `/name` that won't resolve rather than dispatch a silent no-op. */
+  /** User-scope (global) skill capabilities, both default `true`: whether the runtime RESOLVES a
+   * user `/name` (Claude: `loadUserSettings`) and whether the Marketplace can INSTALL one (Codex gates in WSL). */
   resolvesUserScopeSkills?: (settings: Record<string, unknown>) => boolean;
+  installsUserScopeSkills?: (settings: Record<string, unknown>) => boolean;
   /** Default settings bag; lets the app shell assemble `providerConfigs` defaults
    * without importing each provider's settings module (ARCH-2 cycle break). */
   defaultConfig: Record<string, unknown>;

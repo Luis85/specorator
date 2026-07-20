@@ -1,3 +1,4 @@
+import { codexProviderRegistration } from '@/providers/codex/registration';
 import {
   applyCodexModelDefaults,
   DEFAULT_CODEX_PROVIDER_SETTINGS,
@@ -31,6 +32,20 @@ describe('codex settings', () => {
     expect(settings.wslDistroOverride).toBe('');
     expect(settings.installationMethod).toBe(DEFAULT_CODEX_PROVIDER_SETTINGS.installationMethod);
     expect(settings.wslDistroOverride).toBe(DEFAULT_CODEX_PROVIDER_SETTINGS.wslDistroOverride);
+  });
+
+  it('gates only the Marketplace install in WSL, not run resolution (distro ~/.codex still runs)', () => {
+    // In WSL the app-server runs inside the distro and resolves its own ~/.codex/skills,
+    // so discovered user skills stay RUNNABLE — Codex must NOT override the run-path hook.
+    // Only the host-side Marketplace install is gated, because HomeFileAdapter writes the
+    // unreachable Windows ~/.codex. A native install uses the host home, so it resolves.
+    expect(codexProviderRegistration.resolvesUserScopeSkills).toBeUndefined(); // run path stays default-true
+    expect(codexProviderRegistration.installsUserScopeSkills?.({})).toBe(true); // default native-windows
+    expect(
+      codexProviderRegistration.installsUserScopeSkills?.({
+        providerConfigs: { codex: { installationMethod: 'wsl' } },
+      }),
+    ).toBe(false);
   });
 
   describe('customModels normalization', () => {

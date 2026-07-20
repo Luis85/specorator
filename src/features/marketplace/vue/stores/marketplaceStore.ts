@@ -1,8 +1,12 @@
 import { defineStore } from 'pinia';
 import { ref, shallowRef } from 'vue';
 
+import { ProviderRegistry } from '../../../../core/providers/ProviderRegistry';
+import { HomeFileAdapter } from '../../../../core/storage/HomeFileAdapter';
+import { asSettingsBag } from '../../../../core/types';
 import type SpecoratorPlugin from '../../../../main';
-import type { MarketplaceItem } from '../../catalogTypes';
+import { refreshSkillCatalogBestEffort } from '../../../skills/refreshSkillCatalogBestEffort';
+import { type MarketplaceItem, normalizeInstallSlug } from '../../catalogTypes';
 import { MarketplaceCache } from '../../MarketplaceCache';
 import {
   DEFAULT_MARKETPLACE_BASE_URL,
@@ -13,9 +17,35 @@ import {
   installedAgentKeys,
   installMarketplaceItem,
   type InstallOutcome,
+  installSkillItem,
   isItemInstalled,
+  isSkillInstalledAt as skillInstalledAtTarget,
   type MarketplaceInstallDeps,
 } from '../../MarketplaceInstaller';
+import { assertNoBinarySkillFiles, fetchSkillFiles } from '../../skillFileFetch';
+import type {
+  SkillInstallScope,
+  SkillInstallTarget,
+  SkillProviderTarget,
+} from '../../skillInstallTargets';
+
+/**
+ * Aborts a user-scope install whose provider no longer supports installing user-scope
+ * skills under the CURRENT settings (Codex switching to WSL, Claude's `loadUserSettings`
+ * disabled). The detail selector blocks NEW user-scope picks reactively; this is the
+ * write-time parallel — a target captured while it was supported must not silently write
+ * to host home the runtime no longer scans. Project-scope installs are never gated.
+ */
+function assertUserScopeStillInstallable(target: SkillInstallTarget, plugin: SpecoratorPlugin): void {
+  if (
+    target.scope === 'user' &&
+    !ProviderRegistry.installsUserScopeSkills(target.provider, asSettingsBag(plugin.settings))
+  ) {
+    throw new MarketplaceError(
+      `${target.provider} can no longer install user-scope skills with the current settings — re-open the skill and choose a target again.`,
+    );
+  }
+}
 
 /**
  * Marketplace store: fetches the catalog manifest via the client (falling back
@@ -49,6 +79,13 @@ export const useMarketplaceStore = defineStore('marketplace', () => {
   // catalog reload (same loadGeneration), so the generation guard alone can't
   // order them; only the latest-started scan commits its result.
   let installedScanSeq = 0;
+  // Serializes skill installs by DESTINATION folder (provider+scope+normalized name) —
+  // the real write-collision boundary, NOT `item.id`. The store is shared across every
+  // open leaf, so a double-click, two live leaves, or a catalog refresh that reuses an
+  // id (changed content) or maps a new name to the same slug could otherwise write and
+  // roll back the same folder concurrently. Installs to one folder chain (tail promise
+  // kept here); each runs its own install, so none rides another's outcome.
+  const skillInstallQueue = new Map<string, Promise<InstallOutcome>>();
 
   function init(p: SpecoratorPlugin): void {
     plugin ??= p;
@@ -98,6 +135,9 @@ export const useMarketplaceStore = defineStore('marketplace', () => {
     return {
       vault: p.app.vault,
       adapter: p.vaultFileAdapter,
+      // User-scope skill installs write outside the vault (home dir). A fresh
+      // HomeFileAdapter is cheap and stateless (rooted at os.homedir()).
+      homeAdapter: new HomeFileAdapter(),
       rosterStore: p.agentRosterStore,
       loopFolder: p.settings.agentBoardLoopFolder || 'Agent Board/loops',
       templateFolder: p.settings.agentBoardTemplateFolder || 'Agent Board/templates',
@@ -228,23 +268,125 @@ export const useMarketplaceStore = defineStore('marketplace', () => {
   /**
    * Installs the exact body the user reviewed in the preview — passed in by the
    * caller rather than re-fetched, so what lands in the vault is what was shown
-   * (no re-dial, no chance the remote changed between preview and install). This
-   * is also why install issues no network request and needs no opt-in guard.
+   * (no re-dial for the reviewed body). Non-skill installs issue no network
+   * request and need no opt-in guard.
+   *
+   * Skills are the exception: they are multi-file, so the reviewed `SKILL.md` is
+   * written verbatim while the supporting files ARE fetched at install time
+   * (guarded by the network opt-in and the same SSRF/containment checks). For a
+   * multi-file skill the marker is also re-fetched and must still match the
+   * reviewed body, so a mid-window catalog change can't pair the reviewed marker
+   * with newer supporting files. A `target` (provider + scope) selects the root.
    */
-  async function install(item: MarketplaceItem, body: string): Promise<InstallOutcome> {
+  async function install(
+    item: MarketplaceItem,
+    body: string,
+    target?: SkillInstallTarget,
+  ): Promise<InstallOutcome> {
     const generation = loadGeneration;
-    const outcome = await installMarketplaceItem(item, body, installDeps(), Date.now());
-    // If the catalog reloaded during the vault write (Refresh / source switch,
-    // possibly from another leaf), a later refreshInstalled already recomputed
-    // installedIds against the new catalog — blindly adding this id could
-    // falsely mark a reused id installed, so only optimistically mark when the
-    // catalog is still the one this install ran against.
+    const outcome =
+      item.type === 'skill'
+        ? await installSkillAt(item, body, requireSkillTarget(target))
+        : await installMarketplaceItem(item, body, installDeps(), Date.now());
+    // If the catalog reloaded during the write (Refresh / source switch, possibly
+    // from another leaf), a later refreshInstalled already recomputed installedIds
+    // against the new catalog — blindly adding this id could falsely mark a reused
+    // id installed, so only optimistically mark when the catalog is still current.
     if (generation === loadGeneration) {
       const next = new Set(installedIds.value);
       next.add(item.id);
       installedIds.value = next;
     }
     return outcome;
+  }
+
+  function requireSkillTarget(target?: SkillInstallTarget): SkillInstallTarget {
+    if (!target) throw new MarketplaceError('Choose a provider and scope to install this skill.');
+    return target;
+  }
+
+  /**
+   * Serializes installs that target the SAME destination folder (provider + scope +
+   * normalized skill name) — the real write-collision boundary, not `item.id`. Two
+   * installs can hit one folder with different ids/content across a catalog refresh
+   * (a replacement item reusing an id, or a different id whose name normalizes to the
+   * same slug), so an id key would let them write and roll back the same directory
+   * concurrently. Each queued install runs its OWN runSkillInstall — a later one hits
+   * the "already installed" preflight skip — so no request rides another's result: the
+   * reviewed content each caller picked is what its own run installs (or skips), never
+   * silently swapped for a peer's. The `item.id`-keyed installed mark still happens per
+   * caller in `install()`.
+   */
+  function installSkillAt(
+    item: MarketplaceItem,
+    skillMdBody: string,
+    target: SkillInstallTarget,
+  ): Promise<InstallOutcome> {
+    const key = `${target.provider} ${target.scope} ${normalizeInstallSlug(item.name)}`;
+    // Snapshot the committed source NOW, at enqueue — a queued install can wait here
+    // while another leaf reloads/switches the catalog, and its fetches must use the
+    // source its reviewed item/body came from, not whatever is committed after the wait
+    // (else the reviewed marker pairs with supporting files from a different catalog).
+    const installSource = source.value;
+    const prior: Promise<unknown> = skillInstallQueue.get(key) ?? Promise.resolve();
+    // Chain after any in-flight install to this folder; swallow the prior's error so
+    // one failed install doesn't reject the whole queue waiting behind it.
+    const run = prior.catch(() => {}).then(() => runSkillInstall(item, skillMdBody, target, installSource));
+    skillInstallQueue.set(key, run);
+    // Free the slot on settlement, but only if we're still the tail (a later enqueue
+    // may have replaced us) so we never drop someone else's in-flight chain.
+    void run
+      .catch(() => {})
+      .finally(() => {
+        if (skillInstallQueue.get(key) === run) skillInstallQueue.delete(key);
+      });
+    return run;
+  }
+
+  /** Fetches a skill's supporting files (network) and installs the whole folder. */
+  async function runSkillInstall(
+    item: MarketplaceItem,
+    skillMdBody: string,
+    target: SkillInstallTarget,
+    installSource: string,
+  ): Promise<InstallOutcome> {
+    // `installSource` was snapshotted at enqueue (installSkillAt), so a concurrent leaf
+    // refresh/source-switch during a queued wait can't split one skill across two
+    // catalogs (marker from the reviewed source, scripts from the new one). The network
+    // opt-in is still re-checked HERE (run time), so an opt-out during the wait aborts.
+    assertNetworkEnabled();
+    // Preflight the target marker before downloading anything: if the skill is
+    // already installed here, skip without fetching the folder — avoids a needless
+    // full-folder download and a misleading "failed" notice if that download errors
+    // for an already-present skill. installSkillItem re-checks race-safely at write.
+    if (await skillInstalledAtTarget(item, target, installDeps())) return 'skipped';
+    // Text-only: reject a declared binary by extension before fetching (fast path;
+    // fetchSkillFiles also verifies by content). No wasted download, no corruption.
+    assertNoBinarySkillFiles(item);
+    const files = await fetchSkillFiles(item, skillMdBody, installSource, assertNetworkEnabled);
+    assertUserScopeStillInstallable(target, requirePlugin());
+    const outcome = await installSkillItem(item, files, target, installDeps());
+    if (outcome === 'installed') {
+      // Skill dot-folders bypass the vault watcher, so mirror skillLibraryStore's
+      // post-write sequence: invalidate the aggregator's TTL bucket AND force-reload
+      // the owning provider's catalog (Codex serves a short listing cache the event
+      // alone can't clear), so the new skill shows in the Library / dropdown / run
+      // surfaces immediately instead of after a TTL. This also drives the
+      // marketplace's own badge refresh (useMarketplaceInstalledRefresh subscribes).
+      const p = requirePlugin();
+      p.events.emit('vaultSkill.changed', { providerId: target.provider });
+      await refreshSkillCatalogBestEffort(p, target.provider);
+    }
+    return outcome;
+  }
+
+  /** Whether the skill already exists at a specific target — drives the detail's per-target button. */
+  async function isSkillInstalledAt(
+    item: MarketplaceItem,
+    provider: SkillProviderTarget,
+    scope: SkillInstallScope,
+  ): Promise<boolean> {
+    return skillInstalledAtTarget(item, { provider, scope }, installDeps());
   }
 
   return {
@@ -259,6 +401,7 @@ export const useMarketplaceStore = defineStore('marketplace', () => {
     load,
     fetchBody,
     install,
+    isSkillInstalledAt,
     // Exposed so a per-leaf event subscription can recompute the installed badges
     // when items are mutated OUTSIDE the marketplace (Library delete/rename, roster
     // change). No network, generation-guarded — safe to call anytime.

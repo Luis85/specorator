@@ -1,10 +1,18 @@
 import type { Vault } from 'obsidian';
 
+import type { HomeFileAdapter } from '@/core/storage/HomeFileAdapter';
 import type { VaultFileAdapter } from '@/core/storage/VaultFileAdapter';
 import type { AgentRosterStore } from '@/features/agents/roster/AgentRosterStore';
 import type { RosterAgent } from '@/features/agents/roster/rosterTypes';
 import type { MarketplaceItem } from '@/features/marketplace/catalogTypes';
-import { installMarketplaceItem, isItemInstalled, type MarketplaceInstallDeps } from '@/features/marketplace/MarketplaceInstaller';
+import {
+  installMarketplaceItem,
+  installSkillItem,
+  isItemInstalled,
+  isSkillInstalledAt,
+  type MarketplaceInstallDeps,
+} from '@/features/marketplace/MarketplaceInstaller';
+import type { SkillInstallTarget } from '@/features/marketplace/skillInstallTargets';
 
 function makeDeps(overrides: Partial<MarketplaceInstallDeps> = {}) {
   const notes = new Map<string, string>();
@@ -20,13 +28,45 @@ function makeDeps(overrides: Partial<MarketplaceInstallDeps> = {}) {
     },
   } as unknown as Vault;
 
+  // `exists` is folder-aware: a directory "exists" when any file lives under it
+  // (mirrors real adapters), so the installer's pre-existing-folder guard can be
+  // exercised by seeding a non-SKILL file.
+  const dirAware = (files: Map<string, string>) => async (p: string) =>
+    files.has(p) || [...files.keys()].some((k) => k.startsWith(`${p}/`));
+  // Recursive delete: drop the path and everything under it (mirrors the real adapters).
+  const deleteAware = (files: Map<string, string>) => async (p: string) => {
+    for (const k of [...files.keys()]) {
+      if (k === p || k.startsWith(`${p}/`)) files.delete(k);
+    }
+  };
+  // Read: returns stored content, rejecting a missing path like the real adapters.
+  const readAware = (files: Map<string, string>) => async (p: string) => {
+    const v = files.get(p);
+    if (v === undefined) throw new Error(`ENOENT: ${p}`);
+    return v;
+  };
+
   const qaFiles = new Map<string, string>();
   const adapter = {
-    exists: async (p: string) => qaFiles.has(p),
+    exists: dirAware(qaFiles),
+    read: readAware(qaFiles),
     write: async (p: string, c: string) => {
       qaFiles.set(p, c);
     },
+    deleteFolderRecursive: deleteAware(qaFiles),
   } as unknown as VaultFileAdapter;
+
+  // Home adapter for user-scope skill installs — a separate in-memory map so
+  // tests can assert vault vs. home routing.
+  const homeFiles = new Map<string, string>();
+  const homeAdapter = {
+    exists: dirAware(homeFiles),
+    read: readAware(homeFiles),
+    write: async (p: string, c: string) => {
+      homeFiles.set(p, c);
+    },
+    deleteFolderRecursive: deleteAware(homeFiles),
+  } as unknown as HomeFileAdapter;
 
   const agents: RosterAgent[] = [];
   const rosterStore = {
@@ -39,6 +79,7 @@ function makeDeps(overrides: Partial<MarketplaceInstallDeps> = {}) {
   const deps: MarketplaceInstallDeps = {
     vault,
     adapter,
+    homeAdapter,
     rosterStore,
     loopFolder: 'Agent Board/loops',
     templateFolder: 'Agent Board/templates',
@@ -46,7 +87,7 @@ function makeDeps(overrides: Partial<MarketplaceInstallDeps> = {}) {
     catalogUrl: 'https://catalog.test/',
     ...overrides,
   };
-  return { deps, notes, qaFiles, agents };
+  return { deps, notes, qaFiles, homeFiles, agents };
 }
 
 const loopItem: MarketplaceItem = {
@@ -292,5 +333,326 @@ describe('isItemInstalled', () => {
     expect(await isItemInstalled(item, deps, new Set(['roster:planner']))).toBe(true);
     expect(await isItemInstalled(item, deps, new Set(['roster:other']))).toBe(false);
     expect(listSpy).not.toHaveBeenCalled();
+  });
+});
+
+const skillItem: MarketplaceItem = {
+  id: 'skills/project-setup',
+  type: 'skill',
+  name: 'project-setup',
+  description: 'Use when setting up a project.',
+  path: 'skills/project-setup/SKILL.md',
+  files: [
+    'skills/project-setup/SKILL.md',
+    'skills/project-setup/references/a.md',
+    'skills/project-setup/scripts/run.mjs',
+  ],
+  tags: [],
+};
+
+/** A minimal valid SKILL.md (name + description frontmatter) for a given skill name. */
+const validSkillMd = (name: string): string =>
+  `---\nname: ${name}\ndescription: Use when doing the thing.\n---\n\nDo the thing.`;
+
+/** The in-skill file map the store hands the installer (keys are folder-relative). */
+function skillFiles(): Map<string, string> {
+  return new Map<string, string>([
+    ['SKILL.md', validSkillMd('project-setup')],
+    ['references/a.md', 'ref a'],
+    ['scripts/run.mjs', 'run'],
+  ]);
+}
+
+describe('installSkillItem', () => {
+  it('writes the whole folder under the vault provider root at project scope', async () => {
+    const { deps, qaFiles, homeFiles } = makeDeps();
+    const outcome = await installSkillItem(skillItem, skillFiles(), { provider: 'claude', scope: 'project' }, deps);
+    expect(outcome).toBe('installed');
+    expect(qaFiles.get('.claude/skills/project-setup/SKILL.md')).toBe(validSkillMd('project-setup'));
+    expect(qaFiles.get('.claude/skills/project-setup/references/a.md')).toBe('ref a');
+    expect(qaFiles.get('.claude/skills/project-setup/scripts/run.mjs')).toBe('run');
+    expect(homeFiles.size).toBe(0); // project scope never touches home
+  });
+
+  it('writes to the home adapter at user scope, under the codex root', async () => {
+    const { deps, qaFiles, homeFiles } = makeDeps();
+    await installSkillItem(skillItem, skillFiles(), { provider: 'codex', scope: 'user' }, deps);
+    expect(homeFiles.get('.codex/skills/project-setup/SKILL.md')).toBe(validSkillMd('project-setup'));
+    expect(homeFiles.get('.codex/skills/project-setup/scripts/run.mjs')).toBe('run');
+    expect(qaFiles.size).toBe(0); // user scope writes to home only
+  });
+
+  it('maps each provider to its own skill root', async () => {
+    const { deps, qaFiles } = makeDeps();
+    await installSkillItem(skillItem, skillFiles(), { provider: 'cursor', scope: 'project' }, deps);
+    expect(qaFiles.has('.cursor/skills/project-setup/SKILL.md')).toBe(true);
+  });
+
+  it('removes the partial skill folder when a write fails, so a retry is not blocked', async () => {
+    const files = new Map<string, string>();
+    const removed: string[] = [];
+    const failing = {
+      exists: async (p: string) => files.has(p) || [...files.keys()].some((k) => k.startsWith(`${p}/`)),
+      read: async (p: string) => {
+        const v = files.get(p);
+        if (v === undefined) throw new Error(`ENOENT: ${p}`);
+        return v;
+      },
+      write: async (p: string, c: string) => {
+        if (p.endsWith('/SKILL.md')) throw new Error('disk full'); // the LAST write fails
+        files.set(p, c);
+      },
+      deleteFolderRecursive: async (p: string) => {
+        removed.push(p);
+        for (const k of [...files.keys()]) if (k === p || k.startsWith(`${p}/`)) files.delete(k);
+      },
+    } as unknown as VaultFileAdapter;
+    const { deps } = makeDeps({ adapter: failing });
+
+    await expect(
+      installSkillItem(skillItem, skillFiles(), { provider: 'claude', scope: 'project' }, deps),
+    ).rejects.toThrow(/disk full/);
+    // The supporting files were written then removed with the folder — nothing lingers to
+    // trip the pre-existing-folder guard, so the user can retry through Marketplace.
+    expect([...files.keys()].some((k) => k.startsWith('.claude/skills/project-setup'))).toBe(false);
+    expect(removed).toContain('.claude/skills/project-setup');
+  });
+
+  it('does NOT delete the folder on rollback when a peer completed the COMPLETE SKILL.md', async () => {
+    // SKILL.md is absent at the pre-write guard but present — and byte-identical to what we
+    // meant to write — by cleanup time: a peer install of the same skill finished mid-write.
+    // Rollback compares content, sees a complete peer marker, and must not destroy the skill.
+    const removed: string[] = [];
+    const failing = {
+      exists: async () => false, // nothing present at the pre-write guards
+      read: async (p: string) => (p.endsWith('/SKILL.md') ? validSkillMd('project-setup') : ''),
+      write: async (p: string) => {
+        if (p.endsWith('/SKILL.md')) throw new Error('disk full'); // our own marker write fails
+      },
+      deleteFolderRecursive: async (p: string) => {
+        removed.push(p);
+      },
+    } as unknown as VaultFileAdapter;
+    const { deps } = makeDeps({ adapter: failing });
+
+    await expect(
+      installSkillItem(skillItem, skillFiles(), { provider: 'claude', scope: 'project' }, deps),
+    ).rejects.toThrow(/disk full/);
+    expect(removed).toEqual([]); // the peer's COMPLETE marker (== skillMd) was left intact
+  });
+
+  it('DOES roll back when our own final marker write leaves a truncated SKILL.md', async () => {
+    // The final SKILL.md write creates/truncates then fails (disk full mid-write), leaving a
+    // partial marker. A content compare recognizes it as OUR broken write — not a peer's
+    // completion — and rolls the folder back, so a retry starts clean and the preflight never
+    // reports the truncated skill as installed.
+    const removed: string[] = [];
+    const failing = {
+      exists: async () => false,
+      read: async (p: string) => (p.endsWith('/SKILL.md') ? 'truncated par' : ''), // partial, != skillMd
+      write: async (p: string) => {
+        if (p.endsWith('/SKILL.md')) throw new Error('disk full');
+      },
+      deleteFolderRecursive: async (p: string) => {
+        removed.push(p);
+      },
+    } as unknown as VaultFileAdapter;
+    const { deps } = makeDeps({ adapter: failing });
+
+    await expect(
+      installSkillItem(skillItem, skillFiles(), { provider: 'claude', scope: 'project' }, deps),
+    ).rejects.toThrow(/disk full/);
+    expect(removed).toEqual(['.claude/skills/project-setup']); // our partial marker rolled back
+  });
+
+  it('installs by NAME so distinct-name items sharing a path parent get distinct folders', async () => {
+    // The install folder + dedup key must agree (both name-based). Two differently
+    // named items that share one `<folder>/SKILL.md` parent (only reachable via a
+    // custom manifest) must install to DISTINCT dirs, not collide — else installing
+    // one would mark both installed and block the other.
+    const { deps, qaFiles } = makeDeps();
+    const target: SkillInstallTarget = { provider: 'claude', scope: 'project' };
+    const alpha: MarketplaceItem = { id: 'skills/alpha', type: 'skill', name: 'alpha', description: 'd', path: 'skills/shared/SKILL.md', files: [], tags: [] };
+    const beta: MarketplaceItem = { id: 'skills/beta', type: 'skill', name: 'beta', description: 'd', path: 'skills/shared/SKILL.md', files: [], tags: [] };
+    await installSkillItem(alpha, new Map([['SKILL.md', validSkillMd('alpha')]]), target, deps);
+    await installSkillItem(beta, new Map([['SKILL.md', validSkillMd('beta')]]), target, deps);
+    expect(qaFiles.get('.claude/skills/alpha/SKILL.md')).toBe(validSkillMd('alpha'));
+    expect(qaFiles.get('.claude/skills/beta/SKILL.md')).toBe(validSkillMd('beta'));
+    // ...and their installed-state is independent.
+    expect(await isSkillInstalledAt(alpha, target, deps)).toBe(true);
+    expect(await isSkillInstalledAt(beta, target, deps)).toBe(true);
+  });
+
+  it('skips when the target already holds the skill', async () => {
+    const { deps } = makeDeps();
+    const target: SkillInstallTarget = { provider: 'claude', scope: 'project' };
+    expect(await installSkillItem(skillItem, skillFiles(), target, deps)).toBe('installed');
+    expect(await installSkillItem(skillItem, skillFiles(), target, deps)).toBe('skipped');
+  });
+
+  it('slugifies a slashed / spaced / uppercase name to one safe provider-valid segment', async () => {
+    // A messy custom-catalog name normalizes to the same [a-z0-9-] slug
+    // parseManifest dedups on — one segment, no nesting, resolvable as a command.
+    const { deps, qaFiles } = makeDeps();
+    const messy: MarketplaceItem = { ...skillItem, name: 'Foo/Bar Baz' };
+    await installSkillItem(messy, new Map([['SKILL.md', validSkillMd('foo-bar-baz')]]), { provider: 'claude', scope: 'project' }, deps);
+    expect(qaFiles.get('.claude/skills/foo-bar-baz/SKILL.md')).toBe(validSkillMd('foo-bar-baz'));
+    expect(qaFiles.has('.claude/skills/Foo/Bar Baz/SKILL.md')).toBe(false);
+  });
+
+  it('refuses a name that normalizes to an empty slug', async () => {
+    const { deps } = makeDeps();
+    const empty: MarketplaceItem = { ...skillItem, name: '!!!' };
+    await expect(
+      installSkillItem(empty, new Map([['SKILL.md', 'x']]), { provider: 'claude', scope: 'project' }, deps),
+    ).rejects.toThrow(/invalid/i);
+  });
+
+  it('refuses a Windows reserved device name (portable across platforms)', async () => {
+    // `con`/`nul`/`com1` can't be a directory on Windows; reject on every OS so
+    // installability doesn't silently depend on the platform.
+    const { deps } = makeDeps();
+    for (const reserved of ['con', 'NUL', 'Com1', 'lpt9', 'aux']) {
+      const item: MarketplaceItem = { ...skillItem, name: reserved };
+      await expect(
+        installSkillItem(item, new Map([['SKILL.md', validSkillMd(reserved)]]), { provider: 'claude', scope: 'project' }, deps),
+      ).rejects.toThrow(/invalid/i);
+    }
+    // A near-miss that is NOT reserved installs fine (`com0`, `console`).
+    const ok: MarketplaceItem = { ...skillItem, name: 'console' };
+    expect(
+      await installSkillItem(ok, new Map([['SKILL.md', validSkillMd('console')]]), { provider: 'claude', scope: 'project' }, deps),
+    ).toBe('installed');
+  });
+
+  it('refuses a pre-existing folder that lacks SKILL.md (protects existing content)', async () => {
+    const { deps, qaFiles } = makeDeps();
+    // A hand-made / half-installed folder holding a user file, no SKILL.md.
+    qaFiles.set('.claude/skills/project-setup/notes.md', 'user content');
+    await expect(
+      installSkillItem(skillItem, skillFiles(), { provider: 'claude', scope: 'project' }, deps),
+    ).rejects.toThrow(/already exists/i);
+    // Nothing was overwritten and no SKILL.md was written.
+    expect(qaFiles.get('.claude/skills/project-setup/notes.md')).toBe('user content');
+    expect(qaFiles.has('.claude/skills/project-setup/SKILL.md')).toBe(false);
+  });
+
+  it('refuses a file map without SKILL.md', async () => {
+    const { deps } = makeDeps();
+    const noSkillMd = new Map<string, string>([['references/a.md', 'x']]);
+    await expect(
+      installSkillItem(skillItem, noSkillMd, { provider: 'claude', scope: 'project' }, deps),
+    ).rejects.toThrow(/SKILL\.md/);
+  });
+
+  it('refuses a SKILL.md with no name/description frontmatter (would install an unloadable skill)', async () => {
+    const { deps, qaFiles } = makeDeps();
+    const noFrontmatter = new Map<string, string>([
+      ['SKILL.md', 'just a body, no frontmatter'],
+      ['scripts/run.mjs', 'run'],
+    ]);
+    await expect(
+      installSkillItem(skillItem, noFrontmatter, { provider: 'claude', scope: 'project' }, deps),
+    ).rejects.toThrow(/name.*description/i);
+    expect(qaFiles.size).toBe(0); // rejected before any write
+  });
+
+  it('refuses a SKILL.md with valid frontmatter but no instruction body (would install an empty skill)', async () => {
+    const { deps, qaFiles } = makeDeps();
+    const noBody = new Map<string, string>([
+      ['SKILL.md', '---\nname: project-setup\ndescription: Use when doing the thing.\n---\n\n   \n'],
+    ]);
+    await expect(
+      installSkillItem(skillItem, noBody, { provider: 'claude', scope: 'project' }, deps),
+    ).rejects.toThrow(/no instructions/i);
+    expect(qaFiles.size).toBe(0); // rejected before any write
+  });
+
+  it('refuses a SKILL.md whose name identifies a different skill than the catalog entry', async () => {
+    const { deps } = makeDeps();
+    const mismatched = new Map<string, string>([['SKILL.md', validSkillMd('something-else')]]);
+    await expect(
+      installSkillItem(skillItem, mismatched, { provider: 'claude', scope: 'project' }, deps),
+    ).rejects.toThrow(/different skill/i);
+  });
+
+  it('refuses a SKILL.md whose name is not a strict provider slug, even when it normalizes to the item slug', async () => {
+    const { deps, qaFiles } = makeDeps();
+    // normalizeInstallSlug is lossy: `Foo_Bar` collapses to `foo-bar`, an overlong name
+    // keeps its length, a quoted `"null"` stays the reserved word — each clears the
+    // "different skill" check yet is a name no provider will load. A lossy-only guard
+    // would install an unloadable skill and mark it Installed; validateSlugName refuses it.
+    const bad: Array<{ slug: string; skillMd: string }> = [
+      { slug: 'foo-bar', skillMd: validSkillMd('Foo_Bar') }, // uppercase + underscore
+      { slug: 'x'.repeat(65), skillMd: validSkillMd('x'.repeat(65)) }, // over the 64-char cap
+      {
+        slug: 'null', // a quoted YAML-reserved word stays the string "null"
+        skillMd: '---\nname: "null"\ndescription: Use when doing the thing.\n---\n\nDo the thing.',
+      },
+    ];
+    for (const { slug, skillMd } of bad) {
+      const item: MarketplaceItem = { ...skillItem, name: slug, id: `skills/${slug}`, path: `skills/${slug}/SKILL.md` };
+      await expect(
+        installSkillItem(item, new Map([['SKILL.md', skillMd]]), { provider: 'claude', scope: 'project' }, deps),
+      ).rejects.toThrow(/lowercase slug/i);
+    }
+    expect(qaFiles.size).toBe(0); // nothing written for any case
+  });
+
+  it('refuses an unsafe in-skill path (traversal) and writes nothing', async () => {
+    const { deps, qaFiles } = makeDeps();
+    // A SAFE supporting file precedes the unsafe one: all paths are validated
+    // up front, so the safe file is never written either — no partial folder for
+    // the pre-existing-folder guard to refuse on a corrected re-install.
+    const evil = new Map<string, string>([
+      ['SKILL.md', validSkillMd('project-setup')],
+      ['references/ok.md', 'safe'],
+      ['../evil.md', 'pwn'],
+    ]);
+    await expect(
+      installSkillItem(skillItem, evil, { provider: 'claude', scope: 'project' }, deps),
+    ).rejects.toThrow(/unsafe/);
+    expect(qaFiles.size).toBe(0);
+  });
+
+  it('refuses a supporting file with a Windows-invalid segment and writes nothing', async () => {
+    // `scripts/con.txt` (reserved device name) can't be created on Windows; the
+    // pre-pass rejects it before any write so a skill isn't installable on
+    // macOS/Linux but broken on Windows.
+    const { deps, qaFiles } = makeDeps();
+    const bad = new Map<string, string>([
+      ['SKILL.md', validSkillMd('project-setup')],
+      ['scripts/con.txt', 'x'],
+    ]);
+    await expect(
+      installSkillItem(skillItem, bad, { provider: 'claude', scope: 'project' }, deps),
+    ).rejects.toThrow(/unsafe/);
+    expect(qaFiles.size).toBe(0);
+  });
+
+  it('writes SKILL.md last so a mid-write failure leaves no dedup marker', async () => {
+    const { deps } = makeDeps();
+    const order: string[] = [];
+    jest.spyOn(deps.adapter, 'write').mockImplementation(async (p: string) => {
+      order.push(p);
+    });
+    await installSkillItem(skillItem, skillFiles(), { provider: 'claude', scope: 'project' }, deps);
+    expect(order[order.length - 1]).toBe('.claude/skills/project-setup/SKILL.md');
+  });
+});
+
+describe('skill installed checks', () => {
+  it('isItemInstalled reports installed when present in ANY root', async () => {
+    const { deps } = makeDeps();
+    expect(await isItemInstalled(skillItem, deps)).toBe(false);
+    await installSkillItem(skillItem, skillFiles(), { provider: 'codex', scope: 'user' }, deps);
+    expect(await isItemInstalled(skillItem, deps)).toBe(true); // found in codex/user
+  });
+
+  it('isSkillInstalledAt reflects the SPECIFIC target only', async () => {
+    const { deps } = makeDeps();
+    await installSkillItem(skillItem, skillFiles(), { provider: 'codex', scope: 'user' }, deps);
+    expect(await isSkillInstalledAt(skillItem, { provider: 'codex', scope: 'user' }, deps)).toBe(true);
+    expect(await isSkillInstalledAt(skillItem, { provider: 'claude', scope: 'project' }, deps)).toBe(false);
   });
 });

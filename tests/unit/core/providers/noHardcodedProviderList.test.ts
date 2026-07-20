@@ -36,6 +36,13 @@ const ALLOWLIST = new Map<string, string>([
     'src/providers/index.ts',
     'Sanctioned registration aggregator — the one place that names every provider.',
   ],
+  [
+    'src/features/marketplace/skillInstallTargets.ts',
+    'Sanctioned skill-root map — names the three providers that own a skill root ' +
+      '(Claude/Codex/Cursor). The roots are provider-specific dot-folder paths the ' +
+      'features layer cannot derive from the registry (features→providers boundary), ' +
+      'mirroring skillCloning.ts VAULT_SKILL_ROOTS.',
+  ],
 ]);
 
 const DISTINCT_THRESHOLD = 3;

@@ -374,6 +374,28 @@ describe('ProviderRegistry', () => {
       title: 'codex title',
     });
   });
+
+  describe('user-scope skill capabilities (resolve vs install split)', () => {
+    const wslBag = { providerConfigs: { codex: { installationMethod: 'wsl' } } };
+
+    it('Codex WSL gates the Marketplace install but keeps run resolution enabled', () => {
+      // Regression guard: a single seam once refused RUNNING in-distro user skills.
+      // Run resolution stays default-true; only the host-side install is gated off.
+      expect(ProviderRegistry.resolvesUserScopeSkills('codex', wslBag)).toBe(true);
+      expect(ProviderRegistry.installsUserScopeSkills('codex', wslBag)).toBe(false);
+      expect(ProviderRegistry.installsUserScopeSkills('codex', {})).toBe(true); // native
+    });
+
+    it('installsUserScopeSkills falls back to resolvesUserScopeSkills when unset (Claude/loadUserSettings)', () => {
+      const off = { providerConfigs: { claude: { loadUserSettings: false } } };
+      const on = { providerConfigs: { claude: { loadUserSettings: true } } };
+      // Claude defines no install hook, so install mirrors resolve: no point offering a
+      // ~/.claude/skills install the SDK won't load when loadUserSettings is off.
+      expect(ProviderRegistry.resolvesUserScopeSkills('claude', off)).toBe(false);
+      expect(ProviderRegistry.installsUserScopeSkills('claude', off)).toBe(false);
+      expect(ProviderRegistry.installsUserScopeSkills('claude', on)).toBe(true);
+    });
+  });
 });
 
 function createMockTitleService(providerId: ProviderId): TitleGenerationService {

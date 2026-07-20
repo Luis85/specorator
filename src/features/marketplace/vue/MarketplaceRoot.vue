@@ -2,6 +2,8 @@
 import { Notice } from 'obsidian';
 import { computed, inject, nextTick, onMounted, onUnmounted, reactive, ref, watch } from 'vue';
 
+import { ProviderRegistry } from '../../../core/providers/ProviderRegistry';
+import { asSettingsBag } from '../../../core/types';
 import { t } from '../../../i18n/i18n';
 import LibraryToolbar from '../../library/vue/components/LibraryToolbar.vue';
 import { useLibraryList } from '../../library/vue/useLibraryList';
@@ -12,6 +14,11 @@ import {
   type MarketplaceItemType,
 } from '../catalogTypes';
 import { maybeWarnMarketplaceNetwork } from '../marketplaceNetworkGate';
+import {
+  SKILL_PROVIDER_TARGETS,
+  type SkillInstallTarget,
+  type SkillProviderTarget,
+} from '../skillInstallTargets';
 import MarketplaceDetail from './components/MarketplaceDetail.vue';
 import MarketplaceGrid from './components/MarketplaceGrid.vue';
 import MarketplaceHome from './components/MarketplaceHome.vue';
@@ -121,6 +128,11 @@ watch([counts, activeView, () => store.loaded, () => store.error, () => store.lo
 // Opt-in network gate: the Marketplace is dark until the user enables it, so
 // merely opening the view never touches the network.
 const enabled = ref(plugin.settings.marketplaceNetworkEnabled === true);
+// Bumped on `settings-changed` so computeds that read the non-reactive
+// `plugin.settings` (e.g. `skillProviderOptions`' per-provider user-scope check,
+// which depends on Claude's `loadUserSettings`) recompute when a setting changes
+// while a leaf stays mounted — without it the cached value would go stale.
+const settingsVersion = ref(0);
 
 // Generation-guarded preview body cache. Opening the detail fetches the body
 // once; `bodies` holds ONLY successfully-fetched content, a failed fetch sets
@@ -180,6 +192,7 @@ async function enable(): Promise<void> {
 let settingsChangedOff: (() => void) | null = null;
 onMounted(() => {
   settingsChangedOff = plugin.events.on('settings-changed', () => {
+    settingsVersion.value += 1; // invalidate settings-derived computeds (scope options)
     void syncEnabled();
   });
 });
@@ -251,14 +264,53 @@ function backToList(): void {
   detailId.value = null;
 }
 
-async function install(item: MarketplaceItem): Promise<void> {
+// Skill install targets: the three providers that own a skill root, labeled from
+// the registry (falling back to the id if a provider isn't registered).
+const skillProviderOptions = computed(() => {
+  void settingsVersion.value; // recompute when settings change (userScope reads live, non-reactive settings)
+  return SKILL_PROVIDER_TARGETS.map((id) => ({ id, label: providerLabel(id), userScope: providerInstallsUserScope(id) }));
+});
+
+function providerLabel(id: SkillProviderTarget): string {
+  try {
+    return ProviderRegistry.getProviderDisplayName(id);
+  } catch {
+    return id;
+  }
+}
+
+// Whether a user-scope (`~/.<provider>/skills`) install would land where this
+// provider's runtime looks, under the LIVE settings. Claude ties it to `loadUserSettings`
+// (offering User when it's off writes a skill the runtime won't load); Codex gates it off
+// in WSL (the app-server's `~/.codex` is inside the distro, not the host dir the install
+// writes) — so the detail hides User scope when this is false. Distinct from run-time
+// resolution: a Codex WSL user skill discovered in-distro still RUNS; it just can't be
+// installed from the host side. Defaults to true (offer User) if the provider isn't
+// registered or settings can't be read, matching the prior always-offer behavior.
+function providerInstallsUserScope(id: SkillProviderTarget): boolean {
+  try {
+    return ProviderRegistry.installsUserScopeSkills(id, asSettingsBag(plugin.settings));
+  } catch {
+    return true;
+  }
+}
+
+// Passed to the detail so it can reflect whether the CURRENTLY selected target
+// already holds the skill (per-target, unlike the "installed anywhere" badge).
+// Tolerates a null item (vue-tsc doesn't narrow the v-if'd detailItem in bindings).
+function skillInstalledChecker(item: MarketplaceItem | null): (target: SkillInstallTarget) => Promise<boolean> {
+  return (target) =>
+    item ? store.isSkillInstalledAt(item, target.provider, target.scope) : Promise.resolve(false);
+}
+
+async function install(item: MarketplaceItem, target?: SkillInstallTarget): Promise<void> {
   // Install the reviewed body only; if the preview hasn't loaded it yet, there
   // is nothing vetted to install (the button is disabled in this state too).
   const body = bodies[item.id];
   if (body === undefined) return;
   installing[item.id] = true;
   try {
-    const outcome = await store.install(item, body);
+    const outcome = await store.install(item, body, target);
     new Notice(
       outcome === 'installed'
         ? t('marketplace.installedNotice', { name: item.name })
@@ -332,8 +384,11 @@ async function install(item: MarketplaceItem): Promise<void> {
       :installing="!!installing[detailItem.id]"
       :installed="store.installedIds.has(detailItem.id)"
       :installable="isInstallableType(detailItem.type)"
+      :skill-provider-options="skillProviderOptions"
+      :skill-installed-checker="skillInstalledChecker(detailItem)"
+      :installed-signal="store.installedIds"
       @back="backToList"
-      @install="install(detailItem)"
+      @install="(target) => detailItem && install(detailItem, target)"
     />
     <template v-else>
       <LibraryToolbar
