@@ -39,8 +39,6 @@ import {
   buildAcpApprovalDecisionOptions,
   buildAcpUsageInfo,
   buildActiveTurnEffect,
-  JsonRpcErrorResponse,
-  JsonRpcTransportClosedError,
   mapApprovalDecision,
   normalizeApprovalInput,
   selectPermissionOption,
@@ -64,6 +62,11 @@ import { getCachedCursorModelIds } from './cursorModelCatalog';
 import { extractCursorModeValue, resolveCursorFamilyId } from './cursorModelFamily';
 import { fromCursorModelValue } from './cursorModelId';
 import { cursorModelContextWindow } from './cursorModelWindowCatalog';
+import {
+  formatCursorRuntimeError,
+  isCursorAuthenticationFailure,
+  isCursorSessionLoadTransportFailure,
+} from './cursorRuntimeErrors';
 import { CursorSessionModelState } from './CursorSessionModelState';
 import {
   loadCursorSessionModelState,
@@ -889,7 +892,7 @@ export class CursorChatRuntime implements ChatRuntime {
         return loadedId;
       } catch (error) {
         let loadError = error;
-        if (this.isAuthenticationFailure(loadError) && await this.tryAuthenticate()) {
+        if (isCursorAuthenticationFailure(loadError) && await this.tryAuthenticate()) {
           try {
             const retryResponse = await this.connection.loadSession({
               cwd,
@@ -909,7 +912,7 @@ export class CursorChatRuntime implements ChatRuntime {
           }
         }
 
-        if (this.isSessionLoadTransportFailure(loadError)) {
+        if (isCursorSessionLoadTransportFailure(loadError)) {
           // Preserve the requested session id so a transient transport failure
           // can retry on the next turn instead of minting a fresh session.
           this.plugin.logger.scope('cursor.acp')
@@ -948,7 +951,7 @@ export class CursorChatRuntime implements ChatRuntime {
         await this.connection.newSession({ cwd, mcpServers: [], additionalDirectories }),
       );
     } catch (error) {
-      if (this.isAuthenticationFailure(error) && await this.tryAuthenticate()) {
+      if (isCursorAuthenticationFailure(error) && await this.tryAuthenticate()) {
         try {
           return await this.adoptFreshSession(
             await this.connection.newSession({ cwd, mcpServers: [], additionalDirectories }),
@@ -958,7 +961,7 @@ export class CursorChatRuntime implements ChatRuntime {
           return null;
         }
       }
-      this.lastStartupErrorMessage = this.isAuthenticationFailure(error)
+      this.lastStartupErrorMessage = isCursorAuthenticationFailure(error)
         ? `${CURSOR_LOGIN_MESSAGE}\n\n${this.formatRuntimeError(error)}`
         : this.formatRuntimeError(error);
       return null;
@@ -996,31 +999,6 @@ export class CursorChatRuntime implements ChatRuntime {
     } catch (error) {
       this.plugin.logger.scope('cursor.acp').warn('persist new session id failed', error);
     }
-  }
-
-  private isAuthenticationFailure(error: unknown): boolean {
-    const message = (error instanceof Error ? error.message : String(error)).trim();
-    if (error instanceof JsonRpcErrorResponse) {
-      const dataCode = readStructuredErrorCode(error.data);
-      if (dataCode && /^(?:AUTH|AUTHENTICATION|UNAUTHENTICATED|UNAUTHORIZED)(?:_|$)/u.test(dataCode)) {
-        return true;
-      }
-    }
-    return /\b(?:authentication required|login required|not authenticated|unauthenticated|unauthorized)\b/iu
-      .test(message);
-  }
-
-  private isSessionLoadTransportFailure(error: unknown): boolean {
-    if (error instanceof JsonRpcTransportClosedError) {
-      return true;
-    }
-    const code = (error as NodeJS.ErrnoException | null | undefined)?.code;
-    if (typeof code === 'string' && ['ECONNRESET', 'EPIPE', 'ETIMEDOUT'].includes(code.toUpperCase())) {
-      return true;
-    }
-    const message = error instanceof Error ? error.message.trim() : String(error).trim();
-    return /^(?:ACP|JSON-RPC) transport (?:closed|disconnected)\b/iu.test(message)
-      || /\b(?:request )?timed out\b/iu.test(message);
   }
 
   private async tryAuthenticate(): Promise<boolean> {
@@ -1417,9 +1395,7 @@ export class CursorChatRuntime implements ChatRuntime {
   }
 
   private formatRuntimeError(error: unknown): string {
-    const baseMessage = error instanceof Error ? error.message : 'Cursor ACP request failed';
-    const stderr = this.process?.getStderrSnapshot();
-    return stderr ? `${baseMessage}\n\n${stderr}` : baseMessage;
+    return formatCursorRuntimeError(error, this.process?.getStderrSnapshot());
   }
 
   private setReady(ready: boolean): void {
@@ -1461,18 +1437,6 @@ export class CursorChatRuntime implements ChatRuntime {
 // before the user decides. ApprovalDecision is a string|object union, so a
 // symbol can never collide with a real decision.
 const APPROVAL_CANCELLED = Symbol('cursor-approval-cancelled');
-
-function readStructuredErrorCode(data: unknown): string | null {
-  if (!data || typeof data !== 'object' || Array.isArray(data)) return null;
-  const record = data as Record<string, unknown>;
-  for (const key of ['code', 'reason', 'type']) {
-    const value = record[key];
-    if (typeof value === 'string' && value.trim()) {
-      return value.trim().toUpperCase();
-    }
-  }
-  return null;
-}
 
 function raceApprovalAgainstCancel<T>(
   promise: Promise<T>,

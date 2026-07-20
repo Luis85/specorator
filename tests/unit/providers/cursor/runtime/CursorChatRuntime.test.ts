@@ -1,10 +1,6 @@
 import { ProviderSettingsCoordinator } from '@/core/providers/ProviderSettingsCoordinator';
 import { createHeadlessRuntimeHost, type RuntimeHost } from '@/core/runtime/RuntimeHost';
-import {
-  AcpStreamChunkQueue,
-  JsonRpcErrorResponse,
-  JsonRpcTransportClosedError,
-} from '@/providers/acp';
+import { AcpStreamChunkQueue } from '@/providers/acp';
 import * as acpBuild from '@/providers/acp/buildAcpUsageInfo';
 import { CursorChatRuntime } from '@/providers/cursor/runtime/CursorChatRuntime';
 import {
@@ -347,28 +343,9 @@ describe('CursorChatRuntime.ensureSession', () => {
   });
 });
 
-describe('CursorChatRuntime error classification', () => {
-  it('uses structured JSON-RPC authentication failures without matching unrelated auth text', () => {
-    const runtime = makeRuntime() as unknown as Record<string, unknown>;
-    const classify = (runtime.isAuthenticationFailure as (error: unknown) => boolean).bind(runtime);
-
-    expect(classify(new JsonRpcErrorResponse(
-      'session/new',
-      -32000,
-      'Authentication required',
-      { code: 'AUTH_REQUIRED' },
-    ))).toBe(true);
-    expect(classify(new Error('authoritative model metadata unavailable'))).toBe(false);
-  });
-
-  it('recognizes the structured transport-closed error without treating arbitrary closed text as transport failure', () => {
-    const runtime = makeRuntime() as unknown as Record<string, unknown>;
-    const classify = (runtime.isSessionLoadTransportFailure as (error: unknown) => boolean).bind(runtime);
-
-    expect(classify(new JsonRpcTransportClosedError())).toBe(true);
-    expect(classify(new Error('closed beta session not found'))).toBe(false);
-  });
-});
+// Error classification (isCursorAuthenticationFailure /
+// isCursorSessionLoadTransportFailure / formatCursorRuntimeError) moved to
+// cursorRuntimeErrors.ts and is covered directly by cursorRuntimeErrors.test.ts.
 
 describe('CursorChatRuntime.createSession (auth retry)', () => {
   it('authenticates and retries when the first newSession rejects', async () => {
