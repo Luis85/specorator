@@ -34,3 +34,18 @@ residuals. Each fix lands with a unit test under
   opens a fragment — so the fetch requests `references/C` and the install fails
   or writes the wrong content. Fix: encode each path segment before URL
   resolution (or reject URL-significant chars during manifest validation).
+
+- [ ] **7. Reject superscript Windows device-name variants.**
+  `RESERVED_DEVICE_NAME` in `skillInstallTargets.ts` rejects `CON`/`COM1`–`COM9`
+  etc. but not the superscript forms `COM¹`–`COM³` / `LPT¹`–`LPT³`, which Windows
+  also treats as reserved. A skill file at `scripts/COM¹.txt` passes both preflight
+  guards and then fails at the filesystem write, potentially after partial writes.
+  Fix: include the superscript-digit variants in the device-name predicate.
+
+- [ ] **8. Reject file/directory path collisions in a skill's `files[]`.**
+  `isSafeSkillFilePath` (`catalogTypes.ts`) validates each path in isolation, so a
+  manifest declaring both `skills/foo/SKILL.md` and `skills/foo/SKILL.md/readme.txt`
+  is accepted; the installer then creates `SKILL.md` as a directory and later fails
+  writing the `SKILL.md` marker file, leaving a partial skill dir that blocks retry.
+  Fix: reject a `files[]` set where any path is an ancestor of another (a declared
+  file used as a directory prefix), including descendants of the `SKILL.md` marker.
