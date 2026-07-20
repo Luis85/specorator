@@ -65,6 +65,35 @@ describe('PluginSettingsManager', () => {
     expect(deps.onPluginsChanged).toHaveBeenCalledTimes(1);
   });
 
+  it('surfaces a local-override notice and skips refresh when the toggle has no effect', async () => {
+    // Simulate `.claude/settings.local.json` overriding the project toggle: the
+    // manager's togglePlugin writes project settings but the effective `enabled`
+    // is unchanged (local wins).
+    const plugin = makePlugin({ enabled: false });
+    const plugins = [plugin];
+    const pluginManager = {
+      getPlugins: jest.fn(() => plugins),
+      togglePlugin: jest.fn(async () => { /* local override → enabled stays false */ }),
+      loadPlugins: jest.fn(async () => {}),
+    } as unknown as AppPluginManager;
+    const agentManager = { loadAgents: jest.fn(async () => {}) } as unknown as Pick<AppAgentManager, 'loadAgents'>;
+    const restartTabs = jest.fn(async () => {});
+    const onPluginsChanged = jest.fn();
+
+    const container = createMockEl();
+    new PluginSettingsManager(container, { pluginManager, agentManager, restartTabs, onPluginsChanged });
+
+    container.querySelector('.specorator-plugin-action-btn')!.click();
+    await Promise.resolve();
+    await Promise.resolve();
+
+    expect(pluginManager.togglePlugin).toHaveBeenCalled();
+    // No effective change → no cache refresh, no agent reload, no tab restart.
+    expect(onPluginsChanged).not.toHaveBeenCalled();
+    expect(agentManager.loadAgents).not.toHaveBeenCalled();
+    expect(restartTabs).not.toHaveBeenCalled();
+  });
+
   it('does not throw when onPluginsChanged is omitted', async () => {
     const deps = makeDeps(makePlugin());
     const container = createMockEl();

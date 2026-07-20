@@ -1123,6 +1123,7 @@
         "toggleTabRestartFailed": "Plugin toggled, but some tabs failed to restart.",
         "enabled": "Plugin \"{id}\" enabled",
         "disabled": "Plugin \"{id}\" disabled",
+        "toggleMaskedByLocal": "Plugin \"{id}\" is overridden by .claude/settings.local.json — the project-level toggle has no effect. Edit settings.local.json to change it.",
         "toggleFailed": "Failed to toggle plugin: {error}",
         "listRefreshed": "Plugin list refreshed",
         "refreshFailed": "Failed to refresh plugins: {error}",

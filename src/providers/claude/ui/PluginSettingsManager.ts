@@ -114,27 +114,25 @@ export class PluginSettingsManager {
     });
   }
 
-  private async togglePlugin(pluginId: string) {
-    const plugin = this.pluginManager.getPlugins().find(p => p.id === pluginId);
-    const wasEnabled = plugin?.enabled ?? false;
+  private isPluginEnabled(pluginId: string): boolean {
+    return this.pluginManager.getPlugins().find(p => p.id === pluginId)?.enabled ?? false;
+  }
 
+  private async togglePlugin(pluginId: string) {
+    const wasEnabled = this.isPluginEnabled(pluginId);
     try {
       await this.pluginManager.togglePlugin(pluginId);
-      await this.agentManager.loadAgents();
-      // A toggled plugin gains/loses its skills; refresh the catalog cache so
-      // the Library reflects it immediately.
-      this.onPluginsChanged?.();
 
-      try {
-        await this.restartTabs();
-      } catch {
-        new Notice(t('provider.claude.plugin.toggleTabRestartFailed'));
+      // The toggle writes `.claude/settings.json`, but a higher-precedence
+      // `.claude/settings.local.json` entry can override it — so the effective
+      // state may not have changed. Surface that instead of a false success,
+      // and skip the (pointless) agent reload + tab restart.
+      if (this.isPluginEnabled(pluginId) === wasEnabled) {
+        new Notice(t('provider.claude.plugin.toggleMaskedByLocal', { id: pluginId }));
+        return;
       }
 
-      new Notice(t(
-        wasEnabled ? 'provider.claude.plugin.disabled' : 'provider.claude.plugin.enabled',
-        { id: pluginId },
-      ));
+      await this.applyPluginToggle(pluginId, wasEnabled);
     } catch (err) {
       await this.pluginManager.togglePlugin(pluginId);
       const message = err instanceof Error ? err.message : 'Unknown error';
@@ -142,6 +140,24 @@ export class PluginSettingsManager {
     } finally {
       this.render();
     }
+  }
+
+  // Post-toggle side effects for an effective change: refresh agents + the skill
+  // catalog, restart tabs, and confirm.
+  private async applyPluginToggle(pluginId: string, wasEnabled: boolean): Promise<void> {
+    await this.agentManager.loadAgents();
+    this.onPluginsChanged?.();
+
+    try {
+      await this.restartTabs();
+    } catch {
+      new Notice(t('provider.claude.plugin.toggleTabRestartFailed'));
+    }
+
+    new Notice(t(
+      wasEnabled ? 'provider.claude.plugin.disabled' : 'provider.claude.plugin.enabled',
+      { id: pluginId },
+    ));
   }
 
   private async refreshPlugins() {

@@ -325,13 +325,17 @@ Prompt`,
       expect(await storage.loadPluginAll([])).toEqual([]);
     });
 
-    it('skips disabled plugins', async () => {
+    it('scans whatever plugins it is given (enable-gating is the caller/manager job)', async () => {
+      // loadPluginAll no longer re-filters on the raw `enabled` flag: the manager's
+      // getEffectivelyEnabledPlugins() is the single enable/effective-source
+      // authority, and it intentionally returns effectively-loaded plugins whose
+      // raw `enabled` may be false (project-disable withheld on an untrusted vault).
       const factory = createPluginAdapterFactory({
         '/plugins/formatter': { 'skills/fix/SKILL.md': '---\ndescription: Fix\n---\nFix' },
       });
       const storage = new SkillStorage(createMockAdapter({}), undefined, factory);
       const loaded = await storage.loadPluginAll([plugin('formatter', '/plugins/formatter', false)]);
-      expect(loaded).toEqual([]);
+      expect(loaded.map((l) => l.skill.name)).toEqual(['formatter:fix']);
     });
 
     it('discovers enabled plugin skills from <installPath>/skills, namespaced and read-only', async () => {

@@ -105,7 +105,16 @@ export async function createClaudeWorkspaceServices(
   // Report the runtime's live effective setting sources so plugin discovery
   // only surfaces plugins the SDK will actually load (matching the same
   // `loadUserSettings` + vault-trust gate the query uses). Read fresh each call
-  // so toggling trust / user-settings takes effect without reloading plugins.
+  // so a fresh discovery pass always reflects the current gate.
+  //
+  // Freshness note: this is correct whenever discovery runs, but cached surfaces
+  // lag a mid-session `loadUserSettings`/trust toggle — the skill aggregator's
+  // 60s TTL (plus its manual refresh) self-heals, and plugin-agent mentions
+  // refresh on the next `loadAgents` (plugin toggle / vault reload). We
+  // deliberately do not wire a bespoke settings-change invalidation here: it's a
+  // rare toggle with bounded, self-healing impact, and the same "discovery
+  // reflects disk; the runtime resolves" tradeoff the user-scope skill path
+  // already makes (see providers/claude/CLAUDE.md).
   const resolveEffectiveSources = (): EffectivePluginSources => {
     const claudeSettings = getClaudeProviderSettings(plugin.settings);
     const sources = resolveClaudeSettingSources(

@@ -132,9 +132,13 @@ export class SkillStorage {
    * them view/run only.
    */
   async loadPluginAll(plugins: PluginInfo[]): Promise<LoadedSkill[]> {
-    const perPlugin = await Promise.all(
-      plugins.filter((p) => p.enabled).map((p) => this.loadPluginRoot(p)),
-    );
+    // Scan whatever plugins the caller passes — no raw `enabled` re-check here.
+    // The caller (ClaudeCommandCatalog → PluginManager.getEffectivelyEnabledPlugins)
+    // is the single enable/effective-source authority; re-filtering on the raw
+    // `enabled` flag would drop a plugin the runtime loads from an effective
+    // lower-precedence source (e.g. user-enabled on an untrusted vault where the
+    // project disable is withheld), whose PluginInfo.enabled is `false`.
+    const perPlugin = await Promise.all(plugins.map((p) => this.loadPluginRoot(p)));
     return perPlugin.flat();
   }
 
