@@ -63,8 +63,8 @@
       "reason": "Grandfathered hotspot. Track the split in docs/tech-debt/2026-06-07-oversized-modules-and-test-files.md; shrink only."
     },
     "src/core/providers/types.ts": {
-      "loc": 639,
-      "reason": "Grandfathered hotspot. Track the split in docs/tech-debt/2026-06-07-oversized-modules-and-test-files.md; shrink only."
+      "loc": 646,
+      "reason": "Grandfathered hotspot. Track the split in docs/tech-debt/2026-06-07-oversized-modules-and-test-files.md; shrink only. +7 for the AppPluginManager.getEffectivelyEnabledPlugins() method + doc — plugin skill/agent discovery scans only plugins the runtime will actually load (enabled AND via a setting source not withheld by loadUserSettings/vault-trust)."
     },
     "src/features/chat/controllers/StreamController.ts": {
       "loc": 639,

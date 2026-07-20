@@ -12,19 +12,22 @@ import type {
   ProviderWorkspaceServices,
 } from '../../../core/providers/types';
 import type { VaultFileAdapter } from '../../../core/storage/VaultFileAdapter';
+import { asSettingsBag } from '../../../core/types';
 import type { PluginContext } from '../../../core/types/PluginContext';
 import { promptVaultTrust } from '../../../shared/modals/VaultTrustModal';
 import { getVaultPath } from '../../../utils/path';
 import { AgentManager } from '../agents/AgentManager';
 import { ClaudeCommandCatalog } from '../commands/ClaudeCommandCatalog';
 import { probeRuntimeCommands } from '../commands/probeRuntimeCommands';
-import { PluginManager } from '../plugins/PluginManager';
+import { type EffectivePluginSources, PluginManager } from '../plugins/PluginManager';
 import { claudeCliSpec } from '../runtime/ClaudeCliResolver';
 import {
   isClaudeVaultTrusted,
   setClaudeVaultTrusted,
+  shouldHonorClaudeProjectSettingsFor,
   vaultProjectSettingsRisky,
 } from '../runtime/claudeProjectTrust';
+import { getClaudeProviderSettings, resolveClaudeSettingSources } from '../settings';
 import { StorageService } from '../storage/StorageService';
 import { claudeSettingsTabRenderer } from '../ui/ClaudeSettingsTab';
 
@@ -99,7 +102,19 @@ export async function createClaudeWorkspaceServices(
   }
 
   const vaultPath = getVaultPath(plugin.app) ?? '';
-  const pluginManager = new PluginManager(vaultPath, claudeStorage.ccSettings);
+  // Report the runtime's live effective setting sources so plugin discovery
+  // only surfaces plugins the SDK will actually load (matching the same
+  // `loadUserSettings` + vault-trust gate the query uses). Read fresh each call
+  // so toggling trust / user-settings takes effect without reloading plugins.
+  const resolveEffectiveSources = (): EffectivePluginSources => {
+    const claudeSettings = getClaudeProviderSettings(plugin.settings);
+    const sources = resolveClaudeSettingSources(
+      claudeSettings.loadUserSettings,
+      shouldHonorClaudeProjectSettingsFor(asSettingsBag(plugin.settings), vaultPath),
+    );
+    return { user: sources.includes('user'), project: sources.includes('project') };
+  };
+  const pluginManager = new PluginManager(vaultPath, claudeStorage.ccSettings, resolveEffectiveSources);
   await pluginManager.loadPlugins();
 
   const agentStorage = claudeStorage.agents;

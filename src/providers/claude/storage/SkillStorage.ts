@@ -14,6 +14,43 @@ export const SKILLS_PATH = '.claude/skills';
  */
 export const PLUGIN_SKILLS_PATH = 'skills';
 
+/** A plugin's manifest, relative to its install root. */
+const PLUGIN_MANIFEST_PATH = '.claude-plugin/plugin.json';
+
+/** The manifest fields we read; a plugin may add custom skill directories. */
+interface PluginManifest {
+  skills?: unknown;
+}
+
+/** Coerce a manifest `skills` value (string | string[]) to a string list. */
+function toPathList(value: unknown): string[] {
+  if (typeof value === 'string') return [value];
+  if (Array.isArray(value)) return value.filter((v): v is string => typeof v === 'string');
+  return [];
+}
+
+/**
+ * Normalize a manifest skill-dir path relative to the plugin root, or null when
+ * unusable. The manifest is third-party, so this REJECTS anything that could
+ * escape the install dir once joined: absolute/home paths, `..` traversal, and
+ * the plugin root itself (`.`/`./`, the single-`SKILL.md`-at-root case, which
+ * this directory scan doesn't cover). Windows separators are normalized first.
+ */
+function sanitizePluginSkillRoot(raw: string): string | null {
+  const p = raw.trim().replace(/\\/g, '/').replace(/^\.\//, '').replace(/\/+$/, '');
+  if (!p || p === '.') return null;
+  if (p.startsWith('/') || p.startsWith('~')) return null;
+  if (p.split('/').some((seg) => seg === '..')) return null;
+  return p;
+}
+
+/** First-wins dedupe by skill name — a skill listed in both the default and a
+ * custom manifest root would otherwise surface twice with the same `/name`. */
+function dedupeSkillsByName(skills: LoadedSkill[]): LoadedSkill[] {
+  const seen = new Set<string>();
+  return skills.filter((s) => (seen.has(s.skill.name) ? false : (seen.add(s.skill.name), true)));
+}
+
 export interface LoadedSkill {
   skill: SlashCommand;
   /** Vault-relative for vault skills; host-absolute for read-only home/plugin skills. */
@@ -103,16 +140,49 @@ export class SkillStorage {
 
   private async loadPluginRoot(plugin: PluginInfo): Promise<LoadedSkill[]> {
     const adapter = this.createPluginAdapter(plugin.installPath);
-    return this.loadRoot(adapter, {
-      skillsPath: PLUGIN_SKILLS_PATH,
-      readOnly: true,
-      toSourcePath: (relPath) => adapter.getAbsolutePath(relPath),
-      // Namespace id AND name by plugin so two plugins can ship a same-named
-      // skill without colliding in the aggregator's id-keyed maps or the
-      // `/name` wire.
-      makeId: (name) => `plugin-skill-${plugin.name}-${name}`,
-      makeName: (name) => `${plugin.name}:${name}`,
-    });
+    const roots = await this.resolvePluginSkillRoots(adapter);
+    const perRoot = await Promise.all(
+      roots.map((skillsPath) =>
+        this.loadRoot(adapter, {
+          skillsPath,
+          readOnly: true,
+          toSourcePath: (relPath) => adapter.getAbsolutePath(relPath),
+          // Namespace id AND name by plugin so two plugins can ship a same-named
+          // skill without colliding in the aggregator's id-keyed maps or the
+          // `/name` wire.
+          makeId: (name) => `plugin-skill-${plugin.name}-${name}`,
+          makeName: (name) => `${plugin.name}:${name}`,
+        }),
+      ),
+    );
+    return dedupeSkillsByName(perRoot.flat());
+  }
+
+  /**
+   * The skill directories to scan for a plugin: the default `skills/` root is
+   * ALWAYS scanned, and any directories the plugin's `.claude-plugin/plugin.json`
+   * lists under `skills` are scanned alongside it (additive — matching the
+   * runtime — https://code.claude.com/docs/en/plugins-reference.md). Absent or
+   * unreadable manifest falls back to just the default.
+   */
+  private async resolvePluginSkillRoots(adapter: RootedReadAdapter): Promise<string[]> {
+    const roots = [PLUGIN_SKILLS_PATH];
+    const manifest = await this.readPluginManifest(adapter);
+    for (const raw of toPathList(manifest?.skills)) {
+      const clean = sanitizePluginSkillRoot(raw);
+      if (clean && !roots.includes(clean)) roots.push(clean);
+    }
+    return roots;
+  }
+
+  private async readPluginManifest(adapter: RootedReadAdapter): Promise<PluginManifest | null> {
+    try {
+      if (!(await adapter.exists(PLUGIN_MANIFEST_PATH))) return null;
+      const parsed: unknown = JSON.parse(await adapter.read(PLUGIN_MANIFEST_PATH));
+      return parsed && typeof parsed === 'object' ? parsed : null;
+    } catch {
+      return null;
+    }
   }
 
   private async loadRoot(

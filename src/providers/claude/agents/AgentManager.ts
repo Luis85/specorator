@@ -98,9 +98,10 @@ export class AgentManager {
   }
 
   private loadPluginAgents(): void {
-    for (const plugin of this.pluginManager.getPlugins()) {
-      if (!plugin.enabled) continue;
-
+    // Only plugins the runtime will actually load (enabled AND via an effective
+    // setting source) — same gate skill discovery uses, so we don't surface an
+    // agent from a plugin whose enabling source is withheld.
+    for (const plugin of this.pluginManager.getEffectivelyEnabledPlugins()) {
       const agentsDir = path.join(plugin.installPath, PLUGIN_AGENTS_DIR);
       if (!fs.existsSync(agentsDir)) continue;
 

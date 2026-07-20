@@ -19,7 +19,7 @@ jest.mock('obsidian', () => ({
 
 import { Notice } from 'obsidian';
 
-import { PluginManager } from '@/providers/claude/plugins/PluginManager';
+import { isPluginEffectivelyEnabled, PluginManager } from '@/providers/claude/plugins/PluginManager';
 
 const mockFs = fs as jest.Mocked<typeof fs>;
 
@@ -793,6 +793,134 @@ describe('PluginManager', () => {
       expect(plugins.length).toBe(1);
       expect(plugins[0].name).toBe('simple-plugin');
       expect(plugins[0].id).toBe('simple-plugin');
+    });
+  });
+
+  describe('isPluginEffectivelyEnabled', () => {
+    const BOTH = { project: true, user: true };
+
+    it('is enabled when an effective source enables it', () => {
+      expect(isPluginEffectivelyEnabled({ user: true }, BOTH)).toBe(true);
+      expect(isPluginEffectivelyEnabled({ project: true }, BOTH)).toBe(true);
+    });
+
+    it('lets an effective project source override user (matching the runtime merge)', () => {
+      expect(isPluginEffectivelyEnabled({ project: false, user: true }, BOTH)).toBe(false);
+      expect(isPluginEffectivelyEnabled({ project: true, user: false }, BOTH)).toBe(true);
+    });
+
+    it('is NOT enabled when enabled only via a withheld user source (loadUserSettings off)', () => {
+      expect(isPluginEffectivelyEnabled({ user: true }, { project: true, user: false })).toBe(false);
+    });
+
+    it('is NOT enabled when enabled only via a withheld project source (untrusted vault)', () => {
+      expect(isPluginEffectivelyEnabled({ project: true }, { project: false, user: true })).toBe(false);
+    });
+
+    it('still honors the effective source when the other is withheld', () => {
+      expect(isPluginEffectivelyEnabled({ user: true }, { project: false, user: true })).toBe(true);
+      expect(isPluginEffectivelyEnabled({ project: true }, { project: true, user: false })).toBe(true);
+    });
+
+    it('defaults to on when no source mentions it (no regression for missing settings)', () => {
+      expect(isPluginEffectivelyEnabled({}, BOTH)).toBe(true);
+      expect(isPluginEffectivelyEnabled({}, { project: false, user: false })).toBe(true);
+    });
+
+    it('is enabled when an effective source enables it despite a withheld disable', () => {
+      expect(isPluginEffectivelyEnabled({ project: false, user: true }, { project: false, user: true })).toBe(true);
+    });
+  });
+
+  describe('getEffectivelyEnabledPlugins', () => {
+    function mockUserEnabledPlugin() {
+      const installedPlugins = {
+        version: 2,
+        plugins: {
+          'p@marketplace': [{
+            scope: 'user', installPath: '/path/to/p',
+            version: '1.0.0', installedAt: 'x', lastUpdated: 'x',
+          }],
+        },
+      };
+      const globalSettings = { enabledPlugins: { 'p@marketplace': true } };
+      mockFs.existsSync.mockReturnValue(true);
+      mockFs.readFileSync.mockImplementation((p: fs.PathOrFileDescriptor) => {
+        if (String(p) === installedPluginsPath) return JSON.stringify(installedPlugins);
+        if (String(p) === globalSettingsPath) return JSON.stringify(globalSettings);
+        return '{}';
+      });
+    }
+
+    it('includes a user-enabled plugin when the user source is effective', async () => {
+      mockUserEnabledPlugin();
+      const manager = new PluginManager(vaultPath, createMockCCSettingsStorage(), () => ({ project: true, user: true }));
+      await manager.loadPlugins();
+      expect(manager.getEffectivelyEnabledPlugins().map((p) => p.id)).toEqual(['p@marketplace']);
+    });
+
+    it('excludes a plugin enabled only via a withheld user source, but keeps it in getPlugins()', async () => {
+      mockUserEnabledPlugin();
+      const manager = new PluginManager(vaultPath, createMockCCSettingsStorage(), () => ({ project: true, user: false }));
+      await manager.loadPlugins();
+      expect(manager.getEffectivelyEnabledPlugins()).toEqual([]);
+      // Raw list is unchanged — the settings UI still shows the user's config.
+      expect(manager.getPlugins().map((p) => p.id)).toEqual(['p@marketplace']);
+    });
+
+    it('excludes a project-enabled plugin when the project source is withheld (untrusted vault)', async () => {
+      const installedPlugins = {
+        version: 2,
+        plugins: {
+          'proj@marketplace': [{
+            scope: 'project', installPath: '/path/to/proj',
+            version: '1.0.0', installedAt: 'x', lastUpdated: 'x', projectPath: vaultPath,
+          }],
+        },
+      };
+      const projectSettings = { enabledPlugins: { 'proj@marketplace': true } };
+      mockFs.existsSync.mockReturnValue(true);
+      mockFs.readFileSync.mockImplementation((p: fs.PathOrFileDescriptor) => {
+        if (String(p) === installedPluginsPath) return JSON.stringify(installedPlugins);
+        if (String(p) === projectSettingsPath) return JSON.stringify(projectSettings);
+        return '{}';
+      });
+      const manager = new PluginManager(vaultPath, createMockCCSettingsStorage(), () => ({ project: false, user: true }));
+      await manager.loadPlugins();
+      expect(manager.getEffectivelyEnabledPlugins()).toEqual([]);
+    });
+
+    it('defaults to including plugins when no resolver is injected', async () => {
+      mockUserEnabledPlugin();
+      const manager = new PluginManager(vaultPath, createMockCCSettingsStorage());
+      await manager.loadPlugins();
+      expect(manager.getEffectivelyEnabledPlugins().map((p) => p.id)).toEqual(['p@marketplace']);
+    });
+
+    it('reflects a freshly-enabled plugin after toggle (enableSources kept in sync)', async () => {
+      const installedPlugins = {
+        version: 2,
+        plugins: {
+          'p@marketplace': [{
+            scope: 'user', installPath: '/path/to/p',
+            version: '1.0.0', installedAt: 'x', lastUpdated: 'x',
+          }],
+        },
+      };
+      const globalSettings = { enabledPlugins: { 'p@marketplace': false } };
+      mockFs.existsSync.mockReturnValue(true);
+      mockFs.readFileSync.mockImplementation((p: fs.PathOrFileDescriptor) => {
+        if (String(p) === installedPluginsPath) return JSON.stringify(installedPlugins);
+        if (String(p) === globalSettingsPath) return JSON.stringify(globalSettings);
+        return '{}';
+      });
+      const manager = new PluginManager(vaultPath, createMockCCSettingsStorage(), () => ({ project: true, user: true }));
+      await manager.loadPlugins();
+      expect(manager.getEffectivelyEnabledPlugins()).toEqual([]);
+
+      // Toggling writes the PROJECT settings, which are effective → now included.
+      await manager.enablePlugin('p@marketplace');
+      expect(manager.getEffectivelyEnabledPlugins().map((p) => p.id)).toEqual(['p@marketplace']);
     });
   });
 

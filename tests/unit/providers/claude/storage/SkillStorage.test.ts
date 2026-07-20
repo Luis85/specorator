@@ -397,6 +397,66 @@ Prompt`,
         'p:plug-only',
       ]);
     });
+
+    it('honors additive plugin.json skills path overrides (string form)', async () => {
+      const factory = createPluginAdapterFactory({
+        '/plugins/formatter': {
+          '.claude-plugin/plugin.json': JSON.stringify({ name: 'formatter', skills: './extra-skills/' }),
+          'skills/default-one/SKILL.md': '---\ndescription: Default\n---\nD',
+          'extra-skills/extra-one/SKILL.md': '---\ndescription: Extra\n---\nE',
+        },
+      });
+      const storage = new SkillStorage(createMockAdapter({}), undefined, factory);
+      const loaded = await storage.loadPluginAll([plugin('formatter', '/plugins/formatter')]);
+      // Default `skills/` is ALWAYS scanned; the manifest dir is added alongside it.
+      expect(loaded.map((l) => l.skill.name).sort()).toEqual([
+        'formatter:default-one',
+        'formatter:extra-one',
+      ]);
+    });
+
+    it('honors array-form overrides and dedupes a same-named skill (default wins)', async () => {
+      const factory = createPluginAdapterFactory({
+        '/plugins/p': {
+          '.claude-plugin/plugin.json': JSON.stringify({ skills: ['./a/', './b/'] }),
+          'skills/shared/SKILL.md': '---\ndescription: from default\n---\nD',
+          'a/shared/SKILL.md': '---\ndescription: from a\n---\nA',
+          'a/only-a/SKILL.md': '---\ndescription: only a\n---\nA',
+          'b/only-b/SKILL.md': '---\ndescription: only b\n---\nB',
+        },
+      });
+      const storage = new SkillStorage(createMockAdapter({}), undefined, factory);
+      const loaded = await storage.loadPluginAll([plugin('p', '/plugins/p')]);
+      expect(loaded.map((l) => l.skill.name).sort()).toEqual(['p:only-a', 'p:only-b', 'p:shared']);
+      // `shared` exists in both the default and `a/`; the default root wins.
+      expect(loaded.find((l) => l.skill.name === 'p:shared')!.skill.description).toBe('from default');
+    });
+
+    it('rejects unsafe manifest skill paths (traversal / absolute)', async () => {
+      const factory = createPluginAdapterFactory({
+        '/plugins/p': {
+          '.claude-plugin/plugin.json': JSON.stringify({ skills: ['../../etc', '/abs/skills', './ok/'] }),
+          'skills/base/SKILL.md': '---\ndescription: base\n---\nB',
+          'ok/good/SKILL.md': '---\ndescription: good\n---\nG',
+        },
+      });
+      const storage = new SkillStorage(createMockAdapter({}), undefined, factory);
+      const loaded = await storage.loadPluginAll([plugin('p', '/plugins/p')]);
+      // Only the default `skills/` and the safe `./ok/` override are scanned.
+      expect(loaded.map((l) => l.skill.name).sort()).toEqual(['p:base', 'p:good']);
+    });
+
+    it('falls back to the default root when plugin.json is malformed', async () => {
+      const factory = createPluginAdapterFactory({
+        '/plugins/p': {
+          '.claude-plugin/plugin.json': 'not json {{{',
+          'skills/base/SKILL.md': '---\ndescription: base\n---\nB',
+        },
+      });
+      const storage = new SkillStorage(createMockAdapter({}), undefined, factory);
+      const loaded = await storage.loadPluginAll([plugin('p', '/plugins/p')]);
+      expect(loaded.map((l) => l.skill.name)).toEqual(['p:base']);
+    });
   });
 
   describe('save', () => {

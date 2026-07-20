@@ -238,6 +238,13 @@ export interface AgentMentionProvider {
 export interface AppPluginManager {
   loadPlugins(): Promise<void>;
   getPlugins(): PluginInfo[];
+  /**
+   * Plugins the runtime will actually load right now (enabled AND via a setting
+   * source that isn't withheld by `loadUserSettings`/vault-trust). Skill/agent
+   * discovery scans this, not `getPlugins()`, so a plugin enabled only via a
+   * withheld source isn't surfaced as a runnable command the runtime drops.
+   */
+  getEffectivelyEnabledPlugins(): PluginInfo[];
   hasPlugins(): boolean;
   hasEnabledPlugins(): boolean;
   getEnabledCount(): number;
