@@ -81,11 +81,8 @@ vi.mock('@/features/skills/refreshSkillCatalogBestEffort', () => ({
 
 import { MAX_SKILL_FILES } from '@/features/marketplace/catalogTypes';
 import { DEFAULT_MARKETPLACE_BASE_URL } from '@/features/marketplace/MarketplaceCatalogClient';
-import {
-  MAX_SKILL_FILE_CHARS,
-  MAX_SKILL_TOTAL_CHARS,
-  useMarketplaceStore,
-} from '@/features/marketplace/vue/stores/marketplaceStore';
+import { MAX_SKILL_FILE_CHARS, MAX_SKILL_TOTAL_CHARS } from '@/features/marketplace/skillFileFetch';
+import { useMarketplaceStore } from '@/features/marketplace/vue/stores/marketplaceStore';
 
 const item: MarketplaceItem = {
   id: 'a',
@@ -568,6 +565,40 @@ describe('marketplaceStore skill install', () => {
     expect(fetchBodySpy).not.toHaveBeenCalled();
     const [, files] = installSkillSpy.mock.calls[0];
     expect(files.get('SKILL.md')).toBe('SKILL BODY');
+  });
+
+  it('serializes concurrent installs of the same skill+target into one actual install', async () => {
+    const store = useMarketplaceStore();
+    store.init(fakePlugin(true));
+    mockSkillSource('SKILL BODY');
+    // Hold the (single) real install open so the second call arrives mid-flight.
+    let finish: (v: 'installed') => void = () => {};
+    installSkillSpy.mockReturnValueOnce(
+      new Promise<'installed'>((resolve) => {
+        finish = resolve;
+      }),
+    );
+    const target = { provider: 'claude', scope: 'project' } as const;
+    const first = store.install(skillItem, 'SKILL BODY', target);
+    const second = store.install(skillItem, 'SKILL BODY', target); // rides the in-flight first
+    finish('installed');
+    expect(await first).toBe('installed');
+    expect(await second).toBe('installed');
+    // The second call deduped onto the first — exactly one folder was written.
+    expect(installSkillSpy).toHaveBeenCalledTimes(1);
+  });
+
+  it('re-runs a later install of the same target once the first has settled', async () => {
+    const store = useMarketplaceStore();
+    store.init(fakePlugin(true));
+    mockSkillSource('SKILL BODY');
+    const target = { provider: 'claude', scope: 'project' } as const;
+    await store.install(skillItem, 'SKILL BODY', target);
+    await new Promise((resolve) => setTimeout(resolve)); // let the in-flight key clear
+    await store.install(skillItem, 'SKILL BODY', target);
+    // The key is freed on settlement, so a genuinely later install runs fresh —
+    // it is NOT deduped onto the first's already-settled promise.
+    expect(installSkillSpy).toHaveBeenCalledTimes(2);
   });
 
   it('does NOT invalidate caches when the skill was already installed (skipped)', async () => {
