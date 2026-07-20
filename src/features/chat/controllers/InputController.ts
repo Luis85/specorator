@@ -495,7 +495,7 @@ export class InputController {
     const assistantMsg = createAssistantPlaceholderMessage(this.deps.generateId());
     state.addMessage(assistantMsg);
     this.activeStreamingAssistantMessage = assistantMsg;
-    activateStreamingAssistantMessage(state, this.deps.getMessagesEl(), assistantMsg);
+    activateStreamingAssistantMessage(state, assistantMsg);
     this.pendingProviderUserMessages = [{
       displayContent,
       images: imagesForMessage,
@@ -1046,7 +1046,7 @@ export class InputController {
     const assistantMessage = createAssistantPlaceholderMessage(this.deps.generateId());
     this.deps.state.addMessage(assistantMessage);
     this.activeStreamingAssistantMessage = assistantMessage;
-    activateStreamingAssistantMessage(this.deps.state, this.deps.getMessagesEl(), assistantMessage);
+    activateStreamingAssistantMessage(this.deps.state, assistantMessage);
     this.deps.streamController.showThinkingIndicator();
     this.deps.state.responseStartTime = performance.now();
     this.awaitingProviderAssistantStart = true;
@@ -1068,7 +1068,7 @@ export class InputController {
     const assistantMessage = createAssistantPlaceholderMessage(this.deps.generateId());
     this.deps.state.addMessage(assistantMessage);
     this.activeStreamingAssistantMessage = assistantMessage;
-    activateStreamingAssistantMessage(this.deps.state, this.deps.getMessagesEl(), assistantMessage);
+    activateStreamingAssistantMessage(this.deps.state, assistantMessage);
     this.deps.streamController.showThinkingIndicator();
     this.emit();
   }

@@ -66,9 +66,7 @@ export function createInlineCardMounter(
   component: Component,
 ): InlineCardMounter {
   function mount(host: HTMLElement, card: VueComponent, props: Record<string, unknown>): InlineCardHandle {
-    const container = host.ownerDocument.createElement('div');
-    container.className = 'specorator-inline-card-mount';
-    host.appendChild(container);
+    const container = host.createDiv({ cls: 'specorator-inline-card-mount' });
 
     const app = createApp(card, props);
     // markRaw: Obsidian objects are large and cyclic — never deep-proxy them.

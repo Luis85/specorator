@@ -64,29 +64,26 @@ class DiffWidget extends WidgetType {
     super();
   }
   toDOM(): HTMLElement {
-    const ownerDocument = this.controller.getOwnerDocument();
-    const span = ownerDocument.createElement('span');
-    span.className = 'specorator-inline-diff-replace';
+    // Detached widget root (CodeMirror inserts it into the editor); children use
+    // the instance helpers so they append to their parent in one step.
+    const span = createSpan({ cls: 'specorator-inline-diff-replace' });
     appendDiffOps(span, this.diffOps);
 
-    const btns = ownerDocument.createElement('span');
-    btns.className = 'specorator-inline-diff-buttons';
+    const btns = span.createSpan({ cls: 'specorator-inline-diff-buttons' });
 
-    const rejectBtn = ownerDocument.createElement('button');
-    rejectBtn.className = 'specorator-inline-diff-btn reject';
-    rejectBtn.textContent = '✕';
-    rejectBtn.title = 'Reject (esc)';
+    const rejectBtn = btns.createEl('button', {
+      cls: 'specorator-inline-diff-btn reject',
+      text: '✕',
+      attr: { title: 'Reject (esc)' },
+    });
     rejectBtn.onclick = () => this.controller.reject();
 
-    const acceptBtn = ownerDocument.createElement('button');
-    acceptBtn.className = 'specorator-inline-diff-btn accept';
-    acceptBtn.textContent = '✓';
-    acceptBtn.title = 'Accept (enter)';
+    const acceptBtn = btns.createEl('button', {
+      cls: 'specorator-inline-diff-btn accept',
+      text: '✓',
+      attr: { title: 'Accept (enter)' },
+    });
     acceptBtn.onclick = () => this.controller.accept();
-
-    btns.appendChild(rejectBtn);
-    btns.appendChild(acceptBtn);
-    span.appendChild(btns);
 
     return span;
   }
@@ -483,28 +480,24 @@ class InlineEditController {
 
   createInputDOM(): HTMLElement {
     const ownerDocument = this.getOwnerDocument();
-    const container = ownerDocument.createElement('div');
-    container.className = 'specorator-inline-input-container';
+    // Detached root (the caller inserts it); children use the instance helpers.
+    const container = createDiv({ cls: 'specorator-inline-input-container' });
     this.containerEl = container;
 
-    this.agentReplyEl = ownerDocument.createElement('div');
-    this.agentReplyEl.className = 'specorator-inline-agent-reply specorator-hidden';
-    container.appendChild(this.agentReplyEl);
+    this.agentReplyEl = container.createDiv({
+      cls: 'specorator-inline-agent-reply specorator-hidden',
+    });
 
-    const inputWrap = ownerDocument.createElement('div');
-    inputWrap.className = 'specorator-inline-input-wrap';
-    container.appendChild(inputWrap);
+    const inputWrap = container.createDiv({ cls: 'specorator-inline-input-wrap' });
 
-    this.inputEl = ownerDocument.createElement('input');
-    this.inputEl.type = 'text';
-    this.inputEl.className = 'specorator-inline-input';
+    this.inputEl = inputWrap.createEl('input', {
+      type: 'text',
+      cls: 'specorator-inline-input',
+    });
     this.inputEl.placeholder = this.mode === 'cursor' ? 'Insert instructions...' : 'Edit instructions...';
     this.inputEl.spellcheck = false;
-    inputWrap.appendChild(this.inputEl);
 
-    this.spinnerEl = ownerDocument.createElement('div');
-    this.spinnerEl.className = 'specorator-inline-spinner specorator-hidden';
-    inputWrap.appendChild(this.spinnerEl);
+    this.spinnerEl = inputWrap.createDiv({ cls: 'specorator-inline-spinner specorator-hidden' });
 
     const inlineCatalog = ProviderWorkspaceRegistry.getCommandCatalog(this.resolvedProviderId);
     this.slashCommandDropdown = new SlashCommandDropdown(
@@ -563,14 +556,11 @@ class InlineEditController {
   }
 
   createPreviewDOM(markdown: string): HTMLElement {
-    const ownerDocument = this.getOwnerDocument();
-    const previewEl = ownerDocument.createElement('div');
-    previewEl.className = 'specorator-inline-markdown-preview';
-
-    const bodyEl = ownerDocument.createElement('div');
-    bodyEl.className = 'specorator-inline-markdown-preview-body markdown-rendered';
-    previewEl.appendChild(bodyEl);
-
+    // Detached root (the caller inserts it); the body appends via the instance helper.
+    const previewEl = createDiv({ cls: 'specorator-inline-markdown-preview' });
+    const bodyEl = previewEl.createDiv({
+      cls: 'specorator-inline-markdown-preview-body markdown-rendered',
+    });
     void this.renderMarkdownPreview(bodyEl, markdown);
     return previewEl;
   }
@@ -669,7 +659,8 @@ class InlineEditController {
     if (!this.agentReplyEl || !this.containerEl) return;
     const replyEl = this.agentReplyEl;
     const renderVersion = ++this.agentReplyRenderVersion;
-    const renderedEl = this.getOwnerDocument().createElement('div');
+    // Off-screen render target; swapped into `replyEl` once markdown resolves.
+    const renderedEl = createDiv();
 
     replyEl.removeClass('specorator-hidden');
     replyEl.empty();

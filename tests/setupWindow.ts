@@ -1,3 +1,10 @@
+// Install Obsidian's DOM helpers for the whole Jest lane: instance methods
+// (createEl/createDiv/empty/…) on HTMLElement.prototype under jsdom, and the
+// GLOBAL create* functions (with a createMockEl fallback for DOM-less node
+// tests). Production code uses the global form for detached roots/sentinels;
+// without this, those paths throw `createEl is not defined` in node-env specs.
+import './setup/obsidianDom';
+
 type TestWindow = typeof globalThis & {
   cancelAnimationFrame?: (handle: number) => void;
   requestAnimationFrame?: (callback: FrameRequestCallback) => number;

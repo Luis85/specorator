@@ -194,7 +194,7 @@ function processInlineCodeVaultPath(app: App, codeEl: HTMLElement): boolean {
   }
 
   codeEl.textContent = '';
-  codeEl.appendChild(createWikilink(codeEl.ownerDocument, openPath, text));
+  codeEl.appendChild(createWikilink(openPath, text));
   return true;
 }
 
@@ -284,17 +284,12 @@ function extractLinkPathFromTarget(linkTarget: string): string {
  * Creates a link element for a wikilink.
  * Click handling is done via event delegation in registerFileLinkHandler.
  */
-function createWikilink(
-  ownerDocument: Document,
-  linkTarget: string,
-  displayText: string
-): HTMLElement {
-  const link = ownerDocument.createElement('a');
-  link.className = 'specorator-file-link internal-link';
-  link.textContent = displayText;
-  link.setAttribute('data-href', linkTarget);
-  link.setAttribute('href', linkTarget);
-  return link;
+function createWikilink(linkTarget: string, displayText: string): HTMLElement {
+  return createEl('a', {
+    cls: 'specorator-file-link internal-link',
+    text: displayText,
+    attr: { href: linkTarget, 'data-href': linkTarget },
+  });
 }
 
 function repairEmptyInternalLink(app: App, link: HTMLAnchorElement): void {
@@ -360,7 +355,7 @@ function buildFragmentWithLinks(ownerDocument: Document, text: string, matches: 
       );
     }
 
-    fragment.insertBefore(createWikilink(ownerDocument, linkTarget, displayText), fragment.firstChild);
+    fragment.insertBefore(createWikilink(linkTarget, displayText), fragment.firstChild);
     currentIndex = index;
   }
 

@@ -12,19 +12,20 @@ import type { ChatState } from '../state/ChatState';
 /**
  * Marks `message` as the in-flight assistant turn for the stream pipeline.
  *
- * `currentContentEl` is a DETACHED element: it marks "an assistant message is
- * active" for the stream pipeline's guards (the subagent pipeline reads it only
- * as that boolean — nothing writes DOM into it) and supplies an `ownerDocument`
- * for timers. `activeMessageId`/`activeBlockIndex` are
- * the reactive-stream pointers the Vue transcript projects; the block index opens
- * (from -1) once the first text/thinking chunk lands (the coordinators own it).
+ * `currentContentEl` is a DETACHED sentinel built with Obsidian's global
+ * `createDiv()`: it marks "an assistant message is active" for the stream
+ * pipeline's guards (the subagent pipeline reads it only as that boolean —
+ * nothing writes DOM into it, and streaming timers take their window from
+ * `messagesEl` directly, not from this element). `activeMessageId`/
+ * `activeBlockIndex` are the reactive-stream pointers the Vue transcript
+ * projects; the block index opens (from -1) once the first text/thinking chunk
+ * lands (the coordinators own it).
  */
 export function activateStreamingAssistantMessage(
   state: ChatState,
-  messagesEl: HTMLElement,
   message: ChatMessage,
 ): void {
-  state.currentContentEl = messagesEl.ownerDocument.createElement('div');
+  state.currentContentEl = createDiv();
   state.currentTextEl = null;
   state.currentTextContent = '';
   state.currentThinkingState = null;

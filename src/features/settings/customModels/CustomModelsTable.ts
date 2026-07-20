@@ -213,9 +213,9 @@ export class CustomModelsTable {
   private showError(anchor: HTMLElement, message: string): void {
     const parent = anchor.parentElement;
     if (!parent) return;
-    const errorEl = parent.ownerDocument.createElement('p');
-    errorEl.className = 'specorator-customModels-error';
-    errorEl.textContent = message;
-    parent.appendChild(errorEl);
+    parent.createEl('p', {
+      cls: 'specorator-customModels-error',
+      text: message,
+    });
   }
 }
