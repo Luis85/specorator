@@ -13,7 +13,7 @@ import { normalizePath, type Vault } from 'obsidian';
 
 import type { HomeFileAdapter } from '../../core/storage/HomeFileAdapter';
 import type { VaultFileAdapter } from '../../core/storage/VaultFileAdapter';
-import { extractString, extractStringArray, parseFrontmatter } from '../../utils/frontmatter';
+import { extractString, extractStringArray, parseFrontmatter, validateSlugName } from '../../utils/frontmatter';
 import type { AgentRosterStore } from '../agents/roster/AgentRosterStore';
 import { rosterIdFromSlug, slugifyRosterName } from '../agents/roster/rosterCapabilities';
 import type { RosterAgent } from '../agents/roster/rosterTypes';
@@ -409,6 +409,16 @@ function assertInstallableSkillBody(skillMd: string, slug: string): void {
   }
   if (!parsed?.body.trim()) {
     throw new MarketplaceError("This skill's SKILL.md has no instructions below its frontmatter and can't be installed.");
+  }
+  // The frontmatter `name` becomes the installed skill's identifier, so hold it to the
+  // same strict slug rule the provider authoring UIs enforce (validateSlugName). The
+  // slug match below uses lossy normalizeInstallSlug — `Foo_Bar`/`Foo Bar` both collapse
+  // to `foo-bar`, and overlong or YAML-reserved names slip through — so without this a
+  // marker no provider can load would still install and be marked "Installed".
+  if (validateSlugName(fmName) !== null) {
+    throw new MarketplaceError(
+      "This skill's SKILL.md `name` must be a lowercase slug (letters, numbers, hyphens; not a reserved word) that every provider accepts, so it can't be installed.",
+    );
   }
   if (normalizeInstallSlug(fmName) !== slug) {
     throw new MarketplaceError("This skill's SKILL.md names a different skill than its catalog entry, so it can't be installed.");

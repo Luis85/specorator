@@ -103,3 +103,15 @@ residuals. Each fix lands with a unit test under
   so the UI reports failure and re-enables Install while the rejected batch is still
   downloading, and a retry can overlap it. Fix: stop pulling new work on the first
   error and await all workers' in-flight requests before rejecting.
+
+- [x] **12. Validate the SKILL.md marker name with the strict provider slug rule.**
+  `assertInstallableSkillBody` matched the frontmatter `name` to the install slug via
+  the LOSSY `normalizeInstallSlug`, so `Foo_Bar`/`Foo Bar` (both → `foo-bar`), an
+  overlong name, or a quoted YAML-reserved word (`"null"`) all passed and were written
+  into the folder and marked "Installed" — even though the provider authoring rule
+  (`validateSlugName`: exact `[a-z0-9-]`, ≤64 chars, no reserved words) rejects them,
+  so no provider could load the skill. Fix: also require `validateSlugName(fmName)` to
+  pass before the (still lossy) slug match, refusing a marker no provider accepts.
+  (Plugin-side defense-in-depth for a custom source; the first-party catalog authors
+  valid slugs. The marketplace validator enforcing the same rule at the source is a
+  possible cross-repo follow-up.)

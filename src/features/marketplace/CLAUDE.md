@@ -218,8 +218,11 @@ Modeled on — and reuses the components of — `features/library`.
   stay under the skill folder, and the installer re-checks each in-skill path
   (`hasUnsafePathSegment`) before writing. The reviewed `SKILL.md` is also
   validated before it's written as the completion marker
-  (`assertInstallableSkillBody`: needs `name`+`description` frontmatter, name must
-  slugify to the install slug). Skills are **text-only** — the plugin fetches each
+  (`assertInstallableSkillBody`: needs `name`+`description` frontmatter, the `name`
+  must pass the strict provider slug rule `validateSlugName` — exact `[a-z0-9-]`,
+  ≤64 chars, no YAML-reserved word — AND slugify to the install slug; the strict
+  check catches names the lossy slug match would mask, like `Foo_Bar` or `"null"`,
+  that no provider could load). Skills are **text-only** — the plugin fetches each
   file as `requestUrl().text` and writes UTF-8, so a binary would corrupt; the
   store refuses a skill whose `files[]` carries a binary extension
   (`isBinarySkillPath`) before fetching, and the marketplace repo's validator

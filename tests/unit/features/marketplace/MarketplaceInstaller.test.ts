@@ -545,6 +545,29 @@ describe('installSkillItem', () => {
     ).rejects.toThrow(/different skill/i);
   });
 
+  it('refuses a SKILL.md whose name is not a strict provider slug, even when it normalizes to the item slug', async () => {
+    const { deps, qaFiles } = makeDeps();
+    // normalizeInstallSlug is lossy: `Foo_Bar` collapses to `foo-bar`, an overlong name
+    // keeps its length, a quoted `"null"` stays the reserved word — each clears the
+    // "different skill" check yet is a name no provider will load. A lossy-only guard
+    // would install an unloadable skill and mark it Installed; validateSlugName refuses it.
+    const bad: Array<{ slug: string; skillMd: string }> = [
+      { slug: 'foo-bar', skillMd: validSkillMd('Foo_Bar') }, // uppercase + underscore
+      { slug: 'x'.repeat(65), skillMd: validSkillMd('x'.repeat(65)) }, // over the 64-char cap
+      {
+        slug: 'null', // a quoted YAML-reserved word stays the string "null"
+        skillMd: '---\nname: "null"\ndescription: Use when doing the thing.\n---\n\nDo the thing.',
+      },
+    ];
+    for (const { slug, skillMd } of bad) {
+      const item: MarketplaceItem = { ...skillItem, name: slug, id: `skills/${slug}`, path: `skills/${slug}/SKILL.md` };
+      await expect(
+        installSkillItem(item, new Map([['SKILL.md', skillMd]]), { provider: 'claude', scope: 'project' }, deps),
+      ).rejects.toThrow(/lowercase slug/i);
+    }
+    expect(qaFiles.size).toBe(0); // nothing written for any case
+  });
+
   it('refuses an unsafe in-skill path (traversal) and writes nothing', async () => {
     const { deps, qaFiles } = makeDeps();
     // A SAFE supporting file precedes the unsafe one: all paths are validated
