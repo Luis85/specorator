@@ -79,6 +79,7 @@ import {
 } from './cursorSessionRoots';
 import { mapCursorToolInput } from './cursorToolInputMapping';
 import { MAX_CURSOR_TOOL_RESULT_CHARS } from './cursorToolNormalization';
+import { APPROVAL_CANCELLED, raceApprovalAgainstCancel, withTimeout } from './cursorTurnRaces';
 import { extractCursorUsage } from './cursorUsageMapping';
 
 interface ActiveTurn {
@@ -1431,41 +1432,6 @@ export class CursorChatRuntime implements ChatRuntime {
       this.captureWriter = null;
     }
   }
-}
-
-// Sentinel resolved by the approval race when the per-turn cancel signal fires
-// before the user decides. ApprovalDecision is a string|object union, so a
-// symbol can never collide with a real decision.
-const APPROVAL_CANCELLED = Symbol('cursor-approval-cancelled');
-
-function raceApprovalAgainstCancel<T>(
-  promise: Promise<T>,
-  signal?: AbortSignal,
-): Promise<T | typeof APPROVAL_CANCELLED> {
-  if (!signal) {
-    return promise;
-  }
-  if (signal.aborted) {
-    return Promise.resolve(APPROVAL_CANCELLED);
-  }
-  // Promise.race forwards `promise`'s rejection unchanged; `.catch` consumes the
-  // cleanup chain's duplicate so it can't surface as an unhandled rejection.
-  const cancellation = new Promise<typeof APPROVAL_CANCELLED>((resolve) => {
-    const onAbort = () => resolve(APPROVAL_CANCELLED);
-    signal.addEventListener('abort', onAbort, { once: true });
-    void promise.finally(() => signal.removeEventListener('abort', onAbort)).catch(() => {});
-  });
-  return Promise.race([promise, cancellation]);
-}
-
-function withTimeout<T>(promise: Promise<T>, ms: number, timeoutError: Error): Promise<T> {
-  // Promise.race: the timeout rejects with a real Error and `promise`'s own
-  // rejection forwards unchanged; `.catch` swallows the cleanup chain's duplicate.
-  const timeout = new Promise<never>((_resolve, reject) => {
-    const timer = window.setTimeout(() => reject(timeoutError), ms);
-    void promise.finally(() => window.clearTimeout(timer)).catch(() => {});
-  });
-  return Promise.race([promise, timeout]);
 }
 
 function buildCaptureSessionName(): string {
