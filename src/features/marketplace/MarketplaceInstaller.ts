@@ -457,7 +457,15 @@ export async function installSkillItem(
     await writeSupportingSkillFiles(skillDir, files, adapter);
     await adapter.write(normalizePath(`${skillDir}/SKILL.md`), skillMd);
   } catch (err) {
-    await adapter.deleteFolderRecursive(normalizePath(skillDir)).catch(() => {});
+    // Best-effort cleanup of OUR partial write — but NOT if a SKILL.md is now present:
+    // a concurrent install of the same target completed it in the meantime, and a
+    // recursive delete would destroy the peer's finished skill. (A full guarantee against
+    // the concurrent-write race needs per-target serialization — see the follow-up note in
+    // docs/tech-debt; this removes the destructive case of deleting a completed install.)
+    const peerCompleted = await adapter
+      .exists(normalizePath(`${skillDir}/SKILL.md`))
+      .catch(() => false);
+    if (!peerCompleted) await adapter.deleteFolderRecursive(normalizePath(skillDir)).catch(() => {});
     throw err;
   }
   return 'installed';

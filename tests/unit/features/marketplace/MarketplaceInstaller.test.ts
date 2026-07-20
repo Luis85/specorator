@@ -405,6 +405,35 @@ describe('installSkillItem', () => {
     expect(removed).toContain('.claude/skills/project-setup');
   });
 
+  it('does NOT delete the folder on rollback when a concurrent peer completed the SKILL.md', async () => {
+    // SKILL.md is absent at the pre-write guard (line 442) but present by cleanup time —
+    // a peer install finished mid-write. Rollback must not destroy the peer's skill.
+    let skillMdSeen = false;
+    const removed: string[] = [];
+    const failing = {
+      exists: async (p: string) => {
+        if (p.endsWith('/SKILL.md')) {
+          const was = skillMdSeen; // false on the pre-write check, true afterwards
+          skillMdSeen = true;
+          return was;
+        }
+        return false;
+      },
+      write: async (p: string) => {
+        if (p.endsWith('/SKILL.md')) throw new Error('disk full');
+      },
+      deleteFolderRecursive: async (p: string) => {
+        removed.push(p);
+      },
+    } as unknown as VaultFileAdapter;
+    const { deps } = makeDeps({ adapter: failing });
+
+    await expect(
+      installSkillItem(skillItem, skillFiles(), { provider: 'claude', scope: 'project' }, deps),
+    ).rejects.toThrow(/disk full/);
+    expect(removed).toEqual([]); // the peer's completed install was left intact
+  });
+
   it('installs by NAME so distinct-name items sharing a path parent get distinct folders', async () => {
     // The install folder + dedup key must agree (both name-based). Two differently
     // named items that share one `<folder>/SKILL.md` parent (only reachable via a

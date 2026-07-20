@@ -53,7 +53,27 @@ residuals. Each fix lands with a unit test under
   Fix: reject a `files[]` set where any path is an ancestor of another (a declared
   file used as a directory prefix), including descendants of the `SKILL.md` marker.
 
-- [x] **9. Clean up a partial skill directory after a write failure.**
+## Residuals / follow-ups (bounded to a non-default custom source)
+
+- **Full per-target install serialization.** Item 9's rollback now skips deleting a
+  dir a concurrent peer has already completed (no destroying a finished install), but
+  two concurrent installs of the SAME target that both fail mid-write can still race.
+  A complete guarantee needs per-target serialization (an in-flight lock in the store)
+  or staging each install in a uniquely-owned dir before an atomic publish.
+- **Pre-buffer streaming size limit.** The per-file size cap runs after
+  `requestUrl().text` has already materialized the whole body — `requestUrl` is a
+  high-level API with no socket/stream hooks, so a truly pre-buffer bound needs a
+  streaming transport (same limitation as the documented DNS-rebinding / redirect
+  SSRF residuals). The cap still refuses to WRITE an oversized body.
+- **Revision pinning (item 10).** Supporting files are fetched at install time from
+  the mutable source while `SKILL.md` is the preview-time body, so a catalog update in
+  that window can yield a hybrid skill. Closing it means pinning to an immutable
+  revision or validating per-file content hashes from the reviewed index (cross-repo).
+
+---
+
+- [x] **9. Clean up a partial skill directory after a write failure.** (Rollback now
+  guards against deleting a concurrent peer's completed install — see residuals above.)
   If a supporting-file write succeeds and a later one fails (transient I/O, disk
   full), the new skill folder is left without `SKILL.md`, and every retry then hits
   the installer's pre-existing-folder refusal — so the user can't reinstall through
