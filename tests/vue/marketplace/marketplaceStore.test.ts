@@ -594,6 +594,26 @@ describe('marketplaceStore skill install', () => {
     expect(installSkillSpy).not.toHaveBeenCalled();
   });
 
+  it('stops pulling new fetch work after the first failure (no overlapping in-flight batch)', async () => {
+    const many: MarketplaceItem = {
+      ...skillItem,
+      files: [
+        'skills/project-setup/SKILL.md',
+        ...Array.from({ length: 19 }, (_unused, i) => `skills/project-setup/f${i}.md`),
+      ],
+    };
+    fetchBodySpy.mockRejectedValueOnce(new Error('boom')); // the first supporting fetch fails
+    const store = useMarketplaceStore();
+    store.init(fakePlugin(true));
+    await expect(
+      store.install(many, 'SKILL BODY', { provider: 'claude', scope: 'project' }),
+    ).rejects.toThrow(/boom/);
+    // Workers stop pulling after the first failure — far fewer than all 19 are fetched
+    // (the old Promise.all left the other workers running the whole batch).
+    expect(fetchBodySpy.mock.calls.length).toBeLessThan(19);
+    expect(installSkillSpy).not.toHaveBeenCalled();
+  });
+
   it('rejects a skill install (and fetches nothing) when the network opt-in is off', async () => {
     const store = useMarketplaceStore();
     store.init(fakePlugin(false));

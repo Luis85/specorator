@@ -39,8 +39,11 @@ export const MAX_SKILL_TOTAL_CHARS = 10_000_000;
 
 /**
  * Runs `fn` over `items` with at most `limit` in flight, preserving input order
- * in the result. Rejects on the first failure (so a skill install writes nothing
- * when any file can't be fetched). Kept local — no external dependency.
+ * in the result. On the first failure it stops pulling new work (so a mid-batch
+ * error — a 404 or a size-cap throw — doesn't keep firing requests) AND waits for
+ * the in-flight workers to settle before rejecting with that first error, so no
+ * request is still running when the caller re-enables the UI or a retry begins.
+ * Kept local — no external dependency.
  */
 async function fetchWithConcurrency<T, R>(
   items: readonly T[],
@@ -49,14 +52,28 @@ async function fetchWithConcurrency<T, R>(
 ): Promise<R[]> {
   const results = new Array<R>(items.length);
   let cursor = 0;
+  let failed = false;
+  let failure: unknown;
   const worker = async (): Promise<void> => {
-    while (cursor < items.length) {
+    while (cursor < items.length && !failed) {
       const index = cursor;
       cursor += 1;
-      results[index] = await fn(items[index]);
+      try {
+        results[index] = await fn(items[index]);
+      } catch (err) {
+        if (!failed) {
+          failed = true;
+          failure = err;
+        }
+        return;
+      }
     }
   };
-  await Promise.all(Array.from({ length: Math.min(limit, items.length) }, () => worker()));
+  // allSettled (not Promise.all) so every worker's in-flight `fn` resolves before we
+  // return — Promise.all would reject the instant one worker throws while the others
+  // keep downloading. Re-throw the first captured error to preserve the reject contract.
+  await Promise.allSettled(Array.from({ length: Math.min(limit, items.length) }, () => worker()));
+  if (failed) throw failure;
   return results;
 }
 

@@ -49,3 +49,24 @@ residuals. Each fix lands with a unit test under
   writing the `SKILL.md` marker file, leaving a partial skill dir that blocks retry.
   Fix: reject a `files[]` set where any path is an ancestor of another (a declared
   file used as a directory prefix), including descendants of the `SKILL.md` marker.
+
+- [ ] **9. Clean up a partial skill directory after a write failure.**
+  If a supporting-file write succeeds and a later one fails (transient I/O, disk
+  full), the new skill folder is left without `SKILL.md`, and every retry then hits
+  the installer's pre-existing-folder refusal — so the user can't reinstall through
+  Marketplace even after the cause is resolved. Fix: on a write failure, remove the
+  skill folder we just created (recursively) so a retry starts clean.
+
+- [ ] **10. Pin skill supporting-file fetches to the reviewed catalog revision.**
+  Supporting files are fetched at install time from the mutable source (GitHub
+  `main`), while the reviewed `SKILL.md` is from preview time — so a catalog update
+  in that window can yield a hybrid skill (marker and scripts from different
+  revisions). Fix: pin all of an item's requests to an immutable revision, or
+  validate fetched content against hashes carried in the reviewed index.
+
+- [x] **11. Stop peer fetch workers after the first failure.**
+  `fetchWithConcurrency` used `Promise.all`, which rejects the instant one worker
+  throws while the other workers keep taking cursor entries and issuing requests —
+  so the UI reports failure and re-enables Install while the rejected batch is still
+  downloading, and a retry can overlap it. Fix: stop pulling new work on the first
+  error and await all workers' in-flight requests before rejecting.
