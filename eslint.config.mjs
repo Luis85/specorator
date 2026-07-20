@@ -97,6 +97,10 @@ const stagedObsidianRules = {
   'obsidianmd/platform': obsidianRuleSeverity,
   'obsidianmd/prefer-abstract-input-suggest': obsidianRuleSeverity,
   'obsidianmd/prefer-active-doc': obsidianRuleSeverity,
+  // Prefers createEl/createDiv/createSpan over document.createElement AND the
+  // createEl('div'|'span') long form (the marketplace validator flags both).
+  // Newly enabled with eslint-plugin-obsidianmd@0.4.1, which exports it.
+  'obsidianmd/prefer-create-el': obsidianRuleSeverity,
   'obsidianmd/prefer-file-manager-trash-file': obsidianRuleSeverity,
   'obsidianmd/prefer-get-language': obsidianRuleSeverity,
   'obsidianmd/prefer-instanceof': obsidianRuleSeverity,

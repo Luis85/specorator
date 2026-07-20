@@ -5,11 +5,11 @@ import * as path from 'path';
 import type { HydrationContext } from '@/core/providers/types';
 import type { Conversation } from '@/core/types';
 import { CursorConversationHistoryService } from '@/providers/cursor/history/CursorConversationHistoryService';
+import * as Store from '@/providers/cursor/history/cursorHistoryStore';
 import {
   cursorWorkspaceHash,
   cursorWorkspaceHashLegacy,
 } from '@/providers/cursor/history/cursorHistoryStore';
-import * as Store from '@/providers/cursor/history/cursorHistoryStore';
 
 function makeConversation(sessionId: string): Conversation {
   return {
