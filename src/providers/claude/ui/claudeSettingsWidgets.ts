@@ -200,8 +200,12 @@ export const mountClaudePluginsSection: ProviderSettingsWidgetMount = (host, con
   new PluginSettingsManager(pluginsContainer, {
     pluginManager: claudeWorkspace.pluginManager,
     agentManager: claudeWorkspace.agentManager,
-    // Enabled plugins contribute skills to `listVaultEntries()`; nudge the skill
-    // catalog's `vaultSkill.changed` seam so the Library re-scans on toggle.
+    // Enabled plugins contribute skills to `listVaultEntries()`; invalidate the
+    // skill aggregator's Claude bucket so the quick-actions Skills tab (and the
+    // next Library scan) reflect the toggle without waiting out the TTL. The
+    // mounted Library panel, like for any external skill-dir edit, refreshes on
+    // its manual-refresh button / remount — those dot-folder roots have no file
+    // watcher, so it doesn't observe this event live.
     onPluginsChanged: () => {
       context.plugin.events.emit('vaultSkill.changed', { providerId: 'claude' });
     },
