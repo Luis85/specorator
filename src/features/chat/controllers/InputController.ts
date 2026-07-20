@@ -572,9 +572,19 @@ export class InputController {
     ctx.userMsg.currentNote = preparedTurn.isCompact
       ? undefined
       : preparedTurn.request.currentNotePath;
-    // Content now carries folded @mentions; re-project so the context card
-    // appears immediately (in-place mutation doesn't fire onMessagesChanged).
-    this.emit();
+    // The user message just gained the folded @mentions (and currentNote) IN
+    // PLACE. Its keyed MessageBubble only re-renders the attached-context card
+    // when the message gets a FRESH identity, but the active message is the
+    // assistant placeholder — so the projection's active/dirty identity refresh
+    // skips this (non-active) user message and a bare emit() would leave the
+    // card hidden. Mark it dirty so the projection refreshes its identity;
+    // refreshMessage re-projects for us (fall back to a plain emit when the
+    // transcript island isn't wired, e.g. in tests).
+    if (this.deps.refreshTranscriptMessage) {
+      this.deps.refreshTranscriptMessage(ctx.userMsg.id);
+    } else {
+      this.emit();
+    }
 
     // Pass history WITHOUT current turn (userMsg + assistantMsg we just added)
     // This prevents duplication when rebuilding context for new sessions
