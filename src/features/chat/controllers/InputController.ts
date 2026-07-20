@@ -27,12 +27,10 @@ import type {
 import type { ApprovalDecision, ChatMessage, ExitPlanModeDecision, StreamChunk } from '../../../core/types';
 import { t } from '../../../i18n/i18n';
 import type SpecoratorPlugin from '../../../main';
-import { InstructionModal } from '../../../shared/modals/InstructionConfirmModal';
 import type { BrowserSelectionContext } from '../../../utils/browser';
 import type { CanvasSelectionContext } from '../../../utils/canvas';
 import type { EditorSelectionContext } from '../../../utils/editor';
 import { dedupeExternalContextPaths, filterRedundantExternalContextPaths } from '../../../utils/externalContextTurn';
-import { appendMarkdownSnippet } from '../../../utils/markdown';
 import type { BoundAgentProjection } from '../../agents/roster/boundAgentPersona';
 import { persistPastedImages } from '../services/persistPastedImages';
 import type { SubagentManager } from '../services/SubagentManager';
@@ -68,6 +66,7 @@ import {
 import type { ConversationController } from './ConversationController';
 import type { InlineCardMounter } from './inlineCardMount';
 import { InlinePromptController } from './InlinePromptController';
+import { runInstructionRefineFlow } from './instructionRefineFlow';
 import { QueuedMessageController } from './QueuedMessageController';
 import { ResumeSessionDropdownCoordinator, type ResumeSessionDropdownDeps } from './ResumeSessionDropdownCoordinator';
 import type { SelectionController } from './SelectionController';
@@ -215,12 +214,6 @@ export class InputController {
 
   private getAuxiliaryModel(): string | null {
     return this.deps.getAuxiliaryModel?.() ?? this.getAgentService()?.getAuxiliaryModel?.() ?? null;
-  }
-
-  private syncInstructionRefineModelOverride(
-    instructionRefineService: InstructionRefineService,
-  ): void {
-    instructionRefineService.setModelOverride?.(this.getAuxiliaryModel() ?? undefined);
   }
 
   private getActiveProviderId(): ProviderId {
@@ -1182,101 +1175,15 @@ export class InputController {
   // ============================================
 
   async handleInstructionSubmit(rawInstruction: string): Promise<void> {
-    const { plugin } = this.deps;
-
     const instructionRefineService = this.deps.getInstructionRefineService();
-    const instructionModeManager = this.deps.getInstructionModeManager();
-
     if (!instructionRefineService) return;
 
-    const existingPrompt = plugin.settings.systemPrompt;
-    let modal: InstructionModal | null = null;
-    let wasCancelled = false;
-
-    try {
-      modal = new InstructionModal(
-        plugin.app,
-        rawInstruction,
-        {
-          onAccept: (finalInstruction) => {
-            void (async (): Promise<void> => {
-              const currentPrompt = plugin.settings.systemPrompt;
-              plugin.settings.systemPrompt = appendMarkdownSnippet(currentPrompt, finalInstruction);
-              await plugin.saveSettings();
-
-              new Notice(t('chat.input.instructionAdded'));
-              instructionModeManager?.clear();
-            })();
-          },
-          onReject: () => {
-            wasCancelled = true;
-            instructionRefineService.cancel();
-            instructionModeManager?.clear();
-          },
-          onClarificationSubmit: async (response) => {
-            this.syncInstructionRefineModelOverride(instructionRefineService);
-            const result = await instructionRefineService.continueConversation(response);
-
-            if (wasCancelled) {
-              return;
-            }
-
-            if (!result.success) {
-              if (result.error === 'Cancelled') {
-                return;
-              }
-              new Notice(result.error || t('chat.input.processResponseFailed'));
-              modal?.showError(result.error || 'Failed to process response');
-              return;
-            }
-
-            if (result.clarification) {
-              modal?.showClarification(result.clarification);
-            } else if (result.refinedInstruction) {
-              modal?.showConfirmation(result.refinedInstruction);
-            }
-          }
-        }
-      );
-      modal.open();
-
-      this.syncInstructionRefineModelOverride(instructionRefineService);
-      instructionRefineService.resetConversation();
-      const result = await instructionRefineService.refineInstruction(
-        rawInstruction,
-        existingPrompt
-      );
-
-      if (wasCancelled) {
-        return;
-      }
-
-      if (!result.success) {
-        if (result.error === 'Cancelled') {
-          instructionModeManager?.clear();
-          return;
-        }
-        new Notice(result.error || t('chat.input.refineFailed'));
-        modal.showError(result.error || 'Failed to refine instruction');
-        instructionModeManager?.clear();
-        return;
-      }
-
-      if (result.clarification) {
-        modal.showClarification(result.clarification);
-      } else if (result.refinedInstruction) {
-        modal.showConfirmation(result.refinedInstruction);
-      } else {
-        new Notice(t('chat.input.noInstruction'));
-        modal.showError('No instruction received');
-        instructionModeManager?.clear();
-      }
-    } catch (error) {
-      const errorMsg = error instanceof Error ? error.message : 'Unknown error';
-      new Notice(t('common.errorWithDetail', { error: errorMsg }));
-      modal?.showError(errorMsg);
-      instructionModeManager?.clear();
-    }
+    await runInstructionRefineFlow(rawInstruction, {
+      plugin: this.deps.plugin,
+      instructionRefineService,
+      instructionModeManager: this.deps.getInstructionModeManager(),
+      getAuxiliaryModel: () => this.getAuxiliaryModel(),
+    });
   }
 
   // ============================================
