@@ -92,6 +92,27 @@ test('installDeps treats a Yarn PnP layout (.pnp.cjs, no node_modules) as conver
   }
 });
 
+test('installDeps ignores a stale .pnp.cjs for a non-yarn manager (reinstalls when node_modules is gone)', () => {
+  // A project switched off Yarn PnP can leave .pnp.cjs behind; for npm/pnpm/bun the
+  // node_modules IS the real artifact, so a leftover loader must not read as installed
+  // and skip a needed reinstall.
+  const p = tmpProject({
+    'package.json': { name: 'x', devDependencies: { left: '1.0.0' } },
+    '.project-setup-backup/.installed': 'npm',
+    '.pnp.cjs': '/* stale pnp loader */', // leftover; no node_modules
+  });
+  const calls = [];
+  try {
+    apply([
+      { type: 'mergeJson', path: 'package.json', patch: { devDependencies: { left: '1.0.0' } } },
+      { type: 'installDeps', packageManager: 'npm' },
+    ], { cwd: p.dir, exec: (cmd, args) => calls.push(`${cmd} ${args.join(' ')}`) });
+    assert.deepEqual(calls, ['npm install']); // stale .pnp.cjs ignored for npm -> reinstall
+  } finally {
+    p.cleanup();
+  }
+});
+
 test('installDeps REINSTALLS when the selected package manager changed', () => {
   // The marker records `npm`, but the plan now selects `pnpm` (e.g. answers.json
   // changed) — pnpm needs its own lockfile, so the stale npm marker must not skip.

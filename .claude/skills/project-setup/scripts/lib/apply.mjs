@@ -38,15 +38,16 @@ export function apply(actions, opts = {}) {
       // works.
       const marker = join(cwd, '.project-setup-backup', '.installed');
       const installedWith = existsSync(marker) ? readFileSync(marker, 'utf8').trim() : null;
-      // "Deps present" = the manager's install artifact exists: `node_modules` for
-      // the node-linker (npm/pnpm/bun/Yarn node-modules), OR the Plug'n'Play loader
-      // (`.pnp.cjs`/`.pnp.js`) for Yarn PnP, which installs WITHOUT a node_modules.
-      // Requiring node_modules unconditionally would make a converged PnP re-apply
-      // reinstall on every run (and fail offline).
+      // "Deps present" = the SELECTED manager's install artifact exists. node_modules
+      // for the node-linker (npm/pnpm/bun/Yarn node-modules); the Plug'n'Play loader
+      // (`.pnp.cjs`/`.pnp.js`) counts ONLY for yarn, which installs WITHOUT a
+      // node_modules. Gating PnP to yarn matters: a leftover `.pnp.cjs` from a former
+      // Yarn PnP setup must NOT read as installed for npm/pnpm/bun (that would skip a
+      // needed reinstall after node_modules is removed). Requiring node_modules
+      // unconditionally would instead make a converged PnP re-apply reinstall forever.
+      const pnpPresent = existsSync(join(cwd, '.pnp.cjs')) || existsSync(join(cwd, '.pnp.js'));
       const depsPresent =
-        existsSync(join(cwd, 'node_modules')) ||
-        existsSync(join(cwd, '.pnp.cjs')) ||
-        existsSync(join(cwd, '.pnp.js'));
+        existsSync(join(cwd, 'node_modules')) || (action.packageManager === 'yarn' && pnpPresent);
       const installCurrent = installedWith === action.packageManager && depsPresent;
       if (!dryRun && (changed.includes('package.json') || !installCurrent)) {
         exec(action.packageManager, ['install'], { cwd });
