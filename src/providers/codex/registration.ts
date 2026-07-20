@@ -18,11 +18,13 @@ export const codexProviderRegistration: ProviderRegistration = {
   cliCommand: 'codex',
   blankTabOrder: 15,
   isEnabled: (settings) => getCodexProviderSettings(settings).enabled,
-  // In WSL mode the app-server resolves its Codex home INSIDE the distro
-  // (`\\wsl$\<distro>\...\.codex`), not the Windows host `~/.codex` a user-scope
-  // install writes to — so a host-side global skill can't resolve or run there.
-  // Native installs use the host home, where user scope resolves normally.
-  resolvesUserScopeSkills: (settings) => getCodexProviderSettings(settings).installationMethod !== 'wsl',
+  // Run resolution stays default-true: in WSL the app-server runs INSIDE the distro
+  // and `skills/list` discovers the distro's own `~/.codex/skills`, so those user-scope
+  // skills are runnable — the run path must not refuse them. Only the Marketplace *install*
+  // is gated, because a host-side `HomeFileAdapter` writes the Windows `~/.codex`
+  // (`\\wsl$\<distro>\...` is the runtime home instead), which the in-distro app-server
+  // never sees. Native installs use the host home, where a user install resolves normally.
+  installsUserScopeSkills: (settings) => getCodexProviderSettings(settings).installationMethod !== 'wsl',
   defaultConfig: { ...DEFAULT_CODEX_PROVIDER_SETTINGS },
   capabilities: CODEX_PROVIDER_CAPABILITIES,
   canonicalToolNames: CODEX_CANONICAL_TOOL_NAMES,

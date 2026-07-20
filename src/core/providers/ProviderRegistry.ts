@@ -192,6 +192,19 @@ export class ProviderRegistry {
     return this.getProviderRegistration(providerId).resolvesUserScopeSkills?.(settings) ?? true;
   }
 
+  /**
+   * Whether the Marketplace can install a user-scope (home-dir) skill that the
+   * provider's runtime will then discover. Defaults to `resolvesUserScopeSkills`
+   * (no point offering a home install the runtime can't resolve); overridden only
+   * where install reachability and run resolvability diverge — Codex in WSL, whose
+   * app-server resolves the distro's own `~/.codex` but never the host dir the
+   * install writes.
+   */
+  static installsUserScopeSkills(providerId: ProviderId, settings: Record<string, unknown>): boolean {
+    const install = this.getProviderRegistration(providerId).installsUserScopeSkills?.(settings);
+    return install ?? this.resolvesUserScopeSkills(providerId, settings);
+  }
+
   static resolveSettingsProviderId(settings: Record<string, unknown>): ProviderId {
     const current = settings.settingsProvider;
     if (typeof current === 'string') {

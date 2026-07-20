@@ -268,7 +268,7 @@ function backToList(): void {
 // the registry (falling back to the id if a provider isn't registered).
 const skillProviderOptions = computed(() => {
   void settingsVersion.value; // recompute when settings change (userScope reads live, non-reactive settings)
-  return SKILL_PROVIDER_TARGETS.map((id) => ({ id, label: providerLabel(id), userScope: providerResolvesUserScope(id) }));
+  return SKILL_PROVIDER_TARGETS.map((id) => ({ id, label: providerLabel(id), userScope: providerInstallsUserScope(id) }));
 });
 
 function providerLabel(id: SkillProviderTarget): string {
@@ -279,15 +279,17 @@ function providerLabel(id: SkillProviderTarget): string {
   }
 }
 
-// Whether a user-scope (`~/.<provider>/skills`) install would actually resolve for
-// this provider under the LIVE settings. Claude ties it to `loadUserSettings`, so
-// offering User there when it's off writes a skill the runtime silently won't load
-// (the run path refuses it too) — so the detail hides User scope when this is false.
-// Defaults to true (offer User) if the provider isn't registered or settings can't
-// be read, matching the prior always-offer behavior.
-function providerResolvesUserScope(id: SkillProviderTarget): boolean {
+// Whether a user-scope (`~/.<provider>/skills`) install would land where this
+// provider's runtime looks, under the LIVE settings. Claude ties it to `loadUserSettings`
+// (offering User when it's off writes a skill the runtime won't load); Codex gates it off
+// in WSL (the app-server's `~/.codex` is inside the distro, not the host dir the install
+// writes) — so the detail hides User scope when this is false. Distinct from run-time
+// resolution: a Codex WSL user skill discovered in-distro still RUNS; it just can't be
+// installed from the host side. Defaults to true (offer User) if the provider isn't
+// registered or settings can't be read, matching the prior always-offer behavior.
+function providerInstallsUserScope(id: SkillProviderTarget): boolean {
   try {
-    return ProviderRegistry.resolvesUserScopeSkills(id, asSettingsBag(plugin.settings));
+    return ProviderRegistry.installsUserScopeSkills(id, asSettingsBag(plugin.settings));
   } catch {
     return true;
   }

@@ -90,6 +90,13 @@ export interface ProviderRegistration {
    * given live settings; default `true`. Claude ties it to `loadUserSettings`, so the
    * run path can refuse a `/name` that won't resolve rather than dispatch a silent no-op. */
   resolvesUserScopeSkills?: (settings: Record<string, unknown>) => boolean;
+  /** Whether the Marketplace can install a user-scope (home-dir) skill that this
+   * provider's runtime will then discover; default: `resolvesUserScopeSkills`. Split from
+   * resolve because the two diverge for Codex in WSL: the app-server runs inside the distro
+   * and resolves its own `~/.codex/skills` (so discovered user skills RUN), but a host-side
+   * `HomeFileAdapter` install writes the Windows `~/.codex`, which the in-distro runtime
+   * never sees — so the install is gated even though resolution is not. */
+  installsUserScopeSkills?: (settings: Record<string, unknown>) => boolean;
   /** Default settings bag; lets the app shell assemble `providerConfigs` defaults
    * without importing each provider's settings module (ARCH-2 cycle break). */
   defaultConfig: Record<string, unknown>;
