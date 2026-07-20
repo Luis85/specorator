@@ -58,7 +58,7 @@ describe('skillIndexPersistence', () => {
     const buckets = new Map<ProviderId, ProviderCommandEntry[]>([
       ['claude', [
         entry({ id: 'skill-vault', scope: 'vault', sourceFilePath: '.claude/skills/vault/SKILL.md' }),
-        entry({ id: 'plugin-skill-formatter-lint', scope: 'plugin', name: 'formatter:lint', sourceFilePath: hostPath }),
+        entry({ id: 'plugin-skill-formatter:lint', scope: 'plugin', name: 'formatter:lint', sourceFilePath: hostPath }),
       ]],
     ]);
     const json = serializePersistedSkillIndex(buckets, 1);

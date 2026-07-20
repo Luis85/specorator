@@ -153,8 +153,11 @@ export class SkillStorage {
           toSourcePath: (relPath) => adapter.getAbsolutePath(relPath),
           // Namespace id AND name by plugin so two plugins can ship a same-named
           // skill without colliding in the aggregator's id-keyed maps or the
-          // `/name` wire.
-          makeId: (name) => `plugin-skill-${plugin.name}-${name}`,
+          // `/name` wire. The id uses the `:` separator (as the invocation does)
+          // rather than `-`: joining kebab-case names with `-` is NOT injective
+          // (`a-b`+`c` and `a`+`b-c` both give `a-b-c`), which would collide in
+          // the Library's `entryById` map and run the wrong plugin's skill.
+          makeId: (name) => `plugin-skill-${plugin.name}:${name}`,
           makeName: (name) => `${plugin.name}:${name}`,
         }),
       ),
@@ -195,22 +198,27 @@ export class SkillStorage {
   ): Promise<LoadedSkill[]> {
     try {
       const folders = await adapter.listFolders(config.skillsPath);
-      const results = await Promise.all(
-        folders.map((f) => this.loadOne(adapter, f, config)),
-      );
+      // A root may be a parent of skill dirs (`<root>/<name>/SKILL.md`) AND/OR a
+      // skill dir itself (`<root>/SKILL.md` directly — the manifest
+      // `"skills": ["./custom/extra"]` form the runtime accepts). Scan both.
+      const dirs = [config.skillsPath, ...folders];
+      const results = await Promise.all(dirs.map((d) => this.loadSkillDir(adapter, d, config)));
       return results.filter((x): x is LoadedSkill => x !== null);
     } catch {
       return [];
     }
   }
 
-  private async loadOne(
+  // Loads the single skill defined by `<dir>/SKILL.md`, named by `dir`'s last
+  // segment. `dir` is a child skill dir for the collection case, or the root
+  // itself when the root is a skill dir directly.
+  private async loadSkillDir(
     adapter: SkillReadAdapter,
-    folder: string,
+    dir: string,
     config: RootScanConfig,
   ): Promise<LoadedSkill | null> {
-    const skillName = folder.split('/').pop()!;
-    const skillPath = `${config.skillsPath}/${skillName}/SKILL.md`;
+    const skillName = dir.split('/').pop()!;
+    const skillPath = `${dir}/SKILL.md`;
     try {
       if (!(await adapter.exists(skillPath))) return null;
       const content = await adapter.read(skillPath);

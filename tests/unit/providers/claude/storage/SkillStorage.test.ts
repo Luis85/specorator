@@ -352,7 +352,7 @@ Prompt`,
       expect(loaded[0].skill.name).toBe('formatter:review');
       expect(loaded[0].skill.description).toBe('Plugin review');
       // Distinct, plugin-namespaced id so two plugins' same-named skills don't collide.
-      expect(loaded[0].skill.id).toBe('plugin-skill-formatter-review');
+      expect(loaded[0].skill.id).toBe('plugin-skill-formatter:review');
       expect(loaded[0].readOnly).toBe(true);
       // Host-absolute path under the plugin install dir → clone/delete gate rejects it.
       expect(loaded[0].filePath).toBe('/plugins/formatter/skills/review/SKILL.md');
@@ -371,9 +371,44 @@ Prompt`,
 
       expect(loaded.map((l) => l.skill.name).sort()).toEqual(['a:deploy', 'b:deploy']);
       expect(loaded.map((l) => l.skill.id).sort()).toEqual([
-        'plugin-skill-a-deploy',
-        'plugin-skill-b-deploy',
+        'plugin-skill-a:deploy',
+        'plugin-skill-b:deploy',
       ]);
+    });
+
+    it('builds injective ids for ambiguous kebab-case plugin/skill names', async () => {
+      // plugin `a-b` skill `c` vs plugin `a` skill `b-c`: a `-` join collides
+      // (both `...a-b-c`); the `:` separator keeps them distinct so the Library's
+      // entryById map can't run the wrong plugin's skill.
+      const factory = createPluginAdapterFactory({
+        '/plugins/a-b': { 'skills/c/SKILL.md': '---\ndescription: ab-c\n---\nX' },
+        '/plugins/a': { 'skills/b-c/SKILL.md': '---\ndescription: a-bc\n---\nY' },
+      });
+      const storage = new SkillStorage(createMockAdapter({}), undefined, factory);
+      const loaded = await storage.loadPluginAll([
+        plugin('a-b', '/plugins/a-b'),
+        plugin('a', '/plugins/a'),
+      ]);
+      const ids = loaded.map((l) => l.skill.id).sort();
+      expect(ids).toEqual(['plugin-skill-a-b:c', 'plugin-skill-a:b-c']);
+      expect(new Set(ids).size).toBe(2);
+    });
+
+    it('loads a manifest path that is itself a skill dir (contains SKILL.md directly)', async () => {
+      // "skills": ["./custom/extra"] where custom/extra/SKILL.md exists directly
+      // — the runtime loads it as <plugin>:extra, not as a parent of skill dirs.
+      const factory = createPluginAdapterFactory({
+        '/plugins/p': {
+          '.claude-plugin/plugin.json': JSON.stringify({ skills: ['./custom/extra'] }),
+          'custom/extra/SKILL.md': '---\ndescription: Direct skill\n---\nD',
+          'skills/normal/SKILL.md': '---\ndescription: Normal\n---\nN',
+        },
+      });
+      const storage = new SkillStorage(createMockAdapter({}), undefined, factory);
+      const loaded = await storage.loadPluginAll([plugin('p', '/plugins/p')]);
+      expect(loaded.map((l) => l.skill.name).sort()).toEqual(['p:extra', 'p:normal']);
+      expect(loaded.find((l) => l.skill.name === 'p:extra')!.filePath)
+        .toBe('/plugins/p/custom/extra/SKILL.md');
     });
 
     it('returns [] for a plugin whose skills dir is absent (no throw)', async () => {
