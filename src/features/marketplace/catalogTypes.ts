@@ -270,16 +270,17 @@ function collectSafeSkillFiles(rawFiles: unknown, prefix: string): string[] | nu
 
 /**
  * True when two paths would resolve to the same file, or one is a strict
- * directory-prefix ancestor of another (`a/b` and `a/b/c`) — compared
- * CASE-INSENSITIVELY. `scripts/Foo.md` vs `scripts/foo.md`, or a supporting
- * `skill.md` vs the injected `SKILL.md`, are distinct on Linux but the SAME file on
- * Windows / default macOS, where one silently overwrites the other (the marker write
- * runs last, so it clobbers a colliding supporting file yet still reports installed).
- * Rejecting the whole skill fails loud instead of installing an incomplete folder;
- * folding on all platforms keeps the catalog parse deterministic and portable.
+ * directory-prefix ancestor of another (`a/b` and `a/b/c`) — compared after Unicode
+ * (NFC) normalization AND case folding. `scripts/Foo.md` vs `scripts/foo.md` collide
+ * case-insensitively (Windows / default macOS); `café.md` as NFC vs NFD collide on
+ * normalization-insensitive macOS filesystems; a supporting `skill.md` collides with
+ * the injected `SKILL.md`. Each is distinct on Linux but the SAME file elsewhere, where
+ * one silently overwrites the other (the marker write runs last, so it clobbers a
+ * colliding supporting file yet still reports installed). Rejecting the whole skill
+ * fails loud; normalizing on all platforms keeps the catalog parse deterministic.
  */
 function hasFilePathCollision(paths: string[]): boolean {
-  const folded = paths.map((p) => p.toLowerCase());
+  const folded = paths.map((p) => p.normalize('NFC').toLowerCase());
   return folded.some((a, i) => folded.some((b, j) => j !== i && (b === a || b.startsWith(`${a}/`))));
 }
 

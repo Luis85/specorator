@@ -55,6 +55,17 @@ residuals. Each fix lands with a unit test under
 
 ## Residuals / follow-ups (bounded to a non-default custom source)
 
+- **Dropping un-installable slug entries at parse — considered, declined.** A custom
+  skill whose `name` normalizes to a provider-invalid slug (a YAML-reserved word like
+  `null`, a >64-char slug, or a Windows device name like `con`) displays in the catalog
+  but can never install — `assertSkillFolderName` rejects the device name and item 12's
+  `validateSlugName` rejects the reserved/overlong marker, both with a clear error. The
+  install path already fails SAFELY (no corruption, no false "Installed" badge), so
+  dropping such entries at parse time is a display-only nicety; doing it would bake
+  provider-slug + device-name rules into the neutral catalog parser. Left as-is —
+  reconsider only if un-installable custom entries showing in the grid becomes a real
+  annoyance, or add the check to the marketplace validator at the source instead.
+
 - **Per-destination install serialization — DONE.** The store now queues skill
   installs by DESTINATION folder (`provider + scope + normalizeInstallSlug(name)`, the
   real write-collision boundary — NOT `item.id`, which a catalog refresh can reuse for
@@ -129,15 +140,16 @@ residuals. Each fix lands with a unit test under
   valid slugs. The marketplace validator enforcing the same rule at the source is a
   possible cross-repo follow-up.)
 
-- [x] **13. Reject case-insensitive file collisions in a skill's `files[]`.**
+- [x] **13. Reject case- AND Unicode-insensitive file collisions in a skill's `files[]`.**
   `sanitizeSkillFiles`'s dedup + prefix-collision scan compared paths CASE-SENSITIVELY,
   so `scripts/Foo.md` and `scripts/foo.md`, or a supporting `skill.md` vs the injected
   `SKILL.md`, are distinct on Linux but the SAME file on Windows / default macOS — one
   silently overwrites the other (the marker write runs last, so it clobbers a colliding
-  supporting file) yet the skill still reports installed. Fix: fold to lowercase before
-  the duplicate + prefix-collision check and reject the whole skill (fail loud), on all
-  platforms so the catalog parse stays deterministic and portable. Case-insensitive
-  completion of item 8.
+  supporting file) yet the skill still reports installed. Fix: normalize each path to
+  NFC (macOS filesystems are normalization-insensitive — `café.md` NFC vs NFD are one
+  file) AND fold to lowercase before the duplicate + prefix-collision check, rejecting
+  the whole skill (fail loud) on all platforms so the catalog parse stays deterministic
+  and portable. Case- and normalization-insensitive completion of item 8.
 
 - [x] **14. Don't treat our own partial marker write as a peer's completion.**
   Item 9's rollback suppressed cleanup whenever a `SKILL.md` was PRESENT at cleanup time,

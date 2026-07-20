@@ -261,6 +261,17 @@ describe('parseManifest — skill files', () => {
     ])).toBeUndefined();
   });
 
+  it('rejects the WHOLE skill on a Unicode-normalization file collision (macOS)', () => {
+    // 'é' has two encodings macOS treats as the same file: NFC (single U+00E9) and NFD
+    // (U+0065 + combining U+0301). Case folding alone leaves them distinct, so the paths
+    // must be Unicode-normalized (NFC) before comparison or one silently overwrites the other.
+    const acute = String.fromCharCode(0x0301); // combining acute accent
+    const nfd = `skills/project-setup/cafe${acute}.md`.normalize('NFD');
+    const nfc = nfd.normalize('NFC');
+    expect(nfc).not.toBe(nfd); // genuinely distinct strings...
+    expect(firstSkill(['skills/project-setup/SKILL.md', nfc, nfd])).toBeUndefined(); // ...same file
+  });
+
   it('falls back to just SKILL.md when files is absent', () => {
     expect(firstSkill(undefined)?.files).toEqual(['skills/project-setup/SKILL.md']);
   });
