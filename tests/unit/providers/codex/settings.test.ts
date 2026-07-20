@@ -1,3 +1,4 @@
+import { codexProviderRegistration } from '@/providers/codex/registration';
 import {
   applyCodexModelDefaults,
   DEFAULT_CODEX_PROVIDER_SETTINGS,
@@ -31,6 +32,17 @@ describe('codex settings', () => {
     expect(settings.wslDistroOverride).toBe('');
     expect(settings.installationMethod).toBe(DEFAULT_CODEX_PROVIDER_SETTINGS.installationMethod);
     expect(settings.wslDistroOverride).toBe(DEFAULT_CODEX_PROVIDER_SETTINGS.wslDistroOverride);
+  });
+
+  it('resolvesUserScopeSkills is false in WSL mode (host ~/.codex is not the distro runtime home)', () => {
+    // In WSL the app-server's Codex home is inside the distro, so a host-side
+    // user-scope install can't resolve there; a native install uses the host home.
+    expect(codexProviderRegistration.resolvesUserScopeSkills?.({})).toBe(true); // default native-windows
+    expect(
+      codexProviderRegistration.resolvesUserScopeSkills?.({
+        providerConfigs: { codex: { installationMethod: 'wsl' } },
+      }),
+    ).toBe(false);
   });
 
   describe('customModels normalization', () => {
