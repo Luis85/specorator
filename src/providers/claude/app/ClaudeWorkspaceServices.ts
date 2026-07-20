@@ -12,22 +12,19 @@ import type {
   ProviderWorkspaceServices,
 } from '../../../core/providers/types';
 import type { VaultFileAdapter } from '../../../core/storage/VaultFileAdapter';
-import { asSettingsBag } from '../../../core/types';
 import type { PluginContext } from '../../../core/types/PluginContext';
 import { promptVaultTrust } from '../../../shared/modals/VaultTrustModal';
 import { getVaultPath } from '../../../utils/path';
 import { AgentManager } from '../agents/AgentManager';
 import { ClaudeCommandCatalog } from '../commands/ClaudeCommandCatalog';
 import { probeRuntimeCommands } from '../commands/probeRuntimeCommands';
-import { type EffectivePluginSources, PluginManager } from '../plugins/PluginManager';
+import { PluginManager } from '../plugins/PluginManager';
 import { claudeCliSpec } from '../runtime/ClaudeCliResolver';
 import {
   isClaudeVaultTrusted,
   setClaudeVaultTrusted,
-  shouldHonorClaudeProjectSettingsFor,
   vaultProjectSettingsRisky,
 } from '../runtime/claudeProjectTrust';
-import { getClaudeProviderSettings, resolveClaudeSettingSources } from '../settings';
 import { StorageService } from '../storage/StorageService';
 import { claudeSettingsTabRenderer } from '../ui/ClaudeSettingsTab';
 
@@ -102,28 +99,7 @@ export async function createClaudeWorkspaceServices(
   }
 
   const vaultPath = getVaultPath(plugin.app) ?? '';
-  // Report the runtime's live effective setting sources so plugin discovery
-  // only surfaces plugins the SDK will actually load (matching the same
-  // `loadUserSettings` + vault-trust gate the query uses). Read fresh each call
-  // so a fresh discovery pass always reflects the current gate.
-  //
-  // Freshness note: this is correct whenever discovery runs, but cached surfaces
-  // lag a mid-session `loadUserSettings`/trust toggle — the skill aggregator's
-  // 60s TTL (plus its manual refresh) self-heals, and plugin-agent mentions
-  // refresh on the next `loadAgents` (plugin toggle / vault reload). We
-  // deliberately do not wire a bespoke settings-change invalidation here: it's a
-  // rare toggle with bounded, self-healing impact, and the same "discovery
-  // reflects disk; the runtime resolves" tradeoff the user-scope skill path
-  // already makes (see providers/claude/CLAUDE.md).
-  const resolveEffectiveSources = (): EffectivePluginSources => {
-    const claudeSettings = getClaudeProviderSettings(plugin.settings);
-    const sources = resolveClaudeSettingSources(
-      claudeSettings.loadUserSettings,
-      shouldHonorClaudeProjectSettingsFor(asSettingsBag(plugin.settings), vaultPath),
-    );
-    return { user: sources.includes('user'), project: sources.includes('project') };
-  };
-  const pluginManager = new PluginManager(vaultPath, claudeStorage.ccSettings, resolveEffectiveSources);
+  const pluginManager = new PluginManager(vaultPath, claudeStorage.ccSettings);
   await pluginManager.loadPlugins();
 
   const agentStorage = claudeStorage.agents;

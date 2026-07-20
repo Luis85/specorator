@@ -86,8 +86,8 @@ export class ClaudeCommandCatalog implements ProviderCommandCatalog {
     private probe?: CommandProbe,
     private eventBus?: EventBus<SpecoratorEventMap>,
     // Optional so cold-path/test construction stays lightweight; when wired,
-    // effectively-enabled plugins' skills are folded into `listVaultEntries()`.
-    private pluginManager?: Pick<AppPluginManager, 'getEffectivelyEnabledPlugins'>,
+    // enabled plugins' skills are folded into `listVaultEntries()`.
+    private pluginManager?: Pick<AppPluginManager, 'getEnabledPlugins'>,
   ) {}
 
   setRuntimeCommands(commands: SlashCommand[]): void {
@@ -158,7 +158,7 @@ export class ClaudeCommandCatalog implements ProviderCommandCatalog {
     const skills = await this.skillStorage.loadAll();
     const userSkills = await this.skillStorage.loadUserAll();
     const pluginSkills = this.pluginManager
-      ? await this.skillStorage.loadPluginAll(this.pluginManager.getEffectivelyEnabledPlugins())
+      ? await this.skillStorage.loadPluginAll(this.pluginManager.getEnabledPlugins())
       : [];
     const readOnlySkill = (scope: ProviderCommandScope) =>
       (entry: { skill: SlashCommand; filePath: string }) =>

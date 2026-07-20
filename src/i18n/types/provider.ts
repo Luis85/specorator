@@ -3,7 +3,6 @@ export type ProviderTranslationKey =
   | 'provider.claude.plugin.toggleTabRestartFailed'
   | 'provider.claude.plugin.enabled'
   | 'provider.claude.plugin.disabled'
-  | 'provider.claude.plugin.toggleMaskedByLocal'
   | 'provider.claude.plugin.toggleFailed'
   | 'provider.claude.plugin.listRefreshed'
   | 'provider.claude.plugin.refreshFailed'

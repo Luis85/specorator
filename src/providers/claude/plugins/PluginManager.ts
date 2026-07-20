@@ -86,80 +86,19 @@ function normalizeInstalledEntries(
 }
 
 interface PluginEnabledLookup {
-  // `.claude/settings.local.json` — highest precedence, shares the project gate.
-  local: Record<string, boolean>;
   project: Record<string, boolean>;
   // Named `userGlobal` (not `global`) to satisfy obsidianmd/no-global-this.
   userGlobal: Record<string, boolean>;
 }
 
-/** Raw `enabledPlugins[id]` value per setting source (undefined = unmentioned). */
-interface PluginEnableSources {
-  local?: boolean;
-  project?: boolean;
-  user?: boolean;
-}
-
-/**
- * The runtime's effective Claude setting sources, after the `loadUserSettings`
- * toggle and the vault-trust gate have been applied. `project` covers both the
- * `project` and `local` sources (they load or withhold together).
- */
-export interface EffectivePluginSources {
-  project: boolean;
-  user: boolean;
-}
-
-/** Internal record: public PluginInfo plus the per-source enable state discovery needs. */
-interface PluginRecord extends PluginInfo {
-  enableSources: PluginEnableSources;
-}
-
-/** Raw enabled flag for the settings UI: full-precedence merge, default-on. */
-function rawPluginEnabled(sources: PluginEnableSources): boolean {
-  return sources.local ?? sources.project ?? sources.user ?? true;
-}
-
-/**
- * Whether the runtime will actually load a plugin, given the effective setting
- * sources. The CLI reads `enabledPlugins` only from sources it loads (`local`
- * and `project` gated by vault trust; `user` gated by `loadUserSettings`) and
- * merges them local > project > user. So the first EFFECTIVE source that
- * mentions the plugin decides — this alone is the discovery authority (not the
- * raw project-over-user flag, which would wrongly veto a plugin the runtime
- * loads from an effective lower-precedence source). A plugin enabled ONLY via a
- * withheld source (user settings with `loadUserSettings` off, or project/local
- * on an untrusted vault) is NOT effectively enabled; one unmentioned by every
- * source keeps the prior installed-default-on.
- */
-export function isPluginEffectivelyEnabled(
-  sources: PluginEnableSources,
-  effective: EffectivePluginSources,
-): boolean {
-  // Sources in the runtime's merge precedence (local > project > user), each
-  // paired with whether the runtime currently reads it (local/project share the
-  // vault-trust gate; user is gated by loadUserSettings).
-  const byPrecedence: ReadonlyArray<{ value?: boolean; effective: boolean }> = [
-    { value: sources.local, effective: effective.project },
-    { value: sources.project, effective: effective.project },
-    { value: sources.user, effective: effective.user },
-  ];
-  // The first effective source that mentions the plugin decides.
-  const decisive = byPrecedence.find((s) => s.effective && s.value !== undefined);
-  if (decisive) return decisive.value === true;
-  // Unmentioned by every effective source: a withheld ENABLE won't reach the
-  // runtime → not loaded; otherwise installed-default-on.
-  return !byPrecedence.some((s) => !s.effective && s.value === true);
-}
-
-// Resolves one installed plugin id to a PluginRecord, or null when no entry
+// Resolves one installed plugin id to a PluginInfo, or null when no entry
 // matches this vault. Project enabled-state wins, then global, then default-on.
-function buildPluginRecord(
+function buildPluginInfo(
   pluginId: string,
   entries: InstalledPluginEntry | InstalledPluginEntry[],
   normalizedVaultPath: string,
   enabledLookup: PluginEnabledLookup,
-): PluginRecord | null {
+): PluginInfo | null {
   if (!entries || (Array.isArray(entries) && entries.length === 0)) {
     return null;
   }
@@ -171,12 +110,7 @@ function buildPluginRecord(
   }
 
   const scope: PluginScope = entry.scope === 'project' ? 'project' : 'user';
-  const enableSources: PluginEnableSources = {
-    local: enabledLookup.local[pluginId],
-    project: enabledLookup.project[pluginId],
-    user: enabledLookup.userGlobal[pluginId],
-  };
-  const enabled = rawPluginEnabled(enableSources);
+  const enabled = enabledLookup.project[pluginId] ?? enabledLookup.userGlobal[pluginId] ?? true;
 
   return {
     id: pluginId,
@@ -184,7 +118,6 @@ function buildPluginRecord(
     enabled,
     scope,
     installPath: entry.installPath,
-    enableSources,
   };
 }
 
@@ -195,84 +128,50 @@ function comparePluginsByScopeThenId(a: PluginInfo, b: PluginInfo): number {
   return a.id.localeCompare(b.id);
 }
 
-/** Strip the internal per-source enable state back to the public shape. */
-function toPluginInfo(record: PluginRecord): PluginInfo {
-  const { enableSources: _enableSources, ...info } = record;
-  return info;
-}
-
-// Both sources effective: the default when no resolver is injected, so callers
-// that don't care about the trust/`loadUserSettings` gate see raw enabled state.
-const ALL_SOURCES_EFFECTIVE: EffectivePluginSources = { project: true, user: true };
-
 export class PluginManager {
   private ccSettingsStorage: CCSettingsStorage;
   private vaultPath: string;
-  private plugins: PluginRecord[] = [];
-  private resolveEffectiveSources: () => EffectivePluginSources;
+  private plugins: PluginInfo[] = [];
 
-  constructor(
-    vaultPath: string,
-    ccSettingsStorage: CCSettingsStorage,
-    // Reports which Claude setting sources the runtime currently loads (after
-    // `loadUserSettings` + vault trust). Injected by the workspace so discovery
-    // can skip plugins the runtime won't actually load. Defaults to "both on".
-    resolveEffectiveSources: () => EffectivePluginSources = () => ALL_SOURCES_EFFECTIVE,
-  ) {
+  constructor(vaultPath: string, ccSettingsStorage: CCSettingsStorage) {
     this.vaultPath = vaultPath;
     this.ccSettingsStorage = ccSettingsStorage;
-    this.resolveEffectiveSources = resolveEffectiveSources;
   }
 
   async loadPlugins(): Promise<void> {
     const installedPlugins = readJsonFile<InstalledPluginsFile>(INSTALLED_PLUGINS_PATH);
-    const enabledLookup = await this.buildEnabledLookup();
-    const normalizedVaultPath = normalizePathForComparison(this.vaultPath);
-
-    this.plugins = Object.entries(installedPlugins?.plugins ?? {})
-      .map(([id, entries]) => buildPluginRecord(id, entries, normalizedVaultPath, enabledLookup))
-      .filter((p): p is PluginRecord => p !== null)
-      .sort(comparePluginsByScopeThenId);
-  }
-
-  // Reads `enabledPlugins` from every setting source the runtime may merge:
-  // `.claude/settings.local.json`, `.claude/settings.json`, `~/.claude/settings.json`.
-  private async buildEnabledLookup(): Promise<PluginEnabledLookup> {
     const globalSettings = readJsonFile<SettingsFile>(GLOBAL_SETTINGS_PATH);
-    const projectSettings = await this.loadProjectSettings('settings.json');
-    const localSettings = await this.loadProjectSettings('settings.local.json');
-    return {
-      local: localSettings?.enabledPlugins ?? {},
+    const projectSettings = await this.loadProjectSettings();
+
+    const enabledLookup: PluginEnabledLookup = {
       project: projectSettings?.enabledPlugins ?? {},
       userGlobal: globalSettings?.enabledPlugins ?? {},
     };
+
+    const normalizedVaultPath = normalizePathForComparison(this.vaultPath);
+    this.plugins = Object.entries(installedPlugins?.plugins ?? {})
+      .map(([id, entries]) => buildPluginInfo(id, entries, normalizedVaultPath, enabledLookup))
+      .filter((p): p is PluginInfo => p !== null)
+      .sort(comparePluginsByScopeThenId);
   }
 
-  private async loadProjectSettings(fileName: 'settings.json' | 'settings.local.json'): Promise<SettingsFile | null> {
-    return readJsonFile(path.join(this.vaultPath, '.claude', fileName));
+  private async loadProjectSettings(): Promise<SettingsFile | null> {
+    return readJsonFile(path.join(this.vaultPath, '.claude', 'settings.json'));
   }
 
   getPlugins(): PluginInfo[] {
-    return this.plugins.map(toPluginInfo);
+    return [...this.plugins];
   }
 
   /**
-   * Plugins the runtime will actually load right now — enabled AND enabled via a
-   * setting source that isn't withheld by `loadUserSettings`/vault-trust. This
-   * is what skill/agent discovery scans, so a plugin enabled only through a
-   * withheld source isn't surfaced as a runnable `/<plugin>:<skill>` the runtime
-   * would silently drop.
+   * Enabled plugins only — what skill/agent discovery scans. Enablement reflects
+   * what's on disk (`enabledPlugins`, project over user); like the user-scope
+   * skill path, discovery mirrors disk and the runtime resolves `/<plugin>:<skill>`
+   * (a plugin the runtime happens not to load in a rare withheld-source config
+   * simply no-ops if invoked).
    */
-  getEffectivelyEnabledPlugins(): PluginInfo[] {
-    const effective = this.resolveEffectiveSources();
-    // `isPluginEffectivelyEnabled` is the sole authority: it already honors
-    // explicit disables via effective-source precedence. AND-ing the raw
-    // `enabled` flag here would wrongly veto a plugin disabled in project but
-    // enabled in an effective lower-precedence source (e.g. user, when the
-    // untrusted vault withholds project) that the runtime does load.
-    return this.plugins
-      .filter((p) => isPluginEffectivelyEnabled(p.enableSources, effective))
-      .map(toPluginInfo);
+  getEnabledPlugins(): PluginInfo[] {
+    return this.plugins.filter((p) => p.enabled);
   }
 
   hasPlugins(): boolean {
@@ -306,8 +205,7 @@ export class PluginManager {
     if (!plugin) {
       return;
     }
-
-    this.applyLocalEnabled(plugin, !plugin.enabled);
+    plugin.enabled = !plugin.enabled;
     await this.ccSettingsStorage.setPluginEnabled(pluginId, plugin.enabled);
   }
 
@@ -316,8 +214,7 @@ export class PluginManager {
     if (!plugin || plugin.enabled) {
       return;
     }
-
-    this.applyLocalEnabled(plugin, true);
+    plugin.enabled = true;
     await this.ccSettingsStorage.setPluginEnabled(pluginId, true);
   }
 
@@ -326,17 +223,7 @@ export class PluginManager {
     if (!plugin || !plugin.enabled) {
       return;
     }
-
-    this.applyLocalEnabled(plugin, false);
+    plugin.enabled = false;
     await this.ccSettingsStorage.setPluginEnabled(pluginId, false);
-  }
-
-  // `setPluginEnabled` writes the project `.claude/settings.json`, so update the
-  // project enable-source and recompute the raw flag from full precedence —
-  // otherwise a just-toggled plugin would carry a stale `enableSources` into the
-  // next `getEffectivelyEnabledPlugins()` and be wrongly filtered from discovery.
-  private applyLocalEnabled(plugin: PluginRecord, enabled: boolean): void {
-    plugin.enableSources.project = enabled;
-    plugin.enabled = rawPluginEnabled(plugin.enableSources);
   }
 }

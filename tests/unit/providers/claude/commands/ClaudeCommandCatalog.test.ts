@@ -374,7 +374,7 @@ Lint` },
       );
       const skills = new SkillStorage(adapter, undefined, () => pluginAdapter);
       const pluginManager = {
-        getEffectivelyEnabledPlugins: () => [
+        getEnabledPlugins: () => [
           { id: 'formatter@m', name: 'formatter', enabled: true, scope: 'user' as const, installPath: '/plugins/formatter' },
         ],
       };
@@ -396,11 +396,9 @@ Lint` },
       expect(entries.find((e) => e.name === 'deploy')?.scope).toBe('vault');
     });
 
-    it('only folds plugins the manager reports as effectively enabled', async () => {
-      // The manager owns the enabled/effective-source gate; the catalog just
-      // scans whatever getEffectivelyEnabledPlugins() returns. An excluded
-      // plugin (disabled, or enabled only via a withheld source) contributes
-      // nothing.
+    it('only folds plugins the manager reports as enabled', async () => {
+      // The manager owns the enabled gate; the catalog just scans whatever
+      // getEnabledPlugins() returns. A disabled plugin contributes nothing.
       const adapter = createMockAdapter({});
       const pluginAdapter = createMockHomeAdapter(
         { 'skills/lint/SKILL.md': `---
@@ -410,7 +408,7 @@ Lint` },
         '/plugins/formatter',
       );
       const skills = new SkillStorage(adapter, undefined, () => pluginAdapter);
-      const pluginManager = { getEffectivelyEnabledPlugins: () => [] };
+      const pluginManager = { getEnabledPlugins: () => [] };
       const catalog = new ClaudeCommandCatalog(
         new SlashCommandStorage(adapter), skills, undefined, undefined, pluginManager,
       );

@@ -114,24 +114,11 @@ export class PluginSettingsManager {
     });
   }
 
-  private isPluginEnabled(pluginId: string): boolean {
-    return this.pluginManager.getPlugins().find(p => p.id === pluginId)?.enabled ?? false;
-  }
-
   private async togglePlugin(pluginId: string) {
-    const wasEnabled = this.isPluginEnabled(pluginId);
+    const plugin = this.pluginManager.getPlugins().find(p => p.id === pluginId);
+    const wasEnabled = plugin?.enabled ?? false;
     try {
       await this.pluginManager.togglePlugin(pluginId);
-
-      // The toggle writes `.claude/settings.json`, but a higher-precedence
-      // `.claude/settings.local.json` entry can override it — so the effective
-      // state may not have changed. Surface that instead of a false success,
-      // and skip the (pointless) agent reload + tab restart.
-      if (this.isPluginEnabled(pluginId) === wasEnabled) {
-        new Notice(t('provider.claude.plugin.toggleMaskedByLocal', { id: pluginId }));
-        return;
-      }
-
       await this.applyPluginToggle(pluginId, wasEnabled);
     } catch (err) {
       await this.pluginManager.togglePlugin(pluginId);
@@ -142,8 +129,8 @@ export class PluginSettingsManager {
     }
   }
 
-  // Post-toggle side effects for an effective change: refresh agents + the skill
-  // catalog, restart tabs, and confirm.
+  // Post-toggle side effects: refresh agents + the skill catalog, restart tabs,
+  // and confirm.
   private async applyPluginToggle(pluginId: string, wasEnabled: boolean): Promise<void> {
     await this.agentManager.loadAgents();
     this.onPluginsChanged?.();
