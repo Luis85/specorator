@@ -35,7 +35,7 @@ residuals. Each fix lands with a unit test under
   or writes the wrong content. Fix: encode each path segment before URL
   resolution (or reject URL-significant chars during manifest validation).
 
-- [ ] **7. Reject superscript Windows device-name variants.**
+- [x] **7. Reject superscript Windows device-name variants.**
   `RESERVED_DEVICE_NAME` in `skillInstallTargets.ts` rejects `CON`/`COM1`–`COM9`
   etc. but not the superscript forms `COM¹`–`COM³` / `LPT¹`–`LPT³`, which Windows
   also treats as reserved. A skill file at `scripts/COM¹.txt` passes both preflight

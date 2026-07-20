@@ -59,9 +59,11 @@ export function skillRootFor(target: SkillInstallTarget): string {
  * Windows reserved device names (case-insensitive), matched against a path
  * segment's base name (before its first dot) — `con`, `nul`, and `com1.txt` all
  * name the CON/NUL/COM1 device on Windows and can't be a file or folder there.
- * `com0`/`lpt0` aren't reserved; `com1`-`com9`/`lpt1`-`lpt9` are.
+ * `com0`/`lpt0` aren't reserved; `com1`-`com9`/`lpt1`-`lpt9` are — and so are the
+ * superscript forms `com¹`-`com³`/`lpt¹`-`lpt³` (U+00B9/B2/B3), which Windows maps
+ * to the COM1-3/LPT1-3 devices too.
  */
-const RESERVED_DEVICE_NAME = /^(con|prn|aux|nul|com[1-9]|lpt[1-9])$/i;
+const RESERVED_DEVICE_NAME = /^(con|prn|aux|nul|com[1-9¹²³]|lpt[1-9¹²³])$/i;
 
 /** True when `name` (a single path segment, or a slug) is a Windows device name. */
 export function isReservedDeviceName(name: string): boolean {

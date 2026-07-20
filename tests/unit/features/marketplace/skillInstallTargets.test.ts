@@ -62,6 +62,7 @@ describe('skillInstallTargets', () => {
       expect(hasUnsafePathSegment('scripts/con.txt')).toBe(true); // reserved base
       expect(hasUnsafePathSegment('nul')).toBe(true);
       expect(hasUnsafePathSegment('scripts/lpt1.md')).toBe(true);
+      expect(hasUnsafePathSegment('scripts/COM¹.txt')).toBe(true); // superscript device name
       expect(hasUnsafePathSegment('scripts/setup?.ps1')).toBe(true); // illegal char
       expect(hasUnsafePathSegment('a<b.md')).toBe(true);
       expect(hasUnsafePathSegment('scripts/trailing.')).toBe(true); // trailing dot
@@ -89,6 +90,9 @@ describe('skillInstallTargets', () => {
       expect(isReservedDeviceName('NUL')).toBe(true);
       expect(isReservedDeviceName('Com1')).toBe(true);
       expect(isReservedDeviceName('lpt9')).toBe(true);
+      expect(isReservedDeviceName('COM¹')).toBe(true); // superscript ¹/²/³ map to COM1-3 / LPT1-3
+      expect(isReservedDeviceName('lpt³')).toBe(true);
+      expect(isReservedDeviceName(`com${String.fromCharCode(0x2074)}`)).toBe(false); // ⁴ (U+2074) isn't a mapped device
       expect(isReservedDeviceName('com0')).toBe(false);
       expect(isReservedDeviceName('console')).toBe(false);
       expect(isReservedDeviceName('project-setup')).toBe(false);
