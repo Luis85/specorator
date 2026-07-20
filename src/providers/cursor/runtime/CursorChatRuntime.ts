@@ -3,7 +3,6 @@ import * as path from 'node:path';
 import { Notice } from 'obsidian';
 
 import { SPECORATOR_STORAGE_PATH } from '../../../core/bootstrap/StoragePaths';
-import { ProviderSettingsCoordinator } from '../../../core/providers/ProviderSettingsCoordinator';
 import type { ProviderCapabilities, ProviderId } from '../../../core/providers/types';
 import { buildUsageInfo } from '../../../core/providers/usage';
 import type { ChatRuntime } from '../../../core/runtime/ChatRuntime';
@@ -59,8 +58,8 @@ import { runWithCursorAgentSpawnLock } from './cursorAgentSpawnLock';
 import { cleanupStaleCursorMcpServer } from './cursorMcpCleanup';
 import { buildCursorModelCatalogCliKey } from './cursorModelCatalog';
 import { getCachedCursorModelIds } from './cursorModelCatalog';
-import { extractCursorModeValue, resolveCursorFamilyId } from './cursorModelFamily';
 import { fromCursorModelValue } from './cursorModelId';
+import { resolveActiveCursorModel, resolveCursorSessionModelId } from './cursorModelResolution';
 import { cursorModelContextWindow } from './cursorModelWindowCatalog';
 import {
   formatCursorRuntimeError,
@@ -1145,15 +1144,10 @@ export class CursorChatRuntime implements ChatRuntime {
   }
 
   private resolveCursorModelForSession(queryOptions?: ChatRuntimeQueryOptions): string | undefined {
-    const familyValue = this.resolveActiveModel(queryOptions) ?? undefined;
-    if (!familyValue) {
-      return undefined;
-    }
-    const rawId = fromCursorModelValue(familyValue);
-    const catalog = this.getActiveCursorCatalogIds();
-    return extractCursorModeValue(rawId, catalog)
-      ? rawId
-      : resolveCursorFamilyId(rawId, catalog);
+    return resolveCursorSessionModelId(
+      this.resolveActiveModel(queryOptions),
+      this.getActiveCursorCatalogIds(),
+    );
   }
 
   // Selected external folders become the ACP session's additionalDirectories so
@@ -1385,14 +1379,7 @@ export class CursorChatRuntime implements ChatRuntime {
   }
 
   private resolveActiveModel(queryOptions?: ChatRuntimeQueryOptions): string | null {
-    if (typeof queryOptions?.model === 'string' && queryOptions.model.trim()) {
-      return queryOptions.model.trim();
-    }
-    const snapshot = ProviderSettingsCoordinator.getProviderSettingsSnapshot(
-      asSettingsBag(this.plugin.settings),
-      'cursor',
-    );
-    return typeof snapshot.model === 'string' && snapshot.model.trim() ? snapshot.model.trim() : null;
+    return resolveActiveCursorModel(queryOptions, asSettingsBag(this.plugin.settings));
   }
 
   private formatRuntimeError(error: unknown): string {
