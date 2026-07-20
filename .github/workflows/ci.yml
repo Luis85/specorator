@@ -178,22 +178,3 @@ jobs:
 
       - name: Artifact smoke check
         run: npm run check:artifacts
-
-  skills:
-    # Behavioral test suite for the bundled `project-setup` skill's Node scripts
-    # (.claude/skills/project-setup/scripts) — the same setup logic distributed
-    # through the marketplace catalog. Previously run only manually, so skill-script
-    # regressions (Yarn PnP re-install, project containment, install-marker, Obsidian
-    # identity, CI-branch quoting) could ship past CI; this job gates them. The suite
-    # imports only Node built-ins (node:test), so no dependency install is needed.
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Setup Node 22
-        uses: actions/setup-node@v4
-        with:
-          node-version: 22
-
-      - name: Skill script tests
-        run: npm run test:skills

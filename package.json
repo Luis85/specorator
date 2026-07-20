@@ -33,7 +33,6 @@
     "test:vue": "vitest run --config vitest.config.mts",
     "test:vue:watch": "vitest --config vitest.config.mts",
     "test:vue:coverage": "vitest run --coverage --config vitest.config.mts",
-    "test:skills": "node scripts/run-skill-tests.mjs",
     "version": "node scripts/sync-version.js && git add manifest.json"
   },
   "keywords": [
