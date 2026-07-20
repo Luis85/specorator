@@ -561,12 +561,12 @@ export class InputController {
     let wasInvalidated = false;
 
     const preparedTurn = ctx.agentService.prepareTurn(ctx.turnRequest);
-    ctx.userMsg.content = preparedTurn.persistedContent;
+    // Fall back to request.text when persistedContent is empty (OpenCode keeps
+    // content in the prompt), then refresh so the card's @mentions render.
+    ctx.userMsg.content = preparedTurn.persistedContent || preparedTurn.request.text;
     ctx.userMsg.currentNote = preparedTurn.isCompact
       ? undefined
       : preparedTurn.request.currentNotePath;
-    // Content gained folded @mentions IN PLACE; the active msg is the assistant
-    // placeholder, so refresh THIS user message to re-render its context card.
     this.deps.refreshTranscriptMessage?.(ctx.userMsg.id);
 
     // Pass history WITHOUT current turn (userMsg + assistantMsg we just added)

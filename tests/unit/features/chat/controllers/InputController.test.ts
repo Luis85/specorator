@@ -3816,6 +3816,39 @@ describe('InputController - Message Queue', () => {
       expect(localDeps.refreshTranscriptMessage as jest.Mock).toHaveBeenCalledWith(userMsg!.id);
     });
 
+    it('falls back to request.text for the card when the provider persists no content (OpenCode)', async () => {
+      const fileContextManager = createMockFileContextManager();
+      (fileContextManager.getAttachedMentionSuffix as jest.Mock).mockReturnValue(' @a.ts @src/');
+
+      const localDeps = createSendableDeps({
+        getFileContextManager: () => fileContextManager as any,
+      });
+      const mockAgentService = (localDeps as any).mockAgentService;
+      // OpenCode's prepareTurn returns persistedContent: '' (the content lives in
+      // the prompt, not persisted separately) — the folded mentions are in request.text.
+      mockAgentService.prepareTurn = jest.fn().mockImplementation((request: any) => ({
+        request,
+        persistedContent: '',
+        prompt: request.text,
+        isCompact: false,
+        mcpMentions: new Set(),
+      }));
+      mockAgentService.query = jest.fn().mockReturnValue(createMockStream([{ type: 'done' }]));
+
+      const localInput = localDeps.getInputEl() as ReturnType<typeof createMockInputEl>;
+      localInput.value = 'explain this';
+      const localController = new InputController(localDeps);
+
+      await localController.sendMessage();
+
+      const userMsg = localDeps.state.messages.find((m: any) => m.role === 'user');
+      // Empty persistedContent must not wipe the mentions: fall back to the folded
+      // turn text so extractVaultMentions can still populate the context card.
+      expect(userMsg?.content).toBe('explain this @a.ts @src/');
+      // displayContent stays clean prose (no mentions).
+      expect(userMsg?.displayContent).toBe('explain this');
+    });
+
     it('does not fold mentions for a /compact message', async () => {
       const fileContextManager = createMockFileContextManager();
       (fileContextManager.getAttachedMentionSuffix as jest.Mock).mockReturnValue(' @a.ts');
