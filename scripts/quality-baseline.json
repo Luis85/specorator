@@ -6,8 +6,8 @@
     "circularDependencies": 0,
     "reExportCycles": 0,
     "boundaryViolations": 0,
-    "cloneGroups": 37,
-    "duplicatedLines": 929,
+    "cloneGroups": 35,
+    "duplicatedLines": 859,
     "complexFunctions": 243,
     "criticalComplexity": 5,
     "averageMaintainability": 90.2
