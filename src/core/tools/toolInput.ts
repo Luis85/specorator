@@ -117,3 +117,71 @@ export function getPathFromToolInput(
       return null;
   }
 }
+
+/** The input key the transcript renderer reads a file-tool's path from, or null for non-file tools. */
+function fileToolLocationInputKey(toolName: string): 'file_path' | 'path' | null {
+  switch (toolName) {
+    case TOOL_READ:
+    case TOOL_WRITE:
+    case TOOL_EDIT:
+      return 'file_path';
+    case TOOL_LS:
+      return 'path';
+    default:
+      return null;
+  }
+}
+
+function hasUsablePath(value: unknown): boolean {
+  if (typeof value !== 'string') return false;
+  const trimmed = value.trim();
+  // '.' is the LS default placeholder — treat it as "no specific path" so an
+  // ACP location can still supply the listed directory.
+  return trimmed.length > 0 && trimmed !== '.';
+}
+
+type PathLocation = { path?: string | null } | null | undefined;
+
+function firstLocationPath(
+  locations: ReadonlyArray<PathLocation> | null | undefined,
+): string | undefined {
+  // `Array.isArray` narrows a ReadonlyArray to `any[]`, so re-establish the
+  // element type before reading `path` (keeps the strict-any lint rules happy).
+  if (!Array.isArray(locations)) return undefined;
+  const list = locations as ReadonlyArray<PathLocation>;
+  for (const location of list) {
+    const path = typeof location?.path === 'string' ? location.path.trim() : '';
+    if (path) return path;
+  }
+  return undefined;
+}
+
+/**
+ * Seed a file tool's touched path into the exact key the transcript renderer
+ * keys off (`file_path` for Read/Write/Edit, `path` for LS) when the normalized
+ * input lacks one. Claude's SDK carries the path in the tool input directly, but
+ * ACP tool calls often deliver it out-of-band (a `locations` array, the human
+ * title, or a diff `content` block). Provider-supplied paths are left untouched;
+ * a no-op returns the same object reference.
+ */
+export function applyFileToolPath(
+  toolName: string,
+  input: Record<string, unknown>,
+  path: string | null | undefined,
+): Record<string, unknown> {
+  const key = fileToolLocationInputKey(toolName);
+  if (!key || hasUsablePath(input[key])) {
+    return input;
+  }
+  const trimmed = typeof path === 'string' ? path.trim() : '';
+  return trimmed ? { ...input, [key]: trimmed } : input;
+}
+
+/** {@link applyFileToolPath} sourced from the first non-empty ACP `locations` path. */
+export function seedFileToolPathFromLocations(
+  toolName: string,
+  input: Record<string, unknown>,
+  locations: ReadonlyArray<PathLocation> | null | undefined,
+): Record<string, unknown> {
+  return applyFileToolPath(toolName, input, firstLocationPath(locations));
+}

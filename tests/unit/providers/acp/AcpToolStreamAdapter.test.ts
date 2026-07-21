@@ -1,9 +1,12 @@
+import { TOOL_BASH, TOOL_READ } from '@/core/tools/toolNames';
 import type { StreamChunk } from '@/core/types';
 import {
   AcpToolStreamAdapter,
   type AcpToolStreamPresentationAdapter,
 } from '@/providers/acp/AcpToolStreamAdapter';
 import type { AcpToolCall, AcpToolCallUpdate } from '@/providers/acp/types';
+
+type ToolUseChunk = Extract<StreamChunk, { type: 'tool_use' }>;
 
 interface PresentationCalls {
   normalizeToolInput: jest.Mock;
@@ -411,6 +414,165 @@ describe('AcpToolStreamAdapter', () => {
           input: { fresh: 1, normalized: true },
         },
       ]);
+    });
+  });
+
+  // ACP delivers a tool's touched file in `locations` (or the title) far more
+  // often than in `rawInput`; the renderer only reads `input.file_path`/`path`,
+  // so the adapter seeds it from `locations` when the provider input lacks one.
+  describe('locations path seeding', () => {
+    function fileToolPresentation(): {
+      adapter: AcpToolStreamPresentationAdapter;
+      calls: PresentationCalls;
+    } {
+      const made = makePresentation();
+      // Real canonical name so the seam's file-tool check fires, and a
+      // pass-through input normalizer so assertions read the seeded key cleanly.
+      (made.adapter.normalizeToolName as jest.Mock).mockReturnValue(TOOL_READ);
+      (made.adapter.normalizeToolInput as jest.Mock).mockImplementation(
+        (_raw: string | undefined, input: Record<string, unknown>) => ({ ...input }),
+      );
+      return made;
+    }
+
+    it('seeds file_path from locations when a file tool arrives without a path', () => {
+      const { adapter } = fileToolPresentation();
+      const stream = new AcpToolStreamAdapter(adapter);
+      const [chunk] = stream.normalizeToolCall(
+        toolCall({ kind: 'read', locations: [{ path: '/notes/a.md' }] }),
+        [{ type: 'tool_use', id: 'tc-1', name: 'x', input: {} }],
+      );
+      expect((chunk as ToolUseChunk).input).toEqual({ file_path: '/notes/a.md' });
+    });
+
+    it('does not override a path the provider input already carries', () => {
+      const { adapter } = fileToolPresentation();
+      const stream = new AcpToolStreamAdapter(adapter);
+      const [chunk] = stream.normalizeToolCall(
+        toolCall({ kind: 'read', rawInput: { file_path: '/real.md' }, locations: [{ path: '/loc.md' }] }),
+        [{ type: 'tool_use', id: 'tc-1', name: 'x', input: {} }],
+      );
+      expect((chunk as ToolUseChunk).input.file_path).toBe('/real.md');
+    });
+
+    it('remembers locations from the initial call for a later update that omits them', () => {
+      const { adapter } = fileToolPresentation();
+      const stream = new AcpToolStreamAdapter(adapter);
+      stream.normalizeToolCall(toolCall({ kind: 'read', locations: [{ path: '/notes/a.md' }] }), []);
+      const [chunk] = stream.normalizeToolCallUpdate(toolCallUpdate({ rawInput: { limit: 20 } }), []);
+      expect((chunk as ToolUseChunk).input).toEqual({ limit: 20, file_path: '/notes/a.md' });
+    });
+
+    it('does not seed a path for non-file tools', () => {
+      const { adapter } = fileToolPresentation();
+      (adapter.normalizeToolName as jest.Mock).mockReturnValue(TOOL_BASH);
+      const stream = new AcpToolStreamAdapter(adapter);
+      const [chunk] = stream.normalizeToolCall(
+        toolCall({ kind: 'execute', locations: [{ path: '/notes/a.md' }] }),
+        [{ type: 'tool_use', id: 'tc-1', name: 'x', input: {} }],
+      );
+      expect((chunk as ToolUseChunk).input.file_path).toBeUndefined();
+    });
+
+    it('passes the seeded input into normalizeToolUseResult so write/edit diffs recover the path', () => {
+      const { adapter, calls } = fileToolPresentation();
+      const stream = new AcpToolStreamAdapter(adapter);
+      stream.normalizeToolCall(
+        toolCall({ kind: 'read', locations: [{ path: '/notes/a.md' }], rawOutput: 'x' }),
+        [{ type: 'tool_result', id: 'tc-1', content: '' }],
+      );
+      const lastCall = calls.normalizeToolUseResult.mock.calls.at(-1);
+      expect(lastCall?.[1]).toEqual({ file_path: '/notes/a.md' });
+    });
+
+    it('re-emits a tool_use when locations arrive on a later update and seed a new path', () => {
+      // The path-only-on-a-later-update case: the first call rendered pathless,
+      // and the update carries locations but no rawInput and an unchanged name.
+      // Without a re-emit the consumer keeps the stale, file-less tool row.
+      const { adapter } = fileToolPresentation();
+      const stream = new AcpToolStreamAdapter(adapter);
+      stream.normalizeToolCall(
+        toolCall({ kind: 'read' }),
+        [{ type: 'tool_use', id: 'tc-1', name: 'x', input: {} }],
+      );
+      const result = stream.normalizeToolCallUpdate(
+        toolCallUpdate({ locations: [{ path: '/notes/a.md' }], status: 'in_progress' }),
+        [],
+      );
+      expect(result).toEqual([
+        { type: 'tool_use', id: 'tc-1', name: 'Read', input: { file_path: '/notes/a.md' } },
+      ]);
+    });
+
+    it('does not re-emit when a later update changes neither input nor name', () => {
+      const { adapter } = fileToolPresentation();
+      const stream = new AcpToolStreamAdapter(adapter);
+      stream.normalizeToolCall(
+        toolCall({ kind: 'read', locations: [{ path: '/notes/a.md' }] }),
+        [{ type: 'tool_use', id: 'tc-1', name: 'x', input: {} }],
+      );
+      // Terminal update repeats the same locations: seeded input is unchanged.
+      const result = stream.normalizeToolCallUpdate(
+        toolCallUpdate({ status: 'completed', locations: [{ path: '/notes/a.md' }] }),
+        [{ type: 'text', content: 'tail' }],
+      );
+      expect(result).toEqual([{ type: 'text', content: 'tail' }]);
+    });
+
+    it('replaces a location-seeded path when a later update reports a different location', () => {
+      // Seeding is applied at emit from the path-less provider input, never
+      // persisted, so a new `locations` value wins instead of the earlier seed
+      // masquerading as provider-supplied input and pinning the stale path.
+      const { adapter } = fileToolPresentation();
+      const stream = new AcpToolStreamAdapter(adapter);
+      stream.normalizeToolCall(
+        toolCall({ kind: 'read', locations: [{ path: '/notes/a.md' }] }),
+        [{ type: 'tool_use', id: 'tc-1', name: 'x', input: {} }],
+      );
+      const result = stream.normalizeToolCallUpdate(
+        toolCallUpdate({ locations: [{ path: '/notes/b.md' }], status: 'in_progress' }),
+        [],
+      );
+      expect(result).toEqual([
+        { type: 'tool_use', id: 'tc-1', name: 'Read', input: { file_path: '/notes/b.md' } },
+      ]);
+    });
+
+    it('keeps a provider-supplied path even when a later location differs', () => {
+      // Provider input still wins: a real `rawInput` path is never overwritten by
+      // a divergent `locations` value on a later update.
+      const { adapter } = fileToolPresentation();
+      const stream = new AcpToolStreamAdapter(adapter);
+      stream.normalizeToolCall(
+        toolCall({ kind: 'read', rawInput: { file_path: '/real.md' }, locations: [{ path: '/notes/a.md' }] }),
+        [{ type: 'tool_use', id: 'tc-1', name: 'x', input: {} }],
+      );
+      const result = stream.normalizeToolCallUpdate(
+        toolCallUpdate({ locations: [{ path: '/notes/b.md' }], status: 'in_progress' }),
+        [],
+      );
+      // No re-emit: the provider path is unchanged despite the new location.
+      expect(result).toEqual([]);
+    });
+
+    it('seeds file_path from a terminal diff content block when rawInput and locations lack one', () => {
+      // Cursor's captured edit shape: an initial empty rawInput, then a terminal
+      // update whose diff `content` carries the touched file (no locations).
+      const { adapter } = fileToolPresentation();
+      const stream = new AcpToolStreamAdapter(adapter);
+      stream.normalizeToolCall(
+        toolCall({ kind: 'edit' }),
+        [{ type: 'tool_use', id: 'tc-1', name: 'x', input: {} }],
+      );
+      const result = stream.normalizeToolCallUpdate(
+        toolCallUpdate({
+          status: 'completed',
+          content: [{ type: 'diff' as const, path: '/notes/a.md', oldText: 'x', newText: 'y' }],
+        }),
+        [{ type: 'tool_result', id: 'tc-1', content: 'done' }],
+      );
+      const toolUse = result.find((c): c is ToolUseChunk => c.type === 'tool_use');
+      expect(toolUse?.input).toEqual({ file_path: '/notes/a.md' });
     });
   });
 

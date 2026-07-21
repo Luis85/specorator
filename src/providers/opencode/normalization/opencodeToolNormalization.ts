@@ -224,6 +224,16 @@ function extractToolMetadata(rawOutput: unknown): Record<string, unknown> | null
   return isPlainObject(rawOutput.metadata) ? rawOutput.metadata : null;
 }
 
+// ACP tool kind → Opencode raw tool name. ACP has no separate `write` kind, so
+// file writes arrive as `edit` and resolve to Edit (better a file tool than a
+// blank prose name). `execute`/`fetch` map onto Opencode's own bash/webfetch ids.
+const OPENCODE_KIND_TO_RAW_NAME: Record<string, string> = {
+  edit: 'edit',
+  execute: 'bash',
+  fetch: 'webfetch',
+  read: 'read',
+};
+
 export function resolveOpencodeRawToolName(
   currentRawName: string | undefined,
   update: {
@@ -232,28 +242,20 @@ export function resolveOpencodeRawToolName(
   },
 ): string {
   const titleName = firstTrimmedString(update.title);
-  const knownTitleName = titleName && isKnownToolName(titleName)
-    ? titleName.trim().toLowerCase()
-    : undefined;
-
-  if (knownTitleName) {
-    return knownTitleName;
+  if (titleName && isKnownToolName(titleName)) {
+    return titleName.trim().toLowerCase();
   }
 
-  if (currentRawName) {
+  // Pin only a KNOWN current name. A prose fallback (e.g. an initial `Applying
+  // changes` title with no kind) must stay correctable: a later update carrying
+  // the real file-mutating kind resolves the canonical id below instead of being
+  // short-circuited back to the prose.
+  if (currentRawName && isKnownToolName(currentRawName)) {
     return currentRawName;
   }
 
-  switch (update.kind) {
-    case 'execute':
-      return 'bash';
-    case 'fetch':
-      return 'webfetch';
-    case 'read':
-      return 'read';
-    default:
-      return titleName ?? 'tool';
-  }
+  const kindName = update.kind ? OPENCODE_KIND_TO_RAW_NAME[update.kind] : undefined;
+  return kindName ?? currentRawName ?? titleName ?? 'tool';
 }
 
 export function normalizeOpencodeToolName(rawName: string | undefined): string {

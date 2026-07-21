@@ -1,7 +1,9 @@
 import {
+  applyFileToolPath,
   extractResolvedAnswers,
   extractResolvedAnswersFromResultText,
   getPathFromToolInput,
+  seedFileToolPathFromLocations,
 } from '@/core/tools/toolInput';
 
 describe('extractResolvedAnswers', () => {
@@ -346,5 +348,90 @@ describe('getPathFromToolInput', () => {
 
       expect(result).toBe('~/Documents/file.txt');
     });
+  });
+});
+
+describe('seedFileToolPathFromLocations', () => {
+  it('seeds file_path for Read/Write/Edit when the input carries no path', () => {
+    for (const name of ['Read', 'Write', 'Edit']) {
+      const result = seedFileToolPathFromLocations(name, {}, [{ path: '/notes/a.md' }]);
+      expect(result).toEqual({ file_path: '/notes/a.md' });
+    }
+  });
+
+  it('seeds path for LS when the input carries no path', () => {
+    const result = seedFileToolPathFromLocations('LS', {}, [{ path: '/notes' }]);
+    expect(result).toEqual({ path: '/notes' });
+  });
+
+  it('preserves other input keys while seeding', () => {
+    const result = seedFileToolPathFromLocations('Read', { limit: 20 }, [{ path: '/notes/a.md' }]);
+    expect(result).toEqual({ limit: 20, file_path: '/notes/a.md' });
+  });
+
+  it('does not override an existing non-empty path (provider input wins)', () => {
+    const input = { file_path: '/real/path.md' };
+    const result = seedFileToolPathFromLocations('Read', input, [{ path: '/loc/other.md' }]);
+    expect(result).toBe(input);
+    expect(result).toEqual({ file_path: '/real/path.md' });
+  });
+
+  it('treats an empty-string path as seedable', () => {
+    const result = seedFileToolPathFromLocations('Edit', { file_path: '   ' }, [{ path: '/notes/a.md' }]);
+    expect(result).toEqual({ file_path: '/notes/a.md' });
+  });
+
+  it('treats an LS path of "." as seedable', () => {
+    const result = seedFileToolPathFromLocations('LS', { path: '.' }, [{ path: '/notes/sub' }]);
+    expect(result).toEqual({ path: '/notes/sub' });
+  });
+
+  it('picks the first location with a non-empty path', () => {
+    const result = seedFileToolPathFromLocations('Read', {}, [
+      { path: '  ' },
+      { path: '/notes/real.md' },
+    ]);
+    expect(result).toEqual({ file_path: '/notes/real.md' });
+  });
+
+  it('leaves input unchanged for non-file tools', () => {
+    const input = { command: 'ls -la' };
+    const result = seedFileToolPathFromLocations('Bash', input, [{ path: '/notes/a.md' }]);
+    expect(result).toBe(input);
+  });
+
+  it('leaves input unchanged when locations are missing or empty', () => {
+    const input = {};
+    expect(seedFileToolPathFromLocations('Read', input, undefined)).toBe(input);
+    expect(seedFileToolPathFromLocations('Read', input, null)).toBe(input);
+    expect(seedFileToolPathFromLocations('Read', input, [])).toBe(input);
+    expect(seedFileToolPathFromLocations('Read', input, [{ path: '   ' }])).toBe(input);
+  });
+});
+
+describe('applyFileToolPath', () => {
+  it('seeds the canonical key for file tools from an explicit path', () => {
+    expect(applyFileToolPath('Edit', {}, '/notes/a.md')).toEqual({ file_path: '/notes/a.md' });
+    expect(applyFileToolPath('LS', {}, '/notes')).toEqual({ path: '/notes' });
+  });
+
+  it('trims the path and preserves other keys', () => {
+    expect(applyFileToolPath('Write', { content: 'x' }, '  /notes/a.md  ')).toEqual({
+      content: 'x',
+      file_path: '/notes/a.md',
+    });
+  });
+
+  it('does not override an existing provider path', () => {
+    const input = { file_path: '/real.md' };
+    expect(applyFileToolPath('Read', input, '/other.md')).toBe(input);
+  });
+
+  it('is a no-op for non-file tools or an empty path', () => {
+    const bash = { command: 'ls' };
+    expect(applyFileToolPath('Bash', bash, '/notes/a.md')).toBe(bash);
+    const empty = {};
+    expect(applyFileToolPath('Read', empty, null)).toBe(empty);
+    expect(applyFileToolPath('Read', empty, '   ')).toBe(empty);
   });
 });
