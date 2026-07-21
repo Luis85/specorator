@@ -27,13 +27,10 @@ import type {
 import type { ApprovalDecision, ChatMessage, ExitPlanModeDecision, StreamChunk } from '../../../core/types';
 import { t } from '../../../i18n/i18n';
 import type SpecoratorPlugin from '../../../main';
-import { InstructionModal } from '../../../shared/modals/InstructionConfirmModal';
 import type { BrowserSelectionContext } from '../../../utils/browser';
 import type { CanvasSelectionContext } from '../../../utils/canvas';
 import type { EditorSelectionContext } from '../../../utils/editor';
 import { dedupeExternalContextPaths, filterRedundantExternalContextPaths } from '../../../utils/externalContextTurn';
-import { appendMarkdownSnippet } from '../../../utils/markdown';
-import type { BoundAgentProjection } from '../../agents/roster/boundAgentPersona';
 import { persistPastedImages } from '../services/persistPastedImages';
 import type { SubagentManager } from '../services/SubagentManager';
 import { applyTitleGenerationResult } from '../services/titleGenerationResult';
@@ -42,6 +39,7 @@ import type { FileContextManager } from '../ui/FileContext';
 import type { ImageContextManager } from '../ui/ImageContext';
 import type { InstructionModeManager } from '../ui/InstructionModeManager';
 import type { AddExternalContextResult, McpServerSelector } from '../ui/toolbar/shared';
+import { resolveBoundAgentQueryOptions } from './boundAgentQueryOptions';
 import type { BrowserSelectionController } from './BrowserSelectionController';
 import type { CanvasSelectionController } from './CanvasSelectionController';
 import {
@@ -68,6 +66,7 @@ import {
 import type { ConversationController } from './ConversationController';
 import type { InlineCardMounter } from './inlineCardMount';
 import { InlinePromptController } from './InlinePromptController';
+import { runInstructionRefineFlow } from './instructionRefineFlow';
 import { QueuedMessageController } from './QueuedMessageController';
 import { ResumeSessionDropdownCoordinator, type ResumeSessionDropdownDeps } from './ResumeSessionDropdownCoordinator';
 import type { SelectionController } from './SelectionController';
@@ -215,12 +214,6 @@ export class InputController {
 
   private getAuxiliaryModel(): string | null {
     return this.deps.getAuxiliaryModel?.() ?? this.getAgentService()?.getAuxiliaryModel?.() ?? null;
-  }
-
-  private syncInstructionRefineModelOverride(
-    instructionRefineService: InstructionRefineService,
-  ): void {
-    instructionRefineService.setModelOverride?.(this.getAuxiliaryModel() ?? undefined);
   }
 
   private getActiveProviderId(): ProviderId {
@@ -568,18 +561,19 @@ export class InputController {
     let wasInvalidated = false;
 
     const preparedTurn = ctx.agentService.prepareTurn(ctx.turnRequest);
-    ctx.userMsg.content = preparedTurn.persistedContent;
+    // Fall back to request.text when persistedContent is empty (OpenCode keeps
+    // content in the prompt), then refresh so the card's @mentions render.
+    ctx.userMsg.content = preparedTurn.persistedContent || preparedTurn.request.text;
     ctx.userMsg.currentNote = preparedTurn.isCompact
       ? undefined
       : preparedTurn.request.currentNotePath;
-    // Content now carries folded @mentions; re-project so the context card
-    // appears immediately (in-place mutation doesn't fire onMessagesChanged).
-    this.emit();
+    this.deps.refreshTranscriptMessage?.(ctx.userMsg.id);
 
     // Pass history WITHOUT current turn (userMsg + assistantMsg we just added)
     // This prevents duplication when rebuilding context for new sessions
     const previousMessages = state.messages.slice(0, -2);
-    const queryOptions: ChatRuntimeQueryOptions = await this.resolveTurnQueryOptions(
+    const queryOptions: ChatRuntimeQueryOptions = await resolveBoundAgentQueryOptions(
+      this.deps.plugin,
       state.currentConversationId,
       ctx.tabModelOverride,
     );
@@ -604,61 +598,6 @@ export class InputController {
     }
 
     return { wasInterrupted, wasInvalidated };
-  }
-
-  /**
-   * Builds per-turn ChatRuntimeQueryOptions, merging any bound-agent overrides
-   * (prompt and model) into the base tab-model-override options. The builder's
-   * precedence (explicit model > boundAgentModel > settings.model) ensures an
-   * explicit tab/work-order model is never clobbered by the agent binding.
-   */
-  private async resolveTurnQueryOptions(
-    conversationId: string | null,
-    tabModelOverride: string | null | undefined,
-  ): Promise<ChatRuntimeQueryOptions> {
-    const log = this.deps.plugin.logger.scope('input');
-    const base: ChatRuntimeQueryOptions = tabModelOverride ? { model: tabModelOverride } : {};
-
-    if (!conversationId) {
-      log.debug('[bound-agent] resolveTurnQueryOptions: no conversationId — skipping agent resolution');
-      return base;
-    }
-
-    const conversation = await this.deps.plugin.getConversationById(conversationId);
-    if (!conversation?.boundAgentId) {
-      log.debug('[bound-agent] resolveTurnQueryOptions: conversation has no boundAgentId', { conversationId, found: !!conversation });
-      return base;
-    }
-
-    log.debug('[bound-agent] resolveTurnQueryOptions: resolving agent', { conversationId, boundAgentId: conversation.boundAgentId });
-
-    // Pass the conversation's provider so the bound model is only folded in when
-    // the agent's saved model targets that provider; after a disabled-provider
-    // fallback the agent's cross-provider model id must not reach this runtime.
-    const projection: BoundAgentProjection | null | undefined = await this.deps.plugin.resolveBoundAgent?.(
-      conversation.boundAgentId,
-      conversation.providerId,
-    );
-    if (!projection) {
-      log.debug('[bound-agent] resolveTurnQueryOptions: resolveBoundAgent returned null', { boundAgentId: conversation.boundAgentId });
-      return base;
-    }
-
-    log.debug('[bound-agent] resolveTurnQueryOptions: agent resolved', { slug: projection.slug, hasPrompt: !!projection.prompt, promptLen: projection.prompt?.length });
-
-    const boundAgentModel = projection.model || undefined;
-
-    return {
-      ...base,
-      // Fold the bound model into `model` so non-Claude runtimes that only read
-      // `queryOptions.model` (not `boundAgentModel`) receive it. Explicit
-      // tab/work-order override takes precedence; boundAgentModel is the fallback.
-      model: tabModelOverride ?? boundAgentModel,
-      boundAgentPrompt: projection.prompt || undefined,
-      boundAgentModel,
-      boundAgentSlug: projection.slug || undefined,
-      boundAgentDescription: projection.description || undefined,
-    };
   }
 
   private async finalizeTurn(
@@ -1182,101 +1121,15 @@ export class InputController {
   // ============================================
 
   async handleInstructionSubmit(rawInstruction: string): Promise<void> {
-    const { plugin } = this.deps;
-
     const instructionRefineService = this.deps.getInstructionRefineService();
-    const instructionModeManager = this.deps.getInstructionModeManager();
-
     if (!instructionRefineService) return;
 
-    const existingPrompt = plugin.settings.systemPrompt;
-    let modal: InstructionModal | null = null;
-    let wasCancelled = false;
-
-    try {
-      modal = new InstructionModal(
-        plugin.app,
-        rawInstruction,
-        {
-          onAccept: (finalInstruction) => {
-            void (async (): Promise<void> => {
-              const currentPrompt = plugin.settings.systemPrompt;
-              plugin.settings.systemPrompt = appendMarkdownSnippet(currentPrompt, finalInstruction);
-              await plugin.saveSettings();
-
-              new Notice(t('chat.input.instructionAdded'));
-              instructionModeManager?.clear();
-            })();
-          },
-          onReject: () => {
-            wasCancelled = true;
-            instructionRefineService.cancel();
-            instructionModeManager?.clear();
-          },
-          onClarificationSubmit: async (response) => {
-            this.syncInstructionRefineModelOverride(instructionRefineService);
-            const result = await instructionRefineService.continueConversation(response);
-
-            if (wasCancelled) {
-              return;
-            }
-
-            if (!result.success) {
-              if (result.error === 'Cancelled') {
-                return;
-              }
-              new Notice(result.error || t('chat.input.processResponseFailed'));
-              modal?.showError(result.error || 'Failed to process response');
-              return;
-            }
-
-            if (result.clarification) {
-              modal?.showClarification(result.clarification);
-            } else if (result.refinedInstruction) {
-              modal?.showConfirmation(result.refinedInstruction);
-            }
-          }
-        }
-      );
-      modal.open();
-
-      this.syncInstructionRefineModelOverride(instructionRefineService);
-      instructionRefineService.resetConversation();
-      const result = await instructionRefineService.refineInstruction(
-        rawInstruction,
-        existingPrompt
-      );
-
-      if (wasCancelled) {
-        return;
-      }
-
-      if (!result.success) {
-        if (result.error === 'Cancelled') {
-          instructionModeManager?.clear();
-          return;
-        }
-        new Notice(result.error || t('chat.input.refineFailed'));
-        modal.showError(result.error || 'Failed to refine instruction');
-        instructionModeManager?.clear();
-        return;
-      }
-
-      if (result.clarification) {
-        modal.showClarification(result.clarification);
-      } else if (result.refinedInstruction) {
-        modal.showConfirmation(result.refinedInstruction);
-      } else {
-        new Notice(t('chat.input.noInstruction'));
-        modal.showError('No instruction received');
-        instructionModeManager?.clear();
-      }
-    } catch (error) {
-      const errorMsg = error instanceof Error ? error.message : 'Unknown error';
-      new Notice(t('common.errorWithDetail', { error: errorMsg }));
-      modal?.showError(errorMsg);
-      instructionModeManager?.clear();
-    }
+    await runInstructionRefineFlow(rawInstruction, {
+      plugin: this.deps.plugin,
+      instructionRefineService,
+      instructionModeManager: this.deps.getInstructionModeManager(),
+      getAuxiliaryModel: () => this.getAuxiliaryModel(),
+    });
   }
 
   // ============================================
