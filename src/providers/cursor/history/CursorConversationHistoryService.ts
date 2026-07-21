@@ -101,53 +101,17 @@ export class CursorConversationHistoryService extends BaseHistoryService<CursorP
     const acpValidationError = validateCursorAcpSessionVault(sessionId, ctx.vaultPath);
     const removedPaths: string[] = [];
     const errors: string[] = [];
+    const collect = (result: RemovalResult): void => {
+      removedPaths.push(...result.removed);
+      errors.push(...result.errors);
+    };
 
-    const acpDir = path.join(os.homedir(), '.cursor', 'acp-sessions', sessionId);
+    // The global ACP session dir is only vault-owned when validation passes.
     if (!acpValidationError) {
-      try {
-        if (fs.existsSync(acpDir)) {
-          fs.rmSync(acpDir, { recursive: true, force: true });
-          removedPaths.push(acpDir);
-        }
-      } catch (error) {
-        errors.push(error instanceof Error ? error.message : String(error));
-      }
+      collect(removeCursorAcpSessionDir(sessionId));
     }
-
-    const chatsRoot = path.join(os.homedir(), '.cursor', 'chats');
-    const candidateHashes = [
-      cursorWorkspaceHash(ctx.vaultPath),
-      cursorWorkspaceHashLegacy(ctx.vaultPath),
-    ];
-    const seenDirs = new Set<string>();
-    for (const hash of candidateHashes) {
-      const chatDir = path.join(chatsRoot, hash, sessionId);
-      if (!chatDir.startsWith(chatsRoot)) continue;
-      if (seenDirs.has(chatDir)) continue;
-      seenDirs.add(chatDir);
-      try {
-        if (fs.existsSync(chatDir)) {
-          fs.rmSync(chatDir, { recursive: true, force: true });
-          removedPaths.push(chatDir);
-        }
-      } catch (error) {
-        errors.push(error instanceof Error ? error.message : String(error));
-      }
-    }
-
-    const transcriptPath = resolveCursorAgentTranscriptPath(ctx.vaultPath, sessionId);
-    if (transcriptPath) {
-      try {
-        fs.rmSync(transcriptPath, { force: true });
-        removedPaths.push(transcriptPath);
-        const transcriptDir = path.dirname(transcriptPath);
-        if (fs.existsSync(transcriptDir) && fs.readdirSync(transcriptDir).length === 0) {
-          fs.rmSync(transcriptDir, { recursive: true, force: true });
-        }
-      } catch (error) {
-        errors.push(error instanceof Error ? error.message : String(error));
-      }
-    }
+    collect(removeCursorChatDirs(ctx.vaultPath, sessionId));
+    collect(removeCursorAgentTranscript(ctx.vaultPath, sessionId));
 
     if (acpValidationError) {
       return {
@@ -210,6 +174,65 @@ export class CursorConversationHistoryService extends BaseHistoryService<CursorP
       return null;
     }
   }
+}
+
+type RemovalResult = { removed: string[]; errors: string[] };
+
+function toErrorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
+}
+
+// Recursively remove a directory if present, recording the path or the failure.
+function safeRemoveDir(dir: string, result: RemovalResult): void {
+  try {
+    if (fs.existsSync(dir)) {
+      fs.rmSync(dir, { recursive: true, force: true });
+      result.removed.push(dir);
+    }
+  } catch (error) {
+    result.errors.push(toErrorMessage(error));
+  }
+}
+
+function removeCursorAcpSessionDir(sessionId: string): RemovalResult {
+  const result: RemovalResult = { removed: [], errors: [] };
+  safeRemoveDir(path.join(os.homedir(), '.cursor', 'acp-sessions', sessionId), result);
+  return result;
+}
+
+function removeCursorChatDirs(vaultPath: string, sessionId: string): RemovalResult {
+  const result: RemovalResult = { removed: [], errors: [] };
+  const chatsRoot = path.join(os.homedir(), '.cursor', 'chats');
+  const candidateHashes = [
+    cursorWorkspaceHash(vaultPath),
+    cursorWorkspaceHashLegacy(vaultPath),
+  ];
+  const seenDirs = new Set<string>();
+  for (const hash of candidateHashes) {
+    const chatDir = path.join(chatsRoot, hash, sessionId);
+    if (!chatDir.startsWith(chatsRoot)) continue;
+    if (seenDirs.has(chatDir)) continue;
+    seenDirs.add(chatDir);
+    safeRemoveDir(chatDir, result);
+  }
+  return result;
+}
+
+function removeCursorAgentTranscript(vaultPath: string, sessionId: string): RemovalResult {
+  const result: RemovalResult = { removed: [], errors: [] };
+  const transcriptPath = resolveCursorAgentTranscriptPath(vaultPath, sessionId);
+  if (!transcriptPath) return result;
+  try {
+    fs.rmSync(transcriptPath, { force: true });
+    result.removed.push(transcriptPath);
+    const transcriptDir = path.dirname(transcriptPath);
+    if (fs.existsSync(transcriptDir) && fs.readdirSync(transcriptDir).length === 0) {
+      fs.rmSync(transcriptDir, { recursive: true, force: true });
+    }
+  } catch (error) {
+    result.errors.push(toErrorMessage(error));
+  }
+  return result;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
