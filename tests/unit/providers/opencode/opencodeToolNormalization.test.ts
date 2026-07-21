@@ -1,6 +1,9 @@
+import { TOOL_EDIT } from '../../../../src/core/tools/toolNames';
 import {
   createOpencodeToolStreamAdapter,
   normalizeOpencodeToolInput,
+  normalizeOpencodeToolName,
+  resolveOpencodeRawToolName,
 } from '../../../../src/providers/opencode/normalization/opencodeToolNormalization';
 
 describe('normalizeOpencodeToolInput', () => {
@@ -193,5 +196,63 @@ describe('createOpencodeToolStreamAdapter', () => {
       name: 'WebSearch',
       type: 'tool_use',
     }]);
+  });
+
+  it('resolves an edit whose title is prose to the canonical Edit tool', () => {
+    const adapter = createOpencodeToolStreamAdapter();
+
+    expect(adapter.normalizeToolCall({
+      kind: 'edit',
+      rawInput: { filePath: '/vault/notes/today.md' },
+      title: 'Applying changes',
+      toolCallId: 'tool-4',
+    }, [{
+      id: 'tool-4',
+      input: {},
+      name: 'edit',
+      type: 'tool_use',
+    }])).toEqual([{
+      id: 'tool-4',
+      input: { file_path: '/vault/notes/today.md' },
+      name: 'Edit',
+      type: 'tool_use',
+    }]);
+  });
+});
+
+describe('resolveOpencodeRawToolName', () => {
+  it('resolves the edit kind when the title is prose (not a known tool name)', () => {
+    expect(resolveOpencodeRawToolName(undefined, { kind: 'edit', title: 'Applying changes' })).toBe('edit');
+    expect(normalizeOpencodeToolName(
+      resolveOpencodeRawToolName(undefined, { kind: 'edit', title: 'Applying changes' }),
+    )).toBe(TOOL_EDIT);
+  });
+
+  it('resolves the edit kind when no title is present', () => {
+    expect(resolveOpencodeRawToolName(undefined, { kind: 'edit' })).toBe('edit');
+  });
+
+  it('still prefers a known tool name in the title over the kind', () => {
+    expect(resolveOpencodeRawToolName(undefined, { kind: 'edit', title: 'write' })).toBe('write');
+  });
+
+  it('keeps resolving the previously mapped read/execute/fetch kinds', () => {
+    expect(resolveOpencodeRawToolName(undefined, { kind: 'read' })).toBe('read');
+    expect(resolveOpencodeRawToolName(undefined, { kind: 'execute' })).toBe('bash');
+    expect(resolveOpencodeRawToolName(undefined, { kind: 'fetch' })).toBe('webfetch');
+  });
+
+  it('lets a later edit kind correct a name first pinned to a prose title', () => {
+    // Initial call: prose title, no kind → currentRawName becomes the prose text.
+    const first = resolveOpencodeRawToolName(undefined, { title: 'Applying changes' });
+    expect(first).toBe('Applying changes');
+    // A later update supplying the semantic edit kind must correct the id, not
+    // stay short-circuited on the prose name — otherwise the file stays hidden.
+    expect(resolveOpencodeRawToolName(first, { kind: 'edit' })).toBe('edit');
+    expect(normalizeOpencodeToolName(resolveOpencodeRawToolName(first, { kind: 'edit' }))).toBe(TOOL_EDIT);
+  });
+
+  it('keeps a resolved known current name pinned when a later prose title arrives', () => {
+    expect(resolveOpencodeRawToolName('read', { title: 'notes/today.md' })).toBe('read');
   });
 });
