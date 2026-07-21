@@ -114,22 +114,28 @@ export class CursorSessionCoordinator {
       } catch (error) {
         let loadError = error;
         if (isCursorAuthenticationFailure(loadError) && await this.tryAuthenticate()) {
-          try {
-            const retryResponse = await connection.loadSession({
-              cwd,
-              mcpServers: [],
-              sessionId: requestedId,
-              additionalDirectories: cursorSessionAdditionalDirectories(roots),
-            });
-            const loadedId = retryResponse.sessionId ?? requestedId;
-            this.loadedSessionId = loadedId;
-            this.sessionId = loadedId;
-            this.activeSessionRoots = roots;
-            this.modelApplicator.captureAdvertisedModelValues(retryResponse);
-            this.capture.event('session_load', { sessionId: loadedId, retriedAfterAuth: true });
-            return loadedId;
-          } catch (retryError) {
-            loadError = retryError;
+          // Re-read the connection after authenticating: a force-respawn during
+          // tryAuthenticate() swaps it, so the retry must target the live
+          // connection, not the disposed one captured at the top of this method.
+          const authedConnection = this.getConnection();
+          if (authedConnection) {
+            try {
+              const retryResponse = await authedConnection.loadSession({
+                cwd,
+                mcpServers: [],
+                sessionId: requestedId,
+                additionalDirectories: cursorSessionAdditionalDirectories(roots),
+              });
+              const loadedId = retryResponse.sessionId ?? requestedId;
+              this.loadedSessionId = loadedId;
+              this.sessionId = loadedId;
+              this.activeSessionRoots = roots;
+              this.modelApplicator.captureAdvertisedModelValues(retryResponse);
+              this.capture.event('session_load', { sessionId: loadedId, retriedAfterAuth: true });
+              return loadedId;
+            } catch (retryError) {
+              loadError = retryError;
+            }
           }
         }
 
@@ -174,13 +180,19 @@ export class CursorSessionCoordinator {
       );
     } catch (error) {
       if (isCursorAuthenticationFailure(error) && await this.tryAuthenticate()) {
-        try {
-          return await this.adoptFreshSession(
-            await connection.newSession({ cwd, mcpServers: [], additionalDirectories }),
-          );
-        } catch (retryError) {
-          this.lastStartupErrorMessage = this.formatRuntimeError(retryError);
-          return null;
+        // Re-read the connection after authenticating: a force-respawn during
+        // tryAuthenticate() swaps it, so the retry targets the live connection,
+        // not the disposed one captured at the top of this method.
+        const authedConnection = this.getConnection();
+        if (authedConnection) {
+          try {
+            return await this.adoptFreshSession(
+              await authedConnection.newSession({ cwd, mcpServers: [], additionalDirectories }),
+            );
+          } catch (retryError) {
+            this.lastStartupErrorMessage = this.formatRuntimeError(retryError);
+            return null;
+          }
         }
       }
       this.lastStartupErrorMessage = isCursorAuthenticationFailure(error)
