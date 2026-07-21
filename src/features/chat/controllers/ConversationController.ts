@@ -1,6 +1,6 @@
 import { Notice } from 'obsidian';
 
-import type { ConversationSwitchResult } from '../../../core/providers/types';
+import type { ConversationSwitchResult, HistoryLoadOutcome } from '../../../core/providers/types';
 import { isHydrationCommitReady } from '../../../core/providers/types';
 import type { ChatRuntime } from '../../../core/runtime/ChatRuntime';
 import type { ChatRewindMode } from '../../../core/runtime/types';
@@ -416,10 +416,10 @@ export class ConversationController {
       // `restoreConversation`'s sync DOM rebuild. Microtask awaits never paint,
       // so the cached-hydration path (pre-warmed tab) would otherwise just freeze.
       await new Promise<void>((resolve) => window.setTimeout(resolve, 0));
-      if (abort.signal.aborted || lifecycleGeneration !== this.lifecycleGeneration) return;
+      if (this.isHydrationStale(abort, lifecycleGeneration)) return;
 
       const switchResult = await this.switchConversationForHydration(id, abort.signal);
-      if (abort.signal.aborted || this.hydrationAbort !== abort || lifecycleGeneration !== this.lifecycleGeneration) return;
+      if (this.isHydrationStale(abort, lifecycleGeneration) || this.hydrationAbort !== abort) return;
       if (!switchResult) {
         this.deps.setTranscriptLoading(null);
         this.deps.setTranscriptGreeting(this.getGreeting());
@@ -429,17 +429,7 @@ export class ConversationController {
 
       const { conversation, hydration } = switchResult;
       if (!isHydrationCommitReady(hydration)) {
-        if (hydration.kind === 'error' && hydration.error.code !== 'cancelled') {
-          this.deps.setTranscriptHydrationError({
-            code: hydration.error.code,
-            message: hydration.error.message,
-          });
-        } else if (hydration.kind === 'empty' && hydration.reason === 'no-store') {
-          this.deps.setTranscriptHydrationError({
-            code: 'store-missing',
-            message: t('chat.history.storeUnavailable'),
-          });
-        }
+        this.applyHydrationFailure(hydration);
         this.restorePendingSwitchDraftForHydration(id);
         return;
       }
@@ -456,7 +446,7 @@ export class ConversationController {
       } catch {
         // Best-effort bind after history hydration; transcript is already visible.
       }
-      if (abort.signal.aborted || state.currentConversationId !== conversation.id || lifecycleGeneration !== this.lifecycleGeneration) return;
+      if (this.isHydrationStale(abort, lifecycleGeneration) || state.currentConversationId !== conversation.id) return;
 
       this.updateWelcomeVisibility();
       this.callbacks.onConversationSwitched?.();
@@ -470,6 +460,30 @@ export class ConversationController {
           this.deps.setTranscriptLoading(null);
         }
       }
+    }
+  }
+
+  /**
+   * True when a newer switch/lifecycle superseded this hydration (aborted signal
+   * or a bumped lifecycle generation), so the stale result must be dropped
+   * without touching the renderer.
+   */
+  private isHydrationStale(abort: AbortController, generation: number): boolean {
+    return abort.signal.aborted || generation !== this.lifecycleGeneration;
+  }
+
+  /** Surfaces the transcript-level error banner for a hydration that can't commit. */
+  private applyHydrationFailure(hydration: HistoryLoadOutcome): void {
+    if (hydration.kind === 'error' && hydration.error.code !== 'cancelled') {
+      this.deps.setTranscriptHydrationError({
+        code: hydration.error.code,
+        message: hydration.error.message,
+      });
+    } else if (hydration.kind === 'empty' && hydration.reason === 'no-store') {
+      this.deps.setTranscriptHydrationError({
+        code: 'store-missing',
+        message: t('chat.history.storeUnavailable'),
+      });
     }
   }
 
