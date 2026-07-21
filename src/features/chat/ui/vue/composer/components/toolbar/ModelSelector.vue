@@ -27,13 +27,17 @@ function renderProviderIcon(el: HTMLElement | null, icon: ProviderIconSvg | unde
 
 <template>
   <div class="specorator-model-selector">
-    <button
+    <!-- A plain <div>, NOT a <button>: inside a Vue island a raw <button>
+         inherits Obsidian's native button chrome (background/border/box-shadow),
+         which makes the model name read as a prominent button. The imperative
+         ModelSelector rendered this as a div, and the sibling toolbar widgets
+         (ModeSelector, ThinkingBudgetSelector) are plain divs/spans too. -->
+    <div
       class="specorator-model-btn"
-      type="button"
       @click="open = !open"
     >
       <span class="specorator-model-label">{{ store.toolbar.modelLabel }}</span>
-    </button>
+    </div>
     <div
       v-if="open"
       class="specorator-model-dropdown"
