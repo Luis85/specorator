@@ -1390,7 +1390,7 @@ describe('CursorChatRuntime.applySelectedModel (advertised wire ids)', () => {
   ): Record<string, unknown> {
     const bag = primeRuntime(runtime, { setConfigOption });
     bag.advertisedModelValues = advertised;
-    jest.spyOn(runtime as unknown as { resolveCursorModelForSession: () => string | undefined }, 'resolveCursorModelForSession')
+    jest.spyOn((runtime as unknown as { modelApplicator: { resolveCursorModelForSession: () => string | undefined } }).modelApplicator, 'resolveCursorModelForSession')
       .mockReturnValue(resolved);
     return bag;
   }
@@ -1402,7 +1402,7 @@ describe('CursorChatRuntime.applySelectedModel (advertised wire ids)', () => {
   it('sends the advertised wire id when the resolved family prefix matches', async () => {
     const runtime = makeRuntime();
     const persist = jest.spyOn(
-      runtime as unknown as { persistAdvertisedModelState: () => Promise<void> },
+      (runtime as unknown as { modelApplicator: { persistAdvertisedModelState: () => Promise<void> } }).modelApplicator,
       'persistAdvertisedModelState',
     ).mockResolvedValue();
     const setConfigOption = jest.fn().mockResolvedValue({ configOptions: [] });
@@ -1771,7 +1771,7 @@ describe('CursorChatRuntime.applySelectedModel (advertised wire ids)', () => {
       'gpt-5.4[reasoning=high]',
     ];
     jest.spyOn(
-      runtime as unknown as { resolveCursorModelForSession: () => string | undefined },
+      (runtime as unknown as { modelApplicator: { resolveCursorModelForSession: () => string | undefined } }).modelApplicator,
       'resolveCursorModelForSession',
     ).mockReturnValue('gpt-5.4-medium');
 
@@ -1800,7 +1800,7 @@ describe('CursorChatRuntime.captureAdvertisedModelValues', () => {
 
   it('captures wire ids from a session response config option', () => {
     const runtime = makeRuntime() as unknown as Record<string, unknown>;
-    (runtime.captureAdvertisedModelValues as (r: unknown) => void).call(runtime, {
+    (runtime.modelApplicator as { captureAdvertisedModelValues: (r: unknown) => void }).captureAdvertisedModelValues({
       sessionId: 'S1',
       configOptions: [{
         id: 'model',
@@ -1824,7 +1824,7 @@ describe('CursorChatRuntime.captureAdvertisedModelValues', () => {
 
   it('captures the opaque model config id instead of assuming model', () => {
     const runtime = makeRuntime() as unknown as Record<string, unknown>;
-    (runtime.captureAdvertisedModelValues as (r: unknown) => void).call(runtime, {
+    (runtime.modelApplicator as { captureAdvertisedModelValues: (r: unknown) => void }).captureAdvertisedModelValues({
       sessionId: 'S1',
       configOptions: [{
         id: 'selected_model',
@@ -1844,7 +1844,7 @@ describe('CursorChatRuntime.captureAdvertisedModelValues', () => {
 
   it('falls back to the legacy models state when no config option is advertised', () => {
     const runtime = makeRuntime() as unknown as Record<string, unknown>;
-    (runtime.captureAdvertisedModelValues as (r: unknown) => void).call(runtime, {
+    (runtime.modelApplicator as { captureAdvertisedModelValues: (r: unknown) => void }).captureAdvertisedModelValues({
       sessionId: 'S1',
       models: { availableModels: [{ id: 'auto', name: 'Auto' }], currentModelId: 'auto' },
     });
@@ -1915,7 +1915,7 @@ describe('CursorChatRuntime.captureAdvertisedModelValues', () => {
     const bag = runtime as unknown as Record<string, unknown>;
     const persistedCurrentValues: unknown[] = [];
     jest.spyOn(
-      runtime as unknown as { persistAdvertisedModelState: () => Promise<void> },
+      (runtime as unknown as { modelApplicator: { persistAdvertisedModelState: () => Promise<void> } }).modelApplicator,
       'persistAdvertisedModelState',
     ).mockImplementation(async () => {
       persistedCurrentValues.push(bag.currentSessionModelId);
@@ -1963,10 +1963,10 @@ describe('CursorChatRuntime.captureAdvertisedModelValues', () => {
   // selection could never match.
   it('keeps the session/new catalog when a real session/load response advertises none', () => {
     const runtime = makeRuntime() as unknown as Record<string, unknown>;
-    (runtime.captureAdvertisedModelValues as (r: unknown) => void).call(runtime, CURSOR_NEW_SESSION_RESULT);
+    (runtime.modelApplicator as { captureAdvertisedModelValues: (r: unknown) => void }).captureAdvertisedModelValues(CURSOR_NEW_SESSION_RESULT);
     expect(runtime.advertisedModelValues).toEqual(CURSOR_ADVERTISED_MODEL_VALUES);
 
-    (runtime.captureAdvertisedModelValues as (r: unknown) => void).call(runtime, CURSOR_LOAD_SESSION_RESULT);
+    (runtime.modelApplicator as { captureAdvertisedModelValues: (r: unknown) => void }).captureAdvertisedModelValues(CURSOR_LOAD_SESSION_RESULT);
     expect(runtime.advertisedModelValues).toEqual(CURSOR_ADVERTISED_MODEL_VALUES);
   });
 
@@ -1986,7 +1986,7 @@ describe('CursorChatRuntime.captureAdvertisedModelValues', () => {
     await (bag.ensureSession as (c: string) => Promise<string | null>).call(runtime, '/cwd');
     expect(bag.advertisedModelValues).toEqual(CURSOR_ADVERTISED_MODEL_VALUES);
 
-    jest.spyOn(runtime as unknown as { resolveCursorModelForSession: () => string | undefined }, 'resolveCursorModelForSession')
+    jest.spyOn((runtime as unknown as { modelApplicator: { resolveCursorModelForSession: () => string | undefined } }).modelApplicator, 'resolveCursorModelForSession')
       .mockReturnValue('claude-opus-4-5[thinking=true]');
     await (bag.applySelectedModel as (s: string, q?: unknown) => Promise<void>).call(
       runtime,
@@ -2011,7 +2011,7 @@ describe('CursorChatRuntime.captureAdvertisedModelValues', () => {
     await (bag.createSession as (c: string) => Promise<string | null>).call(runtime, '/cwd');
     expect(bag.advertisedModelValues).toEqual([]);
 
-    jest.spyOn(runtime as unknown as { resolveCursorModelForSession: () => string | undefined }, 'resolveCursorModelForSession')
+    jest.spyOn((runtime as unknown as { modelApplicator: { resolveCursorModelForSession: () => string | undefined } }).modelApplicator, 'resolveCursorModelForSession')
       .mockReturnValue('gpt-5.4-medium');
     await expect(
       (bag.applySelectedModel as (s: string, q?: unknown) => Promise<void>).call(

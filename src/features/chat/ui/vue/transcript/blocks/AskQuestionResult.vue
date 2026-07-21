@@ -6,18 +6,16 @@ import type { AskUserQuestionItem, ToolCallInfo } from '../../../../../../core/t
 import { formatAskUserQuestionDisplayAnswer } from '../askUserQuestionDisplayAnswer';
 
 /**
- * Reproduces the read-only ANSWERED branch of
- * `rendering/askUserQuestionRenderer.ts`'s `renderAskUserQuestionResult`
- * (`.specorator-ask-review` review rows). The pre-answer options-list state
- * (`renderAskUserQuestionFallback`) is a separate, larger DOM contract that
- * this task does not build — when questions/answers can't be resolved this
- * falls back to the shared plain-text `contentFallback` contract instead of
- * reproducing the options list, since stored tool calls are expected to
- * already be answered.
+ * Renders the read-only ANSWERED branch of an ask-user question as
+ * `.specorator-ask-review` review rows. The pre-answer options-list state is a
+ * separate, larger DOM contract that this component does not build — when
+ * questions/answers can't be resolved it falls back to the shared plain-text
+ * `contentFallback` contract instead of reproducing the options list, since
+ * stored tool calls are expected to already be answered.
  *
- * Note: the legacy `resolveAskUserAnswers` caches its parsed result back
- * onto `toolCall.resolvedAnswers` as a side effect. That mutation is dropped
- * here (props must not be mutated) in favor of a pure computed re-derivation.
+ * Answers are re-derived as a pure computed (props must not be mutated), so —
+ * unlike a cache-on-read helper — this never writes the parsed result back
+ * onto `toolCall.resolvedAnswers` as a side effect.
  */
 const props = defineProps<{ toolCall: ToolCallInfo }>();
 
