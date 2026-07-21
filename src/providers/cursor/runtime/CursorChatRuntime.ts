@@ -1,5 +1,3 @@
-import { Notice } from 'obsidian';
-
 import type { ProviderCapabilities, ProviderId } from '../../../core/providers/types';
 import { buildUsageInfo } from '../../../core/providers/usage';
 import type { ChatRuntime } from '../../../core/runtime/ChatRuntime';
@@ -16,13 +14,10 @@ import type {
 import { TOOL_TODO_WRITE } from '../../../core/tools/toolNames';
 import type { ChatMessage, Conversation, SlashCommand, StreamChunk } from '../../../core/types';
 import type { PluginContext } from '../../../core/types/PluginContext';
-import { asSettingsBag } from '../../../core/types/settings';
-import { t } from '../../../i18n/i18n';
 import { getVaultPath } from '../../../utils/path';
 import type { AcpJsonRpcTransport, AcpSubprocess } from '../../acp';
 import {
   AcpClientConnection,
-  type AcpLoadSessionResponse,
   type AcpNewSessionResponse,
   type AcpPlan,
   type AcpRequestPermissionRequest,
@@ -52,10 +47,9 @@ import { createCursorAcpToolStreamAdapter } from './cursorAcpToolNames';
 import { buildCursorAgentEnvironment } from './cursorAgentEnv';
 import { runWithCursorAgentSpawnLock } from './cursorAgentSpawnLock';
 import { cleanupStaleCursorMcpServer } from './cursorMcpCleanup';
+import { CursorModelApplicator } from './CursorModelApplicator';
 import { buildCursorModelCatalogCliKey } from './cursorModelCatalog';
-import { getCachedCursorModelIds } from './cursorModelCatalog';
 import { fromCursorModelValue } from './cursorModelId';
-import { resolveActiveCursorModel, resolveCursorSessionModelId } from './cursorModelResolution';
 import { cursorModelContextWindow } from './cursorModelWindowCatalog';
 import {
   formatCursorRuntimeError,
@@ -63,10 +57,6 @@ import {
   isCursorSessionLoadTransportFailure,
 } from './cursorRuntimeErrors';
 import { CursorSessionModelState } from './CursorSessionModelState';
-import {
-  loadCursorSessionModelState,
-  saveCursorSessionModelState,
-} from './cursorSessionModelStore';
 import {
   cursorSessionAdditionalDirectories,
   cursorSessionRootsEqual,
@@ -119,6 +109,7 @@ export class CursorChatRuntime implements ChatRuntime {
   /** Atomically reserves the next prompt slot across simultaneous query() starts. */
   private promptStartTail: Promise<void> = Promise.resolve();
   private readonly sessionModel = new CursorSessionModelState();
+  private readonly modelApplicator: CursorModelApplicator;
   private activeCliKey: string | null = null;
   // Aborts a pending blocking cursor/ask_question await so cancel()/cleanup can
   // answer the still-open RPC instead of leaving the agent stuck on it.
@@ -183,6 +174,13 @@ export class CursorChatRuntime implements ChatRuntime {
     private readonly host: RuntimeHost,
   ) {
     this.capture = new CursorAcpCaptureSink(plugin);
+    this.modelApplicator = new CursorModelApplicator({
+      sessionModel: this.sessionModel,
+      plugin,
+      capture: this.capture,
+      getConnection: () => this.connection,
+      getActiveCliKey: () => this.activeCliKey,
+    });
   }
 
   getCapabilities(): Readonly<ProviderCapabilities> {
@@ -406,7 +404,7 @@ export class CursorChatRuntime implements ChatRuntime {
       queue: new AcpStreamChunkQueue(),
       sessionId,
       usageContextWindow: cursorModelContextWindow(this.sessionModel.currentValue),
-      usageModel: this.resolveActiveModel(queryOptions),
+      usageModel: this.modelApplicator.resolveActiveModel(queryOptions),
       promptSettled: false,
     };
     this.activeTurn = activeTurn;
@@ -876,7 +874,7 @@ export class CursorChatRuntime implements ChatRuntime {
         this.loadedSessionId = loadedId;
         this.sessionId = loadedId;
         this.activeSessionRoots = roots;
-        this.captureAdvertisedModelValues(response);
+        this.modelApplicator.captureAdvertisedModelValues(response);
         this.capture.event('session_load', { sessionId: loadedId });
         return loadedId;
       } catch (error) {
@@ -893,7 +891,7 @@ export class CursorChatRuntime implements ChatRuntime {
             this.loadedSessionId = loadedId;
             this.sessionId = loadedId;
             this.activeSessionRoots = roots;
-            this.captureAdvertisedModelValues(retryResponse);
+            this.modelApplicator.captureAdvertisedModelValues(retryResponse);
             this.capture.event('session_load', { sessionId: loadedId, retriedAfterAuth: true });
             return loadedId;
           } catch (retryError) {
@@ -962,9 +960,9 @@ export class CursorChatRuntime implements ChatRuntime {
     this.sessionId = response.sessionId;
     this.currentModeId = null;
     this.sessionModel.reset();
-    this.captureAdvertisedModelValues(response, false);
+    this.modelApplicator.captureAdvertisedModelValues(response, false);
     this.sessionModel.forceReapply();
-    await this.persistAdvertisedModelState()
+    await this.modelApplicator.persistAdvertisedModelState()
       .catch((error) => this.plugin.logger.scope('cursor.acp').warn('persist fresh model state failed', error));
     this.capture.event('session_new', { sessionId: response.sessionId });
     await this.persistNewSessionId(response.sessionId);
@@ -1018,35 +1016,6 @@ export class CursorChatRuntime implements ChatRuntime {
     }
   }
 
-  private captureAdvertisedModelValues(
-    response: AcpNewSessionResponse | AcpLoadSessionResponse,
-    persist = true,
-    expectedRevision?: number,
-  ): boolean {
-    const result = expectedRevision === undefined
-      ? this.sessionModel.capture(response)
-      : this.sessionModel.captureAtRevision(response, expectedRevision);
-    if (!result) {
-      return true;
-    }
-    if (persist && result.shouldPersist) {
-      void this.persistAdvertisedModelState()
-        .catch((error) => this.plugin.logger.scope('cursor.acp').warn('persist advertised models failed', error));
-    }
-    return result.hasAuthoritativeCurrent;
-  }
-
-  private async persistAdvertisedModelState(): Promise<void> {
-    if (!this.activeCliKey || !this.sessionModel.values) {
-      return;
-    }
-    await saveCursorSessionModelState(
-      this.plugin.storage.getAdapter(),
-      this.activeCliKey,
-      this.sessionModel.snapshot(),
-    );
-  }
-
   private async prepareSessionForPromptTurn(
     sessionId: string,
     queryOptions?: ChatRuntimeQueryOptions,
@@ -1066,77 +1035,10 @@ export class CursorChatRuntime implements ChatRuntime {
     this.currentTurnIsPlan = mode.modeId === 'plan' && this.currentModeId === 'plan';
   }
 
-  private async applySelectedModel(
-    sessionId: string,
-    queryOptions?: ChatRuntimeQueryOptions,
-  ): Promise<void> {
-    if (!this.connection) {
-      return;
-    }
-    const resolved = this.resolveCursorModelForSession(queryOptions);
-    if (!resolved) {
-      return;
-    }
-    const advertised = this.sessionModel.values;
-    if ((!advertised || advertised.length === 0) && !this.sessionModel.isAuthoritative) {
-      const restoreRevision = this.sessionModel.revision;
-      if (this.activeCliKey) {
-        const persisted = await loadCursorSessionModelState(
-          this.plugin.storage.getAdapter(),
-          this.activeCliKey,
-        ).catch(() => null);
-        if (persisted) {
-          this.sessionModel.restoreAtRevision(persisted, restoreRevision);
-        }
-      }
-    }
-    const wireValue = this.sessionModel.match(
-      resolved,
-      this.getActiveCursorCatalogIds(),
-    );
-    if (!wireValue) {
-      const message = t('provider.cursor.models.applyFailed');
-      this.plugin.logger.scope('cursor.acp')
-        .warn('no advertised model value matches selection; failing turn', resolved);
-      new Notice(message, 8000);
-      throw new Error(message);
-    }
-    if (wireValue === this.sessionModel.currentValue) {
-      return;
-    }
-    try {
-      const configRevision = this.sessionModel.revision;
-      const response = await this.connection.setConfigOption({
-        configId: this.sessionModel.configId,
-        sessionId,
-        type: 'select',
-        value: wireValue,
-      });
-      const hasAuthoritativeCurrent = this.captureAdvertisedModelValues({
-        configOptions: response.configOptions,
-      }, true, configRevision);
-      if (!hasAuthoritativeCurrent && this.sessionModel.confirmApplied(wireValue, configRevision)) {
-        void this.persistAdvertisedModelState()
-          .catch((error) => this.plugin.logger.scope('cursor.acp').warn('persist selected model failed', error));
-      }
-      if (this.sessionModel.currentValue !== wireValue) {
-        throw new Error(t('provider.cursor.models.applyFailed'));
-      }
-      this.capture.event('model_apply', { value: wireValue, ok: true });
-    } catch (error) {
-      const message = error instanceof Error ? error.message : t('provider.cursor.models.applyFailed');
-      this.plugin.logger.scope('cursor.acp').warn('setConfigOption(model) failed', error);
-      this.capture.event('model_apply', { value: wireValue, ok: false });
-      new Notice(message, 8000);
-      throw error instanceof Error ? error : new Error(message);
-    }
-  }
-
-  private resolveCursorModelForSession(queryOptions?: ChatRuntimeQueryOptions): string | undefined {
-    return resolveCursorSessionModelId(
-      this.resolveActiveModel(queryOptions),
-      this.getActiveCursorCatalogIds(),
-    );
+  // Thin seam onto the model collaborator: retained because the runtime's
+  // white-box unit tests drive model application through `applySelectedModel`.
+  private applySelectedModel(sessionId: string, queryOptions?: ChatRuntimeQueryOptions): Promise<void> {
+    return this.modelApplicator.applySelectedModel(sessionId, queryOptions);
   }
 
   // Selected external folders become the ACP session's additionalDirectories so
@@ -1149,13 +1051,6 @@ export class CursorChatRuntime implements ChatRuntime {
     return normalizeCursorSessionRoots(
       turn.request.externalContextPaths ?? queryOptions?.externalContextPaths,
     );
-  }
-
-  // Model catalog for the ACTIVE endpoint (cli + env incl. CURSOR_BASE_URL) so
-  // selection/advertised matching never resolve against a prior endpoint's ids.
-  private getActiveCursorCatalogIds(): string[] {
-    const cli = this.plugin.getResolvedProviderCliPath('cursor') ?? undefined;
-    return getCachedCursorModelIds(cli, cli ? buildCursorAgentEnvironment(this.plugin, cli) : undefined);
   }
 
   // First terminal writer wins: the racing paths (resolved/rejected prompt,
@@ -1196,7 +1091,7 @@ export class CursorChatRuntime implements ChatRuntime {
     }
     if (notification.update.sessionUpdate === 'config_option_update') {
       if (notification.sessionId === this.sessionId) {
-        this.captureAdvertisedModelValues({
+        this.modelApplicator.captureAdvertisedModelValues({
           configOptions: notification.update.configOptions,
         });
       }
@@ -1365,10 +1260,6 @@ export class CursorChatRuntime implements ChatRuntime {
         contextWindowIsAuthoritative: fallbackContextWindow > 0,
       }),
     });
-  }
-
-  private resolveActiveModel(queryOptions?: ChatRuntimeQueryOptions): string | null {
-    return resolveActiveCursorModel(queryOptions, asSettingsBag(this.plugin.settings));
   }
 
   private formatRuntimeError(error: unknown): string {
