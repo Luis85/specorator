@@ -238,6 +238,8 @@ export interface AgentMentionProvider {
 export interface AppPluginManager {
   loadPlugins(): Promise<void>;
   getPlugins(): PluginInfo[];
+  /** Enabled plugins only — the set skill/agent discovery scans. */
+  getEnabledPlugins(): PluginInfo[];
   hasPlugins(): boolean;
   hasEnabledPlugins(): boolean;
   getEnabledCount(): number;

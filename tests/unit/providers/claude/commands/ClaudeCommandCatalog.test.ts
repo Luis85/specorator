@@ -357,6 +357,81 @@ Home`,
       expect(user?.id).toBe('user-skill-shared');
       expect(user?.sourceFilePath).toBe('/home/user/.claude/skills/shared/SKILL.md');
     });
+
+    it('folds in read-only plugin skills from enabled plugins', async () => {
+      const adapter = createMockAdapter({
+        '.claude/skills/deploy/SKILL.md': `---
+description: Vault deploy
+---
+Deploy`,
+      });
+      const pluginAdapter = createMockHomeAdapter(
+        { 'skills/lint/SKILL.md': `---
+description: Plugin lint
+---
+Lint` },
+        '/plugins/formatter',
+      );
+      const skills = new SkillStorage(adapter, undefined, () => pluginAdapter);
+      const pluginManager = {
+        getEnabledPlugins: () => [
+          { id: 'formatter@m', name: 'formatter', enabled: true, scope: 'user' as const, installPath: '/plugins/formatter' },
+        ],
+      };
+      const catalog = new ClaudeCommandCatalog(
+        new SlashCommandStorage(adapter), skills, undefined, undefined, pluginManager,
+      );
+
+      const entries = await catalog.listVaultEntries();
+      const pluginSkill = entries.find((e) => e.name === 'formatter:lint');
+      expect(pluginSkill).toBeDefined();
+      expect(pluginSkill!.kind).toBe('skill');
+      expect(pluginSkill!.scope).toBe('plugin');
+      expect(pluginSkill!.isEditable).toBe(false);
+      expect(pluginSkill!.isDeletable).toBe(false);
+      // Host-absolute path → downstream clone/delete gate keeps it view/run only.
+      expect(pluginSkill!.sourceFilePath).toBe('/plugins/formatter/skills/lint/SKILL.md');
+
+      // Vault skill unaffected.
+      expect(entries.find((e) => e.name === 'deploy')?.scope).toBe('vault');
+    });
+
+    it('only folds plugins the manager reports as enabled', async () => {
+      // The manager owns the enabled gate; the catalog just scans whatever
+      // getEnabledPlugins() returns. A disabled plugin contributes nothing.
+      const adapter = createMockAdapter({});
+      const pluginAdapter = createMockHomeAdapter(
+        { 'skills/lint/SKILL.md': `---
+description: Plugin lint
+---
+Lint` },
+        '/plugins/formatter',
+      );
+      const skills = new SkillStorage(adapter, undefined, () => pluginAdapter);
+      const pluginManager = { getEnabledPlugins: () => [] };
+      const catalog = new ClaudeCommandCatalog(
+        new SlashCommandStorage(adapter), skills, undefined, undefined, pluginManager,
+      );
+
+      const entries = await catalog.listVaultEntries();
+      expect(entries.find((e) => e.name === 'formatter:lint')).toBeUndefined();
+    });
+
+    it('omits plugin skills when no plugin manager is wired', async () => {
+      const adapter = createMockAdapter({
+        '.claude/skills/deploy/SKILL.md': `---
+description: Deploy
+---
+Deploy`,
+      });
+      const catalog = new ClaudeCommandCatalog(
+        new SlashCommandStorage(adapter),
+        new SkillStorage(adapter),
+      );
+
+      const entries = await catalog.listVaultEntries();
+      expect(entries.every((e) => e.scope !== 'plugin')).toBe(true);
+    });
   });
 
   describe('saveVaultEntry', () => {

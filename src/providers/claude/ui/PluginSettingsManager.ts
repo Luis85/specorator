@@ -11,6 +11,12 @@ export interface PluginSettingsManagerDeps {
   pluginManager: AppPluginManager;
   agentManager: Pick<AppAgentManager, 'loadAgents'>;
   restartTabs: () => Promise<void>;
+  /**
+   * Fired after the enabled-plugin set changes (toggle or refresh). Lets the
+   * host invalidate the skill catalog so a plugin's skills appear/disappear in
+   * the Library without waiting out the aggregator TTL.
+   */
+  onPluginsChanged?: () => void;
 }
 
 export class PluginSettingsManager {
@@ -18,12 +24,14 @@ export class PluginSettingsManager {
   private pluginManager: AppPluginManager;
   private agentManager: Pick<AppAgentManager, 'loadAgents'>;
   private restartTabs: () => Promise<void>;
+  private onPluginsChanged?: () => void;
 
   constructor(containerEl: HTMLElement, deps: PluginSettingsManagerDeps) {
     this.containerEl = containerEl;
     this.pluginManager = deps.pluginManager;
     this.agentManager = deps.agentManager;
     this.restartTabs = deps.restartTabs;
+    this.onPluginsChanged = deps.onPluginsChanged;
     this.render();
   }
 
@@ -109,21 +117,9 @@ export class PluginSettingsManager {
   private async togglePlugin(pluginId: string) {
     const plugin = this.pluginManager.getPlugins().find(p => p.id === pluginId);
     const wasEnabled = plugin?.enabled ?? false;
-
     try {
       await this.pluginManager.togglePlugin(pluginId);
-      await this.agentManager.loadAgents();
-
-      try {
-        await this.restartTabs();
-      } catch {
-        new Notice(t('provider.claude.plugin.toggleTabRestartFailed'));
-      }
-
-      new Notice(t(
-        wasEnabled ? 'provider.claude.plugin.disabled' : 'provider.claude.plugin.enabled',
-        { id: pluginId },
-      ));
+      await this.applyPluginToggle(pluginId, wasEnabled);
     } catch (err) {
       await this.pluginManager.togglePlugin(pluginId);
       const message = err instanceof Error ? err.message : 'Unknown error';
@@ -133,10 +129,30 @@ export class PluginSettingsManager {
     }
   }
 
+  // Post-toggle side effects: refresh agents + the skill catalog, restart tabs,
+  // and confirm.
+  private async applyPluginToggle(pluginId: string, wasEnabled: boolean): Promise<void> {
+    await this.agentManager.loadAgents();
+    this.onPluginsChanged?.();
+
+    try {
+      await this.restartTabs();
+    } catch {
+      new Notice(t('provider.claude.plugin.toggleTabRestartFailed'));
+    }
+
+    new Notice(t(
+      wasEnabled ? 'provider.claude.plugin.disabled' : 'provider.claude.plugin.enabled',
+      { id: pluginId },
+    ));
+  }
+
   private async refreshPlugins() {
     try {
       await this.pluginManager.loadPlugins();
       await this.agentManager.loadAgents();
+      // Re-scan may have surfaced newly-installed plugins (and their skills).
+      this.onPluginsChanged?.();
 
       new Notice(t('provider.claude.plugin.listRefreshed'));
     } catch (err) {

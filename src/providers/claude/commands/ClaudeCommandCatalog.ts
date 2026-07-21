@@ -4,7 +4,11 @@ import type {
   ProviderCommandCatalog,
   ProviderCommandDropdownConfig,
 } from '../../../core/providers/commands/ProviderCommandCatalog';
-import type { ProviderCommandEntry } from '../../../core/providers/commands/ProviderCommandEntry';
+import type {
+  ProviderCommandEntry,
+  ProviderCommandScope,
+} from '../../../core/providers/commands/ProviderCommandEntry';
+import type { AppPluginManager } from '../../../core/providers/types';
 import type { SlashCommand } from '../../../core/types';
 import { isSkill } from '../../../utils/slashCommand';
 import type { SkillStorage } from '../storage/SkillStorage';
@@ -12,12 +16,12 @@ import type { SlashCommandStorage } from '../storage/SlashCommandStorage';
 
 function slashCommandToEntry(
   cmd: SlashCommand,
-  options: { sourceFilePath?: string; readOnly?: boolean } = {},
+  options: { sourceFilePath?: string; readOnly?: boolean; scope?: ProviderCommandScope } = {},
 ): ProviderCommandEntry {
   const skill = isSkill(cmd);
-  // Home-scope (`~/.claude/skills/`) skills are view/run only: the vault adapter
-  // can't write outside the vault, so surface them as user-scope and gate the
-  // Library's edit/delete affordances off.
+  // Home-scope (`~/.claude/skills/`) and plugin (`<installPath>/skills/`) skills
+  // are view/run only: the vault adapter can't write outside the vault, so
+  // surface them read-only and gate the Library's edit/delete affordances off.
   const readOnly = options.readOnly ?? false;
   const editable = !readOnly && cmd.source !== 'sdk';
   return {
@@ -35,7 +39,7 @@ function slashCommandToEntry(
     context: cmd.context,
     agent: cmd.agent,
     hooks: cmd.hooks,
-    scope: readOnly ? 'user' : cmd.source === 'sdk' ? 'runtime' : 'vault',
+    scope: options.scope ?? (readOnly ? 'user' : cmd.source === 'sdk' ? 'runtime' : 'vault'),
     source: cmd.source ?? 'user',
     isEditable: editable,
     isDeletable: editable,
@@ -81,6 +85,9 @@ export class ClaudeCommandCatalog implements ProviderCommandCatalog {
     private skillStorage: SkillStorage,
     private probe?: CommandProbe,
     private eventBus?: EventBus<SpecoratorEventMap>,
+    // Optional so cold-path/test construction stays lightweight; when wired,
+    // enabled plugins' skills are folded into `listVaultEntries()`.
+    private pluginManager?: Pick<AppPluginManager, 'getEnabledPlugins'>,
   ) {}
 
   setRuntimeCommands(commands: SlashCommand[]): void {
@@ -124,8 +131,9 @@ export class ClaudeCommandCatalog implements ProviderCommandCatalog {
 
   /**
    * Vault commands + skills, plus read-only user-scope (`~/.claude/skills/`)
-   * skills. The name predates home discovery — it feeds the Library Skills tab,
-   * the cold-start dropdown fallback, AND the settings slash-command manager.
+   * skills and read-only plugin skills (`<installPath>/skills/`). The name
+   * predates home/plugin discovery — it feeds the Library Skills tab, the
+   * cold-start dropdown fallback, AND the settings slash-command manager.
    *
    * Same-named personal + project skills are BOTH listed, not deduped: dropping
    * either breaks a real consumer — dropping the project skill removes the only
@@ -138,17 +146,28 @@ export class ClaudeCommandCatalog implements ProviderCommandCatalog {
    * carry a host-absolute `sourceFilePath`, so downstream `isCloneableSkillPath`
    * keeps them view/run only; the manager additionally filters user scope out
    * (it only manages editable vault entries).
+   *
+   * Plugin skills come from enabled Claude Code plugins the user manages via the
+   * CLI/settings. They are surfaced `scope: 'plugin'` (read-only, host-absolute
+   * path) with a `plugin:skill` namespaced name — the exact form the runtime
+   * resolves — so the Library and cold dropdown can show and dispatch them even
+   * before a warm session's SDK `slash_commands` list would.
    */
   async listVaultEntries(): Promise<ProviderCommandEntry[]> {
     const commands = await this.commandStorage.loadAll();
     const skills = await this.skillStorage.loadAll();
     const userSkills = await this.skillStorage.loadUserAll();
+    const pluginSkills = this.pluginManager
+      ? await this.skillStorage.loadPluginAll(this.pluginManager.getEnabledPlugins())
+      : [];
+    const readOnlySkill = (scope: ProviderCommandScope) =>
+      (entry: { skill: SlashCommand; filePath: string }) =>
+        slashCommandToEntry(entry.skill, { sourceFilePath: entry.filePath, readOnly: true, scope });
     return [
       ...commands.map((cmd) => slashCommandToEntry(cmd)),
       ...skills.map((entry) => slashCommandToEntry(entry.skill, { sourceFilePath: entry.filePath })),
-      ...userSkills.map((entry) =>
-        slashCommandToEntry(entry.skill, { sourceFilePath: entry.filePath, readOnly: true }),
-      ),
+      ...userSkills.map(readOnlySkill('user')),
+      ...pluginSkills.map(readOnlySkill('plugin')),
     ];
   }
 

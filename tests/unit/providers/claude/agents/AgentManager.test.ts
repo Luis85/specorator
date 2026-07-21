@@ -14,16 +14,19 @@ import type { PluginManager } from '@/providers/claude/plugins/PluginManager';
 
 const mockFs = jest.mocked(fs);
 
-// Create a mock PluginManager
+// Create a mock PluginManager. `loadPluginAgents` reads getEnabledPlugins(), so
+// the mock filters disabled plugins out of that list, mirroring the real one.
 function createMockPluginManager(plugins: Array<{ name: string; enabled: boolean; installPath: string }> = []): PluginManager {
+  const toInfo = (p: { name: string; enabled: boolean; installPath: string }) => ({
+    id: `${p.name}@test`,
+    name: p.name,
+    enabled: p.enabled,
+    scope: 'user' as const,
+    installPath: p.installPath,
+  });
   return {
-    getPlugins: jest.fn().mockReturnValue(plugins.map(p => ({
-      id: `${p.name}@test`,
-      name: p.name,
-      enabled: p.enabled,
-      scope: 'user' as const,
-      installPath: p.installPath,
-    }))),
+    getPlugins: jest.fn().mockReturnValue(plugins.map(toInfo)),
+    getEnabledPlugins: jest.fn().mockReturnValue(plugins.filter(p => p.enabled).map(toInfo)),
   } as unknown as PluginManager;
 }
 

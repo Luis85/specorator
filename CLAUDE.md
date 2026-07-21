@@ -133,6 +133,7 @@ Current coverage, by user-visible path:
 | `.claude/commands/**/*.md` | Claude slash commands |
 | `.claude/skills/*/SKILL.md` | Claude vault skills (editable) |
 | `~/.claude/skills/*/SKILL.md` | Claude user (global) skills — discovered read-only (view/run only; host-absolute path, outside the vault). Warm chat dropdown remains SDK-owned per `loadUserSettings` |
+| `<plugin installPath>/skills/*/SKILL.md` | Claude Code **plugin** skills from enabled plugins — discovered read-only (view/run only; host-absolute path). Namespaced `/<plugin>:<skill>` for invocation, matching the SDK's `slash_commands`. Surfaced in the Library + cold dropdown (the warm dropdown is already SDK-owned) |
 | `.claude/agents/*.md` | Claude vault agents |
 | `.specorator/sessions/*.meta.json` | Provider-neutral session metadata |
 | `.specorator/runs/<runId>/heartbeat.json` | Per-run sidecar heartbeat (`{ at, status, pauseReason? }`) — moved off the work-order note to avoid racing the agent's `Edit` tool; GC'd at terminal |

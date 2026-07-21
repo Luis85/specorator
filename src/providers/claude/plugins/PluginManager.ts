@@ -148,28 +148,30 @@ export class PluginManager {
       userGlobal: globalSettings?.enabledPlugins ?? {},
     };
 
-    const plugins: PluginInfo[] = [];
     const normalizedVaultPath = normalizePathForComparison(this.vaultPath);
-
-    if (installedPlugins?.plugins) {
-      for (const [pluginId, entries] of Object.entries(installedPlugins.plugins)) {
-        const plugin = buildPluginInfo(pluginId, entries, normalizedVaultPath, enabledLookup);
-        if (plugin) {
-          plugins.push(plugin);
-        }
-      }
-    }
-
-    this.plugins = plugins.sort(comparePluginsByScopeThenId);
+    this.plugins = Object.entries(installedPlugins?.plugins ?? {})
+      .map(([id, entries]) => buildPluginInfo(id, entries, normalizedVaultPath, enabledLookup))
+      .filter((p): p is PluginInfo => p !== null)
+      .sort(comparePluginsByScopeThenId);
   }
 
   private async loadProjectSettings(): Promise<SettingsFile | null> {
-    const projectSettingsPath = path.join(this.vaultPath, '.claude', 'settings.json');
-    return readJsonFile(projectSettingsPath);
+    return readJsonFile(path.join(this.vaultPath, '.claude', 'settings.json'));
   }
 
   getPlugins(): PluginInfo[] {
     return [...this.plugins];
+  }
+
+  /**
+   * Enabled plugins only — what skill/agent discovery scans. Enablement reflects
+   * what's on disk (`enabledPlugins`, project over user); like the user-scope
+   * skill path, discovery mirrors disk and the runtime resolves `/<plugin>:<skill>`
+   * (a plugin the runtime happens not to load in a rare withheld-source config
+   * simply no-ops if invoked).
+   */
+  getEnabledPlugins(): PluginInfo[] {
+    return this.plugins.filter((p) => p.enabled);
   }
 
   hasPlugins(): boolean {
@@ -203,11 +205,8 @@ export class PluginManager {
     if (!plugin) {
       return;
     }
-
-    const newEnabled = !plugin.enabled;
-    plugin.enabled = newEnabled;
-
-    await this.ccSettingsStorage.setPluginEnabled(pluginId, newEnabled);
+    plugin.enabled = !plugin.enabled;
+    await this.ccSettingsStorage.setPluginEnabled(pluginId, plugin.enabled);
   }
 
   async enablePlugin(pluginId: string): Promise<void> {
@@ -215,7 +214,6 @@ export class PluginManager {
     if (!plugin || plugin.enabled) {
       return;
     }
-
     plugin.enabled = true;
     await this.ccSettingsStorage.setPluginEnabled(pluginId, true);
   }
@@ -225,7 +223,6 @@ export class PluginManager {
     if (!plugin || !plugin.enabled) {
       return;
     }
-
     plugin.enabled = false;
     await this.ccSettingsStorage.setPluginEnabled(pluginId, false);
   }

@@ -53,6 +53,31 @@ describe('skillIndexPersistence', () => {
     expect(JSON.stringify(parsed)).not.toContain('/Users/alice');
   });
 
+  it('redacts host-absolute sourceFilePath for plugin-scope skills', () => {
+    const hostPath = '/Users/alice/.claude/plugins/formatter/skills/lint/SKILL.md';
+    const buckets = new Map<ProviderId, ProviderCommandEntry[]>([
+      ['claude', [
+        entry({ id: 'skill-vault', scope: 'vault', sourceFilePath: '.claude/skills/vault/SKILL.md' }),
+        entry({ id: 'plugin-skill-formatter:lint', scope: 'plugin', name: 'formatter:lint', sourceFilePath: hostPath }),
+      ]],
+    ]);
+    const json = serializePersistedSkillIndex(buckets, 1);
+    const parsed = JSON.parse(json);
+    const [vault, plugin] = parsed.buckets.claude;
+    expect(vault.sourceFilePath).toBe('.claude/skills/vault/SKILL.md');
+    // The plugin install path must never land in the vault-synced index.
+    expect(plugin.sourceFilePath).toBeUndefined();
+    expect(json).not.toContain(hostPath);
+    expect(json).not.toContain('/Users/alice');
+  });
+
+  it('discards a v2 index on upgrade so the refetch includes plugin skills', () => {
+    // A pre-plugin-skill v2 cache holds vault + user skills but no plugin ones.
+    // It must be rejected (→ cold refetch) rather than served stale.
+    const v2 = JSON.stringify({ schemaVersion: 2, writtenAt: 0, buckets: { claude: [entry()] } });
+    expect(parsePersistedSkillIndex(v2)).toBeNull();
+  });
+
   it('keeps a Codex user skill host path out of the index (id + sourceFilePath)', () => {
     // Regression: the read-only Codex user-skill id must be path-free. When it
     // embedded encodeURIComponent(skill.path), the host home path leaked into

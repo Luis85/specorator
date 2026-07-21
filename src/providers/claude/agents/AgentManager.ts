@@ -98,9 +98,8 @@ export class AgentManager {
   }
 
   private loadPluginAgents(): void {
-    for (const plugin of this.pluginManager.getPlugins()) {
-      if (!plugin.enabled) continue;
-
+    // Enabled plugins only — same set skill discovery scans.
+    for (const plugin of this.pluginManager.getEnabledPlugins()) {
       const agentsDir = path.join(plugin.installPath, PLUGIN_AGENTS_DIR);
       if (!fs.existsSync(agentsDir)) continue;
 

@@ -63,8 +63,8 @@
       "reason": "Grandfathered hotspot. Track the split in docs/tech-debt/2026-06-07-oversized-modules-and-test-files.md; shrink only."
     },
     "src/core/providers/types.ts": {
-      "loc": 639,
-      "reason": "Grandfathered hotspot. Track the split in docs/tech-debt/2026-06-07-oversized-modules-and-test-files.md; shrink only."
+      "loc": 641,
+      "reason": "Grandfathered hotspot. Track the split in docs/tech-debt/2026-06-07-oversized-modules-and-test-files.md; shrink only. +2 for the AppPluginManager.getEnabledPlugins() method + doc — the set plugin skill/agent discovery scans."
     },
     "src/features/chat/controllers/StreamController.ts": {
       "loc": 639,
