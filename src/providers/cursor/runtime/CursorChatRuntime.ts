@@ -32,6 +32,7 @@ import {
   buildActiveTurnEffect,
   mapApprovalDecision,
   normalizeApprovalInput,
+  relayAcpTurnStream,
   selectPermissionOption,
 } from '../../acp';
 import { CURSOR_PROVIDER_CAPABILITIES } from '../capabilities';
@@ -50,6 +51,7 @@ import { CursorModelApplicator } from './CursorModelApplicator';
 import { buildCursorModelCatalogCliKey } from './cursorModelCatalog';
 import { fromCursorModelValue } from './cursorModelId';
 import { cursorModelContextWindow } from './cursorModelWindowCatalog';
+import { CursorPromptOwnership } from './CursorPromptOwnership';
 import { formatCursorRuntimeError } from './cursorRuntimeErrors';
 import { CursorSessionCoordinator } from './CursorSessionCoordinator';
 import { CursorSessionModelState } from './CursorSessionModelState';
@@ -92,25 +94,14 @@ export class CursorChatRuntime implements ChatRuntime {
   readonly providerId: ProviderId = 'cursor';
 
   private activeTurn: ActiveTurn | null = null;
-  // The prior turn's prompt-settle chain (see ActiveTurn.promptSettled). query()
-  // awaits it — bounded by the cancel-escalation window — so turns serialize and a
-  // cancelled turn's late blocking requests can't leak into the next turn.
-  private pendingPromptSettled: Promise<void> | null = null;
-  /** Atomically reserves the next prompt slot across simultaneous query() starts. */
-  private promptStartTail: Promise<void> = Promise.resolve();
   private readonly sessionModel = new CursorSessionModelState();
   private readonly modelApplicator: CursorModelApplicator;
   private readonly sessionCoordinator: CursorSessionCoordinator;
+  private readonly promptOwnership: CursorPromptOwnership;
   private activeCliKey: string | null = null;
   // Aborts a pending blocking cursor/ask_question await so cancel()/cleanup can
   // answer the still-open RPC instead of leaving the agent stuck on it.
   private askQuestionAbortController: AbortController | null = null;
-  // Set by cancel() for the turn currently claiming/waiting on prompt ownership.
-  // Consumed once when ownership is granted so a later queued query cannot clear
-  // an earlier turn's Stop that arrived during awaitPriorTurnSettled.
-  private ownershipCancelRequested = false;
-  /** Count of query() callers blocked in awaitPriorTurnSettled. */
-  private serializeWaiters = 0;
   private autoApprovePermissions = false;
   // Diagnostics-only, default-off ACP capture sink (wire frames/stderr/lifecycle
   // events; see docs/superpowers/specs/2026-07-11-cursor-acp-capture-design.md).
@@ -172,6 +163,11 @@ export class CursorChatRuntime implements ChatRuntime {
       getBoundConversationId: () => this.boundConversationId,
       formatRuntimeError: (error) => this.formatRuntimeError(error),
     });
+    this.promptOwnership = new CursorPromptOwnership({
+      requestCancel: () => this.cancel(),
+      recycleProcess: () => this.recycleProcess(),
+      serializeCeilingMs: CURSOR_TURN_SERIALIZE_CEILING_MS,
+    });
   }
 
   // Session identity lives on the coordinator; the runtime proxies each field so
@@ -189,6 +185,11 @@ export class CursorChatRuntime implements ChatRuntime {
   private set currentModeId(value: string | null) { this.sessionCoordinator.currentModeId = value; }
   private get lastStartupErrorMessage(): string | null { return this.sessionCoordinator.lastStartupErrorMessage; }
   private set lastStartupErrorMessage(value: string | null) { this.sessionCoordinator.lastStartupErrorMessage = value; }
+
+  // Prompt-ownership state lives on the collaborator; the runtime proxies the one
+  // field the unit suite seeds directly (a prior turn's settle chain).
+  private get pendingPromptSettled(): Promise<void> | null { return this.promptOwnership.pendingPromptSettled; }
+  private set pendingPromptSettled(value: Promise<void> | null) { this.promptOwnership.pendingPromptSettled = value; }
 
   getCapabilities(): Readonly<ProviderCapabilities> {
     return CURSOR_PROVIDER_CAPABILITIES;
@@ -286,12 +287,6 @@ export class CursorChatRuntime implements ChatRuntime {
     return controller.signal;
   }
 
-  private consumeOwnershipCancelRequest(): boolean {
-    const requested = this.ownershipCancelRequested;
-    this.ownershipCancelRequested = false;
-    return requested;
-  }
-
   async *query(
     turn: PreparedChatTurn,
     conversationHistory?: ChatMessage[],
@@ -308,7 +303,7 @@ export class CursorChatRuntime implements ChatRuntime {
     // share one session id, so A's late sessionId-less blocking request could see B's
     // rotated signal and open A's plan into B. Waiting for A to settle BEFORE rotating
     // the controller keeps A's aborted signal current so A's late requests cancel.
-    const releasePromptOwnership = await this.claimPromptOwnership();
+    const releasePromptOwnership = await this.promptOwnership.claim();
     if (!releasePromptOwnership) {
       yield { type: 'error', content: CURSOR_TURN_BUSY_MESSAGE };
       yield { type: 'done' };
@@ -320,7 +315,7 @@ export class CursorChatRuntime implements ChatRuntime {
       // Reset AFTER the wait: a cancelled prior turn's finalize runs during it and would else leave stale planCompleted.
       this.turnMetadata = {};
 
-      const cancelDuringClaimWait = this.consumeOwnershipCancelRequest();
+      const cancelDuringClaimWait = this.promptOwnership.consumeCancelRequest();
       const turnSignal = this.beginTurnAbortScope(cancelDuringClaimWait);
 
       yield { type: 'user_message_start', content: turn.persistedContent };
@@ -469,85 +464,15 @@ export class CursorChatRuntime implements ChatRuntime {
     const promptPromise = this.dispatchPromptTurn(
       activeTurn, turn, history, sessionId, queryOptions, releasePromptOwnership,
     );
-    try {
-      while (true) {
-        const chunk = await activeTurn.queue.next();
-        if (!chunk) {
-          break;
-        }
-        yield chunk;
-      }
-      await promptPromise;
-    } finally {
+    yield* relayAcpTurnStream(activeTurn.queue, promptPromise, () => {
       if (this.activeTurn === activeTurn) {
         this.activeTurn = null;
       }
-    }
-  }
-
-  private async claimPromptOwnership(): Promise<(() => void) | null> {
-    const priorClaim = this.promptStartTail;
-    let releaseClaim!: () => void;
-    const claimSlot = new Promise<void>((resolve) => {
-      releaseClaim = resolve;
     });
-    this.promptStartTail = priorClaim.then(() => claimSlot);
-    await priorClaim;
-
-    try {
-      if (!(await this.awaitPriorTurnSettled())) {
-        this.consumeOwnershipCancelRequest();
-        return null;
-      }
-      let releaseReservation!: () => void;
-      const reservation = new Promise<void>((resolve) => {
-        releaseReservation = resolve;
-      });
-      this.pendingPromptSettled = reservation;
-      let released = false;
-      return () => {
-        if (released) return;
-        released = true;
-        releaseReservation();
-        if (this.pendingPromptSettled === reservation) {
-          this.pendingPromptSettled = null;
-        }
-      };
-    } finally {
-      releaseClaim();
-    }
-  }
-
-  // Bounded serialize wait for a prior turn's prompt (see the call site in query()
-  // for the attribution gap this closes). Returns false when the prior prompt is
-  // still live after cancel/recycle — callers must not issue a second session/prompt.
-  private async awaitPriorTurnSettled(): Promise<boolean> {
-    if (!this.pendingPromptSettled) {
-      return true;
-    }
-    this.serializeWaiters += 1;
-    try {
-      const settled = await withTimeout(
-        this.pendingPromptSettled,
-        CURSOR_TURN_SERIALIZE_CEILING_MS,
-        new Error('cursor turn serialize ceiling'),
-      ).then(() => true).catch(() => false);
-      if (settled) {
-        return true;
-      }
-
-      this.cancel();
-      await this.recycleProcess();
-      return false;
-    } finally {
-      this.serializeWaiters -= 1;
-    }
   }
 
   cancel(): void {
-    if (this.serializeWaiters > 0) {
-      this.ownershipCancelRequested = true;
-    }
+    this.promptOwnership.requestCancelIfWaiting();
     const turn = this.activeTurn;
     if (this.connection && this.sessionId) {
       this.connection.cancel({ sessionId: this.sessionId });

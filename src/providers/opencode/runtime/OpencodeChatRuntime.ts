@@ -55,6 +55,7 @@ import {
   extractAcpSessionModeState,
   extractAcpSessionThoughtLevelState,
   readWorkspaceTextFile,
+  relayAcpTurnStream,
   resolveWorkspaceScopedPath,
 } from '../../acp';
 import { OPENCODE_PROVIDER_CAPABILITIES } from '../capabilities';
@@ -410,20 +411,11 @@ export class OpencodeChatRuntime implements ChatRuntime {
       }
     });
 
-    try {
-      while (true) {
-        const chunk = await activeTurn.queue.next();
-        if (!chunk) {
-          break;
-        }
-        yield chunk;
-      }
-      await promptPromise;
-    } finally {
+    yield* relayAcpTurnStream(activeTurn.queue, promptPromise, () => {
       if (this.activeTurn === activeTurn) {
         this.activeTurn = null;
       }
-    }
+    });
   }
 
   cancel(): void {
