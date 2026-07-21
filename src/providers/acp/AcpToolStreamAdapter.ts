@@ -58,12 +58,17 @@ export class AcpToolStreamAdapter {
   // first rendered under a prose title; comparing against this lets the adapter
   // re-emit the corrected name even when the update carries no rawInput.
   private readonly emittedNames = new Map<string, string>();
+  // Last input actually emitted per tool id. A later update can seed a path from
+  // `locations` (unchanged name, no rawInput); comparing against this re-emits
+  // the tool_use so the newly surfaced file reaches the consumer.
+  private readonly emittedInputs = new Map<string, Record<string, unknown>>();
 
   constructor(private readonly adapter: AcpToolStreamPresentationAdapter) {}
 
   reset(): void {
     this.toolStates.clear();
     this.emittedNames.clear();
+    this.emittedInputs.clear();
   }
 
   normalizeToolCall(toolCall: AcpToolCall, chunks: StreamChunk[]): StreamChunk[] {
@@ -76,7 +81,7 @@ export class AcpToolStreamAdapter {
     rememberResultPayload(state, toolCall.content, toolCall.rawOutput);
     this.toolStates.set(toolCall.toolCallId, state);
     const mapped = chunks.map((chunk) => this.normalizeChunk(chunk, state));
-    this.rememberEmittedName(toolCall.toolCallId, mapped);
+    this.rememberEmitted(toolCall.toolCallId, mapped);
     return mapped;
   }
 
@@ -91,15 +96,8 @@ export class AcpToolStreamAdapter {
     this.toolStates.set(toolCallUpdate.toolCallId, state);
 
     const normalizedName = this.adapter.normalizeToolName(state.rawName);
-    const previousName = this.emittedNames.get(toolCallUpdate.toolCallId);
-    // Re-emit the tool_use when a later update's normalized name DIFFERS from the
-    // one already shown for this id, so the corrected kind reaches the consumer
-    // even without accompanying rawInput. Otherwise the rendered name and the
-    // isWriteEditTool()/delete bookkeeping stay pinned to the prose title.
-    const nameChanged = previousName !== undefined && previousName !== normalizedName;
-
     const result: StreamChunk[] = [];
-    if (toolCallUpdate.rawInput !== undefined || nameChanged) {
+    if (this.shouldReemitToolUse(toolCallUpdate, state, normalizedName)) {
       result.push({
         id: toolCallUpdate.toolCallId,
         input: state.input,
@@ -112,15 +110,37 @@ export class AcpToolStreamAdapter {
       result.push(this.normalizeChunk(chunk, state));
     }
 
-    this.rememberEmittedName(toolCallUpdate.toolCallId, result);
+    this.rememberEmitted(toolCallUpdate.toolCallId, result);
     return result;
   }
 
-  private rememberEmittedName(toolCallId: string, chunks: StreamChunk[]): void {
+  // A later update re-emits its tool_use when the rendered name OR input changed
+  // since the last emission — otherwise the consumer keeps the stale tool row.
+  // `rawInput` is always a re-emit; a corrected kind changes the name; a
+  // `locations`-seeded path changes the input without either of those.
+  private shouldReemitToolUse(
+    toolCallUpdate: AcpToolCallUpdate,
+    state: AcpToolStreamState,
+    normalizedName: string,
+  ): boolean {
+    if (toolCallUpdate.rawInput !== undefined) {
+      return true;
+    }
+    const id = toolCallUpdate.toolCallId;
+    const previousName = this.emittedNames.get(id);
+    if (previousName !== undefined && previousName !== normalizedName) {
+      return true;
+    }
+    const previousInput = this.emittedInputs.get(id);
+    return previousInput !== undefined && !shallowEqualInput(previousInput, state.input);
+  }
+
+  private rememberEmitted(toolCallId: string, chunks: StreamChunk[]): void {
     for (let i = chunks.length - 1; i >= 0; i--) {
       const chunk = chunks[i];
       if (chunk.type === 'tool_use') {
         this.emittedNames.set(toolCallId, chunk.name);
+        this.emittedInputs.set(toolCallId, chunk.input);
         return;
       }
     }
@@ -137,16 +157,7 @@ export class AcpToolStreamAdapter {
   ): AcpToolStreamState {
     const nextRawName = this.adapter.resolveRawToolName(current?.rawName, update);
     const nextLocations = update.locations ?? current?.locations;
-
-    let state: AcpToolStreamState;
-    if (update.rawInput !== undefined) {
-      const rawInput = { ...current?.rawInput, ...normalizeRawToolInput(update.rawInput) };
-      state = this.buildToolState(nextRawName, rawInput, current, update.title);
-    } else if (nextRawName !== current?.rawName) {
-      state = this.buildToolState(nextRawName, current?.rawInput ?? {}, current, update.title);
-    } else {
-      state = current ?? this.buildToolState(nextRawName, {}, undefined, update.title);
-    }
+    const state = this.selectBaseState(current, update, nextRawName);
 
     // Fall back to the canonical path field from `locations` when the provider's
     // own input mapping produced none, so Read/Write/Edit/LS show the file the
@@ -159,6 +170,23 @@ export class AcpToolStreamAdapter {
       nextLocations,
     );
     return state;
+  }
+
+  // Pick the base state before location seeding: re-normalize from accumulated
+  // raw input, rebuild on a name change, or reuse the prior state unchanged.
+  private selectBaseState(
+    current: AcpToolStreamState | undefined,
+    update: { rawInput?: unknown; title?: string | null },
+    nextRawName: string,
+  ): AcpToolStreamState {
+    if (update.rawInput !== undefined) {
+      const rawInput = { ...current?.rawInput, ...normalizeRawToolInput(update.rawInput) };
+      return this.buildToolState(nextRawName, rawInput, current, update.title);
+    }
+    if (nextRawName !== current?.rawName) {
+      return this.buildToolState(nextRawName, current?.rawInput ?? {}, current, update.title);
+    }
+    return current ?? this.buildToolState(nextRawName, {}, undefined, update.title);
   }
 
   private buildToolState(
@@ -201,6 +229,19 @@ export class AcpToolStreamAdapter {
         return chunk;
     }
   }
+}
+
+// Shallow value equality over own keys — enough to detect whether a location
+// seed added or changed the single path field the renderer reads.
+function shallowEqualInput(a: Record<string, unknown>, b: Record<string, unknown>): boolean {
+  if (a === b) {
+    return true;
+  }
+  const keys = Object.keys(a);
+  if (keys.length !== Object.keys(b).length) {
+    return false;
+  }
+  return keys.every((key) => Object.is(a[key], b[key]));
 }
 
 function rememberResultPayload(

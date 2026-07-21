@@ -484,6 +484,40 @@ describe('AcpToolStreamAdapter', () => {
       const lastCall = calls.normalizeToolUseResult.mock.calls.at(-1);
       expect(lastCall?.[1]).toEqual({ file_path: '/notes/a.md' });
     });
+
+    it('re-emits a tool_use when locations arrive on a later update and seed a new path', () => {
+      // The path-only-on-a-later-update case: the first call rendered pathless,
+      // and the update carries locations but no rawInput and an unchanged name.
+      // Without a re-emit the consumer keeps the stale, file-less tool row.
+      const { adapter } = fileToolPresentation();
+      const stream = new AcpToolStreamAdapter(adapter);
+      stream.normalizeToolCall(
+        toolCall({ kind: 'read' }),
+        [{ type: 'tool_use', id: 'tc-1', name: 'x', input: {} }],
+      );
+      const result = stream.normalizeToolCallUpdate(
+        toolCallUpdate({ locations: [{ path: '/notes/a.md' }], status: 'in_progress' }),
+        [],
+      );
+      expect(result).toEqual([
+        { type: 'tool_use', id: 'tc-1', name: 'Read', input: { file_path: '/notes/a.md' } },
+      ]);
+    });
+
+    it('does not re-emit when a later update changes neither input nor name', () => {
+      const { adapter } = fileToolPresentation();
+      const stream = new AcpToolStreamAdapter(adapter);
+      stream.normalizeToolCall(
+        toolCall({ kind: 'read', locations: [{ path: '/notes/a.md' }] }),
+        [{ type: 'tool_use', id: 'tc-1', name: 'x', input: {} }],
+      );
+      // Terminal update repeats the same locations: seeded input is unchanged.
+      const result = stream.normalizeToolCallUpdate(
+        toolCallUpdate({ status: 'completed', locations: [{ path: '/notes/a.md' }] }),
+        [{ type: 'text', content: 'tail' }],
+      );
+      expect(result).toEqual([{ type: 'text', content: 'tail' }]);
+    });
   });
 
   // Cancellation: AcpToolStreamAdapter is synchronous and has no I/O or

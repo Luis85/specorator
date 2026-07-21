@@ -241,4 +241,18 @@ describe('resolveOpencodeRawToolName', () => {
     expect(resolveOpencodeRawToolName(undefined, { kind: 'execute' })).toBe('bash');
     expect(resolveOpencodeRawToolName(undefined, { kind: 'fetch' })).toBe('webfetch');
   });
+
+  it('lets a later edit kind correct a name first pinned to a prose title', () => {
+    // Initial call: prose title, no kind → currentRawName becomes the prose text.
+    const first = resolveOpencodeRawToolName(undefined, { title: 'Applying changes' });
+    expect(first).toBe('Applying changes');
+    // A later update supplying the semantic edit kind must correct the id, not
+    // stay short-circuited on the prose name — otherwise the file stays hidden.
+    expect(resolveOpencodeRawToolName(first, { kind: 'edit' })).toBe('edit');
+    expect(normalizeOpencodeToolName(resolveOpencodeRawToolName(first, { kind: 'edit' }))).toBe(TOOL_EDIT);
+  });
+
+  it('keeps a resolved known current name pinned when a later prose title arrives', () => {
+    expect(resolveOpencodeRawToolName('read', { title: 'notes/today.md' })).toBe('read');
+  });
 });
