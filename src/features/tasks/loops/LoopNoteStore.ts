@@ -2,6 +2,7 @@ import type { App, Vault } from 'obsidian';
 
 import { extractString, extractStringArray, parseFrontmatter } from '../../../utils/frontmatter';
 import {
+  beginNoteFrontmatter,
   deleteNote,
   extractSection,
   fileBaseName,
@@ -50,14 +51,7 @@ export class LoopNoteStore {
   }
 
   build(input: SaveLoopInput): string {
-    const lines: string[] = [
-      '---',
-      'type: specorator-loop',
-      'schema_version: 1',
-      `name: ${JSON.stringify(input.name)}`,
-    ];
-    if (input.description) lines.push(`description: ${JSON.stringify(input.description)}`);
-    if (input.icon) lines.push(`icon: ${JSON.stringify(input.icon)}`);
+    const lines = beginNoteFrontmatter('specorator-loop', input);
     if (input.tags && input.tags.length > 0) {
       lines.push(`tags: [${input.tags.map((tag) => JSON.stringify(tag)).join(', ')}]`);
     }

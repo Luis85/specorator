@@ -42,6 +42,22 @@ export function noteFilePathForName(folder: string, name: string, fallbackSlug: 
   return normalizePath(`${normalizeFolder(folder)}/${slug}.md`);
 }
 
+/**
+ * Opens a Specorator note's YAML frontmatter with the fields every note-store
+ * shares — the `---` fence, `type`, `schema_version`, `name`, and the optional
+ * `description`/`icon`. Callers push their type-specific keys, then close the
+ * fence. Keeps the shared header in one place across the loop/template stores.
+ */
+export function beginNoteFrontmatter(
+  type: string,
+  common: { name: string; description?: string; icon?: string },
+): string[] {
+  const lines = ['---', `type: ${type}`, 'schema_version: 1', `name: ${JSON.stringify(common.name)}`];
+  if (common.description) lines.push(`description: ${JSON.stringify(common.description)}`);
+  if (common.icon) lines.push(`icon: ${JSON.stringify(common.icon)}`);
+  return lines;
+}
+
 /** Parses every Markdown note under `folder`, collecting parse failures as warnings. */
 export async function listNoteDefinitions<T>(
   vault: Vault,

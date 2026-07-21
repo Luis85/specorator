@@ -6,7 +6,7 @@ import { renderTaskPrompt } from '../prompt/TaskPromptRenderer';
 import type { RunSidecarHeartbeat } from '../storage/RunSidecarStore';
 import { ActiveRunRegistry } from './activeRunRegistry';
 import { RunSession, type RunSessionResult, type RunSessionWriteStatusOptions } from './RunSession';
-import type { TaskExecutionSurface, TaskRunHandle } from './TaskExecutionSurface';
+import type { TaskExecutionSurface, TaskRunHandle, TaskRunTerminal } from './TaskExecutionSurface';
 
 export interface TaskRunCoordinatorDeps {
   executionSurface: TaskExecutionSurface;
@@ -133,17 +133,8 @@ export class TaskRunCoordinator {
       ({ provider, model } = await this.resolveRunProviderModel(task));
     }
 
-    if (!provider) return { ok: false, error: 'Work order is missing provider' };
-    if (!model) return { ok: false, error: 'Work order is missing model' };
-    if (task.frontmatter.status === 'running' || this.registry.has(id) || this.activeRuns.has(id)) {
-      return { ok: false, error: 'This work order is already running.' };
-    }
-    if (!this.deps.isProviderEnabled(provider)) {
-      return { ok: false, error: `Provider ${provider} is not enabled` };
-    }
-    if (!this.deps.ownsModel(provider, model)) {
-      return { ok: false, error: `Model ${model} is not available for provider ${provider}` };
-    }
+    const runnable = this.assertRunnable(task, provider, model);
+    if (!runnable.ok) return runnable;
 
     // Reserve the id in both the live-session registry (which holds the RunSession
     // for reply/stop) and the cross-pane in-flight set before awaiting the surface
@@ -168,8 +159,8 @@ export class TaskRunCoordinator {
         prompt,
         tabReservation: reservation,
         boundAgentId,
-        provider,
-        model,
+        provider: runnable.provider,
+        model: runnable.model,
       });
       handle = startedHandle;
       if (!startedHandle.runId) {
@@ -181,28 +172,7 @@ export class TaskRunCoordinator {
         return { ok: false, error: terminal.error ?? 'Run failed.', startupFailed: true };
       }
 
-      const session = new RunSession({
-        task,
-        runId: startedHandle.runId,
-        // The conversation is created lazily by the first chat turn, so read it
-        // live: it is null at start and becomes non-null once the send binds it.
-        getConversationId: () => startedHandle.conversationId,
-        sidepanelTabId: startedHandle.sidepanelTabId,
-        stream: startedHandle.stream,
-        events: this.deps.events,
-        now: this.deps.now,
-        writeStatus: this.deps.writeTaskStatus,
-        writeHeartbeat: this.deps.writeHeartbeat,
-        // `task` is captured: `appendLedger` injects it for sidecar path resolution.
-        appendLedger: (runId, entry) => this.deps.appendLedger(task, runId, entry),
-        appendLedgerBatch: this.deps.appendLedgerBatch
-          ? (runId, entries) => this.deps.appendLedgerBatch!(task, runId, entries)
-          : undefined,
-        finalizeLedgerToNote: this.deps.finalizeLedgerToNote,
-        writeHandoff: this.deps.writeHandoff,
-        heartbeatIntervalMs: this.deps.heartbeatIntervalMs,
-        staleThresholdMs: this.deps.staleThresholdMs,
-      });
+      const session = this.createRunSession(task, startedHandle);
       this.registry.bind(id, session);
       // Drive the session to a prompt finish if the chat turn settles but emits
       // no stream end, so it doesn't wait for onEnd until the stale timer. This
@@ -213,11 +183,7 @@ export class TaskRunCoordinator {
       // normal stream `done` fires before the terminal resolves, so it wins) or
       // after a stale-heartbeat settle.
       void startedHandle.terminal
-        .then((terminal) => {
-          if (terminal.status === 'failed') session.fail(terminal.error ?? 'Chat run failed.');
-          else if (terminal.status === 'canceled') session.cancel('Chat run canceled.');
-          else session.complete(terminal.finalAssistantContent);
-        })
+        .then((terminal) => this.settleSessionFromTerminal(session, terminal))
         .catch((error) => session.fail(error instanceof Error ? error.message : String(error)));
       const result: RunSessionResult = await session.run();
       if (result.ok) return { ok: true, status: result.status };
@@ -242,5 +208,63 @@ export class TaskRunCoordinator {
       this.registry.release(id);
       this.activeRuns.delete(id);
     }
+  }
+
+  /**
+   * Validates that the resolved provider/model can launch and that no run is
+   * already in flight for this work order. On success returns the narrowed
+   * provider/model; otherwise the rejection result to return verbatim.
+   */
+  private assertRunnable(
+    task: TaskSpec,
+    provider: ProviderId | undefined,
+    model: string | undefined,
+  ): { ok: true; provider: ProviderId; model: string } | { ok: false; error: string } {
+    const { id } = task.frontmatter;
+    if (!provider) return { ok: false, error: 'Work order is missing provider' };
+    if (!model) return { ok: false, error: 'Work order is missing model' };
+    if (task.frontmatter.status === 'running' || this.registry.has(id) || this.activeRuns.has(id)) {
+      return { ok: false, error: 'This work order is already running.' };
+    }
+    if (!this.deps.isProviderEnabled(provider)) {
+      return { ok: false, error: `Provider ${provider} is not enabled` };
+    }
+    if (!this.deps.ownsModel(provider, model)) {
+      return { ok: false, error: `Model ${model} is not available for provider ${provider}` };
+    }
+    return { ok: true, provider, model };
+  }
+
+  /** Builds the RunSession for a started handle, wiring the sidecar dep closures. */
+  private createRunSession(task: TaskSpec, handle: TaskRunHandle): RunSession {
+    return new RunSession({
+      task,
+      runId: handle.runId,
+      // The conversation is created lazily by the first chat turn, so read it
+      // live: it is null at start and becomes non-null once the send binds it.
+      getConversationId: () => handle.conversationId,
+      sidepanelTabId: handle.sidepanelTabId,
+      stream: handle.stream,
+      events: this.deps.events,
+      now: this.deps.now,
+      writeStatus: this.deps.writeTaskStatus,
+      writeHeartbeat: this.deps.writeHeartbeat,
+      // `task` is captured: `appendLedger` injects it for sidecar path resolution.
+      appendLedger: (runId, entry) => this.deps.appendLedger(task, runId, entry),
+      appendLedgerBatch: this.deps.appendLedgerBatch
+        ? (runId, entries) => this.deps.appendLedgerBatch!(task, runId, entries)
+        : undefined,
+      finalizeLedgerToNote: this.deps.finalizeLedgerToNote,
+      writeHandoff: this.deps.writeHandoff,
+      heartbeatIntervalMs: this.deps.heartbeatIntervalMs,
+      staleThresholdMs: this.deps.staleThresholdMs,
+    });
+  }
+
+  /** Drives a session to a terminal outcome from the chat turn's settled result. */
+  private settleSessionFromTerminal(session: RunSession, terminal: TaskRunTerminal): void {
+    if (terminal.status === 'failed') session.fail(terminal.error ?? 'Chat run failed.');
+    else if (terminal.status === 'canceled') session.cancel('Chat run canceled.');
+    else session.complete(terminal.finalAssistantContent);
   }
 }
