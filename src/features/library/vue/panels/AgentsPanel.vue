@@ -2,17 +2,14 @@
 import { Notice } from 'obsidian';
 import { inject, nextTick, onMounted, onUnmounted, ref, watch } from 'vue';
 
-import { ProviderRegistry } from '../../../../core/providers/ProviderRegistry';
-import { asSettingsBag } from '../../../../core/types/settings';
 import { t } from '../../../../i18n/i18n';
 import { confirm } from '../../../../shared/modals/ConfirmModal';
 import { withErrorNotice } from '../../../../shared/uiAction';
 import { startChatWithRosterAgent, syncRosterAgentsWithNotice } from '../../../agents/roster/rosterAgentActions';
-import { rosterLibraryAccessors, rosterRoleLabel } from '../../../agents/roster/rosterLibraryAccessors';
+import { rosterLibraryAccessors } from '../../../agents/roster/rosterLibraryAccessors';
 import type { RosterAgent } from '../../../agents/roster/rosterTypes';
 import { AgentDetailEditor } from '../../../agents/roster/view/AgentDetailEditor';
-import AvatarSlot from '../components/AvatarSlot.vue';
-import LibraryCard from '../components/LibraryCard.vue';
+import AgentCard from '../components/AgentCard.vue';
 import LibraryEmptyState from '../components/LibraryEmptyState.vue';
 import LibraryToolbar from '../components/LibraryToolbar.vue';
 import { PLUGIN_KEY, TAB_GUARD_KEY, VIEW_KEY } from '../libraryKeys';
@@ -26,7 +23,6 @@ if (!plugin) throw new Error('AgentsPanel mounted without PLUGIN_KEY');
 const store = useRosterStore();
 store.init(plugin);
 
-const CARD_AVATAR_SIZE = 36;
 const detailHost = ref<HTMLElement | null>(null);
 const detailOpen = ref(false);
 
@@ -218,25 +214,6 @@ function onSync(): void {
   }, t('agentRoster.actionFailed'), fail);
 }
 
-function modelLabel(agent: RosterAgent): string {
-  const selection = agent.modelSelection;
-  if (!selection || !plugin) return '';
-  const options = ProviderRegistry.getChatUIConfig(selection.providerId)
-    .getModelOptions(asSettingsBag(plugin.settings));
-  return options.find((o) => o.value === selection.modelId)?.label ?? selection.modelId;
-}
-
-/** Legacy parity: an agent with no chips renders no (empty) caps row at all. */
-function hasCaps(agent: RosterAgent): boolean {
-  // `!= null` (not `!== undefined`): a raw `"modelSelection": null` in roster
-  // JSON must not open the caps row while the chip's truthiness check skips it.
-  return (
-    agent.roles.length > 0 ||
-    (agent.tags ?? []).length > 0 ||
-    agent.modelSelection != null ||
-    agent.skills.length > 0
-  );
-}
 </script>
 
 <template>
@@ -294,89 +271,16 @@ function hasCaps(agent: RosterAgent): boolean {
         >
           {{ t('library.noMatches') }}
         </div>
-        <!-- eslint-disable vue/attribute-hyphenation -- vue-tsc only resolves the
-          REQUIRED ariaLabel prop in camelCase (hyphenated aria-* is typed as a
-          native attribute), so lint:fix must not flip it back to aria-label. -->
-        <LibraryCard
+        <AgentCard
           v-for="agent in list.rows.value"
           :key="agent.id"
-          class="specorator-vue-agent-card"
-          :name="agent.name"
-          :ariaLabel="agent.name"
+          :agent="agent"
           :busy="pending.isBusy(agent.id)"
           @activate="openDetail(agent)"
-        >
-          <template #leading>
-            <AvatarSlot
-              :agent="agent"
-              :size="CARD_AVATAR_SIZE"
-            />
-          </template>
-          <div class="specorator-vue-agent-card-desc">
-            {{ agent.description || '—' }}
-          </div>
-          <div
-            v-if="hasCaps(agent)"
-            class="specorator-vue-card-caps"
-          >
-            <span
-              v-for="role in agent.roles"
-              :key="role"
-              class="specorator-vue-agent-chip specorator-vue-agent-chip-role"
-            >
-              {{ rosterRoleLabel(role) }}
-            </span>
-            <span
-              v-for="tag in agent.tags ?? []"
-              :key="tag"
-              class="specorator-vue-chip"
-            >{{ tag }}</span>
-            <span
-              v-if="agent.modelSelection"
-              class="specorator-vue-agent-chip specorator-vue-agent-chip-model"
-            >
-              {{ modelLabel(agent) }}
-            </span>
-            <span
-              v-if="agent.skills.length > 0"
-              class="specorator-vue-agent-chip"
-            >
-              {{ t('agentRoster.capsSummary', { skills: String(agent.skills.length) }) }}
-            </span>
-          </div>
-          <template #actions>
-            <button
-              type="button"
-              class="mod-cta"
-              :disabled="pending.isBusy(agent.id)"
-              :aria-busy="pending.isBusy(agent.id) ? 'true' : undefined"
-              @click="onStartChat(agent)"
-            >
-              {{ t('agentRoster.startChatShort') }}
-            </button>
-            <button
-              type="button"
-              class="specorator-vue-card-icon"
-              :aria-label="t('library.duplicate')"
-              :title="t('library.duplicate')"
-              :disabled="pending.isBusy(agent.id)"
-              :aria-busy="pending.isBusy(agent.id) ? 'true' : undefined"
-              @click="onClone(agent)"
-            >
-              ⧉
-            </button>
-            <button
-              type="button"
-              class="specorator-vue-card-delete"
-              :disabled="pending.isBusy(agent.id)"
-              :aria-busy="pending.isBusy(agent.id) ? 'true' : undefined"
-              @click="onDelete(agent)"
-            >
-              {{ t('agentRoster.delete') }}
-            </button>
-          </template>
-        </LibraryCard>
-        <!-- eslint-enable vue/attribute-hyphenation -->
+          @start-chat="onStartChat(agent)"
+          @clone="onClone(agent)"
+          @delete="onDelete(agent)"
+        />
       </template>
     </div>
   </div>
@@ -388,32 +292,6 @@ function hasCaps(agent: RosterAgent): boolean {
 </template>
 
 <style scoped>
-/* Roster-specific card deltas (forked from features/agent-roster.css; the
-   legacy roster view was deleted 2026-07-04 — agent-roster.css now only
-   serves the embedded AgentDetailEditor). */
-.specorator-vue-agent-card-desc {
-  color: var(--sp-text-muted);
-  font-size: var(--sp-font-small);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  user-select: text;
-  cursor: text;
-}
-
-.specorator-vue-agent-chip {
-  font-size: var(--sp-font-smaller);
-  color: var(--sp-text-muted);
-  background: var(--sp-border);
-  border-radius: var(--sp-radius-s);
-  padding: 0 var(--sp-space-2xs);
-}
-
-.specorator-vue-agent-chip-role {
-  color: var(--sp-text-on-accent);
-  background: var(--sp-accent);
-}
-
 /* Embedded legacy detail editor: neutralize its own padding — the island
    already pads contentEl. Plain scoped rule, NOT :deep(): the host is a
    root node of this multi-root component, so no ancestor carries our scope

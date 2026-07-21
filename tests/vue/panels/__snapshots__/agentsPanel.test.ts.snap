@@ -5,6 +5,7 @@ exports[`AgentsPanel mutation flows > card structure snapshot (small, stable sub
   aria-label="Alice"
   class="specorator-vue-card specorator-vue-agent-card"
   data-v-1932512b=""
+  data-v-88386024=""
   data-v-f28e8ef0=""
   role="button"
   tabindex="0"
@@ -18,7 +19,7 @@ exports[`AgentsPanel mutation flows > card structure snapshot (small, stable sub
       aria-hidden="true"
       class="specorator-vue-avatar"
       data-v-5434e477=""
-      data-v-f28e8ef0=""
+      data-v-88386024=""
     />
     
   </div>
@@ -41,18 +42,19 @@ exports[`AgentsPanel mutation flows > card structure snapshot (small, stable sub
     
     <div
       class="specorator-vue-agent-card-desc"
-      data-v-f28e8ef0=""
+      data-v-88386024=""
     >
       router
     </div>
     <div
       class="specorator-vue-card-caps"
-      data-v-f28e8ef0=""
+      data-v-5b5d5390=""
+      data-v-88386024=""
     >
       
       <span
         class="specorator-vue-agent-chip specorator-vue-agent-chip-role"
-        data-v-f28e8ef0=""
+        data-v-5b5d5390=""
       >
         Worker
       </span>
@@ -60,7 +62,7 @@ exports[`AgentsPanel mutation flows > card structure snapshot (small, stable sub
       
       <span
         class="specorator-vue-chip"
-        data-v-f28e8ef0=""
+        data-v-5b5d5390=""
       >
         t
       </span>
@@ -76,9 +78,9 @@ exports[`AgentsPanel mutation flows > card structure snapshot (small, stable sub
     data-v-1932512b=""
   >
     
+    
     <button
       class="mod-cta"
-      data-v-f28e8ef0=""
       type="button"
     >
       Start chat
@@ -86,7 +88,6 @@ exports[`AgentsPanel mutation flows > card structure snapshot (small, stable sub
     <button
       aria-label="Duplicate"
       class="specorator-vue-card-icon"
-      data-v-f28e8ef0=""
       title="Duplicate"
       type="button"
     >
@@ -94,11 +95,11 @@ exports[`AgentsPanel mutation flows > card structure snapshot (small, stable sub
     </button>
     <button
       class="specorator-vue-card-delete"
-      data-v-f28e8ef0=""
       type="button"
     >
       Delete
     </button>
+    
     
   </div>
 </div>
