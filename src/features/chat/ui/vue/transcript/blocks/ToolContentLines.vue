@@ -12,43 +12,21 @@ import {
   TOOL_TOOL_SEARCH,
   TOOL_WEB_FETCH,
 } from '../../../../../../core/tools/toolNames';
-import type { ApplyPatchFileDiff } from '../../../../../../utils/diff';
-import { parseApplyPatchDiffs, parseFileUpdateChangeDiffs } from '../../../../../../utils/diff';
 import IconSpan from '../IconSpan.vue';
 import ToolLinesExpanded from '../ToolLinesExpanded.vue';
-import { useFileLink } from '../useFileLink';
-import DiffView from './DiffView.vue';
+import ToolFileSearchLines from './ToolFileSearchLines.vue';
+import ToolPatchSections from './ToolPatchSections.vue';
 
 /**
  * Generic tool-content body: ports the non-specialized branches of
- * `rendering/ToolCallRenderer.ts`'s `renderExpandedContent` (plus
- * `renderBashContent` / `renderFileSearchExpanded` / `renderWebFetchExpanded`
- * / `renderToolSearchExpanded` / `renderApplyPatchDiffSections`) —
- * everything that isn't TodoWrite, AskUserQuestion, or WebSearch (those get
- * their own dedicated components).
- *
- * `apply_patch` restores the legacy `renderApplyPatchDiffSections` behavior
- * (per-file diff sections, reusing `DiffView`) when the patch/changes input
- * parses into file diffs; it deliberately does not port the rest of
- * `renderApplyPatchExpanded`'s fallback chain (`applyPatchExpandedHelpers.ts`'s
- * change-list / raw-patch-text / free-text-result-file-match rendering, or
- * the leading verification-failure line dump) — those remain a documented
- * gap, falling through to the plain 20-line default alongside the
- * agent-lifecycle JSON-object expansion.
- *
- * `Glob`/`Grep`/`LS` file-search result lines reproduce
- * `renderFileSearchExpanded`'s `decorateVaultFileLink` treatment: each
- * non-header line resolves via the shared `useFileLink` composable (same
- * `resolveOpenableVaultPath` resolver `decorateVaultFileLink` uses, shared
- * with `ToolCall.vue` and `WriteEditView.vue`) and becomes clickable when it
- * resolves. (`Read`'s content here is the file's line-numbered text, not a
- * path list — it has no line-level link decoration in the legacy renderer
- * either; only its `.specorator-tool-summary` gets the link treatment,
- * reproduced in `ToolCall.vue`.)
+ * `rendering/ToolCallRenderer.ts`'s `renderExpandedContent` — everything that
+ * isn't TodoWrite, AskUserQuestion, or WebSearch (those get their own
+ * dedicated components). The two heaviest branches are child components:
+ * `apply_patch` per-file diff sections (`ToolPatchSections.vue`) and
+ * Glob/Grep/LS file-search lines (`ToolFileSearchLines.vue`); Bash, WebFetch,
+ * ToolSearch, Read, and the plain fallback stay here.
  */
 const props = defineProps<{ name: string; input: Record<string, unknown>; result?: string }>();
-
-const { resolve: resolveLink } = useFileLink();
 
 const command = computed(() => (typeof props.input.command === 'string' ? props.input.command : ''));
 // `ToolLinesExpanded` requires a non-optional `result: string`; every branch
@@ -57,30 +35,11 @@ const command = computed(() => (typeof props.input.command === 'string' ? props.
 // "No result" state instead.
 const resolvedResult = computed(() => props.result ?? '');
 
+const isApplyPatch = computed(() => props.name === TOOL_APPLY_PATCH);
+
 const isFileSearch = computed(
   () => props.name === TOOL_GLOB || props.name === TOOL_GREP || props.name === TOOL_LS
 );
-
-function isFileSearchHeaderLine(line: string): boolean {
-  const trimmed = line.trim();
-  return /^Found \d+ files?:/i.test(trimmed) || /^\d+ matches across/i.test(trimmed);
-}
-
-interface FileSearchLine {
-  text: string;
-  hoverable: boolean;
-  linkPath: string | null;
-}
-
-const fileSearchLines = computed<FileSearchLine[]>(() => {
-  const lines = (props.result ?? '').split(/\r?\n/).filter(line => line.trim());
-  return lines.map(line => {
-    const stripped = line.replace(/^\s*\d+→/, '').trim();
-    const hoverable = !isFileSearchHeaderLine(stripped);
-    const linkPath = hoverable ? resolveLink(stripped) : null;
-    return { text: stripped || ' ', hoverable, linkPath };
-  });
-});
 
 const WEB_FETCH_MAX_CHARS = 500;
 const webFetchText = computed(() => (props.result ?? '').slice(0, WEB_FETCH_MAX_CHARS));
@@ -99,18 +58,6 @@ const toolSearchNames = computed<string[]>(() => {
   } catch {
     return [];
   }
-});
-
-const isApplyPatch = computed(() => props.name === TOOL_APPLY_PATCH);
-
-// Mirrors `ToolCallRenderer.ts`'s `getApplyPatchFileDiffs`: prefer the
-// `*** Begin Patch` text format, falling back to the structured
-// `input.changes` shape (Codex `apply_patch` calls use either).
-const applyPatchFileDiffs = computed<ApplyPatchFileDiff[]>(() => {
-  if (!isApplyPatch.value) return [];
-  const patchText = typeof props.input.patch === 'string' ? props.input.patch : '';
-  const parsedDiffs = patchText ? parseApplyPatchDiffs(patchText) : [];
-  return parsedDiffs.length > 0 ? parsedDiffs : parseFileUpdateChangeDiffs(props.input.changes);
 });
 </script>
 
@@ -132,67 +79,21 @@ const applyPatchFileDiffs = computed<ApplyPatchFileDiff[]>(() => {
     >No result</div>
   </template>
 
-  <template v-else-if="isApplyPatch">
-    <template v-if="applyPatchFileDiffs.length > 0">
-      <div
-        v-for="(fileDiff, i) in applyPatchFileDiffs"
-        :key="i"
-        class="specorator-tool-patch-section"
-      >
-        <div
-          v-if="fileDiff.operation === 'delete' && fileDiff.diffLines.length === 0"
-          class="specorator-tool-empty"
-        >File deleted</div>
-        <div
-          v-else-if="fileDiff.diffLines.length === 0"
-          class="specorator-tool-empty"
-        >No textual diff available</div>
-        <div
-          v-else
-          class="specorator-write-edit-diff-row"
-        >
-          <DiffView
-            :diff-data="fileDiff"
-            part="diff"
-          />
-        </div>
-      </div>
-    </template>
-    <div
-      v-else-if="!result"
-      class="specorator-tool-empty"
-    >No result</div>
-    <ToolLinesExpanded
-      v-else
-      :result="resolvedResult"
-      :max-lines="20"
-    />
-  </template>
+  <ToolPatchSections
+    v-else-if="isApplyPatch"
+    :input="input"
+    :result="result"
+  />
 
   <div
     v-else-if="!result"
     class="specorator-tool-empty"
   >No result</div>
 
-  <template v-else-if="isFileSearch">
-    <div
-      v-if="fileSearchLines.length === 0"
-      class="specorator-tool-empty"
-    >No matches found</div>
-    <div
-      v-else
-      class="specorator-tool-lines"
-    >
-      <div
-        v-for="(line, i) in fileSearchLines"
-        :key="i"
-        class="specorator-tool-line"
-        :class="{ hoverable: line.hoverable, 'specorator-file-link': !!line.linkPath }"
-        :role="line.linkPath ? 'link' : undefined"
-        :data-href="line.linkPath || null"
-      >{{ line.text }}</div>
-    </div>
-  </template>
+  <ToolFileSearchLines
+    v-else-if="isFileSearch"
+    :result="result"
+  />
 
   <div
     v-else-if="name === TOOL_WEB_FETCH"
