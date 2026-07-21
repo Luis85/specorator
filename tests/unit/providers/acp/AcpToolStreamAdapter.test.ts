@@ -554,6 +554,26 @@ describe('AcpToolStreamAdapter', () => {
       // No re-emit: the provider path is unchanged despite the new location.
       expect(result).toEqual([]);
     });
+
+    it('seeds file_path from a terminal diff content block when rawInput and locations lack one', () => {
+      // Cursor's captured edit shape: an initial empty rawInput, then a terminal
+      // update whose diff `content` carries the touched file (no locations).
+      const { adapter } = fileToolPresentation();
+      const stream = new AcpToolStreamAdapter(adapter);
+      stream.normalizeToolCall(
+        toolCall({ kind: 'edit' }),
+        [{ type: 'tool_use', id: 'tc-1', name: 'x', input: {} }],
+      );
+      const result = stream.normalizeToolCallUpdate(
+        toolCallUpdate({
+          status: 'completed',
+          content: [{ type: 'diff' as const, path: '/notes/a.md', oldText: 'x', newText: 'y' }],
+        }),
+        [{ type: 'tool_result', id: 'tc-1', content: 'done' }],
+      );
+      const toolUse = result.find((c): c is ToolUseChunk => c.type === 'tool_use');
+      expect(toolUse?.input).toEqual({ file_path: '/notes/a.md' });
+    });
   });
 
   // Cancellation: AcpToolStreamAdapter is synchronous and has no I/O or

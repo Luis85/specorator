@@ -1,4 +1,4 @@
-import { seedFileToolPathFromLocations } from '../../core/tools/toolInput';
+import { applyFileToolPath, seedFileToolPathFromLocations } from '../../core/tools/toolInput';
 import type { StreamChunk } from '../../core/types';
 import type { SDKToolUseResult } from '../../core/types/diff';
 import type {
@@ -166,17 +166,17 @@ export class AcpToolStreamAdapter {
     return state;
   }
 
-  // Fall back to the canonical path field from `locations` when the provider's
-  // own input mapping produced none, so Read/Write/Edit/LS show the file the
-  // renderer keys off `input.file_path`/`input.path`. Provider-supplied paths
-  // win; a no-op returns the same input reference. Computed at emit so a changed
-  // `locations` value always re-seeds from the (path-less) provider input.
+  // Fall back to the canonical path field for Read/Write/Edit/LS when the
+  // provider's own input mapping produced none, so they show the file the
+  // renderer keys off `input.file_path`/`input.path`. Sources, in precedence:
+  // provider input, then `locations`, then a diff `content` block's path
+  // (Cursor's captured edit delivers the touched file only in the terminal
+  // diff). Computed at emit so a changed source always re-seeds from the
+  // path-less provider input; a no-op returns the same input reference.
   private resolveInput(state: AcpToolStreamState): Record<string, unknown> {
-    return seedFileToolPathFromLocations(
-      this.adapter.normalizeToolName(state.rawName),
-      state.input,
-      state.locations,
-    );
+    const name = this.adapter.normalizeToolName(state.rawName);
+    const withLocation = seedFileToolPathFromLocations(name, state.input, state.locations);
+    return applyFileToolPath(name, withLocation, firstDiffContentPath(state.content));
   }
 
   // Pick the base state before location seeding: re-normalize from accumulated
@@ -236,6 +236,21 @@ export class AcpToolStreamAdapter {
         return chunk;
     }
   }
+}
+
+// Path from the first diff `content` block, if any. Some ACP edits (Cursor's
+// captured shape) carry the touched file only in the terminal diff, not in
+// `rawInput` or `locations`.
+function firstDiffContentPath(content: AcpToolCallContent[] | undefined): string | undefined {
+  if (!content) {
+    return undefined;
+  }
+  for (const item of content) {
+    if (item.type === 'diff' && typeof item.path === 'string' && item.path.trim()) {
+      return item.path.trim();
+    }
+  }
+  return undefined;
 }
 
 // Shallow value equality over own keys — enough to detect whether a location

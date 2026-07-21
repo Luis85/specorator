@@ -1,4 +1,5 @@
 import {
+  applyFileToolPath,
   extractResolvedAnswers,
   extractResolvedAnswersFromResultText,
   getPathFromToolInput,
@@ -405,5 +406,32 @@ describe('seedFileToolPathFromLocations', () => {
     expect(seedFileToolPathFromLocations('Read', input, null)).toBe(input);
     expect(seedFileToolPathFromLocations('Read', input, [])).toBe(input);
     expect(seedFileToolPathFromLocations('Read', input, [{ path: '   ' }])).toBe(input);
+  });
+});
+
+describe('applyFileToolPath', () => {
+  it('seeds the canonical key for file tools from an explicit path', () => {
+    expect(applyFileToolPath('Edit', {}, '/notes/a.md')).toEqual({ file_path: '/notes/a.md' });
+    expect(applyFileToolPath('LS', {}, '/notes')).toEqual({ path: '/notes' });
+  });
+
+  it('trims the path and preserves other keys', () => {
+    expect(applyFileToolPath('Write', { content: 'x' }, '  /notes/a.md  ')).toEqual({
+      content: 'x',
+      file_path: '/notes/a.md',
+    });
+  });
+
+  it('does not override an existing provider path', () => {
+    const input = { file_path: '/real.md' };
+    expect(applyFileToolPath('Read', input, '/other.md')).toBe(input);
+  });
+
+  it('is a no-op for non-file tools or an empty path', () => {
+    const bash = { command: 'ls' };
+    expect(applyFileToolPath('Bash', bash, '/notes/a.md')).toBe(bash);
+    const empty = {};
+    expect(applyFileToolPath('Read', empty, null)).toBe(empty);
+    expect(applyFileToolPath('Read', empty, '   ')).toBe(empty);
   });
 });

@@ -345,6 +345,36 @@ describe('CursorChatRuntime ACP stream (scripted fake server over in-memory stre
     expect(toolUse?.input).toMatchObject({ file_path: '/notes/today.md' });
   });
 
+  it('surfaces the file path from a diff-only edit (empty rawInput, path in the terminal diff)', async () => {
+    // Cursor's real captured edit shape (realAcpCaptures.ts CURSOR_EDIT_TOOL_CALL):
+    // the initial call has empty rawInput and no locations; only the terminal
+    // diff carries the path. The final tool_use must expose it as file_path so
+    // WriteEditView renders the file name and link, not a bare "Edit".
+    const chunks = await runScenario(({ emit }) => {
+      emit({
+        sessionUpdate: 'tool_call',
+        toolCallId: 'tc-edit',
+        title: 'Edit File',
+        kind: 'edit',
+        status: 'pending',
+        rawInput: {},
+      });
+      emit({
+        sessionUpdate: 'tool_call_update',
+        toolCallId: 'tc-edit',
+        status: 'completed',
+        content: [{ type: 'diff', path: '/notes/a.md', oldText: 'foo', newText: 'bar' }],
+      });
+      return { stopReason: 'end_turn' };
+    });
+
+    const finalToolUse = chunks
+      .filter((c): c is Extract<StreamChunk, { type: 'tool_use' }> => c.type === 'tool_use' && c.id === 'tc-edit')
+      .at(-1);
+    expect(finalToolUse?.name).toBe(TOOL_EDIT);
+    expect(finalToolUse?.input).toMatchObject({ file_path: '/notes/a.md' });
+  });
+
   it('threads the usage_update authoritative window into the final usage chunk', async () => {
     const chunks = await runScenario(({ emit }) => {
       emit({ sessionUpdate: 'agent_message_chunk', messageId: 'a1', content: { type: 'text', text: 'done' } });

@@ -157,26 +157,31 @@ function firstLocationPath(
 }
 
 /**
- * Surface a file tool's touched path from ACP `locations` when the normalized
- * input lacks it. Claude's SDK carries `file_path`/`path` in the tool input
- * directly, but ACP tool calls often deliver the path only in the `locations`
- * array (or the human title) — which the transcript renderer never reads. This
- * seeds the exact key the renderer keys off (`file_path` for Read/Write/Edit,
- * `path` for LS), leaving provider-supplied paths untouched. Returns the same
- * object reference when nothing is seeded.
+ * Seed a file tool's touched path into the exact key the transcript renderer
+ * keys off (`file_path` for Read/Write/Edit, `path` for LS) when the normalized
+ * input lacks one. Claude's SDK carries the path in the tool input directly, but
+ * ACP tool calls often deliver it out-of-band (a `locations` array, the human
+ * title, or a diff `content` block). Provider-supplied paths are left untouched;
+ * a no-op returns the same object reference.
  */
-export function seedFileToolPathFromLocations(
+export function applyFileToolPath(
   toolName: string,
   input: Record<string, unknown>,
-  locations: ReadonlyArray<PathLocation> | null | undefined,
+  path: string | null | undefined,
 ): Record<string, unknown> {
   const key = fileToolLocationInputKey(toolName);
   if (!key || hasUsablePath(input[key])) {
     return input;
   }
-  const locationPath = firstLocationPath(locations);
-  if (!locationPath) {
-    return input;
-  }
-  return { ...input, [key]: locationPath };
+  const trimmed = typeof path === 'string' ? path.trim() : '';
+  return trimmed ? { ...input, [key]: trimmed } : input;
+}
+
+/** {@link applyFileToolPath} sourced from the first non-empty ACP `locations` path. */
+export function seedFileToolPathFromLocations(
+  toolName: string,
+  input: Record<string, unknown>,
+  locations: ReadonlyArray<PathLocation> | null | undefined,
+): Record<string, unknown> {
+  return applyFileToolPath(toolName, input, firstLocationPath(locations));
 }
