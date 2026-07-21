@@ -95,7 +95,7 @@ onBeforeUnmount(detachDocClick);
       role="button"
       tabindex="0"
       aria-haspopup="listbox"
-      :aria-expanded="open ? 'true' : 'false'"
+      :aria-expanded="open"
       @click.stop="toggle"
       @keydown="onActivationKey($event, toggle)"
     >
@@ -123,7 +123,7 @@ onBeforeUnmount(detachDocClick);
           :class="{ selected: isSelected(opt) }"
           role="option"
           tabindex="0"
-          :aria-selected="isSelected(opt) ? 'true' : 'false'"
+          :aria-selected="isSelected(opt)"
           @click.stop="pick(opt.value)"
           @keydown="onOptionKeydown($event, opt.value)"
         >
