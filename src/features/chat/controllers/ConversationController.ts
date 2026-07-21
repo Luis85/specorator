@@ -463,27 +463,15 @@ export class ConversationController {
     }
   }
 
-  /**
-   * True when a newer switch/lifecycle superseded this hydration (aborted signal
-   * or a bumped lifecycle generation), so the stale result must be dropped
-   * without touching the renderer.
-   */
   private isHydrationStale(abort: AbortController, generation: number): boolean {
     return abort.signal.aborted || generation !== this.lifecycleGeneration;
   }
 
-  /** Surfaces the transcript-level error banner for a hydration that can't commit. */
   private applyHydrationFailure(hydration: HistoryLoadOutcome): void {
     if (hydration.kind === 'error' && hydration.error.code !== 'cancelled') {
-      this.deps.setTranscriptHydrationError({
-        code: hydration.error.code,
-        message: hydration.error.message,
-      });
+      this.deps.setTranscriptHydrationError({ code: hydration.error.code, message: hydration.error.message });
     } else if (hydration.kind === 'empty' && hydration.reason === 'no-store') {
-      this.deps.setTranscriptHydrationError({
-        code: 'store-missing',
-        message: t('chat.history.storeUnavailable'),
-      });
+      this.deps.setTranscriptHydrationError({ code: 'store-missing', message: t('chat.history.storeUnavailable') });
     }
   }
 
