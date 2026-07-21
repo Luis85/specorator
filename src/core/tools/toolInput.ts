@@ -117,3 +117,66 @@ export function getPathFromToolInput(
       return null;
   }
 }
+
+/** The input key the transcript renderer reads a file-tool's path from, or null for non-file tools. */
+function fileToolLocationInputKey(toolName: string): 'file_path' | 'path' | null {
+  switch (toolName) {
+    case TOOL_READ:
+    case TOOL_WRITE:
+    case TOOL_EDIT:
+      return 'file_path';
+    case TOOL_LS:
+      return 'path';
+    default:
+      return null;
+  }
+}
+
+function hasUsablePath(value: unknown): boolean {
+  if (typeof value !== 'string') return false;
+  const trimmed = value.trim();
+  // '.' is the LS default placeholder — treat it as "no specific path" so an
+  // ACP location can still supply the listed directory.
+  return trimmed.length > 0 && trimmed !== '.';
+}
+
+type PathLocation = { path?: string | null } | null | undefined;
+
+function firstLocationPath(
+  locations: ReadonlyArray<PathLocation> | null | undefined,
+): string | undefined {
+  // `Array.isArray` narrows a ReadonlyArray to `any[]`, so re-establish the
+  // element type before reading `path` (keeps the strict-any lint rules happy).
+  if (!Array.isArray(locations)) return undefined;
+  const list = locations as ReadonlyArray<PathLocation>;
+  for (const location of list) {
+    const path = typeof location?.path === 'string' ? location.path.trim() : '';
+    if (path) return path;
+  }
+  return undefined;
+}
+
+/**
+ * Surface a file tool's touched path from ACP `locations` when the normalized
+ * input lacks it. Claude's SDK carries `file_path`/`path` in the tool input
+ * directly, but ACP tool calls often deliver the path only in the `locations`
+ * array (or the human title) — which the transcript renderer never reads. This
+ * seeds the exact key the renderer keys off (`file_path` for Read/Write/Edit,
+ * `path` for LS), leaving provider-supplied paths untouched. Returns the same
+ * object reference when nothing is seeded.
+ */
+export function seedFileToolPathFromLocations(
+  toolName: string,
+  input: Record<string, unknown>,
+  locations: ReadonlyArray<PathLocation> | null | undefined,
+): Record<string, unknown> {
+  const key = fileToolLocationInputKey(toolName);
+  if (!key || hasUsablePath(input[key])) {
+    return input;
+  }
+  const locationPath = firstLocationPath(locations);
+  if (!locationPath) {
+    return input;
+  }
+  return { ...input, [key]: locationPath };
+}

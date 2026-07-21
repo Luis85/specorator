@@ -1,9 +1,12 @@
+import { TOOL_BASH, TOOL_READ } from '@/core/tools/toolNames';
 import type { StreamChunk } from '@/core/types';
 import {
   AcpToolStreamAdapter,
   type AcpToolStreamPresentationAdapter,
 } from '@/providers/acp/AcpToolStreamAdapter';
 import type { AcpToolCall, AcpToolCallUpdate } from '@/providers/acp/types';
+
+type ToolUseChunk = Extract<StreamChunk, { type: 'tool_use' }>;
 
 interface PresentationCalls {
   normalizeToolInput: jest.Mock;
@@ -411,6 +414,75 @@ describe('AcpToolStreamAdapter', () => {
           input: { fresh: 1, normalized: true },
         },
       ]);
+    });
+  });
+
+  // ACP delivers a tool's touched file in `locations` (or the title) far more
+  // often than in `rawInput`; the renderer only reads `input.file_path`/`path`,
+  // so the adapter seeds it from `locations` when the provider input lacks one.
+  describe('locations path seeding', () => {
+    function fileToolPresentation(): {
+      adapter: AcpToolStreamPresentationAdapter;
+      calls: PresentationCalls;
+    } {
+      const made = makePresentation();
+      // Real canonical name so the seam's file-tool check fires, and a
+      // pass-through input normalizer so assertions read the seeded key cleanly.
+      (made.adapter.normalizeToolName as jest.Mock).mockReturnValue(TOOL_READ);
+      (made.adapter.normalizeToolInput as jest.Mock).mockImplementation(
+        (_raw: string | undefined, input: Record<string, unknown>) => ({ ...input }),
+      );
+      return made;
+    }
+
+    it('seeds file_path from locations when a file tool arrives without a path', () => {
+      const { adapter } = fileToolPresentation();
+      const stream = new AcpToolStreamAdapter(adapter);
+      const [chunk] = stream.normalizeToolCall(
+        toolCall({ kind: 'read', locations: [{ path: '/notes/a.md' }] }),
+        [{ type: 'tool_use', id: 'tc-1', name: 'x', input: {} }],
+      );
+      expect((chunk as ToolUseChunk).input).toEqual({ file_path: '/notes/a.md' });
+    });
+
+    it('does not override a path the provider input already carries', () => {
+      const { adapter } = fileToolPresentation();
+      const stream = new AcpToolStreamAdapter(adapter);
+      const [chunk] = stream.normalizeToolCall(
+        toolCall({ kind: 'read', rawInput: { file_path: '/real.md' }, locations: [{ path: '/loc.md' }] }),
+        [{ type: 'tool_use', id: 'tc-1', name: 'x', input: {} }],
+      );
+      expect((chunk as ToolUseChunk).input.file_path).toBe('/real.md');
+    });
+
+    it('remembers locations from the initial call for a later update that omits them', () => {
+      const { adapter } = fileToolPresentation();
+      const stream = new AcpToolStreamAdapter(adapter);
+      stream.normalizeToolCall(toolCall({ kind: 'read', locations: [{ path: '/notes/a.md' }] }), []);
+      const [chunk] = stream.normalizeToolCallUpdate(toolCallUpdate({ rawInput: { limit: 20 } }), []);
+      expect((chunk as ToolUseChunk).input).toEqual({ limit: 20, file_path: '/notes/a.md' });
+    });
+
+    it('does not seed a path for non-file tools', () => {
+      const { adapter } = fileToolPresentation();
+      (adapter.normalizeToolName as jest.Mock).mockReturnValue(TOOL_BASH);
+      const stream = new AcpToolStreamAdapter(adapter);
+      const [chunk] = stream.normalizeToolCall(
+        toolCall({ kind: 'execute', locations: [{ path: '/notes/a.md' }] }),
+        [{ type: 'tool_use', id: 'tc-1', name: 'x', input: {} }],
+      );
+      expect((chunk as ToolUseChunk).input.file_path).toBeUndefined();
+    });
+
+    it('passes the seeded input into normalizeToolUseResult so write/edit diffs recover the path', () => {
+      const { adapter, calls } = fileToolPresentation();
+      const stream = new AcpToolStreamAdapter(adapter);
+      stream.normalizeToolCall(
+        toolCall({ kind: 'read', locations: [{ path: '/notes/a.md' }], rawOutput: 'x' }),
+        [{ type: 'tool_result', id: 'tc-1', content: '' }],
+      );
+      const lastCall = calls.normalizeToolUseResult.mock.calls.at(-1);
+      expect(lastCall?.[1]).toEqual({ file_path: '/notes/a.md' });
     });
   });
 

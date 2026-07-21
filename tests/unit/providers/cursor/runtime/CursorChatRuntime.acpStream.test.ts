@@ -6,7 +6,7 @@ import { Readable, Writable } from 'node:stream';
 import { ProviderSettingsCoordinator } from '@/core/providers/ProviderSettingsCoordinator';
 import { createHeadlessRuntimeHost, type RuntimeHost } from '@/core/runtime/RuntimeHost';
 import { parseTodoInput } from '@/core/tools/todo';
-import { TOOL_EDIT, TOOL_TODO_WRITE } from '@/core/tools/toolNames';
+import { TOOL_EDIT, TOOL_READ, TOOL_TODO_WRITE } from '@/core/tools/toolNames';
 import type { StreamChunk } from '@/core/types';
 import { AcpJsonRpcTransport, type AcpPromptResponse, type AcpSessionUpdate,AcpStreamChunkQueue } from '@/providers/acp';
 import type { CursorAcpExtensionHost } from '@/providers/cursor/runtime/cursorAcpExtensions';
@@ -314,6 +314,35 @@ describe('CursorChatRuntime ACP stream (scripted fake server over in-memory stre
     const finalToolUse = toolUses.at(-1);
     expect(finalToolUse?.name).toBe(TOOL_EDIT);
     expect(finalToolUse?.input).toMatchObject({ file_path: '/notes/a.md', old_string: 'foo', new_string: 'bar' });
+  });
+
+  it('surfaces the file path from ACP locations when a read tool_call carries no rawInput', async () => {
+    // The user-reported case: Cursor delivers the touched file only in
+    // `locations` (the ACP-canonical carrier), not in `rawInput`. The renderer
+    // keys the file label off `input.file_path`, so the adapter must seed it
+    // from locations — otherwise the tool row shows a bare "Read" with no file.
+    const chunks = await runScenario(({ emit }) => {
+      emit({
+        sessionUpdate: 'tool_call',
+        toolCallId: 'tc-read',
+        title: 'read',
+        kind: 'read',
+        status: 'pending',
+        locations: [{ path: '/notes/today.md' }],
+      });
+      emit({
+        sessionUpdate: 'tool_call_update',
+        toolCallId: 'tc-read',
+        status: 'completed',
+      });
+      return { stopReason: 'end_turn' };
+    });
+
+    const toolUse = chunks.find(
+      (c): c is Extract<StreamChunk, { type: 'tool_use' }> => c.type === 'tool_use' && c.id === 'tc-read',
+    );
+    expect(toolUse?.name).toBe(TOOL_READ);
+    expect(toolUse?.input).toMatchObject({ file_path: '/notes/today.md' });
   });
 
   it('threads the usage_update authoritative window into the final usage chunk', async () => {

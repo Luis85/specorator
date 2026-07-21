@@ -245,6 +245,11 @@ export function resolveOpencodeRawToolName(
   }
 
   switch (update.kind) {
+    case 'edit':
+      // ACP has no separate `write` kind — file writes also arrive as `edit`.
+      // Resolving to `edit` (→ Edit) when the title is prose still surfaces the
+      // file, where falling through to the prose title would leave it blank.
+      return 'edit';
     case 'execute':
       return 'bash';
     case 'fetch':

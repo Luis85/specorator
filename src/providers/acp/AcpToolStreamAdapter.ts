@@ -1,6 +1,12 @@
+import { seedFileToolPathFromLocations } from '../../core/tools/toolInput';
 import type { StreamChunk } from '../../core/types';
 import type { SDKToolUseResult } from '../../core/types/diff';
-import type { AcpToolCall, AcpToolCallContent, AcpToolCallUpdate } from './types';
+import type {
+  AcpToolCall,
+  AcpToolCallContent,
+  AcpToolCallLocation,
+  AcpToolCallUpdate,
+} from './types';
 
 // `rawInput` is the accumulated wire-shape input; `input` is its normalized
 // projection. Both are kept because provider normalizers are not idempotent
@@ -11,6 +17,10 @@ import type { AcpToolCall, AcpToolCallContent, AcpToolCallUpdate } from './types
 interface AcpToolStreamState {
   content?: AcpToolCallContent[];
   input: Record<string, unknown>;
+  // Last-seen ACP `locations` for this call. ACP delivers a file tool's touched
+  // path here (or in the title) far more often than in `rawInput`, and a later
+  // update may carry rawInput without re-sending locations, so it is remembered.
+  locations?: AcpToolCallLocation[];
   rawInput: Record<string, unknown>;
   rawName: string;
   rawOutput?: unknown;
@@ -59,6 +69,7 @@ export class AcpToolStreamAdapter {
   normalizeToolCall(toolCall: AcpToolCall, chunks: StreamChunk[]): StreamChunk[] {
     const state = this.updateToolState(undefined, {
       kind: toolCall.kind,
+      locations: toolCall.locations,
       rawInput: toolCall.rawInput,
       title: toolCall.title,
     });
@@ -72,6 +83,7 @@ export class AcpToolStreamAdapter {
   normalizeToolCallUpdate(toolCallUpdate: AcpToolCallUpdate, chunks: StreamChunk[]): StreamChunk[] {
     const state = this.updateToolState(this.toolStates.get(toolCallUpdate.toolCallId), {
       kind: toolCallUpdate.kind,
+      locations: toolCallUpdate.locations,
       rawInput: toolCallUpdate.rawInput,
       title: toolCallUpdate.title,
     });
@@ -118,22 +130,35 @@ export class AcpToolStreamAdapter {
     current: AcpToolStreamState | undefined,
     update: {
       kind?: string | null;
+      locations?: AcpToolCallLocation[] | null;
       rawInput?: unknown;
       title?: string | null;
     },
   ): AcpToolStreamState {
     const nextRawName = this.adapter.resolveRawToolName(current?.rawName, update);
+    const nextLocations = update.locations ?? current?.locations;
 
+    let state: AcpToolStreamState;
     if (update.rawInput !== undefined) {
       const rawInput = { ...current?.rawInput, ...normalizeRawToolInput(update.rawInput) };
-      return this.buildToolState(nextRawName, rawInput, current, update.title);
+      state = this.buildToolState(nextRawName, rawInput, current, update.title);
+    } else if (nextRawName !== current?.rawName) {
+      state = this.buildToolState(nextRawName, current?.rawInput ?? {}, current, update.title);
+    } else {
+      state = current ?? this.buildToolState(nextRawName, {}, undefined, update.title);
     }
 
-    if (nextRawName !== current?.rawName) {
-      return this.buildToolState(nextRawName, current?.rawInput ?? {}, current, update.title);
-    }
-
-    return current ?? this.buildToolState(nextRawName, {}, undefined, update.title);
+    // Fall back to the canonical path field from `locations` when the provider's
+    // own input mapping produced none, so Read/Write/Edit/LS show the file the
+    // renderer keys off `input.file_path`/`input.path`. Provider-supplied paths
+    // win; a no-op returns the same input reference.
+    state.locations = nextLocations;
+    state.input = seedFileToolPathFromLocations(
+      this.adapter.normalizeToolName(nextRawName),
+      state.input,
+      nextLocations,
+    );
+    return state;
   }
 
   private buildToolState(
