@@ -1,3 +1,4 @@
+import { stringifyToolValue } from '../../../core/tools/toolInputNormalization';
 import {
   isAgentLifecycleTool,
   TOOL_APPLY_PATCH,
@@ -17,18 +18,6 @@ import {
   TOOL_WRITE,
   TOOL_WRITE_STDIN,
 } from '../../../core/tools/toolNames';
-
-export function stringifyToolValue(value: unknown): string {
-  if (typeof value === 'string') return value;
-  if (typeof value === 'number' || typeof value === 'boolean') return String(value);
-  if (value === null || value === undefined) return '';
-
-  try {
-    return JSON.stringify(value);
-  } catch {
-    return '';
-  }
-}
 
 export function getInputText(input: Record<string, unknown>, key: string, fallback = ''): string {
   return stringifyToolValue(input[key]) || fallback;

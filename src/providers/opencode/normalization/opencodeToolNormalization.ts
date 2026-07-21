@@ -1,3 +1,4 @@
+import { normalizeWebSearchInput } from '../../../core/tools/toolInputNormalization';
 import {
   TOOL_ASK_USER_QUESTION,
   TOOL_BASH,
@@ -90,32 +91,6 @@ function firstTrimmedString(...values: unknown[]): string | undefined {
   }
 
   return undefined;
-}
-
-function firstNonEmptyString(...values: unknown[]): string {
-  return firstTrimmedString(...values) ?? '';
-}
-
-function normalizeStringArray(value: unknown): string[] {
-  if (!Array.isArray(value)) {
-    return [];
-  }
-
-  const uniqueValues = new Set<string>();
-  for (const entry of value) {
-    if (typeof entry !== 'string') {
-      continue;
-    }
-
-    const trimmed = entry.trim();
-    if (!trimmed) {
-      continue;
-    }
-
-    uniqueValues.add(trimmed);
-  }
-
-  return [...uniqueValues];
 }
 
 function normalizeQuestionOptions(value: unknown): Array<{ description: string; label: string }> {
@@ -279,40 +254,6 @@ export function resolveOpencodeRawToolName(
     default:
       return titleName ?? 'tool';
   }
-}
-
-function normalizeWebSearchInput(input: Record<string, unknown>): Record<string, unknown> {
-  const action = isPlainObject(input.action)
-    ? input.action
-    : {};
-
-  const queries = normalizeStringArray(action.queries ?? input.queries);
-  const query = firstNonEmptyString(action.query, input.query, queries[0]);
-  const url = firstNonEmptyString(action.url, input.url);
-  const pattern = firstNonEmptyString(action.pattern, input.pattern);
-  const explicitType = firstNonEmptyString(action.type, input.actionType, input.action_type);
-
-  const actionType = explicitType
-    || (url && pattern ? 'find_in_page' : url ? 'open_page' : (query || queries.length > 0) ? 'search' : '');
-
-  const normalized: Record<string, unknown> = {};
-  if (actionType) {
-    normalized.actionType = actionType;
-  }
-  if (query) {
-    normalized.query = query;
-  }
-  if (queries.length > 0) {
-    normalized.queries = queries;
-  }
-  if (url) {
-    normalized.url = url;
-  }
-  if (pattern) {
-    normalized.pattern = pattern;
-  }
-
-  return normalized;
 }
 
 export function normalizeOpencodeToolName(rawName: string | undefined): string {

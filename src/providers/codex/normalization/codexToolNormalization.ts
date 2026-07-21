@@ -5,6 +5,11 @@
  * to ensure tool identity parity between live and restored conversations.
  */
 
+import {
+  normalizeWebSearchInput,
+  stringifyToolValue,
+} from '../../../core/tools/toolInputNormalization';
+
 // ---------------------------------------------------------------------------
 // Tool name normalization
 // ---------------------------------------------------------------------------
@@ -80,7 +85,7 @@ export function normalizeCodexToolInput(
     case 'view_image':
       return {
         ...input,
-        file_path: stringifyCodexValue(input.path ?? input.file_path),
+        file_path: stringifyToolValue(input.path ?? input.file_path),
       };
 
     case 'web_search':
@@ -102,12 +107,12 @@ function normalizeUpdatePlanTodos(input: Record<string, unknown>): Array<Record<
   return plan.map((entry: unknown) => {
     if (!entry || typeof entry !== 'object') return { id: '', title: '', status: 'pending' };
     const item = entry as Record<string, unknown>;
-    const text = stringifyCodexValue(item.step ?? item.title ?? item.content);
+    const text = stringifyToolValue(item.step ?? item.title ?? item.content);
     return {
-      id: stringifyCodexValue(item.id),
+      id: stringifyToolValue(item.id),
       content: text,
       activeForm: text,
-      status: stringifyCodexValue(item.status) || 'pending',
+      status: stringifyToolValue(item.status) || 'pending',
     };
   });
 }
@@ -145,8 +150,8 @@ function normalizeQuestions(input: Record<string, unknown>): Array<Record<string
       : [];
 
     return {
-      question: stringifyCodexValue(item.question) || `Question ${index + 1}`,
-      ...(item.id ? { id: stringifyCodexValue(item.id) } : {}),
+      question: stringifyToolValue(item.question) || `Question ${index + 1}`,
+      ...(item.id ? { id: stringifyToolValue(item.id) } : {}),
       header: typeof item.header === 'string' && item.header.trim()
         ? String(item.header)
         : `Q${index + 1}`,
@@ -160,47 +165,12 @@ function normalizeCommandValue(value: unknown): string {
   if (typeof value === 'string') return value;
   if (Array.isArray(value)) {
     return value
-      .map(stringifyCodexValue)
+      .map(stringifyToolValue)
       .filter(Boolean)
       .join(' ')
       .trim();
   }
-  return stringifyCodexValue(value);
-}
-
-function stringifyCodexValue(value: unknown): string {
-  if (typeof value === 'string') return value;
-  if (typeof value === 'number' || typeof value === 'boolean') return String(value);
-  if (value === null || value === undefined) return '';
-
-  try {
-    return JSON.stringify(value);
-  } catch {
-    return '';
-  }
-}
-
-function normalizeWebSearchInput(input: Record<string, unknown>): Record<string, unknown> {
-  const action = input.action && typeof input.action === 'object'
-    ? input.action as Record<string, unknown>
-    : {};
-
-  const queries = normalizeStringArray(action.queries ?? input.queries);
-  const query = firstNonEmptyString(action.query, input.query, queries[0]);
-  const url = firstNonEmptyString(action.url, input.url);
-  const pattern = firstNonEmptyString(action.pattern, input.pattern);
-  const explicitType = firstNonEmptyString(action.type, input.actionType, input.action_type);
-
-  const actionType = explicitType
-    || (url && pattern ? 'find_in_page' : url ? 'open_page' : (query || queries.length > 0) ? 'search' : '');
-
-  const normalized: Record<string, unknown> = {};
-  if (actionType) normalized.actionType = actionType;
-  if (query) normalized.query = query;
-  if (queries.length > 0) normalized.queries = queries;
-  if (url) normalized.url = url;
-  if (pattern) normalized.pattern = pattern;
-  return normalized;
+  return stringifyToolValue(value);
 }
 
 function normalizeApplyPatchInput(input: Record<string, unknown>): Record<string, unknown> {
@@ -220,20 +190,6 @@ function firstNonEmptyString(...values: unknown[]): string {
     }
   }
   return '';
-}
-
-function normalizeStringArray(value: unknown): string[] {
-  if (!Array.isArray(value)) return [];
-
-  const uniqueValues = new Set<string>();
-  for (const entry of value) {
-    if (typeof entry !== 'string') continue;
-    const trimmed = entry.trim();
-    if (!trimmed) continue;
-    uniqueValues.add(trimmed);
-  }
-
-  return [...uniqueValues];
 }
 
 // ---------------------------------------------------------------------------
