@@ -4,6 +4,7 @@ import { extractString, parseFrontmatter } from '../../../utils/frontmatter';
 import type { TaskPriority } from '../model/taskTypes';
 import { chainConfigFrontmatterLines, parseChainConfig, type WorkOrderChainConfig } from '../model/workOrderChain';
 import {
+  beginNoteFrontmatter,
   deleteNote,
   fileBaseName,
   listNoteDefinitions,
@@ -74,14 +75,7 @@ export class TemplateNoteStore {
   }
 
   build(input: SaveTemplateInput): string {
-    const lines: string[] = [
-      '---',
-      'type: specorator-work-order-template',
-      'schema_version: 1',
-      `name: ${JSON.stringify(input.name)}`,
-    ];
-    if (input.description) lines.push(`description: ${JSON.stringify(input.description)}`);
-    if (input.icon) lines.push(`icon: ${JSON.stringify(input.icon)}`);
+    const lines = beginNoteFrontmatter('specorator-work-order-template', input);
     if (input.provider) lines.push(`provider: ${JSON.stringify(input.provider)}`);
     if (input.model) lines.push(`model: ${JSON.stringify(input.model)}`);
     if (input.priority) lines.push(`priority: ${input.priority}`);
