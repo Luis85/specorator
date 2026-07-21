@@ -43,14 +43,6 @@
   z-index: 1000;
   width: max-content;
   padding: 4px;
-  opacity: 0;
-  visibility: hidden;
-  transition: opacity 0.15s ease, visibility 0.15s ease;
-}
-
-.specorator-model-selector:hover .specorator-model-dropdown {
-  opacity: 1;
-  visibility: visible;
 }
 
 .specorator-model-group {

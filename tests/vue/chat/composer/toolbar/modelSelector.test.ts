@@ -52,6 +52,59 @@ describe('ModelSelector.vue', () => {
     expect(wrapper.find('.specorator-model-dropdown').exists()).toBe(false);
   });
 
+  it('exposes native button semantics on the div trigger (role/tabindex/aria-haspopup + aria-expanded)', async () => {
+    const wrapper = mountSelector(stubCallbacks());
+    const trigger = wrapper.find('.specorator-model-btn');
+    expect(trigger.attributes('role')).toBe('button');
+    expect(trigger.attributes('tabindex')).toBe('0');
+    expect(trigger.attributes('aria-haspopup')).toBe('listbox');
+    expect(trigger.attributes('aria-expanded')).toBe('false');
+
+    await trigger.trigger('click');
+    expect(wrapper.find('.specorator-model-btn').attributes('aria-expanded')).toBe('true');
+  });
+
+  it('opens on Enter/Space keydown so keyboard users can reach the options', async () => {
+    const wrapper = mountSelector(stubCallbacks());
+    await wrapper.find('.specorator-model-btn').trigger('keydown', { key: 'Enter' });
+    expect(wrapper.find('.specorator-model-dropdown').exists()).toBe(true);
+
+    await wrapper.find('.specorator-model-btn').trigger('keydown', { key: 'Enter' });
+    expect(wrapper.find('.specorator-model-dropdown').exists()).toBe(false);
+
+    await wrapper.find('.specorator-model-btn').trigger('keydown', { key: ' ' });
+    expect(wrapper.find('.specorator-model-dropdown').exists()).toBe(true);
+  });
+
+  it('activating an option by keyboard fires onSetModel and closes the dropdown', async () => {
+    const cb = stubCallbacks();
+    const wrapper = mountSelector(cb);
+    const store = useComposerStore();
+    store.setToolbar({
+      ...store.toolbar,
+      modelLabel: 'Sonnet',
+      modelGroups: [{ label: 'Claude', options: [{ value: 'sonnet-id', label: 'Sonnet' }] }],
+    });
+
+    await wrapper.find('.specorator-model-btn').trigger('keydown', { key: 'Enter' });
+    const option = wrapper.find('.specorator-model-option');
+    expect(option.attributes('role')).toBe('option');
+    expect(option.attributes('aria-selected')).toBe('true');
+
+    await option.trigger('keydown', { key: 'Enter' });
+    expect(cb.onSetModel).toHaveBeenCalledWith('sonnet-id');
+    expect(wrapper.find('.specorator-model-dropdown').exists()).toBe(false);
+  });
+
+  it('Escape closes the dropdown', async () => {
+    const wrapper = mountSelector(stubCallbacks());
+    await wrapper.find('.specorator-model-btn').trigger('click');
+    expect(wrapper.find('.specorator-model-dropdown').exists()).toBe(true);
+
+    await wrapper.find('.specorator-model-selector').trigger('keydown', { key: 'Escape' });
+    expect(wrapper.find('.specorator-model-dropdown').exists()).toBe(false);
+  });
+
   it('renders a ProviderIconSvg descriptor as a REAL svg element, not [object Object]', async () => {
     const wrapper = mountSelector(stubCallbacks());
     const store = useComposerStore();
