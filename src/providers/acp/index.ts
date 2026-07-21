@@ -10,4 +10,5 @@ export * from './AcpToolStreamAdapter';
 export * from './acpWorkspaceFs';
 export * from './buildAcpUsageInfo';
 export * from './methodNames';
+export * from './relayAcpTurnStream';
 export * from './types';

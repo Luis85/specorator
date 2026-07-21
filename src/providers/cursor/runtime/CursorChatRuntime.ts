@@ -32,11 +32,11 @@ import {
   buildActiveTurnEffect,
   mapApprovalDecision,
   normalizeApprovalInput,
+  relayAcpTurnStream,
   selectPermissionOption,
 } from '../../acp';
 import { CURSOR_PROVIDER_CAPABILITIES } from '../capabilities';
 import { CursorAcpCaptureSink } from '../diagnostics/CursorAcpCaptureSink';
-import { validateCursorAcpSessionVault } from '../history/cursorSessionOwnership';
 import { encodeCursorTurn } from '../prompt/encodeCursorTurn';
 import { getCursorState, resolveCursorSessionId } from '../types';
 import { registerCursorAcpExtensions } from './cursorAcpExtensions';
@@ -51,17 +51,11 @@ import { CursorModelApplicator } from './CursorModelApplicator';
 import { buildCursorModelCatalogCliKey } from './cursorModelCatalog';
 import { fromCursorModelValue } from './cursorModelId';
 import { cursorModelContextWindow } from './cursorModelWindowCatalog';
-import {
-  formatCursorRuntimeError,
-  isCursorAuthenticationFailure,
-  isCursorSessionLoadTransportFailure,
-} from './cursorRuntimeErrors';
+import { CursorPromptOwnership } from './CursorPromptOwnership';
+import { formatCursorRuntimeError } from './cursorRuntimeErrors';
+import { CursorSessionCoordinator } from './CursorSessionCoordinator';
 import { CursorSessionModelState } from './CursorSessionModelState';
-import {
-  cursorSessionAdditionalDirectories,
-  cursorSessionRootsEqual,
-  normalizeCursorSessionRoots,
-} from './cursorSessionRoots';
+import { normalizeCursorSessionRoots } from './cursorSessionRoots';
 import { mapCursorToolInput } from './cursorToolInputMapping';
 import { MAX_CURSOR_TOOL_RESULT_CHARS } from './cursorToolNormalization';
 import { APPROVAL_CANCELLED, raceApprovalAgainstCancel, withTimeout } from './cursorTurnRaces';
@@ -95,31 +89,19 @@ const CURSOR_TURN_BUSY_MESSAGE =
   'Cursor agent is still finishing the previous turn. Stop the current turn or wait a moment, then retry.';
 const CURSOR_OLD_CLI_MESSAGE =
   'Cursor CLI does not support ACP (`agent acp`). Update cursor-agent (`cursor-agent update` or reinstall from cursor.com/cli), then retry.';
-const CURSOR_LOGIN_MESSAGE =
-  'Cursor CLI is not authenticated. Run `cursor-agent login` in a terminal, then retry.';
 
 export class CursorChatRuntime implements ChatRuntime {
   readonly providerId: ProviderId = 'cursor';
 
   private activeTurn: ActiveTurn | null = null;
-  // The prior turn's prompt-settle chain (see ActiveTurn.promptSettled). query()
-  // awaits it — bounded by the cancel-escalation window — so turns serialize and a
-  // cancelled turn's late blocking requests can't leak into the next turn.
-  private pendingPromptSettled: Promise<void> | null = null;
-  /** Atomically reserves the next prompt slot across simultaneous query() starts. */
-  private promptStartTail: Promise<void> = Promise.resolve();
   private readonly sessionModel = new CursorSessionModelState();
   private readonly modelApplicator: CursorModelApplicator;
+  private readonly sessionCoordinator: CursorSessionCoordinator;
+  private readonly promptOwnership: CursorPromptOwnership;
   private activeCliKey: string | null = null;
   // Aborts a pending blocking cursor/ask_question await so cancel()/cleanup can
   // answer the still-open RPC instead of leaving the agent stuck on it.
   private askQuestionAbortController: AbortController | null = null;
-  // Set by cancel() for the turn currently claiming/waiting on prompt ownership.
-  // Consumed once when ownership is granted so a later queued query cannot clear
-  // an earlier turn's Stop that arrived during awaitPriorTurnSettled.
-  private ownershipCancelRequested = false;
-  /** Count of query() callers blocked in awaitPriorTurnSettled. */
-  private serializeWaiters = 0;
   private autoApprovePermissions = false;
   // Diagnostics-only, default-off ACP capture sink (wire frames/stderr/lifecycle
   // events; see docs/superpowers/specs/2026-07-11-cursor-acp-capture-design.md).
@@ -128,7 +110,6 @@ export class CursorChatRuntime implements ChatRuntime {
   private readonly capture: CursorAcpCaptureSink;
   private connection: AcpClientConnection | null = null;
   private contextUsage: AcpUsageUpdate | null = null;
-  private currentModeId: string | null = null;
   /** Conversation explicitly bound to this per-tab runtime. */
   private boundConversationId: string | null = null;
   private currentTurnIsPlan = false;
@@ -143,16 +124,8 @@ export class CursorChatRuntime implements ChatRuntime {
   // in StreamController) instead of stacking a new TodoWrite block per update.
   private currentTurnPlanToolCallId: string | null = null;
   private planTurnCounter = 0;
-  private lastStartupErrorMessage: string | null = null;
-  private loadedSessionId: string | null = null;
   private process: AcpSubprocess | null = null;
   private readonly readyState = new ReadyStateNotifier();
-  private sessionId: string | null = null;
-  private sessionInvalidated = false;
-  // External-context roots the live ACP session was opened with. A turn whose
-  // selection differs forces a fresh session (additionalDirectories are fixed at
-  // session/new), so the agent's readable scope tracks the attached folders.
-  private activeSessionRoots: string[] = [];
   private readonly sessionUpdateNormalizer = new AcpSessionUpdateNormalizer({
     maxToolOutputChars: MAX_CURSOR_TOOL_RESULT_CHARS,
   });
@@ -181,7 +154,42 @@ export class CursorChatRuntime implements ChatRuntime {
       getConnection: () => this.connection,
       getActiveCliKey: () => this.activeCliKey,
     });
+    this.sessionCoordinator = new CursorSessionCoordinator({
+      getConnection: () => this.connection,
+      plugin,
+      capture: this.capture,
+      sessionModel: this.sessionModel,
+      modelApplicator: this.modelApplicator,
+      getBoundConversationId: () => this.boundConversationId,
+      formatRuntimeError: (error) => this.formatRuntimeError(error),
+    });
+    this.promptOwnership = new CursorPromptOwnership({
+      requestCancel: () => this.cancel(),
+      recycleProcess: () => this.recycleProcess(),
+      serializeCeilingMs: CURSOR_TURN_SERIALIZE_CEILING_MS,
+    });
   }
+
+  // Session identity lives on the coordinator; the runtime proxies each field so
+  // its turn/notification code (and the white-box unit suite) keep reading and
+  // writing them by name.
+  private get sessionId(): string | null { return this.sessionCoordinator.sessionId; }
+  private set sessionId(value: string | null) { this.sessionCoordinator.sessionId = value; }
+  private get loadedSessionId(): string | null { return this.sessionCoordinator.loadedSessionId; }
+  private set loadedSessionId(value: string | null) { this.sessionCoordinator.loadedSessionId = value; }
+  private get sessionInvalidated(): boolean { return this.sessionCoordinator.sessionInvalidated; }
+  private set sessionInvalidated(value: boolean) { this.sessionCoordinator.sessionInvalidated = value; }
+  private get activeSessionRoots(): string[] { return this.sessionCoordinator.activeSessionRoots; }
+  private set activeSessionRoots(value: string[]) { this.sessionCoordinator.activeSessionRoots = value; }
+  private get currentModeId(): string | null { return this.sessionCoordinator.currentModeId; }
+  private set currentModeId(value: string | null) { this.sessionCoordinator.currentModeId = value; }
+  private get lastStartupErrorMessage(): string | null { return this.sessionCoordinator.lastStartupErrorMessage; }
+  private set lastStartupErrorMessage(value: string | null) { this.sessionCoordinator.lastStartupErrorMessage = value; }
+
+  // Prompt-ownership state lives on the collaborator; the runtime proxies the one
+  // field the unit suite seeds directly (a prior turn's settle chain).
+  private get pendingPromptSettled(): Promise<void> | null { return this.promptOwnership.pendingPromptSettled; }
+  private set pendingPromptSettled(value: Promise<void> | null) { this.promptOwnership.pendingPromptSettled = value; }
 
   getCapabilities(): Readonly<ProviderCapabilities> {
     return CURSOR_PROVIDER_CAPABILITIES;
@@ -279,12 +287,6 @@ export class CursorChatRuntime implements ChatRuntime {
     return controller.signal;
   }
 
-  private consumeOwnershipCancelRequest(): boolean {
-    const requested = this.ownershipCancelRequested;
-    this.ownershipCancelRequested = false;
-    return requested;
-  }
-
   async *query(
     turn: PreparedChatTurn,
     conversationHistory?: ChatMessage[],
@@ -301,7 +303,7 @@ export class CursorChatRuntime implements ChatRuntime {
     // share one session id, so A's late sessionId-less blocking request could see B's
     // rotated signal and open A's plan into B. Waiting for A to settle BEFORE rotating
     // the controller keeps A's aborted signal current so A's late requests cancel.
-    const releasePromptOwnership = await this.claimPromptOwnership();
+    const releasePromptOwnership = await this.promptOwnership.claim();
     if (!releasePromptOwnership) {
       yield { type: 'error', content: CURSOR_TURN_BUSY_MESSAGE };
       yield { type: 'done' };
@@ -313,7 +315,7 @@ export class CursorChatRuntime implements ChatRuntime {
       // Reset AFTER the wait: a cancelled prior turn's finalize runs during it and would else leave stale planCompleted.
       this.turnMetadata = {};
 
-      const cancelDuringClaimWait = this.consumeOwnershipCancelRequest();
+      const cancelDuringClaimWait = this.promptOwnership.consumeCancelRequest();
       const turnSignal = this.beginTurnAbortScope(cancelDuringClaimWait);
 
       yield { type: 'user_message_start', content: turn.persistedContent };
@@ -462,85 +464,15 @@ export class CursorChatRuntime implements ChatRuntime {
     const promptPromise = this.dispatchPromptTurn(
       activeTurn, turn, history, sessionId, queryOptions, releasePromptOwnership,
     );
-    try {
-      while (true) {
-        const chunk = await activeTurn.queue.next();
-        if (!chunk) {
-          break;
-        }
-        yield chunk;
-      }
-      await promptPromise;
-    } finally {
+    yield* relayAcpTurnStream(activeTurn.queue, promptPromise, () => {
       if (this.activeTurn === activeTurn) {
         this.activeTurn = null;
       }
-    }
-  }
-
-  private async claimPromptOwnership(): Promise<(() => void) | null> {
-    const priorClaim = this.promptStartTail;
-    let releaseClaim!: () => void;
-    const claimSlot = new Promise<void>((resolve) => {
-      releaseClaim = resolve;
     });
-    this.promptStartTail = priorClaim.then(() => claimSlot);
-    await priorClaim;
-
-    try {
-      if (!(await this.awaitPriorTurnSettled())) {
-        this.consumeOwnershipCancelRequest();
-        return null;
-      }
-      let releaseReservation!: () => void;
-      const reservation = new Promise<void>((resolve) => {
-        releaseReservation = resolve;
-      });
-      this.pendingPromptSettled = reservation;
-      let released = false;
-      return () => {
-        if (released) return;
-        released = true;
-        releaseReservation();
-        if (this.pendingPromptSettled === reservation) {
-          this.pendingPromptSettled = null;
-        }
-      };
-    } finally {
-      releaseClaim();
-    }
-  }
-
-  // Bounded serialize wait for a prior turn's prompt (see the call site in query()
-  // for the attribution gap this closes). Returns false when the prior prompt is
-  // still live after cancel/recycle — callers must not issue a second session/prompt.
-  private async awaitPriorTurnSettled(): Promise<boolean> {
-    if (!this.pendingPromptSettled) {
-      return true;
-    }
-    this.serializeWaiters += 1;
-    try {
-      const settled = await withTimeout(
-        this.pendingPromptSettled,
-        CURSOR_TURN_SERIALIZE_CEILING_MS,
-        new Error('cursor turn serialize ceiling'),
-      ).then(() => true).catch(() => false);
-      if (settled) {
-        return true;
-      }
-
-      this.cancel();
-      await this.recycleProcess();
-      return false;
-    } finally {
-      this.serializeWaiters -= 1;
-    }
   }
 
   cancel(): void {
-    if (this.serializeWaiters > 0) {
-      this.ownershipCancelRequested = true;
-    }
+    this.promptOwnership.requestCancelIfWaiting();
     const turn = this.activeTurn;
     if (this.connection && this.sessionId) {
       this.connection.cancel({ sessionId: this.sessionId });
@@ -829,191 +761,20 @@ export class CursorChatRuntime implements ChatRuntime {
     return stderr ? `${CURSOR_OLD_CLI_MESSAGE}\n\n${stderr}` : CURSOR_OLD_CLI_MESSAGE;
   }
 
-  private async ensureSession(cwd: string, roots: string[] = []): Promise<string | null> {
-    if (!this.connection) {
-      return null;
-    }
-    // additionalDirectories are fixed at session/new, so a changed external-root
-    // selection on a live session needs a fresh one (with history re-injected).
-    if (
-      this.loadedSessionId
-      && this.sessionId === this.loadedSessionId
-      && !cursorSessionRootsEqual(this.activeSessionRoots, roots)
-    ) {
-      this.sessionInvalidated = true;
-      this.sessionId = null;
-      this.loadedSessionId = null;
-    }
-    if (this.sessionId && this.loadedSessionId === this.sessionId) {
-      return this.sessionId;
-    }
-
-    if (this.sessionId) {
-      const requestedId = this.sessionId;
-      const ownershipError = validateCursorAcpSessionVault(requestedId, cwd);
-      if (ownershipError) {
-        this.lastStartupErrorMessage = ownershipError.message;
-        this.plugin.logger.scope('cursor.acp').warn(
-          'refusing to load Cursor session from another workspace',
-          ownershipError,
-        );
-        return null;
-      }
-      try {
-        const response = await this.connection.loadSession({
-          cwd,
-          mcpServers: [],
-          sessionId: requestedId,
-          additionalDirectories: cursorSessionAdditionalDirectories(roots),
-        });
-        // Real Cursor session/load responses carry no sessionId (verified against
-        // ACP wire captures 2026-07-12); the loaded session keeps the id we asked
-        // to load. Adopting the response's absent id here would abort the resumed
-        // turn ("Failed to open a Cursor session") and silently discard the load.
-        const loadedId = response.sessionId ?? requestedId;
-        this.loadedSessionId = loadedId;
-        this.sessionId = loadedId;
-        this.activeSessionRoots = roots;
-        this.modelApplicator.captureAdvertisedModelValues(response);
-        this.capture.event('session_load', { sessionId: loadedId });
-        return loadedId;
-      } catch (error) {
-        let loadError = error;
-        if (isCursorAuthenticationFailure(loadError) && await this.tryAuthenticate()) {
-          try {
-            const retryResponse = await this.connection.loadSession({
-              cwd,
-              mcpServers: [],
-              sessionId: requestedId,
-              additionalDirectories: cursorSessionAdditionalDirectories(roots),
-            });
-            const loadedId = retryResponse.sessionId ?? requestedId;
-            this.loadedSessionId = loadedId;
-            this.sessionId = loadedId;
-            this.activeSessionRoots = roots;
-            this.modelApplicator.captureAdvertisedModelValues(retryResponse);
-            this.capture.event('session_load', { sessionId: loadedId, retriedAfterAuth: true });
-            return loadedId;
-          } catch (retryError) {
-            loadError = retryError;
-          }
-        }
-
-        if (isCursorSessionLoadTransportFailure(loadError)) {
-          // Preserve the requested session id so a transient transport failure
-          // can retry on the next turn instead of minting a fresh session.
-          this.plugin.logger.scope('cursor.acp')
-            .warn('session/load transport failure; preserving session id', loadError);
-          this.lastStartupErrorMessage = this.formatRuntimeError(loadError);
-          this.capture.event('session_load_transport_failure', { sessionId: requestedId });
-          return null;
-        }
-
-        // Load-bearing no-spike fallback: an id-mapping mismatch degrades to a
-        // fresh session with history re-injected on the next prompt.
-        this.plugin.logger.scope('cursor.acp').warn(
-          'session/load failed; falling back to new session',
-          loadError,
-        );
-        this.capture.event('session_load_fallback');
-        this.sessionInvalidated = true;
-        this.sessionId = null;
-        this.loadedSessionId = null;
-      }
-    }
-
-    return this.createSession(cwd, roots);
+  private ensureSession(cwd: string, roots: string[] = []): Promise<string | null> {
+    return this.sessionCoordinator.ensureSession(cwd, roots);
   }
 
-  private async createSession(cwd: string, roots: string[] = []): Promise<string | null> {
-    if (!this.connection) {
-      return null;
-    }
-    // Committing to a session opened with exactly these roots; track them so the
-    // next turn's ensureSession only recreates when the selection actually changes.
-    this.activeSessionRoots = roots;
-    const additionalDirectories = cursorSessionAdditionalDirectories(roots);
-    try {
-      return await this.adoptFreshSession(
-        await this.connection.newSession({ cwd, mcpServers: [], additionalDirectories }),
-      );
-    } catch (error) {
-      if (isCursorAuthenticationFailure(error) && await this.tryAuthenticate()) {
-        try {
-          return await this.adoptFreshSession(
-            await this.connection.newSession({ cwd, mcpServers: [], additionalDirectories }),
-          );
-        } catch (retryError) {
-          this.lastStartupErrorMessage = this.formatRuntimeError(retryError);
-          return null;
-        }
-      }
-      this.lastStartupErrorMessage = isCursorAuthenticationFailure(error)
-        ? `${CURSOR_LOGIN_MESSAGE}\n\n${this.formatRuntimeError(error)}`
-        : this.formatRuntimeError(error);
-      return null;
-    }
+  private createSession(cwd: string, roots: string[] = []): Promise<string | null> {
+    return this.sessionCoordinator.createSession(cwd, roots);
   }
 
-  private async adoptFreshSession(response: AcpNewSessionResponse): Promise<string> {
-    this.loadedSessionId = response.sessionId;
-    this.sessionId = response.sessionId;
-    this.currentModeId = null;
-    this.sessionModel.reset();
-    this.modelApplicator.captureAdvertisedModelValues(response, false);
-    this.sessionModel.forceReapply();
-    await this.modelApplicator.persistAdvertisedModelState()
-      .catch((error) => this.plugin.logger.scope('cursor.acp').warn('persist fresh model state failed', error));
-    this.capture.event('session_new', { sessionId: response.sessionId });
-    await this.persistNewSessionId(response.sessionId);
-    return response.sessionId;
+  private adoptFreshSession(response: AcpNewSessionResponse): Promise<string> {
+    return this.sessionCoordinator.adoptFreshSession(response);
   }
 
-  private async persistNewSessionId(sessionId: string): Promise<void> {
-    const conversationId = this.boundConversationId;
-    if (!conversationId) return;
-    const conversation = this.plugin.getConversationSync(conversationId);
-    if (!conversation) return;
-    const existingState = getCursorState(conversation.providerState);
-    if (existingState.chatSessionId === sessionId && conversation.sessionId === sessionId) {
-      return;
-    }
-    try {
-      await this.plugin.updateConversation(conversationId, {
-        sessionId,
-        providerState: { ...existingState, chatSessionId: sessionId },
-      });
-    } catch (error) {
-      this.plugin.logger.scope('cursor.acp').warn('persist new session id failed', error);
-    }
-  }
-
-  private async tryAuthenticate(): Promise<boolean> {
-    if (!this.connection) {
-      return false;
-    }
-    try {
-      await this.connection.authenticate({ methodId: 'cursor_login' });
-      return true;
-    } catch {
-      return false;
-    }
-  }
-
-  private async applyMode(sessionId: string, modeId: string): Promise<void> {
-    if (!this.connection || this.currentModeId === modeId) {
-      return;
-    }
-    try {
-      await this.connection.setMode({ modeId, sessionId });
-      this.currentModeId = modeId;
-      this.capture.event('mode_apply', { modeId, ok: true });
-    } catch (error) {
-      // Mode setting is best-effort: an agent that rejects setMode still runs
-      // the turn in its default mode; approvals remain client-enforced.
-      this.plugin.logger.scope('cursor.acp').warn('setMode failed', error);
-      this.capture.event('mode_apply', { modeId, ok: false });
-    }
+  private applyMode(sessionId: string, modeId: string): Promise<void> {
+    return this.sessionCoordinator.applyMode(sessionId, modeId);
   }
 
   private async prepareSessionForPromptTurn(
