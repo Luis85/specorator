@@ -321,41 +321,9 @@ export class CursorChatRuntime implements ChatRuntime {
       yield { type: 'user_message_start', content: turn.persistedContent };
       yield { type: 'assistant_message_start' };
 
-      if (!this.staleMcpCleaned) {
-        this.staleMcpCleaned = true;
-        await cleanupStaleCursorMcpServer();
-      }
-
-      let startupError: string | null = null;
-      if (!(await this.ensureReady())) {
-        startupError = this.lastStartupErrorMessage ?? CURSOR_OLD_CLI_MESSAGE;
-      }
-      if (startupError || !this.connection) {
-        yield { type: 'error', content: startupError ?? 'Cursor ACP runtime is not ready.' };
-        yield { type: 'done' };
-        return;
-      }
-
-      const cwd = getVaultPath(this.plugin.app) ?? process.cwd();
-      const externalRoots = this.resolveTurnExternalRoots(turn, queryOptions);
-      // Capture the session id BEFORE ensureSession (which may mint a fresh one): a
-      // turn starting without one (fork, provider switch, resume whose native session
-      // never loaded) still carries history that must be re-injected into the prompt.
-      const sessionIdAtTurnStart = this.sessionId;
-      const sessionId = await this.ensureSession(cwd, externalRoots);
-      if (!sessionId) {
-        yield { type: 'error', content: this.lastStartupErrorMessage ?? 'Failed to open a Cursor session.' };
-        yield { type: 'done' };
-        return;
-      }
-
-      const shouldBootstrapHistory = (conversationHistory?.length ?? 0) > 0
-        && (!sessionIdAtTurnStart || this.sessionInvalidated);
-
-      try {
-        await this.prepareSessionForPromptTurn(sessionId, queryOptions);
-      } catch (error) {
-        yield { type: 'error', content: this.formatRuntimeError(error) };
+      const prep = await this.prepareCursorTurn(turn, conversationHistory, queryOptions);
+      if (!prep.ok) {
+        yield { type: 'error', content: prep.error };
         yield { type: 'done' };
         return;
       }
@@ -367,62 +335,147 @@ export class CursorChatRuntime implements ChatRuntime {
         return;
       }
 
-      this.activeTurn?.queue.close();
-      const activeTurn: ActiveTurn = {
-        queue: new AcpStreamChunkQueue(),
-        sessionId,
-        usageContextWindow: cursorModelContextWindow(this.sessionModel.currentValue),
-        usageModel: this.resolveActiveModel(queryOptions),
-        promptSettled: false,
-      };
-      this.activeTurn = activeTurn;
-      this.currentTurnSawAssistantContent = false;
-      this.currentTurnPlanDecidedInline = false;
-      this.currentTurnPlanToolCallId = null;
-      this.contextUsage = null;
-      this.sessionUpdateNormalizer.reset();
-      this.toolStreamAdapter.reset();
-
-      const history = shouldBootstrapHistory ? (conversationHistory ?? []) : [];
+      const activeTurn = this.startActiveTurn(prep.sessionId, queryOptions);
+      const history = prep.shouldBootstrapHistory ? (conversationHistory ?? []) : [];
 
       promptDispatched = true;
-      const promptPromise = Promise.resolve().then(() => this.connection!.prompt({
-        prompt: buildCursorAcpPromptBlocks(turn, history, queryOptions?.boundAgentPrompt),
-        sessionId,
-      })).then((response) => {
-        this.emitFinalUsage(activeTurn, response.usage ?? null);
-        this.finalizePlanTurnMetadata();
-        this.pushTurnTermination(activeTurn, [{ type: 'done' }]);
-      }).catch((error) => {
-        this.pushTurnTermination(activeTurn, [{ type: 'error', content: this.formatRuntimeError(error) }, { type: 'done' }]);
-      }).finally(() => {
-        // Prompt settled: the one signal that stands the escalation timer down.
-        // Set before nulling activeTurn so the timer can't see a nulled activeTurn
-        // paired with an unsettled prompt.
-        activeTurn.promptSettled = true;
-        if (this.activeTurn === activeTurn) {
-          this.activeTurn = null;
-        }
-        releasePromptOwnership();
-      });
-
-      try {
-        while (true) {
-          const chunk = await activeTurn.queue.next();
-          if (!chunk) {
-            break;
-          }
-          yield chunk;
-        }
-        await promptPromise;
-      } finally {
-        if (this.activeTurn === activeTurn) {
-          this.activeTurn = null;
-        }
-      }
+      yield* this.runPromptTurn(
+        activeTurn, turn, history, prep.sessionId, queryOptions, releasePromptOwnership,
+      );
     } finally {
       if (!promptDispatched) {
         releasePromptOwnership();
+      }
+    }
+  }
+
+  // Runs the post-yield startup path — stale-MCP cleanup, ensureReady, session
+  // open, and per-turn session prep — collapsing its guards into one result so
+  // query() emits a single error/done pair on any failure.
+  private async prepareCursorTurn(
+    turn: PreparedChatTurn,
+    conversationHistory: ChatMessage[] | undefined,
+    queryOptions: ChatRuntimeQueryOptions | undefined,
+  ): Promise<
+    | { ok: false; error: string }
+    | { ok: true; sessionId: string; shouldBootstrapHistory: boolean }
+  > {
+    if (!this.staleMcpCleaned) {
+      this.staleMcpCleaned = true;
+      await cleanupStaleCursorMcpServer();
+    }
+
+    let startupError: string | null = null;
+    if (!(await this.ensureReady())) {
+      startupError = this.lastStartupErrorMessage ?? CURSOR_OLD_CLI_MESSAGE;
+    }
+    if (startupError || !this.connection) {
+      return { ok: false, error: startupError ?? 'Cursor ACP runtime is not ready.' };
+    }
+
+    const cwd = getVaultPath(this.plugin.app) ?? process.cwd();
+    const externalRoots = this.resolveTurnExternalRoots(turn, queryOptions);
+    // Capture the session id BEFORE ensureSession (which may mint a fresh one): a
+    // turn starting without one (fork, provider switch, resume whose native session
+    // never loaded) still carries history that must be re-injected into the prompt.
+    const sessionIdAtTurnStart = this.sessionId;
+    const sessionId = await this.ensureSession(cwd, externalRoots);
+    if (!sessionId) {
+      return { ok: false, error: this.lastStartupErrorMessage ?? 'Failed to open a Cursor session.' };
+    }
+
+    const shouldBootstrapHistory = (conversationHistory?.length ?? 0) > 0
+      && (!sessionIdAtTurnStart || this.sessionInvalidated);
+
+    try {
+      await this.prepareSessionForPromptTurn(sessionId, queryOptions);
+    } catch (error) {
+      return { ok: false, error: this.formatRuntimeError(error) };
+    }
+
+    return { ok: true, sessionId, shouldBootstrapHistory };
+  }
+
+  // Opens a fresh ActiveTurn and resets the per-turn stream/plan/usage state.
+  private startActiveTurn(
+    sessionId: string,
+    queryOptions: ChatRuntimeQueryOptions | undefined,
+  ): ActiveTurn {
+    this.activeTurn?.queue.close();
+    const activeTurn: ActiveTurn = {
+      queue: new AcpStreamChunkQueue(),
+      sessionId,
+      usageContextWindow: cursorModelContextWindow(this.sessionModel.currentValue),
+      usageModel: this.resolveActiveModel(queryOptions),
+      promptSettled: false,
+    };
+    this.activeTurn = activeTurn;
+    this.currentTurnSawAssistantContent = false;
+    this.currentTurnPlanDecidedInline = false;
+    this.currentTurnPlanToolCallId = null;
+    this.contextUsage = null;
+    this.sessionUpdateNormalizer.reset();
+    this.toolStreamAdapter.reset();
+    return activeTurn;
+  }
+
+  // Fires the ACP prompt off-thread and wires its settlement: final usage/plan
+  // metadata on success, a terminal error otherwise, and — always — the
+  // prompt-settled flag, activeTurn teardown, and prompt-ownership release.
+  private dispatchPromptTurn(
+    activeTurn: ActiveTurn,
+    turn: PreparedChatTurn,
+    history: ChatMessage[],
+    sessionId: string,
+    queryOptions: ChatRuntimeQueryOptions | undefined,
+    releasePromptOwnership: () => void,
+  ): Promise<void> {
+    return Promise.resolve().then(() => this.connection!.prompt({
+      prompt: buildCursorAcpPromptBlocks(turn, history, queryOptions?.boundAgentPrompt),
+      sessionId,
+    })).then((response) => {
+      this.emitFinalUsage(activeTurn, response.usage ?? null);
+      this.finalizePlanTurnMetadata();
+      this.pushTurnTermination(activeTurn, [{ type: 'done' }]);
+    }).catch((error) => {
+      this.pushTurnTermination(activeTurn, [{ type: 'error', content: this.formatRuntimeError(error) }, { type: 'done' }]);
+    }).finally(() => {
+      // Prompt settled: the one signal that stands the escalation timer down.
+      // Set before nulling activeTurn so the timer can't see a nulled activeTurn
+      // paired with an unsettled prompt.
+      activeTurn.promptSettled = true;
+      if (this.activeTurn === activeTurn) {
+        this.activeTurn = null;
+      }
+      releasePromptOwnership();
+    });
+  }
+
+  // Dispatches the prompt and relays the ACP stream to the caller, tearing down
+  // activeTurn once the queue drains and the prompt settles.
+  private async *runPromptTurn(
+    activeTurn: ActiveTurn,
+    turn: PreparedChatTurn,
+    history: ChatMessage[],
+    sessionId: string,
+    queryOptions: ChatRuntimeQueryOptions | undefined,
+    releasePromptOwnership: () => void,
+  ): AsyncGenerator<StreamChunk> {
+    const promptPromise = this.dispatchPromptTurn(
+      activeTurn, turn, history, sessionId, queryOptions, releasePromptOwnership,
+    );
+    try {
+      while (true) {
+        const chunk = await activeTurn.queue.next();
+        if (!chunk) {
+          break;
+        }
+        yield chunk;
+      }
+      await promptPromise;
+    } finally {
+      if (this.activeTurn === activeTurn) {
+        this.activeTurn = null;
       }
     }
   }
