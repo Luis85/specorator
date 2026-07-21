@@ -9,7 +9,7 @@
     "cloneGroups": 32,
     "duplicatedLines": 820,
     "complexFunctions": 262,
-    "criticalComplexity": 3,
+    "criticalComplexity": 2,
     "averageMaintainability": 90.1
   }
 }
