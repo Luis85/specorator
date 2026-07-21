@@ -96,11 +96,12 @@ export class AcpToolStreamAdapter {
     this.toolStates.set(toolCallUpdate.toolCallId, state);
 
     const normalizedName = this.adapter.normalizeToolName(state.rawName);
+    const resolvedInput = this.resolveInput(state);
     const result: StreamChunk[] = [];
-    if (this.shouldReemitToolUse(toolCallUpdate, state, normalizedName)) {
+    if (this.shouldReemitToolUse(toolCallUpdate, resolvedInput, normalizedName)) {
       result.push({
         id: toolCallUpdate.toolCallId,
-        input: state.input,
+        input: resolvedInput,
         name: normalizedName,
         type: 'tool_use',
       });
@@ -120,7 +121,7 @@ export class AcpToolStreamAdapter {
   // `locations`-seeded path changes the input without either of those.
   private shouldReemitToolUse(
     toolCallUpdate: AcpToolCallUpdate,
-    state: AcpToolStreamState,
+    resolvedInput: Record<string, unknown>,
     normalizedName: string,
   ): boolean {
     if (toolCallUpdate.rawInput !== undefined) {
@@ -132,7 +133,7 @@ export class AcpToolStreamAdapter {
       return true;
     }
     const previousInput = this.emittedInputs.get(id);
-    return previousInput !== undefined && !shallowEqualInput(previousInput, state.input);
+    return previousInput !== undefined && !shallowEqualInput(previousInput, resolvedInput);
   }
 
   private rememberEmitted(toolCallId: string, chunks: StreamChunk[]): void {
@@ -156,20 +157,26 @@ export class AcpToolStreamAdapter {
     },
   ): AcpToolStreamState {
     const nextRawName = this.adapter.resolveRawToolName(current?.rawName, update);
-    const nextLocations = update.locations ?? current?.locations;
     const state = this.selectBaseState(current, update, nextRawName);
-
-    // Fall back to the canonical path field from `locations` when the provider's
-    // own input mapping produced none, so Read/Write/Edit/LS show the file the
-    // renderer keys off `input.file_path`/`input.path`. Provider-supplied paths
-    // win; a no-op returns the same input reference.
-    state.locations = nextLocations;
-    state.input = seedFileToolPathFromLocations(
-      this.adapter.normalizeToolName(nextRawName),
-      state.input,
-      nextLocations,
-    );
+    // `input` stays the pure provider projection; the `locations` fallback is
+    // applied at emit (resolveInput). Persisting the seed would let a stale path
+    // from an earlier `locations` block masquerade as provider input and block a
+    // later `locations` update from replacing it.
+    state.locations = update.locations ?? current?.locations;
     return state;
+  }
+
+  // Fall back to the canonical path field from `locations` when the provider's
+  // own input mapping produced none, so Read/Write/Edit/LS show the file the
+  // renderer keys off `input.file_path`/`input.path`. Provider-supplied paths
+  // win; a no-op returns the same input reference. Computed at emit so a changed
+  // `locations` value always re-seeds from the (path-less) provider input.
+  private resolveInput(state: AcpToolStreamState): Record<string, unknown> {
+    return seedFileToolPathFromLocations(
+      this.adapter.normalizeToolName(state.rawName),
+      state.input,
+      state.locations,
+    );
   }
 
   // Pick the base state before location seeding: re-normalize from accumulated
@@ -211,13 +218,13 @@ export class AcpToolStreamAdapter {
       case 'tool_use':
         return {
           ...chunk,
-          input: state.input,
+          input: this.resolveInput(state),
           name: this.adapter.normalizeToolName(state.rawName),
         };
       case 'tool_result': {
         const toolUseResult = this.adapter.normalizeToolUseResult(
           state.rawName,
-          state.input,
+          this.resolveInput(state),
           state.rawOutput,
           state.content,
         );

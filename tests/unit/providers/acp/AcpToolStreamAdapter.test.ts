@@ -518,6 +518,42 @@ describe('AcpToolStreamAdapter', () => {
       );
       expect(result).toEqual([{ type: 'text', content: 'tail' }]);
     });
+
+    it('replaces a location-seeded path when a later update reports a different location', () => {
+      // Seeding is applied at emit from the path-less provider input, never
+      // persisted, so a new `locations` value wins instead of the earlier seed
+      // masquerading as provider-supplied input and pinning the stale path.
+      const { adapter } = fileToolPresentation();
+      const stream = new AcpToolStreamAdapter(adapter);
+      stream.normalizeToolCall(
+        toolCall({ kind: 'read', locations: [{ path: '/notes/a.md' }] }),
+        [{ type: 'tool_use', id: 'tc-1', name: 'x', input: {} }],
+      );
+      const result = stream.normalizeToolCallUpdate(
+        toolCallUpdate({ locations: [{ path: '/notes/b.md' }], status: 'in_progress' }),
+        [],
+      );
+      expect(result).toEqual([
+        { type: 'tool_use', id: 'tc-1', name: 'Read', input: { file_path: '/notes/b.md' } },
+      ]);
+    });
+
+    it('keeps a provider-supplied path even when a later location differs', () => {
+      // Provider input still wins: a real `rawInput` path is never overwritten by
+      // a divergent `locations` value on a later update.
+      const { adapter } = fileToolPresentation();
+      const stream = new AcpToolStreamAdapter(adapter);
+      stream.normalizeToolCall(
+        toolCall({ kind: 'read', rawInput: { file_path: '/real.md' }, locations: [{ path: '/notes/a.md' }] }),
+        [{ type: 'tool_use', id: 'tc-1', name: 'x', input: {} }],
+      );
+      const result = stream.normalizeToolCallUpdate(
+        toolCallUpdate({ locations: [{ path: '/notes/b.md' }], status: 'in_progress' }),
+        [],
+      );
+      // No re-emit: the provider path is unchanged despite the new location.
+      expect(result).toEqual([]);
+    });
   });
 
   // Cancellation: AcpToolStreamAdapter is synchronous and has no I/O or
