@@ -54,6 +54,16 @@ export class VaultSkillAggregator implements VaultSkillSource {
   private readonly nowMs: () => number;
   private readonly cache = new Map<ProviderId, CachedBucket>();
   private readonly inFlight = new Map<ProviderId, Promise<ProviderCommandEntry[]>>();
+  /**
+   * Per-provider generation guard. Each live fetch claims the provider's slot
+   * with a monotonic token; `invalidate()` drops it and a newer fetch replaces
+   * it. A fetch commits its result (and releases its in-flight slot) only while
+   * it still holds the current token, so a stale in-flight listing that resolves
+   * after an invalidate — the onload prewarm landing after a skill mutation —
+   * can't repopulate the bucket with pre-write data.
+   */
+  private fetchGeneration = 0;
+  private readonly bucketGeneration = new Map<ProviderId, number>();
   private eventBusUnsubscribe: (() => void) | undefined;
   private readonly cacheAdapter?: VaultFileAdapter;
   private readonly cachePath: string;
@@ -153,9 +163,11 @@ export class VaultSkillAggregator implements VaultSkillSource {
     if (providerId === undefined) {
       this.cache.clear();
       this.inFlight.clear();
+      this.bucketGeneration.clear();
     } else {
       this.cache.delete(providerId);
       this.inFlight.delete(providerId);
+      this.bucketGeneration.delete(providerId);
     }
   }
 
@@ -170,6 +182,7 @@ export class VaultSkillAggregator implements VaultSkillSource {
     this.eventBusUnsubscribe = undefined;
     this.cache.clear();
     this.inFlight.clear();
+    this.bucketGeneration.clear();
   }
 
   /** Trailing-edge debounce: collapse near-simultaneous fetches into a single write. */
@@ -209,15 +222,25 @@ export class VaultSkillAggregator implements VaultSkillSource {
     const existing = this.inFlight.get(record.providerId);
     if (existing) return existing;
 
+    // Claim the provider slot; only commit while we still hold it (see
+    // `bucketGeneration`). An invalidate() or newer fetch since we started
+    // retires this one so a late resolution can't overwrite the fresh bucket.
+    const generation = ++this.fetchGeneration;
+    this.bucketGeneration.set(record.providerId, generation);
+    const isCurrent = (): boolean =>
+      this.bucketGeneration.get(record.providerId) === generation;
+
     const promise = (async () => {
       try {
         const all = await record.commandCatalog.listVaultEntries();
         const raw = all.filter((e) => e.kind === 'skill');
-        this.cache.set(record.providerId, {
-          entries: raw,
-          expiresAt: this.nowMs() + this.ttlMs,
-        });
-        this.schedulePersist();
+        if (isCurrent()) {
+          this.cache.set(record.providerId, {
+            entries: raw,
+            expiresAt: this.nowMs() + this.ttlMs,
+          });
+          this.schedulePersist();
+        }
         return raw;
       } catch (err: unknown) {
         this.logger?.warn('vault skill aggregation failed', {
@@ -231,14 +254,18 @@ export class VaultSkillAggregator implements VaultSkillSource {
         // (non-`stale`) TTL serves the preserved entries without thrashing
         // retries; it re-fetches on the next cycle.
         const preserved = this.cache.get(record.providerId)?.entries ?? [];
-        this.cache.set(record.providerId, {
-          entries: preserved,
-          expiresAt: this.nowMs() + this.ttlMs,
-        });
-        this.schedulePersist();
+        if (isCurrent()) {
+          this.cache.set(record.providerId, {
+            entries: preserved,
+            expiresAt: this.nowMs() + this.ttlMs,
+          });
+          this.schedulePersist();
+        }
         return preserved;
       } finally {
-        this.inFlight.delete(record.providerId);
+        // Only release the slot if it's still ours: a superseding fetch may have
+        // claimed `inFlight` already, and deleting it would break its dedup.
+        if (isCurrent()) this.inFlight.delete(record.providerId);
       }
     })();
     this.inFlight.set(record.providerId, promise);

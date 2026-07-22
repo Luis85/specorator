@@ -59,6 +59,33 @@ describe('VaultSkillAggregator', () => {
     expect(await agg.listAll()).toEqual([]);
   });
 
+  it('a stale in-flight fetch that resolves after invalidate() cannot repopulate the bucket', async () => {
+    // The onload prewarm can have a Codex listing in flight when a skill mutation
+    // fires invalidate() + a fresh fetch. The stale in-flight request must not
+    // overwrite the fresh bucket when it resolves late, or the Library pins the
+    // pre-write listing for the full TTL.
+    let resolveStale!: (v: ProviderCommandEntry[]) => void;
+    const listVaultEntries = jest.fn()
+      .mockReturnValueOnce(new Promise<ProviderCommandEntry[]>((r) => { resolveStale = r; }))
+      .mockResolvedValue([makeSkillEntry({ id: 'skill-fresh', name: 'fresh' })]);
+    const records = [makeRecord({ entries: listVaultEntries })];
+    const agg = new VaultSkillAggregator(() => records, { ttlMs: 60_000 });
+
+    const first = agg.listAll();        // fetch A — in-flight on the stale promise
+    agg.invalidate('claude');           // retire it (a mutation happened)
+    const second = await agg.listAll(); // fetch B — fresh
+    expect(second.map((e) => e.name)).toEqual(['fresh']);
+
+    resolveStale([makeSkillEntry({ id: 'skill-stale', name: 'stale' })]); // A resolves late
+    await first;
+
+    // The late stale fetch is retired: the bucket still holds the fresh listing.
+    expect(agg.listCachedNow().map((e) => e.name)).toEqual(['fresh']);
+    // A subsequent read is served from that fresh cache — no third fetch.
+    expect((await agg.listAll()).map((e) => e.name)).toEqual(['fresh']);
+    expect(listVaultEntries).toHaveBeenCalledTimes(2);
+  });
+
   it('filters out non-skill entries', async () => {
     const records = [
       makeRecord({
