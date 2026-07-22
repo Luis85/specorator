@@ -44,7 +44,7 @@ The chat-header quick-action button (`dispatchQuickActionToTab` → the active t
 
 1. **In-memory per-provider TTL cache** (60 s default). `listAll()` and `listAllStreaming()` consult the cache before invoking `record.commandCatalog.listVaultEntries()`. `providerEnabled` and `providerDisplayName` are re-tagged from the current `ProviderRecord` on every read, so toggling a provider mid-session updates dimming immediately without invalidation.
 2. **Persistent disk index** at `.specorator/cache/skill-index.json`. Hydrated synchronously-via-async during `onload`, written debounced (1 s trailing) after every successful fetch. Skill bodies (`content`) are stripped at persist time — only metadata required for the picker is stored. Schema mismatch or malformed JSON is treated as a cold cache. **Hydrated buckets are flagged `stale`**: they back the synchronous first paint (`listCachedNow`) but are not trusted for the TTL — the first `fetchBucket` revalidates against disk instead. On-disk/enablement state can drift while Obsidian is closed (a plugin disabled via the CLI, a skill added/deleted), so a valid persisted TTL must not pin the stale set for ~60s. The flag is one-shot: a live fetch writes a non-`stale` bucket, so normal TTL caching resumes. Scope-agnostic — vault, user, and plugin skills all revalidate.
-3. **EventBus `vaultSkill.changed`** emitted by `ClaudeCommandCatalog` and `CodexSkillCatalog` after in-app skill save/delete. The aggregator subscribes and invalidates the matching provider bucket.
+3. **EventBus `vaultSkill.changed`** emitted by `ClaudeCommandCatalog` and `CodexSkillCatalog` after in-app skill save/delete (and by `SkillEditorModal` and the Claude plugin-toggle path). The aggregator subscribes and invalidates the matching provider bucket. Mounted UI consumers key off the SAME event to live-reload — see [Library panel live-refresh](#library-panel-live-refresh).
 
 ### Why no vault file watcher
 
@@ -65,6 +65,10 @@ Each quick-actions toolbar button additionally fires `void plugin.vaultSkillAggr
 ### In-flight deduplication
 
 Two concurrent callers (pre-warm + user click; user click + EventBus-triggered refresh) share underlying per-provider fetch promises via `inFlight: Map<ProviderId, Promise<...>>`. The underlying `listVaultEntries()` is invoked at most once per provider per refresh cycle.
+
+### Library panel live-refresh
+
+The Vue **Library** Skills panel (`features/library/vue/panels/SkillsPanel.vue`) reads the aggregator through a Pinia store (`skillLibraryStore`) that loads once on mount. That store does not itself observe the bus, so the panel subscribes via `useVaultSkillRefresh(plugin, () => store.load())` — a per-leaf composable mirroring `features/marketplace/vue/useMarketplaceInstalledRefresh.ts`: it debounces (300 ms) a `store.load()` on every `vaultSkill.changed`, and its `onUnmounted` releases the bus subscription and clears the timer. Without it, an already-open panel showed stale rows after a vault-skill edit in another leaf, a marketplace skill install, or a Claude plugin toggle until manual refresh/remount. Because the aggregator invalidates the changed provider's bucket synchronously on the same event, the debounced `store.load()` re-fetches fresh (no re-invalidate needed). One shared Pinia backs every Library leaf, so each open panel subscribes independently and each fires the same request-token-guarded `store.load()`; teardown is per-leaf, which is what keeps it leak-free. `store.load()` emits nothing, so a self-emitted event from the store's own clone/remove (which already reloads) at worst schedules one extra guarded reload — never a loop.
 
 ## Gotchas
 

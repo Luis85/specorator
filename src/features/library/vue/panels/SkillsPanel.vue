@@ -18,6 +18,7 @@ import { PLUGIN_KEY } from '../libraryKeys';
 import { useSkillLibraryStore } from '../stores/skillLibraryStore';
 import { useLibraryList } from '../useLibraryList';
 import { useRowActionPending } from '../useRowActionPending';
+import { useVaultSkillRefresh } from '../useVaultSkillRefresh';
 
 const plugin = inject(PLUGIN_KEY);
 if (!plugin) throw new Error('SkillsPanel mounted without PLUGIN_KEY');
@@ -37,6 +38,14 @@ const list = useLibraryList<SkillLibraryRow>(
 const pending = useRowActionPending();
 
 onMounted(() => void withErrorNotice(() => store.load(), t('skillLibrary.actionFailed'), fail));
+
+// Live-refresh on out-of-panel skill mutations (another leaf's edit, a
+// marketplace install, a Claude plugin toggle). Skill roots are dot-folders
+// with no vault watcher, so the only in-app signal is the `vaultSkill.changed`
+// bus event — the same one the aggregator invalidates its bucket on, so this
+// debounced reload re-derives fresh rows. Per-leaf teardown lives in the
+// composable's onUnmounted (no listener leak on leaf close).
+useVaultSkillRefresh(plugin, () => void store.load());
 
 function fail(error: unknown): void {
   plugin?.logger.scope('skills').error('skill library action failed', error);
