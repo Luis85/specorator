@@ -43,7 +43,7 @@ The chat-header quick-action button (`dispatchQuickActionToTab` → the active t
 ### Three-layer freshness model
 
 1. **In-memory per-provider TTL cache** (60 s default). `listAll()` and `listAllStreaming()` consult the cache before invoking `record.commandCatalog.listVaultEntries()`. `providerEnabled` and `providerDisplayName` are re-tagged from the current `ProviderRecord` on every read, so toggling a provider mid-session updates dimming immediately without invalidation.
-2. **Persistent disk index** at `.specorator/cache/skill-index.json`. Hydrated synchronously-via-async during `onload`, written debounced (1 s trailing) after every successful fetch. Skill bodies (`content`) are stripped at persist time — only metadata required for the picker is stored. Schema mismatch or malformed JSON is treated as a cold cache.
+2. **Persistent disk index** at `.specorator/cache/skill-index.json`. Hydrated synchronously-via-async during `onload`, written debounced (1 s trailing) after every successful fetch. Skill bodies (`content`) are stripped at persist time — only metadata required for the picker is stored. Schema mismatch or malformed JSON is treated as a cold cache. **Hydrated buckets are flagged `stale`**: they back the synchronous first paint (`listCachedNow`) but are not trusted for the TTL — the first `fetchBucket` revalidates against disk instead. On-disk/enablement state can drift while Obsidian is closed (a plugin disabled via the CLI, a skill added/deleted), so a valid persisted TTL must not pin the stale set for ~60s. The flag is one-shot: a live fetch writes a non-`stale` bucket, so normal TTL caching resumes. Scope-agnostic — vault, user, and plugin skills all revalidate.
 3. **EventBus `vaultSkill.changed`** emitted by `ClaudeCommandCatalog` and `CodexSkillCatalog` after in-app skill save/delete. The aggregator subscribes and invalidates the matching provider bucket.
 
 ### Why no vault file watcher
@@ -58,7 +58,7 @@ If `listCachedNow()` returns an empty array (cold start before disk hydrate comp
 
 ### Pre-warm
 
-`onload` triggers `void aggregator.listAllStreaming(() => {})` as fire-and-forget after hydrate. Users opening the modal seconds later read a hot cache.
+`onload` triggers `void aggregator.listAllStreaming(() => {})` as fire-and-forget after hydrate. Users opening the modal seconds later read a hot cache. This same prewarm doubles as the **revalidation trigger** for the `stale` hydrated buckets (layer 2): because hydration marks them needs-revalidation, the prewarm's `fetchBucket` re-scans and replaces them rather than reusing the persisted TTL, so an offline change converges within an instant-paint beat.
 
 Each quick-actions toolbar button additionally fires `void plugin.vaultSkillAggregator?.listAllStreaming(() => {})` on `mouseenter` so the cache stays warm against TTL expiry between opens. Concurrent hovers are deduplicated by the aggregator's in-flight map.
 

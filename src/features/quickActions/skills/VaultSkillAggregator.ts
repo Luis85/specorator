@@ -16,6 +16,13 @@ import type {
 interface CachedBucket {
   entries: ProviderCommandEntry[];
   expiresAt: number;
+  /**
+   * Hydrated-from-disk buckets carry this. They serve the instant cold paint
+   * (`listCachedNow` ignores TTL/stale) but must be revalidated on the first
+   * real fetch instead of trusted for the full TTL — see `hydrate()`. A live
+   * fetch always writes a non-stale bucket, so it is one-shot.
+   */
+  stale?: boolean;
 }
 
 const DEFAULT_TTL_MS = 60_000;
@@ -76,6 +83,14 @@ export class VaultSkillAggregator implements VaultSkillSource {
    * not exist. When the file is present but the contents are malformed or
    * the schema version does not match, the failure is swallowed and a
    * `warn` breadcrumb is emitted; callers continue with a cold cache.
+   *
+   * Hydrated buckets are flagged `stale`: they back the synchronous first
+   * paint (`listCachedNow`) but are NOT trusted for the TTL. On-disk and
+   * enablement state can drift while Obsidian is closed — a plugin disabled
+   * via the CLI, a skill added or deleted — so the onload prewarm (or the
+   * first `listAll`/`listAllStreaming`) re-scans and replaces them within an
+   * instant-paint beat instead of showing the persisted set for ~60s. This is
+   * scope-agnostic: vault, user, and plugin skills all revalidate.
    */
   async hydrate(): Promise<void> {
     if (!this.cacheAdapter) return;
@@ -89,7 +104,7 @@ export class VaultSkillAggregator implements VaultSkillSource {
       }
       const expiresAt = this.nowMs() + this.ttlMs;
       for (const [providerId, entries] of buckets) {
-        this.cache.set(providerId, { entries, expiresAt });
+        this.cache.set(providerId, { entries, expiresAt, stale: true });
       }
     } catch (err: unknown) {
       this.logger?.warn('skill index hydrate failed', { err });
@@ -186,7 +201,9 @@ export class VaultSkillAggregator implements VaultSkillSource {
   private fetchBucket(record: ProviderRecord): Promise<ProviderCommandEntry[]> {
     const now = this.nowMs();
     const cached = this.cache.get(record.providerId);
-    if (cached && cached.expiresAt > now) {
+    // A `stale` bucket (hydrated from disk) serves the cold paint but forces one
+    // revalidation here, so an offline change can't ride the persisted TTL.
+    if (cached && !cached.stale && cached.expiresAt > now) {
       return Promise.resolve(cached.entries);
     }
     const existing = this.inFlight.get(record.providerId);
