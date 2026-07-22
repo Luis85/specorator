@@ -224,13 +224,19 @@ export class VaultSkillAggregator implements VaultSkillSource {
           providerId: record.providerId,
           err,
         });
-        // Cache empty so we don't thrash retries within TTL
+        // Preserve the last-known-good entries — the hydrated bucket being
+        // revalidated, or a prior fetch — rather than erasing usable skills (and
+        // persisting the empty set) after a transient provider failure. Read the
+        // bucket fresh so a concurrent `invalidate()` still wins. A normal
+        // (non-`stale`) TTL serves the preserved entries without thrashing
+        // retries; it re-fetches on the next cycle.
+        const preserved = this.cache.get(record.providerId)?.entries ?? [];
         this.cache.set(record.providerId, {
-          entries: [],
+          entries: preserved,
           expiresAt: this.nowMs() + this.ttlMs,
         });
         this.schedulePersist();
-        return [];
+        return preserved;
       } finally {
         this.inFlight.delete(record.providerId);
       }

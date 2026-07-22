@@ -662,4 +662,33 @@ describe('VaultSkillAggregator', () => {
     await agg.listAll();
     expect(fetch).toHaveBeenCalledTimes(1);
   });
+
+  it('preserves hydrated entries when the revalidation fetch rejects (no erase to [])', async () => {
+    const adapter = {
+      exists: jest.fn().mockResolvedValue(true),
+      read: jest.fn().mockResolvedValue(hydratedIndex('cached')),
+      write: jest.fn().mockResolvedValue(undefined),
+    };
+    // The forced revalidation fetch fails (a transient provider outage on
+    // startup). The usable hydrated skills must survive, not be erased to [].
+    const fetch = jest.fn().mockRejectedValue(new Error('boom'));
+    const records = [makeRecord({ entries: fetch })];
+    const agg = new VaultSkillAggregator(() => records, {
+      ttlMs: 60_000,
+      cacheAdapter: adapter as never,
+      cachePath: '.specorator/cache/skill-index.json',
+    });
+    await agg.hydrate();
+
+    const result = await agg.listAll();
+    expect(fetch).toHaveBeenCalledTimes(1);
+    expect(result.map((e) => e.name)).toEqual(['cached']);
+    expect(agg.listCachedNow().map((e) => e.name)).toEqual(['cached']);
+
+    // The fallback bucket carries a normal TTL, so it serves the preserved
+    // entries without thrashing retries within the window.
+    const result2 = await agg.listAll();
+    expect(fetch).toHaveBeenCalledTimes(1);
+    expect(result2.map((e) => e.name)).toEqual(['cached']);
+  });
 });
