@@ -26,6 +26,11 @@ const REFRESH_DEBOUNCE_MS = 300;
  * request-token guarded, so a self-emitted event (the store's own clone/remove,
  * which already reloads) at worst schedules one extra guarded reload — never a
  * loop, since `load` emits nothing.
+ *
+ * `reload` is fired from a timer, so it must handle its own rejection — the
+ * composable can't surface an error it doesn't await. Callers whose reload can
+ * reject (e.g. `store.load()`) wrap it in `withErrorNotice` so a failed reload
+ * logs + notices instead of becoming an unhandled rejection.
  */
 export function useVaultSkillRefresh(
   plugin: SpecoratorPlugin,

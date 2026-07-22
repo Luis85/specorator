@@ -327,6 +327,22 @@ describe('SkillsPanel mutation flows', () => {
     );
   });
 
+  it('surfaces an event-driven reload failure via the error logger (withErrorNotice, no unhandled rejection)', async () => {
+    // Mount load succeeds (panel renders), but the reload triggered by an
+    // out-of-panel mutation rejects. The event path must route through
+    // withErrorNotice like the mount/manual paths — logging + Notice — not
+    // discard the promise into an unhandled rejection.
+    const listAll = vi.fn()
+      .mockResolvedValueOnce([entry])
+      .mockRejectedValue(new Error('boom'));
+    const { errorLog, fireVaultSkill } = setupMutable([entry], { listAll });
+    await screen.findByText('a-skill');
+    expect(errorLog).not.toHaveBeenCalled();
+    fireVaultSkill();
+    await waitFor(() => expect(errorLog).toHaveBeenCalled());
+    expect(Notice).toHaveBeenCalled();
+  });
+
   it('releases the vaultSkill.changed subscription on unmount (no listener leak)', async () => {
     const { vaultSkillDisposer, unmount } = setupMutable([entry]);
     await screen.findByText('a-skill');

@@ -44,8 +44,12 @@ onMounted(() => void withErrorNotice(() => store.load(), t('skillLibrary.actionF
 // with no vault watcher, so the only in-app signal is the `vaultSkill.changed`
 // bus event — the same one the aggregator invalidates its bucket on, so this
 // debounced reload re-derives fresh rows. Per-leaf teardown lives in the
-// composable's onUnmounted (no listener leak on leaf close).
-useVaultSkillRefresh(plugin, () => void store.load());
+// composable's onUnmounted (no listener leak on leaf close). Routed through
+// withErrorNotice like the mount/manual paths so a rejected reload logs +
+// notices instead of surfacing as an unhandled rejection.
+useVaultSkillRefresh(plugin, () =>
+  void withErrorNotice(() => store.load(), t('skillLibrary.actionFailed'), fail),
+);
 
 function fail(error: unknown): void {
   plugin?.logger.scope('skills').error('skill library action failed', error);
