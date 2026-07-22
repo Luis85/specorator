@@ -146,7 +146,9 @@ describe('SkillsPanel mutation flows', () => {
     await waitFor(() => expect(p.vaultFileAdapter.write).toHaveBeenCalledWith(
       '.claude/skills/a-skill-copy/SKILL.md', '---\ntags: [t1]\n---\nbody',
     ));
-    expect(p.events.emit).toHaveBeenCalledWith('vaultSkill.changed', { providerId: 'claude' });
+    // emit now follows the awaited catalog refresh (refresh → emit), so assert it
+    // eventually rather than synchronously after the write.
+    await waitFor(() => expect(p.events.emit).toHaveBeenCalledWith('vaultSkill.changed', { providerId: 'claude' }));
     // Multi-leaf staleness contract: clone() must reload the shared store.
     await waitFor(() => expect(p.vaultSkillAggregator.listAll.mock.calls.length).toBeGreaterThan(1));
     // The editor must open on the fresh `<slug>-copy` row (folder basename is
@@ -232,7 +234,9 @@ describe('SkillsPanel mutation flows', () => {
     await fireEvent.click(screen.getByRole('button', { name: 'Delete' }));
     await waitFor(() => expect(p.vaultFileAdapter.deleteFolderRecursive).toHaveBeenCalledWith('.claude/skills/a'));
     expect(confirm).toHaveBeenCalled();
-    expect(p.events.emit).toHaveBeenCalledWith('vaultSkill.changed', { providerId: 'claude' });
+    // emit now follows the awaited catalog refresh (refresh → emit), so assert it
+    // eventually rather than synchronously after the delete.
+    await waitFor(() => expect(p.events.emit).toHaveBeenCalledWith('vaultSkill.changed', { providerId: 'claude' }));
     await waitFor(() => expect(Notice).toHaveBeenCalledWith('Deleted a-skill.'));
     // Multi-leaf staleness contract: remove() must reload the shared store.
     await waitFor(() => expect(p.vaultSkillAggregator.listAll.mock.calls.length).toBeGreaterThan(1));

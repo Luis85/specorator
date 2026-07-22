@@ -97,8 +97,13 @@ export const useSkillLibraryStore = defineStore('library-skills', () => {
     if (!p) throw new Error('skillLibraryStore used before init()');
     if (!isCloneableSkillPath(row.sourceFilePath)) return null;
     const path = await writeSkillClone(p.vaultFileAdapter, row.sourceFilePath, row.name);
-    p.events.emit('vaultSkill.changed', { providerId: row.providerId });
+    // Force the provider catalog refresh BEFORE announcing the change. A consumer
+    // that reloads on `vaultSkill.changed` (the Library live-refresh composable,
+    // or this store's own `load()` below) would otherwise race a slow Codex
+    // `skills/list` and cache the pre-refresh listing for the TTL. refresh → emit
+    // → reload keeps every reader on the fresh listing.
     await refreshSkillCatalogBestEffort(p, row.providerId);
+    p.events.emit('vaultSkill.changed', { providerId: row.providerId });
     await load();
     return path;
   }
@@ -117,10 +122,12 @@ export const useSkillLibraryStore = defineStore('library-skills', () => {
     if (!folder) return false;
     await p.vaultFileAdapter.deleteFolderRecursive(folder);
     // Same seam as SkillEditorModal.save: skill dot-folders bypass the vault
-    // watcher, so invalidate the aggregator bucket AND force-reload the owning
-    // provider's catalog (Codex serves a 5s listing cache the event can't clear).
-    p.events.emit('vaultSkill.changed', { providerId: row.providerId });
+    // watcher, so force-reload the owning provider's catalog (Codex serves a 5s
+    // listing cache the event can't clear) BEFORE announcing the change — a
+    // consumer that reloads on the event must not race that refresh and cache the
+    // pre-delete listing. refresh → emit → reload.
     await refreshSkillCatalogBestEffort(p, row.providerId);
+    p.events.emit('vaultSkill.changed', { providerId: row.providerId });
     await load();
     return true;
   }

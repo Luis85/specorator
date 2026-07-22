@@ -17,7 +17,10 @@ const REFRESH_DEBOUNCE_MS = 300;
  *
  * The aggregator's own handler invalidates the changed provider's bucket
  * synchronously when the event fires, so by the time this debounced `reload`
- * runs, `store.load()` re-fetches fresh rather than re-invalidating.
+ * runs, `store.load()` re-fetches fresh rather than re-invalidating. Producers
+ * that force a provider-catalog refresh emit the event only AFTER awaiting it
+ * (see `refreshSkillCatalogBestEffort`), so this reload can't race a slow Codex
+ * `skills/list` and cache the pre-refresh listing.
  *
  * Owns its own `onMounted`/`onUnmounted` — call once from a panel's `setup`. The
  * Library shares one Pinia across leaves, so every open panel subscribes

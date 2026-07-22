@@ -368,14 +368,16 @@ export const useMarketplaceStore = defineStore('marketplace', () => {
     const outcome = await installSkillItem(item, files, target, installDeps());
     if (outcome === 'installed') {
       // Skill dot-folders bypass the vault watcher, so mirror skillLibraryStore's
-      // post-write sequence: invalidate the aggregator's TTL bucket AND force-reload
-      // the owning provider's catalog (Codex serves a short listing cache the event
-      // alone can't clear), so the new skill shows in the Library / dropdown / run
-      // surfaces immediately instead of after a TTL. This also drives the
-      // marketplace's own badge refresh (useMarketplaceInstalledRefresh subscribes).
+      // post-write sequence: force-reload the owning provider's catalog (Codex
+      // serves a short listing cache the event alone can't clear), so the new skill
+      // shows in the Library / dropdown / run surfaces immediately instead of after
+      // a TTL. The forced refresh runs BEFORE the event so a consumer that reloads
+      // on it (the Library live-refresh, the aggregator) can't race the slow Codex
+      // `skills/list` and cache the pre-install listing for the TTL. This event
+      // also drives the marketplace's own badge refresh (useMarketplaceInstalledRefresh).
       const p = requirePlugin();
-      p.events.emit('vaultSkill.changed', { providerId: target.provider });
       await refreshSkillCatalogBestEffort(p, target.provider);
+      p.events.emit('vaultSkill.changed', { providerId: target.provider });
     }
     return outcome;
   }
