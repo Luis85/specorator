@@ -16,6 +16,13 @@ import type {
 interface CachedBucket {
   entries: ProviderCommandEntry[];
   expiresAt: number;
+  /**
+   * Hydrated-from-disk buckets carry this. They serve the instant cold paint
+   * (`listCachedNow` ignores TTL/stale) but must be revalidated on the first
+   * real fetch instead of trusted for the full TTL — see `hydrate()`. A live
+   * fetch always writes a non-stale bucket, so it is one-shot.
+   */
+  stale?: boolean;
 }
 
 const DEFAULT_TTL_MS = 60_000;
@@ -47,6 +54,16 @@ export class VaultSkillAggregator implements VaultSkillSource {
   private readonly nowMs: () => number;
   private readonly cache = new Map<ProviderId, CachedBucket>();
   private readonly inFlight = new Map<ProviderId, Promise<ProviderCommandEntry[]>>();
+  /**
+   * Per-provider generation guard. Each live fetch claims the provider's slot
+   * with a monotonic token; `invalidate()` drops it and a newer fetch replaces
+   * it. A fetch commits its result (and releases its in-flight slot) only while
+   * it still holds the current token, so a stale in-flight listing that resolves
+   * after an invalidate — the onload prewarm landing after a skill mutation —
+   * can't repopulate the bucket with pre-write data.
+   */
+  private fetchGeneration = 0;
+  private readonly bucketGeneration = new Map<ProviderId, number>();
   private eventBusUnsubscribe: (() => void) | undefined;
   private readonly cacheAdapter?: VaultFileAdapter;
   private readonly cachePath: string;
@@ -76,6 +93,14 @@ export class VaultSkillAggregator implements VaultSkillSource {
    * not exist. When the file is present but the contents are malformed or
    * the schema version does not match, the failure is swallowed and a
    * `warn` breadcrumb is emitted; callers continue with a cold cache.
+   *
+   * Hydrated buckets are flagged `stale`: they back the synchronous first
+   * paint (`listCachedNow`) but are NOT trusted for the TTL. On-disk and
+   * enablement state can drift while Obsidian is closed — a plugin disabled
+   * via the CLI, a skill added or deleted — so the onload prewarm (or the
+   * first `listAll`/`listAllStreaming`) re-scans and replaces them within an
+   * instant-paint beat instead of showing the persisted set for ~60s. This is
+   * scope-agnostic: vault, user, and plugin skills all revalidate.
    */
   async hydrate(): Promise<void> {
     if (!this.cacheAdapter) return;
@@ -89,7 +114,7 @@ export class VaultSkillAggregator implements VaultSkillSource {
       }
       const expiresAt = this.nowMs() + this.ttlMs;
       for (const [providerId, entries] of buckets) {
-        this.cache.set(providerId, { entries, expiresAt });
+        this.cache.set(providerId, { entries, expiresAt, stale: true });
       }
     } catch (err: unknown) {
       this.logger?.warn('skill index hydrate failed', { err });
@@ -138,9 +163,11 @@ export class VaultSkillAggregator implements VaultSkillSource {
     if (providerId === undefined) {
       this.cache.clear();
       this.inFlight.clear();
+      this.bucketGeneration.clear();
     } else {
       this.cache.delete(providerId);
       this.inFlight.delete(providerId);
+      this.bucketGeneration.delete(providerId);
     }
   }
 
@@ -155,6 +182,7 @@ export class VaultSkillAggregator implements VaultSkillSource {
     this.eventBusUnsubscribe = undefined;
     this.cache.clear();
     this.inFlight.clear();
+    this.bucketGeneration.clear();
   }
 
   /** Trailing-edge debounce: collapse near-simultaneous fetches into a single write. */
@@ -186,36 +214,58 @@ export class VaultSkillAggregator implements VaultSkillSource {
   private fetchBucket(record: ProviderRecord): Promise<ProviderCommandEntry[]> {
     const now = this.nowMs();
     const cached = this.cache.get(record.providerId);
-    if (cached && cached.expiresAt > now) {
+    // A `stale` bucket (hydrated from disk) serves the cold paint but forces one
+    // revalidation here, so an offline change can't ride the persisted TTL.
+    if (cached && !cached.stale && cached.expiresAt > now) {
       return Promise.resolve(cached.entries);
     }
     const existing = this.inFlight.get(record.providerId);
     if (existing) return existing;
 
+    // Claim the provider slot; only commit while we still hold it (see
+    // `bucketGeneration`). An invalidate() or newer fetch since we started
+    // retires this one so a late resolution can't overwrite the fresh bucket.
+    const generation = ++this.fetchGeneration;
+    this.bucketGeneration.set(record.providerId, generation);
+    const isCurrent = (): boolean =>
+      this.bucketGeneration.get(record.providerId) === generation;
+
     const promise = (async () => {
       try {
         const all = await record.commandCatalog.listVaultEntries();
         const raw = all.filter((e) => e.kind === 'skill');
-        this.cache.set(record.providerId, {
-          entries: raw,
-          expiresAt: this.nowMs() + this.ttlMs,
-        });
-        this.schedulePersist();
+        if (isCurrent()) {
+          this.cache.set(record.providerId, {
+            entries: raw,
+            expiresAt: this.nowMs() + this.ttlMs,
+          });
+          this.schedulePersist();
+        }
         return raw;
       } catch (err: unknown) {
         this.logger?.warn('vault skill aggregation failed', {
           providerId: record.providerId,
           err,
         });
-        // Cache empty so we don't thrash retries within TTL
-        this.cache.set(record.providerId, {
-          entries: [],
-          expiresAt: this.nowMs() + this.ttlMs,
-        });
-        this.schedulePersist();
-        return [];
+        // Preserve the last-known-good entries — the hydrated bucket being
+        // revalidated, or a prior fetch — rather than erasing usable skills (and
+        // persisting the empty set) after a transient provider failure. Read the
+        // bucket fresh so a concurrent `invalidate()` still wins. A normal
+        // (non-`stale`) TTL serves the preserved entries without thrashing
+        // retries; it re-fetches on the next cycle.
+        const preserved = this.cache.get(record.providerId)?.entries ?? [];
+        if (isCurrent()) {
+          this.cache.set(record.providerId, {
+            entries: preserved,
+            expiresAt: this.nowMs() + this.ttlMs,
+          });
+          this.schedulePersist();
+        }
+        return preserved;
       } finally {
-        this.inFlight.delete(record.providerId);
+        // Only release the slot if it's still ours: a superseding fetch may have
+        // claimed `inFlight` already, and deleting it would break its dedup.
+        if (isCurrent()) this.inFlight.delete(record.providerId);
       }
     })();
     this.inFlight.set(record.providerId, promise);

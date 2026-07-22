@@ -41,7 +41,7 @@ function makePlugin() {
       read: vi.fn().mockResolvedValue('---\ntags: [t1]\n---\n'),
       stat: vi.fn().mockResolvedValue({ mtime: 1 }),
     },
-    events: { emit: vi.fn() },
+    events: { emit: vi.fn(), on: vi.fn().mockReturnValue(() => {}) },
     logger: { scope: () => ({ error: vi.fn(), warn: vi.fn() }) },
   } as never;
 }
@@ -78,6 +78,11 @@ function setupMutable(entries: unknown[], opts: { listAll?: ReturnType<typeof vi
   const pinia = createPinia();
   setActivePinia(pinia);
   const errorLog = vi.fn();
+  // Capture-and-fire the `vaultSkill.changed` subscription so a test can
+  // simulate an out-of-panel mutation (another leaf, marketplace install,
+  // plugin toggle) and assert the live reload.
+  const vaultSkillHandlers: Array<() => void> = [];
+  const vaultSkillDisposer = vi.fn();
   const plugin = {
     // vault present (adapter-less): host-absolute skill paths resolve to null
     // (out-of-vault) instead of throwing inside resolveSkillVaultPath.
@@ -90,9 +95,19 @@ function setupMutable(entries: unknown[], opts: { listAll?: ReturnType<typeof vi
       exists: vi.fn().mockResolvedValue(false),
       deleteFolderRecursive: vi.fn().mockResolvedValue(undefined),
     },
-    events: { emit: vi.fn() },
+    events: {
+      emit: vi.fn(),
+      on: vi.fn((name: string, handler: () => void) => {
+        if (name === 'vaultSkill.changed') {
+          vaultSkillHandlers.push(handler);
+          return vaultSkillDisposer;
+        }
+        return () => {};
+      }),
+    },
     logger: { scope: () => ({ error: errorLog, warn: vi.fn() }) },
   } as never;
+  const fireVaultSkill = (): void => vaultSkillHandlers.forEach((handler) => handler());
   const store = useSkillLibraryStore();
   store.init(plugin);
   const utils = render(SkillsPanel, {
@@ -107,7 +122,7 @@ function setupMutable(entries: unknown[], opts: { listAll?: ReturnType<typeof vi
     };
     events: { emit: ReturnType<typeof vi.fn> };
   };
-  return { store, plugin, p, errorLog, ...utils };
+  return { store, plugin, p, errorLog, fireVaultSkill, vaultSkillDisposer, ...utils };
 }
 
 describe('SkillsPanel mutation flows', () => {
@@ -131,7 +146,9 @@ describe('SkillsPanel mutation flows', () => {
     await waitFor(() => expect(p.vaultFileAdapter.write).toHaveBeenCalledWith(
       '.claude/skills/a-skill-copy/SKILL.md', '---\ntags: [t1]\n---\nbody',
     ));
-    expect(p.events.emit).toHaveBeenCalledWith('vaultSkill.changed', { providerId: 'claude' });
+    // emit now follows the awaited catalog refresh (refresh → emit), so assert it
+    // eventually rather than synchronously after the write.
+    await waitFor(() => expect(p.events.emit).toHaveBeenCalledWith('vaultSkill.changed', { providerId: 'claude' }));
     // Multi-leaf staleness contract: clone() must reload the shared store.
     await waitFor(() => expect(p.vaultSkillAggregator.listAll.mock.calls.length).toBeGreaterThan(1));
     // The editor must open on the fresh `<slug>-copy` row (folder basename is
@@ -217,7 +234,9 @@ describe('SkillsPanel mutation flows', () => {
     await fireEvent.click(screen.getByRole('button', { name: 'Delete' }));
     await waitFor(() => expect(p.vaultFileAdapter.deleteFolderRecursive).toHaveBeenCalledWith('.claude/skills/a'));
     expect(confirm).toHaveBeenCalled();
-    expect(p.events.emit).toHaveBeenCalledWith('vaultSkill.changed', { providerId: 'claude' });
+    // emit now follows the awaited catalog refresh (refresh → emit), so assert it
+    // eventually rather than synchronously after the delete.
+    await waitFor(() => expect(p.events.emit).toHaveBeenCalledWith('vaultSkill.changed', { providerId: 'claude' }));
     await waitFor(() => expect(Notice).toHaveBeenCalledWith('Deleted a-skill.'));
     // Multi-leaf staleness contract: remove() must reload the shared store.
     await waitFor(() => expect(p.vaultSkillAggregator.listAll.mock.calls.length).toBeGreaterThan(1));
@@ -297,6 +316,45 @@ describe('SkillsPanel mutation flows', () => {
   it('surfaces a load failure via the error logger (withErrorNotice path)', async () => {
     const { errorLog } = setupMutable([], { listAll: vi.fn().mockRejectedValue(new Error('boom')) });
     await waitFor(() => expect(errorLog).toHaveBeenCalled());
+  });
+
+  it('live-reloads on a vaultSkill.changed fired from outside the panel', async () => {
+    // Open panel + out-of-panel mutation (another leaf's edit, a marketplace
+    // install, a Claude plugin toggle) → rows refresh without a manual click.
+    const { p, fireVaultSkill } = setupMutable([entry]);
+    await screen.findByText('a-skill');
+    const loadsBefore = p.vaultSkillAggregator.listAll.mock.calls.length;
+    fireVaultSkill();
+    // Debounced (300 ms) reload re-derives rows through the shared store.
+    await waitFor(() =>
+      expect(p.vaultSkillAggregator.listAll.mock.calls.length).toBeGreaterThan(loadsBefore),
+    );
+  });
+
+  it('surfaces an event-driven reload failure via the error logger (withErrorNotice, no unhandled rejection)', async () => {
+    // Mount load succeeds (panel renders), but the reload triggered by an
+    // out-of-panel mutation rejects. The event path must route through
+    // withErrorNotice like the mount/manual paths — logging + Notice — not
+    // discard the promise into an unhandled rejection.
+    const listAll = vi.fn()
+      .mockResolvedValueOnce([entry])
+      .mockRejectedValue(new Error('boom'));
+    const { errorLog, fireVaultSkill } = setupMutable([entry], { listAll });
+    await screen.findByText('a-skill');
+    expect(errorLog).not.toHaveBeenCalled();
+    fireVaultSkill();
+    await waitFor(() => expect(errorLog).toHaveBeenCalled());
+    expect(Notice).toHaveBeenCalled();
+  });
+
+  it('releases the vaultSkill.changed subscription on unmount (no listener leak)', async () => {
+    const { vaultSkillDisposer, unmount } = setupMutable([entry]);
+    await screen.findByText('a-skill');
+    unmount();
+    // Teardown releases the bus subscription (the composable's onUnmounted); the
+    // debounce-timer clearing + no-late-reload path is covered by the composable
+    // unit test with fake timers.
+    expect(vaultSkillDisposer).toHaveBeenCalledTimes(1);
   });
 
   it('Duplicate marks the row busy (all actions disabled + aria-busy), fires ONE clone on double-click, re-enables on resolve', async () => {

@@ -92,6 +92,23 @@ describe('SkillEditorModal.save — Codex host-absolute path', () => {
     expect(refreshMock).toHaveBeenCalledTimes(1);
   });
 
+  // The forced refresh must land BEFORE the event fires: Codex's refresh spawns
+  // an ephemeral app-server (slow), and a consumer that reloads on the event (the
+  // Library live-refresh, or the aggregator) would otherwise re-fetch the
+  // pre-refresh listing and cache it for the TTL. Emitting refresh→emit means the
+  // listing is fresh by the time anyone reacts.
+  it('forces the provider catalog refresh BEFORE emitting vaultSkill.changed', async () => {
+    const { plugin, emit } = makePlugin();
+    const order: string[] = [];
+    refreshMock.mockImplementationOnce(async () => { order.push('refresh'); });
+    emit.mockImplementation((name: string) => { if (name === 'vaultSkill.changed') order.push('emit'); });
+    const modal = new SkillEditorModal(plugin as never, plugin as never, makeRow(), jest.fn());
+
+    await primeAndSave(modal, { tags: 'x' });
+
+    expect(order).toEqual(['refresh', 'emit']);
+  });
+
   // Codex's catalog refresh spawns an ephemeral app-server; if the CLI can't
   // start, refresh() rejects AFTER the vault write already landed. The save
   // must still complete (onSaved, saved notice, close) — otherwise the modal

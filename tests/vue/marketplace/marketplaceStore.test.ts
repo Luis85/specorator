@@ -548,6 +548,23 @@ describe('marketplaceStore skill install', () => {
     expect(refreshCatalogSpy).toHaveBeenCalledWith(plugin, 'codex');
   });
 
+  it('forces the provider catalog refresh BEFORE emitting vaultSkill.changed on install', async () => {
+    // Codex's refresh spawns an ephemeral app-server (slow); if the event fired
+    // first, a racing reload (the Library live-refresh subscribes to the same
+    // bus) would re-fetch the pre-refresh listing and cache it for the TTL.
+    const store = useMarketplaceStore();
+    const plugin = fakePlugin(true);
+    store.init(plugin);
+    mockSkillSource('SKILL BODY');
+    const order: string[] = [];
+    refreshCatalogSpy.mockImplementation(async () => { order.push('refresh'); });
+    vi.mocked(plugin.events.emit).mockImplementation((name: string) => {
+      if (name === 'vaultSkill.changed') order.push('emit');
+    });
+    await store.install(skillItem, 'SKILL BODY', { provider: 'codex', scope: 'user' });
+    expect(order).toEqual(['refresh', 'emit']);
+  });
+
   it('aborts (writes nothing) when the marker drifted in the catalog since preview', async () => {
     const store = useMarketplaceStore();
     store.init(fakePlugin(true));

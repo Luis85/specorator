@@ -95,13 +95,14 @@ export class SkillEditorModal extends LibraryEditorModal {
     }
     // Provider skill dot-folders (`.claude/`, `.codex/`) are ignored by Obsidian's
     // vault watcher, so this direct write/rename bypasses the provider-catalog
-    // save seam. Emit the change for the aggregator bucket AND force-reload the
-    // owning provider's catalog — otherwise a provider with its own listing cache
-    // (Codex's 5s `listSkills`) serves the stale pre-rename path to the re-render
-    // below, dropping the renamed skill until the TTL. A Codex edit must not
+    // save seam. Force-reload the owning provider's catalog — otherwise a provider
+    // with its own listing cache (Codex's 5s `listSkills`) serves the stale
+    // pre-rename path — BEFORE emitting the change, so a consumer that reloads on
+    // the event (the aggregator, the Library live-refresh) can't race that refresh
+    // and cache the pre-rename listing for the TTL. A Codex edit must not
     // invalidate Claude, so both are keyed to the owning provider.
-    this.plugin.events.emit('vaultSkill.changed', { providerId: this.row.providerId });
     await refreshSkillCatalogBestEffort(this.plugin, this.row.providerId);
+    this.plugin.events.emit('vaultSkill.changed', { providerId: this.row.providerId });
     this.onSaved();
     new Notice(t('skillLibrary.saved', { name: this.row.name }));
     this.close();

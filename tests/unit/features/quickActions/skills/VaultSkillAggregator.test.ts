@@ -59,6 +59,33 @@ describe('VaultSkillAggregator', () => {
     expect(await agg.listAll()).toEqual([]);
   });
 
+  it('a stale in-flight fetch that resolves after invalidate() cannot repopulate the bucket', async () => {
+    // The onload prewarm can have a Codex listing in flight when a skill mutation
+    // fires invalidate() + a fresh fetch. The stale in-flight request must not
+    // overwrite the fresh bucket when it resolves late, or the Library pins the
+    // pre-write listing for the full TTL.
+    let resolveStale!: (v: ProviderCommandEntry[]) => void;
+    const listVaultEntries = jest.fn()
+      .mockReturnValueOnce(new Promise<ProviderCommandEntry[]>((r) => { resolveStale = r; }))
+      .mockResolvedValue([makeSkillEntry({ id: 'skill-fresh', name: 'fresh' })]);
+    const records = [makeRecord({ entries: listVaultEntries })];
+    const agg = new VaultSkillAggregator(() => records, { ttlMs: 60_000 });
+
+    const first = agg.listAll();        // fetch A — in-flight on the stale promise
+    agg.invalidate('claude');           // retire it (a mutation happened)
+    const second = await agg.listAll(); // fetch B — fresh
+    expect(second.map((e) => e.name)).toEqual(['fresh']);
+
+    resolveStale([makeSkillEntry({ id: 'skill-stale', name: 'stale' })]); // A resolves late
+    await first;
+
+    // The late stale fetch is retired: the bucket still holds the fresh listing.
+    expect(agg.listCachedNow().map((e) => e.name)).toEqual(['fresh']);
+    // A subsequent read is served from that fresh cache — no third fetch.
+    expect((await agg.listAll()).map((e) => e.name)).toEqual(['fresh']);
+    expect(listVaultEntries).toHaveBeenCalledTimes(2);
+  });
+
   it('filters out non-skill entries', async () => {
     const records = [
       makeRecord({
@@ -584,5 +611,111 @@ describe('VaultSkillAggregator', () => {
     expect(path).toBe('.specorator/cache/skill-index.json');
     expect(JSON.parse(body).buckets.claude[0].name).toBe('a');
     jest.useRealTimers();
+  });
+
+  // The persisted index exists for the instant cold paint, but on-disk /
+  // enablement state can drift while Obsidian is closed (a plugin disabled via
+  // the CLI, a skill deleted). Hydrated buckets must therefore serve the first
+  // synchronous paint yet still be revalidated on the first real fetch rather
+  // than trusted for the full TTL — otherwise the stale set lingers for ~60s.
+  const hydratedIndex = (name: string): string =>
+    JSON.stringify({
+      schemaVersion: PERSISTED_SCHEMA_VERSION,
+      writtenAt: 1,
+      buckets: {
+        claude: [
+          {
+            id: `skill-${name}`,
+            providerId: 'claude',
+            kind: 'skill',
+            name,
+            description: 'from disk',
+            content: '',
+            scope: 'vault',
+            source: 'user',
+            isEditable: true,
+            isDeletable: true,
+            displayPrefix: '/',
+            insertPrefix: '/',
+            sourceFilePath: `.claude/skills/${name}/SKILL.md`,
+          },
+        ],
+      },
+    });
+
+  it('serves hydrated buckets for the instant paint but revalidates them on the first fetch', async () => {
+    const adapter = {
+      exists: jest.fn().mockResolvedValue(true),
+      read: jest.fn().mockResolvedValue(hydratedIndex('stale')),
+      write: jest.fn().mockResolvedValue(undefined),
+    };
+    // Disk holds 'stale'; the live scan returns 'fresh' (an offline change).
+    const fetch = jest.fn().mockResolvedValue([makeSkillEntry({ id: 'skill-fresh', name: 'fresh' })]);
+    const records = [makeRecord({ entries: fetch })];
+    const agg = new VaultSkillAggregator(() => records, {
+      ttlMs: 60_000,
+      cacheAdapter: adapter as never,
+      cachePath: '.specorator/cache/skill-index.json',
+    });
+    await agg.hydrate();
+    // Instant cold paint: the persisted set is served synchronously, no fetch.
+    expect(agg.listCachedNow().map((e) => e.name)).toEqual(['stale']);
+    expect(fetch).not.toHaveBeenCalled();
+    // The hydrated bucket is NOT trusted for the fresh TTL — the first fetch
+    // re-scans against disk even though the TTL is nowhere near expiry.
+    const result = await agg.listAll();
+    expect(fetch).toHaveBeenCalledTimes(1);
+    expect(result.map((e) => e.name)).toEqual(['fresh']);
+    // Revalidation replaced the stale rows in the cache too.
+    expect(agg.listCachedNow().map((e) => e.name)).toEqual(['fresh']);
+  });
+
+  it('revalidation is one-shot: a hydrated bucket caches normally after its first fetch', async () => {
+    const adapter = {
+      exists: jest.fn().mockResolvedValue(true),
+      read: jest.fn().mockResolvedValue(hydratedIndex('stale')),
+      write: jest.fn().mockResolvedValue(undefined),
+    };
+    const fetch = jest.fn().mockResolvedValue([makeSkillEntry({ id: 'skill-fresh', name: 'fresh' })]);
+    const records = [makeRecord({ entries: fetch })];
+    const agg = new VaultSkillAggregator(() => records, {
+      ttlMs: 60_000,
+      cacheAdapter: adapter as never,
+      cachePath: '.specorator/cache/skill-index.json',
+    });
+    await agg.hydrate();
+    await agg.listAll();  // revalidates (fetch #1)
+    await agg.listAll();  // within TTL now — served from the fresh cache
+    await agg.listAll();
+    expect(fetch).toHaveBeenCalledTimes(1);
+  });
+
+  it('preserves hydrated entries when the revalidation fetch rejects (no erase to [])', async () => {
+    const adapter = {
+      exists: jest.fn().mockResolvedValue(true),
+      read: jest.fn().mockResolvedValue(hydratedIndex('cached')),
+      write: jest.fn().mockResolvedValue(undefined),
+    };
+    // The forced revalidation fetch fails (a transient provider outage on
+    // startup). The usable hydrated skills must survive, not be erased to [].
+    const fetch = jest.fn().mockRejectedValue(new Error('boom'));
+    const records = [makeRecord({ entries: fetch })];
+    const agg = new VaultSkillAggregator(() => records, {
+      ttlMs: 60_000,
+      cacheAdapter: adapter as never,
+      cachePath: '.specorator/cache/skill-index.json',
+    });
+    await agg.hydrate();
+
+    const result = await agg.listAll();
+    expect(fetch).toHaveBeenCalledTimes(1);
+    expect(result.map((e) => e.name)).toEqual(['cached']);
+    expect(agg.listCachedNow().map((e) => e.name)).toEqual(['cached']);
+
+    // The fallback bucket carries a normal TTL, so it serves the preserved
+    // entries without thrashing retries within the window.
+    const result2 = await agg.listAll();
+    expect(fetch).toHaveBeenCalledTimes(1);
+    expect(result2.map((e) => e.name)).toEqual(['cached']);
   });
 });

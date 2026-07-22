@@ -124,6 +124,47 @@ describe('useSkillLibraryStore', () => {
     expect(refresh).toHaveBeenCalled();
   });
 
+  // The forced catalog refresh must complete BEFORE the event fires. Codex's
+  // refresh spawns an ephemeral app-server (slow); if the event went out first,
+  // a racing reload (the Library live-refresh, or the store's own load) would
+  // re-fetch the pre-refresh Codex listing and cache it for the TTL. Ordering
+  // refresh→emit means every consumer only reloads once the listing is fresh.
+  it('clone() forces the catalog refresh BEFORE emitting vaultSkill.changed', async () => {
+    const store = useSkillLibraryStore();
+    const codexEntry = {
+      ...entry, id: 'codex:skill-c', providerId: 'codex', providerDisplayName: 'Codex',
+      name: 'c', sourceFilePath: '.codex/skills/c/SKILL.md',
+    };
+    const plugin = makePlugin([codexEntry]);
+    const order: string[] = [];
+    const refresh = vi.fn(async () => { order.push('refresh'); });
+    vi.mocked(ProviderWorkspaceRegistry.getCommandCatalog).mockReturnValue({ refresh } as never);
+    const p = plugin as { events: { emit: ReturnType<typeof vi.fn> } };
+    p.events.emit.mockImplementation((name: string) => { if (name === 'vaultSkill.changed') order.push('emit'); });
+    store.init(plugin);
+    await store.load();
+    await store.clone(store.rows[0]);
+    expect(order).toEqual(['refresh', 'emit']);
+  });
+
+  it('remove() forces the catalog refresh BEFORE emitting vaultSkill.changed', async () => {
+    const store = useSkillLibraryStore();
+    const codexEntry = {
+      ...entry, id: 'codex:skill-c', providerId: 'codex', providerDisplayName: 'Codex',
+      name: 'c', sourceFilePath: '.codex/skills/c/SKILL.md',
+    };
+    const plugin = makePlugin([codexEntry]);
+    const order: string[] = [];
+    const refresh = vi.fn(async () => { order.push('refresh'); });
+    vi.mocked(ProviderWorkspaceRegistry.getCommandCatalog).mockReturnValue({ refresh } as never);
+    const p = plugin as { events: { emit: ReturnType<typeof vi.fn> } };
+    p.events.emit.mockImplementation((name: string) => { if (name === 'vaultSkill.changed') order.push('emit'); });
+    store.init(plugin);
+    await store.load();
+    await store.remove(store.rows[0]);
+    expect(order).toEqual(['refresh', 'emit']);
+  });
+
   // Codex's catalog refresh spawns an ephemeral app-server; if the CLI can't
   // start, refresh() rejects AFTER the vault mutation already landed. The
   // mutation flow must still reload (else the UI is stale) and report success
