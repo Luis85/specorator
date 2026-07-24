@@ -157,6 +157,8 @@ export interface PluginContext
   renameConversation(id: string, title: string): Promise<void>;
   updateConversation(id: string, updates: Partial<Conversation>): Promise<void>;
   getConversationById(id: string): Promise<Conversation | null>;
+  /** The canonical DM conversation for an agent on the Team Chat surface, or null. */
+  findTeamChatConversationForAgent(agentId: string): Conversation | null;
   getConversationSync(id: string): Conversation | null;
   getConversationList(): ConversationMeta[];
 

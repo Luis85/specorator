@@ -767,6 +767,10 @@ export default class SpecoratorPlugin extends Plugin implements PluginContext {
     return this.conversationStore.getConversationById(id);
   }
 
+  findTeamChatConversationForAgent(agentId: string): Conversation | null {
+    return this.conversationStore.findTeamChatConversationForAgent(agentId);
+  }
+
   getConversationSync(id: string): Conversation | null {
     return this.conversationStore.getConversationSync(id);
   }

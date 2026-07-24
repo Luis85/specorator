@@ -955,6 +955,19 @@ describe('SpecoratorPlugin', () => {
     });
   });
 
+  describe('findTeamChatConversationForAgent', () => {
+    it('finds a created team-chat DM by bound agent and returns null for an unknown agent', async () => {
+      await plugin.onload();
+
+      const dm = await plugin.createConversation({ boundAgentId: 'roster:a', surface: 'team-chat' });
+      // An ad-hoc chat bound to the same agent must NOT be adopted as the DM.
+      await plugin.createConversation({ boundAgentId: 'roster:a' });
+
+      expect(plugin.findTeamChatConversationForAgent('roster:a')?.id).toBe(dm.id);
+      expect(plugin.findTeamChatConversationForAgent('roster:unknown')).toBeNull();
+    });
+  });
+
   describe('loadSettings with conversations', () => {
     it('should load saved conversations from metadata files', async () => {
       const timestamp = Date.now();

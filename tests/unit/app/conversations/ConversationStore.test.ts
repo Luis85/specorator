@@ -438,6 +438,17 @@ describe('ConversationStore', () => {
     });
   });
 
+  describe('findTeamChatConversationForAgent', () => {
+    it('findTeamChatConversationForAgent returns the agent-bound team-chat conversation, else null', async () => {
+      const { store } = createStore();
+      const dm = await store.createConversation({ boundAgentId: 'roster:a', surface: 'team-chat' });
+      await store.createConversation({ boundAgentId: 'roster:a' });          // ad-hoc, not team-chat
+      await store.createConversation({ boundAgentId: 'roster:b', surface: 'team-chat' }); // other agent
+      expect(store.findTeamChatConversationForAgent('roster:a')?.id).toBe(dm.id);
+      expect(store.findTeamChatConversationForAgent('roster:zzz')).toBeNull();
+    });
+  });
+
   describe('loadConversations', () => {
     it('maps metadata to conversations sorted by recency and backfills response timestamps', async () => {
       const sessions = createMockSessions([

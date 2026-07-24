@@ -414,6 +414,13 @@ export class ConversationStore {
     return this.conversations.find((c) => c.messages.length === 0) || null;
   }
 
+  /** The canonical DM conversation for an agent on the Team Chat surface, or null. */
+  findTeamChatConversationForAgent(agentId: string): Conversation | null {
+    return this.conversations.find(
+      (c) => c.boundAgentId === agentId && (c.surface ?? 'chat') === 'team-chat',
+    ) ?? null;
+  }
+
   getConversationList(): ConversationMeta[] {
     return this.conversations
       .filter((c) => (c.surface ?? 'chat') !== 'team-chat') // ad-hoc history only; DMs live in the Team Chat surface
