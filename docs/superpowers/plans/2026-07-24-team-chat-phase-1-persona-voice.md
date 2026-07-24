@@ -1,3 +1,11 @@
+---
+title: Team Chat — Phase 1 implementation plan (persona/voice + emoji avatars)
+date: 2026-07-24
+status: in-progress
+scope: src/features/agents (roster types, persona, avatar, voice directive, dirty tracking, detail editor), src/i18n, src/style/features/agent-roster.css
+relates-to: docs/superpowers/specs/2026-07-24-team-chat-design.md
+---
+
 # Team Chat — Phase 1: Persona/Voice + Emoji Avatars — Implementation Plan
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
@@ -445,6 +453,16 @@ describe('AgentDetailEditor voice + emoji fields', () => {
     await flush();
     expect(callbacks.onSaved).toHaveBeenCalledWith(expect.objectContaining({ avatarEmoji: '👨‍👩‍👧‍👦' }));
   });
+
+  it('keeps only the first grapheme when multiple glyphs are entered', async () => {
+    const { callbacks, root } = await renderEditor(makeAgent());
+    const emoji = root.querySelector('.specorator-roster-appearance-emoji') as HTMLInputElement;
+    emoji.value = '🔬🧪';
+    emoji.dispatchEvent(new Event('input'));
+    saveButton(root).click();
+    await flush();
+    expect(callbacks.onSaved).toHaveBeenCalledWith(expect.objectContaining({ avatarEmoji: '🔬' }));
+  });
 });
 ```
 
@@ -465,10 +483,38 @@ In `src/features/agents/roster/view/AgentDetailEditor.ts`, in `renderAppearanceR
     emoji.placeholder = t('agentRoster.emoji');
     emoji.setAttribute('aria-label', t('agentRoster.emoji'));
     emoji.addEventListener('input', () => {
-      this.draft.avatarEmoji = emoji.value.trim() || undefined;
+      // Keep only the first grapheme cluster (ZWJ families stay whole) so multiple
+      // glyphs or pasted text can't overflow the fixed-size avatar (see firstGrapheme below).
+      this.draft.avatarEmoji = firstGrapheme(emoji.value.trim()) || undefined;
       this.refreshAvatar();
       this.updateDirty();
     });
+```
+
+Also add this module-level helper near the top of the file (after `const DETAIL_AVATAR_SIZE = 48;`), which the emoji handler above calls:
+
+```typescript
+/**
+ * First grapheme cluster of `s` — keeps a multi-code-point emoji (e.g. a ZWJ family
+ * sequence) whole while dropping any extra glyphs or text after it, so an avatar holds
+ * exactly one visual glyph. Falls back to the first code point where `Intl.Segmenter`
+ * is unavailable.
+ */
+function firstGrapheme(s: string): string {
+  if (!s) return '';
+  const Segmenter = (Intl as {
+    Segmenter?: new (
+      locales?: string,
+      options?: { granularity: 'grapheme' },
+    ) => { segment(input: string): Iterable<{ segment: string }> };
+  }).Segmenter;
+  if (Segmenter) {
+    for (const { segment } of new Segmenter(undefined, { granularity: 'grapheme' }).segment(s)) {
+      return segment;
+    }
+  }
+  return Array.from(s)[0] ?? '';
+}
 ```
 
 - [ ] **Step 4: Add the voice textarea + wire it in**
