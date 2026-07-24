@@ -942,6 +942,17 @@ describe('SpecoratorPlugin', () => {
 
       expect(meta?.preview).toContain('Hello Claude');
     });
+
+    it('excludes team-chat conversations while keeping them reachable via getConversationSync', async () => {
+      await plugin.onload();
+
+      const dm = await plugin.createConversation({ surface: 'team-chat' });
+
+      const list = plugin.getConversationList();
+
+      expect(list.some(c => c.id === dm.id)).toBe(false);
+      expect(plugin.getConversationSync(dm.id)?.surface).toBe('team-chat');
+    });
   });
 
   describe('loadSettings with conversations', () => {

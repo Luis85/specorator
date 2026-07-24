@@ -423,6 +423,19 @@ describe('ConversationStore', () => {
       expect(meta?.preview).toContain('Hello Claude');
       expect(meta?.messageCount).toBe(1);
     });
+
+    it('excludes team-chat conversations from getConversationList but keeps them in getConversations', async () => {
+      const { store } = createStore();
+      await store.createConversation({ surface: 'team-chat' });     // a DM
+      await store.createConversation({});                            // an ordinary chat (surface absent ⇒ 'chat')
+
+      const listed = store.getConversationList();
+
+      expect(listed.some((c) => c.surface === 'team-chat')).toBe(false);
+      expect(listed.length).toBe(1);
+      // Reconciliation sibling still sees ALL conversations (team-chat DMs need env reconciliation too):
+      expect(store.getConversations().length).toBe(2);
+    });
   });
 
   describe('loadConversations', () => {

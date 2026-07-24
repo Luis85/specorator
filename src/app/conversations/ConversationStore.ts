@@ -415,17 +415,20 @@ export class ConversationStore {
   }
 
   getConversationList(): ConversationMeta[] {
-    return this.conversations.map((c) => ({
-      id: c.id,
-      providerId: c.providerId,
-      title: c.title,
-      createdAt: c.createdAt,
-      updatedAt: c.updatedAt,
-      lastResponseAt: c.lastResponseAt,
-      messageCount: c.messages.length,
-      preview: this.getConversationPreview(c),
-      titleGenerationStatus: c.titleGenerationStatus,
-    }));
+    return this.conversations
+      .filter((c) => (c.surface ?? 'chat') !== 'team-chat') // ad-hoc history only; DMs live in the Team Chat surface
+      .map((c) => ({
+        id: c.id,
+        providerId: c.providerId,
+        title: c.title,
+        createdAt: c.createdAt,
+        updatedAt: c.updatedAt,
+        lastResponseAt: c.lastResponseAt,
+        messageCount: c.messages.length,
+        preview: this.getConversationPreview(c),
+        titleGenerationStatus: c.titleGenerationStatus,
+        surface: c.surface,
+      }));
   }
 
   private async loadSdkMessagesForConversation(
