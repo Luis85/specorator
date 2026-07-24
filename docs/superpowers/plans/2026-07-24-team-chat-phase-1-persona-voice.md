@@ -435,6 +435,16 @@ describe('AgentDetailEditor voice + emoji fields', () => {
     await flush();
     expect(callbacks.onSaved).toHaveBeenCalledWith(expect.objectContaining({ avatarEmoji: '🔬' }));
   });
+
+  it('persists a multi-code-point emoji without truncation', async () => {
+    const { callbacks, root } = await renderEditor(makeAgent());
+    const emoji = root.querySelector('.specorator-roster-appearance-emoji') as HTMLInputElement;
+    emoji.value = '👨‍👩‍👧‍👦';
+    emoji.dispatchEvent(new Event('input'));
+    saveButton(root).click();
+    await flush();
+    expect(callbacks.onSaved).toHaveBeenCalledWith(expect.objectContaining({ avatarEmoji: '👨‍👩‍👧‍👦' }));
+  });
 });
 ```
 
@@ -449,7 +459,8 @@ In `src/features/agents/roster/view/AgentDetailEditor.ts`, in `renderAppearanceR
 
 ```typescript
     const emoji = row.createEl('input', { cls: 'specorator-roster-appearance-emoji', type: 'text' });
-    emoji.maxLength = 8;
+    // No maxLength: a UTF-16 code-unit cap would truncate a valid multi-code-point
+    // emoji (e.g. a ZWJ family sequence like 👨‍👩‍👧‍👦) mid-grapheme and corrupt the avatar.
     emoji.value = this.draft.avatarEmoji ?? '';
     emoji.placeholder = t('agentRoster.emoji');
     emoji.setAttribute('aria-label', t('agentRoster.emoji'));

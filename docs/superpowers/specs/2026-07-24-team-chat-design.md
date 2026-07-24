@@ -46,7 +46,8 @@ reserved.
 Ship an additive, main-area **Team Chat** view for **single-agent private chats**:
 
 - A left **roster rail** listing every roster agent with persona avatar, name, and
-  a live presence indicator (idle / thinking / streaming).
+  a live presence indicator (**idle / busy**; a finer thinking→streaming split is an
+  optional refinement — see §3).
 - Clicking an agent opens/resumes **one persistent DM thread** with that agent,
   rendered by the existing chat engine (transcript + composer), using that agent's
   own provider, model, skills, and persona.
@@ -202,7 +203,7 @@ roster-driven, single-visible-pane surface:
   it can't see.
 - **Background streaming.** Switching away from a streaming DM leaves it running in
   its (now inactive) tab, exactly like inactive chat tabs today; its roster
-  presence dot reflects "streaming."
+  presence dot shows "busy."
 
 **Engine-host registry (required, not optional).** Every runtime-lifecycle *and
 settings-broadcast* path today enumerates `plugin.getAllViews()`, whose concrete
@@ -295,6 +296,14 @@ dots.
   Increment-2 seam).
 - `resolveOrCreate(agentId)` returns the mapped `conversationId` if present and
   still exists, else creates a conversation via `ConversationStore.createConversation({ agentId })` (existing `boundAgentId` support), records the mapping, and returns it.
+- **Serialize concurrent calls per `roomKey`.** The method is async, so two
+  overlapping selections for the same agent (e.g. a rapid double-click before the
+  first creation records its mapping) would each observe "no mapping" and create
+  *separate* conversations — last write wins, and the losing tab's messages vanish on
+  the next resume. Memoize the in-flight promise per `roomKey` (evicted on settle) so
+  overlapping callers await the same creation; `writeAtomic` guards only a single
+  file write, not this check-then-act race. The one-thread-per-agent invariant test
+  must include a concurrent-call case.
 - **Provider/model changes after a DM exists.** `Conversation.providerId` is
   immutable — `ConversationStore.updateConversation` strips it, and
   `resolveBoundAgentQueryOptions` resolves the model against that pinned provider. So
