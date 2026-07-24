@@ -85,6 +85,7 @@ export class ConversationStore {
           resumeAtMessageId: meta.resumeAtMessageId,
           workOrderPath: meta.workOrderPath,
           boundAgentId: meta.boundAgentId,
+          surface: meta.surface,
         } satisfies Conversation;
       })
       .sort((a, b) => (b.lastResponseAt ?? b.updatedAt) - (a.lastResponseAt ?? a.updatedAt));
@@ -133,6 +134,7 @@ export class ConversationStore {
       sessionId: sessionId ?? null,
       messages: [],
       boundAgentId: options?.boundAgentId,
+      surface: options?.surface,
     };
 
     this.conversations.unshift(conversation);

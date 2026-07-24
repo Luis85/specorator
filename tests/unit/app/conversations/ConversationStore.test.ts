@@ -31,6 +31,7 @@ function createMockSessions(metadata: SessionMetadata[] = []): MockSessions {
       sessionId: conv.sessionId,
       providerState: conv.providerState,
       boundAgentId: conv.boundAgentId,
+      surface: conv.surface,
     }) as unknown as SessionMetadata),
   };
 }
@@ -123,6 +124,15 @@ describe('ConversationStore', () => {
       // metadata must carry the field so it survives reload
       const savedMeta = sessions.saveMetadata.mock.calls[0][0];
       expect(savedMeta).toMatchObject({ boundAgentId: 'roster:researcher' });
+    });
+
+    it('persists surface when provided', async () => {
+      const { store, sessions } = createStore();
+
+      const conv = await store.createConversation({ surface: 'team-chat' });
+      expect(conv.surface).toBe('team-chat');
+      await store.updateConversation(conv.id, { title: 'x' });
+      expect(sessions.saveMetadata.mock.calls.at(-1)?.[0]).toMatchObject({ surface: 'team-chat' });
     });
   });
 
@@ -468,6 +478,23 @@ describe('ConversationStore', () => {
       await store.loadConversations();
 
       expect(store.getConversationSync('conv-1')?.boundAgentId).toBe('roster:researcher');
+    });
+
+    it('loads surface from metadata on loadConversations', async () => {
+      const meta = {
+        id: 'c1',
+        providerId: 'claude' as const,
+        title: 'DM',
+        createdAt: 1,
+        updatedAt: 1,
+        sessionId: null,
+        surface: 'team-chat',
+      } as any;
+      const { store } = createStore({ sessions: createMockSessions([meta]) });
+
+      await store.loadConversations();
+
+      expect(store.getConversationSync('c1')?.surface).toBe('team-chat');
     });
   });
 
