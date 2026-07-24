@@ -2,6 +2,8 @@ import type { ChatMessage } from '@/core/types';
 import { t } from '@/i18n/i18n';
 import type SpecoratorPlugin from '@/main';
 
+import { isSpecoratorView } from '../isSpecoratorView';
+
 export type FeedbackDirection = 'up' | 'down';
 
 /**
@@ -28,7 +30,7 @@ export function sendFeedbackPrompt(
   let targetTab = activeView.getTabManager()?.getActiveTab() ?? null;
   if (conversationId) {
     const cross = plugin.findConversationAcrossViews(conversationId);
-    if (cross) {
+    if (cross && isSpecoratorView(cross.view)) {
       targetTab = cross.view.getTabManager()?.getTab(cross.tabId) ?? targetTab;
     }
   }

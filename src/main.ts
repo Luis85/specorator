@@ -55,7 +55,7 @@ import type {
   SpecoratorSettings,
 } from './core/types';
 import { VIEW_TYPE_SPECORATOR } from './core/types';
-import type { PluginContext } from './core/types/PluginContext';
+import type { ChatViewHandle, PluginContext } from './core/types/PluginContext';
 import { type EnvironmentScope, type SecretEnvVarRef } from './core/types/settings';
 import type { UsageEventMap } from './core/usage/events';
 import { UsageStorage } from './core/usage/UsageStorage';
@@ -788,12 +788,12 @@ export default class SpecoratorPlugin extends Plugin implements PluginContext {
     return leaves.map(leaf => leaf.view).find(isSpecoratorView) ?? null;
   }
 
-  getAllViews(): SpecoratorView[] {
+  getAllViews(): ChatViewHandle[] {
     const leaves = this.app.workspace.getLeavesOfType(VIEW_TYPE_SPECORATOR);
     return leaves.map(leaf => leaf.view).filter(isSpecoratorView);
   }
 
-  findConversationAcrossViews(conversationId: string): { view: SpecoratorView; tabId: string } | null {
+  findConversationAcrossViews(conversationId: string): { view: ChatViewHandle; tabId: string } | null {
     for (const view of this.getAllViews()) {
       const match = view.getTabManager()?.findTabByConversation(conversationId);
       if (match) return { view, tabId: match.tabId };

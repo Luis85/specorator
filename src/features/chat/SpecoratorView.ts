@@ -24,6 +24,7 @@ import {
   type HydrationFailedBannerPayload,
   registerHydrationFailedSubscriber,
 } from './hydration/hydrationFailedSubscriber';
+import { isSpecoratorView } from './isSpecoratorView';
 import { SpecoratorViewWorkOrderBridge } from './SpecoratorViewWorkOrderBridge';
 import {
   getTabProviderId,
@@ -618,7 +619,9 @@ export class SpecoratorView extends ItemView implements ChatViewHandle {
         findConversationTab: (conversationId) => {
           const cross = this.plugin.findConversationAcrossViews(conversationId);
           if (!cross) return null;
-          const tabManager = cross.view === this ? this.tabManager : cross.view.getTabManager();
+          const tabManager = cross.view === this
+            ? this.tabManager
+            : isSpecoratorView(cross.view) ? cross.view.getTabManager() : null;
           return { tabManager, tabId: cross.tabId };
         },
         openConversationInNewTab: async (conversationId) => {

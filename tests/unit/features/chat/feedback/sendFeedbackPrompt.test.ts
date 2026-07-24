@@ -115,4 +115,22 @@ describe('sendFeedbackPrompt', () => {
       sendFeedbackPrompt(plugin as never, makeMessage(), 'conv-1', 'down'),
     ).not.toThrow();
   });
+
+  // Task 7 narrowed findConversationAcrossViews().view to ChatViewHandle; the
+  // isSpecoratorView guard recovers the concrete tab manager so cross-view
+  // targeting still lands on the owning tab (here activeView owns no active tab).
+  it('sends the feedback turn on the cross-view tab that owns the conversation', () => {
+    const sendMessage = jest.fn();
+    const ownerTab = { controllers: { inputController: { sendMessage } } };
+    const activeView = { getTabManager: () => ({ getActiveTab: () => null }) };
+    const ownerView = { getTabManager: () => ({ getTab: (id: string) => (id === 't7' ? ownerTab : null) }) };
+    const plugin = {
+      getView: () => activeView,
+      findConversationAcrossViews: () => ({ view: ownerView, tabId: 't7' }),
+    } as any;
+
+    sendFeedbackPrompt(plugin, {} as any, 'c-7', 'up');
+
+    expect(sendMessage).toHaveBeenCalledWith({ content: expect.any(String) });
+  });
 });

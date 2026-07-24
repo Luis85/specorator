@@ -627,10 +627,13 @@ export class TabManager implements TabManagerInterface {
       }
     }
 
-    // Check if conversation is open in another view (split workspace scenario)
-    // Compare view references directly (more robust than leaf comparison)
+    // Check if conversation is open in another view (split workspace scenario).
+    // Compare owning leaves: each live view owns exactly one workspace leaf, so
+    // this is reference-equivalent to comparing the views themselves, and it
+    // stays valid now that findConversationAcrossViews returns the narrowed
+    // ChatViewHandle (which no longer overlaps the concrete TabManagerViewHost).
     const crossViewResult = this.plugin.findConversationAcrossViews(conversationId);
-    const isSameView = crossViewResult?.view === this.view;
+    const isSameView = crossViewResult?.view.leaf === this.view.leaf;
     if (crossViewResult && !isSameView) {
       // Focus the other view and switch to its tab instead of opening duplicate
       await revealWorkspaceLeaf(this.plugin.app.workspace, crossViewResult.view.leaf);
