@@ -192,6 +192,14 @@ roster-driven, single-visible-pane surface:
 - **Lifecycle / caps.** Keep a bounded set of hot DM tabs (active + small LRU);
   quiesce/close the rest. **This requires generalizing the plugin's engine
   aggregation, not just registering a view** — see "Engine-host registry" below.
+  The chat cap is **not** shared across hosts today: `tryReserveTabSlot`
+  (`TabManager.ts:124`) checks only its own `countTabsByKind`, and
+  `PluginViewActivator.getTabSlotUsage` (`:96`) accounts **work-order tabs only**, so
+  a sidebar manager and a Team Chat manager can each reserve up to `maxChatTabs`
+  independently. Decide explicitly: either extend the cross-host slot accounting to
+  the `chat` kind (plugin-level reservation, mirroring work-order), or give Team Chat
+  its **own** small DM budget — the per-manager local LRU cannot honor a shared cap
+  it can't see.
 - **Background streaming.** Switching away from a streaming DM leaves it running in
   its (now inactive) tab, exactly like inactive chat tabs today; its roster
   presence dot reflects "streaming."
@@ -237,6 +245,29 @@ extract a small `createChatTabEngine(host, callbacks)` seam consumed by *both* v
 — an "improve the code you're working in" extraction, not a rewrite. Attempt
 reuse-as-is first; fall back to the extraction if construction can't be cleanly
 parameterized. Either way the engine's internals stay untouched.
+
+**Reused-island action callbacks must be rebased onto the owning tab.** The
+transcript and composer islands are reused for *rendering*, but several of their
+actions resolve their target through the **global sidebar view**, not the owning tab
+— so on the Team Chat surface they mis-target or no-op:
+
+- **`$` resume dropdown.** The composer's resume list comes from `InputController` →
+  `plugin.getConversationList()` (`InputController.ts:177`). After the §4 default
+  filter that excludes `'team-chat'`, this returns *ad-hoc* chat sessions; selecting
+  one would replace the agent's DM with an unrelated conversation while the room
+  mapping + header still point at the DM. **Disable the `$` resume affordance on the
+  Team Chat surface** (a DM's thread is fixed per agent), or scope its provider to
+  that agent's own thread.
+- **Message-toolbar actions** (feedback 👍/👎, promote-to-work-order).
+  `tabControllers.ts:303` runs actions with
+  `plugin.getActiveConversationSnapshot()?.id ?? tab.conversationId`, and
+  `getActiveConversationSnapshot()` reads `getView()` — the **sidebar** view
+  (`main.ts:634`); `ChatWorkOrderLinker.promoteActiveConversationToWorkOrder` (`:39`)
+  and `sendFeedbackPrompt` route the same way. With a sidebar chat open, a Team Chat
+  action targets *that* conversation; with none open, it no-ops. The host migration
+  **must** make these callbacks resolve the **owning tab's** conversation (prefer
+  `tab.conversationId`, or inject the host's active snapshot) instead of the global
+  sidebar snapshot.
 
 ### 3. Presence
 
@@ -448,10 +479,11 @@ including the provider-change thread-rotation policy (§4).
 `src/app/commands/registerPluginCommands.ts` (command), `src/i18n` (10 locales),
 root `CLAUDE.md` architecture table (Team Chat row).
 
-**Reused unchanged:** `TabManager` + per-tab composition, transcript/composer
-islands, `deriveEditedFilesFromMessages`, `renderAgentAvatar`, `useRosterStore` +
-`useLibraryList`, `resolveBoundAgentQueryOptions`,
-`RosterAgentService.resolveBoundAgent`.
+**Reused unchanged:** `TabManager` + per-tab composition, transcript/composer island
+*rendering* (see §2 — their `$`-resume and message-action callbacks are rebased onto
+the owning tab, not reused as-is), `deriveEditedFilesFromMessages`,
+`renderAgentAvatar`, `useRosterStore` + `useLibraryList`,
+`resolveBoundAgentQueryOptions`, `RosterAgentService.resolveBoundAgent`.
 
 ## Risks
 
@@ -472,5 +504,12 @@ islands, `deriveEditedFilesFromMessages`, `renderAgentAvatar`, `useRosterStore` 
   `SessionMetadata` / `Conversation` / `ConversationMeta` and *both* history
   consumers (header dropdown + composer resume); missing one re-introduces the
   intermingling it is meant to prevent.
+- **Shared chat-cap enforcement** — chat-tab reservation is per-`TabManager` today;
+  without plugin-level `chat`-kind accounting (or an explicit separate Team Chat
+  budget), the sidebar and Team Chat can each hit `maxChatTabs` (§2).
+- **Reused-island callbacks assume the sidebar view** — the `$` resume dropdown and
+  message-toolbar actions resolve their target via the global active view; on the
+  Team Chat surface they must be disabled/scoped or rebased onto the owning tab (§2),
+  or they mis-target the sidebar conversation.
 - **Scope creep toward groups/personality** — held off by the Non-goals and the
   single-`voice`-field decision.
