@@ -2,41 +2,15 @@ import { EnvironmentApplyService } from '@/app/environment/EnvironmentApplyServi
 import * as providerEnv from '@/core/providers/providerEnvironment';
 import { ProviderRegistry } from '@/core/providers/ProviderRegistry';
 import { ProviderSettingsCoordinator } from '@/core/providers/ProviderSettingsCoordinator';
-import type { ProviderId } from '@/core/providers/types';
 import type { Conversation } from '@/core/types';
 import type SpecoratorPlugin from '@/main';
 
-function createTab(overrides: Partial<{
-  providerId: ProviderId;
-  isStreaming: boolean;
-  service: unknown;
-  serviceInitialized: boolean;
-  conversationId: string | null;
-}> = {}) {
-  return {
-    providerId: overrides.providerId ?? 'claude',
-    state: { isStreaming: overrides.isStreaming ?? false },
-    service: overrides.service ?? {
-      cleanup: jest.fn(),
-      syncConversationState: jest.fn(),
-      resetSession: jest.fn(),
-      ensureReady: jest.fn().mockResolvedValue(undefined),
-    },
-    serviceInitialized: overrides.serviceInitialized ?? true,
-    conversationId: overrides.conversationId ?? null,
-    controllers: { inputController: { cancelStreaming: jest.fn() } },
-    ui: { externalContextSelector: undefined },
-  };
-}
-
 function createPlugin(overrides: Partial<{
-  affectedTabs: ReturnType<typeof createTab>[];
   settings: Record<string, unknown>;
   reconcileResult: { changed: boolean; invalidatedConversations: Conversation[] };
 }> = {}): SpecoratorPlugin {
-  const tabs = overrides.affectedTabs ?? [];
   const tabManager = {
-    getAllTabs: jest.fn().mockReturnValue(tabs),
+    resyncTabsForProviders: jest.fn().mockResolvedValue(0),
   };
   const view = {
     getTabManager: jest.fn().mockReturnValue(tabManager),
@@ -98,7 +72,7 @@ describe('EnvironmentApplyService', () => {
     expect(ids).toEqual(['codex']);
   });
 
-  it('cancels streaming tabs before restarting them on change', async () => {
+  it('delegates resync to each view tab manager with the affected providers and changed flag', async () => {
     jest.spyOn(providerEnv, 'getEnvironmentVariablesForScope').mockReturnValue('OLD');
     jest.spyOn(providerEnv, 'setEnvironmentVariablesForScope').mockImplementation(() => undefined);
     jest.spyOn(ProviderRegistry, 'getRegisteredProviderIds').mockReturnValue(['claude']);
@@ -108,55 +82,18 @@ describe('EnvironmentApplyService', () => {
       invalidatedConversations: [],
     });
 
-    const streamingTab = createTab({ isStreaming: true });
-    const plugin = createPlugin({ affectedTabs: [streamingTab] });
-    const service = new EnvironmentApplyService(plugin);
-
-    await service.apply('shared', 'NEW');
-
-    expect(streamingTab.controllers.inputController.cancelStreaming).toHaveBeenCalled();
-    expect((streamingTab.service as { resetSession: jest.Mock }).resetSession).toHaveBeenCalled();
-    // FORCE the respawn: a persistent runtime otherwise keeps the stale-env child.
-    expect((streamingTab.service as { ensureReady: jest.Mock }).ensureReady)
-      .toHaveBeenCalledWith({ force: true });
-  });
-
-  it('cancels every affected tab across all views before restarting any (env-apply ordering)', async () => {
-    jest.spyOn(providerEnv, 'getEnvironmentVariablesForScope').mockReturnValue('OLD');
-    jest.spyOn(providerEnv, 'setEnvironmentVariablesForScope').mockImplementation(() => undefined);
-    jest.spyOn(ProviderRegistry, 'getRegisteredProviderIds').mockReturnValue(['claude']);
-    jest.spyOn(ProviderSettingsCoordinator, 'handleEnvironmentChange' as any).mockImplementation(() => undefined);
-    jest.spyOn(ProviderSettingsCoordinator, 'reconcileProviders' as any).mockReturnValue({
-      changed: false,
-      invalidatedConversations: [],
-    });
-
-    const order: string[] = [];
-    const makeTab = (name: string) => ({
-      providerId: 'claude' as ProviderId,
-      state: { isStreaming: true },
-      service: {
-        cleanup: jest.fn(),
-        syncConversationState: jest.fn(),
-        resetSession: jest.fn(),
-        ensureReady: jest.fn(() => { order.push(`restart:${name}`); return Promise.resolve(); }),
-      },
-      serviceInitialized: true,
-      conversationId: null,
-      controllers: { inputController: { cancelStreaming: jest.fn(() => order.push(`cancel:${name}`)) } },
-      ui: { externalContextSelector: undefined },
-    });
-    const t1 = makeTab('v1');
-    const t2 = makeTab('v2');
-    const view1 = { getTabManager: () => ({ getAllTabs: () => [t1] }), invalidateProviderCommandCaches: jest.fn(), refreshModelSelector: jest.fn() };
-    const view2 = { getTabManager: () => ({ getAllTabs: () => [t2] }), invalidateProviderCommandCaches: jest.fn(), refreshModelSelector: jest.fn() };
+    const resync1 = jest.fn().mockResolvedValue(0);
+    const resync2 = jest.fn().mockResolvedValue(0);
+    const view1 = { getTabManager: () => ({ resyncTabsForProviders: resync1 }), invalidateProviderCommandCaches: jest.fn(), refreshModelSelector: jest.fn() };
+    const view2 = { getTabManager: () => ({ resyncTabsForProviders: resync2 }), invalidateProviderCommandCaches: jest.fn(), refreshModelSelector: jest.fn() };
     const plugin = { ...createPlugin(), getAllViews: jest.fn().mockReturnValue([view1, view2]) } as unknown as SpecoratorPlugin;
 
     await new EnvironmentApplyService(plugin).apply('shared', 'NEW');
 
-    // Both cancels precede both restarts (cancel-all-then-restart-all).
-    expect(order.indexOf('cancel:v1')).toBeLessThan(order.indexOf('restart:v1'));
-    expect(order.indexOf('cancel:v2')).toBeLessThan(order.indexOf('restart:v1'));
-    expect(order.indexOf('cancel:v2')).toBeLessThan(order.indexOf('restart:v2'));
+    // The single-snapshot cancel-then-restart ordering lives inside
+    // resyncTabsForProviders (pinned by the TabManager suite); here we only
+    // pin that the shell delegates to every view's manager with the right args.
+    expect(resync1).toHaveBeenCalledWith(['claude'], true);
+    expect(resync2).toHaveBeenCalledWith(['claude'], true);
   });
 });

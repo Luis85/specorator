@@ -554,24 +554,12 @@ describe('SpecoratorPlugin', () => {
       expect(saveMetadataSpy).toHaveBeenCalled();
     });
 
-    it('broadcasts ensureReady with force when env changes without model change', async () => {
+    it('delegates a non-model env change to resyncTabsForProviders with changed=false', async () => {
       await plugin.onload();
 
-      // Mock getView to return a view with tabManager
-      const mockSyncConversationState = jest.fn();
-      const mockEnsureReady = jest.fn().mockResolvedValue(true);
+      const mockResync = jest.fn().mockResolvedValue(0);
       const mockTabManager = {
-        getAllTabs: jest.fn().mockReturnValue([{
-          providerId: 'claude',
-          conversationId: null,
-          state: { isStreaming: false },
-          serviceInitialized: true,
-          service: {
-            ensureReady: mockEnsureReady,
-            syncConversationState: mockSyncConversationState,
-          },
-          ui: { externalContextSelector: { getExternalContexts: jest.fn().mockReturnValue([]) } },
-        }]),
+        resyncTabsForProviders: mockResync,
         getPersistedState: jest.fn().mockReturnValue({ tabs: [], activeTabId: null }),
         disposeAllRuntimes: jest.fn(),
       };
@@ -582,47 +570,21 @@ describe('SpecoratorPlugin', () => {
       };
       jest.spyOn(plugin, 'getAllViews').mockReturnValue([mockView as any]);
 
-      // Change env but not in a way that affects model
+      // A non-model env var does not invalidate the session (changed=false). The
+      // per-tab force-restart + external-context sync now lives inside
+      // TabManager.resyncTabsForProviders (pinned by the TabManager suite); here
+      // we pin only that the shell routes through that seam with the right flag.
       await plugin.applyEnvironmentVariables('shared', 'SOME_VAR=value');
 
-      expect(mockSyncConversationState).toHaveBeenCalledWith(null, []);
-      expect(mockEnsureReady).toHaveBeenCalledWith({ force: true });
+      expect(mockResync).toHaveBeenCalledWith(expect.arrayContaining(['claude']), false);
     });
 
-    it('syncs live external contexts before restarting invalidated Claude runtimes', async () => {
+    it('delegates a model-invalidating env change to resyncTabsForProviders with changed=true', async () => {
       await plugin.onload();
 
-      const conversation = await plugin.createConversation({
-        providerId: 'claude',
-        sessionId: 'session-123',
-      });
-      await plugin.updateConversation(conversation.id, {
-        externalContextPaths: ['/saved/context'],
-        messages: [{
-          content: 'hi',
-          id: 'msg-1',
-          role: 'user',
-          timestamp: Date.now(),
-          userMessageId: 'msg-1',
-        }],
-      });
-
-      const mockSyncConversationState = jest.fn();
-      const mockResetSession = jest.fn();
-      const mockEnsureReady = jest.fn().mockResolvedValue(true);
+      const mockResync = jest.fn().mockResolvedValue(0);
       const mockTabManager = {
-        getAllTabs: jest.fn().mockReturnValue([{
-          conversationId: conversation.id,
-          providerId: 'claude',
-          state: { isStreaming: false },
-          serviceInitialized: true,
-          service: {
-            ensureReady: mockEnsureReady,
-            resetSession: mockResetSession,
-            syncConversationState: mockSyncConversationState,
-          },
-          ui: { externalContextSelector: { getExternalContexts: jest.fn().mockReturnValue(['/live/context']) } },
-        }]),
+        resyncTabsForProviders: mockResync,
         getPersistedState: jest.fn().mockReturnValue({ tabs: [], activeTabId: null }),
         disposeAllRuntimes: jest.fn(),
       };
@@ -635,14 +597,10 @@ describe('SpecoratorPlugin', () => {
 
       await plugin.applyEnvironmentVariables('provider:claude', 'ANTHROPIC_MODEL=claude-sonnet-4-5');
 
-      expect(mockSyncConversationState).toHaveBeenCalledWith(
-        expect.objectContaining({ id: conversation.id }),
-        ['/live/context'],
-      );
-      expect(mockResetSession).toHaveBeenCalledTimes(1);
-      // Env-invalidated runtimes force a respawn so a persistent child can't keep
-      // stale credentials/base URL (a non-forced ensureReady early-returns).
-      expect(mockEnsureReady).toHaveBeenCalledWith({ force: true });
+      // A model-affecting change invalidates the session (changed=true). Per-tab
+      // session drop + live external-context precedence + forced respawn are
+      // pinned by the TabManager suite; here we pin the routing + the flag.
+      expect(mockResync).toHaveBeenCalledWith(['claude'], true);
     });
   });
 

@@ -2,7 +2,7 @@ import { Notice } from 'obsidian';
 
 import { ProviderRegistry } from '../../../core/providers/ProviderRegistry';
 import { hasForkSupport } from '../../../core/providers/typeGuards';
-import type { ProviderId } from '../../../core/providers/types';
+import { DEFAULT_CHAT_PROVIDER_ID, type ProviderId } from '../../../core/providers/types';
 import type { ChatRuntime } from '../../../core/runtime/ChatRuntime';
 import type { SlashCommand } from '../../../core/types';
 import type { Conversation } from '../../../core/types/chat';
@@ -993,6 +993,70 @@ export class TabManager implements TabManagerInterface {
       if (tab.conversationId !== conversationId) continue;
       await tab.controllers.conversationController?.createNew({ force: true });
     }
+  }
+
+  /**
+   * Re-sync + force-restart every initialized runtime whose provider is in
+   * `providerIds`, cancelling any in-flight stream first. Captures the affected
+   * set ONCE up front, so cancel and restart run over the SAME snapshot: no tab
+   * is ever restarted without first being cancelled, and a tab created afterwards
+   * (e.g. during a restart await) is left untouched. When `changed`, drops the
+   * session before restart. Returns the count of tabs whose restart threw;
+   * uninitialized tabs count as success.
+   */
+  async resyncTabsForProviders(providerIds: ProviderId[], changed: boolean): Promise<number> {
+    const affected = [...this.affectedProviderTabs(providerIds)];
+    for (const tab of affected) {
+      if (tab.state.isStreaming) tab.controllers.inputController?.cancelStreaming();
+    }
+    let failed = 0;
+    for (const tab of affected) {
+      if (!(await this.resyncTabRuntime(tab, changed))) failed++;
+    }
+    return failed;
+  }
+
+  private *affectedProviderTabs(providerIds: ProviderId[]): Iterable<TabData> {
+    for (const tab of this.tabs.values()) {
+      if (providerIds.includes(tab.providerId ?? DEFAULT_CHAT_PROVIDER_ID)) yield tab;
+    }
+  }
+
+  private async resyncTabRuntime(tab: TabData, changed: boolean): Promise<boolean> {
+    if (!tab.service || !tab.serviceInitialized) return true;
+    try {
+      this.syncTabRuntimeState(tab);
+      // Always FORCE a respawn: a persistent runtime (Claude / Cursor / Codex /
+      // Opencode ACP) keeps a live child that still holds the OLD credentials /
+      // base URL, so a non-forced ensureReady early-returns and the env change
+      // never reaches the process. `changed` additionally drops the session.
+      if (changed) tab.service.resetSession();
+      await tab.service.ensureReady({ force: true });
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  private syncTabRuntimeState(tab: TabData): void {
+    if (!tab.service || !tab.serviceInitialized) return;
+    const conversation = tab.conversationId
+      ? this.plugin.getConversationSync(tab.conversationId)
+      : null;
+    tab.service.syncConversationState(
+      conversation,
+      this.resolveExternalContextPaths(tab, conversation),
+    );
+  }
+
+  /** Prefer the tab's live selection; else the conversation's (when it has context), else the persistent default. */
+  private resolveExternalContextPaths(tab: TabData, conversation: Conversation | null): string[] {
+    const selected = tab.ui.externalContextSelector?.getExternalContexts();
+    if (selected) return selected;
+    const hasContext = (conversation?.messages.length ?? 0) > 0;
+    return hasContext
+      ? conversation?.externalContextPaths ?? []
+      : this.plugin.settings.persistentExternalContextPaths ?? [];
   }
 
   // ============================================

@@ -8,19 +8,11 @@ import { ProviderRegistry } from '@/core/providers/ProviderRegistry';
 import { ProviderSettingsCoordinator } from '@/core/providers/ProviderSettingsCoordinator';
 import { migrateEnvSecrets } from '@/core/providers/secretEnvVars';
 import type { ProviderId } from '@/core/providers/types';
-import { DEFAULT_CHAT_PROVIDER_ID } from '@/core/providers/types';
 import type { Conversation } from '@/core/types';
 import { asSettingsBag } from '@/core/types';
 import type { EnvironmentScope, SecretEnvVarRef } from '@/core/types/settings';
-import type { TabData } from '@/features/chat/tabs/types';
 import { t } from '@/i18n/i18n';
 import type SpecoratorPlugin from '@/main';
-
-/** The slice of a chat tab the env-apply runtime sync touches. */
-type SyncableTab = Pick<
-  TabData,
-  'service' | 'serviceInitialized' | 'conversationId' | 'ui' | 'state' | 'controllers' | 'providerId'
->;
 
 export class EnvironmentApplyService {
   constructor(private readonly plugin: SpecoratorPlugin) {}
@@ -93,73 +85,16 @@ export class EnvironmentApplyService {
     }
   }
 
-  /** Cancel in-flight streams, then re-sync/restart each affected tab's runtime. */
+  /** Cancel in-flight streams then re-sync/restart affected runtimes on every view's tab manager. */
   private async syncAffectedTabs(affected: ProviderId[], changed: boolean): Promise<void> {
-    const affectedTabs: SyncableTab[] = [];
-    for (const view of this.plugin.getAllViews()) {
-      const tabManager = view.getTabManager();
-      if (!tabManager) continue;
-      for (const tab of tabManager.getAllTabs()) {
-        if (affected.includes(tab.providerId ?? DEFAULT_CHAT_PROVIDER_ID)) {
-          affectedTabs.push(tab);
-        }
-      }
-    }
-
-    for (const tab of affectedTabs) {
-      if (tab.state.isStreaming) tab.controllers.inputController?.cancelStreaming();
-    }
-
     let failedTabs = 0;
-    for (const tab of affectedTabs) {
-      if (!(await this.resyncTab(tab, changed))) failedTabs++;
+    for (const view of this.plugin.getAllViews()) {
+      const manager = view.getTabManager();
+      if (manager) failedTabs += await manager.resyncTabsForProviders(affected, changed);
     }
     if (failedTabs > 0) {
       new Notice(t('env.applyPartial', { count: failedTabs }));
     }
-  }
-
-  /**
-   * Re-sync one tab's runtime: skip uninitialized tabs (counted as success),
-   * else sync state + restart/refresh. Returns false when the runtime throws.
-   */
-  private async resyncTab(tab: SyncableTab, changed: boolean): Promise<boolean> {
-    if (!tab.service || !tab.serviceInitialized) return true;
-    try {
-      this.syncTabRuntimeState(tab);
-      // Always FORCE a respawn: a persistent runtime (Claude / Cursor / Codex /
-      // Opencode ACP) keeps a live child that still holds the OLD credentials /
-      // base URL, so a non-forced ensureReady early-returns and the env change
-      // never reaches the process. `changed` additionally drops the session.
-      if (changed) {
-        tab.service.resetSession();
-      }
-      await tab.service.ensureReady({ force: true });
-      return true;
-    } catch {
-      return false;
-    }
-  }
-
-  private syncTabRuntimeState(tab: SyncableTab): void {
-    if (!tab.service || !tab.serviceInitialized) return;
-    const conversation = tab.conversationId
-      ? this.plugin.getConversationSync(tab.conversationId)
-      : null;
-    tab.service.syncConversationState(
-      conversation,
-      this.resolveExternalContextPaths(tab, conversation),
-    );
-  }
-
-  /** Prefer the tab's live selection; else the conversation's (when it has context), else the persistent default. */
-  private resolveExternalContextPaths(tab: SyncableTab, conversation: Conversation | null): string[] {
-    const selected = tab.ui.externalContextSelector?.getExternalContexts();
-    if (selected) return selected;
-    const hasContext = (conversation?.messages.length ?? 0) > 0;
-    return hasContext
-      ? conversation?.externalContextPaths ?? []
-      : this.plugin.settings.persistentExternalContextPaths ?? [];
   }
 
   private refreshAffectedViews(affected: ProviderId[]): void {
