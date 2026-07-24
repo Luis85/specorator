@@ -265,6 +265,7 @@ describe('AgentDetailEditor voice + emoji fields', () => {
     const emoji = root.querySelector('.specorator-roster-appearance-emoji') as HTMLInputElement;
     emoji.value = '🔬🧪';
     emoji.dispatchEvent(new Event('input'));
+    expect(emoji.value).toBe('🔬');
     saveButton(root).click();
     await flush();
     expect(callbacks.onSaved).toHaveBeenCalledWith(expect.objectContaining({ avatarEmoji: '🔬' }));

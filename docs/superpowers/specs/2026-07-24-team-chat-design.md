@@ -315,10 +315,11 @@ dots.
   `resolveOrCreate` returning the existing conversation would leave the DM stuck on
   the old provider and silently drop the new model. Policy: on open, compare the
   agent's freshly-resolved provider (`resolveAgentProvider`) against the mapped
-  conversation's `providerId`; on mismatch, **rotate the thread** — create a fresh DM
-  on the new provider, repoint `roomKey → newConversationId`, and keep the prior
-  conversation as history behind a small "provider changed — started a new thread"
-  notice. This mirrors the app's existing "start a new chat to change provider" rule
+  conversation's `providerId`; on mismatch, **rotate the thread** — **detach/close the
+  old DM tab** (so it can't keep streaming on the old provider, hold a chat slot, or
+  race the new tab's presence updates), create a fresh DM on the new provider, repoint
+  `roomKey → newConversationId`, and keep only the prior *conversation* as history
+  behind a small "provider changed — started a new thread" notice. This mirrors the app's existing "start a new chat to change provider" rule
   (`agentRoster.bindingHint`) rather than pretending a conversation can switch
   providers in place.
 - **Surface discriminator.** Add optional `surface?: 'chat' | 'team-chat'` and

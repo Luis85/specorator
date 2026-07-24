@@ -174,7 +174,11 @@ export class AgentDetailEditor {
     emoji.placeholder = t('agentRoster.emoji');
     emoji.setAttribute('aria-label', t('agentRoster.emoji'));
     emoji.addEventListener('input', () => {
-      this.draft.avatarEmoji = firstGrapheme(emoji.value.trim()) || undefined;
+      const normalized = firstGrapheme(emoji.value.trim());
+      this.draft.avatarEmoji = normalized || undefined;
+      // Reflect the normalized single glyph back into the field so what's shown matches
+      // what's saved (a multi-glyph paste otherwise leaves the field out of sync).
+      if (emoji.value !== normalized) emoji.value = normalized;
       this.refreshAvatar();
       this.updateDirty();
     });
