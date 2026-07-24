@@ -1059,6 +1059,19 @@ export class TabManager implements TabManagerInterface {
       : this.plugin.settings.persistentExternalContextPaths ?? [];
   }
 
+  /** First tab (in insertion order) bound to `conversationId`, or null. */
+  findTabByConversation(conversationId: string): { tabId: TabId } | null {
+    for (const tab of this.tabs.values()) {
+      if (tab.conversationId === conversationId) return { tabId: tab.id };
+    }
+    return null;
+  }
+
+  /** Whether a tab with this id is currently open. */
+  hasTab(tabId: string): boolean {
+    return this.tabs.has(tabId);
+  }
+
   // ============================================
   // Cleanup
   // ============================================

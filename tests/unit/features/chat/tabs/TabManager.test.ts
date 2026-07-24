@@ -3458,4 +3458,25 @@ describe('TabManager - host migration (Group D)', () => {
       expect(late.service.ensureReady).not.toHaveBeenCalled();
     });
   });
+
+  describe('findTabByConversation / hasTab', () => {
+    it('returns the first tab id bound to a conversation, else null', () => {
+      const manager = createManager();
+      (manager as any).tabs = new Map<string, any>([
+        ['a', { id: 'a', conversationId: 'c-1' }],
+        ['b', { id: 'b', conversationId: 'c-2' }],
+      ]);
+
+      expect(manager.findTabByConversation('c-2')).toEqual({ tabId: 'b' });
+      expect(manager.findTabByConversation('missing')).toBeNull();
+    });
+
+    it('hasTab reflects open-tab membership', () => {
+      const manager = createManager();
+      (manager as any).tabs = new Map<string, any>([['a', { id: 'a' }]]);
+
+      expect(manager.hasTab('a')).toBe(true);
+      expect(manager.hasTab('z')).toBe(false);
+    });
+  });
 });

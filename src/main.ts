@@ -795,15 +795,8 @@ export default class SpecoratorPlugin extends Plugin implements PluginContext {
 
   findConversationAcrossViews(conversationId: string): { view: SpecoratorView; tabId: string } | null {
     for (const view of this.getAllViews()) {
-      const tabManager = view.getTabManager();
-      if (!tabManager) continue;
-
-      const tabs = tabManager.getAllTabs();
-      for (const tab of tabs) {
-        if (tab.conversationId === conversationId) {
-          return { view, tabId: tab.id };
-        }
-      }
+      const match = view.getTabManager()?.findTabByConversation(conversationId);
+      if (match) return { view, tabId: match.tabId };
     }
     return null;
   }

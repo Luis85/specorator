@@ -149,7 +149,7 @@ export class WorkOrderActivityProvider implements WorkOrderActivityProviderContr
   async closeTab(tabId: string): Promise<void> {
     for (const view of this.plugin.getAllViews()) {
       const manager = view.getTabManager();
-      if (!manager?.getTab(tabId)) continue;
+      if (!manager?.hasTab(tabId)) continue;
       // Force-close: a finished work-order tab is never streaming, and this frees
       // the work-order slot so AgentBoardView's chat:tabs-changed handler can tick
       // the next queued run.
@@ -165,7 +165,7 @@ export class WorkOrderActivityProvider implements WorkOrderActivityProviderContr
     if (item.sidepanelTabId) {
       for (const view of this.plugin.getAllViews()) {
         const manager = view.getTabManager();
-        if (!manager?.getTab(item.sidepanelTabId)) continue;
+        if (!manager?.hasTab(item.sidepanelTabId)) continue;
         // The dropdown renders in every chat view, so the owning tab can live in
         // a different workspace leaf/split. Reveal that leaf first — otherwise
         // selecting the row only flips the other manager's internal tab and the

@@ -1791,17 +1791,19 @@ describe('SpecoratorPlugin', () => {
 });
 
 describe('host-migration characterization', () => {
-  function viewWithTabs(tabs: any[], extra: Record<string, unknown> = {}) {
+  function viewWithTabs(convToTab: Record<string, string>, extra: Record<string, unknown> = {}) {
     return {
       leaf: { id: `leaf-${Math.random()}` },
-      getTabManager: () => ({ getAllTabs: () => tabs }),
+      getTabManager: () => ({
+        findTabByConversation: (id: string) => (id in convToTab ? { tabId: convToTab[id] } : null),
+      }),
       ...extra,
     };
   }
 
-  it('findConversationAcrossViews returns the owning view + tab id via getAllTabs scan', () => {
-    const view1 = viewWithTabs([{ id: 't1', conversationId: 'c-1' }]);
-    const view2 = viewWithTabs([{ id: 't2', conversationId: 'c-2' }]);
+  it('findConversationAcrossViews returns the owning view + tab id via findTabByConversation', () => {
+    const view1 = viewWithTabs({ 'c-1': 't1' });
+    const view2 = viewWithTabs({ 'c-2': 't2' });
     const ctx = { getAllViews: () => [view1, view2] } as unknown as SpecoratorPlugin;
 
     const result = SpecoratorPlugin.prototype.findConversationAcrossViews.call(ctx, 'c-2');
