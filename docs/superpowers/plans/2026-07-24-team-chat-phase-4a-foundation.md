@@ -149,7 +149,7 @@ This is the largest task; it establishes the view object and its `ChatViewHandle
     - `areTabsRestored()` → `this.tabsRestored`.
     - `leaf` → inherited.
   - `getState()/setState()` — leaf-owned: `getState()` returns `{ selectedAgentId, tabManagerState: this.tabManager?.getPersistedState() }`; `setState()` stores `selectedAgentId` for 4b's restore. **Does not** write the global `persistTabManagerState()` slot (T5).
-  - `onClose()`: abort/dispose active DM runtimes (`this.tabManager?.disposeAllRuntimes()`), unmount Vue, empty `contentEl`, remove classes.
+  - `onClose()`: mirror `SpecoratorView`'s teardown lifecycle (`SpecoratorView.ts:350` `destroyTabRuntime` / `:384` `onClose`) — **do not** call only `disposeAllRuntimes()`. That method is the plugin-*shutdown* runtime-only path; on a leaf close it leaks conversation/selection/navigation controllers, DOM listeners, auxiliary services, and the per-tab Vue islands, and it skips the per-conversation saves. Instead add a `destroyTabRuntime()` helper that does `await this.persistTabStateImmediate()` (force-persist the leaf state, cancelling any debounced write) **then** `await this.tabManager?.destroy()` (`TabManager.ts:1090` — saves every open DM conversation and disposes all tabs/controllers/islands) **then** `this.tabManager = null`. `onClose()` awaits `destroyTabRuntime()`, then `vueApp?.unmount()` (runs the islands' `onUnmounted` disposers), `contentEl.empty()`, and removes the `.specorator-vue`/`.specorator-team-chat-vue-root` classes. Because the leaf state is force-persisted immediately (not debounced) and `destroy()` saves each conversation, a close-then-reopen restores the DM cleanly. Provide a `TeamChatView.test.ts` assertion that `onClose` awaits `tabManager.destroy()` (not merely `disposeAllRuntimes`) and persists leaf state.
 
 - [ ] 3.7 `activateTeamChat.ts` — mirror `activateLibrary`: reveal existing `VIEW_TYPE_TEAM_CHAT` leaf or `getLeaf('tab')` + `setViewState` (main area) + `revealLeaf` + `loadIfDeferred()`; optional `agentId` param calls `view.selectAgent(agentId)` in 4b (accept + ignore in 4a).
 
@@ -163,7 +163,7 @@ This is the largest task; it establishes the view object and its `ChatViewHandle
 
 - [ ] 3.11 Tests:
   - `tests/vue/teamChat/teamChatView.mount.test.ts` — mounting `TeamChatRoot` provides the content host exactly once and renders the roster rows from a fake roster store (read-only: asserts no DM-open callback fires on row render).
-  - `tests/unit/features/teamChat/TeamChatView.test.ts` — `implements ChatViewHandle` conformance: `getTabManager()` returns the manager after the host mounts; `invalidateProviderCommandCaches` delegates; `getState()` round-trips `selectedAgentId`; `onClose` disposes runtimes.
+  - `tests/unit/features/teamChat/TeamChatView.test.ts` — `implements ChatViewHandle` conformance: `getTabManager()` returns the manager after the host mounts; `invalidateProviderCommandCaches` delegates; `getState()` round-trips `selectedAgentId`; `onClose` force-persists leaf state and awaits `tabManager.destroy()` (full teardown, not `disposeAllRuntimes`).
   - `tests/integration/main.test.ts` — `VIEW_TYPE_TEAM_CHAT` is registered and `open-team-chat` command exists.
 
 - [ ] 3.12 Gate: `npm run typecheck && npm run lint && npm run test && npm run test:vue && npm run typecheck:vue`. Commit: `Phase 4a (3/5): TeamChatView scaffold + registration + i18n + read-only roster` (+ trailers).
