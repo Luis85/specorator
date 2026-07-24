@@ -29,15 +29,7 @@ export class PluginLifecycle {
 
   shutdownActiveRuntimes(): void {
     for (const view of this.plugin.getAllViews()) {
-      const tabManager = view.getTabManager();
-      if (!tabManager) continue;
-      for (const tab of tabManager.getAllTabs()) {
-        try {
-          void tab.service?.cleanup();
-        } catch {
-          // best-effort: keep tearing down remaining runtimes
-        }
-      }
+      view.getTabManager()?.disposeAllRuntimes();
     }
   }
 

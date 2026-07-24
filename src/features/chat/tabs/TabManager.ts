@@ -946,6 +946,32 @@ export class TabManager implements TabManagerInterface {
   }
 
   // ============================================
+  // Host migration (Group D commands)
+  //
+  // Purpose-built commands that keep every TabData reach inside TabManager and
+  // expose only core-safe signatures on ChatTabManagerHandle, extending the
+  // broadcastToAllTabs/broadcastToProviderTabs precedent so a second chat-host
+  // view can drive the same lifecycle without core importing feature types.
+  // ============================================
+
+  /**
+   * Fire-and-forget cleanup of every tab's runtime. Guards ONLY on `tab.service`
+   * (NOT `serviceInitialized`), matching the pre-migration
+   * `PluginLifecycle.shutdownActiveRuntimes` guard — intentionally broader than
+   * `broadcastToTabs`, so a constructed-but-uninitialized runtime is still torn
+   * down. Errors are swallowed so one failing cleanup can't strand the rest.
+   */
+  disposeAllRuntimes(): void {
+    for (const tab of this.tabs.values()) {
+      try {
+        void tab.service?.cleanup();
+      } catch {
+        // best-effort: keep tearing down remaining runtimes
+      }
+    }
+  }
+
+  // ============================================
   // Cleanup
   // ============================================
 

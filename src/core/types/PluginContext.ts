@@ -44,6 +44,10 @@ export interface ChatTabManagerHandle {
   closeTab(tabId: string, force?: boolean): Promise<boolean>;
   /** Activate an open tab by id. */
   switchToTab(tabId: string): Promise<void>;
+
+  // --- Group D: purpose-built commands that keep TabData reach inside TabManager ---
+  /** Best-effort cleanup of every tab's runtime (guards `tab.service` only). */
+  disposeAllRuntimes(): void;
 }
 
 /**

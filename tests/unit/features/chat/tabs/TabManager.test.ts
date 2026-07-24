@@ -3274,3 +3274,35 @@ describe('TabManager - buildForkTitle', () => {
     expect(updateCall.title).toBe('Fork: My Chat (#1) 4');
   });
 });
+
+describe('TabManager - host migration (Group D)', () => {
+  describe('disposeAllRuntimes', () => {
+    it('cleans up a service even when serviceInitialized is false (guard is tab.service only)', () => {
+      const manager = createManager();
+      const cleanupInit = jest.fn();
+      const cleanupUninit = jest.fn();
+      (manager as any).tabs = new Map<string, any>([
+        ['a', { service: { cleanup: cleanupInit }, serviceInitialized: true }],
+        ['b', { service: { cleanup: cleanupUninit }, serviceInitialized: false }],
+        ['c', { service: null, serviceInitialized: false }],
+      ]);
+
+      manager.disposeAllRuntimes();
+
+      expect(cleanupInit).toHaveBeenCalledTimes(1);
+      expect(cleanupUninit).toHaveBeenCalledTimes(1);
+    });
+
+    it('swallows a throwing cleanup and still disposes the rest', () => {
+      const manager = createManager();
+      const ok = jest.fn();
+      (manager as any).tabs = new Map<string, any>([
+        ['a', { service: { cleanup: () => { throw new Error('boom'); } }, serviceInitialized: true }],
+        ['b', { service: { cleanup: ok }, serviceInitialized: true }],
+      ]);
+
+      expect(() => manager.disposeAllRuntimes()).not.toThrow();
+      expect(ok).toHaveBeenCalledTimes(1);
+    });
+  });
+});

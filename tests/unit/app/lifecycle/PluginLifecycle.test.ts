@@ -11,12 +11,13 @@ function createTab(opts: { cleanup?: () => Promise<void> | void } = {}) {
 
 function createView(tabs: ReturnType<typeof createTab>[]) {
   const tabManager = {
-    getAllTabs: jest.fn().mockReturnValue(tabs),
+    disposeAllRuntimes: jest.fn(),
     getPersistedState: jest.fn().mockReturnValue({ openTabs: [] }),
   };
   return {
     getTabManager: jest.fn().mockReturnValue(tabManager),
-  } as unknown as SpecoratorView;
+    __tabManager: tabManager,
+  } as unknown as SpecoratorView & { __tabManager: { disposeAllRuntimes: jest.Mock } };
 }
 
 function createPlugin(views: SpecoratorView[]): SpecoratorPlugin {
@@ -28,43 +29,22 @@ function createPlugin(views: SpecoratorView[]): SpecoratorPlugin {
 }
 
 describe('PluginLifecycle.shutdownActiveRuntimes', () => {
-  it('calls cleanup on every tab across every view', () => {
-    const tabsA = [createTab(), createTab()];
-    const tabsB = [createTab()];
-    const plugin = createPlugin([createView(tabsA), createView(tabsB)]);
-    const lifecycle = new PluginLifecycle(plugin);
-
-    lifecycle.shutdownActiveRuntimes();
-
-    for (const tab of [...tabsA, ...tabsB]) {
-      expect(tab.service.cleanup).toHaveBeenCalledTimes(1);
-    }
-  });
-
-  it('swallows cleanup errors and keeps tearing down remaining tabs', () => {
-    const throwingTab = createTab({ cleanup: () => { throw new Error('boom'); } });
-    const okTab = createTab();
-    const plugin = createPlugin([createView([throwingTab, okTab])]);
-    const lifecycle = new PluginLifecycle(plugin);
-
-    expect(() => lifecycle.shutdownActiveRuntimes()).not.toThrow();
-    expect(okTab.service.cleanup).toHaveBeenCalledTimes(1);
-  });
-
-  it('cleans up a tab whose service exists but is uninitialized (guard is tab.service only, broader than broadcast)', () => {
-    const cleanup = jest.fn();
-    const tabManager = {
-      getAllTabs: jest.fn().mockReturnValue([
-        { service: { cleanup }, serviceInitialized: false },
-        { service: null, serviceInitialized: false },
-      ]),
-    };
-    const view = { getTabManager: jest.fn().mockReturnValue(tabManager) } as unknown as SpecoratorView;
-    const plugin = createPlugin([view]);
+  it('delegates to disposeAllRuntimes on every view', () => {
+    const viewA = createView([]) as any;
+    const viewB = createView([]) as any;
+    const plugin = createPlugin([viewA, viewB]);
 
     new PluginLifecycle(plugin).shutdownActiveRuntimes();
 
-    expect(cleanup).toHaveBeenCalledTimes(1);
+    expect(viewA.__tabManager.disposeAllRuntimes).toHaveBeenCalledTimes(1);
+    expect(viewB.__tabManager.disposeAllRuntimes).toHaveBeenCalledTimes(1);
+  });
+
+  it('skips views without a tab manager', () => {
+    const view = { getTabManager: jest.fn().mockReturnValue(null) } as unknown as SpecoratorView;
+    const plugin = createPlugin([view]);
+
+    expect(() => new PluginLifecycle(plugin).shutdownActiveRuntimes()).not.toThrow();
   });
 });
 
