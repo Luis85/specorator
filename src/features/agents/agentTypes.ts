@@ -19,6 +19,8 @@ export interface AgentPersona {
   initials?: string;
   /** Optional Lucide icon name; takes precedence over initials for non-builtin personas. */
   icon?: string;
+  /** Emoji glyph; takes precedence over icon/initials for non-builtin personas. */
+  emoji?: string;
   /** True only for the built-in `standard` persona. */
   builtin?: boolean;
 }

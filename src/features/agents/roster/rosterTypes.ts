@@ -22,6 +22,13 @@ export interface RosterAgent {
   initials?: string;
   icon?: string;
   /**
+   * Freeform voice/tone directive shaping how the agent speaks, distinct from the
+   * task `prompt`. Injected into the bound-agent persona directive.
+   */
+  voice?: string;
+  /** Emoji avatar glyph; takes precedence over icon/initials when set. */
+  avatarEmoji?: string;
+  /**
    * Set only on agents installed from the Marketplace (absent on hand-authored
    * ones). Records where the agent came from; `id` is the stable catalog id,
    * which survives a catalog-side display-name rebrand.
