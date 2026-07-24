@@ -1,4 +1,4 @@
-import type { Plugin } from 'obsidian';
+import type { Plugin, WorkspaceLeaf } from 'obsidian';
 
 import type { SpecoratorEventMap } from '../../app/events/specoratorEvents';
 import type { BrowserSelectionContext } from '../../utils/browser';
@@ -32,6 +32,18 @@ export interface ChatTabManagerHandle {
     providerIds: ProviderId | ProviderId[],
     fn: (service: ChatRuntime) => Promise<void>,
   ): Promise<void>;
+
+  // --- Group C: neutral tab queries/commands consumed by getAllViews() call sites ---
+  /** Count open tabs of a kind. Literal union mirrors `AppTabManagerState.openTabs[].kind`. */
+  countTabsByKind(kind: 'chat' | 'work-order'): number;
+  /** Open work-order tabs with display title + live-stream flag (neutral shape). */
+  listWorkOrderTabs(): Array<{ id: string; title: string; isStreaming: boolean }>;
+  /** Persisted tab-manager state (core type; field-identical to `PersistedTabManagerState`). */
+  getPersistedState(): AppTabManagerState;
+  /** Force-close a tab; `force` closes even while streaming. */
+  closeTab(tabId: string, force?: boolean): Promise<boolean>;
+  /** Activate an open tab by id. */
+  switchToTab(tabId: string): Promise<void>;
 }
 
 /**
@@ -40,11 +52,25 @@ export interface ChatTabManagerHandle {
  * refresh UI and reach the tab manager without `core/` depending on the view.
  */
 export interface ChatViewHandle {
+  /** Owning workspace leaf (inherited from `ItemView`). Lets cross-view callers reveal the host leaf. */
+  leaf: WorkspaceLeaf;
   getTabManager(): ChatTabManagerHandle | null;
   refreshModelSelector(): void;
   invalidateProviderCommandCaches(providerIds?: ProviderId | ProviderId[]): void;
   /** Re-applies `hiddenProviderCommands` to open command dropdowns. Optional: implemented by the full chat view. */
   updateHiddenProviderCommands?(): void;
+
+  // --- Group B: settings-broadcast + lifecycle surface consumed by getAllViews() call sites ---
+  /** Re-probe provider availability; promote/drop the tab engine when the enabled-provider set changed. */
+  refreshProviderAvailability(): Promise<void>;
+  /** Re-project the shell after a `tabBarPosition` change. */
+  updateLayoutForPosition(): void;
+  /** Re-project the shell after a tab-bar-visibility setting change. */
+  refreshTabControls(): void;
+  /** Apply the "show files changed by the agent" setting to open tabs immediately. */
+  applyEditedFilesSetting(): void;
+  /** Whether the tab manager has finished restoring its persisted tabs. */
+  areTabsRestored(): boolean;
 }
 
 /**

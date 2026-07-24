@@ -10,6 +10,7 @@ import { ProviderRegistry } from '../../core/providers/ProviderRegistry';
 import { ProviderSettingsCoordinator } from '../../core/providers/ProviderSettingsCoordinator';
 import { DEFAULT_CHAT_PROVIDER_ID, type ProviderId } from '../../core/providers/types';
 import { asSettingsBag, VIEW_TYPE_SPECORATOR } from '../../core/types';
+import type { ChatViewHandle } from '../../core/types/PluginContext';
 import type { TabBarPosition } from '../../core/types/settings';
 import { t } from '../../i18n/i18n';
 import type SpecoratorPlugin from '../../main';
@@ -49,7 +50,7 @@ type LoadableView = {
   load: () => Promise<void> | void;
 };
 
-export class SpecoratorView extends ItemView {
+export class SpecoratorView extends ItemView implements ChatViewHandle {
   readonly plugin: SpecoratorPlugin;
   private _workOrderBridge: SpecoratorViewWorkOrderBridge | null = null;
 
