@@ -1829,3 +1829,59 @@ describe('SpecoratorPlugin', () => {
   });
 
 });
+
+describe('host-migration characterization', () => {
+  function viewWithTabs(tabs: any[], extra: Record<string, unknown> = {}) {
+    return {
+      leaf: { id: `leaf-${Math.random()}` },
+      getTabManager: () => ({ getAllTabs: () => tabs }),
+      ...extra,
+    };
+  }
+
+  it('findConversationAcrossViews returns the owning view + tab id via getAllTabs scan', () => {
+    const view1 = viewWithTabs([{ id: 't1', conversationId: 'c-1' }]);
+    const view2 = viewWithTabs([{ id: 't2', conversationId: 'c-2' }]);
+    const ctx = { getAllViews: () => [view1, view2] } as unknown as SpecoratorPlugin;
+
+    const result = SpecoratorPlugin.prototype.findConversationAcrossViews.call(ctx, 'c-2');
+
+    expect(result).toEqual({ view: view2, tabId: 't2' });
+    expect(SpecoratorPlugin.prototype.findConversationAcrossViews.call(ctx, 'missing')).toBeNull();
+  });
+
+  it('quiesceViewsBeforeConversationDelete disposes/cancels/hydrates/saves matching tabs only', async () => {
+    const cc = {
+      dispose: jest.fn(),
+      whenHydrated: jest.fn().mockResolvedValue(undefined),
+      save: jest.fn().mockResolvedValue(undefined),
+    };
+    const matching = { conversationId: 'c-1', controllers: { conversationController: cc, inputController: { cancelStreaming: jest.fn() } } };
+    const other = { conversationId: 'c-9', controllers: { conversationController: { dispose: jest.fn(), whenHydrated: jest.fn(), save: jest.fn() }, inputController: { cancelStreaming: jest.fn() } } };
+    const view = viewWithTabs([matching, other]);
+    const ctx = { getAllViews: () => [view] } as unknown as SpecoratorPlugin;
+
+    await (SpecoratorPlugin.prototype as any).quiesceViewsBeforeConversationDelete.call(ctx, 'c-1');
+
+    expect(cc.dispose).toHaveBeenCalledTimes(1);
+    expect(matching.controllers.inputController.cancelStreaming).toHaveBeenCalledTimes(1);
+    expect(cc.whenHydrated).toHaveBeenCalledTimes(1);
+    expect(cc.save).toHaveBeenCalledTimes(1);
+    expect(other.controllers.conversationController.dispose).not.toHaveBeenCalled();
+  });
+
+  it('repairViewsAfterConversationDelete recreates a fresh conversation (force) on matching tabs only', async () => {
+    const createNew = jest.fn().mockResolvedValue(undefined);
+    const nonMatchCreate = jest.fn().mockResolvedValue(undefined);
+    const view = viewWithTabs([
+      { conversationId: 'c-1', controllers: { conversationController: { createNew } } },
+      { conversationId: 'c-9', controllers: { conversationController: { createNew: nonMatchCreate } } },
+    ]);
+    const ctx = { getAllViews: () => [view] } as unknown as SpecoratorPlugin;
+
+    await (SpecoratorPlugin.prototype as any).repairViewsAfterConversationDelete.call(ctx, 'c-1');
+
+    expect(createNew).toHaveBeenCalledWith({ force: true });
+    expect(nonMatchCreate).not.toHaveBeenCalled();
+  });
+});

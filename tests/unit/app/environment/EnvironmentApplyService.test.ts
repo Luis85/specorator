@@ -120,4 +120,43 @@ describe('EnvironmentApplyService', () => {
     expect((streamingTab.service as { ensureReady: jest.Mock }).ensureReady)
       .toHaveBeenCalledWith({ force: true });
   });
+
+  it('cancels every affected tab across all views before restarting any (env-apply ordering)', async () => {
+    jest.spyOn(providerEnv, 'getEnvironmentVariablesForScope').mockReturnValue('OLD');
+    jest.spyOn(providerEnv, 'setEnvironmentVariablesForScope').mockImplementation(() => undefined);
+    jest.spyOn(ProviderRegistry, 'getRegisteredProviderIds').mockReturnValue(['claude']);
+    jest.spyOn(ProviderSettingsCoordinator, 'handleEnvironmentChange' as any).mockImplementation(() => undefined);
+    jest.spyOn(ProviderSettingsCoordinator, 'reconcileProviders' as any).mockReturnValue({
+      changed: false,
+      invalidatedConversations: [],
+    });
+
+    const order: string[] = [];
+    const makeTab = (name: string) => ({
+      providerId: 'claude' as ProviderId,
+      state: { isStreaming: true },
+      service: {
+        cleanup: jest.fn(),
+        syncConversationState: jest.fn(),
+        resetSession: jest.fn(),
+        ensureReady: jest.fn(() => { order.push(`restart:${name}`); return Promise.resolve(); }),
+      },
+      serviceInitialized: true,
+      conversationId: null,
+      controllers: { inputController: { cancelStreaming: jest.fn(() => order.push(`cancel:${name}`)) } },
+      ui: { externalContextSelector: undefined },
+    });
+    const t1 = makeTab('v1');
+    const t2 = makeTab('v2');
+    const view1 = { getTabManager: () => ({ getAllTabs: () => [t1] }), invalidateProviderCommandCaches: jest.fn(), refreshModelSelector: jest.fn() };
+    const view2 = { getTabManager: () => ({ getAllTabs: () => [t2] }), invalidateProviderCommandCaches: jest.fn(), refreshModelSelector: jest.fn() };
+    const plugin = { ...createPlugin(), getAllViews: jest.fn().mockReturnValue([view1, view2]) } as unknown as SpecoratorPlugin;
+
+    await new EnvironmentApplyService(plugin).apply('shared', 'NEW');
+
+    // Both cancels precede both restarts (cancel-all-then-restart-all).
+    expect(order.indexOf('cancel:v1')).toBeLessThan(order.indexOf('restart:v1'));
+    expect(order.indexOf('cancel:v2')).toBeLessThan(order.indexOf('restart:v1'));
+    expect(order.indexOf('cancel:v2')).toBeLessThan(order.indexOf('restart:v2'));
+  });
 });

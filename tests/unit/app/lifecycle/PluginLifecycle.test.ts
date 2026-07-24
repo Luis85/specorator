@@ -50,6 +50,22 @@ describe('PluginLifecycle.shutdownActiveRuntimes', () => {
     expect(() => lifecycle.shutdownActiveRuntimes()).not.toThrow();
     expect(okTab.service.cleanup).toHaveBeenCalledTimes(1);
   });
+
+  it('cleans up a tab whose service exists but is uninitialized (guard is tab.service only, broader than broadcast)', () => {
+    const cleanup = jest.fn();
+    const tabManager = {
+      getAllTabs: jest.fn().mockReturnValue([
+        { service: { cleanup }, serviceInitialized: false },
+        { service: null, serviceInitialized: false },
+      ]),
+    };
+    const view = { getTabManager: jest.fn().mockReturnValue(tabManager) } as unknown as SpecoratorView;
+    const plugin = createPlugin([view]);
+
+    new PluginLifecycle(plugin).shutdownActiveRuntimes();
+
+    expect(cleanup).toHaveBeenCalledTimes(1);
+  });
 });
 
 describe('PluginLifecycle.persistOpenTabStates', () => {
