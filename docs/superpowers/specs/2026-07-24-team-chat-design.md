@@ -295,7 +295,7 @@ dots.
   can generalize it to a participant set without a data migration (see
   Increment-2 seam).
 - `resolveOrCreate(agentId)` returns the mapped `conversationId` if present and
-  still exists, else creates a conversation via `ConversationStore.createConversation({ agentId })` (existing `boundAgentId` support), records the mapping, and returns it.
+  still exists, else creates a conversation via `ConversationStore.createConversation({ boundAgentId: agentId, surface: 'team-chat' })` (existing `boundAgentId` support), records the mapping, and returns it.
 - **Serialize concurrent access — store-wide, not just per `roomKey`.** The method
   is async (read map → maybe create → write the whole map), so it races two ways:
   **(a) same agent** — two overlapping selections (rapid double-click) each observe
