@@ -296,14 +296,18 @@ dots.
   Increment-2 seam).
 - `resolveOrCreate(agentId)` returns the mapped `conversationId` if present and
   still exists, else creates a conversation via `ConversationStore.createConversation({ agentId })` (existing `boundAgentId` support), records the mapping, and returns it.
-- **Serialize concurrent calls per `roomKey`.** The method is async, so two
-  overlapping selections for the same agent (e.g. a rapid double-click before the
-  first creation records its mapping) would each observe "no mapping" and create
-  *separate* conversations — last write wins, and the losing tab's messages vanish on
-  the next resume. Memoize the in-flight promise per `roomKey` (evicted on settle) so
-  overlapping callers await the same creation; `writeAtomic` guards only a single
-  file write, not this check-then-act race. The one-thread-per-agent invariant test
-  must include a concurrent-call case.
+- **Serialize concurrent access — store-wide, not just per `roomKey`.** The method
+  is async (read map → maybe create → write the whole map), so it races two ways:
+  **(a) same agent** — two overlapping selections (rapid double-click) each observe
+  "no mapping" and create *separate* conversations (last write wins; the losing
+  tab's messages vanish on the next resume); **(b) different agents** — two
+  creations read independent in-memory snapshots of the whole-file map and the
+  second write drops the first's mapping, and because `VaultFileAdapter.writeAtomic`
+  uses a single fixed `${path}.tmp` (`VaultFileAdapter.ts:47`), concurrent writes to
+  the shared `threads.json` can consume each other's temp file. So serialize **all**
+  mutations + persistence store-wide (an async write queue / mutex over the
+  read-modify-write), not merely memoize per `roomKey`. The invariant tests must
+  cover **both** a concurrent same-agent case and a concurrent different-agent case.
 - **Provider/model changes after a DM exists.** `Conversation.providerId` is
   immutable — `ConversationStore.updateConversation` strips it, and
   `resolveBoundAgentQueryOptions` resolves the model against that pinned provider. So
