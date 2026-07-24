@@ -70,6 +70,15 @@ describe('personaRegistry', () => {
       expect(persona.initials).toBe('TA');
       expect(persona.color).toBe('var(--color-base-70)');
     });
+
+    it('maps the agent avatarEmoji onto the persona emoji', () => {
+      const agent = { ...createRosterAgent('Researcher', 1), avatarEmoji: '🔬' };
+      expect(rosterAgentToPersona(agent).emoji).toBe('🔬');
+    });
+
+    it('leaves persona emoji undefined when the agent has none', () => {
+      expect(rosterAgentToPersona(createRosterAgent('Plain', 1)).emoji).toBeUndefined();
+    });
   });
 
   describe('buildPersonaResolverFromAgents', () => {
