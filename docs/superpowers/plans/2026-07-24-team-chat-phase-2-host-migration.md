@@ -36,15 +36,15 @@ relates-to: docs/research/2026-07-24-team-chat-phase-2-host-migration-surface.md
 |------|--------|----------------|
 | `src/core/types/PluginContext.ts` | **Modify** | Widen `ChatViewHandle` (Group B + `leaf`) and `ChatTabManagerHandle` (Group C + Group D). Import `WorkspaceLeaf`. Sole owner of the core-safe host contract. |
 | `src/features/chat/SpecoratorView.ts` | **Modify** | Add `implements ChatViewHandle` (compile-time conformance gate). Import `ChatViewHandle`. Task 7: `isSpecoratorView` guard in the work-order-bridge `findConversationTab` callback. |
-| `src/features/chat/tabs/TabManager.ts` | **Modify** | Home of the Group D command bodies (`disposeAllRuntimes`, `quiesceTabsForConversation`, `repairTabsForConversation`, `resyncTabsForProviders`, `findTabByConversation`, `hasTab`). All `TabData` reach stays here. Import `DEFAULT_CHAT_PROVIDER_ID`. |
+| `src/features/chat/tabs/TabManager.ts` | **Modify** | Home of the Group D command bodies (`disposeAllRuntimes`, `quiesceTabsForConversation`, `repairTabsForConversation`, `cancelStreamingTabsForProviders` + `restartRuntimeTabs`, `findTabByConversation`, `hasTab`). All `TabData` reach stays here. Import `DEFAULT_CHAT_PROVIDER_ID`. |
 | `src/app/lifecycle/PluginLifecycle.ts` | **Modify** | Route `shutdownActiveRuntimes` through `disposeAllRuntimes`. |
 | `src/main.ts` | **Modify** | Route quiesce/repair/findConversationAcrossViews through handle methods; narrow `getAllViews()` and `findConversationAcrossViews` return types to `ChatViewHandle`. Import `ChatViewHandle`. |
-| `src/app/environment/EnvironmentApplyService.ts` | **Modify** | Route `syncAffectedTabs` through the single `resyncTabsForProviders` (per view). Delete `resyncTab`/`syncTabRuntimeState`/`resolveExternalContextPaths`, the `SyncableTab` alias, and the `TabData` + `DEFAULT_CHAT_PROVIDER_ID` imports. |
+| `src/app/environment/EnvironmentApplyService.ts` | **Modify** | Route `syncAffectedTabs` through the global two-phase `cancelStreamingTabsForProviders` + `restartRuntimeTabs` (cancel across all views, then restart each with its frozen id set). Add `import type { ChatTabManagerHandle }`. |
 | `src/features/tasks/ui/WorkOrderActivityProvider.ts` | **Modify** | Replace the two `getTab(id)` existence checks with `hasTab(id)`. |
 | `src/features/chat/feedback/sendFeedbackPrompt.ts` | **Modify** | Task 7: `isSpecoratorView` guard so the concrete `getTab` reach survives the narrowed `findConversationAcrossViews` return. |
 | `tests/unit/app/lifecycle/PluginLifecycle.test.ts` | **Modify** | Guard-nuance characterization (Task 2) → delegation test (Task 3). |
 | `tests/unit/features/chat/tabs/TabManager.test.ts` | **Modify** | New `describe('TabManager - host migration (Group D)')` block: red→green unit tests for every new command (Tasks 3–6). |
-| `tests/unit/app/environment/EnvironmentApplyService.test.ts` | **Modify** | Cross-view cancel-before-restart ordering characterization (Task 2) → orchestration/delegation test (Task 5). |
+| `tests/unit/app/environment/EnvironmentApplyService.test.ts` | **Modify** | Cross-view cancel-before-restart ordering characterization (Task 2) → two-phase delegation + round-14 global-ordering test (Task 5). |
 | `tests/integration/main.test.ts` | **Modify** | Characterization for `findConversationAcrossViews` / `quiesceViewsBeforeConversationDelete` / `repairViewsAfterConversationDelete` (Task 2) → routed-through-handle updates (Tasks 4, 6). |
 | `tests/unit/features/tasks/ui/WorkOrderActivityProvider.test.ts` | **Modify** | Swap the `getTab` manager mocks for `hasTab` (Task 6). |
 
@@ -622,21 +622,27 @@ Steps:
 
 ---
 
-## Task 5 — Group D: env resync (`resyncTabsForProviders`) + route `EnvironmentApplyService`
+## Task 5 (redo) — Group D: env resync as global two-phase cancel/restart (`cancelStreamingTabsForProviders` + `restartRuntimeTabs`) + route `EnvironmentApplyService`
 
-The hardest path. `EnvironmentApplyService.syncAffectedTabs` currently collects a `SyncableTab` slice across views, cancels streaming on all, then resyncs all. A SINGLE handle method — `resyncTabsForProviders(providerIds, changed)` — moves that whole per-manager pass into `TabManager`: it snapshots the affected set ONCE, cancels streaming across that snapshot, then restarts each tab in that SAME snapshot. So no tab is ever restarted without first being cancelled, and a tab created during a restart `await` is left untouched. (A code review rejected the original two-method `cancelStreamingTabsForProviders` + `restartRuntimeTabsForProviders` split: the restart method re-enumerated tabs live at its entry, so a tab created during an earlier manager's restart `await` could be restarted without first being cancelled. One method over one snapshot is the fix.) Every `TabData` reach (`.state`, `.controllers`, `.service`, `.ui`, `.conversationId`) stays inside `TabManager`. The `SyncableTab` alias and `TabData` import are deleted from `EnvironmentApplyService`.
+The hardest path, and the one revised after review. `EnvironmentApplyService.syncAffectedTabs` originally collected a `SyncableTab` slice across ALL views, cancelled streaming on ALL of them, THEN resynced ALL of them — a **global** cancel-before-restart ordering. The first cut of this task (commit `ad0c985`) collapsed that into a SINGLE per-manager method `resyncTabsForProviders(providerIds, changed)` that cancelled+restarted each view in turn. A code review found this **regressed** multi-view behavior: because the caller loops per view (`await resync(v1)` then `await resync(v2)`), a later view (v2) keeps STREAMING on a **stale** provider process for the whole duration of an earlier view's (v1's) slow `ensureReady({force})` — the env change reaches v1's runtime while v2 is still emitting against the old credentials/base URL. The original global ordering cancelled every view first, so no view streamed on a stale runtime during another view's restart.
+
+The fix is a **global two-phase** split — `cancelStreamingTabsForProviders(providerIds): string[]` + `restartRuntimeTabs(tabIds, changed): Promise<number>`:
+- **Phase 1 (across ALL views, before any restart):** the caller calls `cancelStreamingTabsForProviders` on every manager first. Each cancels its affected in-flight streams AND returns the ids of ALL affected tabs (streaming or not) as a **frozen restart set**. Once phase 1 completes, no view is still streaming on a stale runtime.
+- **Phase 2 (per view):** the caller then calls `restartRuntimeTabs(frozenIds, changed)` per manager. Restart operates on the FROZEN id set from phase 1, not a live re-enumeration — so a tab created between the cancel pass and the restart (e.g. during another view's restart `await`) has a new id, is in no frozen set, and is left untouched. `restartRuntimeTabs` also skips any frozen id whose tab was closed in the interim (`this.tabs.get(id)` → undefined).
+
+This restores the original cross-view "cancel every view, THEN restart" guarantee AND keeps frozen-id-set protection against a mid-restart-created tab — fixing both defects at once. (It supersedes the earlier two-method `cancelStreamingTabsForProviders` + `restartRuntimeTabsForProviders` split whose restart re-enumerated live and could restart an un-cancelled tab, AND the single-method `resyncTabsForProviders` that dropped the global ordering. Frozen id sets close the re-enumeration hole; the global two-phase caller closes the ordering regression.) Every `TabData` reach (`.state`, `.controllers`, `.service`, `.ui`, `.conversationId`) stays inside `TabManager`; the frozen set crosses the core boundary as `string[]` tab-ids, never `TabData` (core-safety, `src/core/CLAUDE.md`). The `SyncableTab` alias and `TabData` import are deleted from `EnvironmentApplyService`.
 
 **Files:**
-- Modify: `src/core/types/PluginContext.ts` (`ChatTabManagerHandle` Group D)
-- Modify: `src/features/chat/tabs/TabManager.ts` (Host-migration section; add `DEFAULT_CHAT_PROVIDER_ID` import)
-- Modify: `src/app/environment/EnvironmentApplyService.ts` (replace `syncAffectedTabs`; delete `resyncTab`, `syncTabRuntimeState`, `resolveExternalContextPaths`, `SyncableTab`, and the `TabData`/`DEFAULT_CHAT_PROVIDER_ID` imports)
-- Test: `tests/unit/features/chat/tabs/TabManager.test.ts`, `tests/unit/app/environment/EnvironmentApplyService.test.ts`, `tests/integration/main.test.ts` (env-apply consumer tests move from the old `getAllTabs` seam to `resyncTabsForProviders` delegation)
+- Modify: `src/core/types/PluginContext.ts` (`ChatTabManagerHandle` Group D — replace the single `resyncTabsForProviders` line with the two method signatures)
+- Modify: `src/features/chat/tabs/TabManager.ts` (Host-migration section — replace `resyncTabsForProviders` + delete the `affectedProviderTabs` generator; add the two methods; KEEP `resyncTabRuntime`/`syncTabRuntimeState`/`resolveExternalContextPaths` and the `DEFAULT_CHAT_PROVIDER_ID` import)
+- Modify: `src/app/environment/EnvironmentApplyService.ts` (replace `syncAffectedTabs` with the global two-phase version; add `import type { ChatTabManagerHandle }`)
+- Test: `tests/unit/features/chat/tabs/TabManager.test.ts`, `tests/unit/app/environment/EnvironmentApplyService.test.ts`, `tests/integration/main.test.ts` (env-apply consumer tests move to `cancelStreamingTabsForProviders` + `restartRuntimeTabs` delegation)
 
 Steps:
 
-- [ ] 5.1 **Red — TabManager tests.** Add to the Group D block. A local `tab()` factory mirrors the env-apply `SyncableTab` fields; `createManager()`'s default plugin supplies `getConversationSync` (→ null) and `settings` (no `persistentExternalContextPaths` → `[]`). All tests call the SINGLE method `resyncTabsForProviders(providerIds, changed)`, and the crucial snapshot-once test pins the corrected design:
+- [ ] 5.1 **Red — TabManager tests.** In the Group D block, REPLACE the current Task-5 `resyncTabsForProviders` describe with a `cancelStreamingTabsForProviders / restartRuntimeTabs` describe (reuse the `tab()` factory + `createManager()`; the default plugin supplies `getConversationSync` → null and `settings` with no `persistentExternalContextPaths` → `[]`). Cover: (a) cancel cancels only streaming affected tabs and RETURNS all affected ids (streaming + idle), not unaffected-provider ids; (b) `restartRuntimeTabs(ids, true)` force-restarts + drops session; (c) `changed:false` → no `resetSession`, still `ensureReady({force:true})`; (d) skips uninitialized as success + counts a throwing restart as one failure; (e) skips an id whose tab was closed after cancel; the relocated external-context precedence test (adapted to call cancel THEN restart); AND (f) the **frozen-set** guard (round-13):
   ```ts
-  describe('resyncTabsForProviders', () => {
+  describe('cancelStreamingTabsForProviders / restartRuntimeTabs', () => {
     function tab(overrides: any = {}) {
       return {
         providerId: overrides.providerId ?? 'claude',
@@ -654,30 +660,43 @@ Steps:
       };
     }
 
-    it('cancels only streaming tabs whose provider is affected', async () => {
+    it('cancels only streaming affected tabs and returns all affected ids (streaming + idle, not other providers)', () => {
       const manager = createManager();
       const streamingClaude = tab({ isStreaming: true });
       const idleClaude = tab({ isStreaming: false });
       const streamingCodex = tab({ providerId: 'codex', isStreaming: true });
       (manager as any).tabs = new Map<string, any>([['a', streamingClaude], ['b', idleClaude], ['c', streamingCodex]]);
 
-      await manager.resyncTabsForProviders(['claude'], false);
+      const ids = manager.cancelStreamingTabsForProviders(['claude']);
 
+      // ALL affected tabs (streaming + idle) are frozen for restart; the codex tab is not.
+      expect(ids).toEqual(['a', 'b']);
       expect(streamingClaude.controllers.inputController.cancelStreaming).toHaveBeenCalled();
       expect(idleClaude.controllers.inputController.cancelStreaming).not.toHaveBeenCalled();
       expect(streamingCodex.controllers.inputController.cancelStreaming).not.toHaveBeenCalled();
     });
 
-    it('force-restarts initialized runtimes and drops the session when changed', async () => {
+    it('restartRuntimeTabs(ids, true) force-restarts initialized runtimes and drops the session', async () => {
       const manager = createManager();
       const t = tab();
       (manager as any).tabs = new Map<string, any>([['a', t]]);
 
-      const failed = await manager.resyncTabsForProviders(['claude'], true);
+      const failed = await manager.restartRuntimeTabs(['a'], true);
 
       expect(failed).toBe(0);
       expect(t.service.syncConversationState).toHaveBeenCalled();
       expect(t.service.resetSession).toHaveBeenCalled();
+      expect(t.service.ensureReady).toHaveBeenCalledWith({ force: true });
+    });
+
+    it('restartRuntimeTabs(ids, false) does not drop the session but still force-restarts', async () => {
+      const manager = createManager();
+      const t = tab();
+      (manager as any).tabs = new Map<string, any>([['a', t]]);
+
+      await manager.restartRuntimeTabs(['a'], false);
+
+      expect(t.service.resetSession).not.toHaveBeenCalled();
       expect(t.service.ensureReady).toHaveBeenCalledWith({ force: true });
     });
 
@@ -691,21 +710,11 @@ Steps:
       (t.ui as any).externalContextSelector = { getExternalContexts: jest.fn().mockReturnValue(['/live']) };
       (manager as any).tabs = new Map<string, any>([['a', t]]);
 
-      await manager.resyncTabsForProviders(['claude'], true);
+      const ids = manager.cancelStreamingTabsForProviders(['claude']);
+      await manager.restartRuntimeTabs(ids, true);
 
       expect(t.service.syncConversationState).toHaveBeenCalledWith(conversation, ['/live']);
       expect(t.service.resetSession).toHaveBeenCalledTimes(1);
-    });
-
-    it('does not drop the session when unchanged but still force-restarts', async () => {
-      const manager = createManager();
-      const t = tab();
-      (manager as any).tabs = new Map<string, any>([['a', t]]);
-
-      await manager.resyncTabsForProviders(['claude'], false);
-
-      expect(t.service.resetSession).not.toHaveBeenCalled();
-      expect(t.service.ensureReady).toHaveBeenCalledWith({ force: true });
     });
 
     it('skips uninitialized tabs as success and counts a throwing restart as one failure', async () => {
@@ -716,164 +725,174 @@ Steps:
       });
       (manager as any).tabs = new Map<string, any>([['a', uninit], ['b', throwing]]);
 
-      const failed = await manager.resyncTabsForProviders(['claude'], false);
+      const failed = await manager.restartRuntimeTabs(['a', 'b'], false);
 
       expect(failed).toBe(1);
       expect(uninit.service.ensureReady).not.toHaveBeenCalled();
     });
 
-    // The corrected-design guard: cancel and restart share ONE up-front snapshot.
-    it('operates on one up-front snapshot: a tab added mid-restart is not restarted', async () => {
+    it('skips an id whose tab was closed between cancel and restart', async () => {
       const manager = createManager();
-      const late = tab();
-      const first = tab({
-        service: {
-          cleanup: jest.fn(), syncConversationState: jest.fn(), resetSession: jest.fn(),
-          ensureReady: jest.fn().mockImplementation(async () => { (manager as any).tabs.set('late', late); }),
-        },
-      });
+      const surviving = tab();
+      (manager as any).tabs = new Map<string, any>([['a', surviving]]);
+
+      const ids = manager.cancelStreamingTabsForProviders(['claude']);
+      (manager as any).tabs.delete('a'); // tab closed after the cancel pass
+
+      const failed = await manager.restartRuntimeTabs(ids, false);
+
+      expect(failed).toBe(0);
+      expect(surviving.service.ensureReady).not.toHaveBeenCalled();
+    });
+
+    // The frozen-set guard (round-13): restart operates on the id set captured at cancel time.
+    it('restarts only the frozen id set — a tab created after cancel is not restarted', async () => {
+      const manager = createManager();
+      const first = tab();
       (manager as any).tabs = new Map<string, any>([['first', first]]);
-      await manager.resyncTabsForProviders(['claude'], false);
+      const ids = manager.cancelStreamingTabsForProviders(['claude']);
+      (manager as any).tabs.set('late', tab());          // created AFTER the cancel snapshot
+      await manager.restartRuntimeTabs(ids, false);
       expect(first.service.ensureReady).toHaveBeenCalledTimes(1);
-      expect(late.service.ensureReady).not.toHaveBeenCalled();
+      expect((manager as any).tabs.get('late').service.ensureReady).not.toHaveBeenCalled();
     });
   });
   ```
-  Run it. Expected: FAIL (`manager.resyncTabsForProviders is not a function`).
+  Run it. Expected: FAIL (`manager.cancelStreamingTabsForProviders is not a function`).
   ```bash
-  npx jest tests/unit/features/chat/tabs/TabManager.test.ts -t "resyncTabsForProviders"
+  npx jest tests/unit/features/chat/tabs/TabManager.test.ts -t "cancelStreamingTabsForProviders / restartRuntimeTabs"
   ```
 
-- [ ] 5.2 **Green — implement** in `TabManager.ts` (Host-migration section). Add the value import by merging with the existing `ProviderId` type import from the same module:
-  ```ts
-  import { DEFAULT_CHAT_PROVIDER_ID, type ProviderId } from '../../../core/providers/types';
-  ```
-  Then the SINGLE method + moved privates (`Conversation` and `ProviderId` are already imported in `TabManager.ts`). Cancel and restart iterate the SAME `affected` array captured once, so no tab is restarted un-cancelled and a tab added during a restart await is skipped:
+- [ ] 5.2 **Green — implement** in `TabManager.ts` (Host-migration section). REPLACE `resyncTabsForProviders` and DELETE the `affectedProviderTabs` generator; add the two methods below. KEEP `resyncTabRuntime` / `syncTabRuntimeState` / `resolveExternalContextPaths` unchanged (they are the restart body `restartRuntimeTabs` delegates to) and KEEP the `DEFAULT_CHAT_PROVIDER_ID` value import. `this.tabs` is a `Map<TabId, TabData>` (`TabId = string`), so `for (const [id, tab] of this.tabs)` types cleanly and `affectedIds: string[]` satisfies the handle:
   ```ts
   /**
-   * Re-sync + force-restart every initialized runtime whose provider is in
-   * `providerIds`, cancelling any in-flight stream first. Captures the affected
-   * set ONCE up front, so cancel and restart run over the SAME snapshot: no tab
-   * is ever restarted without first being cancelled, and a tab created afterwards
-   * (e.g. during a restart await) is left untouched. When `changed`, drops the
-   * session before restart. Returns the count of tabs whose restart threw;
-   * uninitialized tabs count as success.
+   * Cancel in-flight streams on every tab whose active provider is in `providerIds`,
+   * and return the ids of ALL affected tabs (streaming or not) as the frozen set to
+   * restart. Split from the restart pass so the env-apply flow can cancel across ALL
+   * views before restarting any — no view keeps streaming on a stale runtime during
+   * another view's restart — and so restart operates on this frozen id set rather than
+   * a live re-enumeration (a tab created afterwards has a new id and is left untouched).
    */
-  async resyncTabsForProviders(providerIds: ProviderId[], changed: boolean): Promise<number> {
-    const affected = [...this.affectedProviderTabs(providerIds)];
-    for (const tab of affected) {
+  cancelStreamingTabsForProviders(providerIds: ProviderId[]): string[] {
+    const affectedIds: string[] = [];
+    for (const [id, tab] of this.tabs) {
+      if (!providerIds.includes(tab.providerId ?? DEFAULT_CHAT_PROVIDER_ID)) continue;
+      affectedIds.push(id);
       if (tab.state.isStreaming) tab.controllers.inputController?.cancelStreaming();
     }
+    return affectedIds;
+  }
+
+  /**
+   * Re-sync + force-restart the runtimes of the given (already-cancelled) tab ids;
+   * when `changed`, drop the session first. Skips ids whose tab was closed between the
+   * cancel pass and here. Returns the count of restarts that threw; uninitialized tabs
+   * count as success.
+   */
+  async restartRuntimeTabs(tabIds: string[], changed: boolean): Promise<number> {
     let failed = 0;
-    for (const tab of affected) {
+    for (const id of tabIds) {
+      const tab = this.tabs.get(id);
+      if (!tab) continue;
       if (!(await this.resyncTabRuntime(tab, changed))) failed++;
     }
     return failed;
   }
-
-  private *affectedProviderTabs(providerIds: ProviderId[]): Iterable<TabData> {
-    for (const tab of this.tabs.values()) {
-      if (providerIds.includes(tab.providerId ?? DEFAULT_CHAT_PROVIDER_ID)) yield tab;
-    }
-  }
-
-  private async resyncTabRuntime(tab: TabData, changed: boolean): Promise<boolean> {
-    if (!tab.service || !tab.serviceInitialized) return true;
-    try {
-      this.syncTabRuntimeState(tab);
-      // Always FORCE a respawn: a persistent runtime (Claude / Cursor / Codex /
-      // Opencode ACP) keeps a live child that still holds the OLD credentials /
-      // base URL, so a non-forced ensureReady early-returns and the env change
-      // never reaches the process. `changed` additionally drops the session.
-      if (changed) tab.service.resetSession();
-      await tab.service.ensureReady({ force: true });
-      return true;
-    } catch {
-      return false;
-    }
-  }
-
-  private syncTabRuntimeState(tab: TabData): void {
-    if (!tab.service || !tab.serviceInitialized) return;
-    const conversation = tab.conversationId
-      ? this.plugin.getConversationSync(tab.conversationId)
-      : null;
-    tab.service.syncConversationState(
-      conversation,
-      this.resolveExternalContextPaths(tab, conversation),
-    );
-  }
-
-  /** Prefer the tab's live selection; else the conversation's (when it has context), else the persistent default. */
-  private resolveExternalContextPaths(tab: TabData, conversation: Conversation | null): string[] {
-    const selected = tab.ui.externalContextSelector?.getExternalContexts();
-    if (selected) return selected;
-    const hasContext = (conversation?.messages.length ?? 0) > 0;
-    return hasContext
-      ? conversation?.externalContextPaths ?? []
-      : this.plugin.settings.persistentExternalContextPaths ?? [];
-  }
   ```
+  (`resyncTabRuntime` still FORCE-respawns via `ensureReady({ force: true })` and drops the session on `changed`; `syncTabRuntimeState` / `resolveExternalContextPaths` still resolve the tab's live selection → conversation context → persistent default. These three privates and the `DEFAULT_CHAT_PROVIDER_ID` import are unchanged from the prior cut.)
 
-- [ ] 5.3 Add to `ChatTabManagerHandle` (Group D section):
+- [ ] 5.3 In `ChatTabManagerHandle` (Group D section), REPLACE the single `resyncTabsForProviders(...)` line with the two signatures:
   ```ts
-    /** Cancel in-flight streams then force-restart affected runtimes over one snapshot; returns the count that threw. */
-    resyncTabsForProviders(providerIds: ProviderId[], changed: boolean): Promise<number>;
+    /** Cancel affected in-flight streams; returns the affected tab ids as the frozen restart set. */
+    cancelStreamingTabsForProviders(providerIds: ProviderId[]): string[];
+    /** Force-restart the runtimes of the given (already-cancelled) tab ids; returns the count that threw. */
+    restartRuntimeTabs(tabIds: string[], changed: boolean): Promise<number>;
   ```
 
 - [ ] 5.4 Run the TabManager tests. Expected: PASS.
   ```bash
-  npx jest tests/unit/features/chat/tabs/TabManager.test.ts -t "resyncTabsForProviders"
+  npx jest tests/unit/features/chat/tabs/TabManager.test.ts -t "cancelStreamingTabsForProviders / restartRuntimeTabs"
   ```
 
-- [ ] 5.5 **Route the consumer** in `src/app/environment/EnvironmentApplyService.ts`:
-  - Delete `import type { TabData } from '@/features/chat/tabs/types';` (line 15) and the `SyncableTab` type alias (~:19-23).
-  - Delete `import { DEFAULT_CHAT_PROVIDER_ID } from '@/core/providers/types';` (line 11) — it is now used only inside `TabManager`. Keep the `ProviderId` type import (line 10). (No `ChatTabManagerHandle` import is needed — the single-loop body never names the type.)
-  - Replace `syncAffectedTabs` (~:97-120) and DELETE `resyncTab` (~:122-142), `syncTabRuntimeState` (~:144-153), and `resolveExternalContextPaths` (~:155-163):
+- [ ] 5.5 **Route the consumer** in `src/app/environment/EnvironmentApplyService.ts`. Add `import type { ChatTabManagerHandle } from '@/core/types/PluginContext';` (the two-phase body names the type for the collected `managers` array); keep the `ProviderId` type import. Replace `syncAffectedTabs` with the GLOBAL two-phase version — collect every view's manager, cancel across ALL of them (freezing each manager's tab-id set), THEN restart each with its own frozen set:
     ```ts
-    /** Cancel in-flight streams then re-sync/restart affected runtimes on every view's tab manager. */
+    /** Cancel in-flight streams across every view first, then re-sync/restart affected runtimes. */
     private async syncAffectedTabs(affected: ProviderId[], changed: boolean): Promise<void> {
-      let failedTabs = 0;
+      const managers: ChatTabManagerHandle[] = [];
       for (const view of this.plugin.getAllViews()) {
         const manager = view.getTabManager();
-        if (manager) failedTabs += await manager.resyncTabsForProviders(affected, changed);
+        if (manager) managers.push(manager);
       }
-      if (failedTabs > 0) {
-        new Notice(t('env.applyPartial', { count: failedTabs }));
+      // Cancel every affected stream across ALL views first (synchronous), freezing each
+      // view's tab-id set, THEN restart — so no view streams on a stale runtime while
+      // another view is mid-restart, and a tab created afterwards is left untouched.
+      const perManagerIds = managers.map((m) => m.cancelStreamingTabsForProviders(affected));
+      let failedTabs = 0;
+      for (let i = 0; i < managers.length; i++) {
+        failedTabs += await managers[i].restartRuntimeTabs(perManagerIds[i], changed);
       }
+      if (failedTabs > 0) new Notice(t('env.applyPartial', { count: failedTabs }));
     }
     ```
-    `refreshAffectedViews` (~:165-170) is unchanged (Group A). Note: the single method snapshots each manager's affected set once, so within a manager cancel and restart share the same set — the intra-manager cancel-before-restart guarantee now lives in `TabManager` (pinned by the snapshot-once TabManager test), not in this caller. The per-view loop stays sequential, matching the original.
+    `refreshAffectedViews` is unchanged (Group A). The cross-view cancel-before-restart ordering — the property the single-method cut regressed — is now enforced HERE by the collect-then-two-phase caller (pinned by the round-14 `EnvironmentApplyService` ordering test); the per-tab restart body + frozen-id-set protection live in `TabManager` (pinned by the TabManager suite).
 
-- [ ] 5.6 **Update the consumer tests**:
-  - In `tests/unit/app/environment/EnvironmentApplyService.test.ts`, the `createPlugin` view mock (`{ getAllTabs }`) → give the manager the single new method, and delete the now-unused `createTab` helper + `affectedTabs` param + `ProviderId` import (nothing else references them). Replace the `tabManager` in `createPlugin`:
+- [ ] 5.6 **Update the consumer tests** to the two-phase API:
+  - In `tests/unit/app/environment/EnvironmentApplyService.test.ts`, replace the `createPlugin` manager mock's single method with the two:
     ```ts
     const tabManager = {
-      resyncTabsForProviders: jest.fn().mockResolvedValue(0),
+      cancelStreamingTabsForProviders: jest.fn().mockReturnValue([]),
+      restartRuntimeTabs: jest.fn().mockResolvedValue(0),
     };
     ```
-  - Replace BOTH the old tab-level `cancels streaming tabs before restarting them on change` test AND the committed Task 2.3 `cancels every affected tab across all views before restarting any` ordering characterization (the intra-manager cancel-before-restart ordering now lives in the TabManager snapshot-once test) with ONE delegation test:
+  - Replace the current single-method delegation test with a two-phase delegation test asserting both methods are called with the affected providers / frozen ids + `changed`:
     ```ts
-    it('delegates resync to each view tab manager with the affected providers and changed flag', async () => {
+    it('delegates cancel + restart to each view tab manager with the affected providers, frozen ids, and changed flag', async () => {
       jest.spyOn(providerEnv, 'getEnvironmentVariablesForScope').mockReturnValue('OLD');
       jest.spyOn(providerEnv, 'setEnvironmentVariablesForScope').mockImplementation(() => undefined);
       jest.spyOn(ProviderRegistry, 'getRegisteredProviderIds').mockReturnValue(['claude']);
       jest.spyOn(ProviderSettingsCoordinator, 'handleEnvironmentChange' as any).mockImplementation(() => undefined);
       jest.spyOn(ProviderSettingsCoordinator, 'reconcileProviders' as any).mockReturnValue({ changed: true, invalidatedConversations: [] });
 
-      const resync1 = jest.fn().mockResolvedValue(0);
-      const resync2 = jest.fn().mockResolvedValue(0);
-      const view1 = { getTabManager: () => ({ resyncTabsForProviders: resync1 }), invalidateProviderCommandCaches: jest.fn(), refreshModelSelector: jest.fn() };
-      const view2 = { getTabManager: () => ({ resyncTabsForProviders: resync2 }), invalidateProviderCommandCaches: jest.fn(), refreshModelSelector: jest.fn() };
+      const cancel1 = jest.fn().mockReturnValue(['t1']);
+      const restart1 = jest.fn().mockResolvedValue(0);
+      const cancel2 = jest.fn().mockReturnValue(['t2']);
+      const restart2 = jest.fn().mockResolvedValue(0);
+      const view1 = { getTabManager: () => ({ cancelStreamingTabsForProviders: cancel1, restartRuntimeTabs: restart1 }), invalidateProviderCommandCaches: jest.fn(), refreshModelSelector: jest.fn() };
+      const view2 = { getTabManager: () => ({ cancelStreamingTabsForProviders: cancel2, restartRuntimeTabs: restart2 }), invalidateProviderCommandCaches: jest.fn(), refreshModelSelector: jest.fn() };
       const plugin = { ...createPlugin(), getAllViews: jest.fn().mockReturnValue([view1, view2]) } as unknown as SpecoratorPlugin;
 
       await new EnvironmentApplyService(plugin).apply('shared', 'NEW');
 
-      expect(resync1).toHaveBeenCalledWith(['claude'], true);
-      expect(resync2).toHaveBeenCalledWith(['claude'], true);
+      expect(cancel1).toHaveBeenCalledWith(['claude']);
+      expect(cancel2).toHaveBeenCalledWith(['claude']);
+      expect(restart1).toHaveBeenCalledWith(['t1'], true);
+      expect(restart2).toHaveBeenCalledWith(['t2'], true);
     });
     ```
-  - In `tests/integration/main.test.ts`, the two `applyEnvironmentVariables` tests (`broadcasts ensureReady with force…` and `syncs live external contexts…`) mock the tab manager at the OLD `getAllTabs` seam and assert the per-tab `syncConversationState`/`resetSession`/`ensureReady` internals this task relocates into `TabManager` — so they break under the routing swap (the same full-suite fallout Task 3 handled). Convert both to delegation tests that mock `resyncTabsForProviders` and assert the shell routes to it with the right `(affected, changed)`: a non-model env change → `changed=false`; a model-affecting change (`ANTHROPIC_MODEL=…`) → `changed=true`. The relocated per-tab behavior (live external-context precedence, `resetSession` on change, forced respawn) is preserved by the TabManager suite (the `syncs the tab live external-context selection…` and snapshot-once tests).
+  - ADD the **round-14 ordering** characterization (the key regression guard — restore the global cancel-every-view-before-restarting-any ordering). Because the caller collects each manager ONCE (`view.getTabManager()` is invoked once, in the collect step, and the same instance is reused for both phases), `getTabManager: () => managerFor(name)` yields a stable `order` array:
+    ```ts
+    it('cancels every view before restarting any (global two-phase, env-apply ordering)', async () => {
+      jest.spyOn(providerEnv, 'getEnvironmentVariablesForScope').mockReturnValue('OLD');
+      jest.spyOn(providerEnv, 'setEnvironmentVariablesForScope').mockImplementation(() => undefined);
+      jest.spyOn(ProviderRegistry, 'getRegisteredProviderIds').mockReturnValue(['claude']);
+      jest.spyOn(ProviderSettingsCoordinator, 'handleEnvironmentChange' as any).mockImplementation(() => undefined);
+      jest.spyOn(ProviderSettingsCoordinator, 'reconcileProviders' as any).mockReturnValue({ changed: false, invalidatedConversations: [] });
+
+      const order: string[] = [];
+      const managerFor = (name: string) => ({
+        cancelStreamingTabsForProviders: jest.fn(() => { order.push(`cancel:${name}`); return [name]; }),
+        restartRuntimeTabs: jest.fn(() => { order.push(`restart:${name}`); return Promise.resolve(0); }),
+      });
+      const view1 = { getTabManager: () => managerFor('v1'), invalidateProviderCommandCaches: jest.fn(), refreshModelSelector: jest.fn() };
+      const view2 = { getTabManager: () => managerFor('v2'), invalidateProviderCommandCaches: jest.fn(), refreshModelSelector: jest.fn() };
+      const plugin = { ...createPlugin(), getAllViews: jest.fn().mockReturnValue([view1, view2]) } as unknown as SpecoratorPlugin;
+
+      await new EnvironmentApplyService(plugin).apply('shared', 'NEW');
+
+      expect(order).toEqual(['cancel:v1', 'cancel:v2', 'restart:v1', 'restart:v2']);
+    });
+    ```
+  - In `tests/integration/main.test.ts`, the two `applyEnvironmentVariables` delegation tests mock the tab manager at the (now old) single-method `resyncTabsForProviders` seam — migrate BOTH to mock `cancelStreamingTabsForProviders` (returning a frozen id set, e.g. `['t1']`) + `restartRuntimeTabs`, asserting the shell routes cancel with the affected providers and restart with the frozen ids + the right `changed` flag: a non-model env change → `changed=false`; a model-affecting change (`ANTHROPIC_MODEL=…`) → `changed=true`. The relocated per-tab behavior (live external-context precedence, `resetSession` on change, forced respawn) stays pinned by the TabManager suite.
 
 - [ ] 5.7 Run the gate. Expected: PASS.
   ```bash
@@ -885,7 +904,7 @@ Steps:
   git add src/core/types/PluginContext.ts src/features/chat/tabs/TabManager.ts src/app/environment/EnvironmentApplyService.ts \
     tests/unit/features/chat/tabs/TabManager.test.ts tests/unit/app/environment/EnvironmentApplyService.test.ts tests/integration/main.test.ts \
     docs/superpowers/plans/2026-07-24-team-chat-phase-2-host-migration.md && git commit \
-    -m "Phase 2 (5/7): move env resync into TabManager as single-snapshot resyncTabsForProviders, route EnvironmentApplyService" \
+    -m "Phase 2 (5/7 redo): env resync as global two-phase cancel/restart with frozen tab-id sets" \
     -m "Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>" \
     -m "Claude-Session: https://claude.ai/code/session_01JogyQ4pDLBAxqPLRVBt8sX"
   ```
@@ -1160,7 +1179,7 @@ Steps:
 | `WorkOrderActivityProvider:150,166` (reveal) | B/C | `leaf` + `switchToTab()` + `closeTab()` | 1, 6 |
 | `PluginLifecycle.shutdownActiveRuntimes:31` | D | `disposeAllRuntimes()` | 3 |
 | `main.ts quiesce/repair:718,735` | D | `quiesceTabsForConversation()` / `repairTabsForConversation()` | 4 |
-| `EnvironmentApplyService.syncAffectedTabs:99` | D | `resyncTabsForProviders()` | 5 |
+| `EnvironmentApplyService.syncAffectedTabs:99` | D | `cancelStreamingTabsForProviders()` + `restartRuntimeTabs()` | 5 |
 | `main.ts findConversationAcrossViews:814` | D | `findTabByConversation()` | 6 |
 | `WorkOrderActivityProvider:150,166` (existence) | D→neutral | `hasTab()` | 6 |
 | `findConversationAcrossViews().view` cousins: `TabManager:633`, `SpecoratorView bridge:620` + `:754`, `sendFeedbackPrompt:32` | narrowing | `leaf`/`switchToTab` on handle; `isSpecoratorView` guards for concrete reach | 7 |
@@ -1186,7 +1205,8 @@ findTabByConversation(conversationId: string): { tabId: string } | null;
 disposeAllRuntimes(): void;
 quiesceTabsForConversation(conversationId: string): Promise<void>;
 repairTabsForConversation(conversationId: string): Promise<void>;
-resyncTabsForProviders(providerIds: ProviderId[], changed: boolean): Promise<number>;
+cancelStreamingTabsForProviders(providerIds: ProviderId[]): string[];
+restartRuntimeTabs(tabIds: string[], changed: boolean): Promise<number>;
 ```
 Final `ChatViewHandle` additions (Task 1): `leaf: WorkspaceLeaf`, `refreshProviderAvailability(): Promise<void>`, `updateLayoutForPosition(): void`, `refreshTabControls(): void`, `applyEditedFilesSetting(): void`, `areTabsRestored(): boolean`.
 
@@ -1198,8 +1218,8 @@ No `core/` signature references `TabData`, `TabKind`, `PersistedTabManagerState`
 ### Known risks / judgment calls (flagged for review)
 
 1. **`disposeAllRuntimes` guard (highest-attention item).** It replicates the `tab.service`-only guard — deliberately broader than `broadcastToTabs` (`tab.service && tab.serviceInitialized`). Pinned by the Task 3.1 TabManager test asserting a `serviceInitialized:false` tab is still cleaned up. If a future reader "unifies" the two guards, that test fails — intentionally.
-2. **Env-resync is ONE method over ONE snapshot** (`resyncTabsForProviders`), not the originally-planned two-method `cancelStreamingTabsForProviders` + `restartRuntimeTabsForProviders` split. A code review rejected the two-method design: `restartRuntimeTabsForProviders` re-enumerated tabs live at its entry, so a tab created during an earlier manager's restart `await` would be restarted WITHOUT first being cancelled. The single method captures the affected set once, cancels across that snapshot, then restarts the SAME snapshot — no tab is restarted un-cancelled, and a tab added mid-restart is skipped (pinned by the `operates on one up-front snapshot` TabManager test). Trade-off, accepted deliberately: the original's cross-view "cancel every view, THEN restart every view" ordering is dropped — the caller now loops per view (cancel+restart v1, then v2). That cross-view ordering was never observable for independent runtimes and no surviving test depends on it (the Task 2.3 cross-view ordering characterization is retired in 5.6; the intra-manager guarantee moved into TabManager).
-3. **Affected-set capture is per-manager, once.** The original captured ONE global affected-tabs list across all views, then cancelled/resynced it. The single method captures each manager's affected set once at method entry, cancels that snapshot, then restarts it. Within a manager this is strictly safe (cancel and restart share the same array — the corrected-design guarantee). Across managers the shell loops sequentially per view; the only difference from the original is the cross-view interleaving noted in risk #2 — behavior-equivalent for independent runtimes.
+2. **Env-resync is a GLOBAL two-phase split** (`cancelStreamingTabsForProviders`, returning a frozen id set, + `restartRuntimeTabs` over that set), superseding two earlier cuts. The originally-planned two-method `cancelStreamingTabsForProviders` + `restartRuntimeTabsForProviders` split was rejected because the restart method re-enumerated tabs live at its entry (a tab created during an earlier manager's restart `await` could be restarted un-cancelled). The follow-up single-method `resyncTabsForProviders` fixed that with one up-front snapshot per manager, but a code review found it REGRESSED the cross-view ordering: since the caller looped per view (cancel+restart v1, THEN cancel+restart v2), a later view kept STREAMING on a stale runtime for the whole of an earlier view's slow `ensureReady({force})`. The two-phase design fixes BOTH defects: (a) `cancelStreamingTabsForProviders` returns a FROZEN id set, so restart never re-enumerates and a mid-restart-created tab (new id, not in the set) is skipped — pinned by the `restarts only the frozen id set` TabManager test; and (b) the caller cancels across ALL views first, THEN restarts — restoring the original global "cancel every view before restarting any" ordering, pinned by the round-14 `EnvironmentApplyService` ordering test. The frozen set crosses the core boundary as `string[]` tab-ids, never `TabData`.
+3. **Frozen id set + global caller, not one live re-enumeration.** The original captured ONE global affected-tabs list across all views, cancelled it, then restarted it. The two-phase design reproduces that guarantee across the core boundary without leaking `TabData`: each manager's `cancelStreamingTabsForProviders` returns its affected tab ids (streaming + idle) as a frozen `string[]`; the caller holds every manager's frozen set, cancels them all in phase 1, then in phase 2 `restartRuntimeTabs` restarts exactly those ids (skipping any closed since — `this.tabs.get(id)` → undefined). Cancel-before-restart holds both within a manager (cancel populates the set restart consumes) and across managers (phase 1 completes for all managers before phase 2 begins).
 4. **`TabManager.ts:633` `crossViewResult.view === this.view` comparability.** After narrowing, this compares `ChatViewHandle` (from the narrowed return) against `TabManagerViewHost` (`this.view`). They overlap on `getTabManager` and `leaf`, so TS permits the `===` (no TS2367). Contingency if a compiler version disagrees: compare `crossViewResult.view.leaf === this.view.leaf` (behavior-equivalent — each live view owns exactly one leaf). Not expected to be needed; noted so the executor isn't surprised.
 5. **`isSpecoratorView` on `cross.view`** (Task 7) is behavior-preserving in Phase 2 (every view is a `SpecoratorView`; the guard always passes) but is a *lie* for a future `TeamChatView` (the predicate is a `value is SpecoratorView` duck-type on `getTabManager`). This is intentional and pre-existing; these two guards (`sendFeedbackPrompt`, the work-order-bridge callback) are precisely the sites the design §2 calls out for the Phase-4 "rebase callbacks onto the owning tab" change. They are safe now and clearly marked for then.
-6. **Group D command shapes were chosen, not dictated by the research doc** (which listed candidate names). Concretely: `disposeAllRuntimes(): void` (sync fire-and-forget, matching the original), `quiesce/repairTabsForConversation(id): Promise<void>`, the single-snapshot `resyncTabsForProviders(providerIds, changed): Promise<number>` above, `findTabByConversation(id): { tabId: string } | null`, and `hasTab(id): boolean` (a boolean existence check replacing the `getTab(id)` truthiness test — the neutral "work-order tab accessor" the research doc asked for without returning `TabData`). Review these names/signatures — they are the durable public surface a second host view will build on.
+6. **Group D command shapes were chosen, not dictated by the research doc** (which listed candidate names). Concretely: `disposeAllRuntimes(): void` (sync fire-and-forget, matching the original), `quiesce/repairTabsForConversation(id): Promise<void>`, the two-phase `cancelStreamingTabsForProviders(providerIds): string[]` + `restartRuntimeTabs(tabIds, changed): Promise<number>` above, `findTabByConversation(id): { tabId: string } | null`, and `hasTab(id): boolean` (a boolean existence check replacing the `getTab(id)` truthiness test — the neutral "work-order tab accessor" the research doc asked for without returning `TabData`). Review these names/signatures — they are the durable public surface a second host view will build on.

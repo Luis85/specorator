@@ -3357,7 +3357,7 @@ describe('TabManager - host migration (Group D)', () => {
     });
   });
 
-  describe('resyncTabsForProviders', () => {
+  describe('cancelStreamingTabsForProviders / restartRuntimeTabs', () => {
     function tab(overrides: any = {}) {
       return {
         providerId: overrides.providerId ?? 'claude',
@@ -3375,30 +3375,43 @@ describe('TabManager - host migration (Group D)', () => {
       };
     }
 
-    it('cancels only streaming tabs whose provider is affected', async () => {
+    it('cancels only streaming affected tabs and returns all affected ids (streaming + idle, not other providers)', () => {
       const manager = createManager();
       const streamingClaude = tab({ isStreaming: true });
       const idleClaude = tab({ isStreaming: false });
       const streamingCodex = tab({ providerId: 'codex', isStreaming: true });
       (manager as any).tabs = new Map<string, any>([['a', streamingClaude], ['b', idleClaude], ['c', streamingCodex]]);
 
-      await manager.resyncTabsForProviders(['claude'], false);
+      const ids = manager.cancelStreamingTabsForProviders(['claude']);
 
+      // ALL affected tabs (streaming + idle) are frozen for restart; the codex tab is not.
+      expect(ids).toEqual(['a', 'b']);
       expect(streamingClaude.controllers.inputController.cancelStreaming).toHaveBeenCalled();
       expect(idleClaude.controllers.inputController.cancelStreaming).not.toHaveBeenCalled();
       expect(streamingCodex.controllers.inputController.cancelStreaming).not.toHaveBeenCalled();
     });
 
-    it('force-restarts initialized runtimes and drops the session when changed', async () => {
+    it('restartRuntimeTabs(ids, true) force-restarts initialized runtimes and drops the session', async () => {
       const manager = createManager();
       const t = tab();
       (manager as any).tabs = new Map<string, any>([['a', t]]);
 
-      const failed = await manager.resyncTabsForProviders(['claude'], true);
+      const failed = await manager.restartRuntimeTabs(['a'], true);
 
       expect(failed).toBe(0);
       expect(t.service.syncConversationState).toHaveBeenCalled();
       expect(t.service.resetSession).toHaveBeenCalled();
+      expect(t.service.ensureReady).toHaveBeenCalledWith({ force: true });
+    });
+
+    it('restartRuntimeTabs(ids, false) does not drop the session but still force-restarts', async () => {
+      const manager = createManager();
+      const t = tab();
+      (manager as any).tabs = new Map<string, any>([['a', t]]);
+
+      await manager.restartRuntimeTabs(['a'], false);
+
+      expect(t.service.resetSession).not.toHaveBeenCalled();
       expect(t.service.ensureReady).toHaveBeenCalledWith({ force: true });
     });
 
@@ -3412,21 +3425,11 @@ describe('TabManager - host migration (Group D)', () => {
       (t.ui as any).externalContextSelector = { getExternalContexts: jest.fn().mockReturnValue(['/live']) };
       (manager as any).tabs = new Map<string, any>([['a', t]]);
 
-      await manager.resyncTabsForProviders(['claude'], true);
+      const ids = manager.cancelStreamingTabsForProviders(['claude']);
+      await manager.restartRuntimeTabs(ids, true);
 
       expect(t.service.syncConversationState).toHaveBeenCalledWith(conversation, ['/live']);
       expect(t.service.resetSession).toHaveBeenCalledTimes(1);
-    });
-
-    it('does not drop the session when unchanged but still force-restarts', async () => {
-      const manager = createManager();
-      const t = tab();
-      (manager as any).tabs = new Map<string, any>([['a', t]]);
-
-      await manager.resyncTabsForProviders(['claude'], false);
-
-      expect(t.service.resetSession).not.toHaveBeenCalled();
-      expect(t.service.ensureReady).toHaveBeenCalledWith({ force: true });
     });
 
     it('skips uninitialized tabs as success and counts a throwing restart as one failure', async () => {
@@ -3437,25 +3440,35 @@ describe('TabManager - host migration (Group D)', () => {
       });
       (manager as any).tabs = new Map<string, any>([['a', uninit], ['b', throwing]]);
 
-      const failed = await manager.resyncTabsForProviders(['claude'], false);
+      const failed = await manager.restartRuntimeTabs(['a', 'b'], false);
 
       expect(failed).toBe(1);
       expect(uninit.service.ensureReady).not.toHaveBeenCalled();
     });
 
-    it('operates on one up-front snapshot: a tab added mid-restart is not restarted', async () => {
+    it('skips an id whose tab was closed between cancel and restart', async () => {
       const manager = createManager();
-      const late = tab();
-      const first = tab({
-        service: {
-          cleanup: jest.fn(), syncConversationState: jest.fn(), resetSession: jest.fn(),
-          ensureReady: jest.fn().mockImplementation(async () => { (manager as any).tabs.set('late', late); }),
-        },
-      });
+      const surviving = tab();
+      (manager as any).tabs = new Map<string, any>([['a', surviving]]);
+
+      const ids = manager.cancelStreamingTabsForProviders(['claude']);
+      (manager as any).tabs.delete('a'); // tab closed after the cancel pass
+
+      const failed = await manager.restartRuntimeTabs(ids, false);
+
+      expect(failed).toBe(0);
+      expect(surviving.service.ensureReady).not.toHaveBeenCalled();
+    });
+
+    it('restarts only the frozen id set — a tab created after cancel is not restarted', async () => {
+      const manager = createManager();
+      const first = tab();
       (manager as any).tabs = new Map<string, any>([['first', first]]);
-      await manager.resyncTabsForProviders(['claude'], false);
+      const ids = manager.cancelStreamingTabsForProviders(['claude']);
+      (manager as any).tabs.set('late', tab());          // created AFTER the cancel snapshot
+      await manager.restartRuntimeTabs(ids, false);
       expect(first.service.ensureReady).toHaveBeenCalledTimes(1);
-      expect(late.service.ensureReady).not.toHaveBeenCalled();
+      expect((manager as any).tabs.get('late').service.ensureReady).not.toHaveBeenCalled();
     });
   });
 

@@ -10,7 +10,8 @@ function createPlugin(overrides: Partial<{
   reconcileResult: { changed: boolean; invalidatedConversations: Conversation[] };
 }> = {}): SpecoratorPlugin {
   const tabManager = {
-    resyncTabsForProviders: jest.fn().mockResolvedValue(0),
+    cancelStreamingTabsForProviders: jest.fn().mockReturnValue([]),
+    restartRuntimeTabs: jest.fn().mockResolvedValue(0),
   };
   const view = {
     getTabManager: jest.fn().mockReturnValue(tabManager),
@@ -72,7 +73,7 @@ describe('EnvironmentApplyService', () => {
     expect(ids).toEqual(['codex']);
   });
 
-  it('delegates resync to each view tab manager with the affected providers and changed flag', async () => {
+  it('delegates cancel + restart to each view tab manager with the affected providers, frozen ids, and changed flag', async () => {
     jest.spyOn(providerEnv, 'getEnvironmentVariablesForScope').mockReturnValue('OLD');
     jest.spyOn(providerEnv, 'setEnvironmentVariablesForScope').mockImplementation(() => undefined);
     jest.spyOn(ProviderRegistry, 'getRegisteredProviderIds').mockReturnValue(['claude']);
@@ -82,18 +83,43 @@ describe('EnvironmentApplyService', () => {
       invalidatedConversations: [],
     });
 
-    const resync1 = jest.fn().mockResolvedValue(0);
-    const resync2 = jest.fn().mockResolvedValue(0);
-    const view1 = { getTabManager: () => ({ resyncTabsForProviders: resync1 }), invalidateProviderCommandCaches: jest.fn(), refreshModelSelector: jest.fn() };
-    const view2 = { getTabManager: () => ({ resyncTabsForProviders: resync2 }), invalidateProviderCommandCaches: jest.fn(), refreshModelSelector: jest.fn() };
+    const cancel1 = jest.fn().mockReturnValue(['t1']);
+    const restart1 = jest.fn().mockResolvedValue(0);
+    const cancel2 = jest.fn().mockReturnValue(['t2']);
+    const restart2 = jest.fn().mockResolvedValue(0);
+    const view1 = { getTabManager: () => ({ cancelStreamingTabsForProviders: cancel1, restartRuntimeTabs: restart1 }), invalidateProviderCommandCaches: jest.fn(), refreshModelSelector: jest.fn() };
+    const view2 = { getTabManager: () => ({ cancelStreamingTabsForProviders: cancel2, restartRuntimeTabs: restart2 }), invalidateProviderCommandCaches: jest.fn(), refreshModelSelector: jest.fn() };
     const plugin = { ...createPlugin(), getAllViews: jest.fn().mockReturnValue([view1, view2]) } as unknown as SpecoratorPlugin;
 
     await new EnvironmentApplyService(plugin).apply('shared', 'NEW');
 
-    // The single-snapshot cancel-then-restart ordering lives inside
-    // resyncTabsForProviders (pinned by the TabManager suite); here we only
-    // pin that the shell delegates to every view's manager with the right args.
-    expect(resync1).toHaveBeenCalledWith(['claude'], true);
-    expect(resync2).toHaveBeenCalledWith(['claude'], true);
+    // Each manager is cancelled with the affected providers, then restarted with
+    // ITS OWN frozen id set + the changed flag. The global cancel-before-restart
+    // ordering across views is pinned by the round-14 test below.
+    expect(cancel1).toHaveBeenCalledWith(['claude']);
+    expect(cancel2).toHaveBeenCalledWith(['claude']);
+    expect(restart1).toHaveBeenCalledWith(['t1'], true);
+    expect(restart2).toHaveBeenCalledWith(['t2'], true);
+  });
+
+  it('cancels every view before restarting any (global two-phase, env-apply ordering)', async () => {
+    jest.spyOn(providerEnv, 'getEnvironmentVariablesForScope').mockReturnValue('OLD');
+    jest.spyOn(providerEnv, 'setEnvironmentVariablesForScope').mockImplementation(() => undefined);
+    jest.spyOn(ProviderRegistry, 'getRegisteredProviderIds').mockReturnValue(['claude']);
+    jest.spyOn(ProviderSettingsCoordinator, 'handleEnvironmentChange' as any).mockImplementation(() => undefined);
+    jest.spyOn(ProviderSettingsCoordinator, 'reconcileProviders' as any).mockReturnValue({ changed: false, invalidatedConversations: [] });
+
+    const order: string[] = [];
+    const managerFor = (name: string) => ({
+      cancelStreamingTabsForProviders: jest.fn(() => { order.push(`cancel:${name}`); return [name]; }),
+      restartRuntimeTabs: jest.fn(() => { order.push(`restart:${name}`); return Promise.resolve(0); }),
+    });
+    const view1 = { getTabManager: () => managerFor('v1'), invalidateProviderCommandCaches: jest.fn(), refreshModelSelector: jest.fn() };
+    const view2 = { getTabManager: () => managerFor('v2'), invalidateProviderCommandCaches: jest.fn(), refreshModelSelector: jest.fn() };
+    const plugin = { ...createPlugin(), getAllViews: jest.fn().mockReturnValue([view1, view2]) } as unknown as SpecoratorPlugin;
+
+    await new EnvironmentApplyService(plugin).apply('shared', 'NEW');
+
+    expect(order).toEqual(['cancel:v1', 'cancel:v2', 'restart:v1', 'restart:v2']);
   });
 });

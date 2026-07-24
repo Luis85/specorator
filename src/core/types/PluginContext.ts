@@ -56,8 +56,10 @@ export interface ChatTabManagerHandle {
   quiesceTabsForConversation(conversationId: string): Promise<void>;
   /** Reset tabs bound to a deleted conversation back to a fresh chat. */
   repairTabsForConversation(conversationId: string): Promise<void>;
-  /** Cancel in-flight streams then force-restart affected runtimes over one snapshot; returns the count that threw. */
-  resyncTabsForProviders(providerIds: ProviderId[], changed: boolean): Promise<number>;
+  /** Cancel affected in-flight streams; returns the affected tab ids as the frozen restart set. */
+  cancelStreamingTabsForProviders(providerIds: ProviderId[]): string[];
+  /** Force-restart the runtimes of the given (already-cancelled) tab ids; returns the count that threw. */
+  restartRuntimeTabs(tabIds: string[], changed: boolean): Promise<number>;
 }
 
 /**

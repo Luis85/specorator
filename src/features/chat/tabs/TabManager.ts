@@ -999,30 +999,37 @@ export class TabManager implements TabManagerInterface {
   }
 
   /**
-   * Re-sync + force-restart every initialized runtime whose provider is in
-   * `providerIds`, cancelling any in-flight stream first. Captures the affected
-   * set ONCE up front, so cancel and restart run over the SAME snapshot: no tab
-   * is ever restarted without first being cancelled, and a tab created afterwards
-   * (e.g. during a restart await) is left untouched. When `changed`, drops the
-   * session before restart. Returns the count of tabs whose restart threw;
-   * uninitialized tabs count as success.
+   * Cancel in-flight streams on every tab whose active provider is in `providerIds`,
+   * and return the ids of ALL affected tabs (streaming or not) as the frozen set to
+   * restart. Split from the restart pass so the env-apply flow can cancel across ALL
+   * views before restarting any — no view keeps streaming on a stale runtime during
+   * another view's restart — and so restart operates on this frozen id set rather than
+   * a live re-enumeration (a tab created afterwards has a new id and is left untouched).
    */
-  async resyncTabsForProviders(providerIds: ProviderId[], changed: boolean): Promise<number> {
-    const affected = [...this.affectedProviderTabs(providerIds)];
-    for (const tab of affected) {
+  cancelStreamingTabsForProviders(providerIds: ProviderId[]): string[] {
+    const affectedIds: string[] = [];
+    for (const [id, tab] of this.tabs) {
+      if (!providerIds.includes(tab.providerId ?? DEFAULT_CHAT_PROVIDER_ID)) continue;
+      affectedIds.push(id);
       if (tab.state.isStreaming) tab.controllers.inputController?.cancelStreaming();
     }
+    return affectedIds;
+  }
+
+  /**
+   * Re-sync + force-restart the runtimes of the given (already-cancelled) tab ids;
+   * when `changed`, drop the session first. Skips ids whose tab was closed between the
+   * cancel pass and here. Returns the count of restarts that threw; uninitialized tabs
+   * count as success.
+   */
+  async restartRuntimeTabs(tabIds: string[], changed: boolean): Promise<number> {
     let failed = 0;
-    for (const tab of affected) {
+    for (const id of tabIds) {
+      const tab = this.tabs.get(id);
+      if (!tab) continue;
       if (!(await this.resyncTabRuntime(tab, changed))) failed++;
     }
     return failed;
-  }
-
-  private *affectedProviderTabs(providerIds: ProviderId[]): Iterable<TabData> {
-    for (const tab of this.tabs.values()) {
-      if (providerIds.includes(tab.providerId ?? DEFAULT_CHAT_PROVIDER_ID)) yield tab;
-    }
   }
 
   private async resyncTabRuntime(tab: TabData, changed: boolean): Promise<boolean> {

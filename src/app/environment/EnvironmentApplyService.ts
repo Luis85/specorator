@@ -10,6 +10,7 @@ import { migrateEnvSecrets } from '@/core/providers/secretEnvVars';
 import type { ProviderId } from '@/core/providers/types';
 import type { Conversation } from '@/core/types';
 import { asSettingsBag } from '@/core/types';
+import type { ChatTabManagerHandle } from '@/core/types/PluginContext';
 import type { EnvironmentScope, SecretEnvVarRef } from '@/core/types/settings';
 import { t } from '@/i18n/i18n';
 import type SpecoratorPlugin from '@/main';
@@ -85,16 +86,22 @@ export class EnvironmentApplyService {
     }
   }
 
-  /** Cancel in-flight streams then re-sync/restart affected runtimes on every view's tab manager. */
+  /** Cancel in-flight streams across every view first, then re-sync/restart affected runtimes. */
   private async syncAffectedTabs(affected: ProviderId[], changed: boolean): Promise<void> {
-    let failedTabs = 0;
+    const managers: ChatTabManagerHandle[] = [];
     for (const view of this.plugin.getAllViews()) {
       const manager = view.getTabManager();
-      if (manager) failedTabs += await manager.resyncTabsForProviders(affected, changed);
+      if (manager) managers.push(manager);
     }
-    if (failedTabs > 0) {
-      new Notice(t('env.applyPartial', { count: failedTabs }));
+    // Cancel every affected stream across ALL views first (synchronous), freezing each
+    // view's tab-id set, THEN restart — so no view streams on a stale runtime while
+    // another view is mid-restart, and a tab created afterwards is left untouched.
+    const perManagerIds = managers.map((m) => m.cancelStreamingTabsForProviders(affected));
+    let failedTabs = 0;
+    for (let i = 0; i < managers.length; i++) {
+      failedTabs += await managers[i].restartRuntimeTabs(perManagerIds[i], changed);
     }
+    if (failedTabs > 0) new Notice(t('env.applyPartial', { count: failedTabs }));
   }
 
   private refreshAffectedViews(affected: ProviderId[]): void {

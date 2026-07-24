@@ -554,12 +554,14 @@ describe('SpecoratorPlugin', () => {
       expect(saveMetadataSpy).toHaveBeenCalled();
     });
 
-    it('delegates a non-model env change to resyncTabsForProviders with changed=false', async () => {
+    it('delegates a non-model env change to cancel + restart with changed=false', async () => {
       await plugin.onload();
 
-      const mockResync = jest.fn().mockResolvedValue(0);
+      const mockCancel = jest.fn().mockReturnValue(['t1']);
+      const mockRestart = jest.fn().mockResolvedValue(0);
       const mockTabManager = {
-        resyncTabsForProviders: mockResync,
+        cancelStreamingTabsForProviders: mockCancel,
+        restartRuntimeTabs: mockRestart,
         getPersistedState: jest.fn().mockReturnValue({ tabs: [], activeTabId: null }),
         disposeAllRuntimes: jest.fn(),
       };
@@ -572,19 +574,22 @@ describe('SpecoratorPlugin', () => {
 
       // A non-model env var does not invalidate the session (changed=false). The
       // per-tab force-restart + external-context sync now lives inside
-      // TabManager.resyncTabsForProviders (pinned by the TabManager suite); here
-      // we pin only that the shell routes through that seam with the right flag.
+      // TabManager.restartRuntimeTabs (pinned by the TabManager suite); here we pin
+      // only that the shell routes through the two-phase seam with the right flag.
       await plugin.applyEnvironmentVariables('shared', 'SOME_VAR=value');
 
-      expect(mockResync).toHaveBeenCalledWith(expect.arrayContaining(['claude']), false);
+      expect(mockCancel).toHaveBeenCalledWith(expect.arrayContaining(['claude']));
+      expect(mockRestart).toHaveBeenCalledWith(['t1'], false);
     });
 
-    it('delegates a model-invalidating env change to resyncTabsForProviders with changed=true', async () => {
+    it('delegates a model-invalidating env change to cancel + restart with changed=true', async () => {
       await plugin.onload();
 
-      const mockResync = jest.fn().mockResolvedValue(0);
+      const mockCancel = jest.fn().mockReturnValue(['t1']);
+      const mockRestart = jest.fn().mockResolvedValue(0);
       const mockTabManager = {
-        resyncTabsForProviders: mockResync,
+        cancelStreamingTabsForProviders: mockCancel,
+        restartRuntimeTabs: mockRestart,
         getPersistedState: jest.fn().mockReturnValue({ tabs: [], activeTabId: null }),
         disposeAllRuntimes: jest.fn(),
       };
@@ -600,7 +605,8 @@ describe('SpecoratorPlugin', () => {
       // A model-affecting change invalidates the session (changed=true). Per-tab
       // session drop + live external-context precedence + forced respawn are
       // pinned by the TabManager suite; here we pin the routing + the flag.
-      expect(mockResync).toHaveBeenCalledWith(['claude'], true);
+      expect(mockCancel).toHaveBeenCalledWith(['claude']);
+      expect(mockRestart).toHaveBeenCalledWith(['t1'], true);
     });
   });
 
