@@ -104,6 +104,7 @@ export class AgentDetailEditor {
     descEl.addEventListener('input', () => { this.draft.description = descEl.value; this.updateDirty(); });
 
     this.renderAppearanceRow(fields);
+    this.renderVoiceRow(fields);
     this.renderRolesRow(fields);
     this.renderTagsRow(fields);
   }
@@ -141,6 +142,31 @@ export class AgentDetailEditor {
     iconSelect.addEventListener('change', () => {
       this.draft.icon = iconSelect.value || undefined;
       this.refreshAvatar();
+      this.updateDirty();
+    });
+
+    const emoji = row.createEl('input', { cls: 'specorator-roster-appearance-emoji', type: 'text' });
+    // No maxLength: a UTF-16 code-unit cap would truncate a valid multi-code-point
+    // emoji (e.g. a ZWJ family sequence) mid-grapheme and corrupt the avatar.
+    emoji.value = this.draft.avatarEmoji ?? '';
+    emoji.placeholder = t('agentRoster.emoji');
+    emoji.setAttribute('aria-label', t('agentRoster.emoji'));
+    emoji.addEventListener('input', () => {
+      this.draft.avatarEmoji = emoji.value.trim() || undefined;
+      this.refreshAvatar();
+      this.updateDirty();
+    });
+  }
+
+  private renderVoiceRow(parent: HTMLElement): void {
+    const row = parent.createDiv({ cls: 'specorator-roster-voice' });
+    const voice = row.createEl('textarea', { cls: 'specorator-roster-voice-input' });
+    voice.rows = 2;
+    voice.value = this.draft.voice ?? '';
+    voice.placeholder = t('agentRoster.voicePlaceholder');
+    voice.setAttribute('aria-label', t('agentRoster.voice'));
+    voice.addEventListener('input', () => {
+      this.draft.voice = voice.value.trim() ? voice.value : undefined;
       this.updateDirty();
     });
   }

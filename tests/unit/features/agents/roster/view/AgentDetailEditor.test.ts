@@ -224,3 +224,39 @@ describe('AgentDetailEditor onSaved callback', () => {
     expect(callbacks.onStartChat).toHaveBeenCalledTimes(1);
   });
 });
+
+describe('AgentDetailEditor voice + emoji fields', () => {
+  it('persists an edited voice field', async () => {
+    const { editor, callbacks, root } = await renderEditor(makeAgent());
+    const voice = root.querySelector('.specorator-roster-voice-input') as HTMLTextAreaElement;
+    expect(voice).toBeTruthy();
+    voice.value = 'Warm and concise';
+    voice.dispatchEvent(new Event('input'));
+    expect(editor.isDirty()).toBe(true);
+    saveButton(root).click();
+    await flush();
+    expect(callbacks.onSaved).toHaveBeenCalledWith(expect.objectContaining({ voice: 'Warm and concise' }));
+  });
+
+  it('persists an edited emoji field', async () => {
+    const { editor, callbacks, root } = await renderEditor(makeAgent());
+    const emoji = root.querySelector('.specorator-roster-appearance-emoji') as HTMLInputElement;
+    expect(emoji).toBeTruthy();
+    emoji.value = '🔬';
+    emoji.dispatchEvent(new Event('input'));
+    expect(editor.isDirty()).toBe(true);
+    saveButton(root).click();
+    await flush();
+    expect(callbacks.onSaved).toHaveBeenCalledWith(expect.objectContaining({ avatarEmoji: '🔬' }));
+  });
+
+  it('persists a multi-code-point emoji without truncation', async () => {
+    const { callbacks, root } = await renderEditor(makeAgent());
+    const emoji = root.querySelector('.specorator-roster-appearance-emoji') as HTMLInputElement;
+    emoji.value = '👨‍👩‍👧‍👦';
+    emoji.dispatchEvent(new Event('input'));
+    saveButton(root).click();
+    await flush();
+    expect(callbacks.onSaved).toHaveBeenCalledWith(expect.objectContaining({ avatarEmoji: '👨‍👩‍👧‍👦' }));
+  });
+});
