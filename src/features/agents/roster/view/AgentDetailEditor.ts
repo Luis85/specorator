@@ -18,6 +18,28 @@ const AVATAR_COLORS = ['red', 'orange', 'yellow', 'green', 'cyan', 'blue', 'purp
 const ICON_CHOICES = ['bot', 'bug', 'wrench', 'telescope', 'flask-conical', 'map', 'shield-check', 'pencil', 'book-open', 'search', 'sparkles', 'code'];
 const DETAIL_AVATAR_SIZE = 48;
 
+/**
+ * First grapheme cluster of `s` — keeps a multi-code-point emoji (e.g. a ZWJ family
+ * sequence) whole while dropping any extra glyphs or text after it, so an avatar holds
+ * exactly one visual glyph. Falls back to the first code point where `Intl.Segmenter`
+ * is unavailable.
+ */
+function firstGrapheme(s: string): string {
+  if (!s) return '';
+  const Segmenter = (Intl as {
+    Segmenter?: new (
+      locales?: string,
+      options?: { granularity: 'grapheme' },
+    ) => { segment(input: string): Iterable<{ segment: string }> };
+  }).Segmenter;
+  if (Segmenter) {
+    for (const { segment } of new Segmenter(undefined, { granularity: 'grapheme' }).segment(s)) {
+      return segment;
+    }
+  }
+  return Array.from(s)[0] ?? '';
+}
+
 export interface AgentDetailEditorCallbacks {
   onBack(): void;
   onStartChat(agent: RosterAgent): void;
@@ -152,7 +174,7 @@ export class AgentDetailEditor {
     emoji.placeholder = t('agentRoster.emoji');
     emoji.setAttribute('aria-label', t('agentRoster.emoji'));
     emoji.addEventListener('input', () => {
-      this.draft.avatarEmoji = emoji.value.trim() || undefined;
+      this.draft.avatarEmoji = firstGrapheme(emoji.value.trim()) || undefined;
       this.refreshAvatar();
       this.updateDirty();
     });

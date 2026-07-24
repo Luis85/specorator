@@ -259,4 +259,14 @@ describe('AgentDetailEditor voice + emoji fields', () => {
     await flush();
     expect(callbacks.onSaved).toHaveBeenCalledWith(expect.objectContaining({ avatarEmoji: '👨‍👩‍👧‍👦' }));
   });
+
+  it('keeps only the first grapheme when multiple glyphs are entered', async () => {
+    const { callbacks, root } = await renderEditor(makeAgent());
+    const emoji = root.querySelector('.specorator-roster-appearance-emoji') as HTMLInputElement;
+    emoji.value = '🔬🧪';
+    emoji.dispatchEvent(new Event('input'));
+    saveButton(root).click();
+    await flush();
+    expect(callbacks.onSaved).toHaveBeenCalledWith(expect.objectContaining({ avatarEmoji: '🔬' }));
+  });
 });
