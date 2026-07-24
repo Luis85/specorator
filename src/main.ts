@@ -716,31 +716,14 @@ export default class SpecoratorPlugin extends Plugin implements PluginContext {
   // narrow callback so it stays free of feature dependencies.
   private async quiesceViewsBeforeConversationDelete(conversationId: string): Promise<void> {
     for (const view of this.getAllViews()) {
-      const tabManager = view.getTabManager();
-      if (!tabManager) continue;
-
-      for (const tab of tabManager.getAllTabs()) {
-        if (tab.conversationId === conversationId) {
-          tab.controllers.conversationController?.dispose();
-          tab.controllers.inputController?.cancelStreaming();
-          await tab.controllers.conversationController?.whenHydrated?.().catch(() => {});
-          await tab.controllers.conversationController?.save().catch(() => {});
-        }
-      }
+      await view.getTabManager()?.quiesceTabsForConversation(conversationId);
     }
   }
 
   // Resets every open tab bound to a deleted conversation back to a fresh chat.
   private async repairViewsAfterConversationDelete(conversationId: string): Promise<void> {
     for (const view of this.getAllViews()) {
-      const tabManager = view.getTabManager();
-      if (!tabManager) continue;
-
-      for (const tab of tabManager.getAllTabs()) {
-        if (tab.conversationId === conversationId) {
-          await tab.controllers.conversationController?.createNew({ force: true });
-        }
-      }
+      await view.getTabManager()?.repairTabsForConversation(conversationId);
     }
   }
 

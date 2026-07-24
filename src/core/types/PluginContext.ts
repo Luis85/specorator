@@ -48,6 +48,10 @@ export interface ChatTabManagerHandle {
   // --- Group D: purpose-built commands that keep TabData reach inside TabManager ---
   /** Best-effort cleanup of every tab's runtime (guards `tab.service` only). */
   disposeAllRuntimes(): void;
+  /** Quiesce tabs bound to a conversation before its metadata is deleted. */
+  quiesceTabsForConversation(conversationId: string): Promise<void>;
+  /** Reset tabs bound to a deleted conversation back to a fresh chat. */
+  repairTabsForConversation(conversationId: string): Promise<void>;
 }
 
 /**

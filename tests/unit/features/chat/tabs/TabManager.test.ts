@@ -3305,4 +3305,55 @@ describe('TabManager - host migration (Group D)', () => {
       expect(ok).toHaveBeenCalledTimes(1);
     });
   });
+
+  describe('quiesceTabsForConversation', () => {
+    it('disposes, cancels, drains hydration, then saves matching tabs in order', async () => {
+      const manager = createManager();
+      const calls: string[] = [];
+      const cc = {
+        dispose: jest.fn(() => calls.push('dispose')),
+        whenHydrated: jest.fn(() => { calls.push('whenHydrated'); return Promise.resolve(); }),
+        save: jest.fn(() => { calls.push('save'); return Promise.resolve(); }),
+      };
+      const inputController = { cancelStreaming: jest.fn(() => calls.push('cancel')) };
+      const other = { conversationId: 'other', controllers: { conversationController: { dispose: jest.fn(), whenHydrated: jest.fn(), save: jest.fn() }, inputController: { cancelStreaming: jest.fn() } } };
+      (manager as any).tabs = new Map<string, any>([
+        ['a', { conversationId: 'c-1', controllers: { conversationController: cc, inputController } }],
+        ['b', other],
+      ]);
+
+      await manager.quiesceTabsForConversation('c-1');
+
+      expect(calls).toEqual(['dispose', 'cancel', 'whenHydrated', 'save']);
+      expect(other.controllers.conversationController.dispose).not.toHaveBeenCalled();
+    });
+
+    it('swallows whenHydrated/save rejections', async () => {
+      const manager = createManager();
+      const cc = {
+        dispose: jest.fn(),
+        whenHydrated: jest.fn().mockRejectedValue(new Error('h')),
+        save: jest.fn().mockRejectedValue(new Error('s')),
+      };
+      (manager as any).tabs = new Map<string, any>([
+        ['a', { conversationId: 'c-1', controllers: { conversationController: cc, inputController: { cancelStreaming: jest.fn() } } }],
+      ]);
+
+      await expect(manager.quiesceTabsForConversation('c-1')).resolves.toBeUndefined();
+    });
+  });
+
+  describe('repairTabsForConversation', () => {
+    it('recreates a fresh conversation (force) only on matching tabs', async () => {
+      const manager = createManager();
+      const match = { conversationId: 'c-1', controllers: { conversationController: { createNew: jest.fn().mockResolvedValue(undefined) } } };
+      const nonMatch = { conversationId: 'c-2', controllers: { conversationController: { createNew: jest.fn().mockResolvedValue(undefined) } } };
+      (manager as any).tabs = new Map<string, any>([['a', match], ['b', nonMatch]]);
+
+      await manager.repairTabsForConversation('c-1');
+
+      expect(match.controllers.conversationController.createNew).toHaveBeenCalledWith({ force: true });
+      expect(nonMatch.controllers.conversationController.createNew).not.toHaveBeenCalled();
+    });
+  });
 });

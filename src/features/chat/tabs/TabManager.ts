@@ -971,6 +971,30 @@ export class TabManager implements TabManagerInterface {
     }
   }
 
+  /**
+   * Quiesce every tab bound to `conversationId` before its conversation is
+   * deleted: dispose the conversation controller, cancel any in-flight stream,
+   * then drain hydration and save (both best-effort). Moved from the shell's
+   * `quiesceViewsBeforeConversationDelete`; the per-tab sequencing is unchanged.
+   */
+  async quiesceTabsForConversation(conversationId: string): Promise<void> {
+    for (const tab of this.tabs.values()) {
+      if (tab.conversationId !== conversationId) continue;
+      tab.controllers.conversationController?.dispose();
+      tab.controllers.inputController?.cancelStreaming();
+      await tab.controllers.conversationController?.whenHydrated?.().catch(() => {});
+      await tab.controllers.conversationController?.save().catch(() => {});
+    }
+  }
+
+  /** Reset every tab bound to `conversationId` back to a fresh conversation. */
+  async repairTabsForConversation(conversationId: string): Promise<void> {
+    for (const tab of this.tabs.values()) {
+      if (tab.conversationId !== conversationId) continue;
+      await tab.controllers.conversationController?.createNew({ force: true });
+    }
+  }
+
   // ============================================
   // Cleanup
   // ============================================
