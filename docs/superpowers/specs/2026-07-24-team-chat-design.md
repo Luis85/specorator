@@ -196,24 +196,39 @@ roster-driven, single-visible-pane surface:
   its (now inactive) tab, exactly like inactive chat tabs today; its roster
   presence dot reflects "streaming."
 
-**Engine-host registry (required, not optional).** Every runtime-lifecycle path
-today enumerates `plugin.getAllViews(): SpecoratorView[]` (`src/main.ts:808`), which
-filters to `VIEW_TYPE_SPECORATOR` only. Its consumers —
-`PluginLifecycle.shutdownActiveRuntimes` + async cleanup, `main.ts` post-provider
-tab-UI init, `quiesceViewsBeforeConversationDelete`,
-`repairViewsAfterConversationDelete`, `findConversationAcrossViews`,
-`EnvironmentApplyService` (env reconcile + `refreshAffectedViews`), and
-`PluginViewActivator` tab-slot usage — would all **skip a live Team Chat engine**:
-environment changes wouldn't restart it, conversation deletion wouldn't
-quiesce/repair it, shutdown could leave its provider subprocess running, and its
-tabs wouldn't count against the cap. So the design **must** introduce a shared
-`ChatEngineHost` interface (the surface those consumers use — `getTabManager()`,
-`invalidateProviderCommandCaches()`, …), implement it on both `SpecoratorView` and
-`TeamChatView`, add `plugin.getChatEngineHosts(): ChatEngineHost[]` enumerating
-**both** view types, and repoint every consumer above from `getAllViews()` to
-`getChatEngineHosts()` (`getAllViews()` may remain as a `SpecoratorView`-typed
-convenience for genuinely sidebar-only call sites). This is the concrete form of the
-"improve the code you're working in" refactor.
+**Engine-host registry (required, not optional).** Every runtime-lifecycle *and
+settings-broadcast* path today enumerates `plugin.getAllViews()`, whose concrete
+`main.ts:808` implementation returns only `VIEW_TYPE_SPECORATOR` leaves — even though
+the `PluginContext` interface already types it `getAllViews(): ChatViewHandle[]`
+(`src/core/types/PluginContext.ts:137`), so **a host-handle abstraction
+(`ChatViewHandle`) already exists to extend**, not a new one to invent. A live Team
+Chat engine would be skipped by *all* current call sites, in four groups:
+
+- **Lifecycle** — `PluginLifecycle.shutdownActiveRuntimes` + async cleanup
+  (`:31,:46`), `main.ts` post-provider tab-UI init (`:271`),
+  `quiesceViewsBeforeConversationDelete` (`:718`),
+  `repairViewsAfterConversationDelete` (`:735`), `findConversationAcrossViews`
+  (`:814`), `EnvironmentApplyService` (`:99,:166`), `PluginViewActivator` tab-slot
+  usage (`:98`).
+- **Settings broadcasts** — `GeneralTabSections.ts` (`:62,:87,:120,:144` —
+  `refreshProviderAvailability` / `refreshTabControls` / `applyEditedFilesSetting`),
+  `providerWidgets.ts` (`:35`), `customModelsCommitHooks.ts` (`:31`),
+  `CustomContextLimits.ts` (`:135`), `SpecoratorSettings.ts` (`:293`),
+  `claudeSettingsWidgets.ts` (`:181`), `opencodeSettingsWidgets.ts` (`:38`). Miss
+  these and enabling a provider leaves an open Team Chat stuck "unavailable", and
+  model / edited-files-display changes stay stale until it is reopened.
+- **Provider runtime** — `OpencodeChatRuntime.ts` (`:1010`).
+- **Tasks** — `WorkOrderActivityProvider.ts` (`:132,:150,:166`).
+
+So the design **must** extend `ChatViewHandle` with the surface these consumers use
+(`getTabManager()`, `invalidateProviderCommandCaches()`, `refreshProviderAvailability`,
+`refreshTabControls`, `applyEditedFilesSetting`, model-selector refresh, …), implement
+it on `TeamChatView`, and make `getAllViews()` (or a new `getChatEngineHosts()`)
+enumerate **both** `VIEW_TYPE_SPECORATOR` and `VIEW_TYPE_TEAM_CHAT`. Every call site
+above then operates through the handle and picks up Team Chat for free; any that
+downcast to `SpecoratorView`-specifics must be audited. This is a genuine
+cross-cutting refactor — land it with characterization tests on those paths *before*
+the Team Chat engine goes live.
 
 **Secondary risk + fallback.** `TabManager` is currently constructed inside
 `SpecoratorView` alongside shell-specific wiring (shell projection, work-order
@@ -225,12 +240,18 @@ parameterized. Either way the engine's internals stay untouched.
 
 ### 3. Presence
 
-Presence is a projection of each open DM tab's existing lifecycle/stream state
-(`TabData` state `blank | bound_cold | bound_active | closing` + stream activity),
-not new machinery: **streaming** = active stream on that tab; **thinking** =
-turn in flight pre-first-token; **idle** = otherwise. Agents with no open DM tab
-are idle. The Team-Chat engine's tab-lifecycle callbacks push these into
-`teamChatStore` for the roster dots.
+Presence is a projection of each open DM tab's existing state, not new machinery.
+The base signal is the existing `TabManagerCallbacks.onTabStreamingChanged(tabId,
+isStreaming)` (`tabs/types.ts:369`) — a **boolean fired at turn start and end only**,
+so it yields two states cleanly: **busy** (turn in flight) vs **idle** (otherwise);
+agents with no open DM tab are idle. It does **not** fire on the first assistant
+token, so a finer **thinking → streaming** split needs an extra signal: subscribe the
+presence projection to the transcript projection (first streamed content = a
+`TranscriptSnapshot` change on the active-stream message). Increment 1 ships **idle /
+busy** from the boolean; the thinking/streaming refinement is an optional add via the
+transcript subscription, not something the base callback can deliver. The Team-Chat
+engine's tab-lifecycle callbacks push presence into `teamChatStore` for the roster
+dots.
 
 ### 4. Thread model & persistence
 
@@ -243,6 +264,19 @@ are idle. The Team-Chat engine's tab-lifecycle callbacks push these into
   Increment-2 seam).
 - `resolveOrCreate(agentId)` returns the mapped `conversationId` if present and
   still exists, else creates a conversation via `ConversationStore.createConversation({ agentId })` (existing `boundAgentId` support), records the mapping, and returns it.
+- **Provider/model changes after a DM exists.** `Conversation.providerId` is
+  immutable — `ConversationStore.updateConversation` strips it, and
+  `resolveBoundAgentQueryOptions` resolves the model against that pinned provider. So
+  if the user later edits the agent's provider (or a cross-provider model),
+  `resolveOrCreate` returning the existing conversation would leave the DM stuck on
+  the old provider and silently drop the new model. Policy: on open, compare the
+  agent's freshly-resolved provider (`resolveAgentProvider`) against the mapped
+  conversation's `providerId`; on mismatch, **rotate the thread** — create a fresh DM
+  on the new provider, repoint `roomKey → newConversationId`, and keep the prior
+  conversation as history behind a small "provider changed — started a new thread"
+  notice. This mirrors the app's existing "start a new chat to change provider" rule
+  (`agentRoster.bindingHint`) rather than pretending a conversation can switch
+  providers in place.
 - **Surface discriminator.** Add optional `surface?: 'chat' | 'team-chat'` and
   **propagate it through the whole conversation projection chain**, not just one
   type: `SessionMetadata` → `Conversation` → `ConversationMeta`
@@ -399,11 +433,16 @@ reserving the key shape is the only forward-compat cost, consistent with YAGNI.
 `ConversationMeta`**); `ConversationStore.getConversationList` /
 `plugin.getConversationList` (surface propagation + `surface`-scoped filtering so
 both the header dropdown and the `InputController` resume flow are covered);
-`src/main.ts` + `PluginLifecycle` + `EnvironmentApplyService` + `PluginViewActivator`
-(new `ChatEngineHost` interface + `getChatEngineHosts()`; lifecycle consumers
-repointed off `getAllViews()`); `EditedFilesBar.vue` (refactored to wrap the
-extracted `EditedFilesStrip`); DM provider/model resolution via `resolveAgentProvider`
-+ `resolveAgentModelForProvider`.
+`ChatViewHandle` (`PluginContext.ts`) extended + `TeamChatView` implements it +
+`getAllViews()`/`getChatEngineHosts()` enumerating both view types, with **all**
+`getAllViews()` consumers repointed — lifecycle (`main.ts`, `PluginLifecycle`,
+`EnvironmentApplyService`, `PluginViewActivator`), settings broadcasts
+(`GeneralTabSections`, `providerWidgets`, `customModelsCommitHooks`,
+`CustomContextLimits`, `SpecoratorSettings`, `claude`/`opencodeSettingsWidgets`),
+provider runtime (`OpencodeChatRuntime`), tasks (`WorkOrderActivityProvider`);
+`EditedFilesBar.vue` (refactored to wrap the extracted `EditedFilesStrip`); DM
+provider/model resolution via `resolveAgentProvider` + `resolveAgentModelForProvider`,
+including the provider-change thread-rotation policy (§4).
 
 **Registration:** `src/app/views/registerPluginViews.ts` (ribbon),
 `src/app/commands/registerPluginCommands.ts` (command), `src/i18n` (10 locales),
@@ -416,14 +455,19 @@ islands, `deriveEditedFilesFromMessages`, `renderAgentAvatar`, `useRosterStore` 
 
 ## Risks
 
-- **Engine-host aggregation is a cross-cutting refactor** (see §2) — repointing
-  every `getAllViews()` consumer onto a shared `ChatEngineHost` registry touches
-  shutdown, conversation delete/repair, environment apply, and tab-slot accounting.
-  Required, not optional; the implementation plan should land it (with
-  characterization tests on those lifecycle paths) *before* the Team Chat engine
-  goes live.
+- **Engine-host aggregation is a cross-cutting refactor** (see §2) — ~15
+  `getAllViews()` call sites across lifecycle, **settings broadcasts**, provider
+  runtime, and tasks must operate through the extended `ChatViewHandle`, or an open
+  Team Chat goes stale (provider stuck unavailable, model / file-display not
+  refreshed) and its runtimes escape shutdown/quiesce. Required, not optional; land
+  it with characterization tests on those paths *before* the Team Chat engine goes
+  live.
 - **`TabManager` construction coupling** (see §2) — mitigated by the
   `createChatTabEngine` extraction fallback.
+- **Provider change on an existing DM** — `providerId` is immutable per
+  conversation, so an agent's provider/model edit can't retro-apply to its open DM;
+  the thread-rotation policy (§4) is what preserves the agent-provider promise and
+  must be built, not assumed.
 - **Conversation-surface propagation reach** — `surface` must thread through
   `SessionMetadata` / `Conversation` / `ConversationMeta` and *both* history
   consumers (header dropdown + composer resume); missing one re-introduces the
