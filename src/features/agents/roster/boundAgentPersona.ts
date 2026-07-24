@@ -7,6 +7,7 @@ export interface BoundAgentPersonaInput {
   name: string;
   description?: string;
   prompt?: string;
+  voice?: string;
   skills?: BoundAgentSkill[];
 }
 
@@ -34,6 +35,7 @@ export function formatBoundAgentPersona(agent: BoundAgentPersonaInput): string {
   const name = agent.name?.trim();
   const description = agent.description?.trim();
   const prompt = agent.prompt?.trim();
+  const voice = agent.voice?.trim();
 
   const blocks: string[] = [];
   if (name) {
@@ -43,6 +45,9 @@ export function formatBoundAgentPersona(agent: BoundAgentPersonaInput): string {
       + `conversation. This overrides any default assistant identity or model name: `
       + `when asked who or what you are, answer as ${name}.`,
     );
+  }
+  if (voice) {
+    blocks.push(`Voice and manner: ${voice}`);
   }
   if (prompt) {
     blocks.push(prompt);
