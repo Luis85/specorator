@@ -42,6 +42,17 @@ describe('isRosterAgentDirty', () => {
     expect(isRosterAgentDirty({ ...a, icon: 'wrench' }, { ...a, icon: 'bug' })).toBe(true);
     expect(isRosterAgentDirty({ ...a, icon: 'wrench' }, { ...a, icon: 'wrench' })).toBe(false);
   });
+
+  it('detects a voice change', () => {
+    const a = base();
+    expect(isRosterAgentDirty(a, { ...a, voice: 'Warm and concise' })).toBe(true);
+  });
+
+  it('detects an avatarEmoji change', () => {
+    const a = base();
+    expect(isRosterAgentDirty(a, { ...a, avatarEmoji: '🔬' })).toBe(true);
+    expect(isRosterAgentDirty({ ...a, avatarEmoji: '🔬' }, { ...a, avatarEmoji: '🔬' })).toBe(false);
+  });
 });
 
 function agent(over: Partial<RosterAgent> = {}): RosterAgent {
