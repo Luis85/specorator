@@ -34,6 +34,12 @@ export function renderAgentAvatar(
   avatar.setAttr('title', persona.name);
   avatar.setAttr('aria-label', persona.name);
 
+  if (!persona.builtin && persona.emoji) {
+    avatar.addClass('specorator-agent-avatar--emoji');
+    avatar.setText(persona.emoji);
+    return avatar;
+  }
+
   const glyph = persona.builtin ? 'cpu' : persona.icon;
   if (glyph) {
     // The mock `setIcon` is a no-op; record the glyph intent so tests can assert

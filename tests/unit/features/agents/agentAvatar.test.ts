@@ -99,4 +99,27 @@ describe('renderAgentAvatar', () => {
     expect(avatar.getAttribute('data-icon')).toBe('cpu');
     expect(avatar.textContent).toBe('');
   });
+
+  it('renders a non-builtin persona emoji as text, taking precedence over icon + initials', () => {
+    const host = document.createElement('div');
+    const persona: AgentPersona = {
+      id: 'sci', name: 'Scientist', color: 'var(--color-cyan)',
+      initials: 'SC', icon: 'flask-conical', emoji: '🔬',
+    };
+    const avatar = renderAgentAvatar(host, persona, 20);
+    expect(avatar.classList.contains('specorator-agent-avatar--emoji')).toBe(true);
+    expect(avatar.textContent).toBe('🔬');
+    expect(avatar.getAttribute('data-icon')).toBeNull();
+    expect(avatar.classList.contains('specorator-agent-avatar--initials')).toBe(false);
+  });
+
+  it('ignores emoji for the built-in persona (cpu still wins)', () => {
+    const host = document.createElement('div');
+    const persona: AgentPersona = {
+      id: 'standard', name: 'Standard', color: 'var(--color-base-90)', builtin: true, emoji: '🤖',
+    };
+    const avatar = renderAgentAvatar(host, persona, 20);
+    expect(avatar.getAttribute('data-icon')).toBe('cpu');
+    expect(avatar.textContent).toBe('');
+  });
 });

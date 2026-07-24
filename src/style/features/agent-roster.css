@@ -254,3 +254,8 @@
   font-family: var(--font-monospace);
   font-size: var(--font-ui-small);
 }
+
+.specorator-agent-avatar--emoji {
+  font-size: calc(var(--agent-avatar-size) * 0.62);
+  line-height: 1;
+}
