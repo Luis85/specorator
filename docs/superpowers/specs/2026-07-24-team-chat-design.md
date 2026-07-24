@@ -160,7 +160,8 @@ Vue tree (styled through the `.specorator-vue` baseline + `--sp-*` tokens,
   composer island for the active DM. Provides the **content host** element that the
   Team-Chat `TabManager` mounts the active DM's tab DOM into.
 - `ui/vue/components/` — `TeamChatTopBar.vue` (agent avatar + name + one-line voice
-  summary), the reused `EditedFilesBar.vue`, `PresenceDot.vue`, empty states.
+  summary), the extracted presentational `EditedFilesStrip.vue` (see §6),
+  `PresenceDot.vue`, empty states.
 - `ui/vue/stores/teamChatStore.ts` — a `shallowRef` read-model (`agents`,
   `selectedAgentId`, `activeThread`, per-agent presence) projected from the engine,
   in the island's own Pinia.
@@ -176,25 +177,49 @@ roster-driven, single-visible-pane surface:
   already supports for work-order tabs.
 - **Roster click → DM tab.** Selecting agent *A* resolves *A*'s canonical DM
   conversation (§4) and calls `switchToTab` if its tab exists, else `createTab`
-  bound to that conversation (`{ conversationId, boundAgentId: A.id }`) resolving
-  *A*'s provider (`A.providerOverride ?? default`) and model
-  (`A.modelSelection`). Runtimes stay **cold until first send** (existing lazy
-  init), so listing/opening agents is cheap.
+  bound to that conversation (`{ conversationId, boundAgentId: A.id }`). **Provider
+  and model are resolved through the existing roster policy, not ad-hoc:** use
+  `resolveAgentProvider` + `resolveAgentModelForProvider`
+  (`src/features/agents/roster/resolveAgentProvider.ts`) — which derive the provider
+  from an explicit `providerOverride` *or* `modelSelection.providerId`, with the
+  enabled-provider fallback — *before* the conversation is created. A naive
+  `providerOverride ?? default` would bypass that policy: an agent with only a
+  `modelSelection` provider, or an override naming a disabled provider, would land
+  on the global provider, after which `RosterAgentService.resolveBoundAgent` drops
+  the cross-provider model selection — silently breaking the core promise that the
+  DM runs on the agent's own provider + model. Runtimes stay **cold until first
+  send** (existing lazy init), so listing/opening agents is cheap.
 - **Lifecycle / caps.** Keep a bounded set of hot DM tabs (active + small LRU);
-  quiesce/close the rest. The Team-Chat engine registers with the plugin's
-  cross-leaf aggregation (`PluginViewActivator` tab-slot usage, environment
-  application, conversation quiescing) so caps and environment stay coherent with
-  the chat sidebar rather than being a rogue second engine.
+  quiesce/close the rest. **This requires generalizing the plugin's engine
+  aggregation, not just registering a view** — see "Engine-host registry" below.
 - **Background streaming.** Switching away from a streaming DM leaves it running in
   its (now inactive) tab, exactly like inactive chat tabs today; its roster
   presence dot reflects "streaming."
 
-**Primary risk + fallback.** `TabManager` is currently constructed inside
+**Engine-host registry (required, not optional).** Every runtime-lifecycle path
+today enumerates `plugin.getAllViews(): SpecoratorView[]` (`src/main.ts:808`), which
+filters to `VIEW_TYPE_SPECORATOR` only. Its consumers —
+`PluginLifecycle.shutdownActiveRuntimes` + async cleanup, `main.ts` post-provider
+tab-UI init, `quiesceViewsBeforeConversationDelete`,
+`repairViewsAfterConversationDelete`, `findConversationAcrossViews`,
+`EnvironmentApplyService` (env reconcile + `refreshAffectedViews`), and
+`PluginViewActivator` tab-slot usage — would all **skip a live Team Chat engine**:
+environment changes wouldn't restart it, conversation deletion wouldn't
+quiesce/repair it, shutdown could leave its provider subprocess running, and its
+tabs wouldn't count against the cap. So the design **must** introduce a shared
+`ChatEngineHost` interface (the surface those consumers use — `getTabManager()`,
+`invalidateProviderCommandCaches()`, …), implement it on both `SpecoratorView` and
+`TeamChatView`, add `plugin.getChatEngineHosts(): ChatEngineHost[]` enumerating
+**both** view types, and repoint every consumer above from `getAllViews()` to
+`getChatEngineHosts()` (`getAllViews()` may remain as a `SpecoratorView`-typed
+convenience for genuinely sidebar-only call sites). This is the concrete form of the
+"improve the code you're working in" refactor.
+
+**Secondary risk + fallback.** `TabManager` is currently constructed inside
 `SpecoratorView` alongside shell-specific wiring (shell projection, work-order
 bridge, leaf persistence). If instantiating it standalone proves too entangled,
-the in-scope, targeted refactor is to extract a small `createChatTabEngine(host,
-callbacks)` seam consumed by *both* `SpecoratorView` and `TeamChatView` — an
-"improve the code you're working in" extraction, not a rewrite. Attempt
+extract a small `createChatTabEngine(host, callbacks)` seam consumed by *both* views
+— an "improve the code you're working in" extraction, not a rewrite. Attempt
 reuse-as-is first; fall back to the extraction if construction can't be cleanly
 parameterized. Either way the engine's internals stay untouched.
 
@@ -218,13 +243,21 @@ are idle. The Team-Chat engine's tab-lifecycle callbacks push these into
   Increment-2 seam).
 - `resolveOrCreate(agentId)` returns the mapped `conversationId` if present and
   still exists, else creates a conversation via `ConversationStore.createConversation({ agentId })` (existing `boundAgentId` support), records the mapping, and returns it.
-- **Surface discriminator.** Add optional `surface?: 'chat' | 'team-chat'` to
-  `SessionMetadata` (`src/core/types/chat.ts`, the documented UI-only overlay) and
-  mirror it onto `Conversation` (as `boundAgentId` already is), defaulting to
-  `'chat'` when absent (existing data untouched). Team Chat creates DMs with
-  `surface: 'team-chat'`. The chat sidebar's conversation-history dropdown filters
-  to `surface !== 'team-chat'`; Team Chat's own source of truth is the thread
-  store, with `surface` as the belt-and-suspenders filter for shared history UI.
+- **Surface discriminator.** Add optional `surface?: 'chat' | 'team-chat'` and
+  **propagate it through the whole conversation projection chain**, not just one
+  type: `SessionMetadata` → `Conversation` → `ConversationMeta`
+  (`src/core/types/chat.ts:124`), carried by `ConversationStore.getConversationList()`
+  / `plugin.getConversationList()`. Default to `'chat'` when absent (existing data
+  untouched); Team Chat creates DMs with `surface: 'team-chat'`. Then **filter every
+  ad-hoc-history entry point** — there are two independent consumers of the
+  unfiltered list, and filtering only one leaks: the header history dropdown
+  (`SpecoratorView` → `buildConversationsSlice(getConversationList())`) **and** the
+  composer `$` resume flow (`InputController.ts:177` →
+  `getConversations: () => plugin.getConversationList()`). Cleanest is to filter the
+  **shared source**: expose a `surface`-scoped `getConversationList` (default
+  excludes `'team-chat'`) so both consumers inherit it, with Team Chat using its
+  thread store as the source of truth plus an inverse (`team-chat`-only) accessor
+  for any history UI it renders itself.
 - Transcript/session storage is unchanged — provider-owned, hydrated lazily via
   `ProviderConversationHistoryService`. Team Chat adds **no** new transcript
   persistence.
@@ -266,14 +299,19 @@ appearance row, beside the existing color/initials/icon controls.
 
 ### 6. Files-worked-on strip
 
-Reuse the edited-files subsystem verbatim. The active DM's tab already records
-`ChatState.editedFiles` on each successful file-mutating tool result
-(`StreamController.recordEditedFiles`, gated by `showAgentEditedFiles`), and
+Reuse the edited-files **data**, not the store-coupled component. The active DM's
+tab already records `ChatState.editedFiles` on each successful file-mutating tool
+result (`StreamController.recordEditedFiles`, gated by `showAgentEditedFiles`), and
 `deriveEditedFilesFromMessages` rebuilds the list on history load (including nested
-subagent tool calls). Team Chat projects the active tab's `editedFiles` into
-`TeamChatTopBar` and renders them with the existing `EditedFilesBar.vue`; each chip
-opens the file in the vault. No new persistence — file attribution is always
-derived from the DM's transcript.
+subagent tool calls). The existing `EditedFilesBar.vue` **cannot** be dropped into
+the Team Chat top bar directly: it reads `useComposerStore()` and
+`inject(CALLBACKS_KEY)`, and each tab's composer is a separate Vue app with its own
+Pinia, so the Team Chat app can't see the active tab's composer state or open-file
+callback. Instead, **extract a presentational `EditedFilesStrip`** (props:
+`entries: EditedFileEntry[]`, `onOpen(path)`) that the current `EditedFilesBar.vue`
+refactors to wrap, and mount that strip in `TeamChatTopBar` fed by the active DM
+tab's projected `editedFiles` + an open-file callback bridged from the tab. No new
+persistence — file attribution is always derived from the DM's transcript.
 
 ## Data flow
 
@@ -356,26 +394,39 @@ reserving the key shape is the only forward-compat cost, consistent with YAGNI.
 `src/features/agents/agentAvatar.ts` (precedence + image render);
 `src/features/agents/personaRegistry.ts` (`rosterAgentToPersona` mapping);
 `src/features/agents/roster/boundAgentPersona.ts` (voice directive);
-`src/features/agents/roster/view/AgentDetailEditor.ts` (voice + emoji/image
-inputs); `src/core/types/chat.ts` (`surface?` on `SessionMetadata` + `Conversation`);
-history-dropdown filter in the chat feature.
+`src/features/agents/roster/view/AgentDetailEditor.ts` (voice + emoji/image inputs);
+`src/core/types/chat.ts` (`surface?` on `SessionMetadata`, `Conversation`, **and
+`ConversationMeta`**); `ConversationStore.getConversationList` /
+`plugin.getConversationList` (surface propagation + `surface`-scoped filtering so
+both the header dropdown and the `InputController` resume flow are covered);
+`src/main.ts` + `PluginLifecycle` + `EnvironmentApplyService` + `PluginViewActivator`
+(new `ChatEngineHost` interface + `getChatEngineHosts()`; lifecycle consumers
+repointed off `getAllViews()`); `EditedFilesBar.vue` (refactored to wrap the
+extracted `EditedFilesStrip`); DM provider/model resolution via `resolveAgentProvider`
++ `resolveAgentModelForProvider`.
 
 **Registration:** `src/app/views/registerPluginViews.ts` (ribbon),
 `src/app/commands/registerPluginCommands.ts` (command), `src/i18n` (10 locales),
 root `CLAUDE.md` architecture table (Team Chat row).
 
 **Reused unchanged:** `TabManager` + per-tab composition, transcript/composer
-islands, `deriveEditedFilesFromMessages` + `EditedFilesBar.vue`,
-`renderAgentAvatar`, `useRosterStore` + `useLibraryList`,
-`resolveBoundAgentQueryOptions`, `ConversationStore`, `PluginViewActivator`
-aggregation.
+islands, `deriveEditedFilesFromMessages`, `renderAgentAvatar`, `useRosterStore` +
+`useLibraryList`, `resolveBoundAgentQueryOptions`,
+`RosterAgentService.resolveBoundAgent`.
 
 ## Risks
 
+- **Engine-host aggregation is a cross-cutting refactor** (see §2) — repointing
+  every `getAllViews()` consumer onto a shared `ChatEngineHost` registry touches
+  shutdown, conversation delete/repair, environment apply, and tab-slot accounting.
+  Required, not optional; the implementation plan should land it (with
+  characterization tests on those lifecycle paths) *before* the Team Chat engine
+  goes live.
 - **`TabManager` construction coupling** (see §2) — mitigated by the
   `createChatTabEngine` extraction fallback.
-- **Cross-leaf aggregation correctness** — Team Chat must register as a first-class
-  participant in tab-slot/quiescing/environment aggregation, or caps and
-  environment application drift. Called out as an explicit integration point.
+- **Conversation-surface propagation reach** — `surface` must thread through
+  `SessionMetadata` / `Conversation` / `ConversationMeta` and *both* history
+  consumers (header dropdown + composer resume); missing one re-introduces the
+  intermingling it is meant to prevent.
 - **Scope creep toward groups/personality** — held off by the Non-goals and the
   single-`voice`-field decision.
