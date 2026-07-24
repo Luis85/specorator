@@ -459,6 +459,7 @@ describe('AgentDetailEditor voice + emoji fields', () => {
     const emoji = root.querySelector('.specorator-roster-appearance-emoji') as HTMLInputElement;
     emoji.value = '🔬🧪';
     emoji.dispatchEvent(new Event('input'));
+    expect(emoji.value).toBe('🔬');
     saveButton(root).click();
     await flush();
     expect(callbacks.onSaved).toHaveBeenCalledWith(expect.objectContaining({ avatarEmoji: '🔬' }));
@@ -483,9 +484,11 @@ In `src/features/agents/roster/view/AgentDetailEditor.ts`, in `renderAppearanceR
     emoji.placeholder = t('agentRoster.emoji');
     emoji.setAttribute('aria-label', t('agentRoster.emoji'));
     emoji.addEventListener('input', () => {
-      // Keep only the first grapheme cluster (ZWJ families stay whole) so multiple
-      // glyphs or pasted text can't overflow the fixed-size avatar (see firstGrapheme below).
-      this.draft.avatarEmoji = firstGrapheme(emoji.value.trim()) || undefined;
+      const normalized = firstGrapheme(emoji.value.trim());
+      this.draft.avatarEmoji = normalized || undefined;
+      // Reflect the normalized single glyph back into the field so what's shown matches
+      // what's saved (a multi-glyph paste otherwise leaves the field out of sync).
+      if (emoji.value !== normalized) emoji.value = normalized;
       this.refreshAvatar();
       this.updateDirty();
     });
