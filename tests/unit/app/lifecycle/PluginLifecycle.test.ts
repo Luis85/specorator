@@ -3,13 +3,7 @@ import type { SpecoratorView } from '@/features/chat/SpecoratorView';
 import type SpecoratorPlugin from '@/main';
 import * as pathUtils from '@/utils/path';
 
-function createTab(opts: { cleanup?: () => Promise<void> | void } = {}) {
-  return {
-    service: { cleanup: jest.fn(opts.cleanup ?? (() => undefined)) },
-  };
-}
-
-function createView(tabs: ReturnType<typeof createTab>[]) {
+function createView(tabs: unknown[]) {
   const tabManager = {
     disposeAllRuntimes: jest.fn(),
     getPersistedState: jest.fn().mockReturnValue({ openTabs: [] }),

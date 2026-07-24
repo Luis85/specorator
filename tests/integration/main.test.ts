@@ -573,6 +573,7 @@ describe('SpecoratorPlugin', () => {
           ui: { externalContextSelector: { getExternalContexts: jest.fn().mockReturnValue([]) } },
         }]),
         getPersistedState: jest.fn().mockReturnValue({ tabs: [], activeTabId: null }),
+        disposeAllRuntimes: jest.fn(),
       };
       const mockView = {
         getTabManager: jest.fn().mockReturnValue(mockTabManager),
@@ -623,6 +624,7 @@ describe('SpecoratorPlugin', () => {
           ui: { externalContextSelector: { getExternalContexts: jest.fn().mockReturnValue(['/live/context']) } },
         }]),
         getPersistedState: jest.fn().mockReturnValue({ tabs: [], activeTabId: null }),
+        disposeAllRuntimes: jest.fn(),
       };
       const mockView = {
         getTabManager: jest.fn().mockReturnValue(mockTabManager),
