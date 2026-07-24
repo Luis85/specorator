@@ -19,12 +19,12 @@ const ICON_CHOICES = ['bot', 'bug', 'wrench', 'telescope', 'flask-conical', 'map
 const DETAIL_AVATAR_SIZE = 48;
 
 /**
- * First grapheme cluster of `s` — keeps a multi-code-point emoji (e.g. a ZWJ family
- * sequence) whole while dropping any extra glyphs or text after it, so an avatar holds
- * exactly one visual glyph. Falls back to the first code point where `Intl.Segmenter`
- * is unavailable.
+ * Last grapheme cluster of `s` — keeps a multi-code-point emoji (e.g. a ZWJ family
+ * sequence) whole while dropping anything before it, so an avatar holds exactly one
+ * glyph AND inserting a new emoji after an existing one replaces it rather than being
+ * discarded. Falls back to the last code point where `Intl.Segmenter` is unavailable.
  */
-function firstGrapheme(s: string): string {
+function lastGrapheme(s: string): string {
   if (!s) return '';
   const Segmenter = (Intl as {
     Segmenter?: new (
@@ -33,11 +33,14 @@ function firstGrapheme(s: string): string {
     ) => { segment(input: string): Iterable<{ segment: string }> };
   }).Segmenter;
   if (Segmenter) {
+    let last = '';
     for (const { segment } of new Segmenter(undefined, { granularity: 'grapheme' }).segment(s)) {
-      return segment;
+      last = segment;
     }
+    return last;
   }
-  return Array.from(s)[0] ?? '';
+  const points = Array.from(s);
+  return points[points.length - 1] ?? '';
 }
 
 export interface AgentDetailEditorCallbacks {
@@ -174,7 +177,7 @@ export class AgentDetailEditor {
     emoji.placeholder = t('agentRoster.emoji');
     emoji.setAttribute('aria-label', t('agentRoster.emoji'));
     emoji.addEventListener('input', () => {
-      const normalized = firstGrapheme(emoji.value.trim());
+      const normalized = lastGrapheme(emoji.value.trim());
       this.draft.avatarEmoji = normalized || undefined;
       // Reflect the normalized single glyph back into the field so what's shown matches
       // what's saved (a multi-glyph paste otherwise leaves the field out of sync).

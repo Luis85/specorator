@@ -454,15 +454,15 @@ describe('AgentDetailEditor voice + emoji fields', () => {
     expect(callbacks.onSaved).toHaveBeenCalledWith(expect.objectContaining({ avatarEmoji: '👨‍👩‍👧‍👦' }));
   });
 
-  it('keeps only the first grapheme when multiple glyphs are entered', async () => {
+  it('keeps the last glyph entered, so a new emoji replaces the old one', async () => {
     const { callbacks, root } = await renderEditor(makeAgent());
     const emoji = root.querySelector('.specorator-roster-appearance-emoji') as HTMLInputElement;
     emoji.value = '🔬🧪';
     emoji.dispatchEvent(new Event('input'));
-    expect(emoji.value).toBe('🔬');
+    expect(emoji.value).toBe('🧪');
     saveButton(root).click();
     await flush();
-    expect(callbacks.onSaved).toHaveBeenCalledWith(expect.objectContaining({ avatarEmoji: '🔬' }));
+    expect(callbacks.onSaved).toHaveBeenCalledWith(expect.objectContaining({ avatarEmoji: '🧪' }));
   });
 });
 ```
@@ -484,7 +484,7 @@ In `src/features/agents/roster/view/AgentDetailEditor.ts`, in `renderAppearanceR
     emoji.placeholder = t('agentRoster.emoji');
     emoji.setAttribute('aria-label', t('agentRoster.emoji'));
     emoji.addEventListener('input', () => {
-      const normalized = firstGrapheme(emoji.value.trim());
+      const normalized = lastGrapheme(emoji.value.trim());
       this.draft.avatarEmoji = normalized || undefined;
       // Reflect the normalized single glyph back into the field so what's shown matches
       // what's saved (a multi-glyph paste otherwise leaves the field out of sync).
@@ -498,12 +498,12 @@ Also add this module-level helper near the top of the file (after `const DETAIL_
 
 ```typescript
 /**
- * First grapheme cluster of `s` — keeps a multi-code-point emoji (e.g. a ZWJ family
- * sequence) whole while dropping any extra glyphs or text after it, so an avatar holds
- * exactly one visual glyph. Falls back to the first code point where `Intl.Segmenter`
- * is unavailable.
+ * Last grapheme cluster of `s` — keeps a multi-code-point emoji (e.g. a ZWJ family
+ * sequence) whole while dropping anything before it, so an avatar holds exactly one
+ * glyph AND inserting a new emoji after an existing one replaces it rather than being
+ * discarded. Falls back to the last code point where `Intl.Segmenter` is unavailable.
  */
-function firstGrapheme(s: string): string {
+function lastGrapheme(s: string): string {
   if (!s) return '';
   const Segmenter = (Intl as {
     Segmenter?: new (
@@ -512,11 +512,14 @@ function firstGrapheme(s: string): string {
     ) => { segment(input: string): Iterable<{ segment: string }> };
   }).Segmenter;
   if (Segmenter) {
+    let last = '';
     for (const { segment } of new Segmenter(undefined, { granularity: 'grapheme' }).segment(s)) {
-      return segment;
+      last = segment;
     }
+    return last;
   }
-  return Array.from(s)[0] ?? '';
+  const points = Array.from(s);
+  return points[points.length - 1] ?? '';
 }
 ```
 
