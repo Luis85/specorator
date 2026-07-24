@@ -731,6 +731,7 @@ export default class SpecoratorPlugin extends Plugin implements PluginContext {
     providerId?: ProviderId;
     sessionId?: string;
     boundAgentId?: string;
+    surface?: 'chat' | 'team-chat';
   }): Promise<Conversation> {
     return this.conversationStore.createConversation(options);
   }

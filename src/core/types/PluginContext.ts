@@ -143,6 +143,7 @@ export interface PluginContext
     providerId?: ProviderId;
     sessionId?: string;
     boundAgentId?: string;
+    surface?: 'chat' | 'team-chat';
   }): Promise<Conversation>;
   switchConversation(
     id: string,
