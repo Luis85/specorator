@@ -201,6 +201,18 @@ roster-driven, single-visible-pane surface:
   the `chat` kind (plugin-level reservation, mirroring work-order), or give Team Chat
   its **own** small DM budget — the per-manager local LRU cannot honor a shared cap
   it can't see.
+- **Tab-state persistence isolation.** Team Chat's tab layout must be **leaf-owned**
+  — its own `getState()`/`setState()`, mirroring `SpecoratorView.ts:142`/`:146` (which
+  the CLAUDE.md gotcha already marks "preferred over global plugin state on restore").
+  It must **not** also ride the global `persistTabManagerState()` singleton slot:
+  `PluginLifecycle.persistOpenTabStates` (`:36`) maps over **every** `getAllViews()`
+  host and writes each one's `getPersistedState()` into the single `data.tabManagerState`
+  field (`SharedStorageService.ts:30`), so the instant a `TeamChatView` joins the
+  enumeration (a hard Phase-2 requirement above), the two hosts race on that one slot
+  — last write wins — and the loser's layout contaminates the *other* host's
+  fallback restore. Exclude Team Chat from the shared write (persist only
+  `VIEW_TYPE_SPECORATOR` managers to the singleton, or key the slot by view type) and
+  let the per-leaf `setState` own Team Chat restore.
 - **Background streaming.** Switching away from a streaming DM leaves it running in
   its (now inactive) tab, exactly like inactive chat tabs today; its roster
   presence dot shows "busy."
@@ -269,6 +281,20 @@ actions resolve their target through the **global sidebar view**, not the owning
   **must** make these callbacks resolve the **owning tab's** conversation (prefer
   `tab.conversationId`, or inject the host's active snapshot) instead of the global
   sidebar snapshot.
+- **Fork actions** (fork-to-new-tab, fork-in-current-tab). `TabManager.handleForkRequest`
+  → `createForkConversation` (`TabManager.ts:759`) clones the turn into a **new**
+  conversation via `plugin.createConversation({ providerId })` — carrying **neither**
+  `boundAgentId` **nor** `surface: 'team-chat'`. On the Team Chat surface a fork
+  therefore (a) escapes the §4 exclusion filter and reappears in the ad-hoc chat
+  history (the clone has no `'team-chat'` tag), and (b) produces an **unmapped,
+  unbound** conversation the `TeamChatThreadStore` room map never records — so the
+  DM's `roomKey → conversationId` mapping and the header identity desync from what
+  the reused transcript now shows. **Disable the fork affordance on the Team Chat
+  surface** (a DM is one fixed thread per agent — the same rationale as the `$`
+  resume disable above), or, if forking within a room is ever wanted, re-scope
+  `createForkConversation` to carry the owning tab's `boundAgentId` + `surface:
+  'team-chat'` **and** rebind the room mapping to the forked conversation
+  atomically. Increment 1 takes the disable path.
 
 ### 3. Presence
 
