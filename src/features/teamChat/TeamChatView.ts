@@ -15,7 +15,7 @@ import type { PersistedTabManagerState } from '../chat/tabs/types';
 import type { ComposerEditedFile } from '../chat/ui/vue/composer/stores/composerStore';
 import { getTeamChatDmOpenCoordinator } from './TeamChatDmOpenCoordinator';
 import { applyDmEditedFilesSetting, applyDmHiddenCommands, noticeRemovedAgentDms, projectActiveDmEditedFiles, reconcileRestoredDmProviders, refreshDmModelState, rotateChangedDmProviders } from './teamChatDmRefresh';
-import { openResolvedTeamChatDm, reconcileRotation, restoreTeamChatDmTabs, touchDmRecency } from './teamChatDmTabs';
+import { openResolvedTeamChatDm, reconcileRotation, restoreTeamChatDmTabs, serializeOnTail, touchDmRecency } from './teamChatDmTabs';
 import { projectCrossLeafPresence, type TeamChatPresence } from './teamChatPresence';
 import type { TeamChatThreadStore } from './TeamChatThreadStore';
 import { createTeamChatPinia } from './ui/vue/globalPinia';
@@ -62,6 +62,8 @@ export class TeamChatView extends ItemView implements ChatViewHandle {
    * change) during those yields invalidates the in-flight open so it can't act on a detached manager (:209).
    */
   private selectionGeneration = 0;
+  /** Per-leaf tail serializing selectAgent's open+reconcile so two fast different-agent clicks run one-at-a-time — no concurrent double-evict at full budget (Round-49). Holder so serializeOnTail advances it byref. */
+  private readonly selectionOpenTail: { tail: Promise<unknown> } = { tail: Promise.resolve() };
   private pendingPersist: number | null = null;
   /** Unsubscribe for the cross-leaf `teamChat:presence` broadcast (Fix 3): another
    *  leaf's DM streaming re-projects this leaf's presence so busy shows everywhere. */
@@ -405,27 +407,25 @@ export class TeamChatView extends ItemView implements ChatViewHandle {
     // The tab to close/reuse: an explicit displaced id (post-reload rotation cleanup, where get() has
     // already rotated) else the pre-resolve mapping (a live rotation left it behind) (Round-48 Fix A).
     const displaced = options.displacedConversationId ?? previousConversationId;
-    // Serialize the find→open plugin-wide, keyed by conversationId, so two
-    // overlapping selects of the SAME DM (simultaneous clicks in two Team Chat
-    // leaves — each leaf has its own generation, so neither supersedes the other)
-    // collapse into ONE open. resolveOrCreate serializes only the roomKey→id
-    // mapping; without this both callers would see findConversationAcrossViews ==
-    // null (neither tab created yet) and each createTab, double-mounting one
-    // conversation (concurrent streams/saves corrupt it). The queued second caller
-    // re-runs the open, now finds the tab, and switches. The serialized body lives in
-    // `openResolvedTeamChatDm` (teamChatDmTabs) so the view stays a thin host; its
-    // staleness guard is this leaf's live generation+manager identity check.
-    await getTeamChatDmOpenCoordinator(this.plugin).serialize(conversationId, () =>
-      openResolvedTeamChatDm(this.plugin, manager, this.leaf, this.dmRecency, conversationId,
-        { isStale: () => this.isSelectionStale(generation, manager), displacedConversationId: displaced, preserveFocus: options.preserveFocus }));
-    // Reconcile a provider-change rotation: record + notify a new rotation, and close any displaced
-    // old-provider tab once its replacement is open — deferred, so a cap-blocked rotation's stale tab
-    // is closed on the retry that finally opens the replacement (:361). notify only for a mapping that
-    // actually rotated THIS pass, so a post-reload cleanup (displaced set, mapping unchanged) closes
-    // the stale tab without re-firing the notice (Round-48). Skip if a newer selection superseded this.
-    if (!this.isSelectionStale(generation, manager)) {
-      await reconcileRotation(this.plugin, agentId, displaced, conversationId, { notify: previousConversationId !== conversationId });
-    }
+    // Serialize this leaf's open+reconcile on a per-leaf tail (Round-49): two fast clicks on
+    // DIFFERENT agents (distinct conversationIds → NOT collapsed by the per-id coordinator) must
+    // run one-at-a-time, else at full budget both evict the same LRU victim (double-close → cap
+    // Notice + neither opens). The per-conversationId coordinator stays INSIDE to still collapse
+    // two leaves opening the SAME DM (independent generations): without it both see
+    // findConversationAcrossViews == null and each createTab, double-mounting one conversation; the
+    // queued second re-runs, finds the tab, switches. Open body + stale guard: openResolvedTeamChatDm.
+    await serializeOnTail(this.selectionOpenTail, async () => {
+      await getTeamChatDmOpenCoordinator(this.plugin).serialize(conversationId, () =>
+        openResolvedTeamChatDm(this.plugin, manager, this.leaf, this.dmRecency, conversationId,
+          { isStale: () => this.isSelectionStale(generation, manager), displacedConversationId: displaced, preserveFocus: options.preserveFocus }));
+      // Reconcile a provider-change rotation: record + notify a fresh rotation, close any displaced
+      // old-provider tab once its replacement is open — deferred so a cap-blocked rotation closes on
+      // the retry (:361). notify only when the mapping rotated THIS pass (post-reload cleanup: displaced
+      // set, mapping unchanged — Round-48). Skip if a newer selection superseded this.
+      if (!this.isSelectionStale(generation, manager)) {
+        await reconcileRotation(this.plugin, agentId, displaced, conversationId, { notify: previousConversationId !== conversationId });
+      }
+    });
   }
 
   /**

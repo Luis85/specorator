@@ -76,6 +76,7 @@ function makeView(): any {
   view.contentEl = createMockEl();
   view.selectedAgentId = null;
   view.dmRecency = []; // LRU recency array (T7); class-field initializer skipped by Object.create
+  view.selectionOpenTail = { tail: Promise.resolve() }; // per-leaf open+reconcile tail (Round-49); ditto
   view.removedAgentDmsNotified = new Set(); // agent-removed dedupe (Round-39); ditto
   view.tabManager = {
     getAllTabs: jest.fn(() => []),

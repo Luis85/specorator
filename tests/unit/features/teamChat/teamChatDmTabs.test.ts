@@ -463,6 +463,33 @@ describe('evictLruDmIfNeeded', () => {
 
     expect(closeTab).toHaveBeenCalledWith('t-a', true);
   });
+
+  // Round-49 Part 2: a selection superseded (a newer roster click, or a leaf teardown bumping the
+  // generation) AFTER the caller's pre-evict stale guard but BEFORE the destructive close must skip
+  // the eviction — else it force-closes a hot DM the superseded open will never replace (its own
+  // post-evict guard then bails). evictLruDmIfNeeded re-checks isStale right after picking the victim.
+  it('skips the eviction and reports no slot when the selection went stale after victim selection (Round-49)', async () => {
+    const closeTab = jest.fn().mockResolvedValue(true);
+    const plugin = { settings: { maxTeamChatDms: 2 }, events: { emit: jest.fn() } } as never;
+    // At budget with an idle LRU victim (t-a) available — but the selection is already superseded.
+    const manager = managerWith([{ id: 't-a', conversationId: 'a' }, { id: 't-b', conversationId: 'b' }], 't-b', closeTab);
+
+    const hasSlot = await evictLruDmIfNeeded(plugin, manager, ['a', 'b'], 'c', null, () => true);
+
+    expect(hasSlot).toBe(false);            // no slot reported → the caller's stale guard bails, no cap Notice
+    expect(closeTab).not.toHaveBeenCalled(); // the victim is NOT force-closed
+  });
+
+  it('still evicts the LRU victim when the selection is live (isStale false) (Round-49)', async () => {
+    const closeTab = jest.fn().mockResolvedValue(true);
+    const plugin = { settings: { maxTeamChatDms: 2 }, events: { emit: jest.fn() } } as never;
+    const manager = managerWith([{ id: 't-a', conversationId: 'a' }, { id: 't-b', conversationId: 'b' }], 't-b', closeTab);
+
+    const hasSlot = await evictLruDmIfNeeded(plugin, manager, ['a', 'b'], 'c', null, () => false);
+
+    expect(hasSlot).toBe(true);
+    expect(closeTab).toHaveBeenCalledWith('t-a', true);
+  });
 });
 
 // Round-43 (:451/:52): the open path must not create an over-budget DM when eviction frees

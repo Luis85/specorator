@@ -54,7 +54,9 @@ export async function openResolvedTeamChatDm(
   // Enforce the hot-DM budget and learn whether a slot is free: evict the LRU DM before
   // creating so a big roster browses gracefully instead of dead-ending at the cap (T7). The
   // displaced tab's slot is excluded — reconcileRotation frees it after this replacement opens.
-  const hasDmSlot = await evictLruDmIfNeeded(plugin, manager, dmRecency, conversationId, displacedSlot);
+  // `isStale` lets the eviction skip the destructive close if a newer selection superseded this
+  // one before the victim is torn down (Round-49).
+  const hasDmSlot = await evictLruDmIfNeeded(plugin, manager, dmRecency, conversationId, displacedSlot, isStale);
   // Re-check staleness after the eviction close.
   if (isStale()) return;
   // No slot: the budget is full AND every inactive DM is mid-turn, so eviction freed nothing
@@ -380,6 +382,12 @@ export function pickLruDmEviction(
  * reconcileRotation closes it AFTER this replacement opens, so its slot is effectively already
  * free — exclude it from the count so the rotation reuses that slot instead of force-closing an
  * unrelated hot DM. Omitted / not-open → today's behavior (evict when genuinely over budget).
+ *
+ * `isStale` (Round-49): re-checked immediately before the destructive close. A selection
+ * superseded (a newer click, or a leaf teardown bumping the generation) between the caller's
+ * pre-evict stale guard and here must NOT commit the force-close — it would evict a hot DM the
+ * superseded open will never replace, then bail on its own post-evict guard. On stale it returns
+ * false without closing; the caller's `if (isStale()) return` then bails BEFORE the cap Notice.
  */
 export async function evictLruDmIfNeeded(
   plugin: SpecoratorPlugin,
@@ -387,6 +395,7 @@ export async function evictLruDmIfNeeded(
   recency: readonly string[],
   openingConversationId: string,
   displacedConversationId?: string | null,
+  isStale: () => boolean = () => false,
 ): Promise<boolean> {
   const tabs = manager.getAllTabs?.() ?? [];
   const displacedOpen = displacedConversationId != null && tabs.some((tab) => tab.conversationId === displacedConversationId);
@@ -394,8 +403,27 @@ export async function evictLruDmIfNeeded(
   if (effectiveCount < resolveMaxTeamChatDms(plugin.settings)) return true;
   const victimTabId = pickLruDmEviction(tabs, recency, manager.getActiveTabId?.() ?? null, openingConversationId);
   if (victimTabId == null) return false;
+  // Superseded after the caller's pre-evict guard but before we destroyed anything — skip the
+  // eviction so a hot DM isn't force-closed for an open that will never happen (Round-49).
+  if (isStale()) return false;
   // A successful eviction close frees exactly the one slot the new DM needs (the budget is
   // enforced on every open, so the manager is at most one over). Propagate the close result:
   // a rare failed close freed nothing, so the caller must not then bypass the cap.
   return closeTeamChatDmTab(plugin, manager, victimTabId);
+}
+
+/**
+ * Serializes `body` onto a caller-owned tail so overlapping calls run strictly one-at-a-time —
+ * the next `body` starts only after the previous fully settles. `tailRef.tail` is both read (the
+ * op to chain on) and advanced by reference (a per-leaf field the caller owns), mirroring
+ * `TeamChatThreadStore.serialize` but with the tail external. The `.catch` keeps the shared tail
+ * resolvable so one rejected body can't wedge the queue; the returned `run` still rejects to the
+ * caller. Used by `TeamChatView.selectAgent` (Round-49): two fast clicks on DIFFERENT agents (which
+ * the per-conversationId open coordinator does not collapse) must not concurrently evict the same
+ * LRU DM at full budget and strand it with neither selection opening.
+ */
+export function serializeOnTail<T>(tailRef: { tail: Promise<unknown> }, body: () => Promise<T>): Promise<T> {
+  const run = tailRef.tail.then(body);
+  tailRef.tail = run.catch(() => undefined);
+  return run;
 }

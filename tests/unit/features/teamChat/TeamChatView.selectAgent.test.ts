@@ -30,6 +30,7 @@ function makeView(overrides: { leaf?: unknown; plugin?: Record<string, unknown> 
   view.tabManager = null;
   view.selectedAgentId = null;
   view.selectionGeneration = 0; // class-field initializer is skipped by Object.create
+  view.selectionOpenTail = { tail: Promise.resolve() }; // ditto — the per-leaf open+reconcile tail (Round-49)
   view.dmRecency = [];          // ditto — the LRU recency array (T7)
   view.tabsRestored = true;     // these flows assume a restored engine (Round-29 gate)
   view.teamChatObservers = new Set();
@@ -233,6 +234,81 @@ describe('TeamChatView.selectAgent — resolve → cross-view reuse / create', (
     // Superseded → bailed at the stale check before touching the engine: no eviction, no create.
     expect(closeTab).not.toHaveBeenCalled();
     expect(createTab).not.toHaveBeenCalled();
+  });
+
+  // Round-49: two rapid roster clicks on DIFFERENT agents at full budget. Their conversationIds
+  // differ, so the per-conversationId open coordinator does NOT collapse them — before the per-leaf
+  // tail they raced: both evictions read getAllTabs and force-closed the SAME LRU victim (the second
+  // close returns false), the second selection reported the cap without opening, and neither opened
+  // while the victim stayed evicted. `selectionOpenTail` makes the second open wait for the first to
+  // fully settle, so it sees the slot the first freed and opens cleanly — one close, only the latest
+  // agent opens, no cap Notice, budget preserved.
+  it('serializes overlapping different-agent selections so neither double-evicts at full budget (Round-49)', async () => {
+    const closeGate = deferred<void>();
+    const closing = new Set<string>();
+    const tabs = [
+      { id: 'tab-1', conversationId: 'conv-1', state: { isStreaming: false } }, // idle LRU victim
+      { id: 'tab-2', conversationId: 'conv-2', state: { isStreaming: false } }, // active
+    ];
+    let firstClose = true;
+    const closeTab = jest.fn(async (tabId: string) => {
+      if (closing.has(tabId)) return false;                                  // a concurrent close of the same tab frees nothing (real TabManager)
+      closing.add(tabId);
+      if (firstClose) { firstClose = false; await closeGate.promise; }       // park the FIRST eviction close so the second selection can queue behind it
+      const index = tabs.findIndex((tab) => tab.id === tabId);
+      closing.delete(tabId);
+      if (index < 0) return false;
+      tabs.splice(index, 1);
+      return true;
+    });
+    const created: string[] = [];
+    const createTab = jest.fn(async (conversationId: string) => {
+      created.push(conversationId);
+      tabs.push({ id: `tab-${conversationId}`, conversationId, state: { isStreaming: false } });
+      return { id: `tab-${conversationId}` };
+    });
+    const manager = {
+      createTab,
+      closeTab,
+      switchToTab: jest.fn(),
+      getAllTabs: () => tabs.slice(),
+      getActiveTabId: () => 'tab-2',
+    };
+    const view = makeView({
+      plugin: {
+        settings: { maxTeamChatDms: 2 },
+        events: { emit: jest.fn() },
+        getTeamChatThreadStore: () => ({
+          get: jest.fn().mockResolvedValue(null),
+          resolveOrCreate: jest.fn((agentId: string) => Promise.resolve(agentId === 'roster:a' ? 'conv-a' : 'conv-b')),
+        }),
+        findConversationAcrossViews: jest.fn(() => null),
+      },
+    });
+    view.dmRecency = ['conv-1', 'conv-2'];
+    view.tabManager = manager;
+
+    const a = view.selectAgent('roster:a'); // generation 1 — enters its open body, parks on the eviction close
+    await flushAsync();                     // let A reach the gated close of the LRU victim (tab-1)
+    const b = view.selectAgent('roster:b'); // generation 2 — queued behind A on the per-leaf tail
+    await flushAsync();                     // B cannot proceed: A still owns the tail
+
+    // Serialization: B's open body has NOT started while A is parked — no second close, no create, no cap Notice.
+    expect(closeTab).toHaveBeenCalledTimes(1);
+    expect(createTab).not.toHaveBeenCalled();
+    expect(mockNotice).not.toHaveBeenCalled();
+
+    closeGate.resolve();                    // A's eviction completes; A is now superseded (gen 2) so it does NOT open
+    await Promise.all([a, b]);
+
+    // Only the latest agent opened, reusing the slot A freed — exactly one eviction, no cap Notice,
+    // and the manager never dipped below budget via a wasted double-close.
+    expect(createTab).toHaveBeenCalledTimes(1);
+    expect(createTab).toHaveBeenCalledWith('conv-b', undefined, { activate: true, kind: 'chat', bypassTabLimit: true });
+    expect(closeTab).toHaveBeenCalledTimes(1);
+    expect(closeTab).toHaveBeenCalledWith('tab-1', true);
+    expect(mockNotice).not.toHaveBeenCalled();
+    expect(tabs).toHaveLength(2);
   });
 
   // Fix A (Round-22) — now scoped to the CROSS-LEAF case: the per-view generation

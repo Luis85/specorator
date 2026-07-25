@@ -80,6 +80,7 @@ function makeView(): any {
   view.tabsRestored = false;
   view.selectedAgentId = null;
   view.selectionGeneration = 0; // class-field initializer is skipped by Object.create
+  view.selectionOpenTail = { tail: Promise.resolve() }; // ditto — the per-leaf open+reconcile tail (Round-49)
   view.dmRecency = [];          // ditto — the LRU recency array (T7)
   view.pendingTabManagerState = null;
   view.pendingPersist = null;
