@@ -332,3 +332,56 @@ describe('isInstallableType', () => {
     expect(isInstallableType('skill')).toBe(true);
   });
 });
+
+describe('parseManifest requires (packages)', () => {
+  const withRequires = (requires: unknown) => ({
+    ...validItem,
+    id: 'agents/pm',
+    type: 'agent',
+    path: 'agents/pm.md',
+    requires,
+  });
+  const dependency = { ...validItem, id: 'skills/brief', type: 'skill', path: 'skills/brief/SKILL.md', files: ['skills/brief/SKILL.md'] };
+
+  it('keeps a well-formed dependency list', () => {
+    const manifest = parseManifest({
+      schemaVersion: 1,
+      items: [withRequires(['skills/brief']), dependency],
+    });
+    expect(manifest?.items[0].requires).toEqual(['skills/brief']);
+  });
+
+  it('strips the field entirely when the item declares none', () => {
+    const manifest = parseManifest({ schemaVersion: 1, items: [validItem, withRequires([])] });
+    // Absent rather than an empty array, so `requires?.length` never reads as
+    // "a package with no members".
+    expect('requires' in (manifest?.items[0] as object)).toBe(false);
+    expect('requires' in (manifest?.items[1] as object)).toBe(false);
+  });
+
+  it('de-duplicates repeated dependencies', () => {
+    const manifest = parseManifest({
+      schemaVersion: 1,
+      items: [withRequires(['skills/brief', 'skills/brief'])],
+    });
+    expect(manifest?.items[0].requires).toEqual(['skills/brief']);
+  });
+
+  it('DROPS an item whose dependency ids are malformed, hostile, or self-referencing', () => {
+    // Dropping is the loud option: silently filtering a bad entry would install a
+    // package missing a piece its item depends on, and mark it installed.
+    const cases: unknown[] = [
+      'skills/brief',                       // not an array
+      ['../../etc/passwd'],                 // traversal, not a catalog id
+      ['__proto__'],                        // prototype-polluting key shape
+      ['Skills/Brief'],                     // wrong case for a catalog id
+      ['agents/pm'],                        // the item itself
+      [42],                                 // not a string
+      Array.from({ length: 51 }, (_, i) => `skills/s${i}`), // over MAX_ITEM_REQUIRES
+    ];
+    for (const requires of cases) {
+      const manifest = parseManifest({ schemaVersion: 1, items: [withRequires(requires)] });
+      expect(manifest?.items).toHaveLength(0);
+    }
+  });
+});

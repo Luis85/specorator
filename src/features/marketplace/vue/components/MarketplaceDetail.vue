@@ -2,14 +2,31 @@
 import { computed, onMounted, ref } from 'vue';
 
 import { t } from '../../../../i18n/i18n';
-import type { MarketplaceItem } from '../../catalogTypes';
+import type { MarketplaceItem, MarketplaceItemType } from '../../catalogTypes';
 import type { SkillInstallTarget, SkillProviderTarget } from '../../skillInstallTargets';
 import { iconForItem, mountLucide } from '../marketplaceIcons';
+import { useDependencyInstalledSet } from '../useDependencyInstalledSet';
+import MarketplaceInstallAction from './MarketplaceInstallAction.vue';
+import MarketplacePackageList from './MarketplacePackageList.vue';
 import MarketplaceSkillInstall from './MarketplaceSkillInstall.vue';
 
 const props = defineProps<{
   item: MarketplaceItem;
   typeLabel: string;
+  /** The item's resolved package dependencies, in install order (empty when it
+   *  stands alone). Installing the item installs these first. */
+  dependencies?: MarketplaceItem[];
+  /** Why the package can't be installed (an absent dependency, a cycle), or null.
+   *  Set means Install is refused — a package installs whole or not at all. */
+  packageError?: string | null;
+  /** Labels for the dependency list's type badges. */
+  typeLabels?: Record<MarketplaceItemType, string>;
+  /** Catalog ids already installed anywhere — the fallback for dependency
+   *  markers when no skill target is being chosen. */
+  installedIds?: ReadonlySet<string>;
+  /** Resolves one package member against one target — skills against that
+   *  provider + scope, everything else against its single vault home. */
+  memberInstalledAt?: (item: MarketplaceItem, target: SkillInstallTarget) => Promise<boolean>;
   body: string | null;
   previewError: boolean;
   installing: boolean;
@@ -20,9 +37,11 @@ const props = defineProps<{
    *  the live settings (Claude ties it to `loadUserSettings`); User scope is hidden
    *  when it's false so a skill isn't written where the runtime won't load it. */
   skillProviderOptions?: { id: SkillProviderTarget; label: string; userScope?: boolean }[];
-  /** Skills only — resolves whether the skill already exists at a given target. */
+  /** Resolves whether everything this install would write is already present at
+   *  a given target — the item's own skill, or a package's skill dependencies,
+   *  checked against the CHOSEN provider + scope rather than "anywhere". */
   skillInstalledChecker?: (target: SkillInstallTarget) => Promise<boolean>;
-  /** Skills only — a value whose identity changes when the store recomputes its
+  /** A value whose identity changes when the store recomputes its
    *  installed state (an external Library skill delete/rename fires
    *  `vaultSkill.changed` → `refreshInstalled`); the per-target check reruns on it
    *  so the button doesn't stay "Installed here" after the skill is removed. */
@@ -34,6 +53,47 @@ const rootEl = ref<HTMLElement | null>(null);
 const nameEl = ref<HTMLElement | null>(null);
 
 const isSkill = computed(() => props.item.type === 'skill');
+const dependencies = computed(() => props.dependencies ?? []);
+const isPackage = computed(() => dependencies.value.length > 0);
+// The provider + scope panel is shown for a skill AND for any item whose package
+// contains skills (an agent that brings the skills it works through) — those
+// skills need a root to install into just the same.
+const needsSkillTarget = computed(
+  () => isSkill.value || dependencies.value.some((dependency) => dependency.type === 'skill'),
+);
+// What "installed" means in the HEADER differs by case. With a target panel the
+// header only reports "installed somewhere" — the per-target truth lives in the
+// panel. Without one the header speaks for the whole package, so every dependency
+// must be present too, and a partially-installed package still offers Install to
+// complete itself.
+const headerInstalled = computed(() =>
+  needsSkillTarget.value
+    ? props.installed
+    : props.installed &&
+      dependencies.value.every((dependency) => props.installedIds?.has(dependency.id) ?? false),
+);
+// The target the panel below currently has selected (null until it publishes one).
+const selectedTarget = ref<SkillInstallTarget | null>(null);
+const targetInstalledIds = useDependencyInstalledSet(
+  () => dependencies.value,
+  () => selectedTarget.value,
+  () => props.memberInstalledAt,
+  () => props.installedSignal,
+);
+// Scope the dependency markers to the destination being configured. Without a
+// target panel there is no destination to scope to, so the catalog-wide set is
+// the honest answer; with one, "installed" must mean "installed HERE" or the
+// list contradicts the button beside it.
+const dependencyInstalledIds = computed(() =>
+  needsSkillTarget.value && selectedTarget.value !== null
+    ? targetInstalledIds.value
+    : (props.installedIds ?? new Set<string>()),
+);
+const installLabel = computed(() =>
+  isPackage.value
+    ? t('marketplace.package.install', { count: dependencies.value.length + 1 })
+    : t('marketplace.install'),
+);
 
 // Nearest scrollable ancestor (Obsidian's `.view-content` in practice), found by
 // overflow rather than a hardcoded host class.
@@ -99,30 +159,16 @@ const safeSourceUrl = computed(() => {
         <span class="specorator-vue-marketplace-card-badge">{{ props.typeLabel }}</span>
       </div>
       <div class="specorator-vue-marketplace-detail-action">
-        <!-- Skills carry their own install panel below (provider + scope), so the
-             header only shows an informational "installed somewhere" chip. -->
-        <template v-if="isSkill">
-          <span
-            v-if="props.installed"
-            class="specorator-vue-marketplace-note"
-          >{{ t('marketplace.installed') }}</span>
-        </template>
-        <template v-else>
-          <span v-if="props.installed">{{ t('marketplace.installed') }}</span>
-          <span
-            v-else-if="!props.installable"
-            class="specorator-vue-marketplace-note"
-          >{{ t('marketplace.notInstallable') }}</span>
-          <button
-            v-else
-            type="button"
-            class="mod-cta"
-            :disabled="props.installing || props.body === null"
-            @click="emit('install')"
-          >
-            {{ props.installing ? t('marketplace.installing') : t('marketplace.install') }}
-          </button>
-        </template>
+        <MarketplaceInstallAction
+          :deferred-to-target-panel="needsSkillTarget"
+          :installed="headerInstalled"
+          :installable="props.installable"
+          :installing="props.installing"
+          :body-loaded="props.body !== null"
+          :blocked="!!props.packageError"
+          :install-label="installLabel"
+          @install="emit('install')"
+        />
       </div>
     </div>
     <div
@@ -141,15 +187,25 @@ const safeSourceUrl = computed(() => {
     >
       {{ props.item.description }}
     </p>
+    <MarketplacePackageList
+      :dependencies="dependencies"
+      :type-labels="props.typeLabels"
+      :installed-ids="dependencyInstalledIds"
+      :error="props.packageError"
+    />
     <MarketplaceSkillInstall
-      v-if="isSkill"
+      v-if="needsSkillTarget"
       :skill-provider-options="props.skillProviderOptions"
       :skill-installed-checker="props.skillInstalledChecker"
       :installing="props.installing"
       :body="props.body"
       :item-id="props.item.id"
       :installed-signal="props.installedSignal"
+      :install-label="installLabel"
+      :disabled="!!props.packageError"
+      :scope-hint="isPackage ? t('marketplace.package.skillTargetHint') : null"
       @install="emit('install', $event)"
+      @update:target="selectedTarget = $event"
     />
     <pre class="specorator-vue-marketplace-body">{{ bodyText }}</pre>
     <div
@@ -216,6 +272,10 @@ const safeSourceUrl = computed(() => {
   color: var(--sp-text-muted);
   user-select: text;
 }
+
+
+
+
 
 .specorator-vue-marketplace-body {
   max-height: 24rem;

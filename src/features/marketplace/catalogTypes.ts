@@ -23,6 +23,14 @@ export interface MarketplaceItem {
    * multi-file skill under the chosen root. Absent for single-file types.
    */
   files?: string[];
+  /**
+   * Catalog ids installed **with** this item — its package. An agent lists the
+   * skills it works through; the installer writes the dependencies first and the
+   * item itself last (see `packageResolution.ts`). Absent when the item stands
+   * alone. Additive to `schemaVersion: 1`: a build that ignores it installs the
+   * item by itself, exactly as before.
+   */
+  requires?: string[];
   tags: string[];
   icon?: string;
   /** Agents only — worker/verifier roles. */
@@ -285,6 +293,50 @@ function hasFilePathCollision(paths: string[]): boolean {
 }
 
 /**
+ * The most direct dependencies one item may declare. Enforced at PARSE time so a
+ * custom catalog can't hand the resolver an unbounded fan-out; the marketplace
+ * repo's validator enforces the same cap at the source.
+ */
+export const MAX_ITEM_REQUIRES = 50;
+
+/**
+ * The item's dependency ids, sanitized: each a safe `<folder>/<slug>` catalog id
+ * (the same shape check the item's own id gets — dependency ids key the
+ * resolver's plain-object-free maps and address a fetch path), de-duplicated,
+ * never the item itself. Returns `null` — DROPPING the item in `parseManifest` —
+ * when `requires` is present but malformed: not an array, over the cap, a
+ * self-reference, or an entry that isn't a catalog id. Dropping is the loud
+ * option, and the same policy skill `files` already gets: silently filtering a
+ * bad entry would install a package MISSING a piece its item depends on and mark
+ * it installed, which is worse than the item being absent from the catalog.
+ */
+function sanitizeRequires(item: MarketplaceItem): string[] | null {
+  if (item.requires === undefined) return [];
+  if (!Array.isArray(item.requires) || item.requires.length > MAX_ITEM_REQUIRES) return null;
+  const seen = new Set<string>();
+  for (const dependency of item.requires) {
+    if (!isSafeCatalogId(dependency) || dependency === item.id) return null;
+    seen.add(dependency);
+  }
+  return [...seen];
+}
+
+/**
+ * Applies `sanitizeRequires`, dropping the item when its `requires` is malformed
+ * and stripping the field entirely when it resolves to nothing — so downstream
+ * code tests `requires?.length` against a real list or `undefined`, never an
+ * empty array that reads as "a package with no members". Mutates the passed
+ * (already-cloned) item.
+ */
+function normalizeItemRequires(item: MarketplaceItem): MarketplaceItem | null {
+  const requires = sanitizeRequires(item);
+  if (requires === null) return null;
+  if (requires.length === 0) delete item.requires;
+  else item.requires = requires;
+  return item;
+}
+
+/**
  * Strips `files` from a non-skill item; for a skill, sanitizes its files and
  * returns null to DROP the skill when any declared file escapes its folder (see
  * `sanitizeSkillFiles`). Mutates the passed (already-cloned) item.
@@ -311,9 +363,10 @@ export function parseManifest(raw: unknown): MarketplaceManifest | null {
   if (manifest.schemaVersion !== MARKETPLACE_MANIFEST_SCHEMA_VERSION) return null;
   if (!Array.isArray(manifest.items)) return null;
 
-  // Normalize description/tags, then resolve `files` per item — a skill whose
-  // declared files escape its folder is dropped (normalizeItemFiles → null)
-  // rather than installed incomplete; non-skills have `files` stripped.
+  // Normalize description/tags, then resolve `files` and `requires` per item — a
+  // skill whose declared files escape its folder, or an item whose dependency ids
+  // are malformed, is dropped (→ null) rather than installed incomplete;
+  // non-skills have `files` stripped.
   const parsed = manifest.items
     .filter(isMarketplaceItem)
     .map((item): MarketplaceItem => ({
@@ -321,7 +374,7 @@ export function parseManifest(raw: unknown): MarketplaceManifest | null {
       description: typeof item.description === 'string' ? item.description : '',
       tags: Array.isArray(item.tags) ? item.tags.map(String) : [],
     }))
-    .map(normalizeItemFiles)
+    .map((item) => (normalizeItemFiles(item) === null ? null : normalizeItemRequires(item)))
     .filter((item): item is MarketplaceItem => item !== null);
 
   // Dedupe by id AND by per-type install key (first wins). Id-dedup keeps the

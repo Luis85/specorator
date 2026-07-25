@@ -13,9 +13,14 @@ import {
 /**
  * Skill install-target panel extracted from `MarketplaceDetail.vue`: the
  * provider + scope selectors, the per-target install button, and the
- * currently-selected-target installed recheck. Rendered only for skills, so it
- * owns the whole `SkillInstallTarget` concern (see the marketplace skills
- * contract). Emits `install` with the chosen target; the detail re-emits it.
+ * currently-selected-target installed recheck. It owns the whole
+ * `SkillInstallTarget` concern (see the marketplace skills contract) for the two
+ * cases that need a skill root — a skill itself, and a **package** whose
+ * dependencies include skills (an agent that brings them). Both drive the button
+ * from the SAME per-target check: `skillInstalledChecker` answers "is everything
+ * this would write already here?" for the selected target, so a package installed
+ * into one provider can still be installed into another.
+ * Emits `install` with the chosen target; the detail re-emits it.
  */
 const props = defineProps<{
   /** Provider targets to offer, labeled from the registry; `userScope` gates
@@ -30,8 +35,21 @@ const props = defineProps<{
   /** Identity changes when the store recomputes installed state, rerunning the
    *  per-target check so the button doesn't stay "Installed here" stale. */
   installedSignal?: unknown;
+  /** Button label when nothing is installed yet — a package says how many items
+   *  one click writes. Defaults to the plain Install label. */
+  installLabel?: string;
+  /** Refuse the install outright (an unresolvable package). */
+  disabled?: boolean;
+  /** Line above the selectors explaining what the chosen root receives; omitted
+   *  for a plain skill, where the panel's meaning is already obvious. */
+  scopeHint?: string | null;
 }>();
-const emit = defineEmits<{ install: [target: SkillInstallTarget] }>();
+const emit = defineEmits<{
+  install: [target: SkillInstallTarget];
+  /** The chosen target, published so the detail can scope its dependency list
+   *  to the same destination this panel installs into. */
+  'update:target': [target: SkillInstallTarget];
+}>();
 
 const provider = ref<SkillProviderTarget>(DEFAULT_SKILL_TARGET.provider);
 const scope = ref<SkillInstallScope>(DEFAULT_SKILL_TARGET.scope);
@@ -72,15 +90,31 @@ watch(
   () => void recheckSelectedInstalled(),
 );
 
+const buttonLabel = computed(() => {
+  if (selectedInstalled.value) return t('marketplace.skill.installedHere');
+  return props.installing ? t('marketplace.installing') : (props.installLabel ?? t('marketplace.install'));
+});
+
 function scopeLabel(value: SkillInstallScope): string {
   return value === 'project' ? t('marketplace.skill.scopeProject') : t('marketplace.skill.scopeUser');
 }
+
+// Publish immediately as well as on change: the detail needs a target from the
+// first render, or its dependency badges would sit unscoped until the user
+// touched a selector.
+watch(selectedTarget, (chosen) => emit('update:target', chosen), { immediate: true });
 
 onMounted(() => void recheckSelectedInstalled());
 </script>
 
 <template>
   <div class="specorator-vue-marketplace-skill-install">
+    <p
+      v-if="scopeHint"
+      class="specorator-vue-marketplace-note"
+    >
+      {{ scopeHint }}
+    </p>
     <div class="specorator-vue-marketplace-skill-fields">
       <label class="specorator-vue-marketplace-skill-field">
         <span>{{ t('marketplace.skill.providerLabel') }}</span>
@@ -105,12 +139,10 @@ onMounted(() => void recheckSelectedInstalled());
       <button
         type="button"
         class="mod-cta specorator-vue-marketplace-skill-install-btn"
-        :disabled="installing || body === null || selectedInstalled"
+        :disabled="installing || body === null || selectedInstalled || disabled === true"
         @click="emit('install', selectedTarget)"
       >
-        {{ selectedInstalled
-          ? t('marketplace.skill.installedHere')
-          : (installing ? t('marketplace.installing') : t('marketplace.install')) }}
+        {{ buttonLabel }}
       </button>
     </div>
     <p

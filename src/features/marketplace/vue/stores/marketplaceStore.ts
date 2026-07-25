@@ -7,6 +7,7 @@ import { asSettingsBag } from '../../../../core/types';
 import type SpecoratorPlugin from '../../../../main';
 import { refreshSkillCatalogBestEffort } from '../../../skills/refreshSkillCatalogBestEffort';
 import { type MarketplaceItem, normalizeInstallSlug } from '../../catalogTypes';
+import type { InstallOutcome, MarketplaceInstallDeps } from '../../installerTypes';
 import { MarketplaceCache } from '../../MarketplaceCache';
 import {
   DEFAULT_MARKETPLACE_BASE_URL,
@@ -16,13 +17,16 @@ import {
 import {
   installedAgentKeys,
   installMarketplaceItem,
-  type InstallOutcome,
-  installSkillItem,
   isItemInstalled,
-  isSkillInstalledAt as skillInstalledAtTarget,
-  type MarketplaceInstallDeps,
 } from '../../MarketplaceInstaller';
+import {
+  installPackage,
+  type PackageInstallContext,
+  type PackageInstallResult,
+} from '../../packageInstall';
+import { describePackageFailure, indexCatalog, resolvePackage } from '../../packageResolution';
 import { assertNoBinarySkillFiles, fetchSkillFiles } from '../../skillFileFetch';
+import { installSkillItem, isSkillInstalledAt as skillInstalledAtTarget } from '../../skillInstall';
 import type {
   SkillInstallScope,
   SkillInstallTarget,
@@ -45,6 +49,81 @@ function assertUserScopeStillInstallable(target: SkillInstallTarget, plugin: Spe
       `${target.provider} can no longer install user-scope skills with the current settings — re-open the skill and choose a target again.`,
     );
   }
+}
+
+/** The vault/home surface every install writes through, resolved from live settings. */
+function buildInstallDeps(p: SpecoratorPlugin, catalogUrl: string): MarketplaceInstallDeps {
+  return {
+    vault: p.app.vault,
+    adapter: p.vaultFileAdapter,
+    // User-scope skill installs write outside the vault (home dir). A fresh
+    // HomeFileAdapter is cheap and stateless (rooted at os.homedir()).
+    homeAdapter: new HomeFileAdapter(),
+    rosterStore: p.agentRosterStore,
+    loopFolder: p.settings.agentBoardLoopFolder || 'Agent Board/loops',
+    templateFolder: p.settings.agentBoardTemplateFolder || 'Agent Board/templates',
+    // Preserve an explicitly-blank folder with `??` (matching main.ts), not
+    // `||`: a blank means the Quick Actions feature is unconfigured, and the
+    // installer refuses the install rather than silently writing to a default
+    // folder the Library never scans.
+    quickActionsFolder: p.settings.quickActionsFolder ?? 'Quick Actions',
+    catalogUrl,
+  };
+}
+
+/**
+ * The skill names to grant an agent on install: every skill in its own package,
+ * normalized to the slug the skill installs under — which is also the name
+ * `VaultSkillAggregator` reports and the roster editor keys on. Empty for a
+ * non-agent, or an agent whose package doesn't resolve (the caller's own
+ * resolution already failed the install in that case).
+ */
+function boundSkillNames(
+  item: MarketplaceItem,
+  byId: ReadonlyMap<string, MarketplaceItem>,
+): string[] {
+  if (item.type !== 'agent') return [];
+  const resolution = resolvePackage(item, byId);
+  if (!resolution.ok) return [];
+  return resolution.dependencies
+    .filter((dependency) => dependency.type === 'skill')
+    .map((dependency) => normalizeInstallSlug(dependency.name));
+}
+
+/**
+ * Assembles the I/O surface `installPackage` writes through. Module-level so the
+ * store's setup stays small; the store passes in the seams that need its own
+ * state (the resolved catalog index, its queued skill install).
+ *
+ * `deps` must be PINNED to the source the install snapshotted, not rebuilt from
+ * the live `source.value`: a package awaits its dependencies before writing the
+ * root, so another leaf can commit a different catalog inside that window — and
+ * an agent whose body came from catalog A must not be stamped with B's URL, or
+ * B's reuse of that catalog id would satisfy A's installed check.
+ */
+function buildPackageContext(seams: {
+  fetchBody: PackageInstallContext['fetchBody'];
+  installSkill: PackageInstallContext['installSkill'];
+  requireSkillTarget: PackageInstallContext['requireSkillTarget'];
+  assertTargetInstallable: PackageInstallContext['assertTargetInstallable'];
+  deps: () => MarketplaceInstallDeps;
+  byId: ReadonlyMap<string, MarketplaceItem>;
+}): PackageInstallContext {
+  return {
+    fetchBody: seams.fetchBody,
+    installSkill: seams.installSkill,
+    installItem: (member, body, options) =>
+      installMarketplaceItem(member, body, seams.deps(), Date.now(), options),
+    boundSkills: (member) => boundSkillNames(member, seams.byId),
+    // Presence judged where the member would actually land: a skill at the chosen
+    // provider + scope, anything else by its own store's natural key.
+    isInstalled: (member, chosen) =>
+      member.type === 'skill'
+        ? skillInstalledAtTarget(member, seams.requireSkillTarget(chosen), seams.deps())
+        : isItemInstalled(member, seams.deps()),
+    requireSkillTarget: seams.requireSkillTarget,
+    assertTargetInstallable: seams.assertTargetInstallable,
+  };
 }
 
 /**
@@ -130,29 +209,12 @@ export const useMarketplaceStore = defineStore('marketplace', () => {
     return new MarketplaceCache(requirePlugin().vaultFileAdapter);
   }
 
+  // `source.value` — the source the DISPLAYED catalog committed to, NOT the live
+  // setting (same as fetchBody/previews): if the user edits marketplaceSourceUrl
+  // without refreshing, an install/scan still belongs to the shown catalog, so
+  // agent provenance is stamped and matched against that source, not the pending one.
   function installDeps(): MarketplaceInstallDeps {
-    const p = requirePlugin();
-    return {
-      vault: p.app.vault,
-      adapter: p.vaultFileAdapter,
-      // User-scope skill installs write outside the vault (home dir). A fresh
-      // HomeFileAdapter is cheap and stateless (rooted at os.homedir()).
-      homeAdapter: new HomeFileAdapter(),
-      rosterStore: p.agentRosterStore,
-      loopFolder: p.settings.agentBoardLoopFolder || 'Agent Board/loops',
-      templateFolder: p.settings.agentBoardTemplateFolder || 'Agent Board/templates',
-      // Preserve an explicitly-blank folder with `??` (matching main.ts), not
-      // `||`: a blank means the Quick Actions feature is unconfigured, and the
-      // installer refuses the install rather than silently writing to a default
-      // folder the Library never scans.
-      quickActionsFolder: p.settings.quickActionsFolder ?? 'Quick Actions',
-      // The source the DISPLAYED catalog committed to (`source.value`), NOT the
-      // live setting — same as fetchBody/previews. If the user edits
-      // marketplaceSourceUrl without refreshing, an install/scan still belongs to
-      // the shown catalog, so its agent provenance must be stamped/matched
-      // against that source, not the pending new one.
-      catalogUrl: source.value,
-    };
+    return buildInstallDeps(requirePlugin(), source.value);
   }
 
   async function refreshInstalled(): Promise<void> {
@@ -261,8 +323,14 @@ export const useMarketplaceStore = defineStore('marketplace', () => {
    * still belong to the old source, so their paths must resolve against it.
    */
   async function fetchBody(item: MarketplaceItem): Promise<string> {
+    return fetchBodyFrom(item, source.value);
+  }
+
+  /** `fetchBody` against an explicit source — the one an in-flight install
+   *  snapshotted, so a concurrent refresh can't split a package across catalogs. */
+  async function fetchBodyFrom(item: MarketplaceItem, src: string): Promise<string> {
     assertNetworkEnabled();
-    return clientFor(source.value).fetchItemBody(item.path);
+    return clientFor(src).fetchItemBody(item.path);
   }
 
   /**
@@ -282,22 +350,40 @@ export const useMarketplaceStore = defineStore('marketplace', () => {
     item: MarketplaceItem,
     body: string,
     target?: SkillInstallTarget,
-  ): Promise<InstallOutcome> {
+  ): Promise<PackageInstallResult> {
     const generation = loadGeneration;
-    const outcome =
-      item.type === 'skill'
-        ? await installSkillAt(item, body, requireSkillTarget(target))
-        : await installMarketplaceItem(item, body, installDeps(), Date.now());
+    // Snapshot the committed source for the WHOLE package: a dependency's body
+    // and the root's reviewed body must come from one catalog, so a concurrent
+    // leaf's refresh mid-install can't mix an agent from one source with skills
+    // from another.
+    const installSource = source.value;
+    const byId = indexCatalog(items.value);
+    const resolution = resolvePackage(item, byId);
+    // A package that can't resolve (a dependency absent from this catalog, a
+    // cycle, an oversized fan-out) installs NOTHING: writing the root alone would
+    // leave an agent bound to skills that were never fetched.
+    if (!resolution.ok) throw new MarketplaceError(describePackageFailure(resolution));
+
+    const ctx = buildPackageContext({
+      fetchBody: fetchBodyFrom,
+      installSkill: installSkillAt,
+      requireSkillTarget,
+      assertTargetInstallable: (chosen) => assertUserScopeStillInstallable(chosen, requirePlugin()),
+      deps: () => buildInstallDeps(requirePlugin(), installSource), // pinned — see buildPackageContext
+      byId,
+    });
+    const result = await installPackage(item, body, resolution.dependencies, target, installSource, ctx);
+
     // If the catalog reloaded during the write (Refresh / source switch, possibly
     // from another leaf), a later refreshInstalled already recomputed installedIds
-    // against the new catalog — blindly adding this id could falsely mark a reused
-    // id installed, so only optimistically mark when the catalog is still current.
+    // against the new catalog — blindly adding these ids could falsely mark a
+    // reused id installed, so only optimistically mark when it's still current.
     if (generation === loadGeneration) {
       const next = new Set(installedIds.value);
-      next.add(item.id);
+      for (const id of result.written) next.add(id);
       installedIds.value = next;
     }
-    return outcome;
+    return result;
   }
 
   function requireSkillTarget(target?: SkillInstallTarget): SkillInstallTarget {
@@ -321,13 +407,14 @@ export const useMarketplaceStore = defineStore('marketplace', () => {
     item: MarketplaceItem,
     skillMdBody: string,
     target: SkillInstallTarget,
+    // The source committed when the install began — snapshotted by the caller so a
+    // queued install that waits here while another leaf reloads/switches the catalog
+    // still fetches from the source its reviewed item/body came from (else the
+    // reviewed marker pairs with supporting files from a different catalog), and so
+    // every member of one package is fetched from the same catalog.
+    installSource: string,
   ): Promise<InstallOutcome> {
     const key = `${target.provider} ${target.scope} ${normalizeInstallSlug(item.name)}`;
-    // Snapshot the committed source NOW, at enqueue — a queued install can wait here
-    // while another leaf reloads/switches the catalog, and its fetches must use the
-    // source its reviewed item/body came from, not whatever is committed after the wait
-    // (else the reviewed marker pairs with supporting files from a different catalog).
-    const installSource = source.value;
     const prior: Promise<unknown> = skillInstallQueue.get(key) ?? Promise.resolve();
     // Chain after any in-flight install to this folder; swallow the prior's error so
     // one failed install doesn't reject the whole queue waiting behind it.

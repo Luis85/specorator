@@ -5,13 +5,9 @@ import type { VaultFileAdapter } from '@/core/storage/VaultFileAdapter';
 import type { AgentRosterStore } from '@/features/agents/roster/AgentRosterStore';
 import type { RosterAgent } from '@/features/agents/roster/rosterTypes';
 import type { MarketplaceItem } from '@/features/marketplace/catalogTypes';
-import {
-  installMarketplaceItem,
-  installSkillItem,
-  isItemInstalled,
-  isSkillInstalledAt,
-  type MarketplaceInstallDeps,
-} from '@/features/marketplace/MarketplaceInstaller';
+import type { MarketplaceInstallDeps } from '@/features/marketplace/installerTypes';
+import { installMarketplaceItem, isItemInstalled } from '@/features/marketplace/MarketplaceInstaller';
+import { installSkillItem, isSkillInstalledAt } from '@/features/marketplace/skillInstall';
 import type { SkillInstallTarget } from '@/features/marketplace/skillInstallTargets';
 
 function makeDeps(overrides: Partial<MarketplaceInstallDeps> = {}) {
@@ -654,5 +650,50 @@ describe('skill installed checks', () => {
     await installSkillItem(skillItem, skillFiles(), { provider: 'codex', scope: 'user' }, deps);
     expect(await isSkillInstalledAt(skillItem, { provider: 'codex', scope: 'user' }, deps)).toBe(true);
     expect(await isSkillInstalledAt(skillItem, { provider: 'claude', scope: 'project' }, deps)).toBe(false);
+  });
+});
+
+describe('installMarketplaceItem package skills', () => {
+  const agentBody = [
+    '---',
+    'type: specorator-agent',
+    'name: "Project Manager"',
+    'description: "Drafts project artifacts."',
+    'roles: ["worker"]',
+    '---',
+    '',
+    'You support a project manager.',
+  ].join('\n');
+  const agentItem: MarketplaceItem = {
+    id: 'agents/project-manager',
+    type: 'agent',
+    name: 'Project Manager',
+    description: 'x',
+    path: 'agents/project-manager.md',
+    tags: [],
+    requires: ['skills/project-brief', 'skills/raid-log'],
+  };
+
+  it('grants an installed agent the skills from its package', async () => {
+    const { deps, agents } = makeDeps();
+    const outcome = await installMarketplaceItem(agentItem, agentBody, deps, 42, {
+      boundSkills: ['project-brief', 'raid-log'],
+    });
+    expect(outcome).toBe('installed');
+    // Name-keyed, matching how the roster editor and VaultSkillAggregator
+    // identify a skill — so the agent can reach them with no manual wiring.
+    expect(agents[0].skills).toEqual(['project-brief', 'raid-log']);
+  });
+
+  it('de-duplicates bound skills and defaults to none', async () => {
+    const { deps, agents } = makeDeps();
+    await installMarketplaceItem(agentItem, agentBody, deps, 42, {
+      boundSkills: ['project-brief', 'project-brief'],
+    });
+    expect(agents[0].skills).toEqual(['project-brief']);
+
+    const plain = makeDeps();
+    await installMarketplaceItem(agentItem, agentBody, plain.deps, 42);
+    expect(plain.agents[0].skills).toEqual([]);
   });
 });

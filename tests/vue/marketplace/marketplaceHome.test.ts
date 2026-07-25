@@ -22,8 +22,10 @@ const sections = [
 describe('MarketplaceHome', () => {
   it('renders one section per type with its count and cards', () => {
     render(MarketplaceHome, { props: { sections, installedIds: new Set<string>(), typeLabels } });
-    expect(screen.getByText('2 items')).toBeTruthy();
-    expect(screen.getByText('1 items')).toBeTruthy();
+    expect(screen.getByText('2 available')).toBeTruthy();
+    // Reads correctly at one, which "1 items" did not — the i18n layer
+    // interpolates only, so the wording has to carry any count.
+    expect(screen.getByText('1 available')).toBeTruthy();
     expect(document.querySelectorAll('.specorator-vue-marketplace-card')).toHaveLength(3);
   });
 

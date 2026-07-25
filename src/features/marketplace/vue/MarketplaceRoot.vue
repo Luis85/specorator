@@ -13,7 +13,10 @@ import {
   type MarketplaceItem,
   type MarketplaceItemType,
 } from '../catalogTypes';
+import { MarketplaceError } from '../MarketplaceCatalogClient';
 import { maybeWarnMarketplaceNetwork } from '../marketplaceNetworkGate';
+import type { PackageInstallResult } from '../packageInstall';
+import { describePackageFailure, indexCatalog, isPackage, resolvePackage } from '../packageResolution';
 import {
   SKILL_PROVIDER_TARGETS,
   type SkillInstallTarget,
@@ -107,6 +110,23 @@ const showHome = computed(
 );
 const showSkeleton = computed(() => store.loading && store.items.length === 0);
 const detailItem = computed(() => store.items.find((item) => item.id === detailId.value) ?? null);
+
+// The open item's package, resolved against the loaded catalog. Only computed for
+// an item that actually declares dependencies, so the common single-item detail
+// never builds the id index. A failure (an absent dependency, a cycle) surfaces in
+// the detail and blocks Install — the store refuses the same resolution anyway, so
+// showing it up front beats failing on click.
+const detailPackage = computed(() => {
+  const item = detailItem.value;
+  if (!item || !isPackage(item)) return null;
+  return resolvePackage(item, indexCatalog(store.items));
+});
+const detailDependencies = computed(() =>
+  detailPackage.value?.ok ? detailPackage.value.dependencies : [],
+);
+const detailPackageError = computed(() =>
+  detailPackage.value && !detailPackage.value.ok ? describePackageFailure(detailPackage.value) : null,
+);
 
 // Fall a stranded category back to Home — whether it leaves a reloaded catalog
 // (counts change), a deep-link selects a category the loaded catalog has zero of
@@ -295,12 +315,40 @@ function providerInstallsUserScope(id: SkillProviderTarget): boolean {
   }
 }
 
-// Passed to the detail so it can reflect whether the CURRENTLY selected target
-// already holds the skill (per-target, unlike the "installed anywhere" badge).
-// Tolerates a null item (vue-tsc doesn't narrow the v-if'd detailItem in bindings).
-function skillInstalledChecker(item: MarketplaceItem | null): (target: SkillInstallTarget) => Promise<boolean> {
-  return (target) =>
-    item ? store.isSkillInstalledAt(item, target.provider, target.scope) : Promise.resolve(false);
+/**
+ * Whether everything the install would write is ALREADY present at the currently
+ * selected target — per-target, unlike the "installed anywhere" card badge.
+ *
+ * Every skill in the set (the item itself, or a package's skill dependencies) is
+ * checked against the CHOSEN provider + scope, because a skill installed into
+ * Claude says nothing about whether Codex has it; non-skill members have a single
+ * vault home, so `installedIds` answers for them. Checking a package's skills
+ * "anywhere" would disable the button after one provider and make the package
+ * uninstallable into a second — which is exactly what a standalone skill's
+ * per-target check already avoids.
+ *
+ * Tolerates a null item (vue-tsc doesn't narrow the v-if'd detailItem in bindings).
+ */
+function targetInstalledChecker(item: MarketplaceItem | null): (target: SkillInstallTarget) => Promise<boolean> {
+  return async (target) => {
+    if (!item) return false;
+    for (const member of [...detailDependencies.value, item]) {
+      if (!(await memberInstalledAt(member, target))) return false;
+    }
+    return true;
+  };
+}
+
+/**
+ * Whether ONE package member is present at `target`. The single definition of
+ * "is this here", shared by the install button's whole-package check above and
+ * the detail's per-dependency markers — so the list can never contradict the
+ * button beside it.
+ */
+function memberInstalledAt(member: MarketplaceItem, target: SkillInstallTarget): Promise<boolean> {
+  return member.type === 'skill'
+    ? store.isSkillInstalledAt(member, target.provider, target.scope)
+    : Promise.resolve(store.installedIds.has(member.id));
 }
 
 async function install(item: MarketplaceItem, target?: SkillInstallTarget): Promise<void> {
@@ -310,17 +358,42 @@ async function install(item: MarketplaceItem, target?: SkillInstallTarget): Prom
   if (body === undefined) return;
   installing[item.id] = true;
   try {
-    const outcome = await store.install(item, body, target);
-    new Notice(
-      outcome === 'installed'
-        ? t('marketplace.installedNotice', { name: item.name })
-        : t('marketplace.skippedNotice', { name: item.name }),
-    );
-  } catch {
-    new Notice(t('marketplace.failedNotice', { name: item.name }));
+    new Notice(installNotice(item, await store.install(item, body, target)));
+  } catch (error) {
+    new Notice(failureNotice(item, error));
   } finally {
     installing[item.id] = false;
   }
+}
+
+/**
+ * What one install actually did. A package reports the dependencies it added, so
+ * "installed" and "completed what was missing" read differently — the plain
+ * single-item notices stay exactly as they were when nothing else was written.
+ */
+function installNotice(item: MarketplaceItem, result: PackageInstallResult): string {
+  const params = { name: item.name, count: result.installed };
+  if (result.outcome === 'installed') {
+    return result.installed > 0
+      ? t('marketplace.installedPackageNotice', params)
+      : t('marketplace.installedNotice', params);
+  }
+  return result.installed > 0
+    ? t('marketplace.completedPackageNotice', params)
+    : t('marketplace.skippedNotice', params);
+}
+
+/**
+ * Why an install failed. A `MarketplaceError` carries a message written FOR the
+ * user and usually names the fix ("re-open the skill and choose a target
+ * again"), so it is worth showing — packages fail in several actionable ways a
+ * bare "couldn't install" would hide. Anything else is an unexpected internal
+ * error whose message would be noise, so it keeps the generic notice.
+ */
+function failureNotice(item: MarketplaceItem, error: unknown): string {
+  return error instanceof MarketplaceError
+    ? t('marketplace.failedNoticeReason', { name: item.name, reason: error.message })
+    : t('marketplace.failedNotice', { name: item.name });
 }
 </script>
 
@@ -384,8 +457,13 @@ async function install(item: MarketplaceItem, target?: SkillInstallTarget): Prom
       :installing="!!installing[detailItem.id]"
       :installed="store.installedIds.has(detailItem.id)"
       :installable="isInstallableType(detailItem.type)"
+      :dependencies="detailDependencies"
+      :package-error="detailPackageError"
+      :type-labels="typeLabels"
+      :installed-ids="store.installedIds"
+      :member-installed-at="memberInstalledAt"
       :skill-provider-options="skillProviderOptions"
-      :skill-installed-checker="skillInstalledChecker(detailItem)"
+      :skill-installed-checker="targetInstalledChecker(detailItem)"
       :installed-signal="store.installedIds"
       @back="backToList"
       @install="(target) => detailItem && install(detailItem, target)"
@@ -406,6 +484,7 @@ async function install(item: MarketplaceItem, target?: SkillInstallTarget): Prom
         v-if="showHome && !showSkeleton"
         :sections="sections"
         :installed-ids="store.installedIds"
+        :member-installed-at="memberInstalledAt"
         :type-labels="typeLabels"
         @open="openItem"
         @see-all="openCategory"
@@ -414,6 +493,7 @@ async function install(item: MarketplaceItem, target?: SkillInstallTarget): Prom
         v-else
         :items="list.rows.value"
         :installed-ids="store.installedIds"
+        :member-installed-at="memberInstalledAt"
         :type-labels="typeLabels"
         :loading="showSkeleton"
         @open="openItem"
