@@ -71,6 +71,25 @@ describe('restoreTeamChatDmTabs — dedup + validate (:225)', () => {
     expect(createTab).not.toHaveBeenCalled();
   });
 
+  // Round-38: an ordinary roster-agent chat has a boundAgentId but surface 'chat' (e.g. from
+  // synced/hand-edited view state). Restoring it into the Team Chat leaf would escape the
+  // surface-keyed DM protections (fork disable, $-resume suppression, DM mapping), so
+  // surface === 'team-chat' is REQUIRED, not merely an alternative to boundAgentId.
+  it('does not restore an ordinary chat that merely has a bound agent (surface !== team-chat) (Round-38)', async () => {
+    const createTab = jest.fn();
+    const boundChat = { surface: 'chat', boundAgentId: 'roster:a', providerId: 'claude' };
+    const plugin = {
+      getConversationSync: jest.fn(() => boundChat),
+      getConversationById: jest.fn().mockResolvedValue(boundChat),
+      findConversationAcrossViews: jest.fn(() => null),
+    } as never;
+    const m = { createTab, hasTab: jest.fn(() => false), switchToTab: jest.fn() } as never;
+
+    await restoreTeamChatDmTabs(plugin, m, layout('c-bound-chat'));
+
+    expect(createTab).not.toHaveBeenCalled();
+  });
+
   it('restores a valid team-chat DM and switches to it (Fix 2)', async () => {
     const created = new Set<string>();
     const createTab = jest.fn().mockImplementation(async () => { created.add('t1'); return { id: 't1' }; });

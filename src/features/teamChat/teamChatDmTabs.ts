@@ -76,13 +76,16 @@ export async function closeRotatedDmTab(
   await stale.view.getTabManager()?.closeTab(stale.tabId, true);
 }
 
-/** A persisted tab is restorable only if its conversation still exists AND is a
- *  team-chat DM (`surface === 'team-chat'` or a bound agent) — otherwise restoring
- *  it would mint a blank unbound chat tab. */
+/** A persisted tab is restorable only if its conversation still exists AND is a real
+ *  team-chat DM — `surface === 'team-chat'` AND a bound agent, both required. An ordinary
+ *  roster-agent chat (`surface: 'chat'` with a boundAgentId, e.g. from synced/hand-edited
+ *  view state) is rejected: restoring it into the Team Chat leaf would escape the
+ *  surface-keyed DM protections (fork disable, `$`-resume suppression, DM mapping), matching
+ *  Round-36's `isConversationUsable` gate. Otherwise restoring mints a stray/unbound tab. */
 function isRestorableTeamChatDm(plugin: SpecoratorPlugin, conversationId: string | null): boolean {
   if (typeof conversationId !== 'string' || conversationId.length === 0) return false;
   const conversation = plugin.getConversationSync(conversationId);
-  return conversation != null && (conversation.surface === 'team-chat' || Boolean(conversation.boundAgentId));
+  return conversation != null && conversation.surface === 'team-chat' && Boolean(conversation.boundAgentId);
 }
 
 /** Old-provider DMs displaced by a provider-change rotation whose replacement open
