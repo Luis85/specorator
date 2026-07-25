@@ -22,10 +22,12 @@ jest.mock('@/utils/cliBinaryLocator', () => ({
   isExistingFile: jest.fn(() => true),
   isExecutableFile: jest.fn(() => true),
   batchShimInvokesNode: jest.fn(() => false),
+  declaredNodeInterpreter: jest.fn(() => null),
 }));
 
 import {
   batchShimInvokesNode,
+  declaredNodeInterpreter,
   findBinaryOnPath,
   isExecutableFile,
   isExistingFile,
@@ -106,6 +108,7 @@ afterEach(() => {
   jest.mocked(isExecutableFile).mockReset();
   jest.mocked(isExecutableFile).mockReturnValue(true);
   jest.mocked(batchShimInvokesNode).mockReset().mockReturnValue(false);
+  jest.mocked(declaredNodeInterpreter).mockReset().mockReturnValue(null);
   jest.mocked(cliPathRequiresNode).mockReset().mockReturnValue(false);
   jest.mocked(findNodeExecutable).mockReset().mockReturnValue('/usr/bin/node');
 });
@@ -345,6 +348,40 @@ describe('detectProviderCli', () => {
     expect(detectProviderCli(makePlugin(), 'det-nobatch')).toMatchObject({
       status: 'unknown',
       cliPath: null,
+    });
+  });
+
+  it('accepts an absolute shebang interpreter that is not on PATH', () => {
+    // `#!/opt/node/bin/node` is launched by the kernel through that exact path;
+    // PATH is never consulted. Requiring a PATH hit would call a script that runs
+    // perfectly `missing-node` and offer to reinstall it.
+    ProviderWorkspaceRegistry.setServices('det-alpha', {
+      cliResolver: stubResolver('/opt/alpha/alpha'),
+    } as never);
+    jest.mocked(cliPathRequiresNode).mockReturnValue(true);
+    jest.mocked(declaredNodeInterpreter).mockReturnValue('/opt/node/bin/node');
+    jest.mocked(findNodeExecutable).mockReturnValue(null);
+
+    expect(detectProviderCli(makePlugin(), 'det-alpha')).toMatchObject({
+      status: 'found',
+      cliPath: '/opt/alpha/alpha',
+    });
+  });
+
+  it('still refuses when that declared interpreter is not runnable', () => {
+    // The named path is the whole answer, so if it is not there the script does
+    // not run — PATH cannot rescue it.
+    ProviderWorkspaceRegistry.setServices('det-alpha', {
+      cliResolver: stubResolver('/opt/alpha/alpha'),
+    } as never);
+    jest.mocked(declaredNodeInterpreter).mockReturnValue('/opt/node/bin/node');
+    jest.mocked(isExecutableFile).mockImplementation(
+      (candidate: string) => candidate !== '/opt/node/bin/node',
+    );
+
+    expect(detectProviderCli(makePlugin(), 'det-alpha')).toMatchObject({
+      status: 'missing',
+      unusable: { path: '/opt/alpha/alpha', reason: 'missing-node' },
     });
   });
 

@@ -40,7 +40,7 @@ surfaces to use the island pattern; this is one.
   key and an install changes no setting, so a cached `null` would outlive the
   install that fixed it). Two provider shapes, split by
   `cliInstall.runtimeFallsBackToPathLookup`:
-  - **Runtime needs a resolved path** (Claude, Codex, Cursor — their resolvers
+  - **Runtime needs a resolved path** (Claude, Cursor — their resolvers
     already scan PATH). A resolver `null` is authoritative → `missing`. With NO
     resolver (workspace init failed, or hasn't run) the status is `unknown` and
     no PATH probe is consulted: `getResolvedProviderCliPath` would still return
@@ -48,10 +48,14 @@ surfaces to use the island pattern; this is one.
     reported as ready.
   - **Runtime spawns the bare command** (OpenCode —
     `getResolvedProviderCliPath('opencode') ?? 'opencode'`, and
-    `resolveOpencodeCliPath` checks configured paths only). Here a resolver
-    `null` means "no pin, use PATH", so the probe IS the authoritative answer;
-    treating it as `missing` would call a working install broken and keep saying
-    so after a successful in-app install.
+    `resolveOpencodeCliPath` checks configured paths only; **Codex** —
+    `CodexLaunchSpecBuilder` spawns `resolvedCliCommand?.trim() || 'codex'`).
+    Here a resolver `null` means "no pin, use PATH", so the probe IS the
+    authoritative answer; treating it as `missing` would call a working install
+    broken and keep saying so after a successful in-app install. Codex's
+    resolver DOES scan PATH, so the two normally agree — but the OS resolves the
+    bare command against the child's PATH at spawn, which is not always the same
+    search, and the runtime's fallback is what the declaration must describe.
   `unknown` is never downgraded to `missing` without an authoritative look —
   claiming a CLI is absent when we could not properly look is worse than
   admitting we don't know.
@@ -65,7 +69,11 @@ surfaces to use the island pattern; this is one.
     every card interaction must not do. The value is picked with the runtime's
     own `pickEnvValueCaseInsensitive` — Windows env names are case-insensitive
     and the LAST declaration wins, so a shared `PATH=` followed by a provider
-    `Path=` must resolve to the provider's.
+    `Path=` must resolve to the provider's. The provider RESOLVERS read the same
+    text the same way since 2026-07-25 (`resolveConfiguredOrDiscoveredCliPath`);
+    an exact-key read there made a resolver answer `null` for a CLI its own
+    runtime launched fine, and put the resolver and this probe in disagreement
+    about one install.
   - **Every candidate becomes a detection through `detectionForCandidate`**,
     whether it came from the resolver or the PATH probe, so a launchability rule
     cannot apply to only one of them. Each rule below was first written on the
@@ -98,6 +106,12 @@ surfaces to use the island pattern; this is one.
       `node "<pkg>/bin/cli.js"`, so cmd.exe starts it whether or not Node is
       reachable and the wrapped command dies immediately — "this provider can
       wrap batch files" is not on its own a promise that anything runs.
+      An entry point that names its interpreter OUTRIGHT is exempt from the PATH
+      search entirely (`declaredNodeInterpreter`): `#!/opt/node/bin/node` is
+      launched by the kernel through that exact path, as is a shim hard-coding an
+      absolute `node.exe`, so only that file's runnability matters. `#!/usr/bin/env
+      node` and a bare `node` in a shim really do resolve through PATH and keep
+      the PATH question.
     - `batch-shim` / `unsupported-form` — a Windows file the provider's spawn
       cannot start. Windows has no shebang support, so what runs is decided by
       HOW each provider spawns, and each declares that as

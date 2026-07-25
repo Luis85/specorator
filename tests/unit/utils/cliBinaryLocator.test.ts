@@ -4,6 +4,7 @@ import * as path from 'path';
 
 import {
   batchShimInvokesNode,
+  declaredNodeInterpreter,
   executableCandidateNames,
   findBinaryOnPath,
   isExecutableFile,
@@ -150,5 +151,58 @@ describe('batchShimInvokesNode', () => {
 
   it('answers false for a path it cannot read rather than throwing', () => {
     expect(batchShimInvokesNode(path.join(dir, 'absent.cmd'))).toBe(false);
+  });
+});
+
+/**
+ * An entry point that names its interpreter outright is launched through that
+ * exact path — the kernel never consults PATH for it — so requiring a PATH hit
+ * would report a script that runs perfectly as `missing-node`.
+ */
+describe('declaredNodeInterpreter', () => {
+  let dir: string;
+
+  beforeEach(() => {
+    dir = fs.mkdtempSync(path.join(os.tmpdir(), 'specorator-interp-'));
+  });
+
+  afterEach(() => {
+    fs.rmSync(dir, { recursive: true, force: true });
+  });
+
+  function write(name: string, body: string): string {
+    const filePath = path.join(dir, name);
+    fs.writeFileSync(filePath, body);
+    return filePath;
+  }
+
+  it('returns the absolute interpreter an absolute shebang names', () => {
+    const script = write('cli', '#!/opt/node/bin/node\nconsole.log(1)\n');
+
+    expect(declaredNodeInterpreter(script)).toBe('/opt/node/bin/node');
+  });
+
+  it('returns null for `env node`, which really does resolve through PATH', () => {
+    // The PATH search stays the right question there — answering with
+    // `/usr/bin/env` would check the wrong file entirely.
+    expect(declaredNodeInterpreter(write('cli', '#!/usr/bin/env node\n'))).toBeNull();
+  });
+
+  it('returns the absolute node a batch shim hard-codes', () => {
+    const shim = write('cli.cmd', '@"C:\\Program Files\\nodejs\\node.exe" "%~dp0\\cli.js" %*');
+
+    expect(declaredNodeInterpreter(shim)).toBe('C:\\Program Files\\nodejs\\node.exe');
+  });
+
+  it('returns null for a shim that invokes a bare `node`', () => {
+    expect(declaredNodeInterpreter(write('cli.cmd', '@node "%~dp0\\cli.js" %*'))).toBeNull();
+  });
+
+  it('returns null for a file with no shebang at all', () => {
+    expect(declaredNodeInterpreter(write('cli', 'binary contents'))).toBeNull();
+  });
+
+  it('returns null for a path it cannot read rather than throwing', () => {
+    expect(declaredNodeInterpreter(path.join(dir, 'absent'))).toBeNull();
   });
 });

@@ -9,6 +9,7 @@ import type { PluginContext } from '@/core/types/PluginContext';
 import { asSettingsBag } from '@/core/types/settings';
 import {
   batchShimInvokesNode,
+  declaredNodeInterpreter,
   executableCandidateNames,
   findBinaryOnPath,
   isExecutableFile,
@@ -160,6 +161,50 @@ type ResolvedPathVerdict =
   | { kind: 'unusable'; reason: ProviderCliUnusableReason }
   | { kind: 'external' };
 
+/**
+ * Is the Node this entry point needs actually reachable?
+ *
+ * Searched on the SAME path the runtime builds for the spawn —
+ * `getEnhancedPath(customPath, cliPath)` also adds the CLI's own directory, so a
+ * Node shipped beside the CLI counts, exactly as it does at launch. Searching the
+ * bare runtime PATH would report `missing-node` for a bundle that launches fine.
+ */
+function nodeReachable(resolved: string, runtimePath: string | undefined): boolean {
+  return findNodeExecutable(getEnhancedPath(runtimePath, resolved)) !== null;
+}
+
+/**
+ * The verdict for a file the KERNEL opens, once its own permission bit is known
+ * good: whatever it reaches one level down must be reachable too.
+ *
+ * Two different questions, and picking the wrong one produces a false verdict in
+ * either direction:
+ * - An entry point that names its interpreter OUTRIGHT (`#!/opt/node/bin/node`,
+ *   or a shim hard-coding an absolute `node.exe`) is launched through that exact
+ *   path and never consults PATH, so only that file's runnability matters. A
+ *   PATH search would call a script that runs perfectly `missing-node`.
+ * - Otherwise Node is reached through PATH — a `#!/usr/bin/env node` script the
+ *   provider spawns directly, or a Windows `.cmd` that runs
+ *   `node <pkg>/bin/cli.js` internally. The batch case is invisible from the
+ *   outside (cmd.exe starts the shim happily and the wrapped command dies), so
+ *   the shim is read.
+ */
+function kernelLaunchedVerdict(
+  resolved: string,
+  runtimePath: string | undefined,
+): ResolvedPathVerdict {
+  const declaredInterpreter = declaredNodeInterpreter(resolved);
+  if (declaredInterpreter !== null) {
+    return isExecutableFile(declaredInterpreter)
+      ? { kind: 'found' }
+      : { kind: 'unusable', reason: 'missing-node' };
+  }
+  const needsNode = cliPathRequiresNode(resolved) || batchShimInvokesNode(resolved);
+  return needsNode && !nodeReachable(resolved, runtimePath)
+    ? { kind: 'unusable', reason: 'missing-node' }
+    : { kind: 'found' };
+}
+
 function classifyResolvedPath(
   providerId: ProviderId,
   resolved: string,
@@ -180,33 +225,19 @@ function classifyResolvedPath(
   // hand-pinned, perfectly working Claude entry point as broken and offer a
   // reinstall for it. What must hold instead is that Node is reachable — the
   // runtime refuses to start without it (`getMissingNodeError`, checked on both
-  // the persistent and cold paths).
-  //
-  // The interpreter is searched on the SAME path the runtime builds for the
-  // spawn — `getEnhancedPath(customPath, cliPath)` also adds the CLI's own
-  // directory, so a Node shipped beside the CLI counts, exactly as it does at
-  // launch. Searching the bare runtime PATH would report `missing-node` for a
-  // bundle the runtime launches fine.
-  const nodeReachable = (): boolean => (
-    findNodeExecutable(getEnhancedPath(runtimePath, resolved)) !== null
-  );
+  // the persistent and cold paths). The provider prefixes Node itself, so the
+  // file's own declared interpreter is irrelevant on this branch.
   if (isNodeLaunched(providerId, resolved)) {
-    return nodeReachable() ? { kind: 'found' } : { kind: 'unusable', reason: 'missing-node' };
+    return nodeReachable(resolved, runtimePath)
+      ? { kind: 'found' }
+      : { kind: 'unusable', reason: 'missing-node' };
   }
 
   // Everything else the kernel opens itself, so the permission bit is the
-  // question — and for anything that reaches Node one level down, that
-  // interpreter must be reachable on top of it: a `#!…node` script the provider
-  // spawns directly, or a Windows `.cmd` shim that runs `node <pkg>/bin/cli.js`
-  // internally. The batch case is invisible from the outside — cmd.exe starts the
-  // shim happily and the wrapped command dies — so the shim is read.
-  if (!isExecutableFile(resolved)) {
-    return { kind: 'unusable', reason: 'not-executable' };
-  }
-  const needsNode = cliPathRequiresNode(resolved) || batchShimInvokesNode(resolved);
-  return needsNode && !nodeReachable()
-    ? { kind: 'unusable', reason: 'missing-node' }
-    : { kind: 'found' };
+  // question first.
+  return isExecutableFile(resolved)
+    ? kernelLaunchedVerdict(resolved, runtimePath)
+    : { kind: 'unusable', reason: 'not-executable' };
 }
 
 /** The identity half of a detection, before anything is known about the binary. */
@@ -289,16 +320,17 @@ function providerPathOverride(
  *
  * Two provider shapes, distinguished by `cliInstall.runtimeFallsBackToPathLookup`:
  *
- * - **Runtime needs a resolved path** (Claude, Codex, Cursor). Their resolvers
- *   already scan PATH, so a `null` is authoritative → `missing`. With no
- *   resolver at all (workspace init failed, or hasn't run), a bare PATH hit
- *   proves nothing — `getResolvedProviderCliPath` still returns `null` and the
- *   runtime refuses to start — so that stays `unknown` rather than a `found`
- *   that would promise a provider the user can't actually use.
- * - **Runtime spawns the bare command** (OpenCode). Its resolver is
- *   configured-paths-only by design, so `null` means "no pin, use PATH" and the
- *   probe is the authoritative answer, not a fallback. That probe searches the
- *   provider's own runtime PATH, not just the host's.
+ * - **Runtime needs a resolved path** (Claude, Cursor). Their resolvers already
+ *   scan PATH, so a `null` is authoritative → `missing`. With no resolver at all
+ *   (workspace init failed, or hasn't run), a bare PATH hit proves nothing —
+ *   `getResolvedProviderCliPath` still returns `null` and the runtime refuses to
+ *   start — so that stays `unknown` rather than a `found` that would promise a
+ *   provider the user can't actually use.
+ * - **Runtime spawns the bare command** (OpenCode, Codex). OpenCode's resolver
+ *   is configured-paths-only by design and Codex's launch spec falls back to a
+ *   bare `codex`, so `null` means "no pin, use PATH" and the probe is the
+ *   authoritative answer, not a fallback. That probe searches the provider's own
+ *   runtime PATH, not just the host's.
  *
  * Whichever way a candidate arrives — resolver or probe — it becomes a detection
  * through `detectionForCandidate`, so the launchability rules apply to both. A

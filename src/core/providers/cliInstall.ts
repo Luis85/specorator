@@ -60,14 +60,19 @@ export interface ProviderCliInstall {
    * from PATH at spawn time.
    *
    * This is what tells onboarding how to read a `null` from the provider's
-   * resolver. OpenCode's resolver is configured-paths-only by design, so `null`
-   * means "no pin, will use PATH" — reporting that as missing would call a
-   * perfectly working install broken (and would keep saying so after a
-   * successful in-app install). Providers whose runtime instead REFUSES to
-   * start without a resolved path (Claude, Codex, Cursor — their resolvers
-   * already scan PATH themselves) leave this unset: for them a `null` is
-   * authoritative, and a bare PATH hit found without a resolver proves nothing
-   * about usability.
+   * resolver. OpenCode's resolver is configured-paths-only by design, and
+   * Codex's launch spec spawns `resolvedCliCommand?.trim() || 'codex'`, so for
+   * both a `null` means "no pin, will use PATH" — reporting that as missing
+   * would call a perfectly working install broken (and would keep saying so
+   * after a successful in-app install). Providers whose runtime instead REFUSES
+   * to start without a resolved path (Claude, Cursor — their resolvers already
+   * scan PATH themselves) leave this unset: for them a `null` is authoritative,
+   * and a bare PATH hit found without a resolver proves nothing about usability.
+   *
+   * Declare what the LAUNCH path actually does, not what the resolver does. A
+   * resolver that scans PATH does not make the runtime's fallback go away —
+   * reading it as "so a null must mean absent" is what left Codex mis-declared,
+   * offering to reinstall a CLI chat was launching fine.
    */
   runtimeFallsBackToPathLookup?: boolean;
   /**

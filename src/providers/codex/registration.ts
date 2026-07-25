@@ -22,6 +22,13 @@ export const codexProviderRegistration: ProviderRegistration = {
     // Spawns its own command, so the shared cmd.exe wrap
     // (`resolveBatchAwareSpawnSpec`) launches a `.cmd`/`.bat` shim.
     launchForms: ['windows-batch'],
+    // `CodexLaunchSpecBuilder` spawns `resolvedCliCommand?.trim() || 'codex'`, so
+    // an unresolved path is not a refusal to start — the OS resolves the bare
+    // command against the child's PATH, which is built from the same environment
+    // text the resolver reads but case-insensitively. Without this declared,
+    // detection took the resolver's `null` as authoritative and offered to
+    // reinstall a CLI that chat launches fine.
+    runtimeFallsBackToPathLookup: true,
     methods: [
       {
         id: 'npm',

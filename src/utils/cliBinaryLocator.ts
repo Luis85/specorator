@@ -1,6 +1,8 @@
 import * as fs from 'fs';
 import * as path from 'path';
 
+import { pickEnvValueCaseInsensitive } from '@/core/providers/subprocessEnvironmentAllowlist';
+
 import { getEnhancedPath, parseEnvironmentVariables } from './env';
 import { expandHomePath, parsePathEntries } from './path';
 
@@ -47,26 +49,60 @@ const BATCH_SHIM_READ_BYTES = 8 * 1024;
  * Only the head is read: the path can be hand-pinned to any file.
  */
 export function batchShimInvokesNode(filePath: string): boolean {
-  if (!BATCH_EXTENSIONS.test(filePath.trim())) {
-    return false;
-  }
+  return BATCH_EXTENSIONS.test(filePath.trim())
+    && NODE_INVOCATION.test(readFileHead(filePath) ?? '');
+}
+
+/** Reads the head of a file, or null if it cannot be read. Bounded: the path is user-supplied. */
+function readFileHead(filePath: string): string | null {
   let fd: number | undefined;
   try {
     fd = fs.openSync(filePath, 'r');
     const buffer = Buffer.alloc(BATCH_SHIM_READ_BYTES);
     const read = fs.readSync(fd, buffer, 0, BATCH_SHIM_READ_BYTES, 0);
-    return NODE_INVOCATION.test(buffer.subarray(0, read).toString('utf8'));
+    return buffer.subarray(0, read).toString('utf8');
   } catch {
-    return false;
+    return null;
   } finally {
     if (fd !== undefined) {
       try {
         fs.closeSync(fd);
       } catch {
-        // Nothing to do; the probe's answer is already decided.
+        // Nothing to do; the caller's answer is already decided.
       }
     }
   }
+}
+
+/** An absolute Node path a batch shim launches directly, e.g. `"C:\Program Files\nodejs\node.exe"`. */
+const ABSOLUTE_NODE_IN_BATCH = /["']((?:[A-Za-z]:[\\/]|\\\\)[^"'\r\n]*node(?:\.exe)?)["']/i;
+/** An absolute interpreter that is Node itself — `/usr/bin/env` is not one. */
+const ABSOLUTE_NODE_SHEBANG = /^\/\S*\/node(?:\.exe)?$/i;
+
+/**
+ * The EXACT Node interpreter an entry point declares, when it names one.
+ *
+ * `#!/opt/node/bin/node` is launched by the kernel through that path and never
+ * consults PATH, so requiring a PATH hit would report a script that runs
+ * perfectly as `missing-node` and offer a reinstall for it. Same for a batch shim
+ * that hard-codes an absolute `node.exe`.
+ *
+ * Returns null for `#!/usr/bin/env node` and for a bare `node` in a shim — those
+ * genuinely resolve through PATH, so the PATH search remains the right question.
+ */
+export function declaredNodeInterpreter(filePath: string): string | null {
+  const head = readFileHead(filePath);
+  if (head === null) {
+    return null;
+  }
+  if (BATCH_EXTENSIONS.test(filePath.trim())) {
+    return ABSOLUTE_NODE_IN_BATCH.exec(head)?.[1] ?? null;
+  }
+  if (!head.startsWith('#!')) {
+    return null;
+  }
+  const [interpreter] = head.split(/\r?\n/)[0].slice(2).trim().split(/\s+/);
+  return interpreter && ABSOLUTE_NODE_SHEBANG.test(interpreter) ? interpreter : null;
 }
 
 /** True when the path points at a real file on THIS host. */
@@ -151,5 +187,10 @@ export function resolveConfiguredOrDiscoveredCliPath(
 ): string | null {
   return resolveConfiguredCliPath(hostnamePath)
     ?? resolveConfiguredCliPath(legacyPath)
-    ?? findBinary(parseEnvironmentVariables(envText || '').PATH);
+    // Case-insensitive, like every runtime that builds the spawn env from the
+    // same text: a provider Environment entered as `Path=` IS the user's PATH on
+    // Windows, so an exact-key read made this resolver answer `null` for a CLI
+    // the runtime then launched fine — and the setup view, reading it
+    // case-insensitively, disagreed with the resolver about the same install.
+    ?? findBinary(pickEnvValueCaseInsensitive(parseEnvironmentVariables(envText || ''), 'PATH'));
 }
