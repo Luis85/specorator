@@ -2,6 +2,7 @@
 import { inject, onMounted, ref } from 'vue';
 
 import { t } from '../../../../i18n/i18n';
+import TeamChatTopBar from './components/TeamChatTopBar.vue';
 import { CALLBACKS_KEY, CONTENT_HOST_KEY } from './keys';
 import { useTeamChatStore } from './stores/teamChatStore';
 import TeamRoster from './TeamRoster.vue';
@@ -32,6 +33,9 @@ onMounted(() => {
       <TeamRoster />
     </aside>
     <section class="specorator-team-chat-main">
+      <!-- Identity + edited-files header for the active DM's agent (self-hides
+           until an agent is selected), pinned above the transcript/composer host. -->
+      <TeamChatTopBar />
       <!-- Phase 4a shows the empty state over a childless host; 4b opens a DM
            into the host and hides this once an agent is selected. -->
       <div
@@ -40,9 +44,12 @@ onMounted(() => {
       >
         {{ t('teamChat.emptyState') }}
       </div>
+      <!-- Shares the sidebar's tab-content-container constraints (flex column +
+           overflow:hidden + min-height:0) so a tall transcript scrolls INSIDE
+           the host instead of pushing the composer past the visible pane. -->
       <div
         ref="hostEl"
-        class="specorator-team-chat-content-host"
+        class="specorator-team-chat-content-host specorator-tab-content-container"
       />
     </section>
   </div>
@@ -63,13 +70,14 @@ onMounted(() => {
 .specorator-team-chat-main {
   position: relative;
   display: flex;
+  flex-direction: column;
   min-height: 0;
   overflow: hidden;
 }
-.specorator-team-chat-content-host {
-  flex: 1 1 auto;
-  min-height: 0;
-}
+/* .specorator-team-chat-content-host takes its flex-column / overflow:hidden /
+   min-height:0 layout from the shared .specorator-tab-content-container class
+   applied in the template (same host contract as the sidebar), so no scoped
+   layout rule is needed here. */
 .specorator-team-chat-empty {
   position: absolute;
   inset: 0;

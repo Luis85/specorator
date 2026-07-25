@@ -155,7 +155,9 @@ describe('TeamChatView — selectedAgentId projects from the active tab', () => 
     const view = makeView();
     view.plugin.getConversationSync = jest.fn(() => ({ boundAgentId: 'roster:a' }));
     view.initTabEngine();
-    view.tabManager.getActiveTab = jest.fn(() => ({ conversationId: 'conv-1' }));
+    // Real TabData carries .state (ChatState); the snapshot's edited-files
+    // projection reads active.state.editedFiles, so the double must include it.
+    view.tabManager.getActiveTab = jest.fn(() => ({ conversationId: 'conv-1', state: { editedFiles: [] } }));
     const observer = jest.fn();
     view.teamChatObservers = new Set([observer]);
 
@@ -165,7 +167,7 @@ describe('TeamChatView — selectedAgentId projects from the active tab', () => 
 
     expect(view.plugin.getConversationSync).toHaveBeenCalledWith('conv-1');
     expect(view.selectedAgentId).toBe('roster:a');
-    expect(observer).toHaveBeenCalledWith({ selectedAgentId: 'roster:a' });
+    expect(observer).toHaveBeenCalledWith({ selectedAgentId: 'roster:a', editedFiles: [] });
   });
 
   it('projects null (empty state) when closing to no active tab', () => {
@@ -183,7 +185,7 @@ describe('TeamChatView — selectedAgentId projects from the active tab', () => 
     const view = makeView();
     view.plugin.getConversationSync = jest.fn(() => ({ boundAgentId: undefined }));
     view.initTabEngine();
-    view.tabManager.getActiveTab = jest.fn(() => ({ conversationId: 'conv-blank' }));
+    view.tabManager.getActiveTab = jest.fn(() => ({ conversationId: 'conv-blank', state: { editedFiles: [] } }));
     view.selectedAgentId = 'roster:stale';
 
     callbacksFor().onTabSwitched();

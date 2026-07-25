@@ -70,6 +70,13 @@ describe('TeamChatRoot (Phase 4a: read-only roster mount)', () => {
     expect((mountHost.mock.calls[0][0] as HTMLElement).classList.contains(
       'specorator-team-chat-content-host',
     )).toBe(true);
+    // Layout fix (Round-25): the DM host must also carry the sidebar's shared
+    // tab-content-container class (flex column + overflow:hidden + min-height:0)
+    // so a tall transcript scrolls INSIDE the host instead of pushing the
+    // composer past the visible pane.
+    expect((mountHost.mock.calls[0][0] as HTMLElement).classList.contains(
+      'specorator-tab-content-container',
+    )).toBe(true);
   });
 
   it('renders roster rows (name + description) from the roster store, read-only', async () => {

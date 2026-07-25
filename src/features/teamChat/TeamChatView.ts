@@ -9,7 +9,10 @@ import { t } from '../../i18n/i18n';
 import type SpecoratorPlugin from '../../main';
 import { tabCountsPayload } from '../chat/events';
 import { TabManager } from '../chat/tabs/TabManager';
+import { openEditedFile } from '../chat/tabs/tabUi';
 import type { PersistedTabManagerState } from '../chat/tabs/types';
+import type { ComposerEditedFile } from '../chat/ui/vue/composer/stores/composerStore';
+import { basename, parentDir } from '../chat/utils/pathLabel';
 import { getTeamChatDmOpenCoordinator } from './TeamChatDmOpenCoordinator';
 import type { TeamChatThreadStore } from './TeamChatThreadStore';
 import { createTeamChatPinia } from './ui/vue/globalPinia';
@@ -437,11 +440,33 @@ export class TeamChatView extends ItemView implements ChatViewHandle {
         };
       },
       onSelectAgent: (agentId) => this.openAgentDm(agentId),
+      onOpenEditedFile: (path) => openEditedFile(this.plugin.app, path),
     };
   }
 
   private buildSnapshot(): TeamChatSnapshot {
-    return { selectedAgentId: this.selectedAgentId };
+    return {
+      selectedAgentId: this.selectedAgentId,
+      editedFiles: this.buildEditedFiles(),
+    };
+  }
+
+  /**
+   * Projects the ACTIVE DM tab's created/edited files onto the display shape the
+   * top bar's `EditedFilesStrip` renders — the same synchronous `tab.state.editedFiles`
+   * → `{ path, changeKind, name, dir }` mapping the composer's `buildEditedFiles`
+   * uses, so both strips read one truth. Re-projected on every `emitTeamChatChange`
+   * (tab switch/create/close/conversation change + streaming stop), so a finished
+   * turn's writes surface in the top bar. Empty when no DM tab is active.
+   */
+  private buildEditedFiles(): ComposerEditedFile[] {
+    const active = this.tabManager?.getActiveTab();
+    return (active?.state.editedFiles ?? []).map((entry) => ({
+      path: entry.path,
+      changeKind: entry.changeKind,
+      name: basename(entry.path),
+      dir: parentDir(entry.path),
+    }));
   }
 
   /** Notifies every registered store observer (mirror of emitChatShellChange). */

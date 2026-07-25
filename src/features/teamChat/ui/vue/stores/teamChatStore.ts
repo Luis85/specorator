@@ -2,22 +2,26 @@ import { defineStore } from 'pinia';
 import { shallowRef } from 'vue';
 
 import type { RosterAgent } from '../../../../agents/roster/rosterTypes';
+import type { ComposerEditedFile } from '../../../../chat/ui/vue/composer/stores/composerStore';
 
 /**
- * Reactive read-model for one Team Chat leaf: the roster projection plus the
- * selected-agent slice the roster reads (row highlight + right-pane empty
- * state). Truth stays in `plugin.agentRosterStore` + the tab engine; the setters
- * replace the whole value (`shallowRef`, no deep-proxy) so a change fires the
- * watch cheaply. `selectedAgentId` is a pure projection of the view's selection
- * — the view owns it and pushes it through `useTeamChatEventRouting`.
+ * Reactive read-model for one Team Chat leaf: the roster projection, the
+ * selected-agent slice (row highlight + right-pane empty state), and the active
+ * DM's edited-files projection the top bar renders. Truth stays in
+ * `plugin.agentRosterStore` + the tab engine; the setters replace the whole
+ * value (`shallowRef`, no deep-proxy) so a change fires the watch cheaply.
+ * `selectedAgentId` is a pure projection of the view's selection — the view owns
+ * it and pushes it (with `editedFiles`) through `useTeamChatEventRouting`. No
+ * separate `activeThread` slice: the top bar resolves the active agent object
+ * from `agents` + `selectedAgentId`, so the fallow ratchet's no-unused-member
+ * rule keeps the store to the two identity fields plus the files projection.
  *
- * Later 4b tasks add the presence slice + an `activeThread` projection when the
- * top bar and presence dots need them; the quality ratchet forbids shipping
- * members no consumer references yet, so they land with their readers.
+ * Presence (idle/busy) lands in a later 4b task with its `PresenceDot` reader.
  */
 export const useTeamChatStore = defineStore('team-chat', () => {
   const agents = shallowRef<RosterAgent[]>([]);
   const selectedAgentId = shallowRef<string | null>(null);
+  const editedFiles = shallowRef<ComposerEditedFile[]>([]);
 
   function setAgents(next: RosterAgent[]): void {
     agents.value = next;
@@ -27,5 +31,9 @@ export const useTeamChatStore = defineStore('team-chat', () => {
     selectedAgentId.value = next;
   }
 
-  return { agents, selectedAgentId, setAgents, setSelected };
+  function setEditedFiles(next: ComposerEditedFile[]): void {
+    editedFiles.value = next;
+  }
+
+  return { agents, selectedAgentId, editedFiles, setAgents, setSelected, setEditedFiles };
 });
