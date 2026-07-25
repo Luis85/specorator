@@ -388,10 +388,10 @@ export class TeamChatView extends ItemView implements ChatViewHandle {
     const generation = options.preserveFocus ? this.selectionGeneration : ++this.selectionGeneration;
     const manager = this.tabManager;
     if (!manager) return; // no engine yet (defensive; clicks only fire post-mount)
-    // Restore still in flight (manager non-null, tabsRestored false): opening now would createTab a
-    // DM restoreState is about to recreate. Queue the LATEST click and drain it after restore, so a
-    // select of an agent absent from the saved layout isn't discarded (Round-48 Fix C; :274/:400).
-    if (!this.tabsRestored) { this.pendingAgentSelection = agentId; return; }
+    // Restore still in flight (tabsRestored false): opening now would createTab a DM restoreState is
+    // about to recreate. Queue only the LATEST FOREGROUND click (drained after restore; Round-48 Fix C,
+    // :274/:400). A background rotation (preserveFocus) hitting this gate is DROPPED, not stored in the foreground-only slot — reconcileRestoredDmProviders re-reconciles it after tabsRestored (:234), so it can't clobber a queued click or lose preserveFocus (Round-54, completes Round-51's rotation decouple).
+    if (!this.tabsRestored) { if (!options.preserveFocus) this.pendingAgentSelection = agentId; return; }
     if (!options.preserveFocus) this.pendingAgentSelection = null; // a FOREGROUND select supersedes a queued restore-time pick (last-click-wins, Round-50); a background rotation runs during reconcile BEFORE the drain, so it must NOT wipe it (Round-51)
     const isStale = options.preserveFocus
       ? () => this.tabManager !== manager                    // rotation: manager-identity ONLY — a foreground click's generation bump must not discard an in-flight rotation (Round-51)
@@ -508,7 +508,8 @@ export class TeamChatView extends ItemView implements ChatViewHandle {
     return {
       ...super.getState(),
       selectedAgentId: this.selectedAgentId ?? undefined,
-      tabManagerState: this.tabManager?.getPersistedState(),
+      // Mid-restore the live manager is only PARTIALLY restored, so persist the FULL saved layout still held in pendingTabManagerState — else a teardown-during-restore overwrites the leaf with a partial layout, dropping un-restored DMs (Round-54 data-loss). :255 nulls it once restore completes → the live manager thereafter.
+      tabManagerState: (this.tabsRestored ? undefined : this.pendingTabManagerState) ?? this.tabManager?.getPersistedState(),
     };
   }
 

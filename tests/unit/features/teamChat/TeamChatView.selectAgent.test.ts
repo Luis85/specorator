@@ -802,4 +802,49 @@ describe('TeamChatView.selectAgent — queued restore-time selection (Round-48 F
     expect(createTab).toHaveBeenCalledWith('conv-c', undefined, { activate: true, kind: 'chat', bypassTabLimit: true });
     expect(view.pendingAgentSelection).toBeNull();
   });
+
+  // Round-54 (:394, completes Round-51's rotation decouple): roster:changed during restore →
+  // reconcileDmsOnRosterChange → refreshProviderAvailability → rotateChangedDmProviders fires
+  // selectAgent(agentId, { preserveFocus: true }). A BACKGROUND rotation hitting the restore gate
+  // must NOT store itself in the foreground-only pendingAgentSelection slot — doing so overwrites a
+  // queued user click AND drops preserveFocus, and the post-restore drain would then replay it as a
+  // FOREGROUND select, unexpectedly activating an inactive restored DM. It is re-reconciled by
+  // reconcileRestoredDmProviders after tabsRestored, so dropping it at the gate is safe.
+  it('a background rotation during restore does NOT queue itself (Round-54)', async () => {
+    const resolveOrCreate = jest.fn().mockResolvedValue('conv-1');
+    const createTab = jest.fn();
+    const view = makeView({
+      plugin: {
+        getTeamChatThreadStore: () => ({ get: jest.fn().mockResolvedValue(null), resolveOrCreate }),
+        findConversationAcrossViews: jest.fn(() => null),
+      },
+    });
+    view.tabManager = { createTab, switchToTab: jest.fn() };
+    view.tabsRestored = false;         // restore still in flight
+    view.pendingAgentSelection = null;
+
+    await view.selectAgent('roster:rotated', { preserveFocus: true });
+
+    // Not queued (foreground-only), and nothing opened mid-restore.
+    expect(view.pendingAgentSelection).toBeNull();
+    expect(resolveOrCreate).not.toHaveBeenCalled();
+    expect(createTab).not.toHaveBeenCalled();
+  });
+
+  it('a background rotation during restore does NOT overwrite an already-queued foreground pick (Round-54)', async () => {
+    const view = makeView({
+      plugin: {
+        getTeamChatThreadStore: () => ({ get: jest.fn().mockResolvedValue(null), resolveOrCreate: jest.fn() }),
+        findConversationAcrossViews: jest.fn(() => null),
+      },
+    });
+    view.tabManager = { createTab: jest.fn(), switchToTab: jest.fn() };
+    view.tabsRestored = false;
+    view.pendingAgentSelection = 'roster:foreground'; // a user click already queued during restore
+
+    await view.selectAgent('roster:rotated', { preserveFocus: true });
+
+    // The queued FOREGROUND click survives — the background rotation did not clobber it (last-foreground-click-wins).
+    expect(view.pendingAgentSelection).toBe('roster:foreground');
+  });
 });

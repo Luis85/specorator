@@ -328,6 +328,36 @@ describe('TeamChatView — persisted DM tab restore', () => {
     expect(restored.pendingTabManagerState).toEqual(twoDmLayout);
   });
 
+  // Round-54 (data-loss, :507): when the leaf closes BEFORE restore completes (large transcripts still
+  // prewarming in restoreTeamChatDmTabs' Promise.all), the live manager holds only a PARTIAL tab set,
+  // but pendingTabManagerState still holds the FULL saved layout (restoreTabs nulls it only AFTER the
+  // await at :255, and tabsRestored flips true synchronously right after — no interleave window). getState
+  // must persist the FULL pending layout while restore is in flight, else the teardown persist overwrites
+  // the saved leaf with a partial layout and the un-restored DMs don't reopen next time.
+  it('getState mid-restore persists the FULL pending layout, not the partial live manager (Round-54)', () => {
+    const view = makeView();
+    view.pendingTabManagerState = twoDmLayout; // held; restore has not consumed it yet
+    view.tabsRestored = false;                 // restore mid-flight
+    // Only ONE of the two DMs prewarmed so far → the live manager reports a PARTIAL layout.
+    const getPersistedState = jest.fn(() => ({ openTabs: [twoDmLayout.openTabs[0]], activeTabId: 't1' }));
+    view.tabManager = { getPersistedState };
+
+    const state = view.getState();
+
+    expect(state.tabManagerState).toEqual(twoDmLayout);
+    expect(getPersistedState).not.toHaveBeenCalled(); // the partial live state is never read mid-restore
+  });
+
+  it('getState after restore completes returns the live manager layout (Round-54)', () => {
+    const view = makeView();
+    view.pendingTabManagerState = null; // consumed by restore (:255)
+    view.tabsRestored = true;
+    const liveLayout = { openTabs: [{ tabId: 't1', conversationId: 'c1', kind: 'chat' as const }], activeTabId: 't1' };
+    view.tabManager = { getPersistedState: jest.fn(() => liveLayout) };
+
+    expect(view.getState().tabManagerState).toEqual(liveLayout);
+  });
+
   it('initTabEngine restores every saved DM tab through the guarded team-chat restore', async () => {
     const view = makeView();
     view.pendingTabManagerState = twoDmLayout;
@@ -726,6 +756,35 @@ describe('TeamChatView — onClose teardown', () => {
     // The runtime-only shutdown path would leak controllers/listeners/islands.
     expect(manager.disposeAllRuntimes).not.toHaveBeenCalled();
     expect(view.getTabManager()).toBeNull();
+  });
+
+  // Round-54 (data-loss, :507): onClose during an in-flight restore persists via getState → the teardown
+  // must write the FULL saved layout still held in pendingTabManagerState, not the partial live manager
+  // state, so the un-restored DMs reopen on the next load instead of being overwritten with a partial set.
+  it('teardown persist during an in-flight restore writes the FULL pending layout (Round-54)', async () => {
+    const view = makeView();
+    const fullLayout = {
+      openTabs: [
+        { tabId: 't1', conversationId: 'c1', kind: 'chat' as const },
+        { tabId: 't2', conversationId: 'c2', kind: 'chat' as const },
+      ],
+      activeTabId: 't2',
+    };
+    view.pendingTabManagerState = fullLayout;
+    view.tabsRestored = false; // restore still prewarming when the leaf closes
+    view.pendingPersist = null;
+    const setViewState = jest.fn().mockResolvedValue(undefined);
+    view.leaf = { setViewState };
+    view.tabManager = {
+      getPersistedState: jest.fn(() => ({ openTabs: [fullLayout.openTabs[0]], activeTabId: 't1' })), // partial
+      destroy: jest.fn().mockResolvedValue(undefined),
+    };
+
+    await view.destroyTabRuntime();
+
+    const persisted = setViewState.mock.calls[0][0].state;
+    expect(persisted.tabManagerState).toEqual(fullLayout); // full layout preserved, not the partial live one
+    expect(view.getTabManager()).toBeNull();               // destroyed after the persist
   });
 
   // Round-28 (:197): teardown must invalidate in-flight selectAgent opens FIRST —
