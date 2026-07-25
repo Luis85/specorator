@@ -585,11 +585,15 @@ describe('SpecoratorPlugin', () => {
         getPersistedState: jest.fn().mockReturnValue({ tabs: [], activeTabId: null }),
         disposeAllRuntimes: jest.fn(),
       };
-      const mockView = {
+      const mockView: Record<string, unknown> = {
         getTabManager: jest.fn().mockReturnValue(mockTabManager),
         invalidateProviderCommandCaches: jest.fn(),
         refreshModelSelector: jest.fn(),
+        getViewType: () => VIEW_TYPE_SPECORATOR,
       };
+      // Sidebar host carrying Obsidian's view.leaf.view back-reference, which the
+      // onunload persist path reads to scope the global tab-state write (T5).
+      mockView.leaf = { view: mockView };
       jest.spyOn(plugin, 'getAllViews').mockReturnValue([mockView as any]);
 
       // A non-model env var does not invalidate the session (changed=false). The
@@ -613,11 +617,15 @@ describe('SpecoratorPlugin', () => {
         getPersistedState: jest.fn().mockReturnValue({ tabs: [], activeTabId: null }),
         disposeAllRuntimes: jest.fn(),
       };
-      const mockView = {
+      const mockView: Record<string, unknown> = {
         getTabManager: jest.fn().mockReturnValue(mockTabManager),
         invalidateProviderCommandCaches: jest.fn(),
         refreshModelSelector: jest.fn(),
+        getViewType: () => VIEW_TYPE_SPECORATOR,
       };
+      // Sidebar host carrying Obsidian's view.leaf.view back-reference, which the
+      // onunload persist path reads to scope the global tab-state write (T5).
+      mockView.leaf = { view: mockView };
       jest.spyOn(plugin, 'getAllViews').mockReturnValue([mockView as any]);
 
       await plugin.applyEnvironmentVariables('provider:claude', 'ANTHROPIC_MODEL=claude-sonnet-4-5');
@@ -1002,8 +1010,17 @@ describe('SpecoratorPlugin', () => {
 
     // A minimal chat-engine host leaf: `getViewType` distinguishes the two hosts
     // and `getTabManager` (a function) is what the duck-type predicates key on.
+    // The view carries a back-reference to its leaf (Obsidian's `view.leaf.view
+    // === view` invariant) so the teardown persist path — PluginLifecycle scopes
+    // the global tab-state write via `view.leaf.view.getViewType()` (T5) — resolves.
     function chatLeaf(viewType: string, tabManager: unknown = fakeTabManager()) {
-      return { view: { getViewType: () => viewType, getTabManager: () => tabManager } };
+      const view: Record<string, unknown> = {
+        getViewType: () => viewType,
+        getTabManager: () => tabManager,
+      };
+      const leaf = { view };
+      view.leaf = leaf;
+      return leaf;
     }
 
     function stubLeavesByType(sidebar: unknown, teamChat: unknown): void {
