@@ -14,6 +14,7 @@ import type { PersistedTabManagerState } from '../chat/tabs/types';
 import type { ComposerEditedFile } from '../chat/ui/vue/composer/stores/composerStore';
 import { basename, parentDir } from '../chat/utils/pathLabel';
 import { getTeamChatDmOpenCoordinator } from './TeamChatDmOpenCoordinator';
+import { projectTeamChatPresence, type TeamChatPresence } from './teamChatPresence';
 import type { TeamChatThreadStore } from './TeamChatThreadStore';
 import { createTeamChatPinia } from './ui/vue/globalPinia';
 import { CALLBACKS_KEY, CONTENT_HOST_KEY, PLUGIN_KEY, VIEW_KEY } from './ui/vue/keys';
@@ -464,7 +465,23 @@ export class TeamChatView extends ItemView implements ChatViewHandle {
     return {
       selectedAgentId: this.selectedAgentId,
       editedFiles: this.buildEditedFiles(),
+      presence: this.buildPresence(),
     };
+  }
+
+  /**
+   * Projects each open DM's idle/busy presence for the roster dots: an agent is
+   * `busy` while its DM tab streams, else absent (the reader defaults absent →
+   * `idle`). Recomputed on every `emitTeamChatChange` — the streaming callback and
+   * a tab close both already emit — from live tab state, mirroring the
+   * `selectedAgentId`/`editedFiles` projections, so a stream start/stop or a DM
+   * close self-heals with no presence map to reconcile.
+   */
+  private buildPresence(): Record<string, TeamChatPresence> {
+    return projectTeamChatPresence(
+      this.tabManager?.getAllTabs() ?? [],
+      (conversationId) => this.plugin.getConversationSync(conversationId)?.boundAgentId ?? null,
+    );
   }
 
   /**

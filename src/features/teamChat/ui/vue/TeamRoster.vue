@@ -4,6 +4,7 @@ import { inject, onMounted, onUnmounted, watch } from 'vue';
 import { t } from '../../../../i18n/i18n';
 import { withErrorNotice } from '../../../../shared/uiAction';
 import { useRosterStore } from '../../../library/vue/stores/rosterStore';
+import PresenceDot from './components/PresenceDot.vue';
 import { CALLBACKS_KEY, PLUGIN_KEY } from './keys';
 import { useTeamChatStore } from './stores/teamChatStore';
 import TeamRosterAvatar from './TeamRosterAvatar.vue';
@@ -108,6 +109,9 @@ function fail(error: unknown): void {
           {{ agent.description || '—' }}
         </div>
       </div>
+      <!-- Live idle/busy dot: `busy` while the agent's DM streams, else idle
+           (agents with no open DM, or an idle DM, are absent from the map). -->
+      <PresenceDot :state="teamChatStore.presence[agent.id] ?? 'idle'" />
     </div>
   </div>
 </template>
@@ -152,6 +156,7 @@ function fail(error: unknown): void {
   outline-offset: -2px;
 }
 .specorator-team-roster-meta {
+  flex: 1 1 auto;
   min-width: 0;
 }
 .specorator-team-roster-name {

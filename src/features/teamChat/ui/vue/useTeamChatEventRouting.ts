@@ -19,6 +19,7 @@ export function useTeamChatEventRouting(subscribe: TeamChatSubscribe): void {
   const dispose = subscribe((snapshot) => {
     store.setSelected(snapshot.selectedAgentId);
     store.setEditedFiles(snapshot.editedFiles);
+    store.setPresence(snapshot.presence);
   });
   onUnmounted(dispose);
 }

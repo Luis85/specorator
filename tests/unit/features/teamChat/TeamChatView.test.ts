@@ -21,6 +21,8 @@ jest.mock('@/features/chat/tabs/TabManager', () => ({
   TabManager: jest.fn().mockImplementation(() => ({
     getPersistedState: jest.fn(() => ({ openTabs: [], activeTabId: null })),
     getActiveTab: jest.fn(() => null),
+    // Read by the snapshot's presence projection (buildPresence → getAllTabs).
+    getAllTabs: jest.fn(() => []),
     restoreState: jest.fn().mockResolvedValue(undefined),
     destroy: jest.fn().mockResolvedValue(undefined),
     invalidateProviderCommandCaches: jest.fn(),
@@ -73,7 +75,7 @@ function makeView(): any {
 
 /** Captures the TabManager callbacks the view wired, so a test can fire
  *  onTabSwitched/onTabClosed/etc. exactly as the real engine would. */
-function callbacksFor(): Record<string, () => void> {
+function callbacksFor(): Record<string, (...args: unknown[]) => void> {
   return (TabManager as jest.Mock).mock.calls[0][3];
 }
 
@@ -167,7 +169,8 @@ describe('TeamChatView — selectedAgentId projects from the active tab', () => 
 
     expect(view.plugin.getConversationSync).toHaveBeenCalledWith('conv-1');
     expect(view.selectedAgentId).toBe('roster:a');
-    expect(observer).toHaveBeenCalledWith({ selectedAgentId: 'roster:a', editedFiles: [] });
+    // Presence is projected alongside the selection; no streaming tab → empty map.
+    expect(observer).toHaveBeenCalledWith({ selectedAgentId: 'roster:a', editedFiles: [], presence: {} });
   });
 
   it('projects null (empty state) when closing to no active tab', () => {
@@ -191,6 +194,64 @@ describe('TeamChatView — selectedAgentId projects from the active tab', () => 
     callbacksFor().onTabSwitched();
 
     expect(view.selectedAgentId).toBeNull();
+  });
+});
+
+describe('TeamChatView — roster presence projection (idle/busy)', () => {
+  beforeEach(() => jest.clearAllMocks());
+
+  it('projects the streaming tab\'s bound agent as busy on onTabStreamingChanged(true)', () => {
+    const view = makeView();
+    view.plugin.getConversationSync = jest.fn(() => ({ boundAgentId: 'roster:a' }));
+    view.initTabEngine();
+    // ChatState flips state.isStreaming before firing the callback, so the live
+    // tab set already shows the streaming DM when the projection recomputes.
+    view.tabManager.getAllTabs = jest.fn(() => [{ conversationId: 'conv-1', state: { isStreaming: true } }]);
+    const observer = jest.fn();
+    view.teamChatObservers = new Set([observer]);
+
+    callbacksFor().onTabStreamingChanged('tab-1', true);
+
+    expect(observer).toHaveBeenCalledWith(
+      expect.objectContaining({ presence: { 'roster:a': 'busy' } }),
+    );
+  });
+
+  it('drops the agent back to idle (absent) when streaming stops', () => {
+    const view = makeView();
+    view.plugin.getConversationSync = jest.fn(() => ({ boundAgentId: 'roster:a' }));
+    view.initTabEngine();
+    view.tabManager.getAllTabs = jest.fn(() => [{ conversationId: 'conv-1', state: { isStreaming: false } }]);
+    const observer = jest.fn();
+    view.teamChatObservers = new Set([observer]);
+
+    callbacksFor().onTabStreamingChanged('tab-1', false);
+
+    // Absent from the map → the roster dot reads idle.
+    expect(observer).toHaveBeenCalledWith(expect.objectContaining({ presence: {} }));
+  });
+
+  it('projects the agent idle when its DM tab closes (tab gone from the set)', () => {
+    const view = makeView();
+    view.initTabEngine();
+    // onTabClosed fires AFTER the engine deletes the tab, so getAllTabs no longer
+    // lists it — the projection naturally recomputes the agent as idle.
+    view.tabManager.getAllTabs = jest.fn(() => []);
+    view.tabManager.getActiveTab = jest.fn(() => null);
+    const observer = jest.fn();
+    view.teamChatObservers = new Set([observer]);
+
+    callbacksFor().onTabClosed('tab-1');
+
+    expect(observer).toHaveBeenCalledWith(expect.objectContaining({ presence: {} }));
+  });
+
+  it('leaves an agent with no open DM tab idle (empty presence map)', () => {
+    const view = makeView();
+    view.initTabEngine();
+    view.tabManager.getAllTabs = jest.fn(() => []);
+
+    expect(view.buildSnapshot().presence).toEqual({});
   });
 });
 

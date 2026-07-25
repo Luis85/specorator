@@ -3,6 +3,7 @@ import { shallowRef } from 'vue';
 
 import type { RosterAgent } from '../../../../agents/roster/rosterTypes';
 import type { ComposerEditedFile } from '../../../../chat/ui/vue/composer/stores/composerStore';
+import type { TeamChatPresence } from '../../../teamChatPresence';
 
 /**
  * Reactive read-model for one Team Chat leaf: the roster projection, the
@@ -16,12 +17,15 @@ import type { ComposerEditedFile } from '../../../../chat/ui/vue/composer/stores
  * from `agents` + `selectedAgentId`, so the fallow ratchet's no-unused-member
  * rule keeps the store to the two identity fields plus the files projection.
  *
- * Presence (idle/busy) lands in a later 4b task with its `PresenceDot` reader.
+ * `presence` is the roster's live idle/busy map, projected off the tab engine's
+ * streaming callbacks (see `projectTeamChatPresence`); it only carries the
+ * currently-busy agents, so `PresenceDot` reads `presence[id] ?? 'idle'`.
  */
 export const useTeamChatStore = defineStore('team-chat', () => {
   const agents = shallowRef<RosterAgent[]>([]);
   const selectedAgentId = shallowRef<string | null>(null);
   const editedFiles = shallowRef<ComposerEditedFile[]>([]);
+  const presence = shallowRef<Record<string, TeamChatPresence>>({});
 
   function setAgents(next: RosterAgent[]): void {
     agents.value = next;
@@ -35,5 +39,18 @@ export const useTeamChatStore = defineStore('team-chat', () => {
     editedFiles.value = next;
   }
 
-  return { agents, selectedAgentId, editedFiles, setAgents, setSelected, setEditedFiles };
+  function setPresence(next: Record<string, TeamChatPresence>): void {
+    presence.value = next;
+  }
+
+  return {
+    agents,
+    selectedAgentId,
+    editedFiles,
+    presence,
+    setAgents,
+    setSelected,
+    setEditedFiles,
+    setPresence,
+  };
 });

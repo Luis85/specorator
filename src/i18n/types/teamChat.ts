@@ -3,4 +3,7 @@ export type TeamChatTranslationKey =
   | 'teamChat.viewTitle'
   | 'teamChat.emptyState'
   | 'teamChat.rosterEmpty'
-  | 'teamChat.tabCapReached';
+  | 'teamChat.tabCapReached'
+  // Roster presence dots (idle / busy)
+  | 'teamChat.presenceIdle'
+  | 'teamChat.presenceBusy';

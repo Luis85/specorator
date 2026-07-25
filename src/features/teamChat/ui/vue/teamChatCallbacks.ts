@@ -1,4 +1,5 @@
 import type { ComposerEditedFile } from '../../../chat/ui/vue/composer/stores/composerStore';
+import type { TeamChatPresence } from '../../teamChatPresence';
 
 /**
  * Vue → engine seam for the Team Chat island (mirror of chat's
@@ -15,6 +16,8 @@ export interface TeamChatSnapshot {
   selectedAgentId: string | null;
   /** The active DM tab's created/edited files (empty when none / no active DM). */
   editedFiles: ComposerEditedFile[];
+  /** Live roster presence: only the currently-busy agents (absent = idle). */
+  presence: Record<string, TeamChatPresence>;
 }
 
 export type TeamChatSubscribe = (onChange: (snapshot: TeamChatSnapshot) => void) => () => void;

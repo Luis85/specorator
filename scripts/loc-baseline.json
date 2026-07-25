@@ -81,6 +81,10 @@
     "src/providers/codex/runtime/codexAppServerTypes.ts": {
       "loc": 535,
       "reason": "Grandfathered hotspot. Track the split in docs/tech-debt/2026-06-07-oversized-modules-and-test-files.md; shrink only."
+    },
+    "src/features/teamChat/TeamChatView.ts": {
+      "loc": 511,
+      "reason": "Team Chat main-area view + engine host (Phase 4a/4b). Grandfathered on crossing the cap in Phase 4b Task 4 (roster presence): +11 for the idle/busy projection wiring - the buildPresence() method (a thin projection mirroring the selectedAgentId/editedFiles ones) + its doc, the snapshot presence field, and the projectTeamChatPresence import. The mapping/projection logic itself lives in features/teamChat/teamChatPresence.ts, keeping the view to callback wiring. Shrink only; track the split (extract the DM-open/selection state machine from the lifecycle + persistence orchestration) in docs/tech-debt/2026-06-07-oversized-modules-and-test-files.md."
     }
   }
 }
