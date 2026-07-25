@@ -277,6 +277,41 @@ describe('pickLruDmEviction', () => {
   it('returns null when the only tab is the active one', () => {
     expect(pickLruDmEviction([{ id: 't-a', conversationId: 'a' }], ['a'], 't-a', 'd')).toBeNull();
   });
+
+  // Round-41 (:451): the LRU victim must NEVER be a DM mid-turn — the eviction close is a
+  // force-close that bypasses TabManager's streaming guard, destroying the runtime and
+  // truncating the background response the spec promises. Skip streaming tabs; prefer an idle
+  // least-recently-used one, and evict nothing (null) when no idle candidate remains.
+  it('skips a streaming LRU tab and evicts the next idle one (Round-41)', () => {
+    // a is the oldest (LRU) but is STREAMING → skip it; next-oldest idle candidate is b.
+    const tabs = [
+      { id: 't-a', conversationId: 'a', state: { isStreaming: true } },
+      { id: 't-b', conversationId: 'b', state: { isStreaming: false } },
+      { id: 't-c', conversationId: 'c', state: { isStreaming: false } },
+    ];
+    expect(pickLruDmEviction(tabs, ['a', 'b', 'c'], 't-c', 'd')).toBe('t-b');
+  });
+
+  it('evicts the idle LRU tab, ignoring a more-recent streaming tab (Round-41)', () => {
+    // a is oldest + idle → evicted; the more-recent b streams but is never chosen anyway.
+    const tabs = [
+      { id: 't-a', conversationId: 'a', state: { isStreaming: false } },
+      { id: 't-b', conversationId: 'b', state: { isStreaming: true } },
+      { id: 't-c', conversationId: 'c', state: { isStreaming: false } },
+    ];
+    expect(pickLruDmEviction(tabs, ['a', 'b', 'c'], 't-c', 'd')).toBe('t-a');
+  });
+
+  it('returns null when every non-active DM is streaming (Round-41)', () => {
+    // c is active; a and b are both mid-turn → no idle victim → no eviction (the open then
+    // falls back to the cap Notice last-resort rather than truncating a live turn).
+    const tabs = [
+      { id: 't-a', conversationId: 'a', state: { isStreaming: true } },
+      { id: 't-b', conversationId: 'b', state: { isStreaming: true } },
+      { id: 't-c', conversationId: 'c', state: { isStreaming: false } },
+    ];
+    expect(pickLruDmEviction(tabs, ['a', 'b', 'c'], 't-c', 'd')).toBeNull();
+  });
 });
 
 describe('closeTeamChatDmTab', () => {
@@ -326,6 +361,26 @@ describe('evictLruDmIfNeeded', () => {
     const plugin = { settings: { maxTeamChatDms: 1 }, events: { emit: jest.fn() } } as never;
 
     await evictLruDmIfNeeded(plugin, { closeTab }, ['a'], 'c');
+
+    expect(closeTab).not.toHaveBeenCalled();
+  });
+
+  it('does not evict when every non-active DM is still streaming (Round-41)', async () => {
+    const closeTab = jest.fn();
+    const plugin = { settings: { maxTeamChatDms: 2 }, events: { emit: jest.fn() } } as never;
+    // At budget (2): t-a is mid-turn, t-b is active → no idle victim → pickLruDmEviction
+    // returns null → nothing is force-closed (the open falls back to createTab's own cap
+    // handling instead of truncating t-a's live turn).
+    const manager = {
+      getAllTabs: () => [
+        { id: 't-a', conversationId: 'a', state: { isStreaming: true } },
+        { id: 't-b', conversationId: 'b', state: { isStreaming: false } },
+      ],
+      getActiveTabId: () => 't-b',
+      closeTab,
+    } as never;
+
+    await evictLruDmIfNeeded(plugin, manager, ['a', 'b'], 'c');
 
     expect(closeTab).not.toHaveBeenCalled();
   });

@@ -251,10 +251,13 @@ export function trimRestorableDmsToBudget<T extends { tabId: string }>(
   });
 }
 
-/** Minimal open-DM-tab shape the LRU reads (satisfied by `TabData`: `id` + `conversationId`). */
+/** Minimal open-DM-tab shape the LRU reads (satisfied by `TabData`: `id`, `conversationId`,
+ *  and `state.isStreaming`). `state` is optional so a lean test double or a torn-down tab that
+ *  omits it is treated as not streaming (evictable). */
 interface DmTabRef {
   readonly id: string;
   readonly conversationId: string | null;
+  readonly state?: { readonly isStreaming?: boolean };
 }
 
 /** Manager surface `evictLruDmIfNeeded` drives. `getAllTabs`/`getActiveTabId` are optional
@@ -273,9 +276,14 @@ export function touchDmRecency(recency: string[], conversationId: string): void 
   recency.push(conversationId);
 }
 
-/** Picks the least-recently-active DM tab to evict — never the active tab, never the one
- *  being opened. A conversation absent from `recency` (never activated) sorts oldest
- *  (`indexOf` → -1). Returns the victim tabId, or null when nothing is evictable. */
+/** Picks the least-recently-active IDLE DM tab to evict — never the active tab, never the one
+ *  being opened, and never a tab mid-turn. Evicting a STREAMING DM would force-close its runtime
+ *  (the eviction close bypasses TabManager's streaming guard) and truncate the background
+ *  response the spec promises (:451), so streaming tabs are skipped in favor of an idle
+ *  least-recently-used one. A conversation absent from `recency` (never activated) sorts oldest
+ *  (`indexOf` → -1). Returns the victim tabId, or null when nothing idle is evictable — e.g.
+ *  every non-active DM is still streaming — so the caller frees no slot and the open falls back
+ *  to the cap Notice rather than killing a live turn. */
 export function pickLruDmEviction(
   tabs: readonly DmTabRef[],
   recency: readonly string[],
@@ -285,7 +293,8 @@ export function pickLruDmEviction(
   const candidates = tabs.filter(
     (tab) => tab.conversationId != null
       && tab.id !== activeTabId
-      && tab.conversationId !== openingConversationId,
+      && tab.conversationId !== openingConversationId
+      && !tab.state?.isStreaming,
   );
   if (candidates.length === 0) return null;
   let victim = candidates[0];

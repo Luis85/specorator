@@ -187,6 +187,38 @@ export class QueuedMessageController {
     const { state } = this.deps;
     if (!state.queuedMessage) return;
 
+    // A Team Chat DM whose agent was removed from the roster is read-only: re-entering
+    // InputController.sendMessage would REJECT the turn (its removed-agent guard) AFTER we
+    // dequeued here, silently dropping the user's follow-up. Gate the SAME predicate BEFORE
+    // clearing the queue so the draft survives intact (self-healing: re-creating the agent lets
+    // it send). The sync surface check short-circuits before any roster lookup, so the sidebar
+    // auto-dequeue path stays microtask-free — only a real DM pays the async roster read.
+    const dmAgentId = teamChatDmBoundAgentId(this.deps.plugin, state.currentConversationId);
+    if (dmAgentId) {
+      void this.dispatchQueuedDmMessage(dmAgentId);
+      return;
+    }
+    this.dispatchQueuedMessage();
+  }
+
+  /** Auto-dequeue for a Team Chat DM: verify the bound agent still exists BEFORE dequeuing. If
+   *  it was removed, leave the queued message intact and notify once (its indicator stays, so
+   *  re-creating the agent lets the follow-up send); else dispatch normally. */
+  private async dispatchQueuedDmMessage(dmAgentId: string): Promise<void> {
+    if ((await this.deps.plugin.agentRosterStore.get(dmAgentId)) === null) {
+      new Notice(t('teamChat.agentRemoved'));
+      return;
+    }
+    this.dispatchQueuedMessage();
+  }
+
+  /** Dequeues the queued snapshot and re-enters the host send path on a macrotask (unchanged
+   *  behavior; the timeout lets the current turn's teardown settle first). Re-checks the queue
+   *  since the DM path awaits a roster read before reaching here. */
+  private dispatchQueuedMessage(): void {
+    const { state } = this.deps;
+    if (!state.queuedMessage) return;
+
     const queuedMessage = this.cloneQueuedMessage(state.queuedMessage);
     state.queuedMessage = null;
     this.updateQueueIndicator();

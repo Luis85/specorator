@@ -221,6 +221,71 @@ describe('QueuedMessageController', () => {
         jest.useRealTimers();
       }
     });
+
+    // Round-41: the AUTO-dequeue clears state.queuedMessage BEFORE re-entering
+    // InputController.sendMessage, whose removed-agent guard then REJECTS the turn — so a
+    // follow-up queued in a DM whose agent was deleted was silently lost. Gate the same
+    // predicate BEFORE dequeuing: leave the queued message intact and notify once.
+    it('preserves the queued follow-up (text + images) when the DM agent was removed (Round-41)', async () => {
+      const { controller, state, requestSend, plugin, rosterGet } = createHarness();
+      (Notice as jest.Mock).mockClear();
+      state.currentConversationId = 'conv-dm';
+      plugin.getConversationSync.mockReturnValue({ surface: 'team-chat', boundAgentId: 'roster:gone' });
+      rosterGet.mockResolvedValue(null); // agent deleted from the roster
+      const images = [{ id: 'img1', name: 'a.png' }] as any;
+      state.queuedMessage = makeQueuedMessage('lost follow-up', { images });
+
+      controller.processQueuedMessage();
+      await Promise.resolve(); // flush the roster-lookup microtask
+      await Promise.resolve();
+
+      // Queue intact (self-healing — re-creating the agent lets it send), nothing dispatched,
+      // user notified once.
+      expect(state.queuedMessage?.content).toBe('lost follow-up');
+      expect(state.queuedMessage?.images).toEqual(images);
+      expect(requestSend).not.toHaveBeenCalled();
+      expect(Notice).toHaveBeenCalledWith(t('teamChat.agentRemoved'));
+    });
+
+    it('dequeues and sends normally in a DM whose bound agent is still present (Round-41)', async () => {
+      jest.useFakeTimers();
+      try {
+        const { controller, state, requestSend, plugin, rosterGet } = createHarness();
+        state.currentConversationId = 'conv-dm';
+        plugin.getConversationSync.mockReturnValue({ surface: 'team-chat', boundAgentId: 'roster:a' });
+        rosterGet.mockResolvedValue({ id: 'roster:a' }); // present
+        state.queuedMessage = makeQueuedMessage('present send');
+
+        controller.processQueuedMessage();
+        await Promise.resolve(); // flush roster lookup → dispatch schedules its setTimeout
+        await Promise.resolve();
+        jest.runAllTimers();
+
+        expect(state.queuedMessage).toBeNull();
+        expect(requestSend).toHaveBeenCalledWith(expect.objectContaining({ content: 'present send' }));
+      } finally {
+        jest.useRealTimers();
+      }
+    });
+
+    it('never consults the roster on a sidebar chat auto-dequeue (Round-41)', () => {
+      jest.useFakeTimers();
+      try {
+        const { controller, state, requestSend, rosterGet } = createHarness();
+        // Default getConversationSync → null → not a DM → the sync surface check short-circuits
+        // before any roster lookup (microtask-free sidebar path).
+        state.queuedMessage = makeQueuedMessage('sidebar dequeue');
+
+        controller.processQueuedMessage();
+        expect(state.queuedMessage).toBeNull(); // cleared synchronously, as before
+        jest.runAllTimers();
+
+        expect(rosterGet).not.toHaveBeenCalled();
+        expect(requestSend).toHaveBeenCalledWith(expect.objectContaining({ content: 'sidebar dequeue' }));
+      } finally {
+        jest.useRealTimers();
+      }
+    });
   });
 
   describe('steering', () => {
