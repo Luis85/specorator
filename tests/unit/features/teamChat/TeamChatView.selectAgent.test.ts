@@ -664,6 +664,66 @@ describe('TeamChatView.selectAgent — resolve → cross-view reuse / create', (
     // No duplicate rotation notice — the mapping did not change on this pass.
     expect(mockNotice).not.toHaveBeenCalled();
   });
+
+  // Round-51 (:334): rotateChangedDmProviders loops selectAgent(agentId, { preserveFocus: true }) over each
+  // mismatched DM. A FOREGROUND roster click landing BETWEEN iterations must NOT be discarded by the next
+  // background rotation. A rotation now READS the generation without bumping it (and its staleness is
+  // manager-identity only), so it can't supersede the in-flight click: all three selections take effect.
+  it('a foreground click between two background rotations is not discarded (Round-51)', async () => {
+    const xGate = deferred<string>();
+    const created: string[] = [];
+    const createTab = jest.fn(async (conversationId: string) => { created.push(conversationId); return { id: `tab-${conversationId}` }; });
+    const view = makeView({
+      plugin: {
+        events: { emit: jest.fn() },
+        getTeamChatThreadStore: () => ({
+          get: jest.fn().mockResolvedValue(null),
+          resolveOrCreate: jest.fn((agentId: string) =>
+            agentId === 'agentX' ? xGate.promise : Promise.resolve(agentId === 'rotA' ? 'conv-a' : 'conv-b')),
+        }),
+        findConversationAcrossViews: jest.fn(() => null),
+      },
+    });
+    view.tabManager = { createTab, switchToTab: jest.fn() };
+
+    await view.selectAgent('rotA', { preserveFocus: true });   // rotation 1 completes (no generation bump)
+    const pX = view.selectAgent('agentX');                     // foreground click lands mid-batch, parks on resolveOrCreate
+    await flushAsync();                                         // let agentX capture the generation and park
+    const pB = view.selectAgent('rotB', { preserveFocus: true }); // rotation 2 runs WHILE agentX is in flight
+    await flushAsync();                                         // rotation 2 opens (buggy code bumped past agentX here)
+    xGate.resolve('conv-x');
+    await Promise.all([pX, pB]);
+
+    // All three opened — neither background rotation superseded the foreground click.
+    expect(created).toEqual(expect.arrayContaining(['conv-a', 'conv-b', 'conv-x']));
+    expect(createTab).toHaveBeenCalledWith('conv-x', undefined, { activate: true, kind: 'chat', bypassTabLimit: true });
+    // Only the foreground click bumped the generation; neither rotation did (else agentX's gen would be stale).
+    expect(view.selectionGeneration).toBe(1);
+  });
+
+  // Round-51 (VERIFY c): a background rotation checks manager-identity ONLY now (it never bumps the
+  // generation), so that manager check must still bail a rotation whose leaf was torn down / replaced
+  // mid-resolve — else it would createTab into a detached or swapped manager.
+  it('a background rotation bails when the manager is replaced mid-resolve (Round-51, manager-identity)', async () => {
+    const resolveConv = deferred<string>();
+    const staleCreate = jest.fn().mockResolvedValue({ id: 'tab-1' });
+    const view = makeView({
+      plugin: {
+        getTeamChatThreadStore: () => ({ get: jest.fn().mockResolvedValue(null), resolveOrCreate: jest.fn(() => resolveConv.promise) }),
+        findConversationAcrossViews: jest.fn(() => null),
+      },
+    });
+    view.tabManager = { createTab: staleCreate, switchToTab: jest.fn() };
+
+    const pending = view.selectAgent('roster:a', { preserveFocus: true });
+    const freshCreate = jest.fn();
+    view.tabManager = { createTab: freshCreate, switchToTab: jest.fn() }; // re-entrant onOpen swapped the engine
+    resolveConv.resolve('conv-1');
+    await pending;
+
+    expect(staleCreate).not.toHaveBeenCalled(); // detached manager untouched
+    expect(freshCreate).not.toHaveBeenCalled(); // this rotation was for the OLD manager
+  });
 });
 
 // Round-48 Fix C (:400): a roster click while tabs are still restoring used to be permanently

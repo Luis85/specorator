@@ -383,28 +383,28 @@ export class TeamChatView extends ItemView implements ChatViewHandle {
    * to it rather than creating a duplicate.
    */
   async selectAgent(agentId: string, options: { preserveFocus?: boolean; displacedConversationId?: string | null } = {}): Promise<void> {
-    // Stamp this selection + capture the current engine, so the async open below
-    // can detect being superseded by a newer select or the engine being torn down
-    // / replaced (see isSelectionStale) and bail before any stale side effect.
-    const generation = ++this.selectionGeneration;
+    // Foreground selects bump the generation so the async open detects a newer select (last-click-wins)
+    // or a torn-down/replaced engine (see isSelectionStale). A BACKGROUND rotation (preserveFocus) READS
+    // it WITHOUT bumping, so it can't supersede a foreground click that lands mid-batch (Round-51).
+    const generation = options.preserveFocus ? this.selectionGeneration : ++this.selectionGeneration;
     const manager = this.tabManager;
-    // No engine yet (defensive; clicks only fire post-mount).
-    if (!manager) return;
+    if (!manager) return; // no engine yet (defensive; clicks only fire post-mount)
     // Restore still in flight (manager non-null, tabsRestored false): opening now would createTab a
     // DM restoreState is about to recreate. Queue the LATEST click and drain it after restore, so a
     // select of an agent absent from the saved layout isn't discarded (Round-48 Fix C; :274/:400).
     if (!this.tabsRestored) { this.pendingAgentSelection = agentId; return; }
-    this.pendingAgentSelection = null; // a proceeding (post-restore) selection supersedes any queued restore-time pick, so the post-reconcile drain can't replay a stale click over this newer one — last-click-wins (Round-50)
-    // Snapshot the currently-mapped DM before resolveOrCreate: a provider change
-    // rotates the mapping to a FRESH conversation (Round-21/26), and the old tab
-    // would otherwise stay attached — its old-provider runtime streaming and holding
-    // a chat slot forever (:283).
+    if (!options.preserveFocus) this.pendingAgentSelection = null; // a FOREGROUND select supersedes a queued restore-time pick (last-click-wins, Round-50); a background rotation runs during reconcile BEFORE the drain, so it must NOT wipe it (Round-51)
+    const isStale = options.preserveFocus
+      ? () => this.tabManager !== manager                    // rotation: manager-identity ONLY — a foreground click's generation bump must not discard an in-flight rotation (Round-51)
+      : () => this.isSelectionStale(generation, manager);    // foreground: generation + manager (unchanged)
+    // Snapshot the currently-mapped DM before resolveOrCreate: a provider change rotates the mapping to a
+    // FRESH conversation (Round-21/26), else the old tab stays attached — its old-provider runtime streaming
+    // and holding a chat slot forever (:283).
     const previousConversationId = await this.getThreadStore().get(agentId);
     const conversationId = await this.getThreadStore().resolveOrCreate(agentId);
-    // Bail if the leaf closed/re-opened or a newer agent was selected while
-    // resolveOrCreate was in flight — otherwise the open would mount into a
-    // detached manager or open a DM the user already navigated away from (:209).
-    if (this.isSelectionStale(generation, manager)) return;
+    // Bail if the leaf closed/re-opened or a newer select superseded this while resolveOrCreate was in
+    // flight — else the open mounts into a detached manager or a DM the user already left (:209).
+    if (isStale()) return;
     // The tab to close/reuse: an explicit displaced id (post-reload rotation cleanup, where get() has
     // already rotated) else the pre-resolve mapping (a live rotation left it behind) (Round-48 Fix A).
     const displaced = options.displacedConversationId ?? previousConversationId;
@@ -418,12 +418,12 @@ export class TeamChatView extends ItemView implements ChatViewHandle {
     await serializeOnTail(this.selectionOpenTail, async () => {
       await getTeamChatDmOpenCoordinator(this.plugin).serialize(conversationId, () =>
         openResolvedTeamChatDm(this.plugin, manager, this.leaf, this.dmRecency, conversationId,
-          { isStale: () => this.isSelectionStale(generation, manager), displacedConversationId: displaced, preserveFocus: options.preserveFocus }));
+          { isStale, displacedConversationId: displaced, preserveFocus: options.preserveFocus }));
       // Reconcile a provider-change rotation: record + notify a fresh rotation, close any displaced
       // old-provider tab once its replacement is open — deferred so a cap-blocked rotation closes on
       // the retry (:361). notify only when the mapping rotated THIS pass (post-reload cleanup: displaced
       // set, mapping unchanged — Round-48). Skip if a newer selection superseded this.
-      if (!this.isSelectionStale(generation, manager)) {
+      if (!isStale()) {
         await reconcileRotation(this.plugin, agentId, displaced, conversationId, { notify: previousConversationId !== conversationId });
       }
     });

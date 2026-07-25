@@ -668,6 +668,42 @@ describe('TeamChatView — persisted DM tab restore', () => {
     expect(selectAgent).not.toHaveBeenCalledWith('roster:B');
     expect(view.pendingAgentSelection).toBeNull();
   });
+
+  // Round-51 (:334): the mirror of the Round-50 case, but a BACKGROUND rotation (preserveFocus) lands during
+  // the reconcile await instead of a foreground click. A rotation runs DURING reconcileRestoredDmProviders,
+  // which is BEFORE the drain, so it must NOT clear the queued restore-time pick (only a foreground selection
+  // supersedes it) — otherwise the drain sees null and the queued pick is lost. The pick still drains.
+  it('a background rotation during the post-restore reconcile does not clobber the queued pick — it still drains (Round-51)', async () => {
+    const reconcileGate = deferred<void>();
+    const view = makeView();
+    view.pendingTabManagerState = null;
+    view.pendingAgentSelection = 'roster:B'; // queued while tabs were still restoring
+    view.tabManager = {
+      getActiveTab: jest.fn(() => null),
+      getAllTabs: jest.fn(() => []),
+      getTabCount: jest.fn(() => 0),
+      countTabsByKind: jest.fn(() => 0),
+    };
+    view.tabsRestored = false;
+    // Parking thread store: the injected rotation reaches the (skipped) clear then awaits get() forever,
+    // keeping this test off the engine machinery (as in the Round-50 sibling above).
+    view.plugin.getTeamChatThreadStore = () => ({ get: () => new Promise(() => {}), resolveOrCreate: jest.fn() });
+    jest.spyOn(view, 'refreshProviderAvailability').mockReturnValue(reconcileGate.promise);
+    const selectAgent = jest.spyOn(view, 'selectAgent'); // call-through: records calls AND runs the real clear-gate
+
+    const restoring = view.restoreTabsThenMarkReady();
+    await flushMicrotasks(); // reach the gated reconcile; tabsRestored is now true
+
+    void view.selectAgent('roster:rotated', { preserveFocus: true }); // background rotation DURING the reconcile await
+    await flushMicrotasks();
+    reconcileGate.resolve();
+    await restoring;
+
+    // The rotation left the queued pick intact (last-click-wins is FOREGROUND-only), so the drain replayed it.
+    expect(selectAgent).toHaveBeenCalledWith('roster:rotated', { preserveFocus: true });
+    expect(selectAgent).toHaveBeenCalledWith('roster:B');
+    expect(view.pendingAgentSelection).toBeNull();
+  });
 });
 
 describe('TeamChatView — onClose teardown', () => {
