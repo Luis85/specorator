@@ -15,7 +15,17 @@ const [placement, setPlacement] = useAppSetting<string>(plugin, 'chatViewPlaceme
 const [maxTabs, setMaxTabsSetting] = useAppSetting<number>(plugin, 'maxChatTabs', 3);
 
 /** Matches the General tab's slider bounds so the two controls can't disagree. */
-const TAB_CHOICES = [3, 4, 5, 6, 8, 10];
+/**
+ * Every cap the General tab's slider accepts (`setLimits(3, 10, 1)`), generated
+ * rather than listed: a subset would render a live value of 7 or 9 as an
+ * unselected control and offer no way back to it.
+ */
+const TAB_CAP_MIN = 3;
+const TAB_CAP_MAX = 10;
+const TAB_CHOICES = Array.from(
+  { length: TAB_CAP_MAX - TAB_CAP_MIN + 1 },
+  (_unused, index) => TAB_CAP_MIN + index,
+);
 
 async function setMaxTabs(value: string): Promise<void> {
   const parsed = Number.parseInt(value, 10);

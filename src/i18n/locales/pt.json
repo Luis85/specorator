@@ -1355,6 +1355,7 @@
       "enabled": "Ativado",
       "foundAt": "Encontrado em",
       "needsCli": "Precisa do comando {command} no seu PATH.",
+      "notExecutable": "Existe um ficheiro em {path}, mas não é executável — corrija as permissões ou reinstale.",
       "authHint": "Ainda não entrou na conta? Execute {command} uma vez num terminal.",
       "docs": "Documentação de instalação",
       "noneEnabled": "Nenhum provedor ativado",
@@ -1376,6 +1377,8 @@
       "cancelled": "Instalação cancelada.",
       "consoleLabel": "Saída do instalador",
       "manualPath": "Definir o caminho manualmente",
+      "manualPathEdit": "Alterar o caminho",
+      "manualPathClearHint": "Deixe em branco para apagar o caminho e voltar à deteção automática.",
       "manualPathPlaceholder": "Caminho completo do executável",
       "manualPathSave": "Guardar caminho"
     },

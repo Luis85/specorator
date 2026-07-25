@@ -8,13 +8,21 @@ import {
 } from '@/features/onboarding/providerDetection';
 
 jest.mock('@/utils/cliBinaryLocator', () => ({
+  // The real `executableCandidateNames`: its per-platform shape is part of what
+  // these tests assert, so stubbing it would assert nothing.
+  ...jest.requireActual('@/utils/cliBinaryLocator'),
   findBinaryOnPath: jest.fn(() => null),
-  // Defaults to "the resolver named a real host file", which is what every
-  // resolver but Codex's WSL branch guarantees; the WSL shape overrides it.
+  // Default to "the resolver named a real, runnable host file", which is what
+  // every resolver but Codex's WSL branch guarantees; the other shapes override.
   isExistingFile: jest.fn(() => true),
+  isExecutableFile: jest.fn(() => true),
 }));
 
-import { findBinaryOnPath, isExistingFile } from '@/utils/cliBinaryLocator';
+import {
+  findBinaryOnPath,
+  isExecutableFile,
+  isExistingFile,
+} from '@/utils/cliBinaryLocator';
 
 // Stub registrations rather than importing `@/providers`: the real aggregator
 // drags the MCP SDK's ESM-only deps in, and detection only needs the registry's
@@ -81,6 +89,8 @@ afterEach(() => {
   jest.mocked(findBinaryOnPath).mockReturnValue(null);
   jest.mocked(isExistingFile).mockReset();
   jest.mocked(isExistingFile).mockReturnValue(true);
+  jest.mocked(isExecutableFile).mockReset();
+  jest.mocked(isExecutableFile).mockReturnValue(true);
 });
 
 function makePlugin(settings: Record<string, unknown> = {}) {
@@ -196,6 +206,22 @@ describe('detectProviderCli', () => {
     expect(candidates.some((name) => name.startsWith('pathcli-alt'))).toBe(true);
   });
 
+  it('does not promise ready for a file that exists but cannot be executed', () => {
+    // A partially installed or copied script without +x fails at spawn with
+    // EACCES, so `found` would promise a launch that cannot happen — and a bare
+    // "not found" would send the user looking for a file they already have.
+    ProviderWorkspaceRegistry.setServices('det-alpha', {
+      cliResolver: stubResolver('/usr/local/bin/alpha'),
+    } as never);
+    jest.mocked(isExecutableFile).mockReturnValue(false);
+
+    expect(detectProviderCli(makePlugin(), 'det-alpha')).toMatchObject({
+      status: 'missing',
+      cliPath: null,
+      unusablePath: '/usr/local/bin/alpha',
+    });
+  });
+
   it('does not promise ready for a command that runs on another target', () => {
     // Codex in WSL mode resolves to a command inside the distro (`codex`, or a
     // configured Linux path). It exists nowhere on this host, and the host PATH
@@ -204,6 +230,7 @@ describe('detectProviderCli', () => {
     ProviderWorkspaceRegistry.setServices('det-alpha', {
       cliResolver: stubResolver('codex'),
     } as never);
+    jest.mocked(isExecutableFile).mockReturnValue(false);
     jest.mocked(isExistingFile).mockReturnValue(false);
 
     expect(detectProviderCli(makePlugin(), 'det-alpha')).toMatchObject({

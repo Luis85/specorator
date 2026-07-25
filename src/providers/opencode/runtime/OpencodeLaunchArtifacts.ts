@@ -7,6 +7,7 @@ import {
   computeSystemPromptKey,
   type SystemPromptSettings,
 } from '../../../core/prompt/mainAgent';
+import { executableCandidateNames, findBinaryOnPath } from '../../../utils/cliBinaryLocator';
 import { expandHomePath } from '../../../utils/path';
 import { resolveBatchAwareSpawnSpec } from '../../../utils/windowsSpawn';
 import { AcpJsonRpcTransport, AcpSubprocess } from '../../acp';
@@ -233,6 +234,33 @@ function requireSettings(
 }
 
 /**
+ * Resolves a bare command name to a runnable file on Windows.
+ *
+ * OpenCode deliberately keeps its resolver configured-paths-only and lets the OS
+ * resolve `opencode` at spawn time. That works on POSIX; on Windows the npm
+ * entry point is `opencode.cmd`, and a batch file cannot be executed directly —
+ * so the bare name has to become a real path before the cmd.exe wrap can fire.
+ * Scoped tightly: win32 only, bare names only (no directory, no extension), and
+ * a failed lookup passes the command through untouched so the OS still gets its
+ * chance. The PATH searched is the runtime's own, not the host's.
+ */
+function resolveWindowsBareCommand(
+  command: string,
+  runtimePath: string | undefined,
+  platform: NodeJS.Platform = process.platform,
+): string {
+  const trimmed = command.trim();
+  if (platform !== 'win32' || !trimmed) {
+    return command;
+  }
+  const isBareName = !path.extname(trimmed) && !/[\\/]/.test(trimmed);
+  if (!isBareName) {
+    return command;
+  }
+  return findBinaryOnPath(executableCandidateNames(trimmed, platform), runtimePath) ?? command;
+}
+
+/**
  * Spawns the `opencode acp` subprocess and wires the JSON-RPC transport over
  * its stdio. Shared by the chat runtime and aux query runner so the launch
  * shape cannot drift between them.
@@ -242,13 +270,13 @@ export function startOpencodeAcpProcess(params: {
   cwd: string;
   env: NodeJS.ProcessEnv;
 }): { process: AcpSubprocess; transport: AcpJsonRpcTransport } {
-  // A configured path on Windows is normally npm's `opencode.cmd`, and Windows
-  // refuses to spawn a batch shim without a shell (Node's CVE-2024-27980 fix) —
-  // so route it through cmd.exe, exactly as the Codex and Cursor launches do.
-  // Anything else, including a bare `opencode` the OS still has to resolve,
-  // passes through unchanged.
+  // Windows refuses to spawn a `.cmd`/`.bat` shim without a shell (Node's
+  // CVE-2024-27980 fix), so batch commands are routed through cmd.exe exactly as
+  // the Codex and Cursor launches do — including the BARE `opencode` this
+  // provider falls back to when no path is pinned, which on Windows is an npm
+  // shim that neither libuv nor CreateProcess can execute directly.
   const spawnSpec = resolveBatchAwareSpawnSpec(
-    params.command,
+    resolveWindowsBareCommand(params.command, params.env.PATH),
     ['acp', `--cwd=${params.cwd}`],
   );
   const process = new AcpSubprocess({

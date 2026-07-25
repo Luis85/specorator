@@ -1355,6 +1355,7 @@
       "enabled": "有効",
       "foundAt": "検出場所",
       "needsCli": "PATH に {command} コマンドが必要です。",
+      "notExecutable": "{path} にファイルはありますが、実行可能ではありません。権限を修正するか再インストールしてください。",
       "authHint": "まだサインインしていない場合は、ターミナルで {command} を一度実行してください。",
       "docs": "インストール手順",
       "noneEnabled": "有効なプロバイダーがありません",
@@ -1376,6 +1377,8 @@
       "cancelled": "インストールを中止しました。",
       "consoleLabel": "インストーラーの出力",
       "manualPath": "パスを手動で指定",
+      "manualPathEdit": "パスを変更",
+      "manualPathClearHint": "空にするとパスが削除され、自動検出に戻ります。",
       "manualPathPlaceholder": "実行ファイルのフルパス",
       "manualPathSave": "パスを保存"
     },

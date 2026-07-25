@@ -40,11 +40,52 @@ const isFound = computed(() => props.detection.status === 'found');
  * `unknown`, leaving the same button offered again.
  */
 const isMissing = computed(() => props.detection.status === 'missing');
-const unknownExplanation = computed(() => (
-  props.detection.unknownReason === 'external-target'
-    ? t('onboarding.providers.unknownExternal', { command: props.detection.cliCommand })
-    : t('onboarding.providers.unknownNoResolver')
+
+/**
+ * The one explanatory line a not-found card shows, resolved here rather than as
+ * nested template conditionals: four cases (unusable file, plain absence, and the
+ * two unknown reasons) each need their own words, and the template stays one
+ * `v-else`.
+ */
+const statusLine = computed<{ state: string; text: string } | null>(() => {
+  const { status, unusablePath, unknownReason, cliCommand } = props.detection;
+  if (status === 'found') {
+    return null;
+  }
+  if (unusablePath) {
+    return {
+      state: 'not-executable',
+      text: t('onboarding.providers.notExecutable', { path: unusablePath }),
+    };
+  }
+  if (status === 'missing') {
+    return { state: 'missing', text: t('onboarding.providers.needsCli', { command: cliCommand }) };
+  }
+  return {
+    state: 'unknown',
+    text: unknownReason === 'external-target'
+      ? t('onboarding.providers.unknownExternal', { command: cliCommand })
+      : t('onboarding.providers.unknownNoResolver'),
+  };
+});
+
+const useLabel = computed(() => (
+  props.detection.enabled
+    ? t('onboarding.providers.enabled')
+    : t('onboarding.providers.use', { name: props.detection.displayName })
 ));
+
+const manualPathLabel = computed(() => (
+  props.detection.pinnedPath
+    ? t('onboarding.install.manualPathEdit')
+    : t('onboarding.install.manualPath')
+));
+
+/** Opens the editor seeded with the current pin, so it can be corrected or cleared. */
+function openManualPath(): void {
+  manualPath.value = props.detection.pinnedPath ?? '';
+  showManualPath.value = true;
+}
 
 function submitPath(): void {
   emit('setPath', manualPath.value);
@@ -84,17 +125,11 @@ function submitPath(): void {
       <code>{{ detection.cliPath }}</code>
     </p>
     <p
-      v-else-if="isMissing"
+      v-else-if="statusLine"
       class="specorator-onboarding-provider-path"
+      :data-state="statusLine.state"
     >
-      {{ t('onboarding.providers.needsCli', { command: detection.cliCommand }) }}
-    </p>
-    <p
-      v-else
-      class="specorator-onboarding-provider-path"
-      data-state="unknown"
-    >
-      {{ unknownExplanation }}
+      {{ statusLine.text }}
     </p>
 
     <label class="specorator-onboarding-provider-use">
@@ -104,11 +139,7 @@ function submitPath(): void {
         :aria-label="t('onboarding.providers.use', { name: detection.displayName })"
         @change="emit('toggle', ($event.target as HTMLInputElement).checked)"
       >
-      <span>{{
-        detection.enabled
-          ? t('onboarding.providers.enabled')
-          : t('onboarding.providers.use', { name: detection.displayName })
-      }}</span>
+      <span>{{ useLabel }}</span>
     </label>
 
     <p
@@ -130,20 +161,19 @@ function submitPath(): void {
 
     <!-- Escape hatch for a binary in a place no PATH scan reaches — including a
          target this host cannot stat at all (Codex in WSL reads its command from
-         the same setting). Offered for `unknown` too, unlike the installer: it
-         names a path instead of assuming one is absent. Writes the host-scoped
-         path, so a synced vault can't push it to another machine. -->
-    <div
-      v-if="!isFound"
-      class="specorator-onboarding-provider-manual"
-    >
+         the same setting). Offered in EVERY state, unlike the installer: it names
+         a path rather than assuming one is absent, and hiding it once something
+         resolves would strip the only control that can correct or clear a wrong
+         pin (blank restores auto-detection) without leaving Setup. Writes the
+         host-scoped path, so a synced vault can't push it to another machine. -->
+    <div class="specorator-onboarding-provider-manual">
       <button
         v-if="!showManualPath"
         type="button"
         data-action="show-manual-path"
-        @click="showManualPath = true"
+        @click="openManualPath()"
       >
-        {{ t('onboarding.install.manualPath') }}
+        {{ manualPathLabel }}
       </button>
       <template v-else>
         <input
@@ -160,6 +190,9 @@ function submitPath(): void {
         >
           {{ t('onboarding.install.manualPathSave') }}
         </button>
+        <p class="specorator-onboarding-provider-path">
+          {{ t('onboarding.install.manualPathClearHint') }}
+        </p>
       </template>
     </div>
   </section>
@@ -236,5 +269,10 @@ function submitPath(): void {
 
 .specorator-onboarding-provider-manual input {
   flex: 1 1 18em;
+}
+
+/* The clear hint belongs under the field, not beside it. */
+.specorator-onboarding-provider-manual p {
+  flex-basis: 100%;
 }
 </style>

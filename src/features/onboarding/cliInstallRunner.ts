@@ -2,7 +2,7 @@ import { spawn } from 'child_process';
 
 import { buildFullSubprocessEnvironment } from '@/core/providers/subprocessEnvironmentAllowlist';
 import type { ProviderCliInstallMethod } from '@/core/providers/types';
-import { findBinaryOnPath } from '@/utils/cliBinaryLocator';
+import { executableCandidateNames, findBinaryOnPath } from '@/utils/cliBinaryLocator';
 import { getEnhancedPath } from '@/utils/env';
 import { forceKillProcessGroup } from '@/utils/processKill';
 import { wrapWindowsCmdShim } from '@/utils/windowsSpawn';
@@ -42,11 +42,11 @@ function isWindowsBatchShim(command: string): boolean {
  * frequently fails to spawn even when a terminal finds it instantly.
  */
 function resolveInstallCommand(command: string): string | null {
-  const candidates = process.platform === 'win32'
-    ? [command, `${command}.cmd`, `${command}.exe`, `${command}.bat`]
-    : [command];
   // findBinaryOnPath scans the same enhanced PATH the child is given below.
-  return findBinaryOnPath(candidates);
+  // Windows candidates exclude the extensionless sh shim npm installs beside
+  // `npm.cmd`: it resolves first by name but cannot be executed, and
+  // `isWindowsBatchShim` would not wrap it, so the install would just fail.
+  return findBinaryOnPath(executableCandidateNames(command));
 }
 
 /**

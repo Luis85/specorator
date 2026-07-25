@@ -1355,6 +1355,7 @@
       "enabled": "已启用",
       "foundAt": "找到于",
       "needsCli": "需要 PATH 中存在 {command} 命令。",
+      "notExecutable": "{path} 处存在文件，但不可执行——请修正权限或重新安装。",
       "authHint": "还没有登录？在终端中运行一次 {command}。",
       "docs": "安装文档",
       "noneEnabled": "尚未启用任何提供方",
@@ -1376,6 +1377,8 @@
       "cancelled": "已取消安装。",
       "consoleLabel": "安装程序输出",
       "manualPath": "手动设置路径",
+      "manualPathEdit": "修改路径",
+      "manualPathClearHint": "留空即可清除路径并恢复自动检测。",
       "manualPathPlaceholder": "可执行文件的完整路径",
       "manualPathSave": "保存路径"
     },

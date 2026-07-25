@@ -1355,6 +1355,7 @@
       "enabled": "已啟用",
       "foundAt": "找到於",
       "needsCli": "需要 PATH 中存在 {command} 指令。",
+      "notExecutable": "{path} 有檔案，但無法執行——請修正權限或重新安裝。",
       "authHint": "還沒登入？在終端機執行一次 {command}。",
       "docs": "安裝文件",
       "noneEnabled": "尚未啟用任何提供者",
@@ -1376,6 +1377,8 @@
       "cancelled": "已取消安裝。",
       "consoleLabel": "安裝程式輸出",
       "manualPath": "手動設定路徑",
+      "manualPathEdit": "修改路徑",
+      "manualPathClearHint": "留空即可清除路徑並恢復自動偵測。",
       "manualPathPlaceholder": "執行檔的完整路徑",
       "manualPathSave": "儲存路徑"
     },

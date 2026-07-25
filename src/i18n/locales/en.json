@@ -1355,6 +1355,7 @@
       "enabled": "Enabled",
       "foundAt": "Found at",
       "needsCli": "Needs the {command} command on your PATH.",
+      "notExecutable": "There's a file at {path}, but it isn't executable — fix its permissions or reinstall.",
       "authHint": "Not signed in yet? Run {command} once in a terminal.",
       "docs": "Install docs",
       "noneEnabled": "No provider enabled yet",
@@ -1376,6 +1377,8 @@
       "cancelled": "Install cancelled.",
       "consoleLabel": "Installer output",
       "manualPath": "Set the path manually",
+      "manualPathEdit": "Change the path",
+      "manualPathClearHint": "Leave blank to clear the path and go back to auto-detection.",
       "manualPathPlaceholder": "Full path to the executable",
       "manualPathSave": "Save path"
     },

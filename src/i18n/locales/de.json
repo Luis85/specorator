@@ -1355,6 +1355,7 @@
       "enabled": "Aktiviert",
       "foundAt": "Gefunden unter",
       "needsCli": "Benötigt den Befehl {command} in deinem PATH.",
+      "notExecutable": "Unter {path} liegt eine Datei, die aber nicht ausführbar ist – korrigiere die Berechtigungen oder installiere neu.",
       "authHint": "Noch nicht angemeldet? Führe {command} einmal im Terminal aus.",
       "docs": "Installationsdoku",
       "noneEnabled": "Noch kein Anbieter aktiviert",
@@ -1376,6 +1377,8 @@
       "cancelled": "Installation abgebrochen.",
       "consoleLabel": "Installationsausgabe",
       "manualPath": "Pfad manuell setzen",
+      "manualPathEdit": "Pfad ändern",
+      "manualPathClearHint": "Leer lassen, um den Pfad zu entfernen und wieder automatisch zu erkennen.",
       "manualPathPlaceholder": "Vollständiger Pfad zur ausführbaren Datei",
       "manualPathSave": "Pfad speichern"
     },

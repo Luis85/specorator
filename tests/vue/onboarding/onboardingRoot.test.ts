@@ -35,6 +35,7 @@ function detection(overrides: Partial<ProviderCliDetection> = {}): ProviderCliDe
     cliCommand: 'alpha',
     status: 'found',
     cliPath: '/usr/local/bin/alpha',
+    pinnedPath: null,
     enabled: false,
     ...overrides,
   };

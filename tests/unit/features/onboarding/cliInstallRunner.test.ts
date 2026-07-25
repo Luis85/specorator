@@ -3,7 +3,12 @@ import { EventEmitter } from 'events';
 import type { ProviderCliInstallMethod } from '@/core/providers/types';
 
 jest.mock('child_process', () => ({ spawn: jest.fn() }));
-jest.mock('@/utils/cliBinaryLocator', () => ({ findBinaryOnPath: jest.fn(() => '/usr/bin/npm') }));
+jest.mock('@/utils/cliBinaryLocator', () => ({
+  findBinaryOnPath: jest.fn(() => '/usr/bin/npm'),
+  // Sentinel: the per-platform names are the helper's own contract, tested in
+  // tests/unit/utils/cliBinaryLocator.test.ts.
+  executableCandidateNames: jest.fn((base: string) => [`${base}.runnable`]),
+}));
 jest.mock('@/utils/env', () => ({ getEnhancedPath: jest.fn(() => '/enhanced/bin:/usr/bin') }));
 jest.mock('@/utils/processKill', () => ({
   forceKillProcessGroup: jest.fn(async () => {}),
@@ -17,7 +22,7 @@ import {
   platformInstallMethods,
   runCliInstall,
 } from '@/features/onboarding/cliInstallRunner';
-import { findBinaryOnPath } from '@/utils/cliBinaryLocator';
+import { executableCandidateNames, findBinaryOnPath } from '@/utils/cliBinaryLocator';
 import { forceKillProcessGroup } from '@/utils/processKill';
 
 class FakeChild extends EventEmitter {
@@ -52,6 +57,7 @@ function mountChild(): FakeChild {
 beforeEach(() => {
   jest.mocked(forceKillProcessGroup).mockClear();
   jest.mocked(spawn).mockReset();
+  jest.mocked(executableCandidateNames).mockClear();
   jest.mocked(findBinaryOnPath).mockReset();
   jest.mocked(findBinaryOnPath).mockReturnValue('/usr/bin/npm');
 });
@@ -98,6 +104,24 @@ describe('runCliInstall', () => {
     expect(result.ok).toBe(false);
     expect(result.error).toContain('npm');
     expect(spawn).not.toHaveBeenCalled();
+  });
+
+  it('looks the package manager up through the shared executable-candidate names', async () => {
+    // Which names are runnable is platform knowledge that already exists for
+    // provider detection: on Windows npm ships an sh shim beside `npm.cmd` that
+    // resolves first by name but cannot be executed — and the batch-shim check
+    // would not wrap it, so the install would fail on a working machine.
+    // `executableCandidateNames` owns that (asserted per platform in
+    // tests/unit/utils/cliBinaryLocator.test.ts); this pins that the installer
+    // goes through it rather than hand-rolling an order.
+    const child = mountChild();
+
+    const handle = runCliInstall(npmMethod, { onOutput: () => {} });
+    child.emit('close', 0);
+    await handle.done;
+
+    expect(executableCandidateNames).toHaveBeenCalledWith('npm');
+    expect(findBinaryOnPath).toHaveBeenCalledWith(['npm.runnable']);
   });
 
   it('streams stdout and stderr through one output channel', async () => {

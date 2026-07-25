@@ -33,6 +33,7 @@ function detection(overrides: Partial<ProviderCliDetection> = {}): ProviderCliDe
     cliCommand: 'alpha',
     status: 'found',
     cliPath: '/usr/local/bin/alpha',
+    pinnedPath: null,
     enabled: false,
     ...overrides,
   };
@@ -127,6 +128,20 @@ describe('ProvidersStep', () => {
     expect(container.textContent).not.toContain('on your PATH');
   });
 
+  it('names a file that exists but cannot be executed, rather than claiming nothing is there', async () => {
+    // A copied or partially installed script without +x: "needs the command on
+    // your PATH" would send the user looking for a file they already have.
+    const { container } = setup(makeStore([
+      detection({ status: 'missing', cliPath: null, unusablePath: '/opt/alpha/alpha' }),
+    ]));
+    const line = container.querySelector('[data-state="not-executable"]')!;
+
+    expect(line.textContent).toContain('/opt/alpha/alpha');
+    expect(container.textContent).not.toContain('on your PATH');
+    // Still a confirmed absence, so the install and manual-path remedies stay.
+    expect(container.querySelector('.specorator-onboarding-install')).not.toBeNull();
+  });
+
   it('toggling the checkbox enables the provider through the store', async () => {
     const store = makeStore([detection()]);
     const { container } = setup(store);
@@ -167,6 +182,36 @@ describe('ProvidersStep', () => {
     await fireEvent.click(container.querySelector('[data-action="save-manual-path"]')!);
 
     expect(store.setCliPath).toHaveBeenCalledWith('alpha', '/opt/custom/alpha');
+  });
+
+  it('keeps the path editor available after detection succeeds', async () => {
+    // Hiding it once something resolves strips the only control that can correct
+    // or clear a wrong-but-existing pin without leaving Setup.
+    const store = makeStore([detection({ pinnedPath: '/opt/wrong/alpha' })]);
+    const { container } = setup(store);
+
+    await fireEvent.click(container.querySelector('[data-action="show-manual-path"]')!);
+    const input = container.querySelector<HTMLInputElement>(
+      '.specorator-onboarding-provider-manual input',
+    )!;
+
+    // Seeded from the PIN, not from the resolved path: prefilling a discovered
+    // path would turn saving into an accidental pin of whatever was found.
+    expect(input.value).toBe('/opt/wrong/alpha');
+  });
+
+  it('a blank save clears the pin, restoring auto-detection', async () => {
+    const store = makeStore([detection({ pinnedPath: '/opt/wrong/alpha' })]);
+    const { container } = setup(store);
+
+    await fireEvent.click(container.querySelector('[data-action="show-manual-path"]')!);
+    await fireEvent.update(
+      container.querySelector('.specorator-onboarding-provider-manual input')!,
+      '',
+    );
+    await fireEvent.click(container.querySelector('[data-action="save-manual-path"]')!);
+
+    expect(store.setCliPath).toHaveBeenCalledWith('alpha', '');
   });
 
   it('summarizes how many providers are enabled', () => {

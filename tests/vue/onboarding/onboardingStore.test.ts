@@ -74,6 +74,7 @@ function detection(overrides: Partial<ProviderCliDetection> = {}): ProviderCliDe
     cliCommand: 'alpha',
     status: 'missing',
     cliPath: null,
+    pinnedPath: null,
     enabled: false,
     ...overrides,
   };

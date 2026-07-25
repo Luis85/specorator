@@ -1,6 +1,9 @@
-import { startOpencodeAcpProcess } from '@/providers/opencode/runtime/OpencodeLaunchArtifacts';
-
 const constructed: Array<Record<string, unknown>> = [];
+
+jest.mock('@/utils/cliBinaryLocator', () => ({
+  executableCandidateNames: jest.fn((base: string) => [`${base}.exe`, `${base}.cmd`]),
+  findBinaryOnPath: jest.fn(() => null),
+}));
 
 jest.mock('@/providers/acp', () => ({
   AcpSubprocess: jest.fn().mockImplementation((spec: Record<string, unknown>) => {
@@ -15,8 +18,23 @@ jest.mock('@/providers/acp', () => ({
   AcpJsonRpcTransport: jest.fn().mockImplementation(() => ({})),
 }));
 
+import { startOpencodeAcpProcess } from '@/providers/opencode/runtime/OpencodeLaunchArtifacts';
+import { findBinaryOnPath } from '@/utils/cliBinaryLocator';
+
+/** Runs `body` with `process.platform` forced, restoring it afterwards. */
+function onPlatform(platform: NodeJS.Platform, body: () => void): void {
+  const previous = process.platform;
+  Object.defineProperty(process, 'platform', { value: platform, configurable: true });
+  try {
+    body();
+  } finally {
+    Object.defineProperty(process, 'platform', { value: previous, configurable: true });
+  }
+}
+
 beforeEach(() => {
   constructed.length = 0;
+  jest.mocked(findBinaryOnPath).mockReset().mockReturnValue(null);
 });
 
 /**
@@ -41,17 +59,11 @@ describe('startOpencodeAcpProcess', () => {
   });
 
   it('routes a Windows .cmd shim through cmd.exe with verbatim arguments', () => {
-    const platform = process.platform;
-    Object.defineProperty(process, 'platform', { value: 'win32', configurable: true });
-    try {
-      startOpencodeAcpProcess({
-        command: 'C:\\Users\\me\\AppData\\Roaming\\npm\\opencode.cmd',
-        cwd: 'C:\\vault',
-        env: {},
-      });
-    } finally {
-      Object.defineProperty(process, 'platform', { value: platform, configurable: true });
-    }
+    onPlatform('win32', () => startOpencodeAcpProcess({
+      command: 'C:\\Users\\me\\AppData\\Roaming\\npm\\opencode.cmd',
+      cwd: 'C:\\vault',
+      env: {},
+    }));
 
     const spec = constructed[0];
     expect(String(spec.command).toLowerCase()).toContain('cmd.exe');
@@ -59,5 +71,46 @@ describe('startOpencodeAcpProcess', () => {
     expect((spec.args as string[]).slice(0, 3)).toEqual(['/d', '/s', '/c']);
     expect((spec.args as string[])[3]).toContain('opencode.cmd');
     expect((spec.args as string[])[3]).toContain('acp');
+  });
+
+  it('resolves a BARE command on Windows before wrapping it', () => {
+    // No pin: the runtime falls back to `opencode`, whose Windows entry point is
+    // an npm `.cmd`. Neither libuv nor CreateProcess can execute a batch file, and
+    // an extension-based wrap cannot fire on a name with no extension — so the
+    // bare name has to become a real path first. The PATH searched is the
+    // runtime's own, not the host's.
+    jest.mocked(findBinaryOnPath).mockReturnValue('C:\\npm\\opencode.cmd');
+
+    onPlatform('win32', () => startOpencodeAcpProcess({
+      command: 'opencode',
+      cwd: 'C:\\vault',
+      env: { PATH: 'C:\\npm' },
+    }));
+
+    expect(findBinaryOnPath).toHaveBeenCalledWith(['opencode.exe', 'opencode.cmd'], 'C:\\npm');
+    const spec = constructed[0];
+    expect(String(spec.command).toLowerCase()).toContain('cmd.exe');
+    expect((spec.args as string[])[3]).toContain('opencode.cmd');
+  });
+
+  it('leaves a bare command alone when nothing resolves, so the OS still gets its chance', () => {
+    onPlatform('win32', () => startOpencodeAcpProcess({
+      command: 'opencode',
+      cwd: 'C:\\vault',
+      env: {},
+    }));
+
+    expect(constructed[0]).toMatchObject({ command: 'opencode' });
+  });
+
+  it('does not touch a bare command off Windows, where the OS resolves it correctly', () => {
+    onPlatform('linux', () => startOpencodeAcpProcess({
+      command: 'opencode',
+      cwd: '/vault',
+      env: {},
+    }));
+
+    expect(findBinaryOnPath).not.toHaveBeenCalled();
+    expect(constructed[0]).toMatchObject({ command: 'opencode' });
   });
 });

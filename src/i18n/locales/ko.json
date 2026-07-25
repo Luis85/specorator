@@ -1355,6 +1355,7 @@
       "enabled": "활성화됨",
       "foundAt": "경로",
       "needsCli": "PATH에 {command} 명령이 필요합니다.",
+      "notExecutable": "{path} 에 파일은 있지만 실행할 수 없습니다. 권한을 수정하거나 다시 설치하세요.",
       "authHint": "아직 로그인하지 않았다면 터미널에서 {command}를 한 번 실행하세요.",
       "docs": "설치 문서",
       "noneEnabled": "활성화된 제공자가 없습니다",
@@ -1376,6 +1377,8 @@
       "cancelled": "설치를 취소했습니다.",
       "consoleLabel": "설치 프로그램 출력",
       "manualPath": "경로 직접 지정",
+      "manualPathEdit": "경로 변경",
+      "manualPathClearHint": "비워 두면 경로가 지워지고 자동 감지로 돌아갑니다.",
       "manualPathPlaceholder": "실행 파일의 전체 경로",
       "manualPathSave": "경로 저장"
     },

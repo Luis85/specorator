@@ -1,10 +1,17 @@
+import { getProviderConfig } from '@/core/providers/providerConfig';
 import { getRuntimeEnvironmentVariables } from '@/core/providers/providerEnvironment';
 import { ProviderRegistry } from '@/core/providers/ProviderRegistry';
 import { ProviderWorkspaceRegistry } from '@/core/providers/ProviderWorkspaceRegistry';
 import type { ProviderId } from '@/core/providers/types';
 import type { PluginContext } from '@/core/types/PluginContext';
 import { asSettingsBag } from '@/core/types/settings';
-import { findBinaryOnPath, isExistingFile } from '@/utils/cliBinaryLocator';
+import {
+  executableCandidateNames,
+  findBinaryOnPath,
+  isExecutableFile,
+  isExistingFile,
+} from '@/utils/cliBinaryLocator';
+import { getHostnameKey } from '@/utils/env';
 
 /**
  * `found` — a binary the runtime would actually spawn.
@@ -38,17 +45,25 @@ export interface ProviderCliDetection {
   cliPath: string | null;
   /** Set only when `status === 'unknown'`. */
   unknownReason?: ProviderCliUnknownReason;
+  /**
+   * A path that exists but cannot be executed — set with `status === 'missing'`
+   * so the card can name it instead of claiming nothing is there.
+   */
+  unusablePath?: string;
+  /**
+   * The path pinned for THIS host, if any — distinct from `cliPath`, which may
+   * have come from a PATH scan. The manual-path editor shows it so a wrong pin
+   * can be corrected or cleared without leaving Setup.
+   */
+  pinnedPath: string | null;
   enabled: boolean;
 }
 
 /**
- * Binary names that satisfy a provider, most canonical first.
- *
- * On Windows the extensionless file npm also installs is a **sh** shim — Windows
- * cannot execute it, so it is not a candidate at all: reporting it as the found
- * binary would name a file nothing on this platform can spawn (and would hide the
- * `.cmd` sibling that is the real entry point). `.exe` leads because it spawns
- * without a shell; `.cmd`/`.bat` need the cmd.exe wrap (see `utils/windowsSpawn`).
+ * Binary names that satisfy a provider, most canonical first — the primary
+ * command plus any provider-declared aliases, each in the forms the platform can
+ * actually execute (`executableCandidateNames`, shared with the installer's own
+ * package-manager lookup).
  */
 export function binaryCandidates(
   providerId: ProviderId,
@@ -56,11 +71,23 @@ export function binaryCandidates(
 ): string[] {
   const primary = ProviderRegistry.getCliCommand(providerId);
   const extra = ProviderRegistry.getCliInstall(providerId).extraBinaryNames ?? [];
-  const bases = [primary, ...extra];
-  if (platform !== 'win32') {
-    return bases;
+  return [primary, ...extra].flatMap((name) => executableCandidateNames(name, platform));
+}
+
+/**
+ * The host-scoped pin `setProviderCliPathForHost` writes, read back through the
+ * same generic provider-config shape so the editor can show and clear it.
+ */
+function pinnedCliPath(
+  settings: Record<string, unknown>,
+  providerId: ProviderId,
+): string | null {
+  const byHost = getProviderConfig(settings, providerId).cliPathsByHost;
+  if (!byHost || typeof byHost !== 'object' || Array.isArray(byHost)) {
+    return null;
   }
-  return bases.flatMap((name) => [`${name}.exe`, `${name}.cmd`, `${name}.bat`]);
+  const pinned = (byHost as Record<string, unknown>)[getHostnameKey()];
+  return typeof pinned === 'string' && pinned.trim() ? pinned : null;
 }
 
 /**
@@ -101,8 +128,10 @@ function providerPathOverride(
  *   probe is the authoritative answer, not a fallback. That probe searches the
  *   provider's own runtime PATH, not just the host's.
  *
- * A resolved value is only `found` once it is confirmed to be a file on THIS
- * host; one that isn't (Codex in WSL mode names a command inside the distro) is
+ * A resolved value is only `found` once it is confirmed to be an EXECUTABLE file
+ * on THIS host. One that exists but lacks `+x` would fail at spawn, so it is
+ * `missing` with the offending path named (`unusablePath`); one that isn't a host
+ * file at all (Codex in WSL mode names a command inside the distro) is
  * `unknown`/`external-target` rather than a promise we can't check.
  *
  * `reset()` before probing: `CachedCliResolver` memoizes on a settings-derived
@@ -119,6 +148,7 @@ export function detectProviderCli(
     displayName: ProviderRegistry.getProviderDisplayName(providerId),
     blurb: ProviderRegistry.getFirstRunBlurb(providerId),
     cliCommand: ProviderRegistry.getCliCommand(providerId),
+    pinnedPath: pinnedCliPath(settings, providerId),
     enabled: ProviderRegistry.isEnabled(providerId, settings),
   };
   const spawnsBareCommand = ProviderRegistry
@@ -128,8 +158,15 @@ export function detectProviderCli(
   if (resolver) {
     resolver.reset();
     const resolved = resolver.resolveFromSettings(settings);
-    if (resolved && isExistingFile(resolved)) {
+    if (resolved && isExecutableFile(resolved)) {
       return { ...base, status: 'found', cliPath: resolved };
+    }
+    if (resolved && isExistingFile(resolved)) {
+      // The file is right there but cannot be run (no `+x` — a partially
+      // installed or copied script), so the runtime would fail with EACCES.
+      // Reported as a confirmed problem with the path named, rather than as a
+      // bare "not found" that sends the user looking for a file they have.
+      return { ...base, status: 'missing', cliPath: null, unusablePath: resolved };
     }
     if (resolved) {
       // A resolver can name a command that does not exist on THIS host: Codex in

@@ -294,13 +294,21 @@ describe('WorkspaceStep', () => {
     expect(view.refreshTabControls).toHaveBeenCalled();
   });
 
-  it('offers only caps within the General tab slider bounds', () => {
+  it('offers EVERY cap the General tab slider accepts', () => {
+    // A subset would render a live 7 or 9 as an unselected control with no way
+    // back to it; the slider is `setLimits(3, 10, 1)`.
     const { container } = mount(WorkspaceStep, makeStore());
 
     const values = [...container.querySelectorAll('[data-field="max-tabs"] option')]
       .map((option) => Number((option as HTMLOptionElement).value));
-    expect(Math.min(...values)).toBeGreaterThanOrEqual(3);
-    expect(Math.max(...values)).toBeLessThanOrEqual(10);
+    expect(values).toEqual([3, 4, 5, 6, 7, 8, 9, 10]);
+  });
+
+  it('shows a live cap the slider allows as the selected value', () => {
+    const { container } = mount(WorkspaceStep, makeStore(), makePlugin({ maxChatTabs: 7 }));
+
+    expect(container.querySelector<HTMLSelectElement>('[data-field="max-tabs"]')!.value)
+      .toBe('7');
   });
 });
 
