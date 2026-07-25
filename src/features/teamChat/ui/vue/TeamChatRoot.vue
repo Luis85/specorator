@@ -76,8 +76,14 @@ onMounted(() => {
 }
 /* .specorator-team-chat-content-host takes its flex-column / overflow:hidden /
    min-height:0 layout from the shared .specorator-tab-content-container class
-   applied in the template (same host contract as the sidebar), so no scoped
-   layout rule is needed here. */
+   applied in the template (same host contract as the sidebar). The only scoped
+   rule is inline padding: the transcript + composer render edge-to-edge (the
+   sidebar relies on the leaf for gutters), so in this wide main-area pane the
+   text input would otherwise sit flush against the roster border — inset it by
+   the top bar's --sp-space-s so the whole chat column aligns off the roster. */
+.specorator-team-chat-content-host {
+  padding-inline: var(--sp-space-s);
+}
 .specorator-team-chat-empty {
   position: absolute;
   inset: 0;

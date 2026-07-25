@@ -1,0 +1,9 @@
+/* Team Chat main-area leaf host sheet.
+
+   Hide the native Obsidian view header on the Team Chat leaf: the in-island top
+   bar already carries the active DM's agent identity, so the tab header is
+   redundant chrome and eats vertical space. Scoped to the view type's
+   `data-type`, mirroring the Library + Marketplace host sheets. */
+.workspace-leaf-content[data-type="specorator-team-chat"] .view-header {
+  display: none;
+}
