@@ -222,7 +222,12 @@ export function rollbackOptimisticOutgoingTurn(
   state.currentTextContent = '';
   state.currentThinkingState = null;
 
-  if (snapshot.shouldRestoreInput) {
+  // Restore the submitted text ONLY when the composer is still empty. If runtime init failed AFTER
+  // the user began a NEWER draft (common on a new DM whose CLI is unavailable — init fails a beat
+  // after the next keystrokes), writing the old text back would clobber it (data loss). The newer
+  // draft wins; mirrors restoreReservedComposerInput's Round-55 guard (trimmed-empty == "empty").
+  // Placeholder removal above stays unconditional — only this composer-text restore is guarded.
+  if (snapshot.shouldRestoreInput && send.inputEl.value.trim() === '') {
     send.inputEl.value = snapshot.inputText;
     resetInputHeight();
   }

@@ -2530,6 +2530,32 @@ describe('InputController - Message Queue', () => {
       // NOT be consumed — a retry of the restored draft still sends currentNotePath.
       expect(deps.getFileContextManager()?.markCurrentNoteSent).not.toHaveBeenCalled();
     });
+
+    // Round-60: the init-failure rollback (rollbackOptimisticOutgoingTurn) restores the submitted
+    // text only when the composer is still empty. If the user began a NEWER draft during the init
+    // await (a new DM whose CLI is unavailable fails init a beat after the next keystrokes), the old
+    // text must NOT clobber it — the newer draft wins (mirrors Round-55's reserve-before-await guard).
+    it('preserves a newer draft typed during the init await, still rolling back placeholders', async () => {
+      deps = createSendableDeps({
+        ensureServiceInitialized: jest.fn(async () => {
+          // The composer was cleared up front; the user types a newer draft while init awaits.
+          inputEl.value = 'new draft';
+          return false;
+        }),
+      });
+      inputEl = deps.getInputEl() as ReturnType<typeof createMockInputEl>;
+      inputEl.value = 'original message';
+      controller = new InputController(deps);
+
+      await controller.sendMessage();
+
+      // The newer draft wins — the old submitted text does NOT overwrite it...
+      expect(inputEl.value).toBe('new draft');
+      // ...and the optimistic user/assistant placeholders were still rolled back.
+      expect(deps.state.messages).toHaveLength(0);
+      expect(deps.state.isStreaming).toBe(false);
+      expect((deps as any).mockAgentService.query).not.toHaveBeenCalled();
+    });
   });
 
   describe('Agent service null', () => {

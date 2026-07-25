@@ -98,4 +98,51 @@ describe('AgentRosterStore', () => {
     expect(adapter.delete).not.toHaveBeenCalled();
     expect(emit).not.toHaveBeenCalled();
   });
+
+  describe('get', () => {
+    it('reads and parses an existing agent by id', async () => {
+      const agent = createRosterAgent('Reviewer', 1);
+      const files = { [`${ROSTER_DIR}/reviewer.json`]: JSON.stringify(agent) };
+      const store = new AgentRosterStore(makeAdapter(files));
+
+      const got = await store.get('roster:reviewer');
+
+      expect(got?.id).toBe('roster:reviewer');
+    });
+
+    it('returns null for a genuinely absent agent', async () => {
+      const store = new AgentRosterStore(makeAdapter({}));
+
+      await expect(store.get('roster:ghost')).resolves.toBeNull();
+    });
+
+    // Round-60 (ROOT): exists() used to run OUTSIDE get()'s try/catch, so a vault-I/O error
+    // REJECTED — surfacing one call site at a time (send R58, steer R59, auto-dequeue). get() is
+    // now TOTAL: an I/O error reads as "not found" (null) so every caller's removed-agent handling
+    // runs, and nothing escapes as an unhandled rejection.
+    it('returns null (does not reject) and reports via onError when exists() throws', async () => {
+      const adapter = {
+        exists: jest.fn().mockRejectedValue(new Error('vault io')),
+        read: jest.fn(),
+      } as unknown as VaultFileAdapter;
+      const onError = jest.fn();
+      const store = new AgentRosterStore(adapter, undefined, onError);
+
+      await expect(store.get('roster:reviewer')).resolves.toBeNull();
+      expect(onError).toHaveBeenCalledWith(`${ROSTER_DIR}/reviewer.json`, expect.any(Error));
+      expect(adapter.read).not.toHaveBeenCalled(); // short-circuited by the throwing exists()
+    });
+
+    it('returns null and reports via onError when read() throws', async () => {
+      const adapter = {
+        exists: jest.fn().mockResolvedValue(true),
+        read: jest.fn().mockRejectedValue(new Error('read fail')),
+      } as unknown as VaultFileAdapter;
+      const onError = jest.fn();
+      const store = new AgentRosterStore(adapter, undefined, onError);
+
+      await expect(store.get('roster:reviewer')).resolves.toBeNull();
+      expect(onError).toHaveBeenCalledWith(`${ROSTER_DIR}/reviewer.json`, expect.any(Error));
+    });
+  });
 });
