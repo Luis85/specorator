@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, inject } from 'vue';
 
+import { ProviderRegistry } from '../../../../../core/providers/ProviderRegistry';
 import { CALLBACKS_KEY } from '../keys';
 import { useTeamChatStore } from '../stores/teamChatStore';
 import TeamRosterAvatar from '../TeamRosterAvatar.vue';
@@ -28,6 +29,19 @@ const activeAgent = computed(() =>
 const voiceLine = computed(() =>
   activeAgent.value?.voice?.trim() || activeAgent.value?.description?.trim() || '');
 
+// The active DM's bound provider, resolved to its display name (Claude / Codex /
+// OpenCode / Cursor Agent) so that when an agent's provider is unavailable or its CLI
+// fails, the user can see which backend the DM runs on. Gate on the registry rather
+// than catch a throw: an id with no registration (a since-disabled provider, or a test
+// double) falls back to the raw id — the guarded-lookup shape MarketplaceRoot uses.
+const providerLabel = computed(() => {
+  const id = store.activeProviderId;
+  if (!id) return '';
+  return ProviderRegistry.getRegisteredProviderIds().includes(id)
+    ? ProviderRegistry.getProviderDisplayName(id)
+    : id;
+});
+
 function openEditedFile(path: string): void {
   callbacks?.onOpenEditedFile(path);
 }
@@ -54,6 +68,11 @@ function openEditedFile(path: string): void {
         {{ voiceLine }}
       </div>
     </div>
+    <span
+      v-if="providerLabel"
+      class="specorator-team-chat-top-bar-provider"
+      :title="providerLabel"
+    >{{ providerLabel }}</span>
     <EditedFilesStrip
       :entries="store.editedFiles"
       :on-open="openEditedFile"
@@ -86,6 +105,17 @@ function openEditedFile(path: string): void {
   font-size: var(--sp-font-small);
   overflow: hidden;
   text-overflow: ellipsis;
+  white-space: nowrap;
+}
+/* The active DM's backend, as a small neutral chip; theme-aware through the tokens. */
+.specorator-team-chat-top-bar-provider {
+  flex-shrink: 0;
+  padding: var(--sp-space-3xs) var(--sp-space-xs);
+  border: 1px solid var(--sp-border);
+  border-radius: var(--sp-radius-s);
+  color: var(--sp-text-muted);
+  font-size: var(--sp-font-smaller);
+  line-height: var(--sp-line-tight);
   white-space: nowrap;
 }
 

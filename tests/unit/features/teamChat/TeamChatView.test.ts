@@ -201,7 +201,9 @@ describe('TeamChatView — selectedAgentId projects from the active tab', () => 
 
   it('onTabSwitched sets selectedAgentId from the active tab bound agent, and emits', () => {
     const view = makeView();
-    view.plugin.getConversationSync = jest.fn(() => ({ boundAgentId: 'roster:a' }));
+    // The DM's conversation carries both the bound agent (drives selection) and the
+    // provider (projected onto the top-bar chip via projectActiveDmProviderId).
+    view.plugin.getConversationSync = jest.fn(() => ({ boundAgentId: 'roster:a', providerId: 'claude' }));
     view.initTabEngine();
     // Real TabData carries .state (ChatState); the snapshot's edited-files
     // projection reads active.state.editedFiles, so the double must include it.
@@ -215,8 +217,9 @@ describe('TeamChatView — selectedAgentId projects from the active tab', () => 
 
     expect(view.plugin.getConversationSync).toHaveBeenCalledWith('conv-1');
     expect(view.selectedAgentId).toBe('roster:a');
-    // Presence is projected alongside the selection; no streaming tab → empty map.
-    expect(observer).toHaveBeenCalledWith({ selectedAgentId: 'roster:a', editedFiles: [], presence: {} });
+    // Presence + the active DM's provider are projected alongside the selection; no
+    // streaming tab → empty presence map.
+    expect(observer).toHaveBeenCalledWith({ selectedAgentId: 'roster:a', editedFiles: [], activeProviderId: 'claude', presence: {} });
   });
 
   it('projects null (empty state) when closing to no active tab', () => {

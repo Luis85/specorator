@@ -99,6 +99,19 @@ export function projectActiveDmEditedFiles(activeTab: TabData | null): ComposerE
 }
 
 /**
+ * Projects the ACTIVE DM tab's bound provider id — its conversation's `providerId`,
+ * or null when no DM tab is active / the tab carries no conversation. A pure
+ * projection like `projectActiveDmEditedFiles`; the top bar resolves it to a
+ * display-name chip so a DM whose provider is unavailable (or whose CLI fails) still
+ * shows which backend it runs on, and it re-derives across a provider-change rotation
+ * (which swaps the active conversation) since it reads the tab's live conversation.
+ */
+export function projectActiveDmProviderId(plugin: SpecoratorPlugin, activeTab: TabData | null): string | null {
+  const conversationId = activeTab?.conversationId;
+  return conversationId ? plugin.getConversationSync(conversationId)?.providerId ?? null : null;
+}
+
+/**
  * Mirror of `SpecoratorView.updateHiddenProviderCommands`: re-applies the
  * provider-scoped `hiddenProviderCommands` set to each open DM's persistent
  * slash-command dropdown, so a settings change repaints the LIVE dropdown rather

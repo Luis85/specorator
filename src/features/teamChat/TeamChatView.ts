@@ -12,9 +12,8 @@ import { TabManager } from '../chat/tabs/TabManager';
 import { refreshBoundAgentDisplayModels } from '../chat/tabs/tabShared';
 import { openEditedFile } from '../chat/tabs/tabUi';
 import type { PersistedTabManagerState } from '../chat/tabs/types';
-import type { ComposerEditedFile } from '../chat/ui/vue/composer/stores/composerStore';
 import { getTeamChatDmOpenCoordinator } from './TeamChatDmOpenCoordinator';
-import { applyDmEditedFilesSetting, applyDmHiddenCommands, noticeRemovedAgentDms, projectActiveDmEditedFiles, reconcileRestoredDmProviders, refreshDmModelState, rotateChangedDmProviders } from './teamChatDmRefresh';
+import { applyDmEditedFilesSetting, applyDmHiddenCommands, noticeRemovedAgentDms, projectActiveDmEditedFiles, projectActiveDmProviderId, reconcileRestoredDmProviders, refreshDmModelState, rotateChangedDmProviders } from './teamChatDmRefresh';
 import { openResolvedTeamChatDm, reconcileRotation, restoreTeamChatDmTabs, serializeOnTail, touchDmRecency } from './teamChatDmTabs';
 import { projectCrossLeafPresence, type TeamChatPresence } from './teamChatPresence';
 import type { TeamChatThreadStore } from './TeamChatThreadStore';
@@ -473,10 +472,15 @@ export class TeamChatView extends ItemView implements ChatViewHandle {
   }
 
   private buildSnapshot(): TeamChatSnapshot {
+    // Resolve the active DM tab once: the edited-files strip AND the provider chip
+    // both project off it (its conversation's providerId), so the top bar shows which
+    // backend a failing/unavailable-provider DM runs on. Re-projected on every change.
+    const activeTab = this.tabManager?.getActiveTab() ?? null;
     return {
       selectedAgentId: this.selectedAgentId,
-      editedFiles: this.buildEditedFiles(),
+      editedFiles: projectActiveDmEditedFiles(activeTab),
       presence: this.buildPresence(),
+      activeProviderId: projectActiveDmProviderId(this.plugin, activeTab),
     };
   }
 
@@ -485,12 +489,6 @@ export class TeamChatView extends ItemView implements ChatViewHandle {
    *  broadcast — so a stream start/stop in ANY leaf self-heals with no map to reconcile. */
   private buildPresence(): Record<string, TeamChatPresence> {
     return projectCrossLeafPresence(this.plugin);
-  }
-
-  /** Active DM tab's created/edited files for the top bar (see projectActiveDmEditedFiles).
-   *  Re-projected on every emitTeamChatChange so a finished turn's writes surface up top. */
-  private buildEditedFiles(): ComposerEditedFile[] {
-    return projectActiveDmEditedFiles(this.tabManager?.getActiveTab() ?? null);
   }
 
   /** Notifies every registered store observer (mirror of emitChatShellChange). */

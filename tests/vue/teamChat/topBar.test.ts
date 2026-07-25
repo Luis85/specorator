@@ -1,7 +1,8 @@
 import { mount } from '@vue/test-utils';
 import { createPinia, setActivePinia } from 'pinia';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { ProviderRegistry } from '@/core/providers/ProviderRegistry';
 import type { RosterAgent } from '@/features/agents/roster/rosterTypes';
 import type { ComposerEditedFile } from '@/features/chat/ui/vue/composer/stores/composerStore';
 import TeamChatTopBar from '@/features/teamChat/ui/vue/components/TeamChatTopBar.vue';
@@ -97,5 +98,71 @@ describe('TeamChatTopBar.vue (Phase 4b: identity + edited-files strip)', () => {
     expect(wrapper.find('.specorator-team-chat-top-bar-name').text()).toBe('Ada');
     expect(wrapper.find('.specorator-edited-files-badge').exists()).toBe(false);
     expect(wrapper.find('.specorator-edited-files-row').classes()).toContain('specorator-hidden');
+  });
+});
+
+describe('TeamChatTopBar.vue — active DM provider chip', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    setActivePinia(createPinia());
+  });
+  // Restore the getRegisteredProviderIds/getProviderDisplayName spies between tests
+  // so the unregistered-fallback case sees the real (empty-registry) behavior.
+  afterEach(() => vi.restoreAllMocks());
+
+  it('renders the active DM provider as a chip using the registry display name', async () => {
+    vi.spyOn(ProviderRegistry, 'getRegisteredProviderIds').mockReturnValue(['claude']);
+    vi.spyOn(ProviderRegistry, 'getProviderDisplayName').mockReturnValue('Claude');
+    const { wrapper, store } = mountTopBar({ onOpenEditedFile: vi.fn() });
+    store.setAgents([agent({ voice: 'Terse.' })]);
+    store.setSelected('roster:a');
+    store.setActiveProviderId('claude');
+    await wrapper.vm.$nextTick();
+
+    const chip = wrapper.find('.specorator-team-chat-top-bar-provider');
+    expect(chip.exists()).toBe(true);
+    expect(chip.text()).toBe('Claude');
+  });
+
+  it('updates the provider chip when the projected activeProviderId changes', async () => {
+    vi.spyOn(ProviderRegistry, 'getRegisteredProviderIds').mockReturnValue(['claude', 'codex']);
+    vi.spyOn(ProviderRegistry, 'getProviderDisplayName').mockImplementation(
+      (id) => (id === 'codex' ? 'Codex' : 'Claude'));
+    const { wrapper, store } = mountTopBar({ onOpenEditedFile: vi.fn() });
+    store.setAgents([agent({ voice: 'Terse.' })]);
+    store.setSelected('roster:a');
+    store.setActiveProviderId('claude');
+    await wrapper.vm.$nextTick();
+    expect(wrapper.find('.specorator-team-chat-top-bar-provider').text()).toBe('Claude');
+
+    // A provider-change rotation swaps the active conversation; the chip must follow.
+    store.setActiveProviderId('codex');
+    await wrapper.vm.$nextTick();
+    expect(wrapper.find('.specorator-team-chat-top-bar-provider').text()).toBe('Codex');
+  });
+
+  it('shows no provider chip when no DM is active (null provider id)', async () => {
+    const { wrapper, store } = mountTopBar({ onOpenEditedFile: vi.fn() });
+    store.setAgents([agent({ voice: 'Terse.' })]);
+    store.setSelected('roster:a');
+    store.setActiveProviderId(null);
+    await wrapper.vm.$nextTick();
+
+    // Identity still renders; the provider chip self-hides (mirror of the files strip).
+    expect(wrapper.find('.specorator-team-chat-top-bar-name').text()).toBe('Ada');
+    expect(wrapper.find('.specorator-team-chat-top-bar-provider').exists()).toBe(false);
+  });
+
+  it('falls back to the raw provider id when the provider is not registered', async () => {
+    // No providers registered in this lane → not in getRegisteredProviderIds() → the raw
+    // id is shown rather than throwing (a DM created on a since-disabled provider, or a
+    // test double), matching MarketplaceRoot's guarded providerLabel.
+    const { wrapper, store } = mountTopBar({ onOpenEditedFile: vi.fn() });
+    store.setAgents([agent({ voice: 'Terse.' })]);
+    store.setSelected('roster:a');
+    store.setActiveProviderId('codex');
+    await wrapper.vm.$nextTick();
+
+    expect(wrapper.find('.specorator-team-chat-top-bar-provider').text()).toBe('codex');
   });
 });

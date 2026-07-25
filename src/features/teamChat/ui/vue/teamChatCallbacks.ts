@@ -16,6 +16,9 @@ export interface TeamChatSnapshot {
   selectedAgentId: string | null;
   /** The active DM tab's created/edited files (empty when none / no active DM). */
   editedFiles: ComposerEditedFile[];
+  /** The active DM's bound provider id, or null when no DM is active — the top bar
+   *  resolves it to a display-name chip so a failing/unavailable backend is visible. */
+  activeProviderId: string | null;
   /** Live roster presence: only the currently-busy agents (absent = idle). */
   presence: Record<string, TeamChatPresence>;
 }

@@ -208,5 +208,26 @@ reaches `{ leaf, getTabManager() }`, so a second host is reuse, not a fork.
 
 `tests/unit/features/teamChat/` (thread store + factory, open coordinator, DM
 tabs/LRU/rotation, presence, and the view's `selectAgent`/refresh/lifecycle paths)
-and `tests/vue/teamChat/` (roster select, top bar, edited-files strip, presence,
-view mount).
+and `tests/vue/teamChat/` (roster select, top bar — identity + provider chip +
+edited-files strip, presence, view mount).
+
+## Known limitations
+
+- **Spurious LRU eviction under a rare full-budget race.** When the hot-DM budget
+  is full and a new-agent selection's eviction is mid-flight (the victim's async
+  save/close), a second click on an ALREADY-OPEN DM supersedes the first: the first
+  selection still commits the eviction, then aborts without opening (superseded),
+  while the second merely switches to its existing tab and never needed the freed
+  slot — so one LRU DM is evicted unnecessarily. Self-recovering: the evicted DM's
+  mapping persists, so re-selecting its agent reopens it. The per-leaf selection
+  serialization (`selectionOpenTail`) + the pre-close staleness check cover the
+  common cases; this residual is the generation bump landing DURING the awaited
+  close. Left as-is by decision (benign + rare); a create-before-evict reordering
+  would close it.
+- **Live provider-rotation is edge-case-dense.** Auto-rotating a DM to a fresh
+  thread when its agent's provider changes (retained per spec §4) is inherently
+  intricate — reload recovery, streaming-turn interruption, active-DM focus
+  preservation, and displaced-slot reuse are each handled, but the class stays
+  narrow-edge-prone. A simpler "provider changed — reopen to switch" affordance
+  (matching the app's existing new-chat-to-change-provider rule) would retire the
+  class; deferred.
