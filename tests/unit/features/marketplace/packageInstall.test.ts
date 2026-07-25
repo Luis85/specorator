@@ -176,3 +176,31 @@ describe('installPackage target revalidation', () => {
     expect(asserted).toEqual([]);
   });
 });
+
+describe('installPackage root preflight', () => {
+  const agent = item('agents/pm', 'agent');
+  const brief = item('skills/brief', 'skill');
+
+  it('does not rewrite a root that the installed predicate already recognizes', async () => {
+    // Completing a partly-installed package re-runs the root. The installers dedup
+    // on a narrower key than the badge (an agent on its name-slug roster id, the
+    // badge also on the source-scoped catalog id), so a catalog-side rename would
+    // otherwise slip past and write a SECOND agent.
+    const { ctx, writes } = makeContext({}, ['agents/pm']);
+    const result = await installPackage(agent, 'REVIEWED', [brief], target, 'https://src/', ctx);
+    expect(writes.some((w) => w.startsWith('item:agents/pm'))).toBe(false);
+    expect(result.outcome).toBe('skipped');
+    // The missing dependency still gets installed — completing the package is the
+    // whole point of offering Install while the root is already present.
+    expect(writes).toEqual(['skill:skills/brief:BODY:skills/brief:claude/project']);
+    expect(result).toMatchObject({ installed: 1, skipped: 0 });
+  });
+
+  it('skips the target re-check when the root is not written at all', async () => {
+    // Nothing is committed, so there is no binding whose target could have lapsed.
+    const { ctx, asserted } = makeContext({}, ['agents/pm', 'skills/brief'], true);
+    const result = await installPackage(agent, 'REVIEWED', [brief], target, 'https://src/', ctx);
+    expect(asserted).toEqual([]);
+    expect(result).toMatchObject({ outcome: 'skipped', installed: 0, skipped: 1 });
+  });
+});

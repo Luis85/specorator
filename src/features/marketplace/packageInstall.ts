@@ -97,17 +97,28 @@ export async function installPackage(
     else skipped += 1;
     written.push(dependency.id);
   }
-  // Re-check the target before committing the root. A skill dependency that was
-  // already present never reaches the skill installer's own check (it returns
-  // 'skipped' first), so without this the SAME package, settings and target
-  // behave differently depending on whether the skills happened to be installed
-  // already: one skill needing a write aborts with a clear error, all present
-  // proceeds silently. Skipped when the root is itself a skill (its own write
-  // asserts) or when no dependency needed a target at all.
-  if (target && root.type !== 'skill' && dependencies.some((member) => member.type === 'skill')) {
-    ctx.assertTargetInstallable(target);
+  // Preflight the root with the SAME predicate the Installed badge uses, exactly
+  // like a dependency. Completing a partly-installed package re-runs the root,
+  // and the installers dedup on a NARROWER key than the badge does — an agent
+  // dedups on its name-slug roster id while the badge also matches the
+  // source-scoped catalog id, so a catalog-side rename would slip past the
+  // installer and write a SECOND agent. (Cross-rename idempotency is deferred
+  // update-management; this only stops the package flow from tripping it, since
+  // before packages an installed root was never offered for install at all.)
+  let outcome: InstallOutcome = 'skipped';
+  if (!(await ctx.isInstalled(root, target))) {
+    // Re-check the target only when actually committing the root. A skill
+    // dependency that was already present never reaches the skill installer's own
+    // check (it returns 'skipped' first), so without this the SAME package,
+    // settings and target behave differently depending on whether the skills
+    // happened to be installed already: one skill needing a write aborts with a
+    // clear error, all present proceeds silently. Skipped when the root is itself
+    // a skill (its own write asserts) or no dependency needed a target at all.
+    if (target && root.type !== 'skill' && dependencies.some((member) => member.type === 'skill')) {
+      ctx.assertTargetInstallable(target);
+    }
+    outcome = await installOne(root, reviewedBody, target, source, ctx);
   }
-  const outcome = await installOne(root, reviewedBody, target, source, ctx);
   written.push(root.id);
   return { outcome, installed, skipped, written };
 }
