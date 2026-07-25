@@ -11,7 +11,7 @@ import {
   isExecutableFile,
   isExistingFile,
 } from '@/utils/cliBinaryLocator';
-import { getHostnameKey } from '@/utils/env';
+import { cliPathRequiresNode, findNodeExecutable, getHostnameKey } from '@/utils/env';
 
 /**
  * `found` — a binary the runtime would actually spawn.
@@ -40,7 +40,9 @@ export type ProviderCliUnusableReason =
   /** No execute permission — the spawn would fail with `EACCES`. */
   | 'not-executable'
   /** A Windows `.cmd`/`.bat` this provider's launch path cannot run. */
-  | 'batch-shim';
+  | 'batch-shim'
+  /** A Node-backed entry point with no Node interpreter to run it. */
+  | 'missing-node';
 
 export interface ProviderCliDetection {
   providerId: ProviderId;
@@ -121,17 +123,27 @@ type ResolvedPathVerdict =
   | { kind: 'unusable'; reason: ProviderCliUnusableReason }
   | { kind: 'external' };
 
-function classifyResolvedPath(providerId: ProviderId, resolved: string): ResolvedPathVerdict {
+function classifyResolvedPath(
+  providerId: ProviderId,
+  resolved: string,
+  runtimePath: string | undefined,
+): ResolvedPathVerdict {
   const rejected = unusableReason(providerId, resolved);
   if (rejected) {
     return { kind: 'unusable', reason: rejected };
   }
-  if (isExecutableFile(resolved)) {
-    return { kind: 'found' };
+  if (!isExecutableFile(resolved)) {
+    return isExistingFile(resolved)
+      ? { kind: 'unusable', reason: 'not-executable' }
+      : { kind: 'external' };
   }
-  return isExistingFile(resolved)
-    ? { kind: 'unusable', reason: 'not-executable' }
-    : { kind: 'external' };
+  // Executable is not sufficient for a Node-backed entry point: `.js` files and
+  // `#!…node` scripts need an interpreter, and Claude's runtime refuses to start
+  // without one (`getMissingNodeError`, checked on both the persistent and cold
+  // paths). The permission bit says nothing about whether Node is reachable.
+  return cliPathRequiresNode(resolved) && !findNodeExecutable(runtimePath)
+    ? { kind: 'unusable', reason: 'missing-node' }
+    : { kind: 'found' };
 }
 
 /**
@@ -214,13 +226,14 @@ export function detectProviderCli(
   };
   const spawnsBareCommand = ProviderRegistry
     .getCliInstall(providerId).runtimeFallsBackToPathLookup === true;
+  const runtimePath = providerPathOverride(settings, providerId);
 
   const resolver = ProviderWorkspaceRegistry.getCliResolver(providerId);
   if (resolver) {
     resolver.reset();
     const resolved = resolver.resolveFromSettings(settings);
     if (resolved) {
-      const verdict = classifyResolvedPath(providerId, resolved);
+      const verdict = classifyResolvedPath(providerId, resolved, runtimePath);
       if (verdict.kind === 'found') {
         return { ...base, status: 'found', cliPath: resolved };
       }
@@ -241,10 +254,7 @@ export function detectProviderCli(
     return { ...base, status: 'unknown', unknownReason: 'no-resolver', cliPath: null };
   }
 
-  const onPath = findBinaryOnPath(
-    binaryCandidates(providerId),
-    providerPathOverride(settings, providerId),
-  );
+  const onPath = findBinaryOnPath(binaryCandidates(providerId), runtimePath);
   if (onPath) {
     return { ...base, status: 'found', cliPath: onPath };
   }

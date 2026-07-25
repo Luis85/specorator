@@ -7,6 +7,11 @@ import {
   detectProviderClis,
 } from '@/features/onboarding/providerDetection';
 
+jest.mock('@/utils/env', () => ({
+  ...jest.requireActual('@/utils/env'),
+  cliPathRequiresNode: jest.fn(() => false),
+  findNodeExecutable: jest.fn(() => '/usr/bin/node'),
+}));
 jest.mock('@/utils/cliBinaryLocator', () => ({
   // The real `executableCandidateNames`: its per-platform shape is part of what
   // these tests assert, so stubbing it would assert nothing.
@@ -23,6 +28,7 @@ import {
   isExecutableFile,
   isExistingFile,
 } from '@/utils/cliBinaryLocator';
+import { cliPathRequiresNode, findNodeExecutable } from '@/utils/env';
 
 // Stub registrations rather than importing `@/providers`: the real aggregator
 // drags the MCP SDK's ESM-only deps in, and detection only needs the registry's
@@ -95,6 +101,8 @@ afterEach(() => {
   jest.mocked(isExistingFile).mockReturnValue(true);
   jest.mocked(isExecutableFile).mockReset();
   jest.mocked(isExecutableFile).mockReturnValue(true);
+  jest.mocked(cliPathRequiresNode).mockReset().mockReturnValue(false);
+  jest.mocked(findNodeExecutable).mockReset().mockReturnValue('/usr/bin/node');
 });
 
 function makePlugin(settings: Record<string, unknown> = {}) {
@@ -224,6 +232,46 @@ describe('detectProviderCli', () => {
       cliPath: null,
       unusable: { path: '/usr/local/bin/alpha', reason: 'not-executable' },
     });
+  });
+
+  it('refuses a Node-backed entry point when no Node interpreter is reachable', () => {
+    // `cliPathRequiresNode` covers `.js` files and `#!…node` scripts. The
+    // permission bit says nothing about whether Node exists, and Claude's runtime
+    // refuses to start without it (`getMissingNodeError`) on both its paths — so
+    // "executable" alone would advertise a provider that cannot launch.
+    ProviderWorkspaceRegistry.setServices('det-alpha', {
+      cliResolver: stubResolver('/usr/local/lib/node_modules/alpha/cli.js'),
+    } as never);
+    jest.mocked(cliPathRequiresNode).mockReturnValue(true);
+    jest.mocked(findNodeExecutable).mockReturnValue(null);
+
+    expect(detectProviderCli(makePlugin(), 'det-alpha')).toMatchObject({
+      status: 'missing',
+      unusable: { path: '/usr/local/lib/node_modules/alpha/cli.js', reason: 'missing-node' },
+    });
+  });
+
+  it('accepts the same Node entry point once an interpreter is reachable', () => {
+    ProviderWorkspaceRegistry.setServices('det-alpha', {
+      cliResolver: stubResolver('/usr/local/lib/node_modules/alpha/cli.js'),
+    } as never);
+    jest.mocked(cliPathRequiresNode).mockReturnValue(true);
+
+    expect(detectProviderCli(makePlugin(), 'det-alpha').status).toBe('found');
+  });
+
+  it('searches for Node on the provider runtime PATH, not just the host one', () => {
+    ProviderWorkspaceRegistry.setServices('det-alpha', {
+      cliResolver: stubResolver('/opt/alpha/cli.js'),
+    } as never);
+    jest.mocked(cliPathRequiresNode).mockReturnValue(true);
+    const plugin = makePlugin({
+      providerConfigs: { 'det-alpha': { environmentVariables: 'PATH=/opt/node/bin' } },
+    });
+
+    detectProviderCli(plugin, 'det-alpha');
+
+    expect(findNodeExecutable).toHaveBeenCalledWith('/opt/node/bin');
   });
 
   it('refuses a Windows batch shim under a provider whose launch path cannot run one', () => {

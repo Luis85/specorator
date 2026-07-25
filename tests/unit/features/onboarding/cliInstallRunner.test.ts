@@ -203,6 +203,37 @@ describe('runCliInstall', () => {
     expect(order).toEqual(['kill:start', 'kill:done', 'settled']);
   });
 
+  it('does not settle on the child close that races the reaper', async () => {
+    // On Windows the direct child is the `cmd.exe` wrapper, which dies while
+    // `taskkill /T /F` is still walking the descendants; on POSIX the group
+    // leader can exit while its forks are still being signalled. Settling on that
+    // close would report the install stopped with npm still writing — and free
+    // the store to start another one on top of it.
+    const child = mountChild();
+    const order: string[] = [];
+    let releaseKill: () => void = () => {};
+    jest.mocked(forceKillProcessGroup).mockImplementation(async () => {
+      await new Promise<void>((resolve) => { releaseKill = () => resolve(); });
+      order.push('reaped');
+    });
+
+    const handle = runCliInstall(npmMethod, { onOutput: () => {} });
+    handle.cancel();
+    void handle.done.then(() => order.push('settled'));
+
+    // The wrapper closes mid-reap.
+    child.emit('close', 1);
+    await Promise.resolve();
+    expect(order).toEqual([]);
+
+    releaseKill();
+    await handle.done;
+    await Promise.resolve();
+
+    expect(order).toEqual(['reaped', 'settled']);
+    expect(await handle.done).toMatchObject({ ok: false, cancelled: true });
+  });
+
   it('a cancel after settling is a no-op', async () => {
     const child = mountChild();
 

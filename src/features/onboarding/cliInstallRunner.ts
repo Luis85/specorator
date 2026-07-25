@@ -143,8 +143,6 @@ export function runCliInstall(
     if (settled || abortReason) return;
     abortReason = reason;
     await forceKillProcessGroup(child);
-    // `close` normally settles first (it fires once the tree is gone); this is
-    // the backstop for a process that was already dead.
     settle(abortResult());
   };
 
@@ -156,10 +154,14 @@ export function runCliInstall(
     settle({ ok: false, exitCode: null, error: error.message });
   });
   child.on('close', (code: number | null) => {
-    if (abortReason) {
-      settle(abortResult());
-      return;
-    }
+    // While aborting, `abort()` owns settlement — it settles only once the reaper
+    // has resolved. The direct child can close FIRST: on Windows it is the
+    // `cmd.exe` wrapper, which dies while `taskkill /T /F` is still walking the
+    // descendants, and on POSIX the group leader can exit while its forks are
+    // still being signalled. Settling here would report the install stopped with
+    // npm still writing to the global prefix — and free the store to start
+    // another one on top of it.
+    if (abortReason) return;
     settle({ ok: code === 0, exitCode: code });
   });
 

@@ -163,6 +163,22 @@ describe('ProvidersStep', () => {
     expect(line.textContent).toContain('.exe');
   });
 
+  it('names a missing Node interpreter as the blocker, not the CLI', async () => {
+    // The file is there and executable; what is absent is the interpreter it
+    // needs. "Needs the command on your PATH" would point at the wrong thing.
+    const { container } = setup(makeStore([
+      detection({
+        status: 'missing',
+        cliPath: null,
+        unusable: { path: '/opt/alpha/cli.js', reason: 'missing-node' },
+      }),
+    ]));
+    const line = container.querySelector('[data-state="missing-node"]')!;
+
+    expect(line.textContent).toContain('/opt/alpha/cli.js');
+    expect(line.textContent).toContain('Node.js');
+  });
+
   it('toggling the checkbox enables the provider through the store', async () => {
     const store = makeStore([detection()]);
     const { container } = setup(store);

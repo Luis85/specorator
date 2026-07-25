@@ -30,6 +30,12 @@ export const claudeProviderRegistration: ProviderRegistration = {
         label: 'npm (global)',
         displayCommand: 'npm install -g @anthropic-ai/claude-code',
         argv: { command: 'npm', args: ['install', '-g', '@anthropic-ai/claude-code'] },
+        // NOT offered on Windows: npm's global bin holds `claude.cmd` plus an
+        // extensionless POSIX sh shim, and this provider can launch neither —
+        // so a "successful" install would be followed by a card that still says
+        // unusable. The native installer below is the Windows route; it lands a
+        // real `claude.exe`, which is what `findClaudeCLIPath` probes for first.
+        platforms: ['darwin', 'linux'],
       },
       // Piped installer scripts need a shell, so they stay copy-only (argv: null).
       {

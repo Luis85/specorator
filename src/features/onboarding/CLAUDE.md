@@ -55,7 +55,7 @@ surfaces to use the island pattern; this is one.
   `unknown` is never downgraded to `missing` without an authoritative look —
   claiming a CLI is absent when we could not properly look is worse than
   admitting we don't know.
-  Two further rules keep `found` honest:
+  Three further rules keep `found` honest:
   - **The probe searches the provider's RUNTIME PATH**, i.e. the shared +
     provider-scoped env text (`getRuntimeEnvironmentVariables`), because a CLI
     installed only under a provider-scoped `PATH=` override is genuinely
@@ -71,6 +71,11 @@ surfaces to use the island pattern; this is one.
     - `not-executable` — no `+x` (`isExecutableFile` = `stat().isFile()` plus
       `X_OK`, which is a no-op on Windows where the extension decides). A
       partially installed or copied script would fail at spawn with `EACCES`.
+    - `missing-node` — a Node-backed entry point (`.js`, or a `#!…node` script)
+      with no Node interpreter reachable on the provider's runtime PATH. Claude's
+      runtime refuses to start in exactly this case (`getMissingNodeError`, on
+      both the persistent and cold paths), and the permission bit says nothing
+      about whether Node exists.
     - `batch-shim` — a Windows `.cmd`/`.bat` under a provider that declares
       `cliInstall.windowsBatchShimUnsupported`. Claude is the one: the SDK owns
       its stdio stream, so a cmd.exe wrapper is not available to it the way it is
@@ -98,6 +103,12 @@ surfaces to use the island pattern; this is one.
     real path on win32 first — an extension-based wrap cannot fire on a name with
     no extension, and its runtime deliberately spawns the bare command when
     nothing is pinned.
+- **A provider only offers install methods that lead somewhere it can launch.**
+  Claude's `npm install -g` is scoped to darwin/linux: npm's global bin on Windows
+  holds `claude.cmd` plus an extensionless POSIX sh shim, neither of which that
+  provider can spawn, so a "successful" install would be followed by a card that
+  still says unusable. Windows gets the native installer, which lands the
+  `claude.exe` that `findClaudeCLIPath` probes for first.
 - **An install is offered only for a CONFIRMED absence** (`status === 'missing'`).
   For `unknown` the card explains which of the two reasons applies and keeps the
   manual-path field — that one names a path instead of assuming one is absent,
@@ -124,6 +135,12 @@ surfaces to use the island pattern; this is one.
   path. Cursor is entirely copy-only for this reason. Further rails: an explicit
   per-run confirm naming the exact command, a bounded output ring, a 10-minute
   timeout, and `onUnmounted` cancel so a closed leaf leaves nothing running.
+  **The abort owns settlement**: once cancel/timeout has fired, the child's own
+  `close` does NOT resolve the run — on Windows the direct child is the `cmd.exe`
+  wrapper, which dies while `taskkill /T /F` is still walking descendants, and on
+  POSIX the group leader can exit while its forks are still being signalled, so
+  settling there would report the install stopped with npm still writing (and free
+  the store to start another on top of it).
   **Teardown is process-tree-wide, not child-only**: a package manager forks
   (lifecycle scripts, node-gyp) and on win32 the direct child is the `cmd.exe`
   wrapper, so a bare `child.kill()` would leave the real npm installing after

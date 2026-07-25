@@ -41,10 +41,25 @@ const isFound = computed(() => props.detection.status === 'found');
  */
 const isMissing = computed(() => props.detection.status === 'missing');
 
+/** Each way a real file still can't be launched needs its own remedy named. */
+function unusableText(
+  unusable: NonNullable<ProviderCliDetection['unusable']>,
+  cliCommand: string,
+): string {
+  switch (unusable.reason) {
+    case 'batch-shim':
+      return t('onboarding.providers.batchShim', { path: unusable.path, command: cliCommand });
+    case 'missing-node':
+      return t('onboarding.providers.missingNode', { path: unusable.path });
+    default:
+      return t('onboarding.providers.notExecutable', { path: unusable.path });
+  }
+}
+
 /**
  * The one explanatory line a not-found card shows, resolved here rather than as
- * nested template conditionals: four cases (unusable file, plain absence, and the
- * two unknown reasons) each need their own words, and the template stays one
+ * nested template conditionals: each unusable reason, a plain absence, and the
+ * two unknown reasons all need their own words, and the template stays one
  * `v-else`.
  */
 const statusLine = computed<{ state: string; text: string } | null>(() => {
@@ -53,12 +68,7 @@ const statusLine = computed<{ state: string; text: string } | null>(() => {
     return null;
   }
   if (unusable) {
-    return {
-      state: unusable.reason,
-      text: unusable.reason === 'batch-shim'
-        ? t('onboarding.providers.batchShim', { path: unusable.path, command: cliCommand })
-        : t('onboarding.providers.notExecutable', { path: unusable.path }),
-    };
+    return { state: unusable.reason, text: unusableText(unusable, cliCommand) };
   }
   if (status === 'missing') {
     return { state: 'missing', text: t('onboarding.providers.needsCli', { command: cliCommand }) };
