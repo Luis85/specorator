@@ -169,6 +169,38 @@ describe('restoreTeamChatDmTabs — dedup + validate (:225)', () => {
     expect(createTab).toHaveBeenCalledWith('c2', 't2', expect.objectContaining({ kind: 'chat' }));
     expect(errorLog).toHaveBeenCalledWith('team chat DM restore failed for one tab', expect.any(Error));
   });
+
+  // Round-58 Fix 2: persisted state can carry DUPLICATE entries for one conversation (a hand-edited
+  // or synced layout). trimRestorableDmsToBudget runs BEFORE any dedup, so duplicates consume budget
+  // slots the open coordinator later skips (it early-returns on an already-open conversation),
+  // silently dropping a valid DM. Dedup by conversationId BEFORE the trim so distinct DMs fill it.
+  it('dedups duplicate persisted entries before the budget trim so a valid DM is not dropped (Round-58)', async () => {
+    const created = new Set<string>();
+    const createTab = jest.fn().mockImplementation(async (cid: string, tabId: string) => { created.add(cid); return { id: tabId }; });
+    const plugin = {
+      settings: { maxTeamChatDms: 2 },
+      getConversationSync: jest.fn(() => teamChatConv),
+      getConversationById: jest.fn().mockResolvedValue(teamChatConv),
+      // Model the real skip: once a conversation is open (its createTab ran), the coordinator finds it.
+      findConversationAcrossViews: jest.fn((id: string) => (created.has(id) ? { view: {}, tabId: `t-${id}` } : null)),
+    } as never;
+    const m = { createTab, hasTab: jest.fn(() => true), switchToTab: jest.fn() } as never;
+
+    // Persisted [A(active), B, A] at budget 2. Without dedup, trim keeps [A, A] and drops B → the
+    // second A is skipped as already-open → B is lost. With dedup-before-trim, [A, B] both restore.
+    await restoreTeamChatDmTabs(plugin, m, {
+      openTabs: [
+        { tabId: 'tA1', conversationId: 'A', kind: 'chat' as const },
+        { tabId: 'tB', conversationId: 'B', kind: 'chat' as const },
+        { tabId: 'tA2', conversationId: 'A', kind: 'chat' as const },
+      ],
+      activeTabId: 'tA1',
+    });
+
+    expect(created.has('A')).toBe(true);
+    expect(created.has('B')).toBe(true);   // B is NOT dropped
+    expect(createTab).toHaveBeenCalledTimes(2);
+  });
 });
 
 describe('restoreTeamChatDmTabs — Team Chat cap governs restore (Round-40 Fix 1)', () => {

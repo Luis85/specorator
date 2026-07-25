@@ -15,5 +15,8 @@ export type TeamChatTranslationKey =
   | 'teamChat.rotationInterrupted'
   // Bound agent deleted from the roster: the open DM is read-only until a new agent is picked
   | 'teamChat.agentRemoved'
+  // Roster read failed (vault I/O) during the DM send guard: the send is blocked fail-safe and
+  // the reserved composer restored, so the user can retry once the transient glitch clears
+  | 'teamChat.agentVerifyFailed'
   // A reused-island action (fork / clear / new-session) that a DM's one-fixed-thread model disallows
   | 'teamChat.actionUnavailableInDm';

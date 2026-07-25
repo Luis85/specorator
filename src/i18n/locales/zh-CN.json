@@ -1339,6 +1339,7 @@
     "providerRotated": "{agent}: provider changed — started a new thread.",
     "rotationInterrupted": "Response interrupted — the agent's provider changed.",
     "agentRemoved": "This agent was removed from your team — the chat is read-only. Pick another agent to continue.",
+    "agentVerifyFailed": "Couldn't verify the agent — please try again.",
     "actionUnavailableInDm": "Not available in Team Chat — each agent has one fixed thread."
   }
 }

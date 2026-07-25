@@ -98,10 +98,17 @@ export async function restoreTeamChatDmTabs(
 ): Promise<void> {
   const allRestorable = persisted.openTabs.filter((tab) => isRestorableTeamChatDm(plugin, tab.conversationId));
   if (allRestorable.length === 0) return;
+  // Dedup by conversationId BEFORE the budget trim: persisted state can carry duplicate entries for
+  // one conversation (a hand-edited/synced layout). Trimming first lets those duplicates consume
+  // budget slots the open coordinator later skips (it early-returns on an already-open conversation),
+  // silently dropping a valid DM (e.g. [A(active), B, A] at budget 2 → trim keeps [A, A], drops B →
+  // second A skipped → B lost). First-occurrence-wins preserves order, so trim's "keep active +
+  // earliest" still holds on the distinct set (Round-58).
+  const distinctRestorable = dedupeByConversationId(allRestorable);
   // Honor Team Chat's OWN budget on restore, not the generic maxChatTabs the createTab cap
   // would otherwise enforce (dropping DMs within maxTeamChatDms): keep at most maxTeamChatDms,
   // trimming the least-recent extras but always keeping the persisted-active one (Round-40).
-  const restorable = trimRestorableDmsToBudget(allRestorable, persisted.activeTabId, resolveMaxTeamChatDms(plugin.settings));
+  const restorable = trimRestorableDmsToBudget(distinctRestorable, persisted.activeTabId, resolveMaxTeamChatDms(plugin.settings));
 
   // Pre-warm hydration in parallel (BaseHistoryService dedupes the createTab
   // re-fetch); without this the UI freezes for the sum of every transcript load.
@@ -295,6 +302,20 @@ export const DEFAULT_MAX_TEAM_CHAT_DMS = 5;
  *  a new DM can always displace a non-active one). */
 export function resolveMaxTeamChatDms(settings: { maxTeamChatDms?: number } | undefined): number {
   return Math.max(2, settings?.maxTeamChatDms ?? DEFAULT_MAX_TEAM_CHAT_DMS);
+}
+
+/** Order-preserving dedup of a restorable DM set by conversationId (first occurrence wins). Persisted
+ *  layouts can carry duplicate entries for one conversation; collapsing them BEFORE the budget trim
+ *  keeps duplicates from consuming distinct slots the open coordinator later skips (already-open).
+ *  Non-string ids are left as-is (they're filtered out upstream, so this only guards the type). */
+function dedupeByConversationId<T extends { conversationId: string | null }>(tabs: readonly T[]): T[] {
+  const seen = new Set<string>();
+  return tabs.filter((tab) => {
+    if (typeof tab.conversationId !== 'string') return true;
+    if (seen.has(tab.conversationId)) return false;
+    seen.add(tab.conversationId);
+    return true;
+  });
 }
 
 /** Trims a restorable DM set to the hot-DM budget, ALWAYS keeping the persisted-active DM and

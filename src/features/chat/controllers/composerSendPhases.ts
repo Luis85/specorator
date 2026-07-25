@@ -1,7 +1,10 @@
+import { Notice } from 'obsidian';
+
 import type { ChatRuntime } from '../../../core/runtime/ChatRuntime';
 import type { ChatTurnMetadata, ChatTurnRequest } from '../../../core/runtime/types';
 import { TOOL_EXIT_PLAN_MODE } from '../../../core/tools/toolNames';
 import type { ChatMessage, ImageAttachment, PlanApprovalDecision } from '../../../core/types';
+import { t } from '../../../i18n/i18n';
 import type { BrowserSelectionContext } from '../../../utils/browser';
 import type { CanvasSelectionContext } from '../../../utils/canvas';
 import { formatDurationMmSs } from '../../../utils/date';
@@ -240,7 +243,7 @@ export function rollbackOptimisticOutgoingTurn(
 
 /**
  * Restores a composer draft reserved (consumed) up front by the Team Chat DM send
- * (`InputController.confirmDmAgentOrRestoreComposer`) when the bound agent turns out removed. Only the
+ * (`confirmDmAgentOrRestoreComposer`, below) when the bound agent turns out removed. Only the
  * textarea text is consumed early — images and pill mentions are read LIVE at turn-build time and
  * can't be cleared before then — so restoring the captured text is the complete undo. Reuses the
  * same `ComposerRollbackSnapshot` the init-failure rollback captures (text-only slice of it).
@@ -258,6 +261,44 @@ export function restoreReservedComposerInput(
   if (send.inputEl.value.trim() !== '') return;
   send.inputEl.value = snapshot.inputText;
   resetInputHeight();
+}
+
+/** Minimal dependencies the Team Chat DM send guard reads — a structural slice so this
+ *  composer-phase module stays decoupled from the concrete plugin/logger types. */
+export interface DmComposerGuardDeps {
+  agentRosterStore: { get(id: string): Promise<unknown> };
+  logger: { scope(name: string): { error(message: string, error: unknown): void } };
+  resetInputHeight: () => void;
+}
+
+/**
+ * Team Chat DM removed-agent gate, run AFTER the composer was reserved (consumed) up front in
+ * `sendMessage`. Returns `true` when the bound agent still exists (proceed on the consumed
+ * composer). Returns `false` — restoring the reserved composer (newer-draft-safe) and notifying —
+ * when the agent was removed OR the roster read REJECTS. Catching the rejection is load-bearing:
+ * `AgentRosterStore.get` awaits `adapter.exists` OUTSIDE its try/catch, so a vault-I/O error
+ * rejects the read; unhandled, it would escape `sendMessage` with the composer already cleared and
+ * silently lose the user's text. Blocking on a failed read is fail-safe — the agent is unconfirmed,
+ * so a transient glitch can't send a turn without its persona/model; the user retries and it
+ * succeeds. Only the textarea text was consumed early (images/pills are read live at turn-build), so
+ * restoring the captured text is the complete undo.
+ */
+export async function confirmDmAgentOrRestoreComposer(
+  send: ComposerSendContext,
+  dmAgentId: string,
+  deps: DmComposerGuardDeps,
+): Promise<boolean> {
+  let removed = false;
+  try {
+    if ((await deps.agentRosterStore.get(dmAgentId)) !== null) return true;
+    removed = true;
+  } catch (error) {
+    deps.logger.scope('team-chat').error('roster read failed during DM send guard', error);
+  }
+  restoreReservedComposerInput(send, captureComposerRollbackSnapshot(send), deps.resetInputHeight);
+  // agentRemoved is a hard state (pick another agent); agentVerifyFailed is transient (retry).
+  new Notice(t(removed ? 'teamChat.agentRemoved' : 'teamChat.agentVerifyFailed'));
+  return false;
 }
 
 export function beginStreamingTurnState(

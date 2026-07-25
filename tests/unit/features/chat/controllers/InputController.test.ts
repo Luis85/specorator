@@ -2197,6 +2197,55 @@ describe('InputController - Message Queue', () => {
       // ...but the newer draft is PRESERVED — the old submitted text does NOT overwrite it.
       expect(inputEl.value).toBe('new draft');
     });
+
+    // Round-58 Fix 1: AgentRosterStore.get() awaits adapter.exists OUTSIDE its try/catch, so a
+    // vault I/O error makes the roster read REJECT. Round-53 cleared the composer UP FRONT, so an
+    // unhandled rejection would escape sendMessage AND lose the submitted text. The guard now
+    // catches it: restore the reserved composer + BLOCK the send (fail-safe — the agent is
+    // unconfirmed, so a transient glitch must not send a turn without its persona/model).
+    it('restores the composer + blocks the send (no throw) when the roster read REJECTS (Round-58)', async () => {
+      deps = makeDmDeps();
+      inputEl = deps.getInputEl() as ReturnType<typeof createMockInputEl>;
+      (deps.plugin as any).agentRosterStore = { get: jest.fn().mockRejectedValue(new Error('io')) };
+      mockNotice.mockClear();
+      inputEl.value = 'hello';
+      controller = new InputController(deps);
+      const dispatch = jest.spyOn(controller as any, 'dispatchComposerTurn').mockResolvedValue(undefined);
+
+      // sendMessage must NOT reject — the rejection is caught inside the guard.
+      await expect(controller.sendMessage()).resolves.toBeUndefined();
+
+      expect(dispatch).not.toHaveBeenCalled();     // the turn is blocked
+      expect(inputEl.value).toBe('hello');         // reserved composer restored (no text loss)
+      expect(mockNotice).toHaveBeenCalledWith(t('teamChat.agentVerifyFailed'));
+      expect(deps.plugin.logger.scope('team-chat').error).toHaveBeenCalledWith(
+        'roster read failed during DM send guard',
+        expect.any(Error),
+      );
+    });
+
+    // Round-58 + Round-55: a rejecting read must ALSO honor the newer-draft guard — the old
+    // submitted text must not clobber a draft the user typed during the (failing) await.
+    it('preserves a newer draft typed during a REJECTING roster read (Round-58)', async () => {
+      deps = makeDmDeps();
+      inputEl = deps.getInputEl() as ReturnType<typeof createMockInputEl>;
+      let rejectRoster: (e: unknown) => void = () => {};
+      (deps.plugin as any).agentRosterStore = {
+        get: jest.fn(() => new Promise((_resolve, reject) => { rejectRoster = reject; })),
+      };
+      inputEl.value = 'hello';
+      controller = new InputController(deps);
+      const dispatch = jest.spyOn(controller as any, 'dispatchComposerTurn').mockResolvedValue(undefined);
+
+      const sendPromise = controller.sendMessage();
+      expect(inputEl.value).toBe('');            // reserved up front (before the await)
+      inputEl.value = 'new draft';               // user types while the read is in flight
+      rejectRoster!(new Error('io'));
+      await sendPromise;
+
+      expect(dispatch).not.toHaveBeenCalled();
+      expect(inputEl.value).toBe('new draft');   // newer draft preserved (restore skipped, Round-55)
+    });
   });
 
   describe('Built-in commands - /resume', () => {

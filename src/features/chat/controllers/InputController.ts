@@ -51,6 +51,7 @@ import {
   completeApprovedNewSessionPlanToolCalls,
   type ComposerSendContext,
   type ComposerTurnOptions,
+  confirmDmAgentOrRestoreComposer,
   createAssistantPlaceholderMessage,
   createOutgoingUserMessage,
   type DispatchedTurnContext,
@@ -60,7 +61,6 @@ import {
   type PlanApprovalOutcome,
   resolveComposerSend,
   resolveComposerSourceImages,
-  restoreReservedComposerInput,
   restoreResumeCheckpointIfNeeded,
   rollbackOptimisticOutgoingTurn,
 } from './composerSendPhases';
@@ -295,7 +295,11 @@ export class InputController {
     // otherwise run WITHOUT the agent's persona/model) and tell the user. The composer was reserved
     // (consumed) above, so a removed agent restores it. Self-healing: a re-created agent resumes.
     const dmAgentId = teamChatDmBoundAgentId(this.deps.plugin, this.deps.state.currentConversationId);
-    if (dmAgentId && !(await this.confirmDmAgentOrRestoreComposer(send, dmAgentId))) return;
+    if (dmAgentId && !(await confirmDmAgentOrRestoreComposer(send, dmAgentId, {
+      agentRosterStore: this.deps.plugin.agentRosterStore,
+      logger: this.deps.plugin.logger,
+      resetInputHeight: () => this.deps.resetInputHeight(),
+    }))) return;
 
     // Persist any pasted/dropped images to the vault BEFORE the queue branch —
     // both the streaming-queue (state.queuedMessage) and the steer-then-commit
@@ -342,25 +346,6 @@ export class InputController {
         logger: this.deps.plugin.logger.scope('chat.images'),
       });
     }
-  }
-
-  /**
-   * Team Chat DM removed-agent gate, run AFTER the composer was reserved (consumed) up front in
-   * sendMessage. Reads the roster: `true` when the bound agent still exists (proceed on the
-   * consumed composer); `false` when it was removed — the reserved composer is restored and the
-   * user notified (self-healing on re-create), so the caller must return. Only the textarea text
-   * was consumed early (images/pills are read live at turn-build time), so restoring the captured
-   * text is the complete undo — `captureComposerRollbackSnapshot` reads `send.content` (stable
-   * since resolve), not the already-cleared textarea, so capturing it here is correct.
-   */
-  private async confirmDmAgentOrRestoreComposer(
-    send: ComposerSendContext,
-    dmAgentId: string,
-  ): Promise<boolean> {
-    if ((await this.deps.plugin.agentRosterStore.get(dmAgentId)) !== null) return true;
-    restoreReservedComposerInput(send, captureComposerRollbackSnapshot(send), () => this.deps.resetInputHeight());
-    new Notice(t('teamChat.agentRemoved'));
-    return false;
   }
 
   private queueComposerSendWhileStreaming(send: ComposerSendContext): ProgrammaticSendResult {
