@@ -12,6 +12,8 @@ const props = defineProps<{
   detection: ProviderCliDetection;
   install: ProviderCliInstall;
   run: InstallRunState;
+  /** Another provider's install is holding the store-wide lock. */
+  blockedBy?: string | null;
 }>();
 
 const emit = defineEmits<{
@@ -169,6 +171,7 @@ function submitPath(): void {
       :display-name="detection.displayName"
       :install="install"
       :run="run"
+      :blocked-by="blockedBy"
       @run="emit('install', $event)"
       @cancel="emit('cancelInstall')"
     />

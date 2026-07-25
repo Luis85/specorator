@@ -1377,6 +1377,7 @@
       "method": "Method",
       "run": "Install now",
       "running": "Installing…",
+      "otherRunning": "Waiting for the {name} install to finish — one at a time.",
       "cancel": "Cancel",
       "manualOnly": "This method runs an installer script, so it has to be run in your own terminal. Copy the command below.",
       "copy": "Copy",

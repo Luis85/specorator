@@ -161,6 +161,12 @@ surfaces to use the island pattern; this is one.
   path. Cursor is entirely copy-only for this reason. Further rails: an explicit
   per-run confirm naming the exact command, a bounded output ring, a 10-minute
   timeout, and `onUnmounted` cancel so a closed leaf leaves nothing running.
+  **Installs are serialized store-wide** (`installingProviderId`), not merely
+  per-provider: three of the four providers install through a global
+  `npm install -g`, which mutates one shared prefix and one shared metadata tree,
+  so two package managers running at once contend and one can clobber the other's
+  result — and confirming a second card is two clicks from the first. Every other
+  card's Run is disabled (not hidden) and names the provider it is waiting on.
   **The abort owns settlement, and waits for the child to actually be gone**:
   the POSIX half of the reaper only SIGNALS (`process.kill(-pid)` returns when
   the signal is queued, not when the group is reaped), so the abort additionally

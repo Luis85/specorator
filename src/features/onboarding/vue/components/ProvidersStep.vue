@@ -19,6 +19,18 @@ function installFor(providerId: ProviderId) {
 function onInstall(providerId: ProviderId, method: ProviderCliInstallMethod): void {
   store.startInstall(providerId, method);
 }
+
+/**
+ * The OTHER provider currently installing, by display name — installs are
+ * serialized store-wide, so every card but that one has its Run action held.
+ */
+function blockedBy(providerId: ProviderId): string | null {
+  const active = store.installingProviderId;
+  if (!active || active === providerId) {
+    return null;
+  }
+  return store.detections.find((d) => d.providerId === active)?.displayName ?? null;
+}
 </script>
 
 <template>
@@ -54,6 +66,7 @@ function onInstall(providerId: ProviderId, method: ProviderCliInstallMethod): vo
         :detection="detection"
         :install="installFor(detection.providerId)"
         :run="store.runFor(detection.providerId)"
+        :blocked-by="blockedBy(detection.providerId)"
         @toggle="store.setEnabled(detection.providerId, $event)"
         @install="onInstall(detection.providerId, $event)"
         @cancel-install="store.cancelInstall(detection.providerId)"

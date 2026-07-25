@@ -40,6 +40,7 @@ export type OnboardingTranslationKey =
   | 'onboarding.install.method'
   | 'onboarding.install.run'
   | 'onboarding.install.running'
+  | 'onboarding.install.otherRunning'
   | 'onboarding.install.cancel'
   | 'onboarding.install.manualOnly'
   | 'onboarding.install.copy'

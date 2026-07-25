@@ -279,6 +279,32 @@ describe('onboarding store', () => {
     expect(runCliInstall).toHaveBeenCalledTimes(1);
   });
 
+  it('serializes installs across providers, not just within one', async () => {
+    // Claude, Codex and OpenCode all install through a global `npm install -g`,
+    // which mutates one shared prefix and one shared metadata tree. Two package
+    // managers doing that at once contend, and one can clobber the other's
+    // result — and confirming a second card is two clicks from the first.
+    const controlled = deferredHandle();
+    const store = useOnboardingStore();
+    store.init(plugin);
+
+    store.startInstall('alpha', method);
+    store.startInstall('beta', method);
+
+    expect(runCliInstall).toHaveBeenCalledTimes(1);
+    expect(store.installingProviderId).toBe('alpha');
+    expect(store.runFor('beta').phase).toBe('idle');
+
+    // ...and the lock lifts once the running one settles.
+    controlled.finish({ ok: true, exitCode: 0 });
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(store.installingProviderId).toBeNull();
+
+    store.startInstall('beta', method);
+    expect(runCliInstall).toHaveBeenCalledTimes(2);
+  });
+
   it('dispose cancels in-flight installs so a closed leaf leaves no orphan child', () => {
     const cancel = vi.fn();
     const done = new Promise<CliInstallResult>(() => {});

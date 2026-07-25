@@ -14,6 +14,10 @@ import type { InstallRunState } from '../stores/onboardingStore';
 const props = defineProps<{ displayName: string; run: InstallRunState }>();
 
 const consoleText = computed(() => props.run.lines.join('\n'));
+/** A cancel that could not confirm the process tree exited — see `cliInstallRunner`. */
+const cancelWarning = computed(() => (
+  props.run.phase === 'cancelled' ? props.run.error : null
+));
 </script>
 
 <template>
@@ -41,11 +45,11 @@ const consoleText = computed(() => props.run.lines.join('\n'));
   <!-- A cancel that could not confirm the process tree exited. Shown because the
        Install button is live again and the descendants may not be gone. -->
   <p
-    v-if="run.phase === 'cancelled' && run.error"
+    v-if="cancelWarning"
     class="specorator-onboarding-install-result is-error"
     data-result="cancelled-warning"
   >
-    {{ run.error }}
+    {{ cancelWarning }}
   </p>
 
   <pre

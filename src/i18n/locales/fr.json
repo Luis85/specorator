@@ -1377,6 +1377,7 @@
       "method": "Méthode",
       "run": "Installer maintenant",
       "running": "Installation…",
+      "otherRunning": "En attente de la fin de l'installation de {name} — une seule à la fois.",
       "cancel": "Annuler",
       "manualOnly": "Cette méthode exécute un script d’installation : elle doit être lancée dans votre propre terminal. Copiez la commande ci-dessous.",
       "copy": "Copier",

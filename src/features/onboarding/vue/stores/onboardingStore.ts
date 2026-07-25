@@ -106,6 +106,20 @@ export const useOnboardingStore = defineStore('specorator-onboarding', () => {
     };
   }
 
+  /**
+   * The one provider currently installing, store-wide — installs do not overlap.
+   *
+   * Three of the four providers install through a global `npm install -g`, which
+   * mutates one shared prefix and one shared metadata tree. Two package managers
+   * doing that at once is not two independent installs: they contend, and one can
+   * fail or clobber the other's result. Per-provider phase alone would allow it,
+   * since confirming a second card is a couple of clicks away from the first.
+   */
+  const installingProviderId = computed<ProviderId | null>(() => {
+    const entry = Object.entries(runs.value).find(([, run]) => run.phase === 'running');
+    return entry?.[0] ?? null;
+  });
+
   /** Synchronous: every probe is a `statSync` walk of PATH, never a subprocess. */
   function refreshDetections(): void {
     scanning.value = true;
@@ -157,7 +171,8 @@ export const useOnboardingStore = defineStore('specorator-onboarding', () => {
    * the user having to press anything.
    */
   function startInstall(providerId: ProviderId, method: ProviderCliInstallMethod): void {
-    if (runFor(providerId).phase === 'running') return;
+    // Store-wide, not per-provider: see `installingProviderId`.
+    if (installingProviderId.value) return;
 
     patchRun(providerId, { phase: 'running', methodId: method.id, lines: [], error: null });
     const handle = runCliInstall(method, {
@@ -288,6 +303,7 @@ export const useOnboardingStore = defineStore('specorator-onboarding', () => {
     creatingFolders,
     folderError,
     enabledProviderIds,
+    installingProviderId,
     modelOptions,
     settingsProviderId,
     init,

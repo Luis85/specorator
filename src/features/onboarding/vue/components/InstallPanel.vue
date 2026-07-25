@@ -15,6 +15,8 @@ const props = defineProps<{
   displayName: string;
   install: ProviderCliInstall;
   run: InstallRunState;
+  /** Display name of the provider holding the store-wide install lock, if any. */
+  blockedBy?: string | null;
 }>();
 
 const emit = defineEmits<{
@@ -40,6 +42,14 @@ const selected = computed<ProviderCliInstallMethod | null>(
 );
 const isRunning = computed(() => props.run.phase === 'running');
 const canSpawn = computed(() => selected.value?.argv !== null && selected.value !== undefined);
+const isBlocked = computed(() => Boolean(props.blockedBy));
+// Resolved here rather than as template conditionals: the running card already
+// says "Installing…", so the waiting note belongs only on the others.
+const blockedNote = computed(() => (
+  isBlocked.value && !isRunning.value
+    ? t('onboarding.install.otherRunning', { name: props.blockedBy ?? '' })
+    : null
+));
 const showRunButton = computed(() => canSpawn.value && !isRunning.value && !confirming.value);
 const displayCommand = computed(() => selected.value?.displayCommand ?? '');
 const copyLabel = computed(() => (
@@ -133,10 +143,21 @@ async function copyCommand(): Promise<void> {
         type="button"
         class="mod-cta"
         data-action="install"
+        :disabled="isBlocked"
         @click="requestRun()"
       >
         {{ t('onboarding.install.run') }}
       </button>
+      <!-- Installs are serialized store-wide: three of the four providers install
+           through a global `npm install -g`, and two package managers mutating one
+           prefix at once can clobber each other's result. -->
+      <span
+        v-if="blockedNote"
+        class="specorator-onboarding-install-status"
+        data-state="blocked"
+      >
+        {{ blockedNote }}
+      </span>
       <button
         v-if="isRunning"
         type="button"

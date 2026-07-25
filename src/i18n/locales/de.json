@@ -1377,6 +1377,7 @@
       "method": "Methode",
       "run": "Jetzt installieren",
       "running": "Installiere …",
+      "otherRunning": "Warte auf den Abschluss der {name}-Installation – nur eine gleichzeitig.",
       "cancel": "Abbrechen",
       "manualOnly": "Diese Methode führt ein Installationsskript aus und muss daher in deinem eigenen Terminal laufen. Kopiere den Befehl unten.",
       "copy": "Kopieren",

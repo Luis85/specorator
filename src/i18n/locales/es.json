@@ -1377,6 +1377,7 @@
       "method": "Método",
       "run": "Instalar ahora",
       "running": "Instalando…",
+      "otherRunning": "Esperando a que termine la instalación de {name}: solo una a la vez.",
       "cancel": "Cancelar",
       "manualOnly": "Este método ejecuta un script de instalación, así que hay que lanzarlo en tu propia terminal. Copia el comando de abajo.",
       "copy": "Copiar",

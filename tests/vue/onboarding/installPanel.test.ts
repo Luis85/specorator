@@ -26,13 +26,18 @@ const install: ProviderCliInstall = {
   ],
 };
 
-function setup(overrides: Partial<ProviderCliInstall> = {}, run: InstallRunState = IDLE) {
+function setup(
+  overrides: Partial<ProviderCliInstall> = {},
+  run: InstallRunState = IDLE,
+  blockedBy: string | null = null,
+) {
   return render(InstallPanel, {
     props: {
       providerId: 'alpha',
       displayName: 'Alpha',
       install: { ...install, ...overrides },
       run,
+      blockedBy,
     },
   });
 }
@@ -137,6 +142,22 @@ describe('InstallPanel', () => {
     expect(container.querySelector('[data-result="cancelled"]')).not.toBeNull();
     expect(container.querySelector('[data-result="cancelled-warning"]')?.textContent)
       .toContain('process tree');
+  });
+
+  it('holds Run while another provider is installing, and says whose', () => {
+    // Global `npm install -g` runs from three of the four providers mutate one
+    // shared prefix; a live Run button on every card invites exactly the overlap
+    // the store refuses. Disabled, not hidden — the reason has to be visible.
+    const { container } = setup({}, IDLE, 'Codex');
+    const run = container.querySelector<HTMLButtonElement>('[data-action="install"]')!;
+
+    expect(run.disabled).toBe(true);
+    expect(container.querySelector('[data-state="blocked"]')?.textContent).toContain('Codex');
+  });
+
+  it('leaves Run live when nothing else is installing', () => {
+    expect(setup().container.querySelector<HTMLButtonElement>('[data-action="install"]')!.disabled)
+      .toBe(false);
   });
 
   it('links the docs only when the provider URL is https', () => {
