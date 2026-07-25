@@ -230,4 +230,31 @@ edited-files strip, presence, view mount).
   preservation, and displaced-slot reuse are each handled, but the class stays
   narrow-edge-prone. A simpler "provider changed — reopen to switch" affordance
   (matching the app's existing new-chat-to-change-provider rule) would retire the
-  class; deferred.
+  class; deferred. Two concrete residuals of that density are the next two entries.
+- **Overlapping provider rotations can strand the middle DM.** During a RAPID A→B→C
+  re-point of one agent's provider, two `roster:changed` reconciliations overlap: the
+  second observes B as `previousConversationId` while its collected
+  `displacedConversationId` still names A, so the `displaced ??` fallback discards B.
+  The first rotation closes A; the second opens C without activating it and tries to
+  close A again — leaving B's runtime on the now-stale provider. Self-recovering (the
+  next `roster:changed`/select re-rotates B, since its `providerId` ≠ expected) and
+  requires re-pointing one agent's provider three times with overlapping
+  reconciliations. Serializing `resolveOrCreate` + collection onto the selection tail
+  would close it; left as-is (bizarre input + recoverable).
+- **Composer attachments aren't reserved before the removed-agent roster read.** The
+  reserve-before-await (the removed-agent DM send/steer guard) snapshots only the
+  composer TEXT; images and file/mention pills are read LIVE at turn-build
+  (`buildTurnSubmission` reads the context managers with no chokepoint). So adding an
+  attachment during that sub-second roster await misattributes it to the
+  already-submitted turn and drops it from the next draft. A clean reserve would have
+  to restructure the turn-build attachment path (`buildTurnSubmission`'s signature +
+  both call sites + a selective clear + the init-failure rollback) — disproportionate
+  to the window; left as-is.
+- **A queued DM can be lost if its agent is deleted mid-steer-dispatch.** The steer
+  path reserves the queued message before its removed-agent roster read, but the
+  actual send is deferred one macrotask (`dispatchQueuedMessage`'s `setTimeout` →
+  `requestSend`). If the agent is deleted in that window, the deferred content-override
+  send is rejected by `InputController`'s authoritative removed-agent guard, and
+  because it consumed no textarea its rollback can't restore the queued text/images.
+  Sub-second window + requires deleting the agent exactly as a steer dispatches; the
+  content is user-recoverable by re-typing.
