@@ -561,6 +561,9 @@ describe('TeamChatView.selectAgent — resolve → cross-view reuse / create', (
       plugin: {
         agentRosterStore: { get: jest.fn().mockResolvedValue({ name: 'Ada' }) },
         events: { emit: jest.fn() }, // closeTeamChatDmTab broadcasts presence on the force-close (T7 :168)
+        // Round-57: conv-old IS this agent's own DM (surface team-chat + boundAgentId roster:a), so the
+        // ownership guard treats it as the displaced tab and rotation closes it exactly as before.
+        getConversationSync: jest.fn((id: string) => (id === 'conv-old' ? { surface: 'team-chat', boundAgentId: 'roster:a' } : null)),
         getTeamChatThreadStore: () => ({ get, resolveOrCreate }),
         findConversationAcrossViews: jest.fn((id: string) => {
           // The new DM registers only after createTab runs; the old DM lives in another leaf.
@@ -596,6 +599,9 @@ describe('TeamChatView.selectAgent — resolve → cross-view reuse / create', (
     const closeTab = jest.fn();
     const view = makeView({
       plugin: {
+        // Round-57: conv-1 is the agent's own DM; the guard resolves it as displaced but the
+        // mapping is unchanged (get === resolveOrCreate), so reconcileRotation still closes nothing.
+        getConversationSync: jest.fn((id: string) => (id === 'conv-1' ? { surface: 'team-chat', boundAgentId: 'roster:a' } : null)),
         getTeamChatThreadStore: () => ({ get, resolveOrCreate }),
         findConversationAcrossViews: jest.fn((id: string) =>
           id === 'conv-1' && tabOpen
@@ -662,6 +668,90 @@ describe('TeamChatView.selectAgent — resolve → cross-view reuse / create', (
     // The lingering displaced old-provider tab IS force-closed cross-leaf, freeing its stale runtime.
     expect(closeOldTab).toHaveBeenCalledWith('tab-old', true);
     // No duplicate rotation notice — the mapping did not change on this pass.
+    expect(mockNotice).not.toHaveBeenCalled();
+  });
+
+  // Round-57 (:409): a CORRUPT threads.json can map the agent key onto an ORDINARY chat
+  // (hand-edit / sync mangle). resolveOrCreate rightly rejects the unusable mapping and creates a
+  // FRESH DM, but selectAgent used to treat the corrupt pre-resolve id as the rotation's displaced
+  // tab — so reconcileRotation would findConversationAcrossViews it and FORCE-CLOSE that unrelated
+  // (possibly streaming) chat. The ownership guard leaves an un-owned previousConversationId out of
+  // the displaced slot entirely, so nothing unrelated is closed and no spurious rotation notice fires.
+  it('does not force-close an unrelated ORDINARY chat a corrupt mapping points at (Round-57)', async () => {
+    let freshOpen = false;
+    const get = jest.fn().mockResolvedValue('conv-corrupt');            // corrupt: agent key → an ordinary chat
+    const resolveOrCreate = jest.fn().mockResolvedValue('conv-fresh');   // store rejected it → fresh DM
+    const createTab = jest.fn().mockImplementation(async () => { freshOpen = true; return { id: 'tab-fresh' }; });
+    const unrelatedClose = jest.fn().mockResolvedValue(true);
+    const otherLeaf = { id: 'leaf-other' };
+    const view = makeView({
+      leaf: { id: 'leaf-this' },
+      plugin: {
+        agentRosterStore: { get: jest.fn().mockResolvedValue({ name: 'Ada' }) },
+        events: { emit: jest.fn() },
+        // conv-corrupt is an ORDINARY chat (surface 'chat'), NOT a team-chat DM → not owned by roster:a.
+        getConversationSync: jest.fn((id: string) =>
+          id === 'conv-corrupt' ? { surface: 'chat', boundAgentId: 'roster:a' } : null),
+        getTeamChatThreadStore: () => ({ get, resolveOrCreate }),
+        findConversationAcrossViews: jest.fn((id: string) => {
+          if (id === 'conv-fresh') {
+            return freshOpen
+              ? { view: { leaf: { id: 'leaf-this' }, getTabManager: () => ({ switchToTab: jest.fn() }) }, tabId: 'tab-fresh' }
+              : null;
+          }
+          if (id === 'conv-corrupt') return { view: { leaf: otherLeaf, getTabManager: () => ({ closeTab: unrelatedClose }) }, tabId: 'tab-corrupt' };
+          return null;
+        }),
+      },
+    });
+    view.tabManager = { createTab, switchToTab: jest.fn() };
+
+    await view.selectAgent('roster:a');
+
+    // The fresh DM opened...
+    expect(createTab).toHaveBeenCalledWith('conv-fresh', undefined, { activate: true, kind: 'chat', bypassTabLimit: true });
+    // ...but the unrelated ordinary chat the corrupt map pointed at is NEVER force-closed...
+    expect(unrelatedClose).not.toHaveBeenCalled();
+    // ...and no spurious rotation notice fired (nothing was a real displaced DM).
+    expect(mockNotice).not.toHaveBeenCalled();
+  });
+
+  // Round-57 (:409): the same corruption, but the corrupt id is ANOTHER agent's live DM. It IS a
+  // team-chat DM, so the surface check alone would pass — only the bound-agent check rejects it, so
+  // agent B's DM (and its stream) is never force-closed by selecting agent A.
+  it("does not force-close ANOTHER agent's DM a corrupt mapping points at (Round-57)", async () => {
+    let freshOpen = false;
+    const get = jest.fn().mockResolvedValue('conv-otherdm');            // corrupt: agent A's key → agent B's DM
+    const resolveOrCreate = jest.fn().mockResolvedValue('conv-fresh');
+    const createTab = jest.fn().mockImplementation(async () => { freshOpen = true; return { id: 'tab-fresh' }; });
+    const otherAgentClose = jest.fn().mockResolvedValue(true);
+    const otherLeaf = { id: 'leaf-other' };
+    const view = makeView({
+      leaf: { id: 'leaf-this' },
+      plugin: {
+        agentRosterStore: { get: jest.fn().mockResolvedValue({ name: 'Ada' }) },
+        events: { emit: jest.fn() },
+        // conv-otherdm is a team-chat DM but bound to a DIFFERENT agent → not owned by roster:a.
+        getConversationSync: jest.fn((id: string) =>
+          id === 'conv-otherdm' ? { surface: 'team-chat', boundAgentId: 'roster:b' } : null),
+        getTeamChatThreadStore: () => ({ get, resolveOrCreate }),
+        findConversationAcrossViews: jest.fn((id: string) => {
+          if (id === 'conv-fresh') {
+            return freshOpen
+              ? { view: { leaf: { id: 'leaf-this' }, getTabManager: () => ({ switchToTab: jest.fn() }) }, tabId: 'tab-fresh' }
+              : null;
+          }
+          if (id === 'conv-otherdm') return { view: { leaf: otherLeaf, getTabManager: () => ({ closeTab: otherAgentClose }) }, tabId: 'tab-b' };
+          return null;
+        }),
+      },
+    });
+    view.tabManager = { createTab, switchToTab: jest.fn() };
+
+    await view.selectAgent('roster:a');
+
+    expect(createTab).toHaveBeenCalledWith('conv-fresh', undefined, { activate: true, kind: 'chat', bypassTabLimit: true });
+    expect(otherAgentClose).not.toHaveBeenCalled(); // agent B's DM is untouched
     expect(mockNotice).not.toHaveBeenCalled();
   });
 

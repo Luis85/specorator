@@ -14,7 +14,7 @@ import { openEditedFile } from '../chat/tabs/tabUi';
 import type { PersistedTabManagerState } from '../chat/tabs/types';
 import { getTeamChatDmOpenCoordinator } from './TeamChatDmOpenCoordinator';
 import { applyDmEditedFilesSetting, applyDmHiddenCommands, noticeRemovedAgentDms, projectActiveDmEditedFiles, projectActiveDmProviderId, reconcileRestoredDmProviders, refreshDmModelState, rotateChangedDmProviders } from './teamChatDmRefresh';
-import { openResolvedTeamChatDm, reconcileRotation, restoreTeamChatDmTabs, serializeOnTail, touchDmRecency } from './teamChatDmTabs';
+import { openResolvedTeamChatDm, ownedDisplacedDmId, reconcileRotation, restoreTeamChatDmTabs, serializeOnTail, touchDmRecency } from './teamChatDmTabs';
 import { projectCrossLeafPresence, type TeamChatPresence } from './teamChatPresence';
 import type { TeamChatThreadStore } from './TeamChatThreadStore';
 import { createTeamChatPinia } from './ui/vue/globalPinia';
@@ -404,9 +404,10 @@ export class TeamChatView extends ItemView implements ChatViewHandle {
     // Bail if the leaf closed/re-opened or a newer select superseded this while resolveOrCreate was in
     // flight — else the open mounts into a detached manager or a DM the user already left (:209).
     if (isStale()) return;
-    // The tab to close/reuse: an explicit displaced id (post-reload rotation cleanup, where get() has
-    // already rotated) else the pre-resolve mapping (a live rotation left it behind) (Round-48 Fix A).
-    const displaced = options.displacedConversationId ?? previousConversationId;
+    // The tab to close/reuse: an explicit displaced id (post-reload rotation cleanup), else the
+    // pre-resolve mapping — but ONLY when it is genuinely THIS agent's own DM, never a corrupt map
+    // pointing at an unrelated chat/DM that reconcileRotation would then force-close (Round-48 A; Round-57).
+    const displaced = options.displacedConversationId ?? ownedDisplacedDmId(this.plugin, previousConversationId, agentId);
     // Serialize this leaf's open+reconcile on a per-leaf tail (Round-49): two fast clicks on
     // DIFFERENT agents (distinct conversationIds → NOT collapsed by the per-id coordinator) must
     // run one-at-a-time, else at full budget both evict the same LRU victim (double-close → cap

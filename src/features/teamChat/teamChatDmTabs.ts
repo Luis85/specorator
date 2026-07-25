@@ -2,6 +2,7 @@ import { Notice, type WorkspaceLeaf } from 'obsidian';
 
 import { t } from '../../i18n/i18n';
 import type SpecoratorPlugin from '../../main';
+import { teamChatDmBoundAgentId } from '../chat/controllers/teamChatSurface';
 import type { TabManager } from '../chat/tabs/TabManager';
 import type { PersistedTabManagerState } from '../chat/tabs/types';
 import { getTeamChatDmOpenCoordinator } from './TeamChatDmOpenCoordinator';
@@ -190,6 +191,29 @@ export async function closeRotatedDmTab(
   );
   if (streaming) new Notice(t('teamChat.rotationInterrupted'));
   await closeTeamChatDmTab(plugin, manager, stale.tabId);
+}
+
+/**
+ * The displaced-tab id `selectAgent` may hand to `reconcileRotation`, but ONLY when
+ * `previousConversationId` is genuinely THIS agent's own Team Chat DM (it exists, is
+ * `surface === 'team-chat'`, AND its `boundAgentId` is `agentId`); otherwise null.
+ *
+ * Guards the `get()`-derived fallback against a CORRUPT `threads.json`: a hand-edited or
+ * sync-mangled map can point the agent key at an ordinary chat or ANOTHER agent's DM.
+ * `resolveOrCreate` already rejects such an unusable mapping (creating a fresh DM), but the raw
+ * pre-resolve id must not then be treated as the rotation's displaced tab — reconcileRotation
+ * would `findConversationAcrossViews` it and FORCE-CLOSE that unrelated (possibly streaming) tab,
+ * interrupting a different conversation. Reuses the shared surface predicate; a null/empty id or a
+ * non-owned conversation answers null, so the rotation neither registers nor closes it (Round-57).
+ * The rotation path's explicit `displacedConversationId` is the mismatched tab's OWN id (already
+ * owned), so it short-circuits this guard and stays unguarded.
+ */
+export function ownedDisplacedDmId(
+  plugin: SpecoratorPlugin,
+  previousConversationId: string | null,
+  agentId: string,
+): string | null {
+  return teamChatDmBoundAgentId(plugin, previousConversationId) === agentId ? previousConversationId : null;
 }
 
 /** A persisted tab is restorable only if its conversation still exists AND is a real
