@@ -1347,6 +1347,8 @@
       "detected": "インストール済み",
       "notDetected": "見つかりません",
       "unknown": "未確認",
+      "unknownNoResolver": "まだ確認できません。プラグインを再読み込みしてから「再確認」を使用してください。",
+      "unknownExternal": "{command} を別のターゲット（WSL など）で実行するため、ここからは確認できません。",
       "rescan": "再確認",
       "rescanning": "確認中…",
       "use": "{name} を使う",

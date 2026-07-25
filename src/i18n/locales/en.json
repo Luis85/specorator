@@ -1347,6 +1347,8 @@
       "detected": "Installed",
       "notDetected": "Not found",
       "unknown": "Not checked yet",
+      "unknownNoResolver": "Couldn't check this one yet — reload the plugin, then use Check again.",
+      "unknownExternal": "Runs {command} on another target (such as WSL), which can't be checked from here.",
       "rescan": "Check again",
       "rescanning": "Checking…",
       "use": "Use {name}",

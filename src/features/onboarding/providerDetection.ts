@@ -1,9 +1,10 @@
+import { getRuntimeEnvironmentVariables } from '@/core/providers/providerEnvironment';
 import { ProviderRegistry } from '@/core/providers/ProviderRegistry';
 import { ProviderWorkspaceRegistry } from '@/core/providers/ProviderWorkspaceRegistry';
 import type { ProviderId } from '@/core/providers/types';
 import type { PluginContext } from '@/core/types/PluginContext';
 import { asSettingsBag } from '@/core/types/settings';
-import { findBinaryOnPath } from '@/utils/cliBinaryLocator';
+import { findBinaryOnPath, isExistingFile } from '@/utils/cliBinaryLocator';
 
 /**
  * `found` — a binary the runtime would actually spawn.
@@ -16,6 +17,17 @@ import { findBinaryOnPath } from '@/utils/cliBinaryLocator';
  */
 export type ProviderCliStatus = 'found' | 'missing' | 'unknown';
 
+/**
+ * Why nothing authoritative could look, so the card can explain instead of
+ * shrugging — and so it can offer the RIGHT remedy (an install helps a missing
+ * CLI; it helps neither of these).
+ */
+export type ProviderCliUnknownReason =
+  /** Workspace services (and with them the provider's resolver) aren't up. */
+  | 'no-resolver'
+  /** The resolver named a command that runs somewhere this host can't stat. */
+  | 'external-target';
+
 export interface ProviderCliDetection {
   providerId: ProviderId;
   displayName: string;
@@ -24,6 +36,8 @@ export interface ProviderCliDetection {
   status: ProviderCliStatus;
   /** Resolved absolute binary path when `status === 'found'`. */
   cliPath: string | null;
+  /** Set only when `status === 'unknown'`. */
+  unknownReason?: ProviderCliUnknownReason;
   enabled: boolean;
 }
 
@@ -40,6 +54,27 @@ function binaryCandidates(providerId: ProviderId): string[] {
 }
 
 /**
+ * The PATH override the provider's own runtime will search, taken from the same
+ * place its resolver does: the shared + provider-scoped environment text.
+ *
+ * A CLI installed only under a provider-scoped `PATH=` entry is genuinely
+ * launchable — `OpencodeChatRuntime` builds its subprocess env from exactly this
+ * — so probing the host PATH alone would report a working install as missing.
+ * Read from settings rather than `plugin.getResolvedEnvironmentVariables`: that
+ * one resolves SecretStorage refs and warns about missing ones, which a probe
+ * that reruns on every card interaction must not do.
+ */
+function providerPathOverride(
+  settings: Record<string, unknown>,
+  providerId: ProviderId,
+): string | undefined {
+  const env = getRuntimeEnvironmentVariables(settings, providerId);
+  // Windows env names are case-insensitive, so the override may arrive as `Path`.
+  const key = Object.keys(env).find((name) => name.toUpperCase() === 'PATH');
+  return key ? env[key] : undefined;
+}
+
+/**
  * Probes one provider's CLI the way that provider's RUNTIME will at spawn time,
  * so the setup view can't report something the runtime disagrees with.
  *
@@ -53,7 +88,12 @@ function binaryCandidates(providerId: ProviderId): string[] {
  *   that would promise a provider the user can't actually use.
  * - **Runtime spawns the bare command** (OpenCode). Its resolver is
  *   configured-paths-only by design, so `null` means "no pin, use PATH" and the
- *   probe is the authoritative answer, not a fallback.
+ *   probe is the authoritative answer, not a fallback. That probe searches the
+ *   provider's own runtime PATH, not just the host's.
+ *
+ * A resolved value is only `found` once it is confirmed to be a file on THIS
+ * host; one that isn't (Codex in WSL mode names a command inside the distro) is
+ * `unknown`/`external-target` rather than a promise we can't check.
  *
  * `reset()` before probing: `CachedCliResolver` memoizes on a settings-derived
  * key, and an install changes no setting, so a cached `null` would otherwise
@@ -78,23 +118,38 @@ export function detectProviderCli(
   if (resolver) {
     resolver.reset();
     const resolved = resolver.resolveFromSettings(settings);
-    if (resolved) {
+    if (resolved && isExistingFile(resolved)) {
       return { ...base, status: 'found', cliPath: resolved };
+    }
+    if (resolved) {
+      // A resolver can name a command that does not exist on THIS host: Codex in
+      // WSL mode resolves to `codex` (or a configured Linux path), which the
+      // runtime hands to `wsl.exe` to run inside the guest. Verifying it would
+      // mean spawning a subprocess into the distro, and probing the host PATH
+      // would answer a different question — so admit we don't know instead of
+      // promising a ready provider (and instead of offering a host install that
+      // would not reach the guest anyway).
+      return { ...base, status: 'unknown', unknownReason: 'external-target', cliPath: null };
     }
     if (!spawnsBareCommand) {
       return { ...base, status: 'missing', cliPath: null };
     }
   } else if (!spawnsBareCommand) {
-    return { ...base, status: 'unknown', cliPath: null };
+    return { ...base, status: 'unknown', unknownReason: 'no-resolver', cliPath: null };
   }
 
-  const onPath = findBinaryOnPath(binaryCandidates(providerId));
+  const onPath = findBinaryOnPath(
+    binaryCandidates(providerId),
+    providerPathOverride(settings, providerId),
+  );
   if (onPath) {
     return { ...base, status: 'found', cliPath: onPath };
   }
   // Nothing found: `missing` only when a resolver also looked, so an
   // uninitialized workspace never hardens into a false negative.
-  return { ...base, status: resolver ? 'missing' : 'unknown', cliPath: null };
+  return resolver
+    ? { ...base, status: 'missing', cliPath: null }
+    : { ...base, status: 'unknown', unknownReason: 'no-resolver', cliPath: null };
 }
 
 /**

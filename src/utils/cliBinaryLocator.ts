@@ -4,7 +4,8 @@ import * as path from 'path';
 import { getEnhancedPath, parseEnvironmentVariables } from './env';
 import { expandHomePath, parsePathEntries } from './path';
 
-function isExistingFile(filePath: string): boolean {
+/** True when the path points at a real file on THIS host. */
+export function isExistingFile(filePath: string): boolean {
   try {
     return fs.statSync(filePath).isFile();
   } catch {

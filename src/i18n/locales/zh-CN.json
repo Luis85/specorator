@@ -1347,6 +1347,8 @@
       "detected": "已安装",
       "notDetected": "未找到",
       "unknown": "尚未检查",
+      "unknownNoResolver": "暂时无法检查——请重新加载插件，然后使用“重新检查”。",
+      "unknownExternal": "在其他目标（例如 WSL）上运行 {command}，无法从此处检查。",
       "rescan": "重新检查",
       "rescanning": "正在检查…",
       "use": "使用 {name}",

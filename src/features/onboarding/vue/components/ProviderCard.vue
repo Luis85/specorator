@@ -33,6 +33,18 @@ const statusLabel = computed(() => {
 });
 
 const isFound = computed(() => props.detection.status === 'found');
+/**
+ * An install is only offered for a CONFIRMED absence. `unknown` means nothing
+ * authoritative could look, so a global install would have the user reinstall a
+ * package they may already have — and the re-probe afterwards would still say
+ * `unknown`, leaving the same button offered again.
+ */
+const isMissing = computed(() => props.detection.status === 'missing');
+const unknownExplanation = computed(() => (
+  props.detection.unknownReason === 'external-target'
+    ? t('onboarding.providers.unknownExternal', { command: props.detection.cliCommand })
+    : t('onboarding.providers.unknownNoResolver')
+));
 
 function submitPath(): void {
   emit('setPath', manualPath.value);
@@ -72,10 +84,17 @@ function submitPath(): void {
       <code>{{ detection.cliPath }}</code>
     </p>
     <p
-      v-else
+      v-else-if="isMissing"
       class="specorator-onboarding-provider-path"
     >
       {{ t('onboarding.providers.needsCli', { command: detection.cliCommand }) }}
+    </p>
+    <p
+      v-else
+      class="specorator-onboarding-provider-path"
+      data-state="unknown"
+    >
+      {{ unknownExplanation }}
     </p>
 
     <label class="specorator-onboarding-provider-use">
@@ -100,7 +119,7 @@ function submitPath(): void {
     </p>
 
     <InstallPanel
-      v-if="!isFound"
+      v-if="isMissing"
       :provider-id="detection.providerId"
       :display-name="detection.displayName"
       :install="install"
@@ -109,8 +128,11 @@ function submitPath(): void {
       @cancel="emit('cancelInstall')"
     />
 
-    <!-- Escape hatch for a binary in a place no PATH scan reaches. Writes the
-         host-scoped path, so a synced vault can't push it to another machine. -->
+    <!-- Escape hatch for a binary in a place no PATH scan reaches — including a
+         target this host cannot stat at all (Codex in WSL reads its command from
+         the same setting). Offered for `unknown` too, unlike the installer: it
+         names a path instead of assuming one is absent. Writes the host-scoped
+         path, so a synced vault can't push it to another machine. -->
     <div
       v-if="!isFound"
       class="specorator-onboarding-provider-manual"

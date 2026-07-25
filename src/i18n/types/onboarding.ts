@@ -20,6 +20,8 @@ export type OnboardingTranslationKey =
   | 'onboarding.providers.detected'
   | 'onboarding.providers.notDetected'
   | 'onboarding.providers.unknown'
+  | 'onboarding.providers.unknownNoResolver'
+  | 'onboarding.providers.unknownExternal'
   | 'onboarding.providers.rescan'
   | 'onboarding.providers.rescanning'
   | 'onboarding.providers.use'

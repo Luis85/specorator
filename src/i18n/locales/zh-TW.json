@@ -1347,6 +1347,8 @@
       "detected": "已安裝",
       "notDetected": "找不到",
       "unknown": "尚未檢查",
+      "unknownNoResolver": "目前還無法檢查——請重新載入外掛程式，然後使用「重新檢查」。",
+      "unknownExternal": "在其他目標（例如 WSL）上執行 {command}，無法從這裡檢查。",
       "rescan": "重新檢查",
       "rescanning": "正在檢查…",
       "use": "使用 {name}",

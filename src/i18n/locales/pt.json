@@ -1347,6 +1347,8 @@
       "detected": "Instalado",
       "notDetected": "Não encontrado",
       "unknown": "Ainda não verificado",
+      "unknownNoResolver": "Ainda não foi possível verificar — recarregue o plugin e use «Verificar novamente».",
+      "unknownExternal": "Executa {command} noutro destino (como o WSL), que não pode ser verificado a partir daqui.",
       "rescan": "Verificar novamente",
       "rescanning": "Verificando…",
       "use": "Usar {name}",

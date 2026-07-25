@@ -5,9 +5,12 @@ import { detectProviderCli, detectProviderClis } from '@/features/onboarding/pro
 
 jest.mock('@/utils/cliBinaryLocator', () => ({
   findBinaryOnPath: jest.fn(() => null),
+  // Defaults to "the resolver named a real host file", which is what every
+  // resolver but Codex's WSL branch guarantees; the WSL shape overrides it.
+  isExistingFile: jest.fn(() => true),
 }));
 
-import { findBinaryOnPath } from '@/utils/cliBinaryLocator';
+import { findBinaryOnPath, isExistingFile } from '@/utils/cliBinaryLocator';
 
 // Stub registrations rather than importing `@/providers`: the real aggregator
 // drags the MCP SDK's ESM-only deps in, and detection only needs the registry's
@@ -72,6 +75,8 @@ afterEach(() => {
   ProviderWorkspaceRegistry.clear();
   jest.mocked(findBinaryOnPath).mockReset();
   jest.mocked(findBinaryOnPath).mockReturnValue(null);
+  jest.mocked(isExistingFile).mockReset();
+  jest.mocked(isExistingFile).mockReturnValue(true);
 });
 
 function makePlugin(settings: Record<string, unknown> = {}) {
@@ -165,6 +170,43 @@ describe('detectProviderCli', () => {
 
     const [candidates] = jest.mocked(findBinaryOnPath).mock.calls[0];
     expect(candidates).toEqual(expect.arrayContaining(['pathcli', 'pathcli-alt']));
+  });
+
+  it('does not promise ready for a command that runs on another target', () => {
+    // Codex in WSL mode resolves to a command inside the distro (`codex`, or a
+    // configured Linux path). It exists nowhere on this host, and the host PATH
+    // would answer a different question — so it must not read as installed, and
+    // a host install would not reach the guest.
+    ProviderWorkspaceRegistry.setServices('det-alpha', {
+      cliResolver: stubResolver('codex'),
+    } as never);
+    jest.mocked(isExistingFile).mockReturnValue(false);
+
+    expect(detectProviderCli(makePlugin(), 'det-alpha')).toMatchObject({
+      status: 'unknown',
+      unknownReason: 'external-target',
+      cliPath: null,
+    });
+  });
+
+  it('probes the provider runtime PATH, not just the host one', () => {
+    // A CLI installed only under a provider-scoped `PATH=` override is genuinely
+    // launchable — the runtime builds its subprocess PATH from that same env —
+    // so ignoring it would report a working install as missing.
+    ProviderWorkspaceRegistry.setServices('det-path', { cliResolver: stubResolver(null) } as never);
+    const plugin = makePlugin({
+      providerConfigs: { 'det-path': { environmentVariables: 'PATH=/opt/provider/bin' } },
+    });
+
+    detectProviderCli(plugin, 'det-path');
+
+    expect(findBinaryOnPath).toHaveBeenCalledWith(expect.anything(), '/opt/provider/bin');
+  });
+
+  it('carries the reason when nothing authoritative could look', () => {
+    // The card needs it: an install helps a confirmed-missing CLI and neither
+    // unknown case, so the two must be distinguishable.
+    expect(detectProviderCli(makePlugin(), 'det-beta').unknownReason).toBe('no-resolver');
   });
 
   it('reflects the provider enabled flag from live settings', () => {

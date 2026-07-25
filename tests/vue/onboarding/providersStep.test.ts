@@ -100,6 +100,33 @@ describe('ProvidersStep', () => {
       .toBe('unknown');
   });
 
+  it('offers no install for an unknown provider — only a confirmed absence gets one', () => {
+    // An install here would have the user reinstall a package they may already
+    // have, and the re-probe would still say unknown, so the button would just be
+    // offered again. The manual-path field stays: it names a path rather than
+    // assuming one is absent.
+    const { container } = setup(makeStore([
+      detection({ status: 'unknown', cliPath: null, unknownReason: 'no-resolver' }),
+    ]));
+    const card = container.querySelector('[data-provider="alpha"]')!;
+
+    expect(card.querySelector('.specorator-onboarding-install')).toBeNull();
+    expect(card.querySelector('[data-action="show-manual-path"]')).not.toBeNull();
+    expect(card.querySelector('[data-state="unknown"]')?.textContent).toContain('Check again');
+  });
+
+  it('explains an unverifiable target instead of claiming the CLI is absent', () => {
+    // Codex in WSL mode: the command runs inside the distro, so "needs the
+    // command on your PATH" would be simply wrong.
+    const { container } = setup(makeStore([
+      detection({ status: 'unknown', cliPath: null, unknownReason: 'external-target' }),
+    ]));
+    const explanation = container.querySelector('[data-state="unknown"]')!;
+
+    expect(explanation.textContent).toContain('WSL');
+    expect(container.textContent).not.toContain('on your PATH');
+  });
+
   it('toggling the checkbox enables the provider through the store', async () => {
     const store = makeStore([detection()]);
     const { container } = setup(store);
