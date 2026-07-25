@@ -22,15 +22,15 @@ export async function openResolvedTeamChatDm(
   leaf: WorkspaceLeaf,
   dmRecency: readonly string[],
   conversationId: string,
-  options: { isStale: () => boolean; previousConversationId?: string | null; preserveFocus?: boolean },
+  options: { isStale: () => boolean; displacedConversationId?: string | null; preserveFocus?: boolean },
 ): Promise<void> {
-  const { isStale, previousConversationId = null, preserveFocus = false } = options;
+  const { isStale, displacedConversationId = null, preserveFocus = false } = options;
   // The serialized body may have queued behind another open (or the leaf may have been torn
   // down since it was enqueued); re-check before touching anything.
   if (isStale()) return;
   // preserveFocus marks a BACKGROUND provider-change rotation: open quietly (no focus steal) and
   // reuse the displaced old tab's slot. Both decisions are derived off the live manager here.
-  const { activate, displacedConversationId } = resolveRotationOpen(manager, conversationId, previousConversationId, preserveFocus);
+  const { activate, displacedConversationId: displacedSlot } = resolveRotationOpen(manager, conversationId, displacedConversationId, preserveFocus);
   // Span every Specorator leaf (sidebar + all Team Chat views): a DM already open in another
   // leaf must be revealed, never double-mounted.
   const existing = plugin.findConversationAcrossViews(conversationId);
@@ -54,7 +54,7 @@ export async function openResolvedTeamChatDm(
   // Enforce the hot-DM budget and learn whether a slot is free: evict the LRU DM before
   // creating so a big roster browses gracefully instead of dead-ending at the cap (T7). The
   // displaced tab's slot is excluded — reconcileRotation frees it after this replacement opens.
-  const hasDmSlot = await evictLruDmIfNeeded(plugin, manager, dmRecency, conversationId, displacedConversationId);
+  const hasDmSlot = await evictLruDmIfNeeded(plugin, manager, dmRecency, conversationId, displacedSlot);
   // Re-check staleness after the eviction close.
   if (isStale()) return;
   // No slot: the budget is full AND every inactive DM is mid-turn, so eviction freed nothing
@@ -172,7 +172,14 @@ export async function closeRotatedDmTab(
   const stale = plugin.findConversationAcrossViews(previousConversationId);
   if (!stale) return;
   const manager = stale.view.getTabManager();
-  if (manager) await closeTeamChatDmTab(plugin, manager, stale.tabId);
+  if (!manager) return;
+  // Force-closing bypasses the streaming guard: a mid-stream stale tab has its partial transcript
+  // saved and its runtime killed, truncating the response. Warn the user BEFORE the close (Round-48).
+  const streaming = (manager.getAllTabs?.() ?? []).some(
+    (tab) => tab.conversationId === previousConversationId && tab.state?.isStreaming,
+  );
+  if (streaming) new Notice(t('teamChat.rotationInterrupted'));
+  await closeTeamChatDmTab(plugin, manager, stale.tabId);
 }
 
 /** A persisted tab is restorable only if its conversation still exists AND is a real
@@ -215,19 +222,24 @@ function getDisplacedDmRegistry(plugin: SpecoratorPlugin): Map<string, string> {
 export async function reconcileRotation(
   plugin: SpecoratorPlugin,
   agentId: string,
-  previousConversationId: string | null,
+  displacedConversationId: string | null,
   conversationId: string,
+  options?: { notify?: boolean },
 ): Promise<void> {
-  const displaced = getDisplacedDmRegistry(plugin);
-  if (previousConversationId && previousConversationId !== conversationId) {
-    displaced.set(agentId, previousConversationId);
-    const agent = await plugin.agentRosterStore.get(agentId);
-    new Notice(t('teamChat.providerRotated', { agent: agent?.name ?? agentId }));
+  const registry = getDisplacedDmRegistry(plugin);
+  if (displacedConversationId && displacedConversationId !== conversationId) {
+    registry.set(agentId, displacedConversationId);
+    // Round-48 Fix A: the reload-cleanup pass re-discovers the displaced tab AFTER the store
+    // already rotated, so it must still close it but NOT re-fire the notice the user saw pre-reload.
+    if (options?.notify ?? true) {
+      const agent = await plugin.agentRosterStore.get(agentId);
+      new Notice(t('teamChat.providerRotated', { agent: agent?.name ?? agentId }));
+    }
   }
-  const displacedId = displaced.get(agentId);
+  const displacedId = registry.get(agentId);
   if (displacedId && displacedId !== conversationId && plugin.findConversationAcrossViews(conversationId)) {
     await closeRotatedDmTab(plugin, displacedId, conversationId);
-    displaced.delete(agentId);
+    registry.delete(agentId);
   }
 }
 
@@ -307,13 +319,13 @@ function readActiveDmConversationId(manager: DmEvictionManager): string | null {
 function resolveRotationOpen(
   manager: DmEvictionManager,
   conversationId: string,
-  previousConversationId: string | null,
+  displacedConversationId: string | null,
   preserveFocus: boolean,
 ): { activate: boolean; displacedConversationId: string | null } {
-  const activate = !preserveFocus || previousConversationId === readActiveDmConversationId(manager);
-  const displacedConversationId =
-    previousConversationId != null && previousConversationId !== conversationId ? previousConversationId : null;
-  return { activate, displacedConversationId };
+  const activate = !preserveFocus || displacedConversationId === readActiveDmConversationId(manager);
+  const displacedSlot =
+    displacedConversationId != null && displacedConversationId !== conversationId ? displacedConversationId : null;
+  return { activate, displacedConversationId: displacedSlot };
 }
 
 /** Records a DM as most-recently-active (move-to-end), so the head of `recency` is the

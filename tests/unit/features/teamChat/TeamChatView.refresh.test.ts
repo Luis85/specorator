@@ -48,7 +48,7 @@ import { Notice } from 'obsidian';
 
 import { ChatState } from '@/features/chat/state/ChatState';
 import { resolveTeamChatAgentProvider } from '@/features/teamChat/resolveTeamChatAgentProvider';
-import { noticeRemovedAgentDms } from '@/features/teamChat/teamChatDmRefresh';
+import { collectDmsNeedingProviderRotation, noticeRemovedAgentDms } from '@/features/teamChat/teamChatDmRefresh';
 import { TeamChatView } from '@/features/teamChat/TeamChatView';
 import { t } from '@/i18n/i18n';
 
@@ -184,9 +184,10 @@ describe('TeamChatView.refreshProviderAvailability — un-grey + agent-provider 
 
     // The stale DM rotates through the shared selectAgent path (notice + old-tab close
     // apply there); the matching DM is never rotated (idempotent). preserveFocus keeps a
-    // background provider-sync from yanking the pane off the DM the user is reading (Round-45).
+    // background provider-sync from yanking the pane off the DM the user is reading (Round-45);
+    // displacedConversationId is the mismatched tab's own id, threaded for reload recovery (Round-48).
     expect(selectAgent).toHaveBeenCalledTimes(1);
-    expect(selectAgent).toHaveBeenCalledWith('roster:a', { preserveFocus: true });
+    expect(selectAgent).toHaveBeenCalledWith('roster:a', { preserveFocus: true, displacedConversationId: 'c-a' });
   });
 
   it('re-projects each open DM composer so a newly enabled provider un-greys it', async () => {
@@ -355,9 +356,10 @@ describe('TeamChatView — restored DM provider reconcile (Round-42, :329)', () 
 
     // The stale-provider DM rotates through selectAgent (fresh conversation on the new provider);
     // the matching-provider DM is never rotated. preserveFocus so the restore-time rotation
-    // opens in the background rather than stealing focus (Round-45).
+    // opens in the background rather than stealing focus (Round-45); displacedConversationId is the
+    // mismatched tab's own id, threaded so the post-reload cleanup can still close it (Round-48).
     expect(selectAgent).toHaveBeenCalledTimes(1);
-    expect(selectAgent).toHaveBeenCalledWith('roster:a', { preserveFocus: true });
+    expect(selectAgent).toHaveBeenCalledWith('roster:a', { preserveFocus: true, displacedConversationId: 'c-a' });
     // The reconcile ran AFTER the restore gate opened, so selectAgent's own !tabsRestored gate
     // would not have short-circuited the rotation.
     expect(view.areTabsRestored()).toBe(true);
@@ -419,5 +421,45 @@ describe('noticeRemovedAgentDms — deleted-agent read-only surfacing', () => {
     await noticeRemovedAgentDms(plugin, tabs as any, new Set());
 
     expect(mockNotice).not.toHaveBeenCalled();
+  });
+});
+
+// Round-48 Fix A (iii): the rotation collector must pair each mismatched DM with the OPEN tab's OWN
+// conversationId (the tab to displace), not the store's possibly-already-rotated mapping — so a
+// reload can recover the displaced old-provider tab id even after threads.json rotated.
+describe('collectDmsNeedingProviderRotation — mismatched-tab pairing (Round-48 Fix A)', () => {
+  beforeEach(() => jest.clearAllMocks());
+
+  it('pairs each stale DM with its own open conversationId, skipping matching DMs', async () => {
+    const plugin = {
+      getConversationSync: jest.fn((id: string) =>
+        id === 'c-a'
+          ? { boundAgentId: 'roster:a', providerId: 'claude' }
+          : { boundAgentId: 'roster:b', providerId: 'claude' }),
+    } as any;
+    // roster:a re-pointed at codex (its DM c-a still on claude → stale); roster:b unchanged.
+    mockResolveProvider.mockImplementation(async (_p: unknown, agentId: string) =>
+      agentId === 'roster:a' ? 'codex' : 'claude');
+
+    const rotations = await collectDmsNeedingProviderRotation(
+      plugin,
+      [{ conversationId: 'c-a', state: {} }, { conversationId: 'c-b', state: {} }] as any,
+    );
+
+    expect(rotations).toEqual([{ agentId: 'roster:a', staleConversationId: 'c-a' }]);
+  });
+
+  it('dedups by agentId, keeping the first mismatched tab', async () => {
+    const plugin = {
+      getConversationSync: jest.fn(() => ({ boundAgentId: 'roster:a', providerId: 'claude' })),
+    } as any;
+    mockResolveProvider.mockResolvedValue('codex'); // both tabs stale, same agent
+
+    const rotations = await collectDmsNeedingProviderRotation(
+      plugin,
+      [{ conversationId: 'c-a1', state: {} }, { conversationId: 'c-a2', state: {} }] as any,
+    );
+
+    expect(rotations).toEqual([{ agentId: 'roster:a', staleConversationId: 'c-a1' }]);
   });
 });

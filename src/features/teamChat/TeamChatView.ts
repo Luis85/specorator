@@ -31,11 +31,6 @@ const TAB_STATE_PERSIST_DEBOUNCE_MS = 300;
  * reaches only `TabManagerViewHost` = `{ leaf, getTabManager() }`, so a second
  * host is reuse, not a fork) and `implements ChatViewHandle` so the ~18
  * broadcast/lifecycle sites can enumerate it through `getAllViews()` (T4).
- *
- * Phase 4a stands up the load-bearing plumbing (registered, openable,
- * enumerable, persistable) and renders the roster READ-ONLY; the interactive DM
- * surface (roster-click → live DM, top bar, presence liveness, fork-disable) is
- * Phase 4b.
  */
 export class TeamChatView extends ItemView implements ChatViewHandle {
   /** One Vue app per leaf (the plugin can open several Team Chat leaves). */
@@ -47,6 +42,9 @@ export class TeamChatView extends ItemView implements ChatViewHandle {
   // False until the engine has restored its tabs; the Agent Board tab-budget gate
   // reads it, so (like SpecoratorView) it flips only AFTER restore completes.
   private tabsRestored = false;
+  /** Latest roster click made while tabs were still restoring; drained as a normal selection once
+   *  restore completes (last-click-wins), so a click during restore isn't discarded (Round-48 Fix C). */
+  private pendingAgentSelection: string | null = null;
   /**
    * Agent whose DM is the active thread. A pure PROJECTION of the active tab's
    * bound agent (see `projectSelectedAgentFromActiveTab`) — never set
@@ -59,11 +57,9 @@ export class TeamChatView extends ItemView implements ChatViewHandle {
    *  `initTabEngine` (mirror of SpecoratorView's `viewTabManagerState`). */
   private pendingTabManagerState: PersistedTabManagerState | null = null;
   /**
-   * Bumped at the start of every `selectAgent`. Its async open yields twice
-   * (`resolveOrCreate` + the serialized open); a newer select (generation bump) or
-   * a teardown/replace of the engine (manager identity change) during those yields
-   * must invalidate the in-flight open so it can't `createTab`/reveal/switch after
-   * being superseded or into a detached manager (:209).
+   * Bumped at the start of every `selectAgent`; its async open yields twice (`resolveOrCreate` + the
+   * serialized open). A newer select (generation bump) or an engine teardown/replace (manager identity
+   * change) during those yields invalidates the in-flight open so it can't act on a detached manager (:209).
    */
   private selectionGeneration = 0;
   private pendingPersist: number | null = null;
@@ -106,32 +102,25 @@ export class TeamChatView extends ItemView implements ChatViewHandle {
     // prior engine so it can't leak pointing at the about-to-be-emptied host. No
     // leaf persist here — setViewState during onOpen would re-enter.
     if (this.tabManager) {
-      // Invalidate any in-flight selectAgent open before tearing down (mirror of
-      // destroyTabRuntime's Round-28 bump): this re-entrant path destroys the manager
-      // directly and can't call destroyTabRuntime (onOpen must not setViewState), so
-      // without this bump an open awaiting resolveOrCreate would pass isSelectionStale
-      // (manager not yet nulled) and createTab into the manager being destroyed (:90).
+      // Invalidate any in-flight selectAgent open before tearing down (mirror of destroyTabRuntime's
+      // Round-28 bump): this re-entrant path destroys the manager directly, so without the bump an open
+      // awaiting resolveOrCreate would pass isSelectionStale and createTab into the doomed manager (:90).
       this.selectionGeneration++;
-      // Re-close the restore gate: the OLD engine left tabsRestored true, but the
-      // NEW manager's restoreState (in initTabEngine) runs async. Without this, a
-      // roster click in the rebuild window passes selectAgent's !tabsRestored gate
-      // (Round-29) and createTabs concurrently with the new restore → duplicate.
-      // initTabEngine always flips it back true after the new restore (Round-31), so
-      // it never stays false forever (:90).
+      // Re-close the restore gate: the OLD engine left tabsRestored true, but the NEW manager's
+      // restoreState (initTabEngine) runs async — without this, a roster click in the rebuild window
+      // passes the !tabsRestored gate and createTabs concurrently with the new restore (Round-29/31; :90).
       this.tabsRestored = false;
-      // Cancel the armed pending-persist debounce: its callback calls
-      // leaf.setViewState (the very re-entry onOpen avoids) and would race the newly
-      // mounting manager. destroyTabRuntime clears it via persistTabStateImmediate,
-      // but this re-entrant path never calls that, so it must clear its own (:109).
+      this.pendingAgentSelection = null; // drop the prior mount's queued click so it can't drain post-remount (Fix C)
+      // Cancel the armed pending-persist debounce: its callback calls leaf.setViewState (the very
+      // re-entry onOpen avoids) and would race the newly mounting manager; this path never reaches
+      // destroyTabRuntime's persistTabStateImmediate that would otherwise clear it (:109).
       if (this.pendingPersist !== null) {
         window.clearTimeout(this.pendingPersist);
         this.pendingPersist = null;
       }
-      // Capture the LIVE DM layout before destroying: the initial setState layout
-      // was already consumed by the first initTabEngine, so without this the rebuilt
-      // engine restores nothing and the pane goes blank while selectedAgentId still
-      // references the old agent (:90). This live capture supersedes the (already
-      // consumed) initial state; the rebuilt initTabEngine reopens these tabs.
+      // Capture the LIVE DM layout before destroying: the initial setState layout was already consumed
+      // by the first initTabEngine, so without this the rebuilt engine restores nothing and the pane
+      // goes blank. This live capture supersedes it; the rebuilt initTabEngine reopens these tabs (:90).
       this.pendingTabManagerState = this.tabManager.getPersistedState();
       await this.tabManager.destroy();
       this.tabManager = null;
@@ -242,6 +231,11 @@ export class TeamChatView extends ItemView implements ChatViewHandle {
         // event does after a deferred/closed-leaf restore. AFTER tabsRestored so selectAgent's
         // restore gate is open; its generation + manager-identity guards drop a superseded rebuild.
         await reconcileRestoredDmProviders(this.plugin, () => this.refreshProviderAvailability());
+        // Drain a roster click queued while restoring (Round-48 Fix C): open it as a normal
+        // focus-taking selection now the gate is up; generation/staleness guards supersede it if stale.
+        const pending = this.pendingAgentSelection;
+        this.pendingAgentSelection = null;
+        if (pending) void this.selectAgent(pending);
       }
     }
   }
@@ -335,7 +329,7 @@ export class TeamChatView extends ItemView implements ChatViewHandle {
     const tabs = this.tabManager?.getAllTabs() ?? [];
     await refreshBoundAgentDisplayModels(this.plugin, tabs); // recompute bound-agent display models before the un-grey/rotate below: a same-provider model change doesn't rotate, so the selector would keep the old model (mirror of SpecoratorView roster:changed)
     refreshDmModelState(this.plugin, tabs);
-    await rotateChangedDmProviders(this.plugin, tabs, (agentId) => this.selectAgent(agentId, { preserveFocus: true })); // background provider-sync: preserveFocus so an inactive DM's rotation doesn't yank the pane off the DM the user is reading (Round-45)
+    await rotateChangedDmProviders(this.plugin, tabs, (agentId, staleId) => this.selectAgent(agentId, { preserveFocus: true, displacedConversationId: staleId })); // background provider-sync: preserveFocus so an inactive DM's rotation doesn't yank the pane off the DM the user is reading (Round-45); displacedConversationId threads the mismatched tab's own id so a post-reload cleanup can still close it (Round-48)
     this.emitTeamChatChange();
   }
 
@@ -386,18 +380,18 @@ export class TeamChatView extends ItemView implements ChatViewHandle {
    * showing. Idempotent per agent — a repeat select of an already-open DM switches
    * to it rather than creating a duplicate.
    */
-  async selectAgent(agentId: string, options: { preserveFocus?: boolean } = {}): Promise<void> {
+  async selectAgent(agentId: string, options: { preserveFocus?: boolean; displacedConversationId?: string | null } = {}): Promise<void> {
     // Stamp this selection + capture the current engine, so the async open below
     // can detect being superseded by a newer select or the engine being torn down
     // / replaced (see isSelectionStale) and bail before any stale side effect.
     const generation = ++this.selectionGeneration;
     const manager = this.tabManager;
-    // Gate on both: no engine yet (defensive; clicks only fire post-mount), AND
-    // restore still in flight — during initTabEngine's restoreState the manager is
-    // already non-null but tabsRestored is false, so opening now would createTab a
-    // DM restoreState is about to recreate → a duplicate controller for one
-    // conversation. Ignore the click; the saved layout reopens the DMs anyway (:274).
-    if (!manager || !this.tabsRestored) return;
+    // No engine yet (defensive; clicks only fire post-mount).
+    if (!manager) return;
+    // Restore still in flight (manager non-null, tabsRestored false): opening now would createTab a
+    // DM restoreState is about to recreate. Queue the LATEST click and drain it after restore, so a
+    // select of an agent absent from the saved layout isn't discarded (Round-48 Fix C; :274/:400).
+    if (!this.tabsRestored) { this.pendingAgentSelection = agentId; return; }
     // Snapshot the currently-mapped DM before resolveOrCreate: a provider change
     // rotates the mapping to a FRESH conversation (Round-21/26), and the old tab
     // would otherwise stay attached — its old-provider runtime streaming and holding
@@ -408,6 +402,9 @@ export class TeamChatView extends ItemView implements ChatViewHandle {
     // resolveOrCreate was in flight — otherwise the open would mount into a
     // detached manager or open a DM the user already navigated away from (:209).
     if (this.isSelectionStale(generation, manager)) return;
+    // The tab to close/reuse: an explicit displaced id (post-reload rotation cleanup, where get() has
+    // already rotated) else the pre-resolve mapping (a live rotation left it behind) (Round-48 Fix A).
+    const displaced = options.displacedConversationId ?? previousConversationId;
     // Serialize the find→open plugin-wide, keyed by conversationId, so two
     // overlapping selects of the SAME DM (simultaneous clicks in two Team Chat
     // leaves — each leaf has its own generation, so neither supersedes the other)
@@ -420,13 +417,14 @@ export class TeamChatView extends ItemView implements ChatViewHandle {
     // staleness guard is this leaf's live generation+manager identity check.
     await getTeamChatDmOpenCoordinator(this.plugin).serialize(conversationId, () =>
       openResolvedTeamChatDm(this.plugin, manager, this.leaf, this.dmRecency, conversationId,
-        { isStale: () => this.isSelectionStale(generation, manager), previousConversationId, preserveFocus: options.preserveFocus }));
-    // Reconcile a provider-change rotation: record + notify a new rotation, and close
-    // any displaced old-provider tab once its replacement is open — deferred, so a
-    // cap-blocked rotation's stale tab is closed on the retry that finally opens the
-    // replacement (:361). Skip if a newer selection superseded this one.
+        { isStale: () => this.isSelectionStale(generation, manager), displacedConversationId: displaced, preserveFocus: options.preserveFocus }));
+    // Reconcile a provider-change rotation: record + notify a new rotation, and close any displaced
+    // old-provider tab once its replacement is open — deferred, so a cap-blocked rotation's stale tab
+    // is closed on the retry that finally opens the replacement (:361). notify only for a mapping that
+    // actually rotated THIS pass, so a post-reload cleanup (displaced set, mapping unchanged) closes
+    // the stale tab without re-firing the notice (Round-48). Skip if a newer selection superseded this.
     if (!this.isSelectionStale(generation, manager)) {
-      await reconcileRotation(this.plugin, agentId, previousConversationId, conversationId);
+      await reconcileRotation(this.plugin, agentId, displaced, conversationId, { notify: previousConversationId !== conversationId });
     }
   }
 

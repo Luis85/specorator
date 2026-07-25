@@ -239,6 +239,52 @@ describe('closeRotatedDmTab', () => {
   });
 });
 
+// Round-48 Fix B: force-closing the displaced tab bypasses the streaming guard, so a mid-stream old
+// DM has its partial transcript saved and its runtime killed — silently truncating the response. The
+// cancel already happens; add the "communicate": surface an interrupted Notice BEFORE the close.
+describe('closeRotatedDmTab — streaming interruption notice (Round-48 Fix B)', () => {
+  beforeEach(() => mockNotice.mockClear());
+
+  /** Stale old tab (t-old / c-old) with a configurable streaming flag; the new tab (c-new) is open. */
+  function pluginWith(streaming: boolean, closeTab: jest.Mock) {
+    return {
+      events: { emit: jest.fn() },
+      findConversationAcrossViews: jest.fn((id: string) =>
+        id === 'c-new'
+          ? { view: {}, tabId: 't-new' }
+          : {
+              view: {
+                getTabManager: () => ({
+                  closeTab,
+                  getAllTabs: () => [{ conversationId: 'c-old', state: { isStreaming: streaming } }],
+                }),
+              },
+              tabId: 't-old',
+            }),
+    } as never;
+  }
+
+  it('surfaces the rotationInterrupted notice BEFORE the force-close when the displaced tab is mid-stream', async () => {
+    const closeTab = jest.fn().mockResolvedValue(true);
+
+    await closeRotatedDmTab(pluginWith(true, closeTab), 'c-old', 'c-new');
+
+    expect(mockNotice).toHaveBeenCalledWith(t('teamChat.rotationInterrupted'));
+    expect(closeTab).toHaveBeenCalledWith('t-old', true);
+    // The user must be warned before the transcript is truncated, not after.
+    expect(mockNotice.mock.invocationCallOrder[0]).toBeLessThan(closeTab.mock.invocationCallOrder[0]);
+  });
+
+  it('does not notice when the displaced tab is idle', async () => {
+    const closeTab = jest.fn().mockResolvedValue(true);
+
+    await closeRotatedDmTab(pluginWith(false, closeTab), 'c-old', 'c-new');
+
+    expect(mockNotice).not.toHaveBeenCalled();
+    expect(closeTab).toHaveBeenCalledWith('t-old', true);
+  });
+});
+
 describe('touchDmRecency', () => {
   it('appends a newly-activated conversation as most-recent', () => {
     const recency = ['a', 'b'];
@@ -518,7 +564,7 @@ describe('openResolvedTeamChatDm — preserveFocus rotation activation (Round-45
     const manager = rotationManager('t-a', createTab);
 
     await openResolvedTeamChatDm(plugin, manager, {} as never, ['conv-b-old', 'conv-a'], 'conv-b-new',
-      { isStale: () => false, previousConversationId: 'conv-b-old', preserveFocus: true });
+      { isStale: () => false, displacedConversationId: 'conv-b-old', preserveFocus: true });
 
     // preserveFocus + the rotated DM is NOT the active one → open in the background (activate:false).
     expect(createTab).toHaveBeenCalledWith('conv-b-new', undefined, { activate: false, kind: 'chat', bypassTabLimit: true });
@@ -530,7 +576,7 @@ describe('openResolvedTeamChatDm — preserveFocus rotation activation (Round-45
     const manager = rotationManager('t-b-old', createTab);
 
     await openResolvedTeamChatDm(plugin, manager, {} as never, ['conv-a', 'conv-b-old'], 'conv-b-new',
-      { isStale: () => false, previousConversationId: 'conv-b-old', preserveFocus: true });
+      { isStale: () => false, displacedConversationId: 'conv-b-old', preserveFocus: true });
 
     // The rotated DM was in focus → its replacement takes focus (activate:true).
     expect(createTab).toHaveBeenCalledWith('conv-b-new', undefined, { activate: true, kind: 'chat', bypassTabLimit: true });
@@ -584,5 +630,43 @@ describe('reconcileRotation — deferred rotation close (:361)', () => {
     // A subsequent reconcile with nothing displaced (prev === new) must not close again.
     await reconcileRotation(plugin, 'roster:a', 'c-new', 'c-new');
     expect(closeTab).toHaveBeenCalledTimes(1);
+  });
+});
+
+// Round-48 Fix A: the reload-cleanup path (get() has already rotated to the new id) still needs to
+// close the lingering displaced old-provider tab, but must NOT re-fire the rotation notice the user
+// already saw pre-reload. `notify` gates only the Notice; the displaced close is unchanged.
+describe('reconcileRotation — notify gate (Round-48 Fix A)', () => {
+  beforeEach(() => mockNotice.mockClear());
+
+  function pluginWithOpenReplacement(closeTab: jest.Mock) {
+    return {
+      agentRosterStore: { get: jest.fn().mockResolvedValue({ name: 'Ada' }) },
+      events: { emit: jest.fn() },
+      findConversationAcrossViews: jest.fn((id: string) =>
+        id === 'c-new'
+          ? { view: {}, tabId: 't-new' }
+          : id === 'c-old'
+            ? { view: { getTabManager: () => ({ closeTab }) }, tabId: 't-old' }
+            : null),
+    } as never;
+  }
+
+  it('closes the displaced tab but fires NO notice when notify is false', async () => {
+    const closeTab = jest.fn().mockResolvedValue(true);
+
+    await reconcileRotation(pluginWithOpenReplacement(closeTab), 'roster:a', 'c-old', 'c-new', { notify: false });
+
+    expect(closeTab).toHaveBeenCalledWith('t-old', true);
+    expect(mockNotice).not.toHaveBeenCalled();
+  });
+
+  it('fires the provider-rotated notice when notify is true (default contract)', async () => {
+    const closeTab = jest.fn().mockResolvedValue(true);
+
+    await reconcileRotation(pluginWithOpenReplacement(closeTab), 'roster:a', 'c-old', 'c-new', { notify: true });
+
+    expect(mockNotice).toHaveBeenCalledWith(t('teamChat.providerRotated', { agent: 'Ada' }));
+    expect(closeTab).toHaveBeenCalledWith('t-old', true);
   });
 });

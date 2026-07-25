@@ -534,4 +534,113 @@ describe('TeamChatView.selectAgent — resolve → cross-view reuse / create', (
     expect(createTab).toHaveBeenCalledWith('conv-1', undefined, { activate: true, kind: 'chat', bypassTabLimit: true });
     expect(closeTab).not.toHaveBeenCalled(); // no rotation → nothing to close
   });
+
+  // Round-48 Fix A (:405): after a reload, the displaced old-provider tab (conv-old) is still open +
+  // persisted, but the store mapping already rotated to conv-new pre-reload. The restore reconcile
+  // re-selects the agent with an EXPLICIT displacedConversationId (conv-old, the mismatched tab's own
+  // id). selectAgent must close conv-old and reuse ITS slot — never evicting the unrelated hot DM —
+  // and must NOT re-fire the rotation notice (get() === resolveOrCreate(), so no fresh rotation).
+  it('closes the explicitly-displaced tab and reuses its slot on a reload-cleanup re-select (Fix A)', async () => {
+    let newTabOpen = false;
+    const get = jest.fn().mockResolvedValue('conv-new');            // store already rotated pre-reload
+    const resolveOrCreate = jest.fn().mockResolvedValue('conv-new'); // usable → no fresh rotation this pass
+    const createTab = jest.fn().mockImplementation(async () => { newTabOpen = true; return { id: 'tab-new' }; });
+    const closeOldTab = jest.fn().mockResolvedValue(true);
+    const unrelatedClose = jest.fn().mockResolvedValue(true);
+    const otherLeaf = { id: 'leaf-other' };
+    const view = makeView({
+      leaf: { id: 'leaf-this' },
+      plugin: {
+        settings: { maxTeamChatDms: 2 },
+        events: { emit: jest.fn() },
+        getTeamChatThreadStore: () => ({ get, resolveOrCreate }),
+        findConversationAcrossViews: jest.fn((id: string) => {
+          if (id === 'conv-new') {
+            return newTabOpen
+              ? { view: { leaf: { id: 'leaf-this' }, getTabManager: () => ({ switchToTab: jest.fn() }) }, tabId: 'tab-new' }
+              : null;
+          }
+          if (id === 'conv-old') return { view: { leaf: otherLeaf, getTabManager: () => ({ closeTab: closeOldTab }) }, tabId: 'tab-old' };
+          return null;
+        }),
+      },
+    });
+    // At budget (2): the displaced old-provider DM (conv-old) + one unrelated hot DM (conv-hot).
+    view.dmRecency = ['conv-old', 'conv-hot'];
+    view.tabManager = {
+      createTab,
+      switchToTab: jest.fn(),
+      getAllTabs: jest.fn(() => [
+        { id: 'tab-old', conversationId: 'conv-old', state: { isStreaming: false } },
+        { id: 'tab-hot', conversationId: 'conv-hot', state: { isStreaming: false } },
+      ]),
+      getActiveTabId: jest.fn(() => 'tab-hot'),
+      closeTab: unrelatedClose,
+    };
+
+    await view.selectAgent('roster:a', { displacedConversationId: 'conv-old' });
+
+    // conv-new opened reusing conv-old's slot — the unrelated hot DM (tab-hot) is NOT evicted.
+    expect(createTab).toHaveBeenCalledWith('conv-new', undefined, { activate: true, kind: 'chat', bypassTabLimit: true });
+    expect(unrelatedClose).not.toHaveBeenCalled();
+    // The lingering displaced old-provider tab IS force-closed cross-leaf, freeing its stale runtime.
+    expect(closeOldTab).toHaveBeenCalledWith('tab-old', true);
+    // No duplicate rotation notice — the mapping did not change on this pass.
+    expect(mockNotice).not.toHaveBeenCalled();
+  });
+});
+
+// Round-48 Fix C (:400): a roster click while tabs are still restoring used to be permanently
+// discarded (selectAgent early-returned). Now the latest such click is queued and drained once
+// restore completes, so selecting an agent absent from the saved layout no longer appears to do nothing.
+describe('TeamChatView.selectAgent — queued restore-time selection (Round-48 Fix C)', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    mockNotice.mockClear();
+  });
+
+  it('queues the agent and does NOT open while tabs are still restoring', async () => {
+    const resolveOrCreate = jest.fn().mockResolvedValue('conv-1');
+    const createTab = jest.fn();
+    const view = makeView({
+      plugin: {
+        getTeamChatThreadStore: () => ({ get: jest.fn().mockResolvedValue(null), resolveOrCreate }),
+        findConversationAcrossViews: jest.fn(() => null),
+      },
+    });
+    view.tabManager = { createTab, switchToTab: jest.fn() };
+    view.tabsRestored = false;
+    view.pendingAgentSelection = null;
+
+    await view.selectAgent('roster:late');
+
+    // Retained for after restore instead of discarded — and nothing opened mid-restore.
+    expect(view.pendingAgentSelection).toBe('roster:late');
+    expect(resolveOrCreate).not.toHaveBeenCalled();
+    expect(createTab).not.toHaveBeenCalled();
+  });
+
+  it('keeps only the LAST agent clicked during restore (last-click-wins)', async () => {
+    const view = makeView();
+    view.tabManager = { createTab: jest.fn(), switchToTab: jest.fn() };
+    view.tabsRestored = false;
+    view.pendingAgentSelection = null;
+
+    await view.selectAgent('roster:first');
+    await view.selectAgent('roster:second');
+
+    expect(view.pendingAgentSelection).toBe('roster:second');
+  });
+
+  it('still bails (no queue) when there is no engine at all', async () => {
+    const view = makeView();
+    view.tabManager = null;
+    view.tabsRestored = false;
+    view.pendingAgentSelection = null;
+
+    await view.selectAgent('roster:x');
+
+    // No manager → the click can't be honored later either, so it is not queued.
+    expect(view.pendingAgentSelection).toBeNull();
+  });
 });

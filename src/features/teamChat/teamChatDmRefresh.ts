@@ -116,40 +116,48 @@ export function applyDmHiddenCommands(plugin: SpecoratorPlugin, tabs: readonly T
 /**
  * The bound agents whose open DM now runs on the WRONG provider: the user re-pointed
  * the agent at another backend, and a DM's `providerId` is immutable, so the mapped
- * conversation is stale and must rotate. Deduped (defensive). An unknown agent
- * (undefined expected provider) is never collected — there is nothing to rotate
- * toward, matching the thread store's own reuse gate.
+ * conversation is stale and must rotate. Each is paired with the mismatched TAB's OWN
+ * `conversationId` — the tab to displace — so the rotation closes/reuses the actually-open
+ * old-provider tab even after the store mapping has itself rotated (Round-48 Fix A: a
+ * reload can no longer recover the displaced id from an in-memory registry). Deduped by
+ * agentId (keep first). An unknown agent (undefined expected provider) is never collected —
+ * there is nothing to rotate toward, matching the thread store's own reuse gate.
  */
 export async function collectDmsNeedingProviderRotation(
   plugin: SpecoratorPlugin,
   tabs: readonly TabData[],
-): Promise<string[]> {
-  const agentIds = new Set<string>();
+): Promise<Array<{ agentId: string; staleConversationId: string }>> {
+  const seen = new Set<string>();
+  const rotations: Array<{ agentId: string; staleConversationId: string }> = [];
   for (const tab of tabs) {
-    const conversation = tab.conversationId ? plugin.getConversationSync(tab.conversationId) : null;
+    const staleConversationId = tab.conversationId;
+    const conversation = staleConversationId ? plugin.getConversationSync(staleConversationId) : null;
     const agentId = conversation?.boundAgentId;
-    if (!agentId) continue;
+    if (!agentId || !staleConversationId || seen.has(agentId)) continue;
     const expectedProvider = await resolveTeamChatAgentProvider(plugin, agentId);
     if (expectedProvider !== undefined && conversation.providerId !== expectedProvider) {
-      agentIds.add(agentId);
+      seen.add(agentId);
+      rotations.push({ agentId, staleConversationId });
     }
   }
-  return [...agentIds];
+  return rotations;
 }
 
 /**
  * Rotates every open DM whose agent's provider changed, through the caller's
  * `rotate` (the view's `selectAgent`) so the Round-34 rotation notice + old-tab
- * close apply. Agents are collected BEFORE rotating because `selectAgent` mutates
- * the tab set (opens the fresh DM, closes the old one). No mismatch → no rotation.
+ * close apply. The mismatched tab's own id is threaded as the displaced id so the
+ * close/slot-reuse targets the actually-open old-provider tab (Round-48 Fix A).
+ * Agents are collected BEFORE rotating because `selectAgent` mutates the tab set
+ * (opens the fresh DM, closes the old one). No mismatch → no rotation.
  */
 export async function rotateChangedDmProviders(
   plugin: SpecoratorPlugin,
   tabs: readonly TabData[],
-  rotate: (agentId: string) => Promise<void>,
+  rotate: (agentId: string, staleConversationId: string) => Promise<void>,
 ): Promise<void> {
-  for (const agentId of await collectDmsNeedingProviderRotation(plugin, tabs)) {
-    await rotate(agentId);
+  for (const entry of await collectDmsNeedingProviderRotation(plugin, tabs)) {
+    await rotate(entry.agentId, entry.staleConversationId);
   }
 }
 

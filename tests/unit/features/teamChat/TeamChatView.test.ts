@@ -505,6 +505,23 @@ describe('TeamChatView — persisted DM tab restore', () => {
     expect(view.areTabsRestored()).toBe(true);
   });
 
+  // Round-48 Fix C (:400): the re-entrant onOpen teardown re-closes the restore gate; it must also
+  // drop any selection queued against the PRIOR mount, or that stale click would drain after the new
+  // restore and open a DM the user never asked for in this mount.
+  it('re-entrant onOpen clears a stale queued selection (:400)', async () => {
+    const view = makeView();
+    view.tabsRestored = true;
+    view.pendingAgentSelection = 'roster:stale';
+    view.tabManager = {
+      getPersistedState: jest.fn(() => ({ openTabs: [], activeTabId: null })),
+      destroy: jest.fn().mockResolvedValue(undefined),
+    };
+
+    await view.onOpen();
+
+    expect(view.pendingAgentSelection).toBeNull();
+  });
+
   // Round-29 (:90): a re-entrant onOpen (leaf move/pop-out, no interleaved onClose)
   // must capture the LIVE layout before destroying the prior engine — the initial
   // setState layout was already consumed by the first initTabEngine, so otherwise
@@ -571,6 +588,47 @@ describe('TeamChatView — persisted DM tab restore', () => {
     await view.restoreTabsThenMarkReady();
 
     expect(view.selectedAgentId).toBe('roster:active');
+  });
+
+  // Round-48 Fix C (:400): a roster click made while tabs were still restoring is queued in
+  // pendingAgentSelection and drained once restore completes — as a normal focus-taking selection.
+  it('drains a queued restore-time selection once tabs finish restoring (:400)', async () => {
+    const view = makeView();
+    view.pendingTabManagerState = null;
+    view.pendingAgentSelection = 'roster:queued';
+    view.tabManager = {
+      getActiveTab: jest.fn(() => null),
+      getAllTabs: jest.fn(() => []),
+      getTabCount: jest.fn(() => 0),
+      countTabsByKind: jest.fn(() => 0),
+    };
+    view.tabsRestored = false;
+    const selectAgent = jest.spyOn(view, 'selectAgent').mockResolvedValue(undefined);
+
+    await view.restoreTabsThenMarkReady();
+
+    // Opened exactly once, as a plain (focus-taking) selection, and the queue is cleared.
+    expect(selectAgent).toHaveBeenCalledTimes(1);
+    expect(selectAgent).toHaveBeenCalledWith('roster:queued');
+    expect(view.pendingAgentSelection).toBeNull();
+  });
+
+  it('opens nothing after restore when no selection was queued (:400)', async () => {
+    const view = makeView();
+    view.pendingTabManagerState = null;
+    view.pendingAgentSelection = null;
+    view.tabManager = {
+      getActiveTab: jest.fn(() => null),
+      getAllTabs: jest.fn(() => []),
+      getTabCount: jest.fn(() => 0),
+      countTabsByKind: jest.fn(() => 0),
+    };
+    view.tabsRestored = false;
+    const selectAgent = jest.spyOn(view, 'selectAgent').mockResolvedValue(undefined);
+
+    await view.restoreTabsThenMarkReady();
+
+    expect(selectAgent).not.toHaveBeenCalled();
   });
 });
 

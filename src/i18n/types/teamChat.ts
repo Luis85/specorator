@@ -11,6 +11,8 @@ export type TeamChatTranslationKey =
   | 'teamChat.presenceBusy'
   // Provider-change rotation notice (a fresh thread was started on the new provider)
   | 'teamChat.providerRotated'
+  // A provider change force-closed a mid-stream DM, truncating the in-flight response
+  | 'teamChat.rotationInterrupted'
   // Bound agent deleted from the roster: the open DM is read-only until a new agent is picked
   | 'teamChat.agentRemoved'
   // A reused-island action (fork / clear / new-session) that a DM's one-fixed-thread model disallows
