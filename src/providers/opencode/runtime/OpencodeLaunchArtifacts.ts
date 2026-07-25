@@ -8,6 +8,7 @@ import {
   type SystemPromptSettings,
 } from '../../../core/prompt/mainAgent';
 import { expandHomePath } from '../../../utils/path';
+import { resolveBatchAwareSpawnSpec } from '../../../utils/windowsSpawn';
 import { AcpJsonRpcTransport, AcpSubprocess } from '../../acp';
 import {
   OPENCODE_BUILD_MODE_ID,
@@ -241,11 +242,21 @@ export function startOpencodeAcpProcess(params: {
   cwd: string;
   env: NodeJS.ProcessEnv;
 }): { process: AcpSubprocess; transport: AcpJsonRpcTransport } {
+  // A configured path on Windows is normally npm's `opencode.cmd`, and Windows
+  // refuses to spawn a batch shim without a shell (Node's CVE-2024-27980 fix) —
+  // so route it through cmd.exe, exactly as the Codex and Cursor launches do.
+  // Anything else, including a bare `opencode` the OS still has to resolve,
+  // passes through unchanged.
+  const spawnSpec = resolveBatchAwareSpawnSpec(
+    params.command,
+    ['acp', `--cwd=${params.cwd}`],
+  );
   const process = new AcpSubprocess({
-    args: ['acp', `--cwd=${params.cwd}`],
-    command: params.command,
+    args: spawnSpec.args,
+    command: spawnSpec.command,
     cwd: params.cwd,
     env: params.env,
+    windowsVerbatimArguments: spawnSpec.windowsVerbatimArguments,
   });
   process.start();
 

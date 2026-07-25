@@ -41,16 +41,26 @@ export interface ProviderCliDetection {
   enabled: boolean;
 }
 
-/** Binary names that satisfy a provider, most canonical first. */
-function binaryCandidates(providerId: ProviderId): string[] {
+/**
+ * Binary names that satisfy a provider, most canonical first.
+ *
+ * On Windows the extensionless file npm also installs is a **sh** shim — Windows
+ * cannot execute it, so it is not a candidate at all: reporting it as the found
+ * binary would name a file nothing on this platform can spawn (and would hide the
+ * `.cmd` sibling that is the real entry point). `.exe` leads because it spawns
+ * without a shell; `.cmd`/`.bat` need the cmd.exe wrap (see `utils/windowsSpawn`).
+ */
+export function binaryCandidates(
+  providerId: ProviderId,
+  platform: NodeJS.Platform = process.platform,
+): string[] {
   const primary = ProviderRegistry.getCliCommand(providerId);
   const extra = ProviderRegistry.getCliInstall(providerId).extraBinaryNames ?? [];
   const bases = [primary, ...extra];
-  if (process.platform !== 'win32') {
+  if (platform !== 'win32') {
     return bases;
   }
-  // GUI-launched Electron sees npm/installer shims, not bare names, on Windows.
-  return bases.flatMap((name) => [name, `${name}.cmd`, `${name}.exe`, `${name}.bat`]);
+  return bases.flatMap((name) => [`${name}.exe`, `${name}.cmd`, `${name}.bat`]);
 }
 
 /**

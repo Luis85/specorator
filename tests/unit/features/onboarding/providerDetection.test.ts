@@ -1,7 +1,11 @@
 import { ProviderRegistry } from '@/core/providers/ProviderRegistry';
 import { ProviderWorkspaceRegistry } from '@/core/providers/ProviderWorkspaceRegistry';
 import type { ProviderCliResolver, ProviderId, ProviderRegistration } from '@/core/providers/types';
-import { detectProviderCli, detectProviderClis } from '@/features/onboarding/providerDetection';
+import {
+  binaryCandidates,
+  detectProviderCli,
+  detectProviderClis,
+} from '@/features/onboarding/providerDetection';
 
 jest.mock('@/utils/cliBinaryLocator', () => ({
   findBinaryOnPath: jest.fn(() => null),
@@ -161,6 +165,22 @@ describe('detectProviderCli', () => {
 
     expect(detectProviderCli(makePlugin(), 'det-path').cliPath).toBe('/pinned/pathcli');
     expect(findBinaryOnPath).not.toHaveBeenCalled();
+  });
+
+  it('does not offer the extensionless npm shim as a Windows candidate', () => {
+    // npm installs BOTH `opencode` (an sh script) and `opencode.cmd` on Windows.
+    // Windows cannot execute the former, so naming it as the found binary would
+    // point at a file nothing on this platform can spawn — and would hide the
+    // `.cmd` sibling that is the real entry point.
+    const windows = binaryCandidates('det-path', 'win32');
+
+    expect(windows).not.toContain('pathcli');
+    expect(windows[0]).toBe('pathcli.exe');
+    expect(windows).toEqual(expect.arrayContaining(['pathcli.cmd', 'pathcli-alt.cmd']));
+  });
+
+  it('probes bare names off Windows, where an extensionless binary is the norm', () => {
+    expect(binaryCandidates('det-path', 'darwin')).toEqual(['pathcli', 'pathcli-alt']);
   });
 
   it('probes the provider-declared extra binary names alongside the primary command', () => {

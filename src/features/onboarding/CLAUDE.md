@@ -68,6 +68,14 @@ surfaces to use the island pattern; this is one.
     or a configured Linux path), which the runtime hands to `wsl.exe`; verifying
     it would mean spawning into the guest, and the host PATH answers a different
     question. That case is `unknown` with `unknownReason: 'external-target'`.
+  - **On Windows the candidates are `.exe` / `.cmd` / `.bat` only** — never the
+    bare name. npm installs BOTH `opencode` (an sh script) and `opencode.cmd`, and
+    Windows cannot execute the former, so offering it would name a file nothing on
+    this platform can spawn and would hide the real entry point. `.exe` leads
+    because it spawns without a shell; a `.cmd`/`.bat` needs the cmd.exe wrap,
+    which every provider launch now applies (`utils/windowsSpawn`
+    `resolveBatchAwareSpawnSpec` — OpenCode's ACP launch was missing it, so a path
+    pinned through the manual-path field would have hit `spawn EINVAL`).
 - **An install is offered only for a CONFIRMED absence** (`status === 'missing'`).
   For `unknown` the card explains which of the two reasons applies and keeps the
   manual-path field — that one names a path instead of assuming one is absent,

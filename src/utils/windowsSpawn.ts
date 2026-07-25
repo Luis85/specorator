@@ -34,6 +34,41 @@ export interface WindowsCmdShim {
  * manually-quoted arguments. Callers decide *when* to wrap (which command
  * extensions count as batch shims on their platform); this owns the *how*.
  */
+export interface BatchAwareSpawnSpec {
+  command: string;
+  args: string[];
+  windowsVerbatimArguments?: boolean;
+}
+
+/**
+ * Resolves the command/args to hand `spawn()` when the command MIGHT be a Windows
+ * batch shim: `.cmd`/`.bat` are wrapped through cmd.exe, and everything else
+ * passes through unchanged — every non-Windows platform, `.exe` and native
+ * binaries, and a bare command name the OS still has to resolve itself.
+ *
+ * Promoted out of `providers/cursor/runtime/cursorWindowsSpawn` (which now
+ * delegates) when the OpenCode ACP launch needed the same treatment: an
+ * npm-installed CLI on Windows IS a `.cmd`, so a provider that spawns a
+ * user-pinned path without this hits `spawn EINVAL`.
+ */
+export function resolveBatchAwareSpawnSpec(
+  command: string,
+  args: string[],
+  platform: NodeJS.Platform = process.platform,
+): BatchAwareSpawnSpec {
+  const trimmed = command.trim();
+  if (!trimmed || platform !== 'win32') {
+    return { command, args };
+  }
+
+  const lower = trimmed.toLowerCase();
+  if (lower.endsWith('.cmd') || lower.endsWith('.bat')) {
+    return wrapWindowsCmdShim(trimmed, args);
+  }
+
+  return { command, args };
+}
+
 export function wrapWindowsCmdShim(command: string, args: readonly string[]): WindowsCmdShim {
   const shellCommand = [command, ...args]
     .map((value) => quoteWindowsShellArgument(value))
