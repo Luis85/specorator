@@ -390,6 +390,33 @@ describe('evictLruDmIfNeeded', () => {
 
     expect(closeTab).not.toHaveBeenCalled();
   });
+
+  // Round-45 Finding 2: a provider-change rotation displaces one open tab, closed by
+  // reconcileRotation AFTER the replacement opens. Excluding that displaced slot from the
+  // budget lets the rotation reuse it instead of force-closing an unrelated hot DM.
+  it('reuses the displaced tab slot during a rotation and evicts nothing (Round-45)', async () => {
+    const closeTab = jest.fn().mockResolvedValue(true);
+    const plugin = { settings: { maxTeamChatDms: 2 }, events: { emit: jest.fn() } } as never;
+    // At budget (2). The displaced old-provider DM 'a' will be closed once the replacement opens,
+    // so its slot covers the new DM — nothing unrelated should be evicted (t-b is active anyway).
+    const manager = managerWith([{ id: 't-a', conversationId: 'a' }, { id: 't-b', conversationId: 'b' }], 't-b', closeTab);
+
+    const hasSlot = await evictLruDmIfNeeded(plugin, manager, ['a', 'b'], 'c', 'a');
+
+    expect(hasSlot).toBe(true);
+    expect(closeTab).not.toHaveBeenCalled();
+  });
+
+  it('still evicts the LRU DM when the displaced conversation is not an open tab (Round-45)', async () => {
+    const closeTab = jest.fn().mockResolvedValue(true);
+    const plugin = { settings: { maxTeamChatDms: 2 }, events: { emit: jest.fn() } } as never;
+    const manager = managerWith([{ id: 't-a', conversationId: 'a' }, { id: 't-b', conversationId: 'b' }], 't-b', closeTab);
+
+    // 'not-open' is not among the tabs → no phantom slot → genuinely over budget → evict LRU idle 'a'.
+    await evictLruDmIfNeeded(plugin, manager, ['a', 'b'], 'c', 'not-open');
+
+    expect(closeTab).toHaveBeenCalledWith('t-a', true);
+  });
 });
 
 // Round-43 (:451/:52): the open path must not create an over-budget DM when eviction frees
@@ -416,7 +443,7 @@ describe('openResolvedTeamChatDm — budget-gated open (Round-43)', () => {
       createTab,
     } as never;
 
-    await openResolvedTeamChatDm(plugin, manager, {} as never, ['a', 'b'], 'c', () => false);
+    await openResolvedTeamChatDm(plugin, manager, {} as never, ['a', 'b'], 'c', { isStale: () => false });
 
     expect(closeTab).not.toHaveBeenCalled();  // a streaming DM is never force-closed
     expect(createTab).not.toHaveBeenCalled(); // and no over-budget runtime is spawned
@@ -437,7 +464,7 @@ describe('openResolvedTeamChatDm — budget-gated open (Round-43)', () => {
       createTab,
     } as never;
 
-    await openResolvedTeamChatDm(plugin, manager, {} as never, ['a', 'b'], 'c', () => false);
+    await openResolvedTeamChatDm(plugin, manager, {} as never, ['a', 'b'], 'c', { isStale: () => false });
 
     expect(closeTab).toHaveBeenCalledWith('t-a', true);
     expect(createTab).toHaveBeenCalledWith('c', undefined, { activate: true, kind: 'chat', bypassTabLimit: true });
@@ -455,11 +482,58 @@ describe('openResolvedTeamChatDm — budget-gated open (Round-43)', () => {
       createTab,
     } as never;
 
-    await openResolvedTeamChatDm(plugin, manager, {} as never, ['a'], 'c', () => false);
+    await openResolvedTeamChatDm(plugin, manager, {} as never, ['a'], 'c', { isStale: () => false });
 
     expect(closeTab).not.toHaveBeenCalled();
     expect(createTab).toHaveBeenCalledWith('c', undefined, { activate: true, kind: 'chat', bypassTabLimit: true });
     expect(mockNotice).not.toHaveBeenCalled();
+  });
+});
+
+// Round-45 Finding 1: rotateChangedDmProviders routes each background rotation through the
+// selectAgent open with preserveFocus. Rotating an INACTIVE open DM's provider must NOT yank
+// the pane to it while the user reads a different DM; rotating the ACTIVE DM still swaps to its
+// fresh replacement. Activation is derived from whether the rotated DM is the one in focus.
+describe('openResolvedTeamChatDm — preserveFocus rotation activation (Round-45)', () => {
+  beforeEach(() => mockNotice.mockClear());
+
+  /** Two open DMs (A + B's old tab); a rotation opens a FRESH id for B. `activeTabId` picks focus. */
+  function rotationManager(activeTabId: string, createTab: jest.Mock) {
+    return {
+      getAllTabs: () => [
+        { id: 't-a', conversationId: 'conv-a', state: { isStreaming: false } },
+        { id: 't-b-old', conversationId: 'conv-b-old', state: { isStreaming: false } },
+      ],
+      getActiveTabId: () => activeTabId,
+      closeTab: jest.fn(),
+      createTab,
+    } as never;
+  }
+
+  const plugin = { settings: { maxTeamChatDms: 5 }, events: { emit: jest.fn() }, findConversationAcrossViews: jest.fn(() => null) } as never;
+
+  it('opens a rotated INACTIVE DM in the background so focus stays on the active DM', async () => {
+    const createTab = jest.fn().mockResolvedValue({ id: 't-b-new' });
+    // Active DM is A; B (inactive) rotates from conv-b-old to conv-b-new.
+    const manager = rotationManager('t-a', createTab);
+
+    await openResolvedTeamChatDm(plugin, manager, {} as never, ['conv-b-old', 'conv-a'], 'conv-b-new',
+      { isStale: () => false, previousConversationId: 'conv-b-old', preserveFocus: true });
+
+    // preserveFocus + the rotated DM is NOT the active one → open in the background (activate:false).
+    expect(createTab).toHaveBeenCalledWith('conv-b-new', undefined, { activate: false, kind: 'chat', bypassTabLimit: true });
+  });
+
+  it('activates a rotated DM when it IS the one the user is viewing', async () => {
+    const createTab = jest.fn().mockResolvedValue({ id: 't-b-new' });
+    // Active DM is B itself; rotating B swaps the pane to its fresh replacement.
+    const manager = rotationManager('t-b-old', createTab);
+
+    await openResolvedTeamChatDm(plugin, manager, {} as never, ['conv-a', 'conv-b-old'], 'conv-b-new',
+      { isStale: () => false, previousConversationId: 'conv-b-old', preserveFocus: true });
+
+    // The rotated DM was in focus → its replacement takes focus (activate:true).
+    expect(createTab).toHaveBeenCalledWith('conv-b-new', undefined, { activate: true, kind: 'chat', bypassTabLimit: true });
   });
 });
 

@@ -335,7 +335,7 @@ export class TeamChatView extends ItemView implements ChatViewHandle {
     const tabs = this.tabManager?.getAllTabs() ?? [];
     await refreshBoundAgentDisplayModels(this.plugin, tabs); // recompute bound-agent display models before the un-grey/rotate below: a same-provider model change doesn't rotate, so the selector would keep the old model (mirror of SpecoratorView roster:changed)
     refreshDmModelState(this.plugin, tabs);
-    await rotateChangedDmProviders(this.plugin, tabs, (agentId) => this.selectAgent(agentId));
+    await rotateChangedDmProviders(this.plugin, tabs, (agentId) => this.selectAgent(agentId, { preserveFocus: true })); // background provider-sync: preserveFocus so an inactive DM's rotation doesn't yank the pane off the DM the user is reading (Round-45)
     this.emitTeamChatChange();
   }
 
@@ -386,7 +386,7 @@ export class TeamChatView extends ItemView implements ChatViewHandle {
    * showing. Idempotent per agent — a repeat select of an already-open DM switches
    * to it rather than creating a duplicate.
    */
-  async selectAgent(agentId: string): Promise<void> {
+  async selectAgent(agentId: string, options: { preserveFocus?: boolean } = {}): Promise<void> {
     // Stamp this selection + capture the current engine, so the async open below
     // can detect being superseded by a newer select or the engine being torn down
     // / replaced (see isSelectionStale) and bail before any stale side effect.
@@ -420,7 +420,7 @@ export class TeamChatView extends ItemView implements ChatViewHandle {
     // staleness guard is this leaf's live generation+manager identity check.
     await getTeamChatDmOpenCoordinator(this.plugin).serialize(conversationId, () =>
       openResolvedTeamChatDm(this.plugin, manager, this.leaf, this.dmRecency, conversationId,
-        () => this.isSelectionStale(generation, manager)));
+        { isStale: () => this.isSelectionStale(generation, manager), previousConversationId, preserveFocus: options.preserveFocus }));
     // Reconcile a provider-change rotation: record + notify a new rotation, and close
     // any displaced old-provider tab once its replacement is open — deferred, so a
     // cap-blocked rotation's stale tab is closed on the retry that finally opens the

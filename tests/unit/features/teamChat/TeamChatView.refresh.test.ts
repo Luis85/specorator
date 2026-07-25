@@ -183,9 +183,10 @@ describe('TeamChatView.refreshProviderAvailability — un-grey + agent-provider 
     await view.refreshProviderAvailability();
 
     // The stale DM rotates through the shared selectAgent path (notice + old-tab close
-    // apply there); the matching DM is never rotated (idempotent).
+    // apply there); the matching DM is never rotated (idempotent). preserveFocus keeps a
+    // background provider-sync from yanking the pane off the DM the user is reading (Round-45).
     expect(selectAgent).toHaveBeenCalledTimes(1);
-    expect(selectAgent).toHaveBeenCalledWith('roster:a');
+    expect(selectAgent).toHaveBeenCalledWith('roster:a', { preserveFocus: true });
   });
 
   it('re-projects each open DM composer so a newly enabled provider un-greys it', async () => {
@@ -353,9 +354,10 @@ describe('TeamChatView — restored DM provider reconcile (Round-42, :329)', () 
     await view.restoreTabsThenMarkReady();
 
     // The stale-provider DM rotates through selectAgent (fresh conversation on the new provider);
-    // the matching-provider DM is never rotated.
+    // the matching-provider DM is never rotated. preserveFocus so the restore-time rotation
+    // opens in the background rather than stealing focus (Round-45).
     expect(selectAgent).toHaveBeenCalledTimes(1);
-    expect(selectAgent).toHaveBeenCalledWith('roster:a');
+    expect(selectAgent).toHaveBeenCalledWith('roster:a', { preserveFocus: true });
     // The reconcile ran AFTER the restore gate opened, so selectAgent's own !tabsRestored gate
     // would not have short-circuited the rotation.
     expect(view.areTabsRestored()).toBe(true);

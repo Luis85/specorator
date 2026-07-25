@@ -22,15 +22,22 @@ export async function openResolvedTeamChatDm(
   leaf: WorkspaceLeaf,
   dmRecency: readonly string[],
   conversationId: string,
-  isStale: () => boolean,
+  options: { isStale: () => boolean; previousConversationId?: string | null; preserveFocus?: boolean },
 ): Promise<void> {
+  const { isStale, previousConversationId = null, preserveFocus = false } = options;
   // The serialized body may have queued behind another open (or the leaf may have been torn
   // down since it was enqueued); re-check before touching anything.
   if (isStale()) return;
+  // preserveFocus marks a BACKGROUND provider-change rotation: open quietly (no focus steal) and
+  // reuse the displaced old tab's slot. Both decisions are derived off the live manager here.
+  const { activate, displacedConversationId } = resolveRotationOpen(manager, conversationId, previousConversationId, preserveFocus);
   // Span every Specorator leaf (sidebar + all Team Chat views): a DM already open in another
   // leaf must be revealed, never double-mounted.
   const existing = plugin.findConversationAcrossViews(conversationId);
   if (existing) {
+    // A preserveFocus re-select of an already-open DM must not steal focus (defensive: a fresh
+    // rotation id is not open elsewhere, so this only upholds the invariant).
+    if (!activate) return;
     if (existing.view.leaf === leaf) {
       await manager.switchToTab(existing.tabId);
     } else {
@@ -45,8 +52,9 @@ export async function openResolvedTeamChatDm(
     return;
   }
   // Enforce the hot-DM budget and learn whether a slot is free: evict the LRU DM before
-  // creating so a big roster browses gracefully instead of dead-ending at the cap (T7).
-  const hasDmSlot = await evictLruDmIfNeeded(plugin, manager, dmRecency, conversationId);
+  // creating so a big roster browses gracefully instead of dead-ending at the cap (T7). The
+  // displaced tab's slot is excluded — reconcileRotation frees it after this replacement opens.
+  const hasDmSlot = await evictLruDmIfNeeded(plugin, manager, dmRecency, conversationId, displacedConversationId);
   // Re-check staleness after the eviction close.
   if (isStale()) return;
   // No slot: the budget is full AND every inactive DM is mid-turn, so eviction freed nothing
@@ -58,8 +66,8 @@ export async function openResolvedTeamChatDm(
     return;
   }
   // Team Chat DMs carry their own budget (eviction above confirmed a slot), so bypass the
-  // shared maxChatTabs.
-  const created = await manager.createTab(conversationId, undefined, { activate: true, kind: 'chat', bypassTabLimit: true });
+  // shared maxChatTabs. `activate` is false for a background rotation of a non-focused DM.
+  const created = await manager.createTab(conversationId, undefined, { activate, kind: 'chat', bypassTabLimit: true });
   // Last-resort cap Notice: with eviction + bypass, createTab returns null only on a
   // teardown-window edge, never the ordinary budget path. A stale open isn't a user error.
   if (!created && !isStale()) {
@@ -278,6 +286,36 @@ interface DmEvictionManager extends DmTabCloser {
   getActiveTabId?(): string | null;
 }
 
+/** The active DM's conversationId, or null when no DM tab is active / the manager can't report
+ *  its tabs. Drives the preserveFocus rotation decision (activate the replacement only when the
+ *  rotated DM is the one currently in focus). Reads the same optional accessors as the eviction
+ *  surface, so a lean/torn-down manager is a safe null rather than a throw. */
+function readActiveDmConversationId(manager: DmEvictionManager): string | null {
+  const activeTabId = manager.getActiveTabId?.() ?? null;
+  if (activeTabId == null) return null;
+  return (manager.getAllTabs?.() ?? []).find((tab) => tab.id === activeTabId)?.conversationId ?? null;
+}
+
+/**
+ * The two rotation-aware open decisions, derived off the caller's options + the live manager:
+ *  - `activate`: a user navigation always activates; a background preserveFocus rotation only
+ *    when the rotated DM IS the one currently in focus (else the replacement opens quietly, so a
+ *    `roster:changed` sync doesn't yank the pane off the DM the user is reading).
+ *  - `displacedConversationId`: the old tab a genuine rotation (prev ≠ new) replaces — its slot is
+ *    reused by the budget check rather than evicted, since `reconcileRotation` closes it next.
+ */
+function resolveRotationOpen(
+  manager: DmEvictionManager,
+  conversationId: string,
+  previousConversationId: string | null,
+  preserveFocus: boolean,
+): { activate: boolean; displacedConversationId: string | null } {
+  const activate = !preserveFocus || previousConversationId === readActiveDmConversationId(manager);
+  const displacedConversationId =
+    previousConversationId != null && previousConversationId !== conversationId ? previousConversationId : null;
+  return { activate, displacedConversationId };
+}
+
 /** Records a DM as most-recently-active (move-to-end), so the head of `recency` is the
  *  least-recently-used. Mutates in place — the view owns the recency array. */
 export function touchDmRecency(recency: string[], conversationId: string): void {
@@ -325,15 +363,23 @@ export function pickLruDmEviction(
  * skips them all (Round-41): the caller must then NOT bypass the cap with an over-budget
  * runtime and instead surfaces the cap Notice. The caller guards the surrounding
  * generation/stale check; an evicted DM's mapping persists so re-selecting its agent reopens it.
+ *
+ * `displacedConversationId` (Round-45): the old tab a provider-change rotation is replacing.
+ * reconcileRotation closes it AFTER this replacement opens, so its slot is effectively already
+ * free — exclude it from the count so the rotation reuses that slot instead of force-closing an
+ * unrelated hot DM. Omitted / not-open → today's behavior (evict when genuinely over budget).
  */
 export async function evictLruDmIfNeeded(
   plugin: SpecoratorPlugin,
   manager: DmEvictionManager,
   recency: readonly string[],
   openingConversationId: string,
+  displacedConversationId?: string | null,
 ): Promise<boolean> {
   const tabs = manager.getAllTabs?.() ?? [];
-  if (tabs.length < resolveMaxTeamChatDms(plugin.settings)) return true;
+  const displacedOpen = displacedConversationId != null && tabs.some((tab) => tab.conversationId === displacedConversationId);
+  const effectiveCount = tabs.length - (displacedOpen ? 1 : 0);
+  if (effectiveCount < resolveMaxTeamChatDms(plugin.settings)) return true;
   const victimTabId = pickLruDmEviction(tabs, recency, manager.getActiveTabId?.() ?? null, openingConversationId);
   if (victimTabId == null) return false;
   // A successful eviction close frees exactly the one slot the new DM needs (the budget is
