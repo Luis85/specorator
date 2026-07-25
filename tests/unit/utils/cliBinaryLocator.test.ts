@@ -4,7 +4,7 @@ import * as path from 'path';
 
 import {
   batchShimInvokesNode,
-  declaredNodeInterpreter,
+  declaredInterpreter,
   executableCandidateNames,
   findBinaryOnPath,
   isExecutableFile,
@@ -159,7 +159,7 @@ describe('batchShimInvokesNode', () => {
  * exact path — the kernel never consults PATH for it — so requiring a PATH hit
  * would report a script that runs perfectly as `missing-node`.
  */
-describe('declaredNodeInterpreter', () => {
+describe('declaredInterpreter', () => {
   let dir: string;
 
   beforeEach(() => {
@@ -179,19 +179,19 @@ describe('declaredNodeInterpreter', () => {
   it('returns the absolute interpreter an absolute shebang names', () => {
     const script = write('cli', '#!/opt/node/bin/node\nconsole.log(1)\n');
 
-    expect(declaredNodeInterpreter(script)).toBe('/opt/node/bin/node');
+    expect(declaredInterpreter(script)).toBe('/opt/node/bin/node');
   });
 
   it('returns null for `env node`, which really does resolve through PATH', () => {
     // The PATH search stays the right question there — answering with
     // `/usr/bin/env` would check the wrong file entirely.
-    expect(declaredNodeInterpreter(write('cli', '#!/usr/bin/env node\n'))).toBeNull();
+    expect(declaredInterpreter(write('cli', '#!/usr/bin/env node\n'))).toBeNull();
   });
 
   it('returns the absolute node a batch shim hard-codes', () => {
     const shim = write('cli.cmd', '@"C:\\Program Files\\nodejs\\node.exe" "%~dp0\\cli.js" %*');
 
-    expect(declaredNodeInterpreter(shim)).toBe('C:\\Program Files\\nodejs\\node.exe');
+    expect(declaredInterpreter(shim)).toBe('C:\\Program Files\\nodejs\\node.exe');
   });
 
   it('returns the absolute node a shim invokes WITHOUT quotes', () => {
@@ -200,7 +200,7 @@ describe('declaredNodeInterpreter', () => {
     // reported `missing-node` for a CLI that starts fine.
     const shim = write('cli.cmd', '@C:\\tools\\node.exe "%~dp0\\cli.js" %*');
 
-    expect(declaredNodeInterpreter(shim)).toBe('C:\\tools\\node.exe');
+    expect(declaredInterpreter(shim)).toBe('C:\\tools\\node.exe');
   });
 
   it('reads an unquoted absolute node from a continuation line, not just the first', () => {
@@ -214,22 +214,37 @@ describe('declaredNodeInterpreter', () => {
     ].join('\r\n'));
 
     // `%~dp0\node.exe` is not absolute, so the unquoted branch is what answers.
-    expect(declaredNodeInterpreter(shim)).toBe('C:\\tools\\node.exe');
+    expect(declaredInterpreter(shim)).toBe('C:\\tools\\node.exe');
   });
 
   it('returns null for a UNC-shaped path that is not node at all', () => {
-    expect(declaredNodeInterpreter(write('cli.cmd', '@C:\\tools\\python.exe x.py'))).toBeNull();
+    expect(declaredInterpreter(write('cli.cmd', '@C:\\tools\\python.exe x.py'))).toBeNull();
   });
 
   it('returns null for a shim that invokes a bare `node`', () => {
-    expect(declaredNodeInterpreter(write('cli.cmd', '@node "%~dp0\\cli.js" %*'))).toBeNull();
+    expect(declaredInterpreter(write('cli.cmd', '@node "%~dp0\\cli.js" %*'))).toBeNull();
+  });
+
+  it('accepts an absolute interpreter whose name is a Node alias', () => {
+    // Debian ships `/usr/bin/nodejs`; a distribution may ship a versioned or
+    // vendored name. The kernel runs whatever the shebang names, so an allow-list
+    // of Node spellings reports `missing-node` for a working script the moment it
+    // guesses short — the question is "does this bypass PATH", not "is this
+    // really Node".
+    const script = write('cli', '#!/usr/bin/nodejs\n');
+
+    expect(declaredInterpreter(script)).toBe('/usr/bin/nodejs');
+  });
+
+  it('returns null for a relative shebang, which is not a path the kernel can trust', () => {
+    expect(declaredInterpreter(write('cli', '#!node\n'))).toBeNull();
   });
 
   it('returns null for a file with no shebang at all', () => {
-    expect(declaredNodeInterpreter(write('cli', 'binary contents'))).toBeNull();
+    expect(declaredInterpreter(write('cli', 'binary contents'))).toBeNull();
   });
 
   it('returns null for a path it cannot read rather than throwing', () => {
-    expect(declaredNodeInterpreter(path.join(dir, 'absent'))).toBeNull();
+    expect(declaredInterpreter(path.join(dir, 'absent'))).toBeNull();
   });
 });

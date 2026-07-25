@@ -90,21 +90,32 @@ const UNQUOTED_ABSOLUTE_NODE = new RegExp(
   String.raw`(?:^|[\s@(])(${WINDOWS_ABSOLUTE_PREFIX}[^\s"'\r\n]*node(?:\.exe)?)(?=[\s"']|$)`,
   'im',
 );
-/** An absolute interpreter that is Node itself — `/usr/bin/env` is not one. */
-const ABSOLUTE_NODE_SHEBANG = /^\/\S*\/node(?:\.exe)?$/i;
+/** A shebang interpreter given as an absolute path — the only kind the kernel uses verbatim. */
+const ABSOLUTE_SHEBANG_INTERPRETER = /^\/\S+$/;
+/**
+ * `env` — the one interpreter that exists to look its argument up on PATH.
+ *
+ * Identified by exclusion rather than by matching an allow-list of Node names,
+ * because the question is "does this bypass PATH?", not "is this really Node".
+ * An allow-list has to guess every alias a distribution ships (`nodejs` on
+ * Debian, a versioned `node20`, a vendored bundle) and reports `missing-node`
+ * for a script the kernel launches fine whenever it guesses short.
+ */
+const PATH_DEFERRING_INTERPRETER = /(?:^|\/)env(?:\.exe)?$/i;
 
 /**
- * The EXACT Node interpreter an entry point declares, when it names one.
+ * The interpreter an entry point names OUTRIGHT, when it names one — the file
+ * that must be runnable for it to start, in place of any PATH search.
  *
- * `#!/opt/node/bin/node` is launched by the kernel through that path and never
- * consults PATH, so requiring a PATH hit would report a script that runs
+ * `#!/opt/node/bin/node` is launched by the kernel through that exact path and
+ * never consults PATH, so requiring a PATH hit would report a script that runs
  * perfectly as `missing-node` and offer a reinstall for it. Same for a batch shim
  * that hard-codes an absolute `node.exe`.
  *
  * Returns null for `#!/usr/bin/env node` and for a bare `node` in a shim — those
  * genuinely resolve through PATH, so the PATH search remains the right question.
  */
-export function declaredNodeInterpreter(filePath: string): string | null {
+export function declaredInterpreter(filePath: string): string | null {
   const head = readFileHead(filePath);
   if (head === null) {
     return null;
@@ -118,7 +129,10 @@ export function declaredNodeInterpreter(filePath: string): string | null {
     return null;
   }
   const [interpreter] = head.split(/\r?\n/)[0].slice(2).trim().split(/\s+/);
-  return interpreter && ABSOLUTE_NODE_SHEBANG.test(interpreter) ? interpreter : null;
+  if (!interpreter || !ABSOLUTE_SHEBANG_INTERPRETER.test(interpreter)) {
+    return null;
+  }
+  return PATH_DEFERRING_INTERPRETER.test(interpreter) ? null : interpreter;
 }
 
 /** True when the path points at a real file on THIS host. */

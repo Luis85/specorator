@@ -9,7 +9,7 @@ import type { PluginContext } from '@/core/types/PluginContext';
 import { asSettingsBag } from '@/core/types/settings';
 import {
   batchShimInvokesNode,
-  declaredNodeInterpreter,
+  declaredInterpreter,
   executableCandidateNames,
   findBinaryOnPath,
   isExecutableFile,
@@ -193,9 +193,9 @@ function kernelLaunchedVerdict(
   resolved: string,
   runtimePath: string | undefined,
 ): ResolvedPathVerdict {
-  const declaredInterpreter = declaredNodeInterpreter(resolved);
-  if (declaredInterpreter !== null) {
-    return isExecutableFile(declaredInterpreter)
+  const declared = declaredInterpreter(resolved);
+  if (declared !== null) {
+    return isExecutableFile(declared)
       ? { kind: 'found' }
       : { kind: 'unusable', reason: 'missing-node' };
   }

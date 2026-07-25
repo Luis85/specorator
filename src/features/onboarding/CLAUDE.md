@@ -114,7 +114,7 @@ surfaces to use the island pattern; this is one.
       reachable and the wrapped command dies immediately — "this provider can
       wrap batch files" is not on its own a promise that anything runs.
       An entry point that names its interpreter OUTRIGHT is exempt from the PATH
-      search entirely (`declaredNodeInterpreter`): `#!/opt/node/bin/node` is
+      search entirely (`declaredInterpreter`): `#!/opt/node/bin/node` is
       launched by the kernel through that exact path, as is a shim hard-coding an
       absolute `node.exe` — quoted or not, since an unquoted absolute path is
       legal in a shim whenever it has no spaces and cmd.exe runs it just as
@@ -122,6 +122,13 @@ surfaces to use the island pattern; this is one.
       `node`, and `%~dp0\node.exe` (relative to the shim, and already covered by
       the CLI's own directory joining the enhanced path) really do resolve through
       a search, so they keep the PATH question.
+      The shebang rule is written as an EXCLUSION — any absolute interpreter
+      counts except `env`, the one whose job is to look its argument up on PATH.
+      An allow-list of Node spellings has to guess every alias a distribution
+      ships (`nodejs` on Debian, a versioned or vendored name) and reports
+      `missing-node` for a script the kernel launches fine the moment it guesses
+      short; the question here is "does this bypass PATH", not "is this really
+      Node".
     - `batch-shim` / `unsupported-form` — a Windows file the provider's spawn
       cannot start. Windows has no shebang support, so what runs is decided by
       HOW each provider spawns, and each declares that as

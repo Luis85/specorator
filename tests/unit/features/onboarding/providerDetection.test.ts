@@ -22,12 +22,12 @@ jest.mock('@/utils/cliBinaryLocator', () => ({
   isExistingFile: jest.fn(() => true),
   isExecutableFile: jest.fn(() => true),
   batchShimInvokesNode: jest.fn(() => false),
-  declaredNodeInterpreter: jest.fn(() => null),
+  declaredInterpreter: jest.fn(() => null),
 }));
 
 import {
   batchShimInvokesNode,
-  declaredNodeInterpreter,
+  declaredInterpreter,
   findBinaryOnPath,
   isExecutableFile,
   isExistingFile,
@@ -108,7 +108,7 @@ afterEach(() => {
   jest.mocked(isExecutableFile).mockReset();
   jest.mocked(isExecutableFile).mockReturnValue(true);
   jest.mocked(batchShimInvokesNode).mockReset().mockReturnValue(false);
-  jest.mocked(declaredNodeInterpreter).mockReset().mockReturnValue(null);
+  jest.mocked(declaredInterpreter).mockReset().mockReturnValue(null);
   jest.mocked(cliPathRequiresNode).mockReset().mockReturnValue(false);
   jest.mocked(findNodeExecutable).mockReset().mockReturnValue('/usr/bin/node');
 });
@@ -359,7 +359,7 @@ describe('detectProviderCli', () => {
       cliResolver: stubResolver('/opt/alpha/alpha'),
     } as never);
     jest.mocked(cliPathRequiresNode).mockReturnValue(true);
-    jest.mocked(declaredNodeInterpreter).mockReturnValue('/opt/node/bin/node');
+    jest.mocked(declaredInterpreter).mockReturnValue('/opt/node/bin/node');
     jest.mocked(findNodeExecutable).mockReturnValue(null);
 
     expect(detectProviderCli(makePlugin(), 'det-alpha')).toMatchObject({
@@ -374,7 +374,7 @@ describe('detectProviderCli', () => {
     ProviderWorkspaceRegistry.setServices('det-alpha', {
       cliResolver: stubResolver('/opt/alpha/alpha'),
     } as never);
-    jest.mocked(declaredNodeInterpreter).mockReturnValue('/opt/node/bin/node');
+    jest.mocked(declaredInterpreter).mockReturnValue('/opt/node/bin/node');
     jest.mocked(isExecutableFile).mockImplementation(
       (candidate: string) => candidate !== '/opt/node/bin/node',
     );
