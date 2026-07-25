@@ -178,6 +178,10 @@ export class InputController {
       getCurrentConversationId: () => this.deps.state.currentConversationId,
       openConversation: (id) => this.deps.openConversation?.(id) ?? this.deps.conversationController.switchTo(id),
       getDropdownCoordinator: () => this.deps.getDropdownCoordinator?.() ?? null,
+      // Team Chat DMs bind one fixed thread per agent, so `$` resume is suppressed
+      // on that surface (surface-driven; non-team-chat and blank tabs unchanged).
+      isResumeDisabled: () =>
+        this.deps.plugin.getConversationSync(this.deps.state.currentConversationId ?? '')?.surface === 'team-chat',
     });
     this.queuedMessages = new QueuedMessageController({
       state: deps.state,

@@ -426,6 +426,119 @@ describe('Tab - handleForkRequest', () => {
   });
 });
 
+describe('Tab - transcript callbacks isForkEligible (fork-disable seam)', () => {
+  const eligibleMessages = () => [
+    { id: 'a0', role: 'assistant' as const, content: 'hi', timestamp: 1, assistantMessageId: 'asst-0' },
+    { id: 'u1', role: 'user' as const, content: 'hello', timestamp: 2, userMessageId: 'user-u' },
+    { id: 'a1', role: 'assistant' as const, content: 'resp', timestamp: 3, assistantMessageId: 'asst-1' },
+  ];
+
+  function setupCallbacks(overrides: Record<string, any> = {}) {
+    const options = createMockOptions(overrides);
+    const tab = createTab(options);
+    const forkRequestCallback = jest.fn().mockResolvedValue(undefined);
+    initializeTabUI(tab, options.plugin);
+    initializeTabControllers(tab, options.plugin, {} as any, forkRequestCallback);
+    const mountTranscriptMock = mountTranscript as unknown as jest.Mock;
+    const callbacks = mountTranscriptMock.mock.calls[mountTranscriptMock.mock.calls.length - 1][3];
+    return { tab, callbacks, plugin: options.plugin };
+  }
+
+  // Characterization (sidebar/Agent-Board unchanged): on a non-team-chat
+  // conversation fork eligibility tracks rewind eligibility exactly.
+  it('sidebar: isForkEligible mirrors isRewindEligible for a non-team-chat conversation', () => {
+    const plugin = createMockPlugin({ getConversationSync: jest.fn().mockReturnValue({ surface: 'chat' }) });
+    const { tab, callbacks } = setupCallbacks({ plugin });
+    tab.conversationId = 'conv-1';
+    tab.state.messages = eligibleMessages();
+
+    expect(callbacks.isRewindEligible('u1')).toBe(true);
+    expect(callbacks.isForkEligible('u1')).toBe(true);
+    // A message with no rewind context is ineligible for both.
+    expect(callbacks.isRewindEligible('missing')).toBe(false);
+    expect(callbacks.isForkEligible('missing')).toBe(false);
+  });
+
+  // The conversation being absent still resolves as non-team-chat (fork tracks rewind).
+  it('sidebar: isForkEligible mirrors isRewindEligible when the conversation is unknown', () => {
+    const { tab, callbacks } = setupCallbacks(); // default getConversationSync → null
+    tab.conversationId = 'conv-1';
+    tab.state.messages = eligibleMessages();
+
+    expect(callbacks.isRewindEligible('u1')).toBe(true);
+    expect(callbacks.isForkEligible('u1')).toBe(true);
+  });
+
+  // Team Chat DM: fork disabled (an unbound ad-hoc fork would escape the surface
+  // filter and desync the room map); rewind — same-conversation — stays eligible.
+  it('team-chat DM: isForkEligible is false while isRewindEligible stays true', () => {
+    const plugin = createMockPlugin({ getConversationSync: jest.fn().mockReturnValue({ surface: 'team-chat' }) });
+    const { tab, callbacks } = setupCallbacks({ plugin });
+    tab.conversationId = 'dm-1';
+    tab.state.messages = eligibleMessages();
+
+    expect(callbacks.isRewindEligible('u1')).toBe(true);
+    expect(callbacks.isForkEligible('u1')).toBe(false);
+  });
+});
+
+describe('Tab - transcript callbacks getMessageActions targeting (reused-island rebasing)', () => {
+  const assistantMsg = {
+    id: 'a1', role: 'assistant' as const, content: 'answer', timestamp: 1, assistantMessageId: 'asst-1',
+  };
+
+  function makeAction() {
+    return { id: 'thumbs-up', label: 'Good', icon: 'thumbs-up', isEligible: () => true, run: jest.fn() };
+  }
+
+  function setup(plugin: any) {
+    const options = createMockOptions({ plugin });
+    const tab = createTab(options);
+    initializeTabUI(tab, options.plugin);
+    initializeTabControllers(tab, options.plugin, {} as any, jest.fn().mockResolvedValue(undefined));
+    const mountTranscriptMock = mountTranscript as unknown as jest.Mock;
+    const callbacks = mountTranscriptMock.mock.calls[mountTranscriptMock.mock.calls.length - 1][3];
+    return { tab, callbacks };
+  }
+
+  // Characterization (sidebar unchanged): a message action targets
+  // getActiveConversationSnapshot()?.id — the sidebar's active conversation.
+  it('sidebar: message action targets getActiveConversationSnapshot() id', () => {
+    const action = makeAction();
+    const plugin = createMockPlugin({
+      chatMessageActions: [action],
+      getActiveConversationSnapshot: jest.fn().mockReturnValue({ id: 'sidebar-conv', title: 'x' }),
+      getConversationSync: jest.fn().mockReturnValue({ surface: 'chat' }),
+    });
+    const { tab, callbacks } = setup(plugin);
+    tab.conversationId = 'tab-conv';
+
+    callbacks.getMessageActions(assistantMsg)[0].run();
+
+    expect(action.run).toHaveBeenCalledWith(assistantMsg, 'sidebar-conv');
+  });
+
+  // Team Chat DM: even with a sidebar chat also open (snapshot present), the
+  // action rebases onto the owning DM tab — never the sidebar's conversation —
+  // and the sidebar snapshot is not even consulted.
+  it('team-chat DM: message action targets the owning tab, not the sidebar snapshot', () => {
+    const action = makeAction();
+    const snapshot = jest.fn().mockReturnValue({ id: 'sidebar-conv', title: 'x' });
+    const plugin = createMockPlugin({
+      chatMessageActions: [action],
+      getActiveConversationSnapshot: snapshot,
+      getConversationSync: jest.fn().mockReturnValue({ surface: 'team-chat' }),
+    });
+    const { tab, callbacks } = setup(plugin);
+    tab.conversationId = 'dm-1';
+
+    callbacks.getMessageActions(assistantMsg)[0].run();
+
+    expect(action.run).toHaveBeenCalledWith(assistantMsg, 'dm-1');
+    expect(snapshot).not.toHaveBeenCalled();
+  });
+});
+
 describe('Tab - handleForkAll (via /fork command)', () => {
 
   function setupForkAllTest(overrides: Record<string, any> = {}) {

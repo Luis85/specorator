@@ -2065,6 +2065,21 @@ describe('InputController - Message Queue', () => {
       expect(controller.isResumeDropdownVisible()).toBe(true);
     });
 
+    it('should suppress the resume dropdown on the Team Chat surface', async () => {
+      // Surface-driven: the owning tab's conversation is a team-chat DM, so `$`
+      // resume is disabled entirely (no dropdown, no "nothing to resume" Notice).
+      (deps.plugin as any).getConversationList = jest.fn().mockReturnValue(mockConversations);
+      deps.state.currentConversationId = 'dm-1';
+      (deps.plugin.getConversationSync as any) = jest.fn().mockReturnValue({ surface: 'team-chat' });
+      inputEl.value = '/resume';
+      controller = new InputController(deps);
+
+      await controller.sendMessage();
+
+      expect(ResumeSessionDropdown).not.toHaveBeenCalled();
+      expect(mockNotice).not.toHaveBeenCalled();
+    });
+
     it('should call switchTo on select callback', async () => {
       (deps.plugin as any).getConversationList = jest.fn().mockReturnValue(mockConversations);
       (deps.conversationController as any).switchTo = jest.fn().mockResolvedValue(undefined);
