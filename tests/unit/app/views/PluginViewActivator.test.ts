@@ -1,5 +1,6 @@
 import { PluginViewActivator } from '@/app/views/PluginViewActivator';
 import { VIEW_TYPE_SPECORATOR } from '@/core/types';
+import { VIEW_TYPE_TEAM_CHAT } from '@/features/teamChat/viewType';
 import type SpecoratorPlugin from '@/main';
 
 function createPlugin(opts: {
@@ -24,6 +25,7 @@ function createPlugin(opts: {
         getTabManager: () => opts.tabManager ?? null,
         areTabsRestored: () => opts.tabsRestored ?? true,
         createNewTab: jest.fn().mockResolvedValue(undefined),
+        leaf: { view: { getViewType: () => VIEW_TYPE_SPECORATOR } },
       }
     : null;
   const newLeafTab = { setViewState: jest.fn().mockResolvedValue(undefined) };
@@ -204,10 +206,12 @@ describe('PluginViewActivator.getTabSlotUsage (work-order budget)', () => {
     const viewA = {
       getTabManager: () => ({ countTabsByKind: (k: string) => (k === 'work-order' ? 1 : 0) }),
       areTabsRestored: () => true,
+      leaf: { view: { getViewType: () => VIEW_TYPE_SPECORATOR } },
     };
     const viewB = {
       getTabManager: () => ({ countTabsByKind: (k: string) => (k === 'work-order' ? 2 : 0) }),
       areTabsRestored: () => true,
+      leaf: { view: { getViewType: () => VIEW_TYPE_SPECORATOR } },
     };
     const { plugin } = createPlugin({ agentBoardQueueCap: 5 });
     (plugin.getAllViews as jest.Mock).mockReturnValue([viewA, viewB]);
@@ -219,15 +223,66 @@ describe('PluginViewActivator.getTabSlotUsage (work-order budget)', () => {
     const restored = {
       getTabManager: () => ({ countTabsByKind: (k: string) => (k === 'work-order' ? 1 : 0) }),
       areTabsRestored: () => true,
+      leaf: { view: { getViewType: () => VIEW_TYPE_SPECORATOR } },
     };
     const midRestore = {
       getTabManager: () => ({ countTabsByKind: () => 0 }),
       areTabsRestored: () => false, // tabs not hydrated yet — WO count unknown
+      leaf: { view: { getViewType: () => VIEW_TYPE_SPECORATOR } },
     };
     const { plugin } = createPlugin({ agentBoardQueueCap: 5 });
     (plugin.getAllViews as jest.Mock).mockReturnValue([restored, midRestore]);
     const activator = new PluginViewActivator(plugin);
     // Must NOT report the restored view's count alone (used: 1) — block capacity.
     expect(activator.getTabSlotUsage()).toEqual({ used: 5, max: 5 });
+  });
+
+  it('excludes a mid-restore Team Chat leaf from the work-order slot gate', () => {
+    // A Team Chat leaf hosts chat-kind DM tabs only — never a work-order run tab —
+    // so its slow DM hydration must not trip the mid-restore block and stall the
+    // Agent Board queue (Round-46).
+    const sidebar = {
+      getTabManager: () => ({ countTabsByKind: (k: string) => (k === 'work-order' ? 1 : 0) }),
+      areTabsRestored: () => true,
+      leaf: { view: { getViewType: () => VIEW_TYPE_SPECORATOR } },
+    };
+    const teamChatMidRestore = {
+      getTabManager: () => null,
+      areTabsRestored: () => false,
+      leaf: { view: { getViewType: () => VIEW_TYPE_TEAM_CHAT } },
+    };
+    const { plugin } = createPlugin({ agentBoardQueueCap: 5 });
+    (plugin.getAllViews as jest.Mock).mockReturnValue([sidebar, teamChatMidRestore]);
+    const activator = new PluginViewActivator(plugin);
+    expect(activator.getTabSlotUsage()).toEqual({ used: 1, max: 5 });
+  });
+
+  it('still blocks capacity while the sidebar view itself is mid-restore', () => {
+    const sidebarMidRestore = {
+      getTabManager: () => ({ countTabsByKind: () => 0 }),
+      areTabsRestored: () => false,
+      leaf: { view: { getViewType: () => VIEW_TYPE_SPECORATOR } },
+    };
+    const { plugin } = createPlugin({ agentBoardQueueCap: 5 });
+    (plugin.getAllViews as jest.Mock).mockReturnValue([sidebarMidRestore]);
+    const activator = new PluginViewActivator(plugin);
+    expect(activator.getTabSlotUsage()).toEqual({ used: 5, max: 5 });
+  });
+
+  it('a restored Team Chat leaf contributes zero work-order tabs', () => {
+    const sidebar = {
+      getTabManager: () => ({ countTabsByKind: (k: string) => (k === 'work-order' ? 2 : 0) }),
+      areTabsRestored: () => true,
+      leaf: { view: { getViewType: () => VIEW_TYPE_SPECORATOR } },
+    };
+    const teamChatRestored = {
+      getTabManager: () => ({ countTabsByKind: () => 0 }),
+      areTabsRestored: () => true,
+      leaf: { view: { getViewType: () => VIEW_TYPE_TEAM_CHAT } },
+    };
+    const { plugin } = createPlugin({ agentBoardQueueCap: 5 });
+    (plugin.getAllViews as jest.Mock).mockReturnValue([sidebar, teamChatRestored]);
+    const activator = new PluginViewActivator(plugin);
+    expect(activator.getTabSlotUsage()).toEqual({ used: 2, max: 5 });
   });
 });
