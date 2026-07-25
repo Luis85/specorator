@@ -14,6 +14,8 @@ import { basename, parentDir } from '../chat/utils/pathLabel';
 import { recalculateUsageForModel } from '../chat/utils/usageInfo';
 import { resolveModelContextWindow } from '../settings/customModels/resolveModelContextWindow';
 import { resolveTeamChatAgentProvider } from './resolveTeamChatAgentProvider';
+import { projectCrossLeafPresence } from './teamChatPresence';
+import type { TeamChatSnapshot } from './ui/vue/teamChatCallbacks';
 
 /**
  * DM-scoped mirrors of SpecoratorView's cross-tab refresh loops, applied to the
@@ -109,6 +111,26 @@ export function projectActiveDmEditedFiles(activeTab: TabData | null): ComposerE
 export function projectActiveDmProviderId(plugin: SpecoratorPlugin, activeTab: TabData | null): string | null {
   const conversationId = activeTab?.conversationId;
   return conversationId ? plugin.getConversationSync(conversationId)?.providerId ?? null : null;
+}
+
+/**
+ * The full `TeamChatSnapshot` the view fans to its store observers, assembled from the
+ * active DM tab: the edited-files strip + provider chip both project off it, presence is
+ * the cross-leaf idle/busy aggregate. A pure projection kept here beside the other DM-scoped
+ * projections (rather than inline in `TeamChatView`) so the view stays a thin host — the same
+ * reason the refresh loops live in this module.
+ */
+export function projectTeamChatSnapshot(
+  plugin: SpecoratorPlugin,
+  activeTab: TabData | null,
+  selectedAgentId: string | null,
+): TeamChatSnapshot {
+  return {
+    selectedAgentId,
+    editedFiles: projectActiveDmEditedFiles(activeTab),
+    presence: projectCrossLeafPresence(plugin),
+    activeProviderId: projectActiveDmProviderId(plugin, activeTab),
+  };
 }
 
 /**

@@ -45,8 +45,23 @@ jest.mock('@/features/teamChat/teamChatDmTabs', () => ({
   evictLruDmIfNeeded: jest.fn().mockResolvedValue(undefined),
 }));
 
+// Round-62 helpers: the view keeps thin call sites; the wiring logic + tests live in
+// teamChatFileEvents.test.ts / teamChatHydrationBanner.test.ts. Here we mock them to
+// assert the onOpen/onClose lifecycle + delegation without the real vault/event plumbing.
+jest.mock('@/features/teamChat/teamChatFileEvents', () => ({
+  registerTeamChatDmFileEvents: jest.fn(),
+}));
+jest.mock('@/features/teamChat/teamChatHydrationBanner', () => ({
+  createDmHydrationBanner: jest.fn(() => ({
+    dispose: jest.fn(),
+    consumePendingHydrationError: jest.fn(() => null),
+  })),
+}));
+
 import { TabManager } from '@/features/chat/tabs/TabManager';
 import { restoreTeamChatDmTabs } from '@/features/teamChat/teamChatDmTabs';
+import { registerTeamChatDmFileEvents } from '@/features/teamChat/teamChatFileEvents';
+import { createDmHydrationBanner } from '@/features/teamChat/teamChatHydrationBanner';
 import { TeamChatView } from '@/features/teamChat/TeamChatView';
 
 /** Drain pending microtasks so the fire-and-forget restore in initTabEngine
@@ -76,6 +91,8 @@ function makeView(): any {
   view.leaf = { setViewState: jest.fn().mockResolvedValue(undefined) };
   view.contentEl = createMockEl();
   view.tabContentEl = createMockEl();
+  view.registerEvent = jest.fn();     // ItemView method; Object.create skips it (used by the file-events wiring)
+  view.hydrationBanner = null;        // class-field initializer is skipped by Object.create (Round-62)
   view.tabManager = null;
   view.tabsRestored = false;
   view.selectedAgentId = null;
@@ -849,5 +866,86 @@ describe('TeamChatView — onClose teardown', () => {
 
     await view.onClose();
     expect(rosterOff).toHaveBeenCalledTimes(1);
+  });
+});
+
+// Round-62: the two SpecoratorView-parity wirings the Team Chat host was missing —
+// the DM file-context cache vault events (Fix 2) and the DM hydration-failure banner
+// (Fix 3). The wiring logic + ownership gate live in the helper modules (mocked here);
+// these assert the view's thin call sites + the presence-mirroring subscribe lifecycle.
+describe('TeamChatView — DM file events + hydration banner (Round-62)', () => {
+  beforeEach(() => jest.clearAllMocks());
+
+  it('registers the DM file-context vault events on open, reading the live active tab + this.registerEvent', async () => {
+    const view = makeView();
+
+    await view.onOpen();
+
+    expect(registerTeamChatDmFileEvents).toHaveBeenCalledWith(
+      view.plugin,
+      expect.any(Function),
+      expect.any(Function),
+    );
+    const [, getActiveTab, registerEvent] = (registerTeamChatDmFileEvents as jest.Mock).mock.calls[0];
+    // The accessor reads the LIVE manager off `this` (survives a manager rebuild).
+    view.tabManager = { getActiveTab: jest.fn(() => 'ACTIVE-DM') };
+    expect(getActiveTab()).toBe('ACTIVE-DM');
+    // A null manager is a safe null (empty-roster state has no active tab).
+    view.tabManager = null;
+    expect(getActiveTab()).toBeNull();
+    // The register callback routes refs to ItemView.registerEvent (auto-dispose on unload).
+    const ref = { event: 'create' };
+    registerEvent(ref);
+    expect(view.registerEvent).toHaveBeenCalledWith(ref);
+  });
+
+  it('subscribes the DM hydration banner on open (host = this view) and disposes it on close', async () => {
+    const view = makeView();
+
+    await view.onOpen();
+
+    expect(createDmHydrationBanner).toHaveBeenCalledWith(view.plugin, view);
+    const controller = (createDmHydrationBanner as jest.Mock).mock.results[0].value;
+    expect(view.hydrationBanner).toBe(controller);
+
+    await view.onClose();
+
+    expect(controller.dispose).toHaveBeenCalledTimes(1);
+    expect(view.hydrationBanner).toBeNull();
+  });
+
+  it('re-entrant onOpen disposes the prior banner before re-subscribing (no leak)', async () => {
+    const view = makeView();
+    await view.onOpen();
+    const first = (createDmHydrationBanner as jest.Mock).mock.results[0].value;
+
+    // A re-entrant onOpen (popout/move, no interleaved onClose): tabManager is set, so the
+    // teardown branch runs. The banner must be disposed and re-created, never doubled.
+    view.tabManager = {
+      getPersistedState: jest.fn(() => ({ openTabs: [], activeTabId: null })),
+      destroy: jest.fn().mockResolvedValue(undefined),
+    };
+    await view.onOpen();
+
+    expect(first.dispose).toHaveBeenCalledTimes(1);
+    expect(createDmHydrationBanner).toHaveBeenCalledTimes(2);
+    expect(view.hydrationBanner).toBe((createDmHydrationBanner as jest.Mock).mock.results[1].value);
+  });
+
+  it('consumePendingHydrationError delegates to the banner controller (the restoreConversation seam)', async () => {
+    const view = makeView();
+    await view.onOpen();
+    const controller = (createDmHydrationBanner as jest.Mock).mock.results[0].value;
+    (controller.consumePendingHydrationError as jest.Mock).mockReturnValue({ code: 'x', message: 'boom' });
+
+    expect(view.consumePendingHydrationError('c1')).toEqual({ code: 'x', message: 'boom' });
+    expect(controller.consumePendingHydrationError).toHaveBeenCalledWith('c1');
+  });
+
+  it('consumePendingHydrationError is a safe null when no banner is subscribed', () => {
+    const view = makeView();
+    view.hydrationBanner = null;
+
+    expect(view.consumePendingHydrationError('c1')).toBeNull();
   });
 });

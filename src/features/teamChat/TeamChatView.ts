@@ -13,9 +13,10 @@ import { refreshBoundAgentDisplayModels } from '../chat/tabs/tabShared';
 import { openEditedFile } from '../chat/tabs/tabUi';
 import type { PersistedTabManagerState } from '../chat/tabs/types';
 import { getTeamChatDmOpenCoordinator } from './TeamChatDmOpenCoordinator';
-import { applyDmEditedFilesSetting, applyDmHiddenCommands, noticeRemovedAgentDms, projectActiveDmEditedFiles, projectActiveDmProviderId, reconcileRestoredDmProviders, refreshDmModelState, rotateChangedDmProviders } from './teamChatDmRefresh';
+import { applyDmEditedFilesSetting, applyDmHiddenCommands, noticeRemovedAgentDms, projectTeamChatSnapshot, reconcileRestoredDmProviders, refreshDmModelState, rotateChangedDmProviders } from './teamChatDmRefresh';
 import { openResolvedTeamChatDm, ownedDisplacedDmId, reconcileRotation, restoreTeamChatDmTabs, serializeOnTail, touchDmRecency } from './teamChatDmTabs';
-import { projectCrossLeafPresence, type TeamChatPresence } from './teamChatPresence';
+import { registerTeamChatDmFileEvents } from './teamChatFileEvents';
+import { createDmHydrationBanner, type DmHydrationBannerController } from './teamChatHydrationBanner';
 import type { TeamChatThreadStore } from './TeamChatThreadStore';
 import { createTeamChatPinia } from './ui/vue/globalPinia';
 import { CALLBACKS_KEY, CONTENT_HOST_KEY, PLUGIN_KEY, VIEW_KEY } from './ui/vue/keys';
@@ -71,6 +72,9 @@ export class TeamChatView extends ItemView implements ChatViewHandle {
    *  — provider-change rotation + un-grey (reused T5 reconcile), plus read-only for deleted
    *  agents. Mirrors `presenceUnsubscribe`'s onOpen/onClose + re-entrant lifecycle. */
   private rosterChangedUnsubscribe: (() => void) | null = null;
+  /** DM hydration-failure → inline banner controller (Round-62 Fix 3): owns the pending map +
+   *  `conversation:hydration-failed` subscription; disposed/re-created like presence/roster. */
+  private hydrationBanner: DmHydrationBannerController | null = null;
   /** Open DMs already flagged agent-removed (Round-39), so a later unrelated `roster:changed`
    *  doesn't re-notice; a re-created agent clears its entry. Owned here, mutated by the helper. */
   private readonly removedAgentDmsNotified = new Set<string>();
@@ -159,6 +163,11 @@ export class TeamChatView extends ItemView implements ChatViewHandle {
     // fires on an actual provider mismatch, so an unrelated edit is cheap).
     this.rosterChangedUnsubscribe?.();
     this.rosterChangedUnsubscribe = this.plugin.events.on('roster:changed', () => void this.reconcileDmsOnRosterChange());
+    // Round-62: surface a DM hydration failure as an inline banner (Fix 3, dispose+re-create like
+    // presence) + keep the active DM tab's file cache fresh on vault changes (Fix 2). Mirror SpecoratorView.
+    this.hydrationBanner?.dispose();
+    this.hydrationBanner = createDmHydrationBanner(this.plugin, this);
+    registerTeamChatDmFileEvents(this.plugin, () => this.tabManager?.getActiveTab() ?? null, (ref) => this.registerEvent(ref));
   }
 
   /** Builds the tab engine into the Vue-provided content host, then restores the
@@ -280,6 +289,8 @@ export class TeamChatView extends ItemView implements ChatViewHandle {
     this.presenceUnsubscribe = null;
     this.rosterChangedUnsubscribe?.();
     this.rosterChangedUnsubscribe = null;
+    this.hydrationBanner?.dispose();
+    this.hydrationBanner = null;
     await this.destroyTabRuntime();
     // Streaming DMs gone; surviving leaves recompute presence (destroyTab skips the callbacks) (:261).
     this.plugin.events.emit('teamChat:presence');
@@ -440,15 +451,6 @@ export class TeamChatView extends ItemView implements ChatViewHandle {
     return this.selectionGeneration !== generation || this.tabManager !== manager;
   }
 
-  /** Fire-and-forget DM open with error logging — the Vue roster-click seam
-   *  delegates here so a rejected resolve/open is logged, never an unhandled
-   *  rejection. It no longer touches selectedAgentId; the activated tab's
-   *  projection does. */
-  private openAgentDm(agentId: string): void {
-    void this.selectAgent(agentId).catch((error) =>
-      this.plugin.logger.scope('team-chat').error('selectAgent failed', error));
-  }
-
   /** The single plugin-scoped agent-DM thread store, shared by every Team Chat
    *  leaf so their mutations serialize and reflect each other (Round-20 Fix A). */
   private getThreadStore(): TeamChatThreadStore {
@@ -467,35 +469,31 @@ export class TeamChatView extends ItemView implements ChatViewHandle {
           this.teamChatObservers.delete(onChange);
         };
       },
-      onSelectAgent: (agentId) => this.openAgentDm(agentId),
+      // Fire-and-forget roster-click open; a rejected resolve/open is logged, never unhandled.
+      onSelectAgent: (agentId) => void this.selectAgent(agentId).catch((error) =>
+        this.plugin.logger.scope('team-chat').error('selectAgent failed', error)),
       onOpenEditedFile: (path) => openEditedFile(this.plugin.app, path),
     };
   }
 
+  /** Delegates to the shared projection (the active DM tab drives it) so the view stays a thin host. */
   private buildSnapshot(): TeamChatSnapshot {
-    // Resolve the active DM tab once: the edited-files strip AND the provider chip
-    // both project off it (its conversation's providerId), so the top bar shows which
-    // backend a failing/unavailable-provider DM runs on. Re-projected on every change.
-    const activeTab = this.tabManager?.getActiveTab() ?? null;
-    return {
-      selectedAgentId: this.selectedAgentId,
-      editedFiles: projectActiveDmEditedFiles(activeTab),
-      presence: this.buildPresence(),
-      activeProviderId: projectActiveDmProviderId(this.plugin, activeTab),
-    };
-  }
-
-  /** Cross-leaf idle/busy presence for the roster dots (see projectCrossLeafPresence).
-   *  Recomputed on every emitTeamChatChange — own tab callbacks + the teamChat:presence
-   *  broadcast — so a stream start/stop in ANY leaf self-heals with no map to reconcile. */
-  private buildPresence(): Record<string, TeamChatPresence> {
-    return projectCrossLeafPresence(this.plugin);
+    return projectTeamChatSnapshot(this.plugin, this.tabManager?.getActiveTab() ?? null, this.selectedAgentId);
   }
 
   /** Notifies every registered store observer (mirror of emitChatShellChange). */
   private emitTeamChatChange(): void {
     const snapshot = this.buildSnapshot();
     for (const observer of this.teamChatObservers) observer(snapshot);
+  }
+
+  /**
+   * Returns+clears a DM's pending hydration failure (Round-62 Fix 3), the mirror of
+   * `SpecoratorView.consumePendingHydrationError`: a DM tab's `restoreConversation` reaches this off its
+   * owning `component` (this view) once bound, surfacing a banner recorded while the tab was still opening.
+   */
+  consumePendingHydrationError(conversationId: string): { code: string; message: string } | null {
+    return this.hydrationBanner?.consumePendingHydrationError(conversationId) ?? null;
   }
 
   // ============================================
