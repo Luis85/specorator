@@ -7,6 +7,7 @@ import type { ProviderId } from '../../core/providers/types';
 import type { ChatViewHandle } from '../../core/types/PluginContext';
 import { t } from '../../i18n/i18n';
 import type SpecoratorPlugin from '../../main';
+import { tabCountsPayload } from '../chat/events';
 import { TabManager } from '../chat/tabs/TabManager';
 import type { PersistedTabManagerState } from '../chat/tabs/types';
 import { getTeamChatDmOpenCoordinator } from './TeamChatDmOpenCoordinator';
@@ -175,6 +176,12 @@ export class TeamChatView extends ItemView implements ChatViewHandle {
       this.plugin.logger.scope('team-chat').error('team chat tab restore failed', error);
     } finally {
       this.tabsRestored = true;
+      // Capacity is readable again now that tabsRestored is true (getTabSlotUsage
+      // reported FULL while it was false). Mirror SpecoratorView: fire chat:tabs-changed
+      // once (shared tabCountsPayload) so the Agent Board work-order queue re-ticks and
+      // drains any runnable card, instead of stalling until an unrelated tab change
+      // nudges it (:171).
+      this.plugin.events.emit('chat:tabs-changed', tabCountsPayload(this.tabManager));
     }
   }
 

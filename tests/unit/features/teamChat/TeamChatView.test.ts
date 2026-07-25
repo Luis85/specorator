@@ -24,6 +24,9 @@ jest.mock('@/features/chat/tabs/TabManager', () => ({
     restoreState: jest.fn().mockResolvedValue(undefined),
     destroy: jest.fn().mockResolvedValue(undefined),
     invalidateProviderCommandCaches: jest.fn(),
+    // Read by the post-restore chat:tabs-changed emit (Round-31).
+    getTabCount: jest.fn(() => 0),
+    countTabsByKind: jest.fn(() => 0),
     // Present so the onClose test can prove it is NOT the path taken.
     disposeAllRuntimes: jest.fn(),
   })),
@@ -52,6 +55,7 @@ function makeView(): any {
   view.plugin = {
     logger: { scope: () => ({ error: jest.fn() }) },
     getConversationSync: jest.fn(() => null),
+    events: { emit: jest.fn() },
   };
   view.leaf = { setViewState: jest.fn().mockResolvedValue(undefined) };
   view.contentEl = createMockEl();
@@ -234,6 +238,25 @@ describe('TeamChatView — persisted DM tab restore', () => {
 
     expect(view.tabManager.restoreState).not.toHaveBeenCalled();
     expect(view.areTabsRestored()).toBe(true);
+  });
+
+  // Round-31 (:171): getTabSlotUsage reports FULL while any view's areTabsRestored()
+  // is false, so the Agent Board queue holds during this leaf's restore. When
+  // tabsRestored flips true, capacity is readable again — but nothing re-emits, so
+  // the queue can stay stalled. Mirror SpecoratorView: fire chat:tabs-changed once.
+  it('emits chat:tabs-changed after restore so the Agent Board queue re-ticks (:171)', async () => {
+    const view = makeView();
+    view.pendingTabManagerState = null; // no-persisted-layout path (tabsRestored still flips true)
+
+    view.initTabEngine();
+    await flushMicrotasks();
+
+    expect(view.areTabsRestored()).toBe(true);
+    expect(view.plugin.events.emit).toHaveBeenCalledWith('chat:tabs-changed', {
+      openCount: expect.any(Number),
+      chatCount: expect.any(Number),
+      workOrderCount: expect.any(Number),
+    });
   });
 
   // Round-30 (:90): the re-entrant onOpen teardown must bump selectionGeneration

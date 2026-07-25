@@ -20,6 +20,7 @@ import { rosterAgentToPersona } from '../agents/personaRegistry';
 import { openQuickActionsModal } from '../quickActions/openQuickActionsModal';
 import { dispatchQuickActionToTab } from '../quickActions/runQuickActionForFile';
 import { resolveModelContextWindow } from '../settings/customModels/resolveModelContextWindow';
+import { tabCountsPayload } from './events';
 import {
   type HydrationFailedBannerPayload,
   registerHydrationFailedSubscriber,
@@ -335,11 +336,7 @@ export class SpecoratorView extends ItemView implements ChatViewHandle {
     // capacity via the hasSpecoratorLeaf fallback. Now that tabsRestored is true
     // the correct work-order count can be read; fire once so the queue
     // re-evaluates without waiting for the next manual tab create/close.
-    this.plugin.events.emit('chat:tabs-changed', {
-      openCount: this.tabManager?.getTabCount() ?? 0,
-      chatCount: this.tabManager?.countTabsByKind('chat') ?? 0,
-      workOrderCount: this.tabManager?.countTabsByKind('work-order') ?? 0,
-    });
+    this.plugin.events.emit('chat:tabs-changed', tabCountsPayload(this.tabManager));
     this.emitChatShellChange();
     void this.refreshBoundAgentChip();
     this.tabManager?.primeProviderRuntime();
