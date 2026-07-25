@@ -988,6 +988,74 @@ describe('SpecoratorPlugin', () => {
     });
   });
 
+  describe('getAllViews / getView host enumeration', () => {
+    // A tab-manager stub with the teardown surface onunload() reaches
+    // (dispose + persist) so the leaf stubs survive afterEach cleanly.
+    function fakeTabManager(overrides: Record<string, unknown> = {}) {
+      return {
+        disposeAllRuntimes: jest.fn(),
+        getPersistedState: jest.fn().mockReturnValue({ openTabs: [] }),
+        findTabByConversation: jest.fn().mockReturnValue(null),
+        ...overrides,
+      };
+    }
+
+    // A minimal chat-engine host leaf: `getViewType` distinguishes the two hosts
+    // and `getTabManager` (a function) is what the duck-type predicates key on.
+    function chatLeaf(viewType: string, tabManager: unknown = fakeTabManager()) {
+      return { view: { getViewType: () => viewType, getTabManager: () => tabManager } };
+    }
+
+    function stubLeavesByType(sidebar: unknown, teamChat: unknown): void {
+      mockApp.workspace.getLeavesOfType.mockImplementation((type: string) => {
+        if (type === VIEW_TYPE_SPECORATOR) return [sidebar];
+        if (type === VIEW_TYPE_TEAM_CHAT) return [teamChat];
+        return [];
+      });
+    }
+
+    it('getAllViews() enumerates both the sidebar and Team Chat hosts', async () => {
+      await plugin.onload();
+      const sidebar = chatLeaf(VIEW_TYPE_SPECORATOR);
+      const teamChat = chatLeaf(VIEW_TYPE_TEAM_CHAT);
+      stubLeavesByType(sidebar, teamChat);
+
+      const types = plugin
+        .getAllViews()
+        .map((v) => (v as unknown as { getViewType(): string }).getViewType());
+      expect(types).toHaveLength(2);
+      expect(types).toEqual(expect.arrayContaining([VIEW_TYPE_SPECORATOR, VIEW_TYPE_TEAM_CHAT]));
+    });
+
+    it('getView() stays sidebar-scoped even when a Team Chat leaf is open', async () => {
+      await plugin.onload();
+      const sidebar = chatLeaf(VIEW_TYPE_SPECORATOR);
+      const teamChat = chatLeaf(VIEW_TYPE_TEAM_CHAT);
+      stubLeavesByType(sidebar, teamChat);
+
+      // Deliberate asymmetry (T4.2): getAllViews spans both hosts, but getView
+      // answers "the active *sidebar* conversation" only, so a Team Chat leaf
+      // must never be returned here.
+      expect(plugin.getView()).toBe(sidebar.view);
+    });
+
+    it('findConversationAcrossViews() resolves a tab living in a Team Chat host', async () => {
+      await plugin.onload();
+      const sidebar = chatLeaf(VIEW_TYPE_SPECORATOR);
+      const teamChatManager = fakeTabManager({
+        findTabByConversation: jest.fn().mockReturnValue({ tabId: 'tc-tab' }),
+      });
+      const teamChat = chatLeaf(VIEW_TYPE_TEAM_CHAT, teamChatManager);
+      stubLeavesByType(sidebar, teamChat);
+
+      // Inherited from getAllViews() — findConversationAcrossViews delegates to it,
+      // so broadening enumeration is what lets it reach Team Chat DM tabs.
+      const match = plugin.findConversationAcrossViews('conv-in-team-chat');
+      expect(match).toEqual({ view: teamChat.view, tabId: 'tc-tab' });
+      expect(teamChatManager.findTabByConversation).toHaveBeenCalledWith('conv-in-team-chat');
+    });
+  });
+
   describe('loadSettings with conversations', () => {
     it('should load saved conversations from metadata files', async () => {
       const timestamp = Date.now();

@@ -63,7 +63,7 @@ import { UsageTracker } from './core/usage/UsageTracker';
 import { AgentRosterStore } from './features/agents/roster/AgentRosterStore';
 import type { BoundAgentProjection } from './features/agents/roster/boundAgentPersona';
 import type { RosterAgent } from './features/agents/roster/rosterTypes';
-import { isSpecoratorView } from './features/chat/isSpecoratorView';
+import { isChatViewHandle, isSpecoratorView } from './features/chat/isSpecoratorView';
 import type { GitStatusWatcher } from './features/chat/services/GitStatusWatcher';
 import type { SpecoratorView } from './features/chat/SpecoratorView';
 import { QuickActionFavoritesCache } from './features/quickActions/QuickActionFavoritesCache';
@@ -78,6 +78,7 @@ import { createQueueControlState, type QueueControlState } from './features/task
 import { QueueSlotTracker } from './features/tasks/execution/QueueSlotTracker';
 import { RunSidecarStore } from './features/tasks/storage/RunSidecarStore';
 import { WorkOrderActivityProvider } from './features/tasks/ui/WorkOrderActivityProvider';
+import { VIEW_TYPE_TEAM_CHAT } from './features/teamChat/viewType';
 import { setLocale, t } from './i18n/i18n';
 import type { Locale } from './i18n/types';
 import type { BrowserSelectionContext } from './utils/browser';
@@ -788,14 +789,30 @@ export default class SpecoratorPlugin extends Plugin implements PluginContext {
     await this.storage.setTabManagerState(state);
   }
 
+  // Deliberate asymmetry with getAllViews(): getView() stays sidebar-scoped
+  // (VIEW_TYPE_SPECORATOR only). It backs getActiveConversationSnapshot (the
+  // *sidebar's* active conversation) and PluginViewActivator slot/new-tab logic,
+  // so a Team Chat leaf must never answer "the active sidebar conversation".
+  // Team Chat rebases its own toolbar actions onto its owning tab instead.
   getView(): SpecoratorView | null {
     const leaves = this.app.workspace.getLeavesOfType(VIEW_TYPE_SPECORATOR);
     return leaves.map(leaf => leaf.view).find(isSpecoratorView) ?? null;
   }
 
+  // Enumerates BOTH chat-engine hosts (sidebar + Team Chat), unlike getView()
+  // above. Every broadcast/lifecycle site — env-var runtime restarts, provider
+  // availability + settings refresh, runtime shutdown, conversation-delete
+  // quiesce/repair, findConversationAcrossViews — must reach Team Chat DM
+  // runtimes, so this filters through the host-agnostic isChatViewHandle rather
+  // than narrowing to the concrete SpecoratorView.
   getAllViews(): ChatViewHandle[] {
-    const leaves = this.app.workspace.getLeavesOfType(VIEW_TYPE_SPECORATOR);
-    return leaves.map(leaf => leaf.view).filter(isSpecoratorView);
+    const leaves = [
+      ...this.app.workspace.getLeavesOfType(VIEW_TYPE_SPECORATOR),
+      ...this.app.workspace.getLeavesOfType(VIEW_TYPE_TEAM_CHAT),
+    ];
+    // Narrow from `unknown`: ChatViewHandle is not an Obsidian `View` subtype
+    // (unlike SpecoratorView), so the type-guard filter overload needs it.
+    return leaves.map(leaf => leaf.view as unknown).filter(isChatViewHandle);
   }
 
   findConversationAcrossViews(conversationId: string): { view: ChatViewHandle; tabId: string } | null {

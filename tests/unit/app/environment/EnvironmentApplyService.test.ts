@@ -3,6 +3,8 @@ import * as providerEnv from '@/core/providers/providerEnvironment';
 import { ProviderRegistry } from '@/core/providers/ProviderRegistry';
 import { ProviderSettingsCoordinator } from '@/core/providers/ProviderSettingsCoordinator';
 import type { Conversation } from '@/core/types';
+import { VIEW_TYPE_SPECORATOR } from '@/core/types';
+import { VIEW_TYPE_TEAM_CHAT } from '@/features/teamChat/viewType';
 import type SpecoratorPlugin from '@/main';
 
 function createPlugin(overrides: Partial<{
@@ -100,6 +102,50 @@ describe('EnvironmentApplyService', () => {
     expect(cancel2).toHaveBeenCalledWith(['claude']);
     expect(restart1).toHaveBeenCalledWith(['t1'], true);
     expect(restart2).toHaveBeenCalledWith(['t2'], true);
+  });
+
+  it('fans an env change to a Team Chat host alongside the sidebar (no sidebar regression)', async () => {
+    jest.spyOn(providerEnv, 'getEnvironmentVariablesForScope').mockReturnValue('OLD');
+    jest.spyOn(providerEnv, 'setEnvironmentVariablesForScope').mockImplementation(() => undefined);
+    jest.spyOn(ProviderRegistry, 'getRegisteredProviderIds').mockReturnValue(['claude']);
+    jest.spyOn(ProviderSettingsCoordinator, 'handleEnvironmentChange' as any).mockImplementation(() => undefined);
+    jest.spyOn(ProviderSettingsCoordinator, 'reconcileProviders' as any).mockReturnValue({
+      changed: true,
+      invalidatedConversations: [],
+    });
+
+    const sidebarCancel = jest.fn().mockReturnValue(['s1']);
+    const sidebarRestart = jest.fn().mockResolvedValue(0);
+    const teamCancel = jest.fn().mockReturnValue(['tc1']);
+    const teamRestart = jest.fn().mockResolvedValue(0);
+    const sidebarView = {
+      getViewType: () => VIEW_TYPE_SPECORATOR,
+      getTabManager: () => ({ cancelStreamingTabsForProviders: sidebarCancel, restartRuntimeTabs: sidebarRestart }),
+      invalidateProviderCommandCaches: jest.fn(),
+      refreshModelSelector: jest.fn(),
+    };
+    const teamChatView = {
+      getViewType: () => VIEW_TYPE_TEAM_CHAT,
+      getTabManager: () => ({ cancelStreamingTabsForProviders: teamCancel, restartRuntimeTabs: teamRestart }),
+      invalidateProviderCommandCaches: jest.fn(),
+      refreshModelSelector: jest.fn(),
+    };
+    const plugin = {
+      ...createPlugin(),
+      getAllViews: jest.fn().mockReturnValue([sidebarView, teamChatView]),
+    } as unknown as SpecoratorPlugin;
+
+    await new EnvironmentApplyService(plugin).apply('shared', 'NEW');
+
+    // Now that getAllViews() enumerates Team Chat hosts (T4), an env change must
+    // restart the Team Chat DM runtime and refresh its provider caches — exactly
+    // like the sidebar's, with no regression to the sidebar path.
+    expect(teamCancel).toHaveBeenCalledWith(['claude']);
+    expect(teamRestart).toHaveBeenCalledWith(['tc1'], true);
+    expect(teamChatView.invalidateProviderCommandCaches).toHaveBeenCalledWith(['claude']);
+    expect(sidebarCancel).toHaveBeenCalledWith(['claude']);
+    expect(sidebarRestart).toHaveBeenCalledWith(['s1'], true);
+    expect(sidebarView.invalidateProviderCommandCaches).toHaveBeenCalledWith(['claude']);
   });
 
   it('cancels every view before restarting any (global two-phase, env-apply ordering)', async () => {
