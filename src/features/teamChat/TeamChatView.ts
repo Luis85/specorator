@@ -1,17 +1,13 @@
 import type { ViewStateResult, WorkspaceLeaf } from 'obsidian';
-import { ItemView } from 'obsidian';
+import { ItemView, Notice } from 'obsidian';
 import { type App as VueApp, createApp, markRaw } from 'vue';
 
-import { ProviderRegistry } from '../../core/providers/ProviderRegistry';
 import type { ProviderId } from '../../core/providers/types';
-import type { Conversation } from '../../core/types/chat';
 import type { ChatViewHandle } from '../../core/types/PluginContext';
-import { asSettingsBag } from '../../core/types/settings';
 import { t } from '../../i18n/i18n';
 import type SpecoratorPlugin from '../../main';
-import { resolveAgentProvider } from '../agents/roster/resolveAgentProvider';
 import { TabManager } from '../chat/tabs/TabManager';
-import { TeamChatThreadStore } from './TeamChatThreadStore';
+import type { TeamChatThreadStore } from './TeamChatThreadStore';
 import { createTeamChatPinia } from './ui/vue/globalPinia';
 import { CALLBACKS_KEY, CONTENT_HOST_KEY, PLUGIN_KEY, VIEW_KEY } from './ui/vue/keys';
 import type { TeamChatCallbacks, TeamChatSnapshot } from './ui/vue/teamChatCallbacks';
@@ -43,8 +39,6 @@ export class TeamChatView extends ItemView implements ChatViewHandle {
   /** Agent whose DM is the active thread; reopened on restore, recorded for getState. */
   private selectedAgentId: string | null = null;
   private pendingPersist: number | null = null;
-  /** roomKey→conversationId map for the agent DMs (adopt-then-create), built lazily. */
-  private teamChatThreadStore: TeamChatThreadStore | null = null;
   // Store-reprojection observers (mirror of chat's chatShellObservers). The
   // routing composable subscribes here and fans each snapshot into the Pinia
   // store; the ChatViewHandle refresh methods re-project through the same seam.
@@ -202,20 +196,37 @@ export class TeamChatView extends ItemView implements ChatViewHandle {
    * Opens or resumes the agent's single persistent DM: record + project the
    * selection immediately (so the roster highlights and the right-pane empty
    * state clears without waiting on I/O), then resolve the DM's conversation and
-   * either switch to its open tab or create one. Idempotent per agent — a repeat
-   * select of an already-open DM switches to it rather than creating a duplicate.
+   * reuse any already-open tab for it. Idempotent per agent — a repeat select of
+   * an already-open DM switches to it rather than creating a duplicate.
    */
   async selectAgent(agentId: string): Promise<void> {
+    const previousAgentId = this.selectedAgentId;
     this.selectedAgentId = agentId;
     this.emitTeamChatChange();
     const manager = this.tabManager;
     if (!manager) return; // engine not built yet (defensive; clicks only fire post-mount)
     const conversationId = await this.getThreadStore().resolveOrCreate(agentId);
-    const existing = manager.findTabByConversation(conversationId);
+    // Span every Specorator leaf (sidebar + all Team Chat views): a DM already
+    // open in another leaf must be revealed, never double-mounted — two
+    // controllers on one conversation stream/save concurrently and corrupt it.
+    const existing = this.plugin.findConversationAcrossViews(conversationId);
     if (existing) {
-      await manager.switchToTab(existing.tabId);
-    } else {
-      await manager.createTab(conversationId, undefined, { activate: true, kind: 'chat' });
+      if (existing.view.leaf === this.leaf) {
+        await manager.switchToTab(existing.tabId);
+      } else {
+        await this.plugin.app.workspace.revealLeaf(existing.view.leaf);
+        await existing.view.getTabManager()?.switchToTab(existing.tabId);
+      }
+      return;
+    }
+    const created = await manager.createTab(conversationId, undefined, { activate: true, kind: 'chat' });
+    if (!created) {
+      // Tab cap reached (createTab returned null). Roll the optimistic selection
+      // back so the roster highlight tracks the visible pane, re-project, and tell
+      // the user why nothing opened. (LRU eviction is a later increment.)
+      this.selectedAgentId = previousAgentId;
+      this.emitTeamChatChange();
+      new Notice(t('teamChat.tabCapReached'));
     }
   }
 
@@ -227,46 +238,10 @@ export class TeamChatView extends ItemView implements ChatViewHandle {
       this.plugin.logger.scope('team-chat').error('selectAgent failed', error));
   }
 
-  /** Lazily builds the agent-DM thread store (roomKey→conversationId map). The
-   *  injected `createConversation` resolves the agent's provider from the roster
-   *  policy BEFORE creating, so the DM runs on the agent's own provider/model. */
+  /** The single plugin-scoped agent-DM thread store, shared by every Team Chat
+   *  leaf so their mutations serialize and reflect each other (Round-20 Fix A). */
   private getThreadStore(): TeamChatThreadStore {
-    if (!this.teamChatThreadStore) {
-      this.teamChatThreadStore = new TeamChatThreadStore({
-        adapter: this.plugin.vaultFileAdapter,
-        createConversation: (agentId) => this.createDmConversation(agentId),
-        conversationExists: (id) => this.plugin.getConversationSync(id) != null,
-        findAdoptable: (agentId) => this.plugin.findTeamChatConversationForAgent(agentId),
-        events: this.plugin.events,
-      });
-    }
-    return this.teamChatThreadStore;
-  }
-
-  /**
-   * Creates the agent's DM conversation on its roster-policy provider — the
-   * explicit `providerOverride`, else the provider implied by `modelSelection`,
-   * else the active/default enabled provider (mirror of `startChatWithRosterAgent`
-   * for the team-chat surface). Resolving the provider BEFORE creation is
-   * load-bearing: `resolveBoundAgent` only forwards the agent's model when the
-   * conversation already runs on the model's provider, so a naive
-   * `providerOverride ?? default` would silently drop a cross-provider model.
-   */
-  private async createDmConversation(agentId: string): Promise<Conversation> {
-    const agent = await this.plugin.agentRosterStore.get(agentId);
-    const settings = asSettingsBag(this.plugin.settings);
-    const providerId = agent
-      ? resolveAgentProvider(
-          agent,
-          (candidate) => ProviderRegistry.isEnabled(candidate, settings),
-          ProviderRegistry.resolveSettingsProviderId(settings),
-        )
-      : undefined;
-    return this.plugin.createConversation({
-      boundAgentId: agentId,
-      surface: 'team-chat',
-      ...(providerId ? { providerId } : {}),
-    });
+    return this.plugin.getTeamChatThreadStore();
   }
 
   // ============================================

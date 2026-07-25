@@ -78,6 +78,7 @@ import { createQueueControlState, type QueueControlState } from './features/task
 import { QueueSlotTracker } from './features/tasks/execution/QueueSlotTracker';
 import { RunSidecarStore } from './features/tasks/storage/RunSidecarStore';
 import { WorkOrderActivityProvider } from './features/tasks/ui/WorkOrderActivityProvider';
+import { createTeamChatThreadStore, type TeamChatThreadStore } from './features/teamChat/teamChatThreadStoreFactory';
 import { VIEW_TYPE_TEAM_CHAT } from './features/teamChat/viewType';
 import { setLocale, t } from './i18n/i18n';
 import type { Locale } from './i18n/types';
@@ -97,6 +98,9 @@ export default class SpecoratorPlugin extends Plugin implements PluginContext {
   storage!: SharedAppStorage;
   gitStatusWatcher: GitStatusWatcher | null = null;
   conversationStore!: ConversationStore;
+  /** Single plugin-scoped Team Chat DM thread store — one instance so every leaf
+   *  shares its store-wide serialization + cache (Round-20). */
+  private teamChatThreadStore: TeamChatThreadStore | null = null;
   /** Plugin-lifetime singleton. Built in onload before any consumer reads it. */
   public quickActionStorage!: QuickActionStorage;
   public quickActionFavoritesCache: QuickActionFavoritesCache | null = null;
@@ -770,6 +774,11 @@ export default class SpecoratorPlugin extends Plugin implements PluginContext {
 
   findTeamChatConversationForAgent(agentId: string): Conversation | null {
     return this.conversationStore.findTeamChatConversationForAgent(agentId);
+  }
+
+  /** The single plugin-scoped Team Chat DM thread store (lazy; reset on reload). */
+  getTeamChatThreadStore(): TeamChatThreadStore {
+    return (this.teamChatThreadStore ??= createTeamChatThreadStore(this));
   }
 
   getConversationSync(id: string): Conversation | null {

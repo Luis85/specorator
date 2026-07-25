@@ -1,6 +1,7 @@
 import { createMockEl } from '@test/helpers/mockElement';
+import { Notice } from 'obsidian';
 
-// Mock the engine so selectAgent's resolve→open/switch flow can be exercised
+// Mock the engine so selectAgent's resolve→reuse/create flow can be exercised
 // without constructing the real tab stack (mirror of TeamChatView.test).
 jest.mock('@/features/chat/tabs/TabManager', () => ({
   TabManager: jest.fn().mockImplementation(() => ({
@@ -9,78 +10,40 @@ jest.mock('@/features/chat/tabs/TabManager', () => ({
   })),
 }));
 
-// Isolate the roster-policy assertion from the full provider registration: the
-// real resolveAgentProvider runs (so the override→model-provider→fallback logic
-// is under test), only the enabled-set + default-provider are stubbed.
-jest.mock('@/core/providers/ProviderRegistry', () => ({
-  ProviderRegistry: {
-    isEnabled: jest.fn(() => true),
-    resolveSettingsProviderId: jest.fn(() => 'claude'),
-  },
-}));
-
 import { TeamChatView } from '@/features/teamChat/TeamChatView';
 
-/** Prototype-only view wired just enough to drive selectAgent + createDmConversation. */
-function makeView(overrides: { plugin?: Record<string, unknown> } = {}): any {
+const mockNotice = Notice as jest.Mock;
+
+/** Prototype-only view wired just enough to drive selectAgent's cross-view reuse. */
+function makeView(overrides: { leaf?: unknown; plugin?: Record<string, unknown> } = {}): any {
   const view = Object.create(TeamChatView.prototype) as any;
+  view.leaf = overrides.leaf ?? { id: 'leaf-this' };
   view.plugin = {
     logger: { scope: () => ({ error: jest.fn() }) },
+    app: { workspace: { revealLeaf: jest.fn().mockResolvedValue(undefined) } },
+    findConversationAcrossViews: jest.fn(() => null),
+    getTeamChatThreadStore: jest.fn(() => ({ resolveOrCreate: jest.fn().mockResolvedValue('conv-1') })),
     ...overrides.plugin,
   };
   view.contentEl = createMockEl();
   view.tabManager = null;
   view.selectedAgentId = null;
-  view.teamChatThreadStore = null;
   view.teamChatObservers = new Set();
   return view;
 }
 
-function fakeAgent(overrides: Record<string, unknown>): any {
-  return {
-    id: 'roster:a', name: 'A', description: '', prompt: '',
-    disallowedTools: [], skills: [], roles: ['worker'],
-    createdAt: 1, updatedAt: 2, ...overrides,
-  };
-}
-
-describe('TeamChatView.selectAgent — resolve → open / switch', () => {
-  beforeEach(() => jest.clearAllMocks());
-
-  it('resolves the DM then CREATES a tab the first time, SWITCHES the second (no re-create)', async () => {
-    const resolveOrCreate = jest.fn().mockResolvedValue('conv-1');
-    const createTab = jest.fn().mockResolvedValue({ id: 'tab-1' });
-    const switchToTab = jest.fn().mockResolvedValue(undefined);
-    let openTab: { tabId: string } | null = null;
-
-    const view = makeView();
-    view.teamChatThreadStore = { resolveOrCreate };
-    view.tabManager = {
-      findTabByConversation: jest.fn(() => openTab),
-      createTab,
-      switchToTab,
-    };
-
-    await view.selectAgent('roster:a');
-    expect(resolveOrCreate).toHaveBeenCalledWith('roster:a');
-    expect(createTab).toHaveBeenCalledWith('conv-1', undefined, { activate: true, kind: 'chat' });
-    expect(switchToTab).not.toHaveBeenCalled();
-
-    // The DM tab is now open — a second select for the same agent switches to it.
-    openTab = { tabId: 'tab-1' };
-    await view.selectAgent('roster:a');
-    expect(createTab).toHaveBeenCalledTimes(1);
-    expect(switchToTab).toHaveBeenCalledWith('tab-1');
+describe('TeamChatView.selectAgent — resolve → cross-view reuse / create', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    mockNotice.mockClear();
   });
 
   it('records selectedAgentId and projects it to observers synchronously, before the async open', async () => {
     const observer = jest.fn();
     const view = makeView();
     view.teamChatObservers = new Set([observer]);
-    view.teamChatThreadStore = { resolveOrCreate: jest.fn().mockResolvedValue('conv-1') };
     view.tabManager = {
-      findTabByConversation: () => null,
-      createTab: jest.fn().mockResolvedValue({}),
+      createTab: jest.fn().mockResolvedValue({ id: 'tab-1' }),
       switchToTab: jest.fn(),
     };
 
@@ -91,66 +54,94 @@ describe('TeamChatView.selectAgent — resolve → open / switch', () => {
     expect(observer).toHaveBeenCalledWith({ selectedAgentId: 'roster:z' });
     await pending;
   });
-});
 
-describe('TeamChatView.createDmConversation — roster-policy provider (spec §2)', () => {
-  beforeEach(() => jest.clearAllMocks());
-
-  it('creates the DM on the agent OWN provider (from modelSelection), NOT the global default', async () => {
-    const createConversation = jest.fn().mockResolvedValue({ id: 'conv-x' });
-    // No explicit providerOverride; only a cross-provider modelSelection. A naive
-    // `providerOverride ?? default` would land this DM on 'claude' (the default),
-    // after which resolveBoundAgent would drop the cursor model as cross-provider.
-    const agent = fakeAgent({ modelSelection: { modelId: 'cursor-fast', providerId: 'cursor' } });
+  it('reuses a DM already open in THIS view via a LOCAL switchToTab (no createTab)', async () => {
+    const switchToTab = jest.fn().mockResolvedValue(undefined);
+    const createTab = jest.fn();
+    const thisLeaf = { id: 'leaf-this' };
     const view = makeView({
+      leaf: thisLeaf,
       plugin: {
-        agentRosterStore: { get: jest.fn().mockResolvedValue(agent) },
-        settings: {},
-        createConversation,
+        getTeamChatThreadStore: () => ({ resolveOrCreate: jest.fn().mockResolvedValue('conv-1') }),
+        // Same leaf ref as the host → "found in this view".
+        findConversationAcrossViews: jest.fn(() => ({
+          view: { leaf: thisLeaf, getTabManager: () => ({ switchToTab: jest.fn() }) },
+          tabId: 'tab-1',
+        })),
       },
     });
+    view.tabManager = { createTab, switchToTab };
 
-    const conversation = await view.createDmConversation('roster:a');
+    await view.selectAgent('roster:a');
 
-    expect(conversation).toEqual({ id: 'conv-x' });
-    expect(createConversation).toHaveBeenCalledWith({
-      boundAgentId: 'roster:a',
-      surface: 'team-chat',
-      providerId: 'cursor',
-    });
+    expect(switchToTab).toHaveBeenCalledWith('tab-1');
+    expect(createTab).not.toHaveBeenCalled();
   });
 
-  it('honors an explicit providerOverride over the model selection', async () => {
-    const createConversation = jest.fn().mockResolvedValue({ id: 'conv-y' });
-    const agent = fakeAgent({
-      providerOverride: 'codex',
-      modelSelection: { modelId: 'cursor-fast', providerId: 'cursor' },
-    });
+  it('reveals + switches in ANOTHER view when the DM is open there (never double-mounts)', async () => {
+    const otherSwitch = jest.fn().mockResolvedValue(undefined);
+    const otherLeaf = { id: 'leaf-other' };
+    const revealLeaf = jest.fn().mockResolvedValue(undefined);
+    const localSwitch = jest.fn();
+    const createTab = jest.fn();
     const view = makeView({
+      leaf: { id: 'leaf-this' },
       plugin: {
-        agentRosterStore: { get: jest.fn().mockResolvedValue(agent) },
-        settings: {},
-        createConversation,
+        app: { workspace: { revealLeaf } },
+        getTeamChatThreadStore: () => ({ resolveOrCreate: jest.fn().mockResolvedValue('conv-2') }),
+        findConversationAcrossViews: jest.fn(() => ({
+          view: { leaf: otherLeaf, getTabManager: () => ({ switchToTab: otherSwitch }) },
+          tabId: 'tab-9',
+        })),
       },
     });
+    view.tabManager = { createTab, switchToTab: localSwitch };
 
-    await view.createDmConversation('roster:a');
-    expect(createConversation).toHaveBeenCalledWith(
-      expect.objectContaining({ boundAgentId: 'roster:a', surface: 'team-chat', providerId: 'codex' }),
-    );
+    await view.selectAgent('roster:b');
+
+    expect(revealLeaf).toHaveBeenCalledWith(otherLeaf);
+    expect(otherSwitch).toHaveBeenCalledWith('tab-9');
+    expect(localSwitch).not.toHaveBeenCalled();
+    expect(createTab).not.toHaveBeenCalled();
   });
 
-  it('falls back to no explicit provider when the agent is not in the roster', async () => {
-    const createConversation = jest.fn().mockResolvedValue({ id: 'conv-z' });
+  it('creates a tab locally when the DM is open in no view', async () => {
+    const createTab = jest.fn().mockResolvedValue({ id: 'tab-new' });
     const view = makeView({
       plugin: {
-        agentRosterStore: { get: jest.fn().mockResolvedValue(null) },
-        settings: {},
-        createConversation,
+        getTeamChatThreadStore: () => ({ resolveOrCreate: jest.fn().mockResolvedValue('conv-3') }),
+        findConversationAcrossViews: jest.fn(() => null),
       },
     });
+    view.tabManager = { createTab, switchToTab: jest.fn() };
 
-    await view.createDmConversation('roster:gone');
-    expect(createConversation).toHaveBeenCalledWith({ boundAgentId: 'roster:gone', surface: 'team-chat' });
+    await view.selectAgent('roster:c');
+
+    expect(createTab).toHaveBeenCalledWith('conv-3', undefined, { activate: true, kind: 'chat' });
+  });
+
+  it('reverts the selection, re-emits, and shows a Notice when createTab hits the tab cap', async () => {
+    const observer = jest.fn();
+    const createTab = jest.fn().mockResolvedValue(null); // tab cap reached
+    const view = makeView({
+      plugin: {
+        getTeamChatThreadStore: () => ({ resolveOrCreate: jest.fn().mockResolvedValue('conv-4') }),
+        findConversationAcrossViews: jest.fn(() => null),
+      },
+    });
+    view.selectedAgentId = 'roster:prev'; // a DM was already showing
+    view.teamChatObservers = new Set([observer]);
+    view.tabManager = { createTab, switchToTab: jest.fn() };
+
+    await view.selectAgent('roster:new');
+
+    // Selection rolls back to the prior agent so the roster highlight tracks the pane.
+    expect(view.selectedAgentId).toBe('roster:prev');
+    // Two projections: the optimistic set, then the revert.
+    expect(observer).toHaveBeenCalledTimes(2);
+    expect(observer).toHaveBeenNthCalledWith(1, { selectedAgentId: 'roster:new' });
+    expect(observer).toHaveBeenNthCalledWith(2, { selectedAgentId: 'roster:prev' });
+    // The user is told why nothing opened.
+    expect(mockNotice).toHaveBeenCalledTimes(1);
   });
 });
