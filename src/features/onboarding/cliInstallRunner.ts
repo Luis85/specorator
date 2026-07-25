@@ -15,6 +15,14 @@ export const INSTALL_TIMEOUT_MS = 10 * 60 * 1000;
  * in uninterruptible sleep — the UI must not hang on one.
  */
 export const ABORT_REAP_GRACE_MS = 2_000;
+/**
+ * Carried on an abort whose process tree was never observed to exit. The install
+ * is over as far as this handle is concerned, but the descendants may not be, and
+ * the user is about to be offered the Install button again.
+ */
+export const UNCONFIRMED_TEARDOWN_ERROR =
+  'Stopped the installer, but could not confirm its process tree exited. '
+  + 'Check for a running install before starting another.';
 /** Output lines retained for the console. Bounded so a chatty installer can't grow memory. */
 export const INSTALL_OUTPUT_LINE_CAP = 400;
 
@@ -161,8 +169,16 @@ export function runCliInstall(
    * Windows the reaper is itself a spawned `taskkill /T /F`, which can walk a
    * large installer tree without ever emitting `close`. Timing only the wait
    * would leave both Cancel and the 10-minute timeout pending forever on exactly
-   * that failure. When the grace wins, the direct child is signalled anyway, so
-   * the wrapper dies even though the tree walk never answered.
+   * that failure.
+   *
+   * When the grace wins, the tree-wide contract still stands, so the fallback
+   * ESCALATES rather than downgrading to the direct child: a second tree kill is
+   * fired (unawaited, so a hung reaper cannot wedge the UI twice) alongside a
+   * direct signal that at least takes out the `cmd.exe` wrapper. What cannot be
+   * done is claim the tree is gone — nothing observed it exit — so that run
+   * settles carrying an explicit warning instead of a clean stop, because the
+   * store re-arms Install the moment it settles and a second `npm i -g` on top
+   * of a live one is exactly what the warning is for.
    */
   const abort = async (reason: 'cancelled' | 'timeout'): Promise<void> => {
     if (settled || abortReason) return;
@@ -183,14 +199,18 @@ export function runCliInstall(
     ]);
     // Whichever won, the loser must not leave a timer pending.
     if (graceTimer !== undefined) window.clearTimeout(graceTimer);
-    if (graceExpired) {
-      try {
-        child.kill('SIGKILL');
-      } catch {
-        // Already gone, or not killable — the answer below is owed either way.
-      }
+    if (!graceExpired) {
+      settle(abortResult());
+      return;
     }
-    settle(abortResult());
+
+    void forceKillProcessGroup(child);
+    try {
+      child.kill('SIGKILL');
+    } catch {
+      // Already gone, or not killable — the answer below is owed either way.
+    }
+    settle({ ...abortResult(), error: UNCONFIRMED_TEARDOWN_ERROR });
   };
 
   const timeout = window.setTimeout(() => { void abort('timeout'); }, INSTALL_TIMEOUT_MS);

@@ -170,7 +170,10 @@ export const useOnboardingStore = defineStore('specorator-onboarding', () => {
     void handle.done.then((result) => {
       handles.delete(providerId);
       if (result.cancelled) {
-        patchRun(providerId, { phase: 'cancelled' });
+        // A cancel can still carry a warning — an abort whose process tree was
+        // never observed to exit. Dropping it would re-arm Install with nothing
+        // said about what may still be running.
+        patchRun(providerId, { phase: 'cancelled', error: result.error ?? null });
       } else if (result.ok) {
         patchRun(providerId, { phase: 'succeeded', error: null });
       } else {

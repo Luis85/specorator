@@ -22,6 +22,7 @@ import {
   INSTALL_OUTPUT_LINE_CAP,
   platformInstallMethods,
   runCliInstall,
+  UNCONFIRMED_TEARDOWN_ERROR,
 } from '@/features/onboarding/cliInstallRunner';
 import { executableCandidateNames, findBinaryOnPath } from '@/utils/cliBinaryLocator';
 import { forceKillProcessGroup } from '@/utils/processKill';
@@ -186,7 +187,6 @@ describe('runCliInstall', () => {
   it('settles only after the tree kill resolves', async () => {
     // Settling first would tell the user the install stopped while npm was still
     // writing to the global prefix.
-    mountChild();
     const order: string[] = [];
     let releaseKill: () => void = () => {};
     jest.mocked(forceKillProcessGroup).mockImplementation(async () => {
@@ -195,9 +195,12 @@ describe('runCliInstall', () => {
       order.push('kill:done');
     });
 
+    const child = mountChild();
     const handle = runCliInstall(npmMethod, { onOutput: () => {} });
     handle.cancel();
     void handle.done.then(() => order.push('settled'));
+    // Closed already, so nothing but the reaper is holding the settle back.
+    child.emit('close', null);
 
     expect(order).toEqual(['kill:start']);
     releaseKill();
@@ -291,12 +294,47 @@ describe('runCliInstall', () => {
       await jest.advanceTimersByTimeAsync(ABORT_REAP_GRACE_MS);
 
       expect(await handle.done).toMatchObject({ ok: false, cancelled: true });
-      // The tree walk never answered, so the direct child is signalled instead —
-      // at least the wrapper dies.
+      // The tree walk never answered, so the direct child is signalled too — at
+      // least the wrapper dies.
       expect(child.killed).toBe(true);
     } finally {
       jest.useRealTimers();
     }
+  });
+
+  it('escalates rather than settling for a child-only kill when the reaper hangs', async () => {
+    // Killing only the `cmd.exe` wrapper would leave npm and its lifecycle
+    // scripts installing while the store re-arms Install — so the tree-wide
+    // teardown is retried (unawaited, so a hung reaper cannot wedge the UI
+    // twice), and the result carries a warning instead of reading as a clean stop.
+    jest.useFakeTimers();
+    try {
+      mountChild();
+      jest.mocked(forceKillProcessGroup).mockImplementation(() => new Promise<void>(() => {}));
+
+      const handle = runCliInstall(npmMethod, { onOutput: () => {} });
+      handle.cancel();
+      await jest.advanceTimersByTimeAsync(ABORT_REAP_GRACE_MS);
+      const result = await handle.done;
+
+      expect(forceKillProcessGroup).toHaveBeenCalledTimes(2);
+      expect(result.error).toBe(UNCONFIRMED_TEARDOWN_ERROR);
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+
+  it('a normally reaped cancel carries no warning', async () => {
+    const child = mountChild();
+
+    const handle = runCliInstall(npmMethod, { onOutput: () => {} });
+    handle.cancel();
+    child.emit('close', null);
+
+    const result = await handle.done;
+    expect(result).toMatchObject({ cancelled: true });
+    expect(result.error).toBeUndefined();
+    expect(forceKillProcessGroup).toHaveBeenCalledTimes(1);
   });
 
   it('a cancel after settling is a no-op', async () => {

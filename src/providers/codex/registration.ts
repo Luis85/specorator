@@ -21,7 +21,7 @@ export const codexProviderRegistration: ProviderRegistration = {
     authCommand: 'codex',
     // Spawns its own command, so the shared cmd.exe wrap
     // (`resolveBatchAwareSpawnSpec`) launches a `.cmd`/`.bat` shim.
-    windowsLaunchForms: ['batch'],
+    launchForms: ['windows-batch'],
     methods: [
       {
         id: 'npm',

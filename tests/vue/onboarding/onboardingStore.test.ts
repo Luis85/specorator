@@ -247,6 +247,27 @@ describe('onboarding store', () => {
     expect(store.runFor('alpha').phase).toBe('cancelled');
   });
 
+  it('keeps the warning a cancel carries about an unconfirmed teardown', async () => {
+    const controlled = deferredHandle();
+    const store = useOnboardingStore();
+    store.init(plugin);
+
+    store.startInstall('alpha', method);
+    controlled.finish({
+      ok: false,
+      exitCode: null,
+      cancelled: true,
+      error: 'could not confirm its process tree exited',
+    });
+    await Promise.resolve();
+    await Promise.resolve();
+
+    expect(store.runFor('alpha')).toMatchObject({
+      phase: 'cancelled',
+      error: 'could not confirm its process tree exited',
+    });
+  });
+
   it('ignores a second start while one install is already running', () => {
     deferredHandle();
     const store = useOnboardingStore();

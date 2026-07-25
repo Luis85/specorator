@@ -40,18 +40,18 @@ interface Stub {
   extra?: string[];
   /** Models OpenCode: the runtime spawns the bare command, so PATH counts. */
   pathFallback?: boolean;
-  /** What the provider's Windows spawn can start beyond a native `.exe`. */
-  windowsForms?: readonly ('batch' | 'node')[];
+  /** What the provider's spawn can start beyond executing the file itself. */
+  launchForms?: readonly ('windows-batch' | 'node')[];
 }
 
 const STUBS: Stub[] = [
   // Models the self-spawning providers: cmd.exe wrap, no Node prefix.
-  { id: 'det-alpha', name: 'Alpha', cli: 'alpha', windowsForms: ['batch'] },
+  { id: 'det-alpha', name: 'Alpha', cli: 'alpha', launchForms: ['windows-batch'] },
   { id: 'det-beta', name: 'Beta', cli: 'beta' },
   { id: 'det-gamma', name: 'Gamma', cli: 'gamma', extra: ['gamma-alt'] },
   { id: 'det-path', name: 'Path', cli: 'pathcli', extra: ['pathcli-alt'], pathFallback: true },
   // Models Claude: prefixes Node, cannot wrap a batch shim.
-  { id: 'det-nobatch', name: 'NoBatch', cli: 'nobatch', windowsForms: ['node'] },
+  { id: 'det-nobatch', name: 'NoBatch', cli: 'nobatch', launchForms: ['node'] },
 ];
 
 function stubResolver(resolved: string | null): ProviderCliResolver & { resetCalls: number } {
@@ -82,7 +82,7 @@ beforeAll(() => {
         authCommand: `${stub.cli} login`,
         extraBinaryNames: stub.extra,
         runtimeFallsBackToPathLookup: stub.pathFallback,
-        windowsLaunchForms: stub.windowsForms,
+        launchForms: stub.launchForms,
         methods: [],
       },
       isEnabled: (settings: Record<string, unknown>) => Boolean(
@@ -280,6 +280,68 @@ describe('detectProviderCli', () => {
     expect(detectProviderCli(makePlugin(), 'det-alpha')).toMatchObject({
       status: 'missing',
       unusable: { path: '/usr/local/lib/node_modules/alpha/cli.js', reason: 'missing-node' },
+    });
+  });
+
+  it('accepts a non-executable script under a provider that launches it via Node', () => {
+    // Claude's spawn rewrites a Node entry point to `node <script>`, and the
+    // INTERPRETER opens the file — `node cli.js` runs a 0644 file that `spawn()`
+    // would reject with EACCES. Asking `X_OK` here would report a hand-pinned,
+    // perfectly working CLI as missing and offer to reinstall it.
+    ProviderWorkspaceRegistry.setServices('det-nobatch', {
+      cliResolver: stubResolver('/opt/nobatch/cli.js'),
+    } as never);
+    jest.mocked(cliPathRequiresNode).mockReturnValue(true);
+    jest.mocked(isExecutableFile).mockReturnValue(false);
+
+    expect(detectProviderCli(makePlugin(), 'det-nobatch')).toMatchObject({
+      status: 'found',
+      cliPath: '/opt/nobatch/cli.js',
+    });
+  });
+
+  it('still needs the interpreter for that script, permission bit or not', () => {
+    ProviderWorkspaceRegistry.setServices('det-nobatch', {
+      cliResolver: stubResolver('/opt/nobatch/cli.js'),
+    } as never);
+    jest.mocked(cliPathRequiresNode).mockReturnValue(true);
+    jest.mocked(isExecutableFile).mockReturnValue(false);
+    jest.mocked(findNodeExecutable).mockReturnValue(null);
+
+    expect(detectProviderCli(makePlugin(), 'det-nobatch')).toMatchObject({
+      status: 'missing',
+      unusable: { path: '/opt/nobatch/cli.js', reason: 'missing-node' },
+    });
+  });
+
+  it('a provider that does NOT prefix Node still needs the script executable', () => {
+    // The kernel opens the file there, via the shebang — so the permission bit
+    // is exactly the question, and the relaxation above must not leak across.
+    ProviderWorkspaceRegistry.setServices('det-alpha', {
+      cliResolver: stubResolver('/opt/alpha/cli.js'),
+    } as never);
+    jest.mocked(cliPathRequiresNode).mockReturnValue(true);
+    jest.mocked(isExecutableFile).mockReturnValue(false);
+
+    expect(detectProviderCli(makePlugin(), 'det-alpha')).toMatchObject({
+      status: 'missing',
+      unusable: { path: '/opt/alpha/cli.js', reason: 'not-executable' },
+    });
+  });
+
+  it('a Node-backed path that is not there at all is not launchable by interpreter', () => {
+    // `cliPathRequiresNode` answers true for any `.js` name, existing or not, so
+    // the node-launch branch must sit behind the existence check — otherwise a
+    // stale pin to a deleted script would report ready.
+    ProviderWorkspaceRegistry.setServices('det-nobatch', {
+      cliResolver: stubResolver('/gone/cli.js'),
+    } as never);
+    jest.mocked(cliPathRequiresNode).mockReturnValue(true);
+    jest.mocked(isExistingFile).mockReturnValue(false);
+
+    expect(detectProviderCli(makePlugin(), 'det-nobatch')).toMatchObject({
+      status: 'unknown',
+      cliPath: null,
     });
   });
 

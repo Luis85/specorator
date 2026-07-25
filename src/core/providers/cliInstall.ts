@@ -35,11 +35,12 @@ export interface ProviderCliInstallMethod {
 }
 
 /**
- * A non-native file form a provider's Windows spawn can still launch.
- * `batch` = `.cmd`/`.bat` through cmd.exe; `node` = a Node entry point prefixed
- * with the Node executable.
+ * A file form a provider's spawn can launch beyond executing the file itself.
+ * `windows-batch` = `.cmd`/`.bat` through cmd.exe (Windows-only by nature);
+ * `node` = a Node entry point prefixed with the Node executable, on every
+ * platform.
  */
-export type ProviderWindowsLaunchForm = 'batch' | 'node';
+export type ProviderLaunchForm = 'windows-batch' | 'node';
 
 /** Provider-contributed CLI install guidance for the onboarding setup view. */
 export interface ProviderCliInstall {
@@ -70,26 +71,31 @@ export interface ProviderCliInstall {
    */
   runtimeFallsBackToPathLookup?: boolean;
   /**
-   * What this provider's launch path can spawn on Windows BEYOND a native
-   * executable (`.exe`/`.com`), which every provider can always run.
+   * What this provider's spawn can start BEYOND executing the file itself —
+   * which differs per provider, so detection needs it declared rather than
+   * guessed:
    *
-   * Windows has no shebang support, so what starts a file is decided entirely by
-   * how the provider spawns it — and the two capabilities differ per provider:
-   *
-   * - `batch` — routes `.cmd`/`.bat` through cmd.exe (`utils/windowsSpawn`).
-   *   Codex, Cursor and OpenCode spawn their own command and do this.
-   * - `node` — prefixes a Node entry point with the Node executable. Only Claude
-   *   does, in `createCustomSpawnFunction`; conversely the SDK owns its stdio
-   *   stream, so a cmd.exe wrapper is not available to it — which is why
+   * - `windows-batch` — routes `.cmd`/`.bat` through cmd.exe
+   *   (`utils/windowsSpawn`). Codex, Cursor and OpenCode spawn their own command
+   *   and do this.
+   * - `node` — rewrites a Node entry point to `node <script>`. Only Claude does,
+   *   in `createCustomSpawnFunction`; conversely the SDK owns its stdio stream,
+   *   so a cmd.exe wrapper is not available to it — which is why
    *   `findClaudeCLIPath` skips `.cmd` while probing and prefers `claude.exe`.
+   *
+   * `node` is deliberately NOT Windows-scoped: it changes what "launchable"
+   * means on every platform. On POSIX the interpreter, not the kernel, opens the
+   * file, so the script's own execute bit is irrelevant — `node script.js` runs a
+   * 0644 file that `spawn()` would reject with EACCES. On Windows, where nothing
+   * but `.exe`/`.com` starts on its own, it is the only reason a Node entry point
+   * is launchable at all.
    *
    * Anything not covered — npm's extensionless POSIX sh shim, a `.ps1`, a Node
    * script under a provider that won't prefix Node — reaches `spawn()` raw and
    * fails. Nothing stops a user PINNING one of those by hand through the setup
-   * view's path field, and npm installs exactly such files on Windows, so
-   * detection needs this declared rather than guessed.
+   * view's path field, and npm installs exactly such files on Windows.
    */
-  windowsLaunchForms?: readonly ProviderWindowsLaunchForm[];
+  launchForms?: readonly ProviderLaunchForm[];
   methods: readonly ProviderCliInstallMethod[];
 }
 

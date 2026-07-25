@@ -79,22 +79,31 @@ surfaces to use the island pattern; this is one.
     - `not-executable` — no `+x` (`isExecutableFile` = `stat().isFile()` plus
       `X_OK`, which is a no-op on Windows where the extension decides). A
       partially installed or copied script would fail at spawn with `EACCES`.
+      Asked only of files the KERNEL opens: a Node entry point under a provider
+      that declares the `node` launch form is opened by the interpreter instead,
+      so `node cli.js` runs a 0644 file and `X_OK` would report a working pin as
+      broken. For those the reachable interpreter is the whole question.
     - `missing-node` — a Node-backed entry point (`.js`, or a `#!…node` script)
       with no Node interpreter reachable. Claude's runtime refuses to start in
       exactly this case (`getMissingNodeError`, on both the persistent and cold
       paths), and the permission bit says nothing about whether Node exists. The
       interpreter is searched on `getEnhancedPath(runtimePath, cliPath)` — the
       same path the runtime builds for the spawn, which also adds the CLI's own
-      directory so a Node shipped beside it counts.
+      directory so a Node shipped beside it counts. `findNodeDirectory` requires
+      `X_OK` on the interpreter itself, so a `node` without `+x` neither counts
+      here nor stops the scan (`src/utils/env.ts` — the probe and the spawn read
+      the same answer by construction).
     - `batch-shim` / `unsupported-form` — a Windows file the provider's spawn
       cannot start. Windows has no shebang support, so what runs is decided by
       HOW each provider spawns, and each declares that as
-      `cliInstall.windowsLaunchForms`: a native `.exe`/`.com` always works,
-      `batch` means `.cmd`/`.bat` go through the cmd.exe wrap (Codex, Cursor,
-      OpenCode), `node` means a Node entry point gets the Node prefix (Claude
-      only, in `createCustomSpawnFunction` — and conversely the SDK owns its
-      stdio stream, so cmd.exe cannot sit in front of it, which is why
-      `findClaudeCLIPath` skips `.cmd` while probing). Anything else — npm's
+      `cliInstall.launchForms`: a native `.exe`/`.com` always works,
+      `windows-batch` means `.cmd`/`.bat` go through the cmd.exe wrap (Codex,
+      Cursor, OpenCode), `node` means a Node entry point gets the Node prefix
+      (Claude only, in `createCustomSpawnFunction` — and conversely the SDK owns
+      its stdio stream, so cmd.exe cannot sit in front of it, which is why
+      `findClaudeCLIPath` skips `.cmd` while probing). `node` is deliberately not
+      Windows-scoped: it is what makes a Node entry point launchable on Windows
+      AND what makes the execute bit irrelevant on POSIX. Anything else — npm's
       extensionless POSIX sh shim, a `.ps1`, a Node script under a provider that
       won't prefix Node — reaches `spawn()` raw and fails, and `isExecutableFile`
       cannot catch it because `X_OK` is an existence check on Windows. The setup
@@ -156,7 +165,16 @@ surfaces to use the island pattern; this is one.
   the POSIX half of the reaper only SIGNALS (`process.kill(-pid)` returns when
   the signal is queued, not when the group is reaped), so the abort additionally
   waits for the child's `close` — bounded by `ABORT_REAP_GRACE_MS`, since a
-  process wedged in uninterruptible sleep must not hang the UI. Once
+  process wedged in uninterruptible sleep must not hang the UI. That grace is
+  armed BEFORE the reaper and covers it, because on Windows the reaper is itself
+  a spawned `taskkill /T /F` that can walk a large installer tree without ever
+  emitting `close`; timing only the wait would leave Cancel and the 10-minute
+  timeout pending forever on exactly that failure. When the grace wins the
+  fallback ESCALATES rather than downgrading to a child-only kill — a second
+  tree kill fired unawaited, plus a direct signal — and the result carries
+  `UNCONFIRMED_TEARDOWN_ERROR` instead of reading as a clean stop, because
+  nothing observed the tree exit and the store re-arms Install the moment the
+  handle settles. Once
   cancel/timeout has fired, the child's own `close` does NOT resolve the run — on Windows the direct child is the `cmd.exe`
   wrapper, which dies while `taskkill /T /F` is still walking descendants, and on
   POSIX the group leader can exit while its forks are still being signalled, so

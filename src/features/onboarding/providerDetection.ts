@@ -1,3 +1,4 @@
+import type { ProviderLaunchForm } from '@/core/providers/cliInstall';
 import { getProviderConfig } from '@/core/providers/providerConfig';
 import { getRuntimeEnvironmentVariables } from '@/core/providers/providerEnvironment';
 import { ProviderRegistry } from '@/core/providers/ProviderRegistry';
@@ -102,7 +103,7 @@ const WINDOWS_NATIVE_EXTENSIONS = /\.(exe|com)$/i;
  * Windows has no shebang support, so what runs is decided by how the provider
  * spawns: a native `.exe` always works, `.cmd`/`.bat` need the cmd.exe wrap, and
  * a Node entry point needs the Node prefix — and providers differ, so each
- * declares its `windowsLaunchForms` rather than the feature layer guessing.
+ * declares its `launchForms` rather than the feature layer guessing.
  * Everything else (npm's extensionless POSIX sh shim, a `.ps1`, a Node script
  * under a provider that won't prefix Node) reaches `spawn()` raw and fails, and
  * `isExecutableFile` cannot catch any of it because `X_OK` is an existence check
@@ -116,15 +117,27 @@ function unusableReason(
   if (platform !== 'win32') {
     return null;
   }
-  const forms = ProviderRegistry.getCliInstall(providerId).windowsLaunchForms ?? [];
   const trimmed = resolved.trim();
   if (WINDOWS_NATIVE_EXTENSIONS.test(trimmed)) {
     return null;
   }
   if (/\.(cmd|bat)$/i.test(trimmed)) {
-    return forms.includes('batch') ? null : 'batch-shim';
+    return launchForms(providerId).includes('windows-batch') ? null : 'batch-shim';
   }
-  return forms.includes('node') && cliPathRequiresNode(trimmed) ? null : 'unsupported-form';
+  return isNodeLaunched(providerId, trimmed) ? null : 'unsupported-form';
+}
+
+/** What this provider's spawn can start beyond executing the file itself. */
+function launchForms(providerId: ProviderId): readonly ProviderLaunchForm[] {
+  return ProviderRegistry.getCliInstall(providerId).launchForms ?? [];
+}
+
+/**
+ * True when this provider would launch this path as `node <script>` rather than
+ * executing the file — which decides which question "launchable" even is.
+ */
+function isNodeLaunched(providerId: ProviderId, resolved: string): boolean {
+  return launchForms(providerId).includes('node') && cliPathRequiresNode(resolved);
 }
 
 /**
@@ -155,22 +168,38 @@ function classifyResolvedPath(
   if (rejected) {
     return { kind: 'unusable', reason: rejected };
   }
-  if (!isExecutableFile(resolved)) {
-    return isExistingFile(resolved)
-      ? { kind: 'unusable', reason: 'not-executable' }
-      : { kind: 'external' };
+  if (!isExistingFile(resolved)) {
+    return { kind: 'external' };
   }
-  // Executable is not sufficient for a Node-backed entry point: `.js` files and
-  // `#!…node` scripts need an interpreter, and Claude's runtime refuses to start
-  // without one (`getMissingNodeError`, checked on both the persistent and cold
-  // paths). The permission bit says nothing about whether Node is reachable.
+
+  // A Node-backed entry point under a provider that rewrites it to
+  // `node <script>` is opened by the INTERPRETER, not the kernel, so the
+  // script's own execute bit decides nothing: `node cli.js` runs a 0644 file
+  // that `spawn()` would reject with EACCES. Asking `X_OK` here would report a
+  // hand-pinned, perfectly working Claude entry point as broken and offer a
+  // reinstall for it. What must hold instead is that Node is reachable — the
+  // runtime refuses to start without it (`getMissingNodeError`, checked on both
+  // the persistent and cold paths).
+  //
   // The interpreter is searched on the SAME path the runtime builds for the
   // spawn — `getEnhancedPath(customPath, cliPath)` also adds the CLI's own
   // directory, so a Node shipped beside the CLI counts, exactly as it does at
   // launch. Searching the bare runtime PATH would report `missing-node` for a
   // bundle the runtime launches fine.
-  return cliPathRequiresNode(resolved)
-    && !findNodeExecutable(getEnhancedPath(runtimePath, resolved))
+  const nodeReachable = (): boolean => (
+    findNodeExecutable(getEnhancedPath(runtimePath, resolved)) !== null
+  );
+  if (isNodeLaunched(providerId, resolved)) {
+    return nodeReachable() ? { kind: 'found' } : { kind: 'unusable', reason: 'missing-node' };
+  }
+
+  // Everything else the kernel opens itself, so the permission bit is the
+  // question — and for a `#!…node` script that the provider spawns directly,
+  // the shebang's interpreter must be reachable on top of it.
+  if (!isExecutableFile(resolved)) {
+    return { kind: 'unusable', reason: 'not-executable' };
+  }
+  return cliPathRequiresNode(resolved) && !nodeReachable()
     ? { kind: 'unusable', reason: 'missing-node' }
     : { kind: 'found' };
 }

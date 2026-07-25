@@ -125,6 +125,20 @@ describe('InstallPanel', () => {
       .container.querySelector('[data-result="cancelled"]')).not.toBeNull();
   });
 
+  it('surfaces a cancel that could not confirm the process tree exited', () => {
+    // The Install button is live again the moment the run settles, so a cancel
+    // whose descendants may still be installing cannot read as a clean stop.
+    const { container } = setup({}, {
+      ...IDLE,
+      phase: 'cancelled',
+      error: 'could not confirm its process tree exited',
+    });
+
+    expect(container.querySelector('[data-result="cancelled"]')).not.toBeNull();
+    expect(container.querySelector('[data-result="cancelled-warning"]')?.textContent)
+      .toContain('process tree');
+  });
+
   it('links the docs only when the provider URL is https', () => {
     expect(setup().container.querySelector('a')?.getAttribute('href'))
       .toBe('https://example.test/docs');

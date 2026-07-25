@@ -38,6 +38,15 @@ const consoleText = computed(() => props.run.lines.join('\n'));
   >
     {{ t('onboarding.install.cancelled') }}
   </p>
+  <!-- A cancel that could not confirm the process tree exited. Shown because the
+       Install button is live again and the descendants may not be gone. -->
+  <p
+    v-if="run.phase === 'cancelled' && run.error"
+    class="specorator-onboarding-install-result is-error"
+    data-result="cancelled-warning"
+  >
+    {{ run.error }}
+  </p>
 
   <pre
     v-if="run.lines.length > 0"

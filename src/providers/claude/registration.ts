@@ -24,7 +24,7 @@ export const claudeProviderRegistration: ProviderRegistration = {
     // executable, so those launch; a `.cmd` does NOT, because the SDK owns the
     // stdio stream and cmd.exe cannot sit in front of it — the same reason
     // `findClaudeCLIPath` skips `.cmd` while probing and prefers `claude.exe`.
-    windowsLaunchForms: ['node'],
+    launchForms: ['node'],
     methods: [
       {
         id: 'npm',
