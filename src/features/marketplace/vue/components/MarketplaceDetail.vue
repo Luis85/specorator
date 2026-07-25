@@ -5,6 +5,7 @@ import { t } from '../../../../i18n/i18n';
 import type { MarketplaceItem, MarketplaceItemType } from '../../catalogTypes';
 import type { SkillInstallTarget, SkillProviderTarget } from '../../skillInstallTargets';
 import { iconForItem, mountLucide } from '../marketplaceIcons';
+import { useDependencyInstalledSet } from '../useDependencyInstalledSet';
 import MarketplaceInstallAction from './MarketplaceInstallAction.vue';
 import MarketplacePackageList from './MarketplacePackageList.vue';
 import MarketplaceSkillInstall from './MarketplaceSkillInstall.vue';
@@ -20,8 +21,12 @@ const props = defineProps<{
   packageError?: string | null;
   /** Labels for the dependency list's type badges. */
   typeLabels?: Record<MarketplaceItemType, string>;
-  /** Catalog ids already installed — marks each dependency in the list. */
+  /** Catalog ids already installed anywhere — the fallback for dependency
+   *  markers when no skill target is being chosen. */
   installedIds?: ReadonlySet<string>;
+  /** Resolves one package member against one target — skills against that
+   *  provider + scope, everything else against its single vault home. */
+  memberInstalledAt?: (item: MarketplaceItem, target: SkillInstallTarget) => Promise<boolean>;
   body: string | null;
   previewError: boolean;
   installing: boolean;
@@ -67,6 +72,23 @@ const packageInstalled = computed(
 // the target panel shows "installed somewhere" (its per-target state lives in the
 // panel), while a header-driven item shows the whole package's state.
 const headerInstalled = computed(() => (needsSkillTarget.value ? props.installed : packageInstalled.value));
+// The target the panel below currently has selected (null until it publishes one).
+const selectedTarget = ref<SkillInstallTarget | null>(null);
+const targetInstalledIds = useDependencyInstalledSet(
+  () => dependencies.value,
+  () => selectedTarget.value,
+  () => props.memberInstalledAt,
+  () => props.installedSignal,
+);
+// Scope the dependency markers to the destination being configured. Without a
+// target panel there is no destination to scope to, so the catalog-wide set is
+// the honest answer; with one, "installed" must mean "installed HERE" or the
+// list contradicts the button beside it.
+const dependencyInstalledIds = computed(() =>
+  needsSkillTarget.value && selectedTarget.value !== null
+    ? targetInstalledIds.value
+    : (props.installedIds ?? new Set<string>()),
+);
 const installLabel = computed(() =>
   isPackage.value
     ? t('marketplace.package.install', { count: dependencies.value.length + 1 })
@@ -168,7 +190,7 @@ const safeSourceUrl = computed(() => {
     <MarketplacePackageList
       :dependencies="dependencies"
       :type-labels="props.typeLabels"
-      :installed-ids="props.installedIds"
+      :installed-ids="dependencyInstalledIds"
       :error="props.packageError"
     />
     <MarketplaceSkillInstall
@@ -183,6 +205,7 @@ const safeSourceUrl = computed(() => {
       :disabled="!!props.packageError"
       :scope-hint="isPackage ? t('marketplace.package.skillTargetHint') : null"
       @install="emit('install', $event)"
+      @update:target="selectedTarget = $event"
     />
     <pre class="specorator-vue-marketplace-body">{{ bodyText }}</pre>
     <div

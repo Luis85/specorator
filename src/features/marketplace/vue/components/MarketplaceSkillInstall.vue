@@ -44,7 +44,12 @@ const props = defineProps<{
    *  for a plain skill, where the panel's meaning is already obvious. */
   scopeHint?: string | null;
 }>();
-const emit = defineEmits<{ install: [target: SkillInstallTarget] }>();
+const emit = defineEmits<{
+  install: [target: SkillInstallTarget];
+  /** The chosen target, published so the detail can scope its dependency list
+   *  to the same destination this panel installs into. */
+  'update:target': [target: SkillInstallTarget];
+}>();
 
 const provider = ref<SkillProviderTarget>(DEFAULT_SKILL_TARGET.provider);
 const scope = ref<SkillInstallScope>(DEFAULT_SKILL_TARGET.scope);
@@ -93,6 +98,11 @@ const buttonLabel = computed(() => {
 function scopeLabel(value: SkillInstallScope): string {
   return value === 'project' ? t('marketplace.skill.scopeProject') : t('marketplace.skill.scopeUser');
 }
+
+// Publish immediately as well as on change: the detail needs a target from the
+// first render, or its dependency badges would sit unscoped until the user
+// touched a selector.
+watch(selectedTarget, (chosen) => emit('update:target', chosen), { immediate: true });
 
 onMounted(() => void recheckSelectedInstalled());
 </script>

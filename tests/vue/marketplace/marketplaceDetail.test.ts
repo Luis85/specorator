@@ -304,3 +304,66 @@ describe('MarketplaceDetail package target completeness', () => {
     expect(install.disabled).toBe(true);
   });
 });
+
+describe('MarketplaceDetail dependency badges follow the selected target', () => {
+  const brief: MarketplaceItem = {
+    id: 'skills/project-brief',
+    type: 'skill',
+    name: 'project-brief',
+    description: '',
+    path: 'skills/project-brief/SKILL.md',
+    tags: [],
+  };
+  const loop: MarketplaceItem = {
+    id: 'loops/x',
+    type: 'loop',
+    name: 'Loop X',
+    description: '',
+    path: 'loops/x.md',
+    tags: [],
+  };
+  const agent = base({
+    id: 'agents/project-manager',
+    type: 'agent',
+    name: 'Project Manager',
+    path: 'agents/project-manager.md',
+    requires: ['skills/project-brief', 'loops/x'],
+  });
+  const typeLabels = { 'quick-action': 'Quick Action', agent: 'Agent', loop: 'Loop', template: 'Template', skill: 'Skill' };
+
+  it('marks a dependency Installed only when it is present at the chosen target', async () => {
+    // The catalog-wide set says the skill is installed (it is — under a DIFFERENT
+    // provider). Scoped to the selected target it is not, and the list must say so,
+    // or it contradicts the target-scoped button right beside it.
+    const { queryAllByText, findByText } = renderDetail({
+      item: agent,
+      typeLabel: 'Agent',
+      dependencies: [brief, loop],
+      typeLabels,
+      installedIds: new Set(['skills/project-brief', 'loops/x']),
+      skillProviderOptions: [{ id: 'claude', label: 'Claude', userScope: true }],
+      skillInstalledChecker: () => Promise.resolve(false),
+      // The loop has one vault home, so it stays installed at every target; the
+      // skill is absent from the one selected.
+      memberInstalledAt: (member: MarketplaceItem) => Promise.resolve(member.type !== 'skill'),
+    });
+    await findByText('Loop X');
+    await vi.waitFor(() => {
+      // Exactly one "Installed" marker — the loop's. The skill's is gone.
+      expect(queryAllByText('Installed')).toHaveLength(1);
+    });
+  });
+
+  it('falls back to the catalog-wide set when no target is being chosen', async () => {
+    // A package with no skills shows no target panel, so there is no destination
+    // to scope to and "installed anywhere" is the honest answer.
+    const { queryAllByText } = renderDetail({
+      item: agent,
+      typeLabel: 'Agent',
+      dependencies: [loop],
+      typeLabels,
+      installedIds: new Set(['loops/x']),
+    });
+    expect(queryAllByText('Installed')).toHaveLength(1);
+  });
+});

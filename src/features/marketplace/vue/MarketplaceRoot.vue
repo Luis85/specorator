@@ -331,14 +331,22 @@ function targetInstalledChecker(item: MarketplaceItem | null): (target: SkillIns
   return async (target) => {
     if (!item) return false;
     for (const member of [...detailDependencies.value, item]) {
-      const present =
-        member.type === 'skill'
-          ? await store.isSkillInstalledAt(member, target.provider, target.scope)
-          : store.installedIds.has(member.id);
-      if (!present) return false;
+      if (!(await memberInstalledAt(member, target))) return false;
     }
     return true;
   };
+}
+
+/**
+ * Whether ONE package member is present at `target`. The single definition of
+ * "is this here", shared by the install button's whole-package check above and
+ * the detail's per-dependency markers — so the list can never contradict the
+ * button beside it.
+ */
+function memberInstalledAt(member: MarketplaceItem, target: SkillInstallTarget): Promise<boolean> {
+  return member.type === 'skill'
+    ? store.isSkillInstalledAt(member, target.provider, target.scope)
+    : Promise.resolve(store.installedIds.has(member.id));
 }
 
 async function install(item: MarketplaceItem, target?: SkillInstallTarget): Promise<void> {
@@ -438,6 +446,7 @@ function installNotice(item: MarketplaceItem, result: { outcome: string; install
       :package-error="detailPackageError"
       :type-labels="typeLabels"
       :installed-ids="store.installedIds"
+      :member-installed-at="memberInstalledAt"
       :skill-provider-options="skillProviderOptions"
       :skill-installed-checker="targetInstalledChecker(detailItem)"
       :installed-signal="store.installedIds"
@@ -460,6 +469,7 @@ function installNotice(item: MarketplaceItem, result: { outcome: string; install
         v-if="showHome && !showSkeleton"
         :sections="sections"
         :installed-ids="store.installedIds"
+        :member-installed-at="memberInstalledAt"
         :type-labels="typeLabels"
         @open="openItem"
         @see-all="openCategory"
@@ -468,6 +478,7 @@ function installNotice(item: MarketplaceItem, result: { outcome: string; install
         v-else
         :items="list.rows.value"
         :installed-ids="store.installedIds"
+        :member-installed-at="memberInstalledAt"
         :type-labels="typeLabels"
         :loading="showSkeleton"
         @open="openItem"
