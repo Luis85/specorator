@@ -189,7 +189,11 @@ describe('detectProviderCli', () => {
     detectProviderCli(makePlugin(), 'det-path');
 
     const [candidates] = jest.mocked(findBinaryOnPath).mock.calls[0];
-    expect(candidates).toEqual(expect.arrayContaining(['pathcli', 'pathcli-alt']));
+    // Asserted by prefix, not exact name: Windows candidates carry an extension
+    // (`binaryCandidates` covers the per-platform shapes directly), and this test
+    // is about the extra name being probed at all.
+    expect(candidates.some((name) => name === 'pathcli' || name.startsWith('pathcli.'))).toBe(true);
+    expect(candidates.some((name) => name.startsWith('pathcli-alt'))).toBe(true);
   });
 
   it('does not promise ready for a command that runs on another target', () => {
