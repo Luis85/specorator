@@ -16,9 +16,10 @@ import {
  * currently-selected-target installed recheck. It owns the whole
  * `SkillInstallTarget` concern (see the marketplace skills contract) for the two
  * cases that need a skill root — a skill itself, and a **package** whose
- * dependencies include skills (an agent that brings them). In package mode the
- * caller passes no `skillInstalledChecker` (there is no single skill to check)
- * and drives the button through `installLabel` / `alreadyInstalled` instead.
+ * dependencies include skills (an agent that brings them). Both drive the button
+ * from the SAME per-target check: `skillInstalledChecker` answers "is everything
+ * this would write already here?" for the selected target, so a package installed
+ * into one provider can still be installed into another.
  * Emits `install` with the chosen target; the detail re-emits it.
  */
 const props = defineProps<{
@@ -37,9 +38,6 @@ const props = defineProps<{
   /** Button label when nothing is installed yet — a package says how many items
    *  one click writes. Defaults to the plain Install label. */
   installLabel?: string;
-  /** Package mode: the item AND every dependency is already present, so the
-   *  button reads Installed and does nothing. */
-  alreadyInstalled?: boolean;
   /** Refuse the install outright (an unresolvable package). */
   disabled?: boolean;
   /** Line above the selectors explaining what the chosen root receives; omitted
@@ -87,15 +85,8 @@ watch(
   () => void recheckSelectedInstalled(),
 );
 
-// "Installed" from either angle: this exact skill already sits at the selected
-// target, or (package mode) the whole package is present.
-const showInstalled = computed(() => selectedInstalled.value || props.alreadyInstalled === true);
 const buttonLabel = computed(() => {
-  if (showInstalled.value) {
-    return props.alreadyInstalled === true && !selectedInstalled.value
-      ? t('marketplace.installed')
-      : t('marketplace.skill.installedHere');
-  }
+  if (selectedInstalled.value) return t('marketplace.skill.installedHere');
   return props.installing ? t('marketplace.installing') : (props.installLabel ?? t('marketplace.install'));
 });
 
@@ -138,7 +129,7 @@ onMounted(() => void recheckSelectedInstalled());
       <button
         type="button"
         class="mod-cta specorator-vue-marketplace-skill-install-btn"
-        :disabled="installing || body === null || showInstalled || disabled === true"
+        :disabled="installing || body === null || selectedInstalled || disabled === true"
         @click="emit('install', selectedTarget)"
       >
         {{ buttonLabel }}

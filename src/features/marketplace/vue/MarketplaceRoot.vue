@@ -313,12 +313,32 @@ function providerInstallsUserScope(id: SkillProviderTarget): boolean {
   }
 }
 
-// Passed to the detail so it can reflect whether the CURRENTLY selected target
-// already holds the skill (per-target, unlike the "installed anywhere" badge).
-// Tolerates a null item (vue-tsc doesn't narrow the v-if'd detailItem in bindings).
-function skillInstalledChecker(item: MarketplaceItem | null): (target: SkillInstallTarget) => Promise<boolean> {
-  return (target) =>
-    item ? store.isSkillInstalledAt(item, target.provider, target.scope) : Promise.resolve(false);
+/**
+ * Whether everything the install would write is ALREADY present at the currently
+ * selected target — per-target, unlike the "installed anywhere" card badge.
+ *
+ * Every skill in the set (the item itself, or a package's skill dependencies) is
+ * checked against the CHOSEN provider + scope, because a skill installed into
+ * Claude says nothing about whether Codex has it; non-skill members have a single
+ * vault home, so `installedIds` answers for them. Checking a package's skills
+ * "anywhere" would disable the button after one provider and make the package
+ * uninstallable into a second — which is exactly what a standalone skill's
+ * per-target check already avoids.
+ *
+ * Tolerates a null item (vue-tsc doesn't narrow the v-if'd detailItem in bindings).
+ */
+function targetInstalledChecker(item: MarketplaceItem | null): (target: SkillInstallTarget) => Promise<boolean> {
+  return async (target) => {
+    if (!item) return false;
+    for (const member of [...detailDependencies.value, item]) {
+      const present =
+        member.type === 'skill'
+          ? await store.isSkillInstalledAt(member, target.provider, target.scope)
+          : store.installedIds.has(member.id);
+      if (!present) return false;
+    }
+    return true;
+  };
 }
 
 async function install(item: MarketplaceItem, target?: SkillInstallTarget): Promise<void> {
@@ -419,7 +439,7 @@ function installNotice(item: MarketplaceItem, result: { outcome: string; install
       :type-labels="typeLabels"
       :installed-ids="store.installedIds"
       :skill-provider-options="skillProviderOptions"
-      :skill-installed-checker="skillInstalledChecker(detailItem)"
+      :skill-installed-checker="targetInstalledChecker(detailItem)"
       :installed-signal="store.installedIds"
       @back="backToList"
       @install="(target) => detailItem && install(detailItem, target)"

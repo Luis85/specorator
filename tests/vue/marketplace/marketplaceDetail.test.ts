@@ -253,3 +253,54 @@ describe('MarketplaceDetail packages', () => {
     expect((screen.getByRole('button', { name: 'Install all (3)' }) as HTMLButtonElement).disabled).toBe(true);
   });
 });
+
+describe('MarketplaceDetail package target completeness', () => {
+  const brief: MarketplaceItem = {
+    id: 'skills/project-brief',
+    type: 'skill',
+    name: 'project-brief',
+    description: '',
+    path: 'skills/project-brief/SKILL.md',
+    tags: [],
+  };
+  const agent = base({
+    id: 'agents/project-manager',
+    type: 'agent',
+    name: 'Project Manager',
+    path: 'agents/project-manager.md',
+    requires: ['skills/project-brief'],
+  });
+
+  it('still offers the install when the package is present elsewhere but not at the selected target', async () => {
+    // Everything reads installed by the catalog-wide badge (it was installed into
+    // Claude), but the selected target (say Codex) doesn't have the skills — the
+    // button must stay live so the package can be installed there too.
+    const { findByRole } = renderDetail({
+      item: agent,
+      typeLabel: 'Agent',
+      dependencies: [brief],
+      installed: true,
+      installedIds: new Set(['agents/project-manager', 'skills/project-brief']),
+      typeLabels: { 'quick-action': 'Quick Action', agent: 'Agent', loop: 'Loop', template: 'Template', skill: 'Skill' },
+      skillProviderOptions: [{ id: 'claude', label: 'Claude', userScope: true }],
+      skillInstalledChecker: () => Promise.resolve(false),
+    });
+    const install = (await findByRole('button', { name: 'Install all (2)' })) as HTMLButtonElement;
+    expect(install.disabled).toBe(false);
+  });
+
+  it('reads "Installed here" once the selected target holds the whole package', async () => {
+    const { findByRole } = renderDetail({
+      item: agent,
+      typeLabel: 'Agent',
+      dependencies: [brief],
+      installed: true,
+      installedIds: new Set(['agents/project-manager', 'skills/project-brief']),
+      typeLabels: { 'quick-action': 'Quick Action', agent: 'Agent', loop: 'Loop', template: 'Template', skill: 'Skill' },
+      skillProviderOptions: [{ id: 'claude', label: 'Claude', userScope: true }],
+      skillInstalledChecker: () => Promise.resolve(true),
+    });
+    const install = (await findByRole('button', { name: 'Installed here' })) as HTMLButtonElement;
+    expect(install.disabled).toBe(true);
+  });
+});

@@ -1019,3 +1019,68 @@ describe('marketplaceStore package install', () => {
     for (const call of clientCtor.mock.calls) expect(call[0]).toBe(store.source);
   });
 });
+
+describe('marketplaceStore package source pinning', () => {
+  const briefSkill: MarketplaceItem = {
+    id: 'skills/project-brief',
+    type: 'skill',
+    name: 'project-brief',
+    description: 'd',
+    path: 'skills/project-brief/SKILL.md',
+    files: ['skills/project-brief/SKILL.md'],
+    tags: [],
+  };
+  const pmAgent: MarketplaceItem = {
+    id: 'agents/project-manager',
+    type: 'agent',
+    name: 'Project Manager',
+    description: 'd',
+    path: 'agents/project-manager.md',
+    tags: [],
+    requires: ['skills/project-brief'],
+  };
+  const packageManifest: MarketplaceManifest = {
+    schemaVersion: 1,
+    catalog: 'specorator-marketplace',
+    count: 2,
+    items: [pmAgent, briefSkill],
+  };
+
+  beforeEach(() => {
+    setActivePinia(createPinia());
+    vi.clearAllMocks();
+    installSpy.mockResolvedValue('installed');
+    installSkillSpy.mockResolvedValue('installed');
+    isSkillInstalledAtSpy.mockResolvedValue(false);
+    isInstalledSpy.mockResolvedValue(false);
+    fetchIndexSpy.mockResolvedValue(packageManifest);
+    fetchBodySpy.mockImplementation(async (p: string) => `BODY:${p}`);
+    refreshCatalogSpy.mockResolvedValue(undefined);
+    installsUserScopeSpy.mockReturnValue(true);
+    cacheWrite.mockResolvedValue(undefined);
+    cacheRead.mockResolvedValue(null);
+  });
+
+  it('stamps the source the install began at, even when another leaf reloads mid-package', async () => {
+    const p = fakePlugin(true);
+    p.settings.marketplaceSourceUrl = 'https://a.example/';
+    const store = useMarketplaceStore();
+    store.init(p);
+    await store.load();
+
+    // A package awaits its dependencies before writing the agent — a real window
+    // in which another leaf can switch the catalog. Simulate that switch inside it.
+    installSkillSpy.mockImplementation(async () => {
+      p.settings.marketplaceSourceUrl = 'https://b.example/';
+      await store.load();
+      return 'installed';
+    });
+    await store.install(pmAgent, 'AGENT BODY', { provider: 'claude', scope: 'project' });
+
+    expect(store.source).toBe('https://b.example/'); // the catalog really did switch
+    // …but the agent's provenance stays bound to the catalog its body came from,
+    // so B's reused ids can't satisfy an installed check for an A-sourced agent.
+    const deps = installSpy.mock.calls.at(-1)?.[2] as { catalogUrl: string };
+    expect(deps.catalogUrl).toBe('https://a.example/');
+  });
+});

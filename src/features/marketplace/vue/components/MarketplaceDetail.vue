@@ -32,9 +32,11 @@ const props = defineProps<{
    *  the live settings (Claude ties it to `loadUserSettings`); User scope is hidden
    *  when it's false so a skill isn't written where the runtime won't load it. */
   skillProviderOptions?: { id: SkillProviderTarget; label: string; userScope?: boolean }[];
-  /** Skills only — resolves whether the skill already exists at a given target. */
+  /** Resolves whether everything this install would write is already present at
+   *  a given target — the item's own skill, or a package's skill dependencies,
+   *  checked against the CHOSEN provider + scope rather than "anywhere". */
   skillInstalledChecker?: (target: SkillInstallTarget) => Promise<boolean>;
-  /** Skills only — a value whose identity changes when the store recomputes its
+  /** A value whose identity changes when the store recomputes its
    *  installed state (an external Library skill delete/rename fires
    *  `vaultSkill.changed` → `refreshInstalled`); the per-target check reruns on it
    *  so the button doesn't stay "Installed here" after the skill is removed. */
@@ -172,13 +174,12 @@ const safeSourceUrl = computed(() => {
     <MarketplaceSkillInstall
       v-if="needsSkillTarget"
       :skill-provider-options="props.skillProviderOptions"
-      :skill-installed-checker="isSkill ? props.skillInstalledChecker : undefined"
+      :skill-installed-checker="props.skillInstalledChecker"
       :installing="props.installing"
       :body="props.body"
       :item-id="props.item.id"
       :installed-signal="props.installedSignal"
       :install-label="installLabel"
-      :already-installed="packageInstalled"
       :disabled="!!props.packageError"
       :scope-hint="isPackage ? t('marketplace.package.skillTargetHint') : null"
       @install="emit('install', $event)"

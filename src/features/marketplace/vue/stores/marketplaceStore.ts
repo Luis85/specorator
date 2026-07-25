@@ -324,11 +324,17 @@ export const useMarketplaceStore = defineStore('marketplace', () => {
     // leave an agent bound to skills that were never fetched.
     if (!resolution.ok) throw new MarketplaceError(describePackageFailure(resolution));
 
+    // Deps PINNED to `installSource` for the whole package, not rebuilt from the
+    // live `source.value`: a package awaits its dependencies before writing the
+    // root, so another leaf can commit a different catalog inside that window —
+    // and an agent whose body came from catalog A must not be stamped with B's
+    // URL (that would let B's reused catalog id satisfy A's installed check).
+    const pinnedDeps = (): MarketplaceInstallDeps => buildInstallDeps(requirePlugin(), installSource);
     const result = await installPackage(item, body, resolution.dependencies, target, installSource, {
       fetchBody: fetchBodyFrom,
       installSkill: installSkillAt,
       installItem: (member, memberBody, options) =>
-        installMarketplaceItem(member, memberBody, installDeps(), Date.now(), options),
+        installMarketplaceItem(member, memberBody, pinnedDeps(), Date.now(), options),
       boundSkills: (member) => boundSkillNames(member, byId),
       requireSkillTarget,
     });

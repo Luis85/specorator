@@ -114,3 +114,39 @@ describe('describePackageFailure', () => {
     expect(describePackageFailure({ ok: false, reason: 'too-large', count: 500 })).toContain('500');
   });
 });
+
+describe('resolvePackage bounds (untrusted catalog)', () => {
+  /** A `requires` chain of `length` items: i0 → i1 → … → i(length-1). */
+  function chain(length: number): MarketplaceItem[] {
+    return Array.from({ length }, (_, i) =>
+      item(`skills/i${i}`, i + 1 < length ? [`skills/i${i + 1}`] : undefined),
+    );
+  }
+
+  it('returns too-large for a chain far deeper than the call stack, instead of throwing', () => {
+    // A recursive walk overflows the stack here (RangeError) — which would break
+    // the "reports failure as data" contract the whole module rests on.
+    const result = resolve(chain(20_000), 'skills/i0');
+    expect(result).toMatchObject({ ok: false, reason: 'too-large' });
+  });
+
+  it('stops walking as soon as the cap is passed, rather than after the whole graph', () => {
+    // Bound the WORK, not just the answer: only the items emitted up to the cap
+    // may be visited, so a huge hostile graph can't tie up the renderer.
+    const items = chain(20_000);
+    const byId = indexCatalog(items);
+    // Count lookups rather than items: `get` is the resolver's only way to reach
+    // a dependency, so it measures how much of the graph was actually walked.
+    const visited = new Set<string>();
+    const counting = {
+      ...byId,
+      get: (id: string) => {
+        visited.add(id);
+        return byId.get(id);
+      },
+    } as unknown as ReadonlyMap<string, MarketplaceItem>;
+    const result = resolvePackage(items[0], counting);
+    expect(result).toMatchObject({ ok: false, reason: 'too-large' });
+    expect(visited.size).toBeLessThanOrEqual(MAX_PACKAGE_ITEMS + 1);
+  });
+});
