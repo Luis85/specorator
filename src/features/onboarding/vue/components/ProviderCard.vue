@@ -51,6 +51,8 @@ function unusableText(
       return t('onboarding.providers.batchShim', { path: unusable.path, command: cliCommand });
     case 'missing-node':
       return t('onboarding.providers.missingNode', { path: unusable.path });
+    case 'unsupported-form':
+      return t('onboarding.providers.unsupportedForm', { path: unusable.path });
     default:
       return t('onboarding.providers.notExecutable', { path: unusable.path });
   }

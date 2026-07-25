@@ -9,6 +9,12 @@ import { wrapWindowsCmdShim } from '@/utils/windowsSpawn';
 
 /** Hard stop for a hung package manager. Global npm installs are slow, not eternal. */
 export const INSTALL_TIMEOUT_MS = 10 * 60 * 1000;
+/**
+ * How long an abort waits for the killed child to actually disappear before
+ * answering anyway. SIGKILL is uncatchable, so this only covers a process stuck
+ * in uninterruptible sleep — the UI must not hang on one.
+ */
+export const ABORT_REAP_GRACE_MS = 2_000;
 /** Output lines retained for the console. Bounded so a chatty installer can't grow memory. */
 export const INSTALL_OUTPUT_LINE_CAP = 400;
 
@@ -115,6 +121,9 @@ export function runCliInstall(
   const done = new Promise<CliInstallResult>((resolve) => {
     resolveDone = resolve;
   });
+  /** Resolves when the direct child is actually gone, whatever ended it. */
+  let markChildClosed: () => void = () => {};
+  const childClosed = new Promise<void>((resolve) => { markChildClosed = resolve; });
 
   const settle = (result: CliInstallResult): void => {
     if (settled) return;
@@ -134,15 +143,33 @@ export function runCliInstall(
   );
 
   /**
-   * Reaps the whole tree, THEN settles — settling first would report the install
-   * stopped while npm was still writing to the global prefix. `forceKillProcessGroup`
-   * signals the POSIX group / `taskkill /T /F`s the Windows tree, so the
-   * `cmd.exe` wrapper can't survive as a live npm underneath a dead shim.
+   * Reaps the whole tree, waits for the child to actually be gone, THEN settles.
+   * Settling earlier would report the install stopped while npm was still
+   * writing to the global prefix — and free the caller to start another one on
+   * top of it. `forceKillProcessGroup` signals the POSIX group / `taskkill /T
+   * /F`s the Windows tree, so the `cmd.exe` wrapper can't survive as a live npm
+   * underneath a dead shim.
+   *
+   * The extra wait is because the POSIX half only SIGNALS: `process.kill(-pid)`
+   * returns as soon as the signal is queued, not when the group is gone. The
+   * child's own `close` is the observable end (Windows `taskkill` already waits,
+   * so there it has normally fired by now). Bounded, because a process wedged in
+   * uninterruptible sleep must not hang the UI — after that the user gets their
+   * answer and SIGKILL finishes the job regardless.
    */
   const abort = async (reason: 'cancelled' | 'timeout'): Promise<void> => {
     if (settled || abortReason) return;
     abortReason = reason;
     await forceKillProcessGroup(child);
+    let graceTimer: number | undefined;
+    await Promise.race([
+      childClosed,
+      new Promise<void>((resolve) => {
+        graceTimer = window.setTimeout(resolve, ABORT_REAP_GRACE_MS);
+      }),
+    ]);
+    // Whichever won, the loser must not leave a timer pending.
+    if (graceTimer !== undefined) window.clearTimeout(graceTimer);
     settle(abortResult());
   };
 
@@ -154,6 +181,7 @@ export function runCliInstall(
     settle({ ok: false, exitCode: null, error: error.message });
   });
   child.on('close', (code: number | null) => {
+    markChildClosed();
     // While aborting, `abort()` owns settlement — it settles only once the reaper
     // has resolved. The direct child can close FIRST: on Windows it is the
     // `cmd.exe` wrapper, which dies while `taskkill /T /F` is still walking the

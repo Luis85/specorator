@@ -28,6 +28,9 @@ export const opencodeProviderRegistration: ProviderRegistration = {
   cliInstall: {
     docsUrl: 'https://opencode.ai/docs/',
     authCommand: 'opencode auth login',
+    // Spawns its own command, so the shared cmd.exe wrap
+    // (`resolveBatchAwareSpawnSpec`) launches a `.cmd`/`.bat` shim.
+    windowsLaunchForms: ['batch'],
     // `OpencodeChatRuntime` spawns `getResolvedProviderCliPath('opencode') ?? 'opencode'`
     // and `resolveOpencodeCliPath` intentionally checks configured paths only,
     // so a PATH install resolves at spawn time with no path setting at all.

@@ -17,6 +17,7 @@ jest.mock('@/utils/processKill', () => ({
 import { spawn } from 'child_process';
 
 import {
+  ABORT_REAP_GRACE_MS,
   appendInstallOutput,
   INSTALL_OUTPUT_LINE_CAP,
   platformInstallMethods,
@@ -55,7 +56,10 @@ function mountChild(): FakeChild {
 }
 
 beforeEach(() => {
-  jest.mocked(forceKillProcessGroup).mockClear();
+  // mockReset, not mockClear: two tests below install a never-resolving
+  // implementation to drive the settle ordering, and `mockClear` leaves it in
+  // place for every later test — which hangs anything that awaits the reaper.
+  jest.mocked(forceKillProcessGroup).mockReset().mockImplementation(async () => {});
   jest.mocked(spawn).mockReset();
   jest.mocked(executableCandidateNames).mockClear();
   jest.mocked(findBinaryOnPath).mockReset();
@@ -232,6 +236,47 @@ describe('runCliInstall', () => {
 
     expect(order).toEqual(['reaped', 'settled']);
     expect(await handle.done).toMatchObject({ ok: false, cancelled: true });
+  });
+
+  it('waits for the child to actually be gone, since the POSIX kill only signals', async () => {
+    // `process.kill(-pid, 'SIGKILL')` returns once the signal is queued, not once
+    // the group is reaped, so resolving the reaper is not proof the tree is gone.
+    // The child's own `close` is the observable end.
+    const child = mountChild();
+
+    const handle = runCliInstall(npmMethod, { onOutput: () => {} });
+    handle.cancel();
+    let settledEarly = false;
+    void handle.done.then(() => { settledEarly = true; });
+
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(settledEarly).toBe(false);
+
+    child.emit('close', null);
+
+    expect(await handle.done).toMatchObject({ ok: false, cancelled: true });
+  });
+
+  it('answers anyway if the child never reports closing', async () => {
+    // A process wedged in uninterruptible sleep must not hang the UI: SIGKILL has
+    // already been delivered, so the user gets their answer and the kernel
+    // finishes the job.
+    jest.useFakeTimers();
+    try {
+      mountChild();
+      const handle = runCliInstall(npmMethod, { onOutput: () => {} });
+      handle.cancel();
+
+      // Async advance: the grace timer is only armed after the reaper's promise
+      // resolves, so a synchronous advance would run before it exists and the
+      // wait would never end.
+      await jest.advanceTimersByTimeAsync(ABORT_REAP_GRACE_MS);
+
+      expect(await handle.done).toMatchObject({ ok: false, cancelled: true });
+    } finally {
+      jest.useRealTimers();
+    }
   });
 
   it('a cancel after settling is a no-op', async () => {

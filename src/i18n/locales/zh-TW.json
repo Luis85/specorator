@@ -1366,6 +1366,7 @@
       "notExecutable": "{path} 有檔案，但無法執行——請修正權限或重新安裝。",
       "batchShim": "{path} 是 .cmd 包裝指令碼，無法從中啟動 {command}——請改為指向原生執行檔（.exe）。",
       "missingNode": "{path} 需要 Node.js 才能執行，但 PATH 中沒有 Node。請安裝 Node.js（或使用不需要 Node 的原生安裝程式），然後重新檢查。",
+      "unsupportedForm": "依該供應商的啟動方式，Windows 無法啟動 {path}——請指向原生執行檔（.exe）。",
       "authHint": "還沒登入？在終端機執行一次 {command}。",
       "docs": "安裝文件",
       "noneEnabled": "尚未啟用任何提供者",

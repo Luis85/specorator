@@ -19,6 +19,9 @@ export const codexProviderRegistration: ProviderRegistration = {
   cliInstall: {
     docsUrl: 'https://github.com/openai/codex',
     authCommand: 'codex',
+    // Spawns its own command, so the shared cmd.exe wrap
+    // (`resolveBatchAwareSpawnSpec`) launches a `.cmd`/`.bat` shim.
+    windowsLaunchForms: ['batch'],
     methods: [
       {
         id: 'npm',

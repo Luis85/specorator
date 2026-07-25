@@ -1366,6 +1366,7 @@
       "notExecutable": "{path} 处存在文件，但不可执行——请修正权限或重新安装。",
       "batchShim": "{path} 是 .cmd 包装脚本，无法从中启动 {command}——请改为指向原生可执行文件（.exe）。",
       "missingNode": "{path} 需要 Node.js 才能运行，但 PATH 中没有 Node。请安装 Node.js（或使用无需 Node 的原生安装程序），然后重新检查。",
+      "unsupportedForm": "按该提供方的启动方式，Windows 无法启动 {path}——请指向原生可执行文件（.exe）。",
       "authHint": "还没有登录？在终端中运行一次 {command}。",
       "docs": "安装文档",
       "noneEnabled": "尚未启用任何提供方",

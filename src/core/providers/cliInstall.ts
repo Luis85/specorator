@@ -34,6 +34,13 @@ export interface ProviderCliInstallMethod {
   platforms?: readonly NodeJS.Platform[];
 }
 
+/**
+ * A non-native file form a provider's Windows spawn can still launch.
+ * `batch` = `.cmd`/`.bat` through cmd.exe; `node` = a Node entry point prefixed
+ * with the Node executable.
+ */
+export type ProviderWindowsLaunchForm = 'batch' | 'node';
+
 /** Provider-contributed CLI install guidance for the onboarding setup view. */
 export interface ProviderCliInstall {
   /** Install/auth documentation. Must be `https://` — the UI refuses to link anything else. */
@@ -63,18 +70,26 @@ export interface ProviderCliInstall {
    */
   runtimeFallsBackToPathLookup?: boolean;
   /**
-   * True when this provider's launch path CANNOT run a Windows `.cmd`/`.bat`
-   * shim, so such a path must never be reported as ready however real the file
-   * is.
+   * What this provider's launch path can spawn on Windows BEYOND a native
+   * executable (`.exe`/`.com`), which every provider can always run.
    *
-   * The other providers spawn their CLI themselves and route batch shims through
-   * cmd.exe (`utils/windowsSpawn`), so they leave this unset. Claude does not
-   * spawn a command — the SDK owns the stdio stream and a cmd.exe wrapper breaks
-   * it, which is why `findClaudeCLIPath` deliberately skips `.cmd` while probing
-   * and prefers `claude.exe`. Nothing stops a user from PINNING `claude.cmd` by
-   * hand, though, and npm installs exactly that on Windows.
+   * Windows has no shebang support, so what starts a file is decided entirely by
+   * how the provider spawns it — and the two capabilities differ per provider:
+   *
+   * - `batch` — routes `.cmd`/`.bat` through cmd.exe (`utils/windowsSpawn`).
+   *   Codex, Cursor and OpenCode spawn their own command and do this.
+   * - `node` — prefixes a Node entry point with the Node executable. Only Claude
+   *   does, in `createCustomSpawnFunction`; conversely the SDK owns its stdio
+   *   stream, so a cmd.exe wrapper is not available to it — which is why
+   *   `findClaudeCLIPath` skips `.cmd` while probing and prefers `claude.exe`.
+   *
+   * Anything not covered — npm's extensionless POSIX sh shim, a `.ps1`, a Node
+   * script under a provider that won't prefix Node — reaches `spawn()` raw and
+   * fails. Nothing stops a user PINNING one of those by hand through the setup
+   * view's path field, and npm installs exactly such files on Windows, so
+   * detection needs this declared rather than guessed.
    */
-  windowsBatchShimUnsupported?: boolean;
+  windowsLaunchForms?: readonly ProviderWindowsLaunchForm[];
   methods: readonly ProviderCliInstallMethod[];
 }
 

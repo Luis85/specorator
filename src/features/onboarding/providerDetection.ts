@@ -2,6 +2,7 @@ import { getProviderConfig } from '@/core/providers/providerConfig';
 import { getRuntimeEnvironmentVariables } from '@/core/providers/providerEnvironment';
 import { ProviderRegistry } from '@/core/providers/ProviderRegistry';
 import { ProviderWorkspaceRegistry } from '@/core/providers/ProviderWorkspaceRegistry';
+import { pickEnvValueCaseInsensitive } from '@/core/providers/subprocessEnvironmentAllowlist';
 import type { ProviderId } from '@/core/providers/types';
 import type { PluginContext } from '@/core/types/PluginContext';
 import { asSettingsBag } from '@/core/types/settings';
@@ -11,7 +12,12 @@ import {
   isExecutableFile,
   isExistingFile,
 } from '@/utils/cliBinaryLocator';
-import { cliPathRequiresNode, findNodeExecutable, getHostnameKey } from '@/utils/env';
+import {
+  cliPathRequiresNode,
+  findNodeExecutable,
+  getEnhancedPath,
+  getHostnameKey,
+} from '@/utils/env';
 
 /**
  * `found` — a binary the runtime would actually spawn.
@@ -41,6 +47,8 @@ export type ProviderCliUnusableReason =
   | 'not-executable'
   /** A Windows `.cmd`/`.bat` this provider's launch path cannot run. */
   | 'batch-shim'
+  /** A Windows file in no form this provider can start (sh shim, `.ps1`, …). */
+  | 'unsupported-form'
   /** A Node-backed entry point with no Node interpreter to run it. */
   | 'missing-node';
 
@@ -84,24 +92,39 @@ export function binaryCandidates(
   return [primary, ...extra].flatMap((name) => executableCandidateNames(name, platform));
 }
 
+/** Native Windows executables — every provider can spawn these directly. */
+const WINDOWS_NATIVE_EXTENSIONS = /\.(exe|com)$/i;
+
 /**
- * A resolved path this provider's launch path refuses, whatever the filesystem
- * says. Only one such fact exists today: a Windows batch shim under a provider
- * that cannot route one through cmd.exe (Claude — the SDK owns its stdio
- * stream), and the provider declares it rather than the feature layer inferring
- * it. Nothing stops a user pinning `claude.cmd` by hand, and npm installs
- * exactly that on Windows.
+ * A path this provider's WINDOWS launch path cannot start, whatever the
+ * filesystem says.
+ *
+ * Windows has no shebang support, so what runs is decided by how the provider
+ * spawns: a native `.exe` always works, `.cmd`/`.bat` need the cmd.exe wrap, and
+ * a Node entry point needs the Node prefix — and providers differ, so each
+ * declares its `windowsLaunchForms` rather than the feature layer guessing.
+ * Everything else (npm's extensionless POSIX sh shim, a `.ps1`, a Node script
+ * under a provider that won't prefix Node) reaches `spawn()` raw and fails, and
+ * `isExecutableFile` cannot catch any of it because `X_OK` is an existence check
+ * on Windows. The setup view's own path field is what makes such a pin reachable.
  */
 function unusableReason(
   providerId: ProviderId,
   resolved: string,
   platform: NodeJS.Platform = process.platform,
 ): ProviderCliUnusableReason | null {
-  if (platform !== 'win32'
-    || !ProviderRegistry.getCliInstall(providerId).windowsBatchShimUnsupported) {
+  if (platform !== 'win32') {
     return null;
   }
-  return /\.(cmd|bat)$/i.test(resolved.trim()) ? 'batch-shim' : null;
+  const forms = ProviderRegistry.getCliInstall(providerId).windowsLaunchForms ?? [];
+  const trimmed = resolved.trim();
+  if (WINDOWS_NATIVE_EXTENSIONS.test(trimmed)) {
+    return null;
+  }
+  if (/\.(cmd|bat)$/i.test(trimmed)) {
+    return forms.includes('batch') ? null : 'batch-shim';
+  }
+  return forms.includes('node') && cliPathRequiresNode(trimmed) ? null : 'unsupported-form';
 }
 
 /**
@@ -141,7 +164,13 @@ function classifyResolvedPath(
   // `#!…node` scripts need an interpreter, and Claude's runtime refuses to start
   // without one (`getMissingNodeError`, checked on both the persistent and cold
   // paths). The permission bit says nothing about whether Node is reachable.
-  return cliPathRequiresNode(resolved) && !findNodeExecutable(runtimePath)
+  // The interpreter is searched on the SAME path the runtime builds for the
+  // spawn — `getEnhancedPath(customPath, cliPath)` also adds the CLI's own
+  // directory, so a Node shipped beside the CLI counts, exactly as it does at
+  // launch. Searching the bare runtime PATH would report `missing-node` for a
+  // bundle the runtime launches fine.
+  return cliPathRequiresNode(resolved)
+    && !findNodeExecutable(getEnhancedPath(runtimePath, resolved))
     ? { kind: 'unusable', reason: 'missing-node' }
     : { kind: 'found' };
 }
@@ -212,10 +241,12 @@ function providerPathOverride(
   settings: Record<string, unknown>,
   providerId: ProviderId,
 ): string | undefined {
-  const env = getRuntimeEnvironmentVariables(settings, providerId);
-  // Windows env names are case-insensitive, so the override may arrive as `Path`.
-  const key = Object.keys(env).find((name) => name.toUpperCase() === 'PATH');
-  return key ? env[key] : undefined;
+  // Windows env names are case-insensitive, so the override may arrive as `Path`
+  // — and when the shared env declares `PATH=` and the provider's own declares
+  // `Path=`, LAST wins, which is what the runtime's own env builder does. Picking
+  // the first would search the shared path while the runtime searched the
+  // provider one.
+  return pickEnvValueCaseInsensitive(getRuntimeEnvironmentVariables(settings, providerId), 'PATH');
 }
 
 /**

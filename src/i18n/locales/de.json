@@ -1366,6 +1366,7 @@
       "notExecutable": "Unter {path} liegt eine Datei, die aber nicht ausführbar ist – korrigiere die Berechtigungen oder installiere neu.",
       "batchShim": "{path} ist ein .cmd-Shim, aus dem {command} nicht gestartet werden kann – verweise stattdessen auf die native Programmdatei (.exe).",
       "missingNode": "{path} benötigt Node.js, aber Node ist nicht in deinem PATH. Installiere Node.js – oder nutze den nativen Installer, der keins braucht – und prüfe dann erneut.",
+      "unsupportedForm": "Windows kann {path} nicht so starten, wie dieser Anbieter es aufruft – verweise auf die native Programmdatei (.exe).",
       "authHint": "Noch nicht angemeldet? Führe {command} einmal im Terminal aus.",
       "docs": "Installationsdoku",
       "noneEnabled": "Noch kein Anbieter aktiviert",

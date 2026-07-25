@@ -62,7 +62,10 @@ surfaces to use the island pattern; this is one.
     launchable — the runtime builds its subprocess PATH from exactly that. Read
     from settings, never `plugin.getResolvedEnvironmentVariables`: that resolves
     SecretStorage refs and warns about missing ones, which a probe that reruns on
-    every card interaction must not do.
+    every card interaction must not do. The value is picked with the runtime's
+    own `pickEnvValueCaseInsensitive` — Windows env names are case-insensitive
+    and the LAST declaration wins, so a shared `PATH=` followed by a provider
+    `Path=` must resolve to the provider's.
   - **Every candidate becomes a detection through `detectionForCandidate`**,
     whether it came from the resolver or the PATH probe, so a launchability rule
     cannot apply to only one of them. Each rule below was first written on the
@@ -77,17 +80,26 @@ surfaces to use the island pattern; this is one.
       `X_OK`, which is a no-op on Windows where the extension decides). A
       partially installed or copied script would fail at spawn with `EACCES`.
     - `missing-node` — a Node-backed entry point (`.js`, or a `#!…node` script)
-      with no Node interpreter reachable on the provider's runtime PATH. Claude's
-      runtime refuses to start in exactly this case (`getMissingNodeError`, on
-      both the persistent and cold paths), and the permission bit says nothing
-      about whether Node exists.
-    - `batch-shim` — a Windows `.cmd`/`.bat` under a provider that declares
-      `cliInstall.windowsBatchShimUnsupported`. Claude is the one: the SDK owns
-      its stdio stream, so a cmd.exe wrapper is not available to it the way it is
-      to the self-spawning providers — which is exactly why `findClaudeCLIPath`
-      skips `.cmd` while probing. Nothing stops a user pinning `claude.cmd` by
-      hand, and npm installs precisely that on Windows. The fact is declared on
-      the registration, never inferred from a provider id here.
+      with no Node interpreter reachable. Claude's runtime refuses to start in
+      exactly this case (`getMissingNodeError`, on both the persistent and cold
+      paths), and the permission bit says nothing about whether Node exists. The
+      interpreter is searched on `getEnhancedPath(runtimePath, cliPath)` — the
+      same path the runtime builds for the spawn, which also adds the CLI's own
+      directory so a Node shipped beside it counts.
+    - `batch-shim` / `unsupported-form` — a Windows file the provider's spawn
+      cannot start. Windows has no shebang support, so what runs is decided by
+      HOW each provider spawns, and each declares that as
+      `cliInstall.windowsLaunchForms`: a native `.exe`/`.com` always works,
+      `batch` means `.cmd`/`.bat` go through the cmd.exe wrap (Codex, Cursor,
+      OpenCode), `node` means a Node entry point gets the Node prefix (Claude
+      only, in `createCustomSpawnFunction` — and conversely the SDK owns its
+      stdio stream, so cmd.exe cannot sit in front of it, which is why
+      `findClaudeCLIPath` skips `.cmd` while probing). Anything else — npm's
+      extensionless POSIX sh shim, a `.ps1`, a Node script under a provider that
+      won't prefix Node — reaches `spawn()` raw and fails, and `isExecutableFile`
+      cannot catch it because `X_OK` is an existence check on Windows. The setup
+      view's own path field is what makes such a pin reachable. Declared on the
+      registration, never inferred from a provider id here.
     `findBinaryOnPath` now requires executability too, so a PATH scan skips a
     non-runnable hit and keeps looking instead of returning something that fails
     at spawn. `resolveConfiguredCliPath` deliberately stays existence-only: a pin
@@ -140,8 +152,12 @@ surfaces to use the island pattern; this is one.
   path. Cursor is entirely copy-only for this reason. Further rails: an explicit
   per-run confirm naming the exact command, a bounded output ring, a 10-minute
   timeout, and `onUnmounted` cancel so a closed leaf leaves nothing running.
-  **The abort owns settlement**: once cancel/timeout has fired, the child's own
-  `close` does NOT resolve the run — on Windows the direct child is the `cmd.exe`
+  **The abort owns settlement, and waits for the child to actually be gone**:
+  the POSIX half of the reaper only SIGNALS (`process.kill(-pid)` returns when
+  the signal is queued, not when the group is reaped), so the abort additionally
+  waits for the child's `close` — bounded by `ABORT_REAP_GRACE_MS`, since a
+  process wedged in uninterruptible sleep must not hang the UI. Once
+  cancel/timeout has fired, the child's own `close` does NOT resolve the run — on Windows the direct child is the `cmd.exe`
   wrapper, which dies while `taskkill /T /F` is still walking descendants, and on
   POSIX the group leader can exit while its forks are still being signalled, so
   settling there would report the install stopped with npm still writing (and free

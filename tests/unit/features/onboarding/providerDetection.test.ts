@@ -1,3 +1,5 @@
+import * as path from 'path';
+
 import { ProviderRegistry } from '@/core/providers/ProviderRegistry';
 import { ProviderWorkspaceRegistry } from '@/core/providers/ProviderWorkspaceRegistry';
 import type { ProviderCliResolver, ProviderId, ProviderRegistration } from '@/core/providers/types';
@@ -40,16 +42,18 @@ interface Stub {
   extra?: string[];
   /** Models OpenCode: the runtime spawns the bare command, so PATH counts. */
   pathFallback?: boolean;
-  /** Models Claude: the SDK owns stdio, so a `.cmd` shim cannot be launched. */
-  noBatchShim?: boolean;
+  /** What the provider's Windows spawn can start beyond a native `.exe`. */
+  windowsForms?: readonly ('batch' | 'node')[];
 }
 
 const STUBS: Stub[] = [
-  { id: 'det-alpha', name: 'Alpha', cli: 'alpha' },
+  // Models the self-spawning providers: cmd.exe wrap, no Node prefix.
+  { id: 'det-alpha', name: 'Alpha', cli: 'alpha', windowsForms: ['batch'] },
   { id: 'det-beta', name: 'Beta', cli: 'beta' },
   { id: 'det-gamma', name: 'Gamma', cli: 'gamma', extra: ['gamma-alt'] },
   { id: 'det-path', name: 'Path', cli: 'pathcli', extra: ['pathcli-alt'], pathFallback: true },
-  { id: 'det-nobatch', name: 'NoBatch', cli: 'nobatch', noBatchShim: true },
+  // Models Claude: prefixes Node, cannot wrap a batch shim.
+  { id: 'det-nobatch', name: 'NoBatch', cli: 'nobatch', windowsForms: ['node'] },
 ];
 
 function stubResolver(resolved: string | null): ProviderCliResolver & { resetCalls: number } {
@@ -80,7 +84,7 @@ beforeAll(() => {
         authCommand: `${stub.cli} login`,
         extraBinaryNames: stub.extra,
         runtimeFallsBackToPathLookup: stub.pathFallback,
-        windowsBatchShimUnsupported: stub.noBatchShim,
+        windowsLaunchForms: stub.windowsForms,
         methods: [],
       },
       isEnabled: (settings: Record<string, unknown>) => Boolean(
@@ -277,7 +281,11 @@ describe('detectProviderCli', () => {
     expect(detectProviderCli(makePlugin(), 'det-alpha').status).toBe('found');
   });
 
-  it('searches for Node on the provider runtime PATH, not just the host one', () => {
+  it('searches for Node the way the runtime does — provider PATH plus the CLI dir', () => {
+    // The runtimes spawn with `getEnhancedPath(customPath, cliPath)`, which also
+    // adds the CLI's own directory, so a Node shipped beside the CLI counts.
+    // Searching the bare provider PATH would report `missing-node` for a bundle
+    // the runtime launches fine.
     ProviderWorkspaceRegistry.setServices('det-alpha', {
       cliResolver: stubResolver('/opt/alpha/cli.js'),
     } as never);
@@ -288,7 +296,23 @@ describe('detectProviderCli', () => {
 
     detectProviderCli(plugin, 'det-alpha');
 
-    expect(findNodeExecutable).toHaveBeenCalledWith('/opt/node/bin');
+    const searched = jest.mocked(findNodeExecutable).mock.calls[0][0] ?? '';
+    expect(searched.split(path.delimiter)).toContain('/opt/node/bin');
+  });
+
+  it('prefers the LAST case-insensitive PATH declaration, as the runtime env does', () => {
+    // Shared env declares `PATH=`, the provider's own declares `Path=`: the
+    // runtime's `pickEnvValueCaseInsensitive` takes the last, so picking the
+    // first would search a different path than the spawn will.
+    ProviderWorkspaceRegistry.setServices('det-path', { cliResolver: stubResolver(null) } as never);
+    const plugin = makePlugin({
+      sharedEnvironmentVariables: 'PATH=/shared/bin',
+      providerConfigs: { 'det-path': { environmentVariables: 'Path=/provider/bin' } },
+    });
+
+    detectProviderCli(plugin, 'det-path');
+
+    expect(findBinaryOnPath).toHaveBeenCalledWith(expect.anything(), '/provider/bin');
   });
 
   it('refuses a Windows batch shim under a provider whose launch path cannot run one', () => {
@@ -305,6 +329,48 @@ describe('detectProviderCli', () => {
         status: 'missing',
         cliPath: null,
         unusable: { path: 'C:\\npm\\nobatch.cmd', reason: 'batch-shim' },
+      });
+    } finally {
+      Object.defineProperty(process, 'platform', { value: platform, configurable: true });
+    }
+  });
+
+  it('refuses a Windows file in no form the provider can start', () => {
+    // npm's extensionless POSIX sh shim is the realistic one: Windows cannot run
+    // it, it is not a batch file, and `X_OK` is an existence check there — so
+    // nothing else in the chain catches it.
+    ProviderWorkspaceRegistry.setServices('det-alpha', {
+      cliResolver: stubResolver('C:\\npm\\alpha'),
+    } as never);
+    const platform = process.platform;
+    Object.defineProperty(process, 'platform', { value: 'win32', configurable: true });
+    try {
+      expect(detectProviderCli(makePlugin(), 'det-alpha')).toMatchObject({
+        status: 'missing',
+        unusable: { path: 'C:\\npm\\alpha', reason: 'unsupported-form' },
+      });
+    } finally {
+      Object.defineProperty(process, 'platform', { value: platform, configurable: true });
+    }
+  });
+
+  it('accepts a Node entry point on Windows only where the provider prefixes Node', () => {
+    ProviderWorkspaceRegistry.setServices('det-nobatch', {
+      cliResolver: stubResolver('C:\\npm\\node_modules\\nobatch\\cli.js'),
+    } as never);
+    ProviderWorkspaceRegistry.setServices('det-alpha', {
+      cliResolver: stubResolver('C:\\npm\\node_modules\\alpha\\cli.js'),
+    } as never);
+    jest.mocked(cliPathRequiresNode).mockReturnValue(true);
+    const platform = process.platform;
+    Object.defineProperty(process, 'platform', { value: 'win32', configurable: true });
+    try {
+      // Claude-shaped: Node prefix declared, so the entry point launches.
+      expect(detectProviderCli(makePlugin(), 'det-nobatch').status).toBe('found');
+      // Self-spawning shape: no Node prefix, so the same file would fail.
+      expect(detectProviderCli(makePlugin(), 'det-alpha')).toMatchObject({
+        status: 'missing',
+        unusable: { reason: 'unsupported-form' },
       });
     } finally {
       Object.defineProperty(process, 'platform', { value: platform, configurable: true });

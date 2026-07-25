@@ -179,6 +179,20 @@ describe('ProvidersStep', () => {
     expect(line.textContent).toContain('Node.js');
   });
 
+  it('explains a Windows file the provider cannot start in any form', async () => {
+    const { container } = setup(makeStore([
+      detection({
+        status: 'missing',
+        cliPath: null,
+        unusable: { path: 'C:\\npm\\alpha', reason: 'unsupported-form' },
+      }),
+    ]));
+    const line = container.querySelector('[data-state="unsupported-form"]')!;
+
+    expect(line.textContent).toContain('C:\\npm\\alpha');
+    expect(line.textContent).toContain('.exe');
+  });
+
   it('toggling the checkbox enables the provider through the store', async () => {
     const store = makeStore([detection()]);
     const { container } = setup(store);

@@ -19,6 +19,9 @@ export const cursorProviderRegistration: ProviderRegistration = {
   cliInstall: {
     docsUrl: 'https://cursor.com/docs/cli/overview',
     authCommand: 'cursor-agent login',
+    // Spawns its own command, so the shared cmd.exe wrap
+    // (`resolveBatchAwareSpawnSpec`) launches a `.cmd`/`.bat` shim.
+    windowsLaunchForms: ['batch'],
     // The CLI ships two entry points for one binary; either satisfies the probe.
     extraBinaryNames: ['agent'],
     // Cursor publishes no package-manager install — only piped installer
