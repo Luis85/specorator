@@ -74,8 +74,22 @@ function readFileHead(filePath: string): string | null {
   }
 }
 
-/** An absolute Node path a batch shim launches directly, e.g. `"C:\Program Files\nodejs\node.exe"`. */
-const ABSOLUTE_NODE_IN_BATCH = /["']((?:[A-Za-z]:[\\/]|\\\\)[^"'\r\n]*node(?:\.exe)?)["']/i;
+/** Drive-letter or UNC prefix — what makes a Windows path absolute. */
+const WINDOWS_ABSOLUTE_PREFIX = String.raw`(?:[A-Za-z]:[\\/]|\\\\)`;
+/** A quoted absolute Node path, e.g. `"C:\Program Files\nodejs\node.exe"` — spaces allowed. */
+const QUOTED_ABSOLUTE_NODE = new RegExp(
+  String.raw`["'](${WINDOWS_ABSOLUTE_PREFIX}[^"'\r\n]*node(?:\.exe)?)["']`,
+  'i',
+);
+/**
+ * The same thing written without quotes, e.g. `C:\tools\node.exe cli.js`. Legal
+ * in a shim as long as the path has no spaces — which is exactly why it cannot
+ * reuse the quoted pattern: the terminator is whitespace, not a closing quote.
+ */
+const UNQUOTED_ABSOLUTE_NODE = new RegExp(
+  String.raw`(?:^|[\s@(])(${WINDOWS_ABSOLUTE_PREFIX}[^\s"'\r\n]*node(?:\.exe)?)(?=[\s"']|$)`,
+  'im',
+);
 /** An absolute interpreter that is Node itself — `/usr/bin/env` is not one. */
 const ABSOLUTE_NODE_SHEBANG = /^\/\S*\/node(?:\.exe)?$/i;
 
@@ -96,7 +110,9 @@ export function declaredNodeInterpreter(filePath: string): string | null {
     return null;
   }
   if (BATCH_EXTENSIONS.test(filePath.trim())) {
-    return ABSOLUTE_NODE_IN_BATCH.exec(head)?.[1] ?? null;
+    return QUOTED_ABSOLUTE_NODE.exec(head)?.[1]
+      ?? UNQUOTED_ABSOLUTE_NODE.exec(head)?.[1]
+      ?? null;
   }
   if (!head.startsWith('#!')) {
     return null;

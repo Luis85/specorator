@@ -116,9 +116,12 @@ surfaces to use the island pattern; this is one.
       An entry point that names its interpreter OUTRIGHT is exempt from the PATH
       search entirely (`declaredNodeInterpreter`): `#!/opt/node/bin/node` is
       launched by the kernel through that exact path, as is a shim hard-coding an
-      absolute `node.exe`, so only that file's runnability matters. `#!/usr/bin/env
-      node` and a bare `node` in a shim really do resolve through PATH and keep
-      the PATH question.
+      absolute `node.exe` — quoted or not, since an unquoted absolute path is
+      legal in a shim whenever it has no spaces and cmd.exe runs it just as
+      happily. Only that file's runnability matters. `#!/usr/bin/env node`, a bare
+      `node`, and `%~dp0\node.exe` (relative to the shim, and already covered by
+      the CLI's own directory joining the enhanced path) really do resolve through
+      a search, so they keep the PATH question.
     - `batch-shim` / `unsupported-form` — a Windows file the provider's spawn
       cannot start. Windows has no shebang support, so what runs is decided by
       HOW each provider spawns, and each declares that as

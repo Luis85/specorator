@@ -194,6 +194,33 @@ describe('declaredNodeInterpreter', () => {
     expect(declaredNodeInterpreter(shim)).toBe('C:\\Program Files\\nodejs\\node.exe');
   });
 
+  it('returns the absolute node a shim invokes WITHOUT quotes', () => {
+    // Legal in a shim whenever the path has no spaces, and cmd.exe runs it just
+    // as happily — so requiring quotes sent detection back to a PATH search and
+    // reported `missing-node` for a CLI that starts fine.
+    const shim = write('cli.cmd', '@C:\\tools\\node.exe "%~dp0\\cli.js" %*');
+
+    expect(declaredNodeInterpreter(shim)).toBe('C:\\tools\\node.exe');
+  });
+
+  it('reads an unquoted absolute node from a continuation line, not just the first', () => {
+    const shim = write('cli.cmd', [
+      '@ECHO off',
+      'IF EXIST "%~dp0\\node.exe" (',
+      '  "%~dp0\\node.exe" "%~dp0\\cli.js" %*',
+      ') ELSE (',
+      '  C:\\tools\\node.exe "%~dp0\\cli.js" %*',
+      ')',
+    ].join('\r\n'));
+
+    // `%~dp0\node.exe` is not absolute, so the unquoted branch is what answers.
+    expect(declaredNodeInterpreter(shim)).toBe('C:\\tools\\node.exe');
+  });
+
+  it('returns null for a UNC-shaped path that is not node at all', () => {
+    expect(declaredNodeInterpreter(write('cli.cmd', '@C:\\tools\\python.exe x.py'))).toBeNull();
+  });
+
   it('returns null for a shim that invokes a bare `node`', () => {
     expect(declaredNodeInterpreter(write('cli.cmd', '@node "%~dp0\\cli.js" %*'))).toBeNull();
   });
