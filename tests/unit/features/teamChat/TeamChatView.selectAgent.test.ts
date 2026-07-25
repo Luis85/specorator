@@ -38,21 +38,23 @@ describe('TeamChatView.selectAgent — resolve → cross-view reuse / create', (
     mockNotice.mockClear();
   });
 
-  it('records selectedAgentId and projects it to observers synchronously, before the async open', async () => {
+  it('does NOT set selectedAgentId optimistically — the tab projection owns it', async () => {
     const observer = jest.fn();
     const view = makeView();
     view.teamChatObservers = new Set([observer]);
+    // Bare jest.fns that do NOT fire the manager's onTabCreated/onTabSwitched, so
+    // nothing projects a selection during this open.
     view.tabManager = {
       createTab: jest.fn().mockResolvedValue({ id: 'tab-1' }),
       switchToTab: jest.fn(),
     };
 
-    const pending = view.selectAgent('roster:z');
-    // Selection is recorded + projected up-front so the roster highlights and the
-    // right-pane empty state clears immediately, not after the conversation resolves.
-    expect(view.selectedAgentId).toBe('roster:z');
-    expect(observer).toHaveBeenCalledWith({ selectedAgentId: 'roster:z' });
-    await pending;
+    await view.selectAgent('roster:z');
+
+    // Selection stays null: it is a projection of the active tab (written by the
+    // engine's tab callbacks), never an optimistic write inside selectAgent.
+    expect(view.selectedAgentId).toBeNull();
+    expect(observer).not.toHaveBeenCalled();
   });
 
   it('reuses a DM already open in THIS view via a LOCAL switchToTab (no createTab)', async () => {
@@ -156,10 +158,11 @@ describe('TeamChatView.selectAgent — resolve → cross-view reuse / create', (
     expect(switchToTab).toHaveBeenCalledWith('tab-1');
   });
 
-  // Fix B (new): the source leaf never opened a tab for this agent (the DM lives
-  // in another leaf), so its optimistic selection must roll back or the roster
-  // highlight + empty state desync against the still-showing prior transcript.
-  it('rolls the source leaf selection back to its prior value on a cross-view reveal (Fix B)', async () => {
+  // Round-24 (replaces Round-22 Fix B manual rollback): the source leaf never
+  // opened a tab for this agent (the DM lives in another leaf), and selectedAgentId
+  // now projects off THIS leaf's own active tab — so it simply stays put, no manual
+  // rollback. The destination leaf projects its own selection via its onTabSwitched.
+  it('cross-leaf reveal leaves THIS leaf selection untouched + no local createTab', async () => {
     const observer = jest.fn();
     const otherSwitch = jest.fn().mockResolvedValue(undefined);
     const otherLeaf = { id: 'leaf-other' };
@@ -176,24 +179,23 @@ describe('TeamChatView.selectAgent — resolve → cross-view reuse / create', (
         })),
       },
     });
-    view.selectedAgentId = 'roster:prev'; // a DM was already showing in this leaf
+    view.selectedAgentId = 'roster:prev'; // this leaf is showing its own DM
     view.teamChatObservers = new Set([observer]);
     view.tabManager = { createTab, switchToTab: jest.fn() };
 
     await view.selectAgent('roster:new');
 
-    // Source-leaf selection is restored so its projection matches its visible pane.
-    expect(view.selectedAgentId).toBe('roster:prev');
     // The owning leaf is revealed + switched; this leaf never double-mounts.
     expect(revealLeaf).toHaveBeenCalledWith(otherLeaf);
     expect(otherSwitch).toHaveBeenCalledWith('tab-9');
     expect(createTab).not.toHaveBeenCalled();
-    // Optimistic set to the clicked agent, then rolled back to the prior one.
-    expect(observer).toHaveBeenNthCalledWith(1, { selectedAgentId: 'roster:new' });
-    expect(observer).toHaveBeenLastCalledWith({ selectedAgentId: 'roster:prev' });
+    // No manual rollback and no optimistic set: selectedAgentId is unchanged and
+    // never re-emitted from selectAgent.
+    expect(view.selectedAgentId).toBe('roster:prev');
+    expect(observer).not.toHaveBeenCalled();
   });
 
-  it('reverts the selection, re-emits, and shows a Notice when createTab hits the tab cap', async () => {
+  it('shows a Notice on the tab cap and leaves selection to the projection (no manual revert)', async () => {
     const observer = jest.fn();
     const createTab = jest.fn().mockResolvedValue(null); // tab cap reached
     const view = makeView({
@@ -208,13 +210,45 @@ describe('TeamChatView.selectAgent — resolve → cross-view reuse / create', (
 
     await view.selectAgent('roster:new');
 
-    // Selection rolls back to the prior agent so the roster highlight tracks the pane.
+    // No tab opened → nothing activated → the projection never fired, so selection
+    // stays exactly where it was (there was no optimistic set to revert).
     expect(view.selectedAgentId).toBe('roster:prev');
-    // Two projections: the optimistic set, then the revert.
-    expect(observer).toHaveBeenCalledTimes(2);
-    expect(observer).toHaveBeenNthCalledWith(1, { selectedAgentId: 'roster:new' });
-    expect(observer).toHaveBeenNthCalledWith(2, { selectedAgentId: 'roster:prev' });
-    // The user is told why nothing opened.
+    expect(observer).not.toHaveBeenCalled();
+    // The user is still told why nothing opened.
     expect(mockNotice).toHaveBeenCalledTimes(1);
+  });
+
+  // Round-24 (:208): a THROWN resolve/persist/create used to strand the roster on
+  // the just-clicked agent (optimistic set + log-only wrapper). With selection now
+  // a projection of the active tab, a thrown open can't move it.
+  it('leaves selectedAgentId unchanged when resolveOrCreate throws (:208)', async () => {
+    const view = makeView({
+      plugin: {
+        getTeamChatThreadStore: () => ({ resolveOrCreate: jest.fn().mockRejectedValue(new Error('resolve boom')) }),
+        findConversationAcrossViews: jest.fn(() => null),
+      },
+    });
+    view.selectedAgentId = 'roster:current'; // reflects the real active tab
+    view.tabManager = { createTab: jest.fn(), switchToTab: jest.fn() };
+
+    await expect(view.selectAgent('roster:new')).rejects.toThrow('resolve boom');
+
+    expect(view.selectedAgentId).toBe('roster:current');
+  });
+
+  it('leaves selectedAgentId unchanged when createTab throws (:208)', async () => {
+    const createTab = jest.fn().mockRejectedValue(new Error('create boom'));
+    const view = makeView({
+      plugin: {
+        getTeamChatThreadStore: () => ({ resolveOrCreate: jest.fn().mockResolvedValue('conv-x') }),
+        findConversationAcrossViews: jest.fn(() => null),
+      },
+    });
+    view.selectedAgentId = 'roster:current';
+    view.tabManager = { createTab, switchToTab: jest.fn() };
+
+    await expect(view.selectAgent('roster:new')).rejects.toThrow('create boom');
+
+    expect(view.selectedAgentId).toBe('roster:current');
   });
 });

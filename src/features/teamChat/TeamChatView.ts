@@ -2,11 +2,13 @@ import type { ViewStateResult, WorkspaceLeaf } from 'obsidian';
 import { ItemView, Notice } from 'obsidian';
 import { type App as VueApp, createApp, markRaw } from 'vue';
 
+import { validateTabManagerState } from '../../core/bootstrap/tabManagerState';
 import type { ProviderId } from '../../core/providers/types';
 import type { ChatViewHandle } from '../../core/types/PluginContext';
 import { t } from '../../i18n/i18n';
 import type SpecoratorPlugin from '../../main';
 import { TabManager } from '../chat/tabs/TabManager';
+import type { PersistedTabManagerState } from '../chat/tabs/types';
 import { getTeamChatDmOpenCoordinator } from './TeamChatDmOpenCoordinator';
 import type { TeamChatThreadStore } from './TeamChatThreadStore';
 import { createTeamChatPinia } from './ui/vue/globalPinia';
@@ -35,10 +37,20 @@ export class TeamChatView extends ItemView implements ChatViewHandle {
   tabManager: TabManager | null = null;
   // The Vue-owned tab-content host, captured via CONTENT_HOST_KEY on mount.
   private tabContentEl: HTMLElement | null = null;
-  // False until the engine is built; the T4 duck-type + Agent Board queue gate on it.
+  // False until the engine has restored its tabs; the Agent Board tab-budget gate
+  // reads it, so (like SpecoratorView) it flips only AFTER restore completes.
   private tabsRestored = false;
-  /** Agent whose DM is the active thread; reopened on restore, recorded for getState. */
+  /**
+   * Agent whose DM is the active thread. A pure PROJECTION of the active tab's
+   * bound agent (see `projectSelectedAgentFromActiveTab`) — never set
+   * optimistically — so cross-leaf switches, failed opens, and the tab cap all
+   * leave it tracking the actually-visible DM. Recorded in `getState` as a
+   * restore hint (the projection reconfirms it once tabs restore).
+   */
   private selectedAgentId: string | null = null;
+  /** Persisted tab layout stashed by `setState`, consumed once by the restore in
+   *  `initTabEngine` (mirror of SpecoratorView's `viewTabManagerState`). */
+  private pendingTabManagerState: PersistedTabManagerState | null = null;
   private pendingPersist: number | null = null;
   // Store-reprojection observers (mirror of chat's chatShellObservers). The
   // routing composable subscribes here and fans each snapshot into the Pinia
@@ -94,28 +106,71 @@ export class TeamChatView extends ItemView implements ChatViewHandle {
     this.vueApp = app;
   }
 
-  /** Builds the tab engine into the Vue-provided content host. */
+  /** Builds the tab engine into the Vue-provided content host, then restores the
+   *  persisted DM tabs. The engine is enumerable immediately via getTabManager()
+   *  (so getAllViews / T4 reaches it); `tabsRestored` flips only after restore. */
   private initTabEngine(): void {
     const containerEl = this.tabContentEl;
     if (!containerEl || this.tabManager) return;
     this.tabManager = new TabManager(this.plugin, containerEl, this, {
-      onTabCreated: () => { this.emitTeamChatChange(); this.persistTabState(); },
-      onTabSwitched: () => { this.emitTeamChatChange(); this.persistTabState(); },
-      onTabClosed: () => { this.emitTeamChatChange(); this.persistTabState(); },
+      // The four tab-set-changing callbacks re-derive selectedAgentId from the
+      // now-active tab (the projection) and persist; the rest only re-emit.
+      onTabCreated: () => { this.projectSelectedAgentFromActiveTab(); this.persistTabState(); },
+      onTabSwitched: () => { this.projectSelectedAgentFromActiveTab(); this.persistTabState(); },
+      onTabClosed: () => { this.projectSelectedAgentFromActiveTab(); this.persistTabState(); },
       onTabStreamingChanged: () => this.emitTeamChatChange(),
       onTabTitleChanged: () => this.emitTeamChatChange(),
       onTabAttentionChanged: () => this.emitTeamChatChange(),
-      onTabConversationChanged: () => { this.emitTeamChatChange(); this.persistTabState(); },
+      onTabConversationChanged: () => { this.projectSelectedAgentFromActiveTab(); this.persistTabState(); },
       onTabProviderChanged: () => this.emitTeamChatChange(),
     });
-    // The engine is enumerable immediately (getTabManager()), so getAllViews
-    // (T4) reaches it.
-    this.tabsRestored = true;
-    // Reopen the last DM if setState restored a selection. setState runs before
-    // onOpen for a restored leaf (SpecoratorView's stash-then-consume pattern),
-    // so selectedAgentId is populated by the time the engine builds.
-    if (this.selectedAgentId) {
-      this.openAgentDm(this.selectedAgentId);
+    // Fire-and-forget from this synchronous Vue mount seam: restore the saved DM
+    // tabs, then mark the budget gate ready. A rejected restore is logged, never
+    // an unhandled rejection.
+    void this.restoreTabsThenMarkReady();
+  }
+
+  /**
+   * Derives `selectedAgentId` from the ACTIVE tab's bound agent (its
+   * conversation's `boundAgentId`), or null when no DM tab is active, then emits.
+   * This is the single writer of `selectedAgentId` at runtime, so the roster
+   * highlight and the right-pane empty state (`!selectedAgentId`) always match the
+   * tab the pane is actually showing — no optimistic set to reconcile.
+   */
+  private projectSelectedAgentFromActiveTab(): void {
+    const conversationId = this.tabManager?.getActiveTab()?.conversationId ?? null;
+    const boundAgentId = conversationId
+      ? this.plugin.getConversationSync(conversationId)?.boundAgentId ?? null
+      : null;
+    this.selectedAgentId = boundAgentId;
+    this.emitTeamChatChange();
+  }
+
+  /** Restores persisted DM tabs, then flips `tabsRestored` (mirror of
+   *  SpecoratorView: the budget gate must not read a half-built tab set). */
+  private async restoreTabsThenMarkReady(): Promise<void> {
+    try {
+      await this.restoreTabs();
+    } catch (error) {
+      this.plugin.logger.scope('team-chat').error('team chat tab restore failed', error);
+    } finally {
+      this.tabsRestored = true;
+    }
+  }
+
+  /**
+   * Round-trips the saved DM tabs through the engine's restore path. `restoreState`
+   * recreates every hidden roster-driven tab and switches to the persisted active
+   * one, whose `onTabSwitched` drives the `selectedAgentId` projection. No separate
+   * selectedAgentId reopen: a non-null selection always corresponds to an active DM
+   * tab that `tabManagerState` already carries, so restoring the layout reopens it.
+   */
+  private async restoreTabs(): Promise<void> {
+    const manager = this.tabManager;
+    const persisted = this.pendingTabManagerState;
+    if (manager && persisted && persisted.openTabs.length > 0) {
+      await manager.restoreState(persisted);
+      this.pendingTabManagerState = null; // consumed once (mirror of SpecoratorView)
     }
   }
 
@@ -194,16 +249,15 @@ export class TeamChatView extends ItemView implements ChatViewHandle {
   }
 
   /**
-   * Opens or resumes the agent's single persistent DM: record + project the
-   * selection immediately (so the roster highlights and the right-pane empty
-   * state clears without waiting on I/O), then resolve the DM's conversation and
-   * reuse any already-open tab for it. Idempotent per agent — a repeat select of
-   * an already-open DM switches to it rather than creating a duplicate.
+   * Opens or resumes the agent's single persistent DM: resolve the DM's
+   * conversation, then reuse any already-open tab for it, else create one.
+   * `selectedAgentId` is NOT set here — it projects off whichever tab this open
+   * ends up activating (`onTabCreated`/`onTabSwitched`), so a cross-leaf reveal or
+   * a failed open never leaves the roster highlighting a DM this pane isn't
+   * showing. Idempotent per agent — a repeat select of an already-open DM switches
+   * to it rather than creating a duplicate.
    */
   async selectAgent(agentId: string): Promise<void> {
-    const previousAgentId = this.selectedAgentId;
-    this.selectedAgentId = agentId;
-    this.emitTeamChatChange();
     const manager = this.tabManager;
     if (!manager) return; // engine not built yet (defensive; clicks only fire post-mount)
     const conversationId = await this.getThreadStore().resolveOrCreate(agentId);
@@ -214,23 +268,19 @@ export class TeamChatView extends ItemView implements ChatViewHandle {
     // findConversationAcrossViews == null (neither tab created yet) and each
     // createTab, double-mounting one conversation (concurrent streams/saves
     // corrupt it). The queued second caller re-runs openResolvedDm, now finds the
-    // tab, and switches. Optimistic selection above stays unserialized for
-    // responsiveness; only the resolve→open must be race-free.
+    // tab, and switches.
     await getTeamChatDmOpenCoordinator(this.plugin).serialize(conversationId, () =>
-      this.openResolvedDm(conversationId, previousAgentId, manager));
+      this.openResolvedDm(conversationId, manager));
   }
 
   /**
    * Body of the serialized DM open: reuse an already-open tab (this leaf or
    * another), else create one here. Re-run safe — a queued second caller for the
    * same conversation re-enters after the first created the tab, finds it, and
-   * switches instead of double-mounting.
+   * switches instead of double-mounting. Touches no selection state: the activated
+   * tab's `onTabSwitched`/`onTabCreated` drives the `selectedAgentId` projection.
    */
-  private async openResolvedDm(
-    conversationId: string,
-    previousAgentId: string | null,
-    manager: TabManager,
-  ): Promise<void> {
+  private async openResolvedDm(conversationId: string, manager: TabManager): Promise<void> {
     // Span every Specorator leaf (sidebar + all Team Chat views): a DM already
     // open in another leaf must be revealed, never double-mounted.
     const existing = this.plugin.findConversationAcrossViews(conversationId);
@@ -238,12 +288,9 @@ export class TeamChatView extends ItemView implements ChatViewHandle {
       if (existing.view.leaf === this.leaf) {
         await manager.switchToTab(existing.tabId);
       } else {
-        // The DM is owned by ANOTHER leaf, so this leaf never opened a tab for it
-        // and its visible pane still shows the prior transcript. Roll this leaf's
-        // optimistic selection back (else the roster highlight + empty state
-        // desync, persisting via getState) before revealing + switching the owner.
-        this.selectedAgentId = previousAgentId;
-        this.emitTeamChatChange();
+        // Owned by ANOTHER leaf — reveal + switch it there. This leaf's
+        // selectedAgentId projects off its OWN active tab, so it correctly stays
+        // put; the destination leaf's onTabSwitched projects ITS selection.
         await this.plugin.app.workspace.revealLeaf(existing.view.leaf);
         await existing.view.getTabManager()?.switchToTab(existing.tabId);
       }
@@ -251,18 +298,17 @@ export class TeamChatView extends ItemView implements ChatViewHandle {
     }
     const created = await manager.createTab(conversationId, undefined, { activate: true, kind: 'chat' });
     if (!created) {
-      // Tab cap reached (createTab returned null). Roll the optimistic selection
-      // back so the roster highlight tracks the visible pane, re-project, and tell
-      // the user why nothing opened. (LRU eviction is a later increment.)
-      this.selectedAgentId = previousAgentId;
-      this.emitTeamChatChange();
+      // Tab cap reached (createTab returned null). No selection to revert — it
+      // already reflects the real active tab — so just tell the user why nothing
+      // opened. (LRU eviction is a later increment.)
       new Notice(t('teamChat.tabCapReached'));
     }
   }
 
-  /** Fire-and-forget DM open with error logging — the Vue seam + restore path
-   *  both delegate here so a rejected resolve/open never becomes an unhandled
-   *  rejection. */
+  /** Fire-and-forget DM open with error logging — the Vue roster-click seam
+   *  delegates here so a rejected resolve/open is logged, never an unhandled
+   *  rejection. It no longer touches selectedAgentId; the activated tab's
+   *  projection does. */
   private openAgentDm(agentId: string): void {
     void this.selectAgent(agentId).catch((error) =>
       this.plugin.logger.scope('team-chat').error('selectAgent failed', error));
@@ -316,8 +362,15 @@ export class TeamChatView extends ItemView implements ChatViewHandle {
   }
 
   async setState(state: unknown, result: ViewStateResult): Promise<void> {
-    const selectedAgentId = (state as { selectedAgentId?: unknown } | null)?.selectedAgentId;
-    if (typeof selectedAgentId === 'string') this.selectedAgentId = selectedAgentId;
+    const raw = state as { selectedAgentId?: unknown; tabManagerState?: unknown } | null;
+    // selectedAgentId is a restore hint for the roster highlight until the tabs
+    // restore and the projection reconfirms it off the active tab.
+    if (typeof raw?.selectedAgentId === 'string') this.selectedAgentId = raw.selectedAgentId;
+    // Stash the validated DM layout for initTabEngine's restore (mirror of
+    // SpecoratorView) so every saved DM tab round-trips on reload, not just the
+    // selected one. setState runs before onOpen, so it's ready when the engine builds.
+    const validated = validateTabManagerState(raw?.tabManagerState);
+    if (validated) this.pendingTabManagerState = validated;
     await super.setState(state, result);
   }
 
