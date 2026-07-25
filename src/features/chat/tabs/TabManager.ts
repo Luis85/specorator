@@ -102,10 +102,19 @@ export class TabManager implements TabManagerInterface {
   /** Tracks nested mutation calls so internal follow-ups do not self-deadlock. */
   private tabMutationDepth = 0;
 
-  /** Set once destroy() begins so createTabImpl won't mount a tab into a manager
-   *  being torn down; the memoized promise makes destroy() idempotent. */
+  /** Set once destroy() begins so a mutation issued after teardown won't run against
+   *  the tearing-down tab set; the memoized promise makes destroy() idempotent. */
   private isDestroying = false;
   private destroyPromise: Promise<void> | null = null;
+
+  /** True once destroy() began AND this is a TOP-LEVEL mutation (depth 0) — the point
+   *  past which a newly-issued create/switch/close/open would append after destroy's
+   *  captured mutation tail and run concurrently with destroyImpl. Nested mutations
+   *  (depth > 0, e.g. an in-flight createTab's own switchToTab) still proceed so the
+   *  drained in-flight mutation completes before teardown (:1107). */
+  private isTeardownRejecting(): boolean {
+    return this.isDestroying && this.tabMutationDepth === 0;
+  }
 
   private runTabMutation<T>(operation: () => Promise<T>): Promise<T> {
     if (this.tabMutationDepth > 0) {
@@ -272,10 +281,10 @@ export class TabManager implements TabManagerInterface {
     tabId?: TabId,
     options: CreateTabOptions = {},
   ): Promise<TabData | null> {
-    // Reject creates ISSUED after teardown began so one can't enqueue behind
-    // destroy's drain and mount a tab into a cleared manager. A create issued
+    // Reject top-level creates ISSUED after teardown began so one can't enqueue
+    // behind destroy's drain and mount a tab into a cleared manager. A create issued
     // BEFORE destroy (already enqueued) still completes and is disposed by destroy (:1095).
-    if (this.isDestroying) return null;
+    if (this.isTeardownRejecting()) return null;
     return this.runTabMutation(() => this.createTabImpl(conversationId, tabId, options));
   }
 
@@ -397,6 +406,7 @@ export class TabManager implements TabManagerInterface {
    * @param tabId The tab to switch to.
    */
   async switchToTab(tabId: TabId): Promise<void> {
+    if (this.isTeardownRejecting()) return; // no-op a switch issued after teardown began (:1107)
     return this.runTabMutation(() => this.switchToTabImpl(tabId));
   }
 
@@ -432,6 +442,7 @@ export class TabManager implements TabManagerInterface {
    * @returns True if the tab was closed.
    */
   async closeTab(tabId: TabId, force = false): Promise<boolean> {
+    if (this.isTeardownRejecting()) return false; // no-op a close issued after teardown began (:1107)
     return this.runTabMutation(() => this.closeTabImpl(tabId, force));
   }
 
@@ -611,6 +622,7 @@ export class TabManager implements TabManagerInterface {
     conversationId: string,
     options: boolean | OpenConversationOptions = false,
   ): Promise<void> {
+    if (this.isTeardownRejecting()) return; // no-op an open issued after teardown began (:1107)
     return this.runTabMutation(() => this.openConversationImpl(conversationId, options));
   }
 

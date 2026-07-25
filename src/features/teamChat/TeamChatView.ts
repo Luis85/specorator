@@ -15,8 +15,8 @@ import type { ComposerEditedFile } from '../chat/ui/vue/composer/stores/composer
 import { basename, parentDir } from '../chat/utils/pathLabel';
 import { getTeamChatDmOpenCoordinator } from './TeamChatDmOpenCoordinator';
 import { applyDmEditedFilesSetting, refreshDmModelState, rotateChangedDmProviders } from './teamChatDmRefresh';
-import { closeRotatedDmTab, restoreTeamChatDmTabs } from './teamChatDmTabs';
-import { projectTeamChatPresence, type TeamChatPresence } from './teamChatPresence';
+import { reconcileRotation, restoreTeamChatDmTabs } from './teamChatDmTabs';
+import { projectCrossLeafPresence, type TeamChatPresence } from './teamChatPresence';
 import type { TeamChatThreadStore } from './TeamChatThreadStore';
 import { createTeamChatPinia } from './ui/vue/globalPinia';
 import { CALLBACKS_KEY, CONTENT_HOST_KEY, PLUGIN_KEY, VIEW_KEY } from './ui/vue/keys';
@@ -67,6 +67,9 @@ export class TeamChatView extends ItemView implements ChatViewHandle {
    */
   private selectionGeneration = 0;
   private pendingPersist: number | null = null;
+  /** Unsubscribe for the cross-leaf `teamChat:presence` broadcast (Fix 3): another
+   *  leaf's DM streaming re-projects this leaf's presence so busy shows everywhere. */
+  private presenceUnsubscribe: (() => void) | null = null;
   // Store-reprojection observers (mirror of chat's chatShellObservers). The
   // routing composable subscribes here and fans each snapshot into the Pinia
   // store; the ChatViewHandle refresh methods re-project through the same seam.
@@ -146,6 +149,10 @@ export class TeamChatView extends ItemView implements ChatViewHandle {
     });
     app.mount(this.contentEl);
     this.vueApp = app;
+    // Re-project presence whenever ANY leaf's DM streaming changes (re-entrant onOpen
+    // drops the prior subscription first so it never double-subscribes).
+    this.presenceUnsubscribe?.();
+    this.presenceUnsubscribe = this.plugin.events.on('teamChat:presence', () => this.emitTeamChatChange());
   }
 
   /** Builds the tab engine into the Vue-provided content host, then restores the
@@ -160,7 +167,7 @@ export class TeamChatView extends ItemView implements ChatViewHandle {
       onTabCreated: () => { this.projectSelectedAgentFromActiveTab(); this.persistTabState(); },
       onTabSwitched: () => { this.projectSelectedAgentFromActiveTab(); this.persistTabState(); },
       onTabClosed: () => { this.projectSelectedAgentFromActiveTab(); this.persistTabState(); },
-      onTabStreamingChanged: () => this.emitTeamChatChange(),
+      onTabStreamingChanged: () => { this.emitTeamChatChange(); this.plugin.events.emit('teamChat:presence'); },
       onTabTitleChanged: () => this.emitTeamChatChange(),
       onTabAttentionChanged: () => this.emitTeamChatChange(),
       onTabConversationChanged: () => { this.projectSelectedAgentFromActiveTab(); this.persistTabState(); },
@@ -249,6 +256,8 @@ export class TeamChatView extends ItemView implements ChatViewHandle {
   }
 
   async onClose(): Promise<void> {
+    this.presenceUnsubscribe?.();
+    this.presenceUnsubscribe = null;
     await this.destroyTabRuntime();
     // unmount() runs the islands' onUnmounted disposers; empty() drops detached
     // DOM + listeners.
@@ -361,18 +370,12 @@ export class TeamChatView extends ItemView implements ChatViewHandle {
     // re-runs openResolvedDm, now finds the tab, and switches.
     await getTeamChatDmOpenCoordinator(this.plugin).serialize(conversationId, () =>
       this.openResolvedDm(conversationId, manager, generation));
-    // A provider-change rotation left the old-provider DM tab attached; tell the user
-    // why the prior transcript went away (spec §rotation), THEN close the old tab
-    // (across leaves) so its runtime tears down and its slot frees. Skip if a newer
-    // selection superseded this one.
-    if (
-      previousConversationId
-      && previousConversationId !== conversationId
-      && !this.isSelectionStale(generation, manager)
-    ) {
-      const agent = await this.plugin.agentRosterStore.get(agentId);
-      new Notice(t('teamChat.providerRotated', { agent: agent?.name ?? agentId }));
-      await closeRotatedDmTab(this.plugin, previousConversationId, conversationId);
+    // Reconcile a provider-change rotation: record + notify a new rotation, and close
+    // any displaced old-provider tab once its replacement is open — deferred, so a
+    // cap-blocked rotation's stale tab is closed on the retry that finally opens the
+    // replacement (:361). Skip if a newer selection superseded this one.
+    if (!this.isSelectionStale(generation, manager)) {
+      await reconcileRotation(this.plugin, agentId, previousConversationId, conversationId);
     }
   }
 
@@ -468,19 +471,11 @@ export class TeamChatView extends ItemView implements ChatViewHandle {
     };
   }
 
-  /**
-   * Projects each open DM's idle/busy presence for the roster dots: an agent is
-   * `busy` while its DM tab streams, else absent (the reader defaults absent →
-   * `idle`). Recomputed on every `emitTeamChatChange` — the streaming callback and
-   * a tab close both already emit — from live tab state, mirroring the
-   * `selectedAgentId`/`editedFiles` projections, so a stream start/stop or a DM
-   * close self-heals with no presence map to reconcile.
-   */
+  /** Cross-leaf idle/busy presence for the roster dots (see projectCrossLeafPresence).
+   *  Recomputed on every emitTeamChatChange — own tab callbacks + the teamChat:presence
+   *  broadcast — so a stream start/stop in ANY leaf self-heals with no map to reconcile. */
   private buildPresence(): Record<string, TeamChatPresence> {
-    return projectTeamChatPresence(
-      this.tabManager?.getAllTabs() ?? [],
-      (conversationId) => this.plugin.getConversationSync(conversationId)?.boundAgentId ?? null,
-    );
+    return projectCrossLeafPresence(this.plugin);
   }
 
   /**

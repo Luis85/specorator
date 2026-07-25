@@ -2142,6 +2142,37 @@ describe('TabManager - destroy serialization (:197)', () => {
     expect(manager.getTabCount()).toBe(0);
     expect(mockDestroyTab).toHaveBeenCalledTimes(1);
   });
+
+  // Round-35 (:1107): Round-32's guard only covered createTab. A switch/close issued
+  // AFTER destroy() begins (a click, or the cross-leaf rotation-close) would append
+  // after drainThenDestroy's captured tail and run concurrently with destroyImpl.
+  it('no-ops a switch/close issued while destroy() is tearing down (:1107)', async () => {
+    let releaseSave!: () => void;
+    const saveGate = new Promise<void>((resolve) => { releaseSave = () => resolve(); });
+    const manager = createManager();
+    const slowTab = createMockTabData({ id: 'tab-slow' });
+    slowTab.controllers.conversationController.save = jest.fn(() => saveGate); // hang destroyImpl mid-save
+    mockCreateTab.mockReturnValueOnce(slowTab);
+    const created = await manager.createTab();
+    mockActivateTab.mockClear();
+    mockDestroyTab.mockClear();
+
+    const tearing = manager.destroy();       // isDestroying=true; destroyImpl hangs on the save (tabs still present, depth 0)
+    await flushMicrotasks();
+
+    const switched = manager.switchToTab(created!.id);
+    const closed = await manager.closeTab(created!.id);
+
+    // Rejected: neither impl ran against the tearing-down tab set.
+    expect(closed).toBe(false);
+    await expect(switched).resolves.toBeUndefined();
+    expect(mockActivateTab).not.toHaveBeenCalled();
+    expect(mockDestroyTab).not.toHaveBeenCalled();
+
+    releaseSave();
+    await tearing;
+    expect(manager.getTabCount()).toBe(0);
+  });
 });
 
 describe('TabManager - Callback Wiring', () => {

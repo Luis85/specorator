@@ -1,4 +1,4 @@
-import { closeRotatedDmTab, restoreTeamChatDmTabs } from '@/features/teamChat/teamChatDmTabs';
+import { closeRotatedDmTab, reconcileRotation, restoreTeamChatDmTabs } from '@/features/teamChat/teamChatDmTabs';
 
 const teamChatConv = { surface: 'team-chat', boundAgentId: 'roster:a', providerId: 'claude' };
 
@@ -128,5 +128,53 @@ describe('closeRotatedDmTab', () => {
     await closeRotatedDmTab(plugin, 'c-old', 'c-new');
 
     expect(closeTab).not.toHaveBeenCalled();
+  });
+});
+
+describe('reconcileRotation — deferred rotation close (:361)', () => {
+  it('defers the displaced close while the replacement is cap-blocked, then closes on the retry', async () => {
+    const closeTab = jest.fn().mockResolvedValue(true);
+    let replacementOpen = false; // the rotation's new tab hit the cap on the first attempt
+    const plugin = {
+      agentRosterStore: { get: jest.fn().mockResolvedValue({ name: 'Ada' }) },
+      findConversationAcrossViews: jest.fn((id: string) => {
+        if (id === 'c-new') return replacementOpen ? { view: {}, tabId: 't-new' } : null;
+        if (id === 'c-old') return { view: { getTabManager: () => ({ closeTab }) }, tabId: 't-old' };
+        return null;
+      }),
+    } as never;
+
+    // Call 1: provider rotated (prev ≠ new) but the replacement never opened (cap) — the
+    // displaced old DM is recorded, and NOTHING is closed (closing now would strand the agent).
+    await reconcileRotation(plugin, 'roster:a', 'c-old', 'c-new');
+    expect(closeTab).not.toHaveBeenCalled();
+
+    // Call 2 (retry): resolveOrCreate already remapped, so prev === new and the rotation is
+    // no longer re-detected; but the replacement is finally open, so the recorded displaced
+    // old-provider tab is now closed and its slot freed.
+    replacementOpen = true;
+    await reconcileRotation(plugin, 'roster:a', 'c-new', 'c-new');
+    expect(closeTab).toHaveBeenCalledWith('t-old', true);
+  });
+
+  it('drains the displaced record so a later no-op reconcile does not re-close', async () => {
+    const closeTab = jest.fn().mockResolvedValue(true);
+    const plugin = {
+      agentRosterStore: { get: jest.fn().mockResolvedValue({ name: 'Ada' }) },
+      findConversationAcrossViews: jest.fn((id: string) =>
+        id === 'c-new'
+          ? { view: {}, tabId: 't-new' }
+          : id === 'c-old'
+            ? { view: { getTabManager: () => ({ closeTab }) }, tabId: 't-old' }
+            : null),
+    } as never;
+
+    // Replacement already open → closes immediately and clears the displaced record.
+    await reconcileRotation(plugin, 'roster:a', 'c-old', 'c-new');
+    expect(closeTab).toHaveBeenCalledTimes(1);
+
+    // A subsequent reconcile with nothing displaced (prev === new) must not close again.
+    await reconcileRotation(plugin, 'roster:a', 'c-new', 'c-new');
+    expect(closeTab).toHaveBeenCalledTimes(1);
   });
 });

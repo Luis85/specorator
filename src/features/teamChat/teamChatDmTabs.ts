@@ -1,3 +1,6 @@
+import { Notice } from 'obsidian';
+
+import { t } from '../../i18n/i18n';
 import type SpecoratorPlugin from '../../main';
 import type { TabManager } from '../chat/tabs/TabManager';
 import type { PersistedTabManagerState } from '../chat/tabs/types';
@@ -80,4 +83,48 @@ function isRestorableTeamChatDm(plugin: SpecoratorPlugin, conversationId: string
   if (typeof conversationId !== 'string' || conversationId.length === 0) return false;
   const conversation = plugin.getConversationSync(conversationId);
   return conversation != null && (conversation.surface === 'team-chat' || Boolean(conversation.boundAgentId));
+}
+
+/** Old-provider DMs displaced by a provider-change rotation whose replacement open
+ *  hasn't opened yet (e.g. it hit the tab cap), keyed agentId → old conversationId,
+ *  per plugin instance. A retry that finally opens the replacement drains it. */
+const displacedDmByAgent = new WeakMap<SpecoratorPlugin, Map<string, string>>();
+
+function getDisplacedDmRegistry(plugin: SpecoratorPlugin): Map<string, string> {
+  let registry = displacedDmByAgent.get(plugin);
+  if (!registry) {
+    registry = new Map();
+    displacedDmByAgent.set(plugin, registry);
+  }
+  return registry;
+}
+
+/**
+ * Handles a provider-change rotation for an agent's DM: when the mapping rotated to
+ * a fresh conversation, record the displaced old DM and tell the user why the prior
+ * transcript went away (BEFORE any close). Then — this call OR a later one — close
+ * the displaced DM once its replacement is actually open, and clear the record.
+ *
+ * The deferral (:361) matters because a cap-blocked rotation leaves the old tab AND
+ * `resolveOrCreate` has already remapped, so the NEXT click sees prev === current and
+ * never re-detects the rotation; the persisted `displaced` id lets the retry that
+ * finally opens the replacement close the stale old-provider tab and free its slot.
+ */
+export async function reconcileRotation(
+  plugin: SpecoratorPlugin,
+  agentId: string,
+  previousConversationId: string | null,
+  conversationId: string,
+): Promise<void> {
+  const displaced = getDisplacedDmRegistry(plugin);
+  if (previousConversationId && previousConversationId !== conversationId) {
+    displaced.set(agentId, previousConversationId);
+    const agent = await plugin.agentRosterStore.get(agentId);
+    new Notice(t('teamChat.providerRotated', { agent: agent?.name ?? agentId }));
+  }
+  const displacedId = displaced.get(agentId);
+  if (displacedId && displacedId !== conversationId && plugin.findConversationAcrossViews(conversationId)) {
+    await closeRotatedDmTab(plugin, displacedId, conversationId);
+    displaced.delete(agentId);
+  }
 }

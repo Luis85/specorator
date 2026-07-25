@@ -13,6 +13,9 @@ import type { TaskEventMap } from '../../features/tasks/events';
 export interface TeamChatEventMap {
   /** The team-chat thread map (roomKey → conversationId) changed. */
   'teamChat:threads-changed': void;
+  /** A DM's streaming state changed in some leaf; every Team Chat leaf re-projects
+   *  presence so an agent busy in ANOTHER leaf's DM shows busy here too. */
+  'teamChat:presence': void;
 }
 
 export type SpecoratorEventMap = ChatEventMap

@@ -21,14 +21,14 @@ jest.mock('@/features/chat/tabs/TabManager', () => ({
   TabManager: jest.fn().mockImplementation(() => ({
     getPersistedState: jest.fn(() => ({ openTabs: [], activeTabId: null })),
     getActiveTab: jest.fn(() => null),
-    // Read by the snapshot's presence projection (buildPresence → getAllTabs).
-    getAllTabs: jest.fn(() => []),
     restoreState: jest.fn().mockResolvedValue(undefined),
     destroy: jest.fn().mockResolvedValue(undefined),
     invalidateProviderCommandCaches: jest.fn(),
     // Read by the post-restore chat:tabs-changed emit (Round-31).
     getTabCount: jest.fn(() => 0),
     countTabsByKind: jest.fn(() => 0),
+    // Read by the cross-leaf presence projection (Round-35: buildPresence → getAllViews → getAllTabs).
+    getAllTabs: jest.fn(() => []),
     // Present so the onClose test can prove it is NOT the path taken.
     disposeAllRuntimes: jest.fn(),
   })),
@@ -65,7 +65,9 @@ function makeView(): any {
   view.plugin = {
     logger: { scope: () => ({ error: jest.fn() }) },
     getConversationSync: jest.fn(() => null),
-    events: { emit: jest.fn() },
+    events: { emit: jest.fn(), on: jest.fn(() => jest.fn()) },
+    // Cross-leaf presence reads getAllViews (Round-35); this leaf wraps its own manager.
+    getAllViews: () => [{ getTabManager: () => view.tabManager }],
   };
   view.leaf = { setViewState: jest.fn().mockResolvedValue(undefined) };
   view.contentEl = createMockEl();

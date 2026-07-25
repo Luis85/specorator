@@ -59,6 +59,9 @@ function makeView(): any {
     events: { emit: jest.fn() },
     settings: { showAgentEditedFiles: true },
     app: {},
+    // buildPresence projects across every leaf's streaming tabs (Round-35 Fix 3);
+    // one leaf here, reading this view's own (possibly-reassigned) tab manager.
+    getAllViews: () => [{ getTabManager: () => view.tabManager }],
   };
   view.leaf = { setViewState: jest.fn().mockResolvedValue(undefined) };
   view.contentEl = createMockEl();

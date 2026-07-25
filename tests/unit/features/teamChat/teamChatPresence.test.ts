@@ -1,4 +1,4 @@
-import { type PresenceTabView, projectTeamChatPresence } from '@/features/teamChat/teamChatPresence';
+import { type PresenceTabView, projectCrossLeafPresence, projectTeamChatPresence } from '@/features/teamChat/teamChatPresence';
 
 /** A tab bound to `conversationId`, streaming or not. */
 function tab(conversationId: string | null, isStreaming: boolean): PresenceTabView {
@@ -52,5 +52,41 @@ describe('projectTeamChatPresence', () => {
       resolver({ 'conv-a': 'roster:a', 'conv-b': 'roster:b', 'conv-c': 'roster:c' }),
     );
     expect(presence).toEqual({ 'roster:a': 'busy', 'roster:c': 'busy' });
+  });
+});
+
+describe('projectCrossLeafPresence — cross-leaf aggregation (Fix 3)', () => {
+  /** A leaf whose engine exposes `tabs`. */
+  function leaf(tabs: PresenceTabView[]) {
+    return { getTabManager: () => ({ getAllTabs: () => tabs }) };
+  }
+
+  it('marks an agent busy from a DM streaming in ANOTHER leaf', () => {
+    const plugin = {
+      // The DM-open coordinator single-mounts the DM in leaf A; leaf B has nothing open.
+      getAllViews: () => [leaf([tab('conv-a', true)]), leaf([])],
+      getConversationSync: (id: string) => (id === 'conv-a' ? { boundAgentId: 'roster:a' } : null),
+    } as never;
+
+    // Aggregated across leaves, so leaf B's roster still shows agent a busy.
+    expect(projectCrossLeafPresence(plugin)).toEqual({ 'roster:a': 'busy' });
+  });
+
+  it('tolerates a leaf whose engine is absent (getTabManager() null)', () => {
+    const plugin = {
+      getAllViews: () => [{ getTabManager: () => null }, leaf([tab('conv-a', true)])],
+      getConversationSync: () => ({ boundAgentId: 'roster:a' }),
+    } as never;
+
+    expect(projectCrossLeafPresence(plugin)).toEqual({ 'roster:a': 'busy' });
+  });
+
+  it('is empty when no leaf has a streaming DM', () => {
+    const plugin = {
+      getAllViews: () => [leaf([tab('conv-a', false)]), leaf([])],
+      getConversationSync: () => ({ boundAgentId: 'roster:a' }),
+    } as never;
+
+    expect(projectCrossLeafPresence(plugin)).toEqual({});
   });
 });

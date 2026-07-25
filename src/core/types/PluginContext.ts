@@ -48,6 +48,9 @@ export interface ChatTabManagerHandle {
   findTabByConversation(conversationId: string): { tabId: string } | null;
   /** Whether a tab id is currently open. */
   hasTab(tabId: string): boolean;
+  /** All open tabs' presence-relevant fields (conversationId + live streaming state)
+   *  for cross-leaf projections; neutral shape satisfied by the concrete `TabData`. */
+  getAllTabs(): readonly { conversationId: string | null; state: { readonly isStreaming: boolean } }[];
 
   // --- Group D: purpose-built commands that keep TabData reach inside TabManager ---
   /** Best-effort cleanup of every tab's runtime (guards `tab.service` only). */
