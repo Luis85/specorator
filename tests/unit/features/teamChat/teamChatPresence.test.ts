@@ -65,7 +65,8 @@ describe('projectCrossLeafPresence — cross-leaf aggregation (Fix 3)', () => {
     const plugin = {
       // The DM-open coordinator single-mounts the DM in leaf A; leaf B has nothing open.
       getAllViews: () => [leaf([tab('conv-a', true)]), leaf([])],
-      getConversationSync: (id: string) => (id === 'conv-a' ? { boundAgentId: 'roster:a' } : null),
+      getConversationSync: (id: string) =>
+        (id === 'conv-a' ? { boundAgentId: 'roster:a', surface: 'team-chat' } : null),
     } as never;
 
     // Aggregated across leaves, so leaf B's roster still shows agent a busy.
@@ -75,7 +76,7 @@ describe('projectCrossLeafPresence — cross-leaf aggregation (Fix 3)', () => {
   it('tolerates a leaf whose engine is absent (getTabManager() null)', () => {
     const plugin = {
       getAllViews: () => [{ getTabManager: () => null }, leaf([tab('conv-a', true)])],
-      getConversationSync: () => ({ boundAgentId: 'roster:a' }),
+      getConversationSync: () => ({ boundAgentId: 'roster:a', surface: 'team-chat' }),
     } as never;
 
     expect(projectCrossLeafPresence(plugin)).toEqual({ 'roster:a': 'busy' });
@@ -84,9 +85,35 @@ describe('projectCrossLeafPresence — cross-leaf aggregation (Fix 3)', () => {
   it('is empty when no leaf has a streaming DM', () => {
     const plugin = {
       getAllViews: () => [leaf([tab('conv-a', false)]), leaf([])],
-      getConversationSync: () => ({ boundAgentId: 'roster:a' }),
+      getConversationSync: () => ({ boundAgentId: 'roster:a', surface: 'team-chat' }),
     } as never;
 
     expect(projectCrossLeafPresence(plugin)).toEqual({});
+  });
+});
+
+describe('projectCrossLeafPresence — team-chat-only presence (Round-37 Fix 2)', () => {
+  function leaf(tabs: PresenceTabView[]) {
+    return { getTabManager: () => ({ getAllTabs: () => tabs }) };
+  }
+
+  it('ignores a streaming ordinary chat that merely has a bound agent (surface !== team-chat)', () => {
+    const plugin = {
+      // A sidebar chat launched with a roster agent: boundAgentId set, but surface is
+      // 'chat', not a Team Chat DM — its streaming must NOT light the roster dot.
+      getAllViews: () => [leaf([tab('conv-side', true)])],
+      getConversationSync: () => ({ boundAgentId: 'roster:a', surface: 'chat' }),
+    } as never;
+
+    expect(projectCrossLeafPresence(plugin)).toEqual({});
+  });
+
+  it('marks busy only for a streaming team-chat DM (surface === team-chat)', () => {
+    const plugin = {
+      getAllViews: () => [leaf([tab('conv-dm', true)])],
+      getConversationSync: () => ({ boundAgentId: 'roster:a', surface: 'team-chat' }),
+    } as never;
+
+    expect(projectCrossLeafPresence(plugin)).toEqual({ 'roster:a': 'busy' });
   });
 });

@@ -520,6 +520,45 @@ describe('TabManager - Tab Lifecycle', () => {
       expect(manager.getTabCount()).toBe(1);
     });
 
+    // Round-37 Fix 1: the sidebar default re-mints a blank home tab so the last-close
+    // never strands the user (a conversation-bound tab so it clears the sole-blank guard
+    // and actually reaches the zero-chat branch).
+    it('creates a blank fallback tab when the last chat DM closes (sidebar default)', async () => {
+      const manager = createManager({
+        callbacks,
+        tabFactory: (n: number) => createMockTabData({ id: `tab-${n}`, conversationId: `conv-${n}` }),
+      });
+
+      const tab = await manager.createTab();
+      expect(mockCreateTab).toHaveBeenCalledTimes(1);
+
+      await manager.closeTab(tab!.id, true);
+
+      // The zero-chat fallback minted a replacement blank home tab.
+      expect(mockCreateTab).toHaveBeenCalledTimes(2);
+      expect(manager.getTabCount()).toBe(1);
+    });
+
+    // Round-37 Fix 1: a Team Chat manager sets autoCreateOnEmpty=false — closing the last
+    // DM must end at zero tabs (roster + empty pane), never mint a blank unbound tab whose
+    // composer could start an ordinary conversation under the empty-state overlay.
+    it('suppresses the blank fallback when autoCreateOnEmpty is off (Team Chat) → zero tabs', async () => {
+      const manager = createManager({
+        callbacks,
+        tabFactory: (n: number) => createMockTabData({ id: `tab-${n}`, conversationId: `conv-${n}` }),
+      });
+      manager.autoCreateOnEmpty = false;
+
+      const tab = await manager.createTab();
+      expect(mockCreateTab).toHaveBeenCalledTimes(1);
+
+      await manager.closeTab(tab!.id, true);
+
+      // No second createTab — the leaf ends empty.
+      expect(mockCreateTab).toHaveBeenCalledTimes(1);
+      expect(manager.getTabCount()).toBe(0);
+    });
+
     it('should save conversation before closing', async () => {
       const mockSave = jest.fn().mockResolvedValue(undefined);
       const tabWithSave = createMockTabData({ id: 'tab-with-save' });

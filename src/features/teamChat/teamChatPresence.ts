@@ -43,9 +43,14 @@ export function projectTeamChatPresence(
  * coordinator single-mounts each DM in ONE leaf, so an agent streaming in leaf A must
  * still show `busy` in leaf B — a per-leaf projection would show it idle. Pure, so it
  * recomputes on each `emitTeamChatChange` (own tab callbacks + the `teamChat:presence`
- * broadcast) with no presence map to reconcile.
+ * broadcast) with no presence map to reconcile. Only real Team Chat DMs contribute: an
+ * ordinary chat launched with a roster agent also carries `boundAgentId`, so presence is
+ * gated on `surface === 'team-chat'` to keep a sidebar turn from lighting the roster dot.
  */
 export function projectCrossLeafPresence(plugin: SpecoratorPlugin): Record<string, TeamChatPresence> {
   const tabs = plugin.getAllViews().flatMap((view) => view.getTabManager()?.getAllTabs() ?? []);
-  return projectTeamChatPresence(tabs, (id) => plugin.getConversationSync(id)?.boundAgentId ?? null);
+  return projectTeamChatPresence(tabs, (id) => {
+    const conversation = plugin.getConversationSync(id);
+    return conversation?.surface === 'team-chat' ? conversation.boundAgentId ?? null : null;
+  });
 }

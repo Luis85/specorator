@@ -90,6 +90,9 @@ export class TabManager implements TabManagerInterface {
   private commandCoordinatorInstance: TabProviderCommandCoordinator | null = null;
   private isRestoringState = false;
 
+  /** False for Team Chat: closing the last chat tab won't auto-mint a blank home tab (its empty state is the roster, not an unbound composer). Also gates the future T7 LRU-eviction close. */
+  autoCreateOnEmpty = true;
+
   /** Guard to prevent concurrent tab switches. */
   private isSwitchingTab = false;
 
@@ -493,8 +496,9 @@ export class TabManager implements TabManagerInterface {
     // drops out of the activity dropdown). Recreate a blank chat home tab
     // whenever none remain — activate it only when we just closed the active tab,
     // otherwise keep focus put and let the tab bar surface the new chat badge as
-    // the escape route.
-    if (this.countTabsByKind('chat') === 0) {
+    // the escape route. Skipped when autoCreateOnEmpty is off (Team Chat): its empty
+    // state is the roster, so a blank unbound tab would be a stray ordinary chat.
+    if (this.autoCreateOnEmpty && this.countTabsByKind('chat') === 0) {
       await this.createTabImpl(undefined, undefined, { activate: closedActiveTab });
       return true;
     }

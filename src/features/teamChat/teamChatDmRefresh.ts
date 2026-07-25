@@ -5,7 +5,9 @@ import type SpecoratorPlugin from '../../main';
 import { getTabProviderId } from '../chat/tabs/providerResolution';
 import { onProviderAvailabilityChanged } from '../chat/tabs/tabProviderSync';
 import type { TabData } from '../chat/tabs/types';
+import type { ComposerEditedFile } from '../chat/ui/vue/composer/stores/composerStore';
 import { deriveEditedFilesFromMessages } from '../chat/utils/editedFiles';
+import { basename, parentDir } from '../chat/utils/pathLabel';
 import { recalculateUsageForModel } from '../chat/utils/usageInfo';
 import { resolveModelContextWindow } from '../settings/customModels/resolveModelContextWindow';
 import { resolveTeamChatAgentProvider } from './resolveTeamChatAgentProvider';
@@ -76,6 +78,21 @@ export function applyDmEditedFilesSetting(plugin: SpecoratorPlugin, tabs: readon
       tab.state.clearEditedFiles();
     }
   }
+}
+
+/**
+ * Projects the ACTIVE DM tab's created/edited files onto the top-bar strip's display shape
+ * — the same synchronous `tab.state.editedFiles` → `{ path, changeKind, name, dir }` mapping
+ * the composer strip uses, so both strips read one truth. A pure projection (unlike the
+ * side-effecting refresh loops here); empty when no DM tab is active.
+ */
+export function projectActiveDmEditedFiles(activeTab: TabData | null): ComposerEditedFile[] {
+  return (activeTab?.state.editedFiles ?? []).map((entry) => ({
+    path: entry.path,
+    changeKind: entry.changeKind,
+    name: basename(entry.path),
+    dir: parentDir(entry.path),
+  }));
 }
 
 /**

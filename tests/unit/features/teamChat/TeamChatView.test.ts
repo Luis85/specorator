@@ -116,6 +116,15 @@ describe('TeamChatView — ChatViewHandle conformance', () => {
     expect(TabManager).toHaveBeenCalledTimes(1);
   });
 
+  // Round-37 Fix 1: Team Chat's empty state is the roster, so its manager must never
+  // auto-mint a blank home tab when the last DM closes (which would surface an unbound
+  // composer able to start an ordinary conversation under the empty-state overlay).
+  it('disables the blank-tab fallback on its manager (:Fix1)', () => {
+    const view = makeView();
+    view.initTabEngine();
+    expect(view.tabManager.autoCreateOnEmpty).toBe(false);
+  });
+
   it('invalidateProviderCommandCaches delegates to the tab manager', () => {
     const view = makeView();
     view.initTabEngine();
@@ -159,7 +168,9 @@ describe('TeamChatView — leaf-owned persistence', () => {
 
   it('getState round-trips selectedAgentId set through setState', async () => {
     const view = makeView();
-    view.initTabEngine();
+    // Set the manager directly (no initTabEngine → no restore projection) so this exercises
+    // the raw setState→getState hint round-trip, not the restore-time selection reset (Fix 3).
+    view.tabManager = { getPersistedState: jest.fn(() => ({ openTabs: [], activeTabId: null })) };
     await view.setState({ selectedAgentId: 'roster:x' }, {});
     const state = view.getState();
     expect(state.selectedAgentId).toBe('roster:x');
@@ -231,7 +242,8 @@ describe('TeamChatView — roster presence projection (idle/busy)', () => {
 
   it('projects the streaming tab\'s bound agent as busy on onTabStreamingChanged(true)', () => {
     const view = makeView();
-    view.plugin.getConversationSync = jest.fn(() => ({ boundAgentId: 'roster:a' }));
+    // Presence contributes only for a real team-chat DM (Round-37 Fix 2).
+    view.plugin.getConversationSync = jest.fn(() => ({ boundAgentId: 'roster:a', surface: 'team-chat' }));
     view.initTabEngine();
     // ChatState flips state.isStreaming before firing the callback, so the live
     // tab set already shows the streaming DM when the projection recomputes.
@@ -385,6 +397,9 @@ describe('TeamChatView — persisted DM tab restore', () => {
       restoreState: jest.fn().mockResolvedValue(undefined),
       getTabCount: jest.fn(() => 0),
       countTabsByKind: jest.fn(() => 0),
+      // Fix 3: the finally projects selection off the active tab (which reads getAllTabs for presence).
+      getActiveTab: jest.fn(() => null),
+      getAllTabs: jest.fn(() => []),
     };
     view.tabManager = m1;
     view.tabsRestored = false;
@@ -509,6 +524,49 @@ describe('TeamChatView — persisted DM tab restore', () => {
     expect(view.pendingTabManagerState).toEqual(layout);
     expect(order).toEqual(['capture', 'destroy']);
   });
+
+  // Round-37 Fix 3 (:30): when every persisted DM is missing/invalid, restore activates
+  // no tab, so the view would keep the persisted selectedAgentId restore hint and a later
+  // reprojection would highlight an agent with no transcript. Restore must project a null
+  // selection so the empty state shows.
+  it('clears the stale selectedAgentId hint when restore activates no DM tab (:30)', async () => {
+    const view = makeView();
+    view.selectedAgentId = 'roster:persisted'; // hint set by setState, no tab behind it
+    view.pendingTabManagerState = null;         // nothing restorable
+    view.tabManager = {
+      getActiveTab: jest.fn(() => null),
+      getAllTabs: jest.fn(() => []),
+      getTabCount: jest.fn(() => 0),
+      countTabsByKind: jest.fn(() => 0),
+    };
+    view.tabsRestored = false;
+
+    await view.restoreTabsThenMarkReady();
+
+    // Projected off the (absent) active tab → null, so the roster shows no highlight
+    // and the right pane shows its empty state.
+    expect(view.selectedAgentId).toBeNull();
+  });
+
+  // Round-37 Fix 3: the normal restore-with-active-tab path still projects the active
+  // DM's agent (the finally projection reads whatever tab restore activated).
+  it('projects the active DM agent after a restore that leaves a tab active (:30)', async () => {
+    const view = makeView();
+    view.selectedAgentId = null;
+    view.plugin.getConversationSync = jest.fn(() => ({ boundAgentId: 'roster:active' }));
+    view.pendingTabManagerState = null;
+    view.tabManager = {
+      getActiveTab: jest.fn(() => ({ conversationId: 'c-active', state: { editedFiles: [] } })),
+      getAllTabs: jest.fn(() => []),
+      getTabCount: jest.fn(() => 1),
+      countTabsByKind: jest.fn(() => 1),
+    };
+    view.tabsRestored = false;
+
+    await view.restoreTabsThenMarkReady();
+
+    expect(view.selectedAgentId).toBe('roster:active');
+  });
 });
 
 describe('TeamChatView — onClose teardown', () => {
@@ -558,5 +616,25 @@ describe('TeamChatView — onClose teardown', () => {
     expect(genAtPersist).toBe(8);
     expect(genAtDestroy).toBe(8);
     expect(view.getTabManager()).toBeNull();
+  });
+
+  // Round-37 Fix 4 (:261): destroyTab skips the streaming/closed callbacks, and onClose
+  // unsubscribes before teardown, so a leaf whose streaming DM lit another leaf's busy dot
+  // would leave that dot stuck. onClose must broadcast teamChat:presence AFTER teardown so
+  // surviving leaves recompute (they no longer see this leaf's now-gone streaming DM).
+  it('broadcasts teamChat:presence after teardown so surviving leaves recompute (:261)', async () => {
+    const view = makeView();
+    const order: string[] = [];
+    view.tabManager = {
+      getPersistedState: jest.fn(() => ({ openTabs: [], activeTabId: null })),
+      destroy: jest.fn(() => { order.push('destroy'); return Promise.resolve(); }),
+    };
+    view.plugin.events.emit = jest.fn((event: string) => { order.push(`emit:${event}`); });
+
+    await view.onClose();
+
+    // Emitted, and AFTER destroy — so the projection reflects the removed tabs.
+    expect(view.plugin.events.emit).toHaveBeenCalledWith('teamChat:presence');
+    expect(order).toEqual(['destroy', 'emit:teamChat:presence']);
   });
 });

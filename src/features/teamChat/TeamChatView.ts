@@ -12,9 +12,8 @@ import { TabManager } from '../chat/tabs/TabManager';
 import { openEditedFile } from '../chat/tabs/tabUi';
 import type { PersistedTabManagerState } from '../chat/tabs/types';
 import type { ComposerEditedFile } from '../chat/ui/vue/composer/stores/composerStore';
-import { basename, parentDir } from '../chat/utils/pathLabel';
 import { getTeamChatDmOpenCoordinator } from './TeamChatDmOpenCoordinator';
-import { applyDmEditedFilesSetting, applyDmHiddenCommands, refreshDmModelState, rotateChangedDmProviders } from './teamChatDmRefresh';
+import { applyDmEditedFilesSetting, applyDmHiddenCommands, projectActiveDmEditedFiles, refreshDmModelState, rotateChangedDmProviders } from './teamChatDmRefresh';
 import { reconcileRotation, restoreTeamChatDmTabs } from './teamChatDmTabs';
 import { projectCrossLeafPresence, type TeamChatPresence } from './teamChatPresence';
 import type { TeamChatThreadStore } from './TeamChatThreadStore';
@@ -173,6 +172,8 @@ export class TeamChatView extends ItemView implements ChatViewHandle {
       onTabConversationChanged: () => { this.projectSelectedAgentFromActiveTab(); this.persistTabState(); },
       onTabProviderChanged: () => this.emitTeamChatChange(),
     });
+    // Empty state is the roster; never auto-mint a blank unbound tab on last-DM close (:Fix1).
+    this.tabManager.autoCreateOnEmpty = false;
     // Fire-and-forget from this synchronous Vue mount seam: restore the saved DM
     // tabs, then mark the budget gate ready. A rejected restore is logged, never
     // an unhandled rejection.
@@ -210,6 +211,8 @@ export class TeamChatView extends ItemView implements ChatViewHandle {
       this.plugin.logger.scope('team-chat').error('team chat tab restore failed', error);
     } finally {
       if (this.tabManager === manager) {
+        // Project the active DM's agent — or null when nothing restored, clearing the stale hint (:30).
+        this.projectSelectedAgentFromActiveTab();
         this.tabsRestored = true;
         // Capacity is readable again now that tabsRestored is true (getTabSlotUsage
         // reported FULL while it was false). Mirror SpecoratorView: fire chat:tabs-changed
@@ -259,6 +262,8 @@ export class TeamChatView extends ItemView implements ChatViewHandle {
     this.presenceUnsubscribe?.();
     this.presenceUnsubscribe = null;
     await this.destroyTabRuntime();
+    // Streaming DMs gone; surviving leaves recompute presence (destroyTab skips the callbacks) (:261).
+    this.plugin.events.emit('teamChat:presence');
     // unmount() runs the islands' onUnmounted disposers; empty() drops detached
     // DOM + listeners.
     this.vueApp?.unmount();
@@ -481,22 +486,10 @@ export class TeamChatView extends ItemView implements ChatViewHandle {
     return projectCrossLeafPresence(this.plugin);
   }
 
-  /**
-   * Projects the ACTIVE DM tab's created/edited files onto the display shape the
-   * top bar's `EditedFilesStrip` renders — the same synchronous `tab.state.editedFiles`
-   * → `{ path, changeKind, name, dir }` mapping the composer's `buildEditedFiles`
-   * uses, so both strips read one truth. Re-projected on every `emitTeamChatChange`
-   * (tab switch/create/close/conversation change + streaming stop), so a finished
-   * turn's writes surface in the top bar. Empty when no DM tab is active.
-   */
+  /** Active DM tab's created/edited files for the top bar (see projectActiveDmEditedFiles).
+   *  Re-projected on every emitTeamChatChange so a finished turn's writes surface up top. */
   private buildEditedFiles(): ComposerEditedFile[] {
-    const active = this.tabManager?.getActiveTab();
-    return (active?.state.editedFiles ?? []).map((entry) => ({
-      path: entry.path,
-      changeKind: entry.changeKind,
-      name: basename(entry.path),
-      dir: parentDir(entry.path),
-    }));
+    return projectActiveDmEditedFiles(this.tabManager?.getActiveTab() ?? null);
   }
 
   /** Notifies every registered store observer (mirror of emitChatShellChange). */
