@@ -14,6 +14,7 @@ import type { PersistedTabManagerState } from '../chat/tabs/types';
 import type { ComposerEditedFile } from '../chat/ui/vue/composer/stores/composerStore';
 import { basename, parentDir } from '../chat/utils/pathLabel';
 import { getTeamChatDmOpenCoordinator } from './TeamChatDmOpenCoordinator';
+import { closeRotatedDmTab, restoreTeamChatDmTabs } from './teamChatDmTabs';
 import { projectTeamChatPresence, type TeamChatPresence } from './teamChatPresence';
 import type { TeamChatThreadStore } from './TeamChatThreadStore';
 import { createTeamChatPinia } from './ui/vue/globalPinia';
@@ -213,17 +214,16 @@ export class TeamChatView extends ItemView implements ChatViewHandle {
   }
 
   /**
-   * Round-trips the saved DM tabs through the engine's restore path. `restoreState`
-   * recreates every hidden roster-driven tab and switches to the persisted active
-   * one, whose `onTabSwitched` drives the `selectedAgentId` projection. No separate
-   * selectedAgentId reopen: a non-null selection always corresponds to an active DM
-   * tab that `tabManagerState` already carries, so restoring the layout reopens it.
+   * Restores the saved DM tabs through the Team-Chat-specific restore, which adds
+   * the guards `TabManager.restoreState` lacks: cross-leaf dedup + per-conversationId
+   * serialization (:225 Fix 1), team-chat-bound validation (:225 Fix 2), and no blank
+   * fallback tab. The active restored tab's `onTabSwitched` drives the projection.
    */
   private async restoreTabs(): Promise<void> {
     const manager = this.tabManager;
     const persisted = this.pendingTabManagerState;
     if (manager && persisted && persisted.openTabs.length > 0) {
-      await manager.restoreState(persisted);
+      await restoreTeamChatDmTabs(this.plugin, manager, persisted);
       this.pendingTabManagerState = null; // consumed once (mirror of SpecoratorView)
     }
   }
@@ -351,7 +351,8 @@ export class TeamChatView extends ItemView implements ChatViewHandle {
     // re-runs openResolvedDm, now finds the tab, and switches.
     await getTeamChatDmOpenCoordinator(this.plugin).serialize(conversationId, () =>
       this.openResolvedDm(conversationId, manager, generation));
-    // A provider-change rotation left the old-provider DM tab attached; close it
+    // A provider-change rotation left the old-provider DM tab attached; tell the user
+    // why the prior transcript went away (spec §rotation), THEN close the old tab
     // (across leaves) so its runtime tears down and its slot frees. Skip if a newer
     // selection superseded this one.
     if (
@@ -359,22 +360,10 @@ export class TeamChatView extends ItemView implements ChatViewHandle {
       && previousConversationId !== conversationId
       && !this.isSelectionStale(generation, manager)
     ) {
-      await this.closeRotatedDmTab(previousConversationId, conversationId);
+      const agent = await this.plugin.agentRosterStore.get(agentId);
+      new Notice(t('teamChat.providerRotated', { agent: agent?.name ?? agentId }));
+      await closeRotatedDmTab(this.plugin, previousConversationId, conversationId);
     }
-  }
-
-  /**
-   * Force-closes the old-provider DM tab a provider-change rotation left behind, in
-   * whichever leaf owns it (cross-leaf via findConversationAcrossViews), so its
-   * runtime disposes and its chat slot frees. No-ops unless the NEW tab actually
-   * opened, so a cap-blocked rotation can't strand the agent with no tab. The old
-   * tab is located by the OLD conversationId (≠ new), so it is never the just-opened one.
-   */
-  private async closeRotatedDmTab(previousConversationId: string, newConversationId: string): Promise<void> {
-    if (!this.plugin.findConversationAcrossViews(newConversationId)) return;
-    const stale = this.plugin.findConversationAcrossViews(previousConversationId);
-    if (!stale) return;
-    await stale.view.getTabManager()?.closeTab(stale.tabId, true);
   }
 
   /**

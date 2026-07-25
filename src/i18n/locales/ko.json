@@ -1331,6 +1331,7 @@
     "rosterEmpty": "No agents in your team yet.",
     "tabCapReached": "Tab limit reached. Close a tab to open this chat.",
     "presenceIdle": "Idle",
-    "presenceBusy": "Busy"
+    "presenceBusy": "Busy",
+    "providerRotated": "{agent}: provider changed — started a new thread."
   }
 }

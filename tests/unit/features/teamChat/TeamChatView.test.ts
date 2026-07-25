@@ -34,7 +34,15 @@ jest.mock('@/features/chat/tabs/TabManager', () => ({
   })),
 }));
 
+// The restore path's dedup/validation logic lives in teamChatDmTabs (unit-tested in
+// teamChatDmTabs.test.ts); here we mock it to assert delegation + the gate/emit around it.
+jest.mock('@/features/teamChat/teamChatDmTabs', () => ({
+  restoreTeamChatDmTabs: jest.fn().mockResolvedValue(undefined),
+  closeRotatedDmTab: jest.fn().mockResolvedValue(undefined),
+}));
+
 import { TabManager } from '@/features/chat/tabs/TabManager';
+import { restoreTeamChatDmTabs } from '@/features/teamChat/teamChatDmTabs';
 import { TeamChatView } from '@/features/teamChat/TeamChatView';
 
 /** Drain pending microtasks so the fire-and-forget restore in initTabEngine
@@ -278,28 +286,27 @@ describe('TeamChatView — persisted DM tab restore', () => {
     expect(restored.pendingTabManagerState).toEqual(twoDmLayout);
   });
 
-  it('initTabEngine restores every saved DM tab through the engine restore path', async () => {
+  it('initTabEngine restores every saved DM tab through the guarded team-chat restore', async () => {
     const view = makeView();
     view.pendingTabManagerState = twoDmLayout;
 
     view.initTabEngine();
     await flushMicrotasks();
 
-    // All saved DM tabs round-trip (restoreState re-creates them + switches to the
-    // active one, whose onTabSwitched then drives the selection projection).
-    expect(view.tabManager.restoreState).toHaveBeenCalledWith(twoDmLayout);
+    // Restore routes through the guarded team-chat path (dedup + validate), not raw restoreState.
+    expect(restoreTeamChatDmTabs).toHaveBeenCalledWith(view.plugin, view.tabManager, twoDmLayout);
     expect(view.pendingTabManagerState).toBeNull(); // consumed exactly once
     expect(view.areTabsRestored()).toBe(true);
   });
 
-  it('skips restoreState when there is no persisted layout', async () => {
+  it('skips the team-chat restore when there is no persisted layout', async () => {
     const view = makeView();
     view.pendingTabManagerState = null;
 
     view.initTabEngine();
     await flushMicrotasks();
 
-    expect(view.tabManager.restoreState).not.toHaveBeenCalled();
+    expect(restoreTeamChatDmTabs).not.toHaveBeenCalled();
     expect(view.areTabsRestored()).toBe(true);
   });
 
@@ -329,17 +336,14 @@ describe('TeamChatView — persisted DM tab restore', () => {
   // NEW restore. Only the current manager's restore may publish.
   it('a superseded manager restore does not publish readiness (:185)', async () => {
     const restoreGate = deferred<void>();
+    (restoreTeamChatDmTabs as jest.Mock).mockReturnValueOnce(restoreGate.promise); // suspend the restore
     const view = makeView();
-    const m1 = {
-      restoreState: jest.fn(() => restoreGate.promise),
-      getTabCount: jest.fn(() => 0),
-      countTabsByKind: jest.fn(() => 0),
-    };
+    const m1 = { getTabCount: jest.fn(() => 0), countTabsByKind: jest.fn(() => 0) };
     view.tabManager = m1;
     view.tabsRestored = false;
     view.pendingTabManagerState = { openTabs: [{ tabId: 't1', conversationId: 'c1', kind: 'chat' }], activeTabId: 't1' };
 
-    const restoring = view.restoreTabsThenMarkReady(); // captures m1, awaits m1.restoreState (suspended)
+    const restoring = view.restoreTabsThenMarkReady(); // captures m1, awaits the (suspended) restore
     await flushMicrotasks();
     expect(view.areTabsRestored()).toBe(false);
 

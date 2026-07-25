@@ -11,6 +11,7 @@ jest.mock('@/features/chat/tabs/TabManager', () => ({
 }));
 
 import { TeamChatView } from '@/features/teamChat/TeamChatView';
+import { t } from '@/i18n/i18n';
 
 const mockNotice = Notice as jest.Mock;
 
@@ -414,6 +415,7 @@ describe('TeamChatView.selectAgent — resolve → cross-view reuse / create', (
     const view = makeView({
       leaf: { id: 'leaf-this' },
       plugin: {
+        agentRosterStore: { get: jest.fn().mockResolvedValue({ name: 'Ada' }) },
         getTeamChatThreadStore: () => ({ get, resolveOrCreate }),
         findConversationAcrossViews: jest.fn((id: string) => {
           // The new DM registers only after createTab runs; the old DM lives in another leaf.
@@ -436,6 +438,9 @@ describe('TeamChatView.selectAgent — resolve → cross-view reuse / create', (
     // New DM opened; the orphaned old-provider tab force-closed in its owning leaf.
     expect(createTab).toHaveBeenCalledWith('conv-new', undefined, { activate: true, kind: 'chat' });
     expect(closeOldTab).toHaveBeenCalledWith('tab-old', true);
+    // Fix 3 (:361): the rotation notice is emitted BEFORE the old tab is closed.
+    expect(mockNotice).toHaveBeenCalledWith(t('teamChat.providerRotated', { agent: 'Ada' }));
+    expect(mockNotice.mock.invocationCallOrder[0]).toBeLessThan(closeOldTab.mock.invocationCallOrder[0]);
   });
 
   it('closes nothing when there is no rotation (mapping unchanged) (:283)', async () => {
