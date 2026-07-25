@@ -35,31 +35,53 @@ function makeHarness(initial: Record<string, unknown> = {}): Harness {
   return harness;
 }
 
-/** Structurally inert stub: enough registration surface to be swept safely. */
-function registerInertProvider(id: string, extra: Record<string, unknown> = {}): void {
+/**
+ * Registration stub carrying the FULL `ProviderChatUIConfig` surface the settings
+ * coordinator touches (it calls `applyModelDefaults` / `normalizeModelVariant` /
+ * `isDefaultModel` while projecting), so a stub registered here stays safe for
+ * every describe — registrations live in a process-wide registry.
+ */
+function registerInertProvider(
+  id: string,
+  options: { models?: string[]; extra?: Record<string, unknown> } = {},
+): void {
+  const models = options.models ?? [];
   ProviderRegistry.register(id as ProviderId, {
     displayName: id,
     firstRunBlurb: `${id} CLI`,
     cliCommand: id,
-    isEnabled: () => true,
+    isEnabled: (settings: Record<string, unknown>) => Boolean(
+      (settings.providerConfigs as Record<string, { enabled?: boolean }> | undefined)?.[id]?.enabled,
+    ),
+    // Every REQUIRED member of ProviderChatUIConfig (the optional `?` ones are
+    // called with `?.`). Complete on purpose: the coordinator walks this surface
+    // while projecting, and stubbing it member-by-member as each failure appears
+    // is how a fixture rots.
     chatUIConfig: {
-      getModelOptions: () => [],
-      getCustomModelIds: () => [],
-      ownsModel: () => false,
+      getModelOptions: () => models.map((model) => ({ value: model, label: model })),
+      ownsModel: (candidate: string) => models.includes(candidate),
       isAdaptiveReasoningModel: () => false,
       getReasoningOptions: () => [],
+      getDefaultReasoningValue: () => '',
+      getContextWindowSize: () => 200_000,
+      isDefaultModel: (candidate: string) => models.includes(candidate),
+      applyModelDefaults: () => {},
       normalizeModelVariant: (candidate: string) => candidate,
-      isDefaultModel: () => false,
+      getCustomModelIds: () => [],
     },
-    ...extra,
+    ...options.extra,
   } as unknown as ProviderRegistration);
 }
 
 // The writers route through ProviderRegistry (an unregistered id is a hard error
-// by design), so every id this file passes must exist in the registry.
+// by design), so every id this file passes must exist in the registry — and in
+// the TOP-LEVEL hook, since a describe-scoped beforeAll runs only for its own
+// tests.
 beforeAll(() => {
-  registerInertProvider('claude');
+  registerInertProvider('claude', { models: ['haiku'] });
   registerInertProvider('codex');
+  registerInertProvider('model-alpha', { models: ['alpha-1'] });
+  registerInertProvider('model-beta', { models: ['beta-1'] });
 });
 
 function makeAdapter(existing: string[] = []) {
@@ -84,6 +106,32 @@ describe('provider writes', () => {
     expect((harness.settings.providerConfigs as Record<string, { enabled: boolean }>).claude.enabled)
       .toBe(true);
     expect(harness.saves).toBe(1);
+  });
+
+  it('aligns the top-level model with the provider selection when enabling', async () => {
+    // A fresh vault starts on Claude's `haiku`. Enabling a non-Claude provider
+    // first must not leave that foreign model as the default: the blank-tab
+    // factory routes by MODEL, so the first chat would open on the wrong
+    // provider once Claude is enabled too.
+    const harness = makeHarness({ model: 'haiku', settingsProvider: 'claude' });
+
+    await setProviderEnabled(harness.plugin, 'model-beta' as ProviderId, true);
+
+
+    expect(harness.settings.settingsProvider).toBe('model-beta');
+    expect(harness.settings.model).toBe('beta-1');
+  });
+
+  it('re-projects when a provider is disabled, so its model is not left behind', async () => {
+    const harness = makeHarness({
+      model: 'beta-1',
+      settingsProvider: 'model-beta',
+      providerConfigs: { 'model-beta': { enabled: true } },
+    });
+
+    await setProviderEnabled(harness.plugin, 'model-beta' as ProviderId, false);
+
+    expect(harness.settings.model).not.toBe('beta-1');
   });
 
   it('preserves other provider config fields when toggling enabled', async () => {
@@ -111,10 +159,12 @@ describe('provider writes', () => {
     // write persists both.
     const cleared: Array<Record<string, unknown>> = [];
     registerInertProvider('hook-provider', {
-      onCliPathChanged: (settings: Record<string, unknown>) => {
-        settings.hookRan = true;
-        cleared.push(settings);
-        return true;
+      extra: {
+        onCliPathChanged: (settings: Record<string, unknown>) => {
+          settings.hookRan = true;
+          cleared.push(settings);
+          return true;
+        },
       },
     });
     const harness = makeHarness();
@@ -220,29 +270,20 @@ describe('setDefaultModel', () => {
   // top-level `model` would be reverted by the owning provider's projection.
   const OWNER = 'model-beta' as ProviderId;
 
-  beforeAll(() => {
-    for (const [id, model] of [['model-alpha', 'alpha-1'], ['model-beta', 'beta-1']] as const) {
-      ProviderRegistry.register(id as ProviderId, {
-        displayName: id,
-        firstRunBlurb: `${id} CLI`,
-        cliCommand: id,
-        isEnabled: () => true,
-        chatUIConfig: {
-          getModelOptions: () => [{ value: model, label: model }],
-          getCustomModelIds: () => [],
-          ownsModel: (candidate: string) => candidate === model,
-          isAdaptiveReasoningModel: () => false,
-          getReasoningOptions: () => [],
-          normalizeModelVariant: (candidate: string) => candidate,
-          isDefaultModel: (candidate: string) => candidate === model,
-          applyModelDefaults: () => {},
-        },
-      } as unknown as ProviderRegistration);
-    }
-  });
+  /** Both model providers enabled — the wizard only offers enabled providers' models. */
+  function makeModelHarness(): Harness {
+    return makeHarness({
+      settingsProvider: 'model-alpha',
+      model: 'alpha-1',
+      providerConfigs: {
+        'model-alpha': { enabled: true },
+        'model-beta': { enabled: true },
+      },
+    });
+  }
 
   it('records the model against the provider that owns it, not just the top level', async () => {
-    const harness = makeHarness({ settingsProvider: 'model-alpha', model: 'alpha-1' });
+    const harness = makeModelHarness();
 
     await setDefaultModel(harness.plugin, 'beta-1');
 
@@ -252,7 +293,7 @@ describe('setDefaultModel', () => {
   });
 
   it('points the active provider at the owner, so a blank chat prefers it', async () => {
-    const harness = makeHarness({ settingsProvider: 'model-alpha', model: 'alpha-1' });
+    const harness = makeModelHarness();
 
     await setDefaultModel(harness.plugin, 'beta-1');
 
@@ -266,7 +307,7 @@ describe('setDefaultModel', () => {
     // Asserted at that contract rather than by driving the real coordinator,
     // which would need a full ProviderChatUIConfig stub for every branch it
     // touches (reasoning options, variants, tier/budget toggles).
-    const harness = makeHarness({ settingsProvider: 'model-alpha', model: 'alpha-1' });
+    const harness = makeModelHarness();
 
     await setDefaultModel(harness.plugin, 'beta-1');
 
@@ -275,23 +316,22 @@ describe('setDefaultModel', () => {
 
   it('applies the chosen model\'s own reasoning defaults', async () => {
     const applied: string[] = [];
-    ProviderRegistry.register(OWNER, {
-      displayName: 'beta',
-      firstRunBlurb: 'beta CLI',
-      cliCommand: 'beta',
-      isEnabled: () => true,
-      chatUIConfig: {
-        getModelOptions: () => [{ value: 'beta-1', label: 'beta-1' }],
-        getCustomModelIds: () => [],
-        ownsModel: (candidate: string) => candidate === 'beta-1',
-        isAdaptiveReasoningModel: () => false,
-        getReasoningOptions: () => [],
-        normalizeModelVariant: (candidate: string) => candidate,
-        isDefaultModel: (candidate: string) => candidate === 'beta-1',
-        applyModelDefaults: (model: string) => applied.push(model),
+    registerInertProvider('model-beta', {
+      models: ['beta-1'],
+      extra: {
+        chatUIConfig: {
+          getModelOptions: () => [{ value: 'beta-1', label: 'beta-1' }],
+          getCustomModelIds: () => [],
+          ownsModel: (candidate: string) => candidate === 'beta-1',
+          isDefaultModel: (candidate: string) => candidate === 'beta-1',
+          isAdaptiveReasoningModel: () => false,
+          getReasoningOptions: () => [],
+          normalizeModelVariant: (candidate: string) => candidate,
+          applyModelDefaults: (model: string) => applied.push(model),
+        },
       },
-    } as unknown as ProviderRegistration);
-    const harness = makeHarness({ settingsProvider: 'model-alpha', model: 'alpha-1' });
+    });
+    const harness = makeModelHarness();
 
     await setDefaultModel(harness.plugin, 'beta-1');
 

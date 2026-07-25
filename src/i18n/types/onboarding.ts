@@ -53,8 +53,6 @@ export type OnboardingTranslationKey =
   | 'onboarding.defaults.modelDesc'
   | 'onboarding.defaults.permission'
   | 'onboarding.defaults.permissionDesc'
-  | 'onboarding.defaults.permissionNormal'
-  | 'onboarding.defaults.permissionPlan'
   | 'onboarding.defaults.titles'
   | 'onboarding.defaults.titlesDesc'
   | 'onboarding.defaults.needsProvider'

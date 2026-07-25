@@ -1383,9 +1383,7 @@
       "model": "Modèle par défaut",
       "modelDesc": "Utilisé pour les nouvelles conversations.",
       "permission": "Approbation des outils",
-      "permissionDesc": "« Normal » demande avant qu’un agent écrive des fichiers ou lance des commandes. « Plan » démarre en lecture seule et demande avant d’agir. Ignorer complètement l’approbation reste un choix explicite dans la barre d’outils.",
-      "permissionNormal": "Normal — demander avant d’agir",
-      "permissionPlan": "Plan — étudier d’abord",
+      "permissionDesc": "Les nouvelles conversations demandent avant qu’un agent écrive des fichiers ou lance des commandes. Le mode Plan et l’absence d’approbation sont des choix par conversation dans la barre d’outils — Plan n’est volontairement pas une valeur par défaut enregistrée, car l’application la réinitialise au redémarrage.",
       "titles": "Nommer les conversations automatiquement",
       "titlesDesc": "Génère un titre court à partir de votre premier message.",
       "needsProvider": "Activez un fournisseur à l’étape précédente pour choisir un modèle par défaut."

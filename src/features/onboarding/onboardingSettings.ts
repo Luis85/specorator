@@ -23,6 +23,21 @@ export async function setProviderEnabled(
   const settings = asSettingsBag(plugin.settings);
   const config = getProviderConfig(settings, providerId);
   setProviderConfig(settings, providerId, { ...config, enabled });
+
+  // Re-align the provider selection AND the top-level model with the new
+  // enabled set. Without this the two disagree: `saveSettings` normalizes
+  // `settingsProvider` to the newly enabled provider but leaves `model` holding
+  // another provider's default (a fresh vault starts on Claude's `haiku`), and
+  // the blank-tab factory routes by MODEL — so enabling Codex first and Claude
+  // later would open the first chat on Claude, contradicting the selection.
+  // `projectProviderState` resolves a model the selected provider actually owns
+  // (its saved pick, else its first option). Also covers disabling: the
+  // outgoing provider's model must not stay behind as the top-level default.
+  ProviderSettingsCoordinator.normalizeProviderSelection(settings);
+  ProviderSettingsCoordinator.projectProviderState(
+    settings,
+    ProviderRegistry.resolveSettingsProviderId(settings),
+  );
   await plugin.saveSettings();
 }
 
@@ -65,13 +80,14 @@ export async function setProviderCliPathForHost(
  * flow from becoming a second, untyped settings editor, and every key here has
  * a matching control on one of the five steps.
  *
- * `permissionMode` is offered as `normal` / `plan` only — `yolo` stays behind
- * the toolbar toggle and its one-time warning (SEC-1), which a setup wizard has
- * no business bypassing.
+ * `permissionMode` is deliberately absent. `plan` is ephemeral by design — the
+ * load path resets it to `normal` on every start — so offering it as a saved
+ * default would advertise something the app refuses to keep; and `yolo` stays
+ * behind the toolbar toggle and its one-time warning (SEC-1). The Defaults step
+ * therefore STATES the approval default instead of pretending to configure it.
  */
 export type OnboardingScalarKey =
   | 'model'
-  | 'permissionMode'
   | 'enableAutoTitleGeneration'
   | 'chatViewPlacement'
   | 'maxChatTabs'

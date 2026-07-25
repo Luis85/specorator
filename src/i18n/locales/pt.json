@@ -1383,9 +1383,7 @@
       "model": "Modelo padrão",
       "modelDesc": "Usado em novas conversas.",
       "permission": "Aprovação de ferramentas",
-      "permissionDesc": "«Normal» pergunta antes de um agente escrever ficheiros ou executar comandos. «Plano» começa em modo leitura e pergunta antes de agir. Dispensar a aprovação por completo continua a ser uma escolha explícita na barra de ferramentas.",
-      "permissionNormal": "Normal — perguntar antes de agir",
-      "permissionPlan": "Plano — investigar primeiro",
+      "permissionDesc": "As conversas novas perguntam antes de um agente escrever ficheiros ou executar comandos. O modo Plano e dispensar aprovações são escolhas por conversa na barra de ferramentas — Plano não é um padrão guardado de propósito, porque a aplicação o repõe ao reiniciar.",
       "titles": "Nomear conversas automaticamente",
       "titlesDesc": "Gera um título curto a partir da sua primeira mensagem.",
       "needsProvider": "Ative um provedor no passo anterior para escolher um modelo padrão."

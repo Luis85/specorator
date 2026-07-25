@@ -1383,9 +1383,7 @@
       "model": "Standardmodell",
       "modelDesc": "Wird für neue Unterhaltungen verwendet.",
       "permission": "Werkzeugfreigabe",
-      "permissionDesc": "„Normal“ fragt nach, bevor ein Agent Dateien schreibt oder Befehle ausführt. „Plan“ startet im Nur-Lese-Modus und fragt vor jeder Aktion. Freigaben komplett zu überspringen bleibt ein bewusster Schalter in der Werkzeugleiste.",
-      "permissionNormal": "Normal — vor Aktionen fragen",
-      "permissionPlan": "Plan — zuerst recherchieren",
+      "permissionDesc": "Neue Unterhaltungen fragen nach, bevor ein Agent Dateien schreibt oder Befehle ausführt. Planmodus und das Überspringen von Freigaben wählst du pro Unterhaltung in der Werkzeugleiste — „Plan“ ist absichtlich kein gespeicherter Standard, da die App ihn beim Neustart zurücksetzt.",
       "titles": "Unterhaltungen automatisch benennen",
       "titlesDesc": "Erzeugt aus deiner ersten Nachricht einen kurzen Titel.",
       "needsProvider": "Aktiviere im vorherigen Schritt einen Anbieter, um ein Standardmodell zu wählen."

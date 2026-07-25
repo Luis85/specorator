@@ -15,7 +15,6 @@ if (!injectedPlugin) throw new Error('DefaultsStep mounted without PLUGIN_KEY');
 const plugin = injectedPlugin;
 
 const store = useOnboardingStore();
-const [permissionMode, setPermissionMode] = useAppSetting<string>(plugin, 'permissionMode', 'normal');
 const [autoTitles, setAutoTitles] = useAppSetting<boolean>(plugin, 'enableAutoTitleGeneration', true);
 
 // The model is NOT bound through useAppSetting: that setter persists on its own,
@@ -121,7 +120,14 @@ async function setModel(key: string): Promise<void> {
       </div>
     </div>
 
-    <div class="specorator-onboarding-field">
+    <!-- Stated, not offered: `plan` is reset to `normal` on every load by design
+         (main.ts, "Plan mode is ephemeral"), and `yolo` is a deliberate toolbar
+         opt-in behind its one-time warning (SEC-1) — so there is no durable
+         choice to make here, only a default worth naming. -->
+    <div
+      class="specorator-onboarding-field"
+      data-field="permission-mode"
+    >
       <div class="specorator-onboarding-field-text">
         <div class="specorator-onboarding-field-label">
           {{ t('onboarding.defaults.permission') }}
@@ -129,24 +135,6 @@ async function setModel(key: string): Promise<void> {
         <p class="specorator-onboarding-field-desc">
           {{ t('onboarding.defaults.permissionDesc') }}
         </p>
-      </div>
-      <div class="specorator-onboarding-field-control">
-        <!-- `yolo` is deliberately absent: bypassing tool approval stays an
-             explicit toolbar opt-in behind its one-time warning (SEC-1). -->
-        <select
-          class="dropdown"
-          data-field="permission-mode"
-          :value="permissionMode"
-          :aria-label="t('onboarding.defaults.permission')"
-          @change="setPermissionMode(($event.target as HTMLSelectElement).value)"
-        >
-          <option value="normal">
-            {{ t('onboarding.defaults.permissionNormal') }}
-          </option>
-          <option value="plan">
-            {{ t('onboarding.defaults.permissionPlan') }}
-          </option>
-        </select>
       </div>
     </div>
 

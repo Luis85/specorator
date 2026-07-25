@@ -24,7 +24,7 @@ surfaces to use the island pattern; this is one.
 | `vue/components/StepRail.vue` | Free-navigable step rail (`role="navigation"` + `aria-current="step"`, deliberately not an ARIA tablist) |
 | `vue/components/ProvidersStep.vue` / `ProviderCard.vue` | Detected providers first; per-card status badge, resolved path, enable toggle, auth hint, install panel, manual-path escape hatch |
 | `vue/components/InstallPanel.vue` / `InstallConfirm.vue` / `InstallOutcome.vue` | Method picker + copyable command + run/cancel; the explicit pre-spawn confirm; the result line + bounded console |
-| `vue/components/DefaultsStep.vue` | Default model (grouped per enabled provider), tool-approval mode, auto-titles |
+| `vue/components/DefaultsStep.vue` | Default model (grouped per enabled provider, owner-tagged), the STATED approval default, auto-titles |
 | `vue/components/FoldersStep.vue` | The five vault folders with exists / will-create / unconfigured badges and a create-missing action |
 | `vue/components/WorkspaceStep.vue` | Chat placement + max chat tabs (bounds mirror the General tab slider) |
 | `vue/components/MarketplaceStep.vue` | Network opt-in (routed through the shared one-time warning) + a deep link to the Marketplace |
@@ -74,17 +74,30 @@ surfaces to use the island pattern; this is one.
   resolution + the `cmd.exe` verbatim wrap on win32 (Node's CVE-2024-27980
   batch-shim refusal), and `buildFullSubprocessEnvironment` with the enhanced
   PATH (a GUI-launched host's PATH cannot find `npm`).
-- **`yolo` is not offered.** The defaults step exposes `normal` and `plan` only;
-  bypassing tool approval stays an explicit toolbar toggle behind its one-time
-  warning (SEC-1), which a setup wizard has no business short-circuiting. The
-  Marketplace opt-in likewise routes through the SAME
-  `maybeWarnMarketplaceNetwork` notice the view and settings tab use, so the
-  network disclosure can't be skipped by entering through onboarding.
+- **Tool approval is STATED, not offered.** There is no durable choice to make:
+  `plan` is ephemeral by design (the load path resets it to `normal` every start,
+  because `prePlanPermissionMode` is lost), and `yolo` stays behind the toolbar
+  toggle and its one-time warning (SEC-1). A select offering either would
+  advertise a default the app refuses to keep, so the step names the safe default
+  and points at the toolbar for per-conversation Plan/bypass. `permissionMode` is
+  therefore absent from `OnboardingScalarKey`. The Marketplace opt-in likewise
+  routes through the SAME `maybeWarnMarketplaceNetwork` notice the view and
+  settings tab use, so the network disclosure can't be skipped by entering
+  through onboarding.
 - **The wizard is a view over settings, not a staging buffer.** Every control
   persists through `plugin.saveSettings()` the moment it is touched, so
   abandoning the flow keeps exactly what was already confirmed and reopening it
-  shows live state. Consequence: `useAppSetting` reads once at mount and writes
+  shows live state. Corollary: the step only renders controls whose value the app
+  actually keeps — see the approval note below. Consequence: `useAppSetting` reads once at mount and writes
   on change — it does not watch `plugin.settings` (a plain non-reactive object).
+- **Enabling or disabling a provider re-projects the selection.** `setProviderEnabled`
+  runs `normalizeProviderSelection` + `projectProviderState` before saving,
+  because otherwise the provider selection and the top-level model disagree: a
+  fresh vault holds Claude's `haiku`, `saveSettings` would point
+  `settingsProvider` at the newly enabled provider, and the blank-tab factory
+  routes by MODEL — so enabling Codex first and Claude later opened the first
+  chat on Claude. Disabling matters for the same reason (the outgoing provider's
+  model must not remain the default).
 - **A blank folder setting is skipped, never defaulted.** The Library and the
   Marketplace installer both read blank as "unconfigured" and refuse to write
   there, so materializing a default would land content somewhere nothing scans.

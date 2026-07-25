@@ -184,12 +184,16 @@ describe('DefaultsStep', () => {
     expect(plugin.saveSettings).not.toHaveBeenCalled();
   });
 
-  it('offers only the approval modes a wizard may set — never the bypass mode (SEC-1)', () => {
+  it('states the approval default instead of offering a choice that would not persist', () => {
+    // `plan` is reset to `normal` on every load by design, and `yolo` is a
+    // toolbar opt-in behind its one-time warning (SEC-1) — so there is no
+    // durable choice to render here, only a default worth naming.
     const { container } = mount(DefaultsStep, makeStore());
+    const row = container.querySelector('[data-field="permission-mode"]')!;
 
-    const values = [...container.querySelectorAll('[data-field="permission-mode"] option')]
-      .map((option) => (option as HTMLOptionElement).value);
-    expect(values).toEqual(['normal', 'plan']);
+    expect(row).not.toBeNull();
+    expect(row.querySelector('select')).toBeNull();
+    expect(row.textContent).toContain('ask before');
   });
 
   it('persists the auto-title toggle', async () => {

@@ -1383,9 +1383,7 @@
       "model": "Modelo por defecto",
       "modelDesc": "Se usa en las conversaciones nuevas.",
       "permission": "Aprobación de herramientas",
-      "permissionDesc": "«Normal» pregunta antes de que un agente escriba archivos o ejecute comandos. «Plan» empieza en solo lectura y pregunta antes de actuar. Saltarse la aprobación por completo sigue siendo un interruptor deliberado en la barra de herramientas.",
-      "permissionNormal": "Normal — preguntar antes de actuar",
-      "permissionPlan": "Plan — investigar primero",
+      "permissionDesc": "Las conversaciones nuevas preguntan antes de que un agente escriba archivos o ejecute comandos. El modo Plan y saltarse las aprobaciones se eligen por conversación en la barra de herramientas: Plan no es un valor por defecto guardado a propósito, porque la app lo restablece al reiniciar.",
       "titles": "Nombrar conversaciones automáticamente",
       "titlesDesc": "Genera un título corto a partir de tu primer mensaje.",
       "needsProvider": "Activa un proveedor en el paso anterior para elegir un modelo por defecto."

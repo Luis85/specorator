@@ -1383,9 +1383,7 @@
       "model": "Default model",
       "modelDesc": "Used for new conversations.",
       "permission": "Tool approval",
-      "permissionDesc": "Normal asks before an agent writes files or runs commands. Plan starts read-only and asks before acting. Skipping approval entirely stays a deliberate toolbar toggle.",
-      "permissionNormal": "Normal — ask before acting",
-      "permissionPlan": "Plan — research first",
+      "permissionDesc": "New conversations ask before an agent writes files or runs commands. Plan mode and skipping approvals are per-conversation toolbar choices — Plan is deliberately not a saved default, since the app resets it on restart.",
       "titles": "Name conversations automatically",
       "titlesDesc": "Generates a short title from your first message.",
       "needsProvider": "Enable a provider on the previous step to pick a default model."
