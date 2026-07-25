@@ -772,8 +772,8 @@ export default class SpecoratorPlugin extends Plugin implements PluginContext {
     return this.conversationStore.getConversationById(id);
   }
 
-  findTeamChatConversationForAgent(agentId: string): Conversation | null {
-    return this.conversationStore.findTeamChatConversationForAgent(agentId);
+  findTeamChatConversationForAgent(agentId: string, providerId?: ProviderId): Conversation | null {
+    return this.conversationStore.findTeamChatConversationForAgent(agentId, providerId);
   }
 
   /** The single plugin-scoped Team Chat DM thread store (lazy; reset on reload). */

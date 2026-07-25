@@ -1,5 +1,6 @@
 import type SpecoratorPlugin from '../../main';
 import { createTeamChatDmConversation } from './createTeamChatDmConversation';
+import { resolveTeamChatAgentProvider } from './resolveTeamChatAgentProvider';
 import { TeamChatThreadStore } from './TeamChatThreadStore';
 
 export type { TeamChatThreadStore } from './TeamChatThreadStore';
@@ -13,9 +14,17 @@ export type { TeamChatThreadStore } from './TeamChatThreadStore';
 export function createTeamChatThreadStore(plugin: SpecoratorPlugin): TeamChatThreadStore {
   return new TeamChatThreadStore({
     adapter: plugin.vaultFileAdapter,
+    resolveExpectedProvider: (agentId) => resolveTeamChatAgentProvider(plugin, agentId),
     createConversation: (agentId) => createTeamChatDmConversation(plugin, agentId),
-    conversationExists: (id) => plugin.getConversationSync(id) != null,
-    findAdoptable: (agentId) => plugin.findTeamChatConversationForAgent(agentId),
+    isConversationUsable: (id, expectedProvider) => {
+      const conversation = plugin.getConversationSync(id);
+      return (
+        conversation != null &&
+        (expectedProvider === undefined || conversation.providerId === expectedProvider)
+      );
+    },
+    findAdoptable: (agentId, expectedProvider) =>
+      plugin.findTeamChatConversationForAgent(agentId, expectedProvider),
     events: plugin.events,
   });
 }

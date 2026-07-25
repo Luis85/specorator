@@ -414,10 +414,17 @@ export class ConversationStore {
     return this.conversations.find((c) => c.messages.length === 0) || null;
   }
 
-  /** The canonical DM conversation for an agent on the Team Chat surface, or null. */
-  findTeamChatConversationForAgent(agentId: string): Conversation | null {
+  /**
+   * The canonical DM conversation for an agent on the Team Chat surface, or null.
+   * Optionally scoped to `providerId` so a provider-change rotation adopts the DM
+   * on the *new* provider, not the stale one still bound to the same agent.
+   */
+  findTeamChatConversationForAgent(agentId: string, providerId?: ProviderId): Conversation | null {
     return this.conversations.find(
-      (c) => c.boundAgentId === agentId && (c.surface ?? 'chat') === 'team-chat',
+      (c) =>
+        c.boundAgentId === agentId &&
+        (c.surface ?? 'chat') === 'team-chat' &&
+        (providerId === undefined || c.providerId === providerId),
     ) ?? null;
   }
 

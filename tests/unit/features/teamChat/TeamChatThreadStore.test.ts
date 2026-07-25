@@ -1,13 +1,16 @@
 import type { SpecoratorEventMap } from '@/app/events/specoratorEvents';
 import { EventBus } from '@/core/events/EventBus';
+import type { ProviderId } from '@/core/providers/types';
 import type { VaultFileAdapter } from '@/core/storage/VaultFileAdapter';
 import type { Conversation } from '@/core/types/chat';
 import { TeamChatThreadStore, THREADS_PATH } from '@/features/teamChat/TeamChatThreadStore';
 
-function conversation(id: string, agentId: string): Conversation {
+const DEFAULT_PROVIDER: ProviderId = 'claude';
+
+function conversationOn(id: string, agentId: string, providerId: ProviderId): Conversation {
   return {
     id,
-    providerId: 'claude',
+    providerId,
     title: 'DM',
     createdAt: 0,
     updatedAt: 0,
@@ -18,21 +21,33 @@ function conversation(id: string, agentId: string): Conversation {
   };
 }
 
+function conversation(id: string, agentId: string): Conversation {
+  return conversationOn(id, agentId, DEFAULT_PROVIDER);
+}
+
 interface HarnessOptions {
   /** Raw content to pre-seed `threads.json` with (e.g. a corrupt or stale map). */
   seedFile?: string;
   /** agentId → orphaned DM that `findAdoptable` should return. */
   adoptable?: Record<string, Conversation>;
-  /** ids for which `conversationExists` returns true up front. */
-  existingIds?: string[];
+  /** Conversations that already exist up front (e.g. a seeded mapped DM). */
+  existingConversations?: Conversation[];
+  /** agentId → the provider the agent currently resolves to (default 'claude'). */
+  expectedProvider?: Record<string, ProviderId>;
 }
 
 function makeHarness(options: HarnessOptions = {}) {
   const files = new Map<string, string>();
   if (options.seedFile !== undefined) files.set(THREADS_PATH, options.seedFile);
 
-  const existing = new Set<string>(options.existingIds ?? []);
-  const adoptable = new Map<string, Conversation>(Object.entries(options.adoptable ?? {}));
+  // Every conversation that currently "exists", keyed by id — the harness's stand-in
+  // for getConversationSync. isConversationUsable reads providerId out of here.
+  const conversationsById = new Map<string, Conversation>();
+  for (const c of options.existingConversations ?? []) conversationsById.set(c.id, c);
+  const adoptableByAgent = new Map<string, Conversation>(Object.entries(options.adoptable ?? {}));
+  for (const c of adoptableByAgent.values()) conversationsById.set(c.id, c);
+  const expectedByAgent = new Map<string, ProviderId>(Object.entries(options.expectedProvider ?? {}));
+  const expectedProviderFor = (agentId: string): ProviderId => expectedByAgent.get(agentId) ?? DEFAULT_PROVIDER;
 
   // In-memory VaultFileAdapter over a Map, with real async writeAtomic/read/exists.
   // The `await Promise.resolve()` yields hand control back to the event loop mid-op
@@ -61,9 +76,11 @@ function makeHarness(options: HarnessOptions = {}) {
   const createdByAgent = new Map<string, Conversation>();
   const createConversation = jest.fn(async (agentId: string) => {
     await Promise.resolve();
-    const created = conversation(`created-${++seq}`, agentId);
+    // Create on the agent's expected provider, mirroring createTeamChatDmConversation
+    // (which resolves the same provider before creating on it).
+    const created = conversationOn(`created-${++seq}`, agentId, expectedProviderFor(agentId));
     // A freshly created conversation exists from then on.
-    existing.add(created.id);
+    conversationsById.set(created.id, created);
     createdByAgent.set(agentId, created);
     return created;
   });
@@ -74,9 +91,17 @@ function makeHarness(options: HarnessOptions = {}) {
 
   const store = new TeamChatThreadStore({
     adapter,
+    resolveExpectedProvider: async (agentId: string) => expectedProviderFor(agentId),
     createConversation,
-    conversationExists: (id: string) => existing.has(id),
-    findAdoptable: (agentId: string) => adoptable.get(agentId) ?? createdByAgent.get(agentId) ?? null,
+    isConversationUsable: (id: string, expected: ProviderId | undefined) => {
+      const c = conversationsById.get(id);
+      return c != null && (expected === undefined || c.providerId === expected);
+    },
+    findAdoptable: (agentId: string, expected: ProviderId | undefined) => {
+      const candidate = adoptableByAgent.get(agentId) ?? createdByAgent.get(agentId) ?? null;
+      if (!candidate) return null;
+      return expected === undefined || candidate.providerId === expected ? candidate : null;
+    },
     events,
   });
 
@@ -87,6 +112,7 @@ function makeHarness(options: HarnessOptions = {}) {
     createConversation,
     changed,
     events,
+    conversationsById,
     readThreads: (): { version: number; rooms: Record<string, string> } | null => {
       const raw = files.get(THREADS_PATH);
       return raw ? (JSON.parse(raw) as { version: number; rooms: Record<string, string> }) : null;
@@ -216,5 +242,73 @@ describe('TeamChatThreadStore', () => {
 
     expect(readDuringEvent).not.toBeNull(); // the change event actually fired
     await expect(readDuringEvent).resolves.toBe(id); // not null / not a prior value
+  });
+
+  describe('provider-change rotation (spec §4)', () => {
+    it('rotates a mapped DM to a fresh conversation on the new provider when the agent changed providers', async () => {
+      // The mapped DM lives on 'claude', but the agent now resolves to 'codex'. Its
+      // OLD DM is still adoptable (same boundAgentId) — the trap the scoping guards.
+      const stale = conversationOn('convo-claude', 'roster:a', 'claude');
+      const h = makeHarness({
+        seedFile: JSON.stringify({ version: 1, rooms: { 'roster:a': 'convo-claude' } }),
+        existingConversations: [stale],
+        adoptable: { 'roster:a': stale },
+        expectedProvider: { 'roster:a': 'codex' },
+      });
+
+      const id = await h.store.resolveOrCreate('roster:a');
+
+      expect(id).not.toBe('convo-claude'); // did NOT return the old-provider DM
+      expect(h.createConversation).toHaveBeenCalledTimes(1); // adoption rejected the stale one
+      expect(h.conversationsById.get(id)?.providerId).toBe('codex'); // fresh, on the new provider
+      expect(h.readThreads()).toEqual({ version: 1, rooms: { 'roster:a': id } }); // remapped + persisted
+      expect(h.changed).toHaveBeenCalledTimes(1); // emitted after the swap
+    });
+
+    it('reuses the mapped DM without rewrite when it already runs on the expected provider (no-op)', async () => {
+      const mapped = conversationOn('convo-codex', 'roster:a', 'codex');
+      const h = makeHarness({
+        seedFile: JSON.stringify({ version: 1, rooms: { 'roster:a': 'convo-codex' } }),
+        existingConversations: [mapped],
+        expectedProvider: { 'roster:a': 'codex' },
+      });
+
+      const id = await h.store.resolveOrCreate('roster:a');
+
+      expect(id).toBe('convo-codex'); // provider matches → reuse, not rotate
+      expect(h.createConversation).not.toHaveBeenCalled();
+      expect(h.writeAtomic).not.toHaveBeenCalled(); // pure cache-hit, no re-persist
+      expect(h.changed).not.toHaveBeenCalled(); // no emit on reuse
+    });
+
+    it('does not adopt an orphan on the wrong provider — creates a fresh DM on the expected provider', async () => {
+      const wrongProviderOrphan = conversationOn('orphan-claude', 'roster:a', 'claude');
+      const h = makeHarness({
+        adoptable: { 'roster:a': wrongProviderOrphan },
+        expectedProvider: { 'roster:a': 'codex' },
+      });
+
+      const id = await h.store.resolveOrCreate('roster:a');
+
+      expect(id).not.toBe('orphan-claude'); // provider mismatch → not adopted
+      expect(h.createConversation).toHaveBeenCalledTimes(1);
+      expect(h.conversationsById.get(id)?.providerId).toBe('codex');
+      expect(h.readThreads()).toEqual({ version: 1, rooms: { 'roster:a': id } });
+    });
+
+    it('adopts an orphan already on the expected provider', async () => {
+      const rightProviderOrphan = conversationOn('orphan-codex', 'roster:a', 'codex');
+      const h = makeHarness({
+        adoptable: { 'roster:a': rightProviderOrphan },
+        expectedProvider: { 'roster:a': 'codex' },
+      });
+
+      const id = await h.store.resolveOrCreate('roster:a');
+
+      expect(id).toBe('orphan-codex'); // provider matches → adopt, don't create
+      expect(h.createConversation).not.toHaveBeenCalled();
+      expect(h.readThreads()).toEqual({ version: 1, rooms: { 'roster:a': 'orphan-codex' } });
+      expect(h.changed).toHaveBeenCalledTimes(1);
+    });
   });
 });

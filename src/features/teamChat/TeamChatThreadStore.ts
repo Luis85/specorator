@@ -1,5 +1,6 @@
 import type { SpecoratorEventMap } from '../../app/events/specoratorEvents';
 import type { EventBus } from '../../core/events/EventBus';
+import type { ProviderId } from '../../core/providers/types';
 import type { VaultFileAdapter } from '../../core/storage/VaultFileAdapter';
 import type { Conversation } from '../../core/types/chat';
 
@@ -15,12 +16,26 @@ interface ThreadsFile {
 
 export interface TeamChatThreadStoreDeps {
   adapter: VaultFileAdapter;
+  /**
+   * The provider the agent's DM should currently run on (roster policy, shared
+   * with DM creation). `undefined` when the agent is unknown — reuse/adoption
+   * then fall back to "any provider", since there is nothing to rotate toward.
+   */
+  resolveExpectedProvider: (agentId: string) => Promise<ProviderId | undefined>;
   /** Wraps `plugin.createConversation({ boundAgentId, surface: 'team-chat', providerId })`. */
   createConversation: (agentId: string) => Promise<Conversation>;
-  /** `plugin.getConversationSync(id) != null` — is the mapped conversation still live? */
-  conversationExists: (id: string) => boolean;
-  /** `plugin.findTeamChatConversationForAgent` — an orphaned DM to adopt when the map is lost. */
-  findAdoptable: (agentId: string) => Conversation | null;
+  /**
+   * Is the mapped conversation still live AND running on `expectedProvider`? A DM's
+   * `providerId` is immutable, so a conversation on a different provider is stale
+   * (the agent was re-pointed at another backend) and must NOT be reused.
+   */
+  isConversationUsable: (id: string, expectedProvider: ProviderId | undefined) => boolean;
+  /**
+   * `plugin.findTeamChatConversationForAgent` scoped to `expectedProvider` — an
+   * orphaned DM to adopt when the map is lost. Scoping is load-bearing: adopting
+   * the agent's OLD-provider DM would instantly undo a provider-change rotation.
+   */
+  findAdoptable: (agentId: string, expectedProvider: ProviderId | undefined) => Conversation | null;
   events?: EventBus<SpecoratorEventMap>;
 }
 
@@ -42,9 +57,11 @@ export class TeamChatThreadStore {
   constructor(private readonly deps: TeamChatThreadStoreDeps) {}
 
   /**
-   * Returns the conversation id for the agent's DM: the mapped id if it still exists,
-   * else an adoptable orphan, else a freshly created conversation — creating and persisting
-   * at most once even under concurrent calls.
+   * Returns the conversation id for the agent's DM: the mapped id when it still
+   * exists AND runs on the agent's expected provider, else an adoptable orphan on
+   * that provider, else a freshly created conversation — creating and persisting
+   * at most once even under concurrent calls. A provider change rotates to a fresh
+   * conversation (spec §4); the old one is left orphaned, never deleted.
    */
   async resolveOrCreate(agentId: string): Promise<string> {
     return this.serialize(() => this.resolveOrCreateInner(agentId));
@@ -60,11 +77,21 @@ export class TeamChatThreadStore {
     const rooms = await this.loadRooms();
     const key = this.roomKeyForAgent(agentId);
 
-    const mapped = rooms[key];
-    if (mapped && this.deps.conversationExists(mapped)) return mapped;
+    // Resolve the agent's expected provider ONCE (roster policy, shared with DM
+    // creation) and thread it through both reuse gates below, so a single roster
+    // read decides reuse, adoption, and creation consistently.
+    const expectedProvider = await this.deps.resolveExpectedProvider(agentId);
 
-    // Adopt an orphaned DM before creating, so a lost threads.json can't duplicate it.
-    const adoptable = this.deps.findAdoptable(agentId);
+    // Reuse the mapping only while it still runs on the expected provider. A DM's
+    // providerId is immutable, so if the user re-pointed the agent at a different
+    // backend, the mapped conversation is stale and must rotate — not be returned.
+    const mapped = rooms[key];
+    if (mapped && this.deps.isConversationUsable(mapped, expectedProvider)) return mapped;
+
+    // Adopt an orphaned DM before creating, so a lost threads.json can't duplicate
+    // it — but only one already on the expected provider. Adopting the agent's
+    // OLD-provider DM here would instantly undo the rotation and it would never move.
+    const adoptable = this.deps.findAdoptable(agentId, expectedProvider);
     const id = adoptable ? adoptable.id : (await this.deps.createConversation(agentId)).id;
 
     // Order matters — durable write, THEN commit the cache, THEN notify:
