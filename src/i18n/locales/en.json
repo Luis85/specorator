@@ -1298,7 +1298,8 @@
   "ribbon": {
     "openChat": "Open Co-Worker Chat",
     "openAgentBoard": "Open Agent Board",
-    "openLibrary": "Open Library"
+    "openLibrary": "Open Library",
+    "openTeamChat": "Open Team Chat"
   },
   "commands": {
     "openView": "Open chat view",
@@ -1321,6 +1322,12 @@
     "openLoopLibrary": "Open loop library",
     "openLibrary": "Open Library",
     "openQuickActions": "Open Quick Actions",
-    "cursorOpenAcpCaptures": "Cursor: open ACP capture folder"
+    "cursorOpenAcpCaptures": "Cursor: open ACP capture folder",
+    "openTeamChat": "Open Team Chat"
+  },
+  "teamChat": {
+    "viewTitle": "Team Chat",
+    "emptyState": "Select an agent to start chatting.",
+    "rosterEmpty": "No agents in your team yet."
   }
 }

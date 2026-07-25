@@ -4,6 +4,7 @@ import { resetCommandHotkeysForTests } from '@/core/commands/commandHotkeyRegist
 import { TOOL_SUBAGENT } from '@/core/tools/toolNames';
 import { VIEW_TYPE_SPECORATOR } from '@/core/types';
 import { QuickActionFavoritesCache } from '@/features/quickActions/QuickActionFavoritesCache';
+import { VIEW_TYPE_TEAM_CHAT } from '@/features/teamChat/viewType';
 import * as sdkSession from '@/providers/claude/history/ClaudeHistoryStore';
 import { DEFAULT_SETTINGS } from '@/providers/claude/types/settings';
 
@@ -172,6 +173,25 @@ describe('SpecoratorPlugin', () => {
         id: 'open-view',
         name: 'Open chat view',
         callback: expect.any(Function),
+      });
+    });
+
+    it('registers the Team Chat view', async () => {
+      await plugin.onload();
+
+      expect((plugin.registerView as jest.Mock)).toHaveBeenCalledWith(
+        VIEW_TYPE_TEAM_CHAT,
+        expect.any(Function),
+      );
+    });
+
+    it('adds the open-team-chat command', async () => {
+      await plugin.onload();
+
+      // Throws if the command was never registered (getRegisteredCommand).
+      expect(getRegisteredCommand('open-team-chat')).toMatchObject({
+        id: 'open-team-chat',
+        name: 'Open Team Chat',
       });
     });
 

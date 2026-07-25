@@ -139,7 +139,10 @@ Follow the Library/Marketplace three-file island pattern:
 
 - `src/features/teamChat/viewType.ts` → `export const VIEW_TYPE_TEAM_CHAT = 'specorator-team-chat'`.
 - `src/features/teamChat/TeamChatView.ts` → `ItemView` subclass. `onOpen()` does
-  `createApp(TeamChatRoot)` + a dedicated `getTeamChatPinia()` + `provide(PLUGIN_KEY, markRaw(plugin))` (+ view/callbacks keys) + `mount(contentEl)`; `onClose()` unmounts and tears down the tab engine. `getState`/`setState`
+  `createApp(TeamChatRoot)` + a dedicated `createTeamChatPinia()` — **fresh per leaf
+  (mirrors chat's `createChatShellPinia`, not Library's shared `getLibraryPinia`)**,
+  because each `TeamChatView` owns its own `TabManager` and the plugin enumerates
+  multiple leaves — + `provide(PLUGIN_KEY, markRaw(plugin))` (+ view/callbacks keys) + `mount(contentEl)`; `onClose()` unmounts and tears down the tab engine. `getState`/`setState`
   persist the selected `agentId` so reopening restores the last DM.
 - `src/features/teamChat/activateTeamChat.ts` → reveal-or-open via
   `getLeaf('tab')` + `setViewState` + `revealLeaf` + `loadIfDeferred()` (opens in
@@ -491,7 +494,7 @@ reserving the key shape is the only forward-compat cost, consistent with YAGNI.
 `activateTeamChat.ts`, `TeamChatThreadStore.ts`,
 `ui/vue/{TeamChatRoot,TeamRoster,TeamChatMain}.vue`,
 `ui/vue/components/{TeamChatTopBar,PresenceDot,...}.vue`,
-`ui/vue/stores/teamChatStore.ts`, a `pinia.ts` (`getTeamChatPinia`), CSS, and
+`ui/vue/stores/teamChatStore.ts`, a `globalPinia.ts` (`createTeamChatPinia`, fresh per leaf), CSS, and
 `src/features/teamChat/CLAUDE.md`.
 
 **Extended:** `src/features/agents/roster/rosterTypes.ts` (`voice`, `avatarEmoji`,

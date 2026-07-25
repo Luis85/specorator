@@ -46,6 +46,14 @@ module.exports = {
     '!src/features/marketplace/vue/**',
     '!src/features/marketplace/MarketplaceView.ts',
     '!src/features/marketplace/activateMarketplace.ts',
+    // src/features/teamChat/ui/vue/** (the Team Chat Vue island: store, pinia,
+    // keys, callbacks, SFCs) is exercised + coverage-gated in the Vitest lane
+    // (tests/vue/teamChat); the Obsidian-coupled ItemView host and leaf
+    // activation are manually verified like the other feature views. The pure
+    // logic (TeamChatThreadStore) stays Jest-collected.
+    '!src/features/teamChat/ui/vue/**',
+    '!src/features/teamChat/TeamChatView.ts',
+    '!src/features/teamChat/activateTeamChat.ts',
     // src/shared/vue/** (mountLucide, the Lucide function-ref host shared by the
     // Agent Board + Marketplace islands) is exercised and coverage-gated in the
     // Vitest lane (vitest.config.mts coverage.include); counting it here at 0%
