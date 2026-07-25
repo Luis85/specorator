@@ -2531,6 +2531,109 @@ describe('TabManager - openConversation Current Tab Path', () => {
   });
 });
 
+// Round-61 (:126/:659): the cross-view reveal/switch must run OUTSIDE this manager's mutation
+// tail. Before the fix it ran INSIDE openConversationImpl (i.e. while runTabMutation held this
+// manager's tail) and awaited the OTHER manager's PUBLIC switchToTab, which since Round-42
+// unconditionally enqueues on that manager's tail. Two live leaves each cross-opening the
+// conversation the OTHER owns therefore each held their own tail while awaiting the other's
+// queued switch → circular wait → permanent deadlock (both managers' future mutations wedged
+// forever). The fix HOISTS the cross-view path into the public openConversation, before the
+// tail, so no manager awaits another's queued switch while holding its own tail.
+describe('TabManager - openConversation cross-view hoist (Round-61 deadlock)', () => {
+  it('resolves both concurrent cross-opens and leaves neither mutation tail wedged', async () => {
+    mockCreateTab.mockReset();
+    let counter = 0;
+    mockCreateTab.mockImplementation(() => createMockTabData({ id: `tab-${++counter}` }));
+
+    const plugin = createMockPlugin();
+    const viewA: any = { leaf: { id: 'leaf-A' }, getTabManager: jest.fn() };
+    const viewB: any = { leaf: { id: 'leaf-B' }, getTabManager: jest.fn() };
+    const managerA = new TabManager(plugin, createMockMcpManager(), createMockEl(), viewA, {});
+    const managerB = new TabManager(plugin, createMockMcpManager(), createMockEl(), viewB, {});
+    viewA.getTabManager.mockReturnValue(managerA);
+    viewB.getTabManager.mockReturnValue(managerB);
+
+    const tabA = await managerA.createTab(); // tab-1, lives in leaf-A
+    const tabB = await managerB.createTab(); // tab-2, lives in leaf-B
+    tabA!.conversationId = 'conv-A';
+    tabB!.conversationId = 'conv-B';
+
+    // conv-A is owned by leaf-A (managerA); conv-B is owned by leaf-B (managerB).
+    plugin.findConversationAcrossViews.mockImplementation((id: string) =>
+      id === 'conv-A' ? { view: viewA, tabId: tabA!.id }
+        : id === 'conv-B' ? { view: viewB, tabId: tabB!.id }
+          : null,
+    );
+
+    let aDone = false;
+    let bDone = false;
+    // A opens B's conversation and B opens A's — concurrently, both in flight, each targeting
+    // the other manager's mutation tail.
+    const openA = managerA.openConversation('conv-B').then(() => { aDone = true; });
+    const openB = managerB.openConversation('conv-A').then(() => { bDone = true; });
+
+    // Buggy code never settles these (each holds its tail awaiting the other's queued switch);
+    // the fixed out-of-tail path completes within a few microtasks. Flushing is independent of
+    // the (potentially) deadlocked promises, so this asserts without hanging the suite.
+    await flushMicrotasks(50);
+    expect(aDone).toBe(true);
+    expect(bDone).toBe(true);
+    await Promise.all([openA, openB]);
+
+    // The cross-view path focused each OTHER leaf (preserved behavior).
+    expect(plugin.app.workspace.revealLeaf).toHaveBeenCalledWith({ id: 'leaf-B' });
+    expect(plugin.app.workspace.revealLeaf).toHaveBeenCalledWith({ id: 'leaf-A' });
+
+    // Neither tail is wedged: each manager still processes a fresh mutation afterward.
+    await expect(managerA.switchToTab(tabA!.id)).resolves.toBeUndefined();
+    await expect(managerB.createTab()).resolves.toBeTruthy();
+  });
+
+  it('reveals the owning leaf and switches its tab for a plain cross-view open', async () => {
+    const plugin = createMockPlugin();
+    const manager = createManager({ plugin });
+    await manager.createTab();
+
+    const otherSwitch = jest.fn().mockResolvedValue(undefined);
+    plugin.findConversationAcrossViews.mockReturnValue({
+      view: { leaf: { id: 'other-leaf' }, getTabManager: () => ({ switchToTab: otherSwitch }) },
+      tabId: 'other-tab',
+    });
+
+    await manager.openConversation('conv-elsewhere');
+
+    expect(plugin.app.workspace.revealLeaf).toHaveBeenCalledWith({ id: 'other-leaf' });
+    expect(otherSwitch).toHaveBeenCalledWith('other-tab');
+    // Cross-view is handled entirely in the public method — the serialized impl never runs.
+    expect(mockCreateTab).toHaveBeenCalledTimes(1); // only the setup tab
+  });
+
+  it('does not mint a duplicate tab when a conversation races cross-view after the pre-tail check (TOCTOU)', async () => {
+    const plugin = createMockPlugin();
+    const manager = createManager({ plugin });
+    await manager.createTab();
+    const countBefore = manager.getTabCount();
+
+    // First lookup (public openConversation, pre-tail) sees no cross-view owner, so the open
+    // proceeds into the serialized impl. Between then and the impl's create, the conversation
+    // races open in ANOTHER leaf; the impl's defensive re-check (second lookup) must bail
+    // without minting a duplicate — and must NOT await the other manager's queued switch.
+    plugin.findConversationAcrossViews
+      .mockReturnValueOnce(null)
+      .mockReturnValue({
+        view: { leaf: { id: 'other-leaf' }, getTabManager: () => ({ switchToTab: jest.fn() }) },
+        tabId: 'other-tab',
+      });
+    plugin.getConversationById.mockResolvedValue({ id: 'conv-race' });
+
+    const createImplSpy = jest.spyOn(manager as any, 'createTabImpl');
+    await manager.openConversation('conv-race', { preferNewTab: true });
+
+    expect(createImplSpy).not.toHaveBeenCalled();
+    expect(manager.getTabCount()).toBe(countBefore);
+  });
+});
+
 describe('TabManager - Service Initialization Errors', () => {
   it('should restore state without pre-warming any tabs', async () => {
     mockCreateTab.mockReturnValue(

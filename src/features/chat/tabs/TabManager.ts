@@ -621,6 +621,15 @@ export class TabManager implements TabManagerInterface {
     options: boolean | OpenConversationOptions = false,
   ): Promise<void> {
     if (this.isDestroying) return; // no-op an external open issued after teardown began (:120)
+    // Round-61: the cross-view reveal/switch is HOISTED out of the mutation tail. It only focuses
+    // ANOTHER leaf and awaits that leaf's queued switchToTab — holding our own tail across that await
+    // deadlocked two leaves each cross-opening the other's conversation. It never mutates OUR tabs.
+    const crossView = this.plugin.findConversationAcrossViews(conversationId);
+    if (crossView && crossView.view.leaf !== this.view.leaf) {
+      await revealWorkspaceLeaf(this.plugin.app.workspace, crossView.view.leaf);
+      await crossView.view.getTabManager()?.switchToTab(crossView.tabId);
+      return;
+    }
     return this.runTabMutation(() => this.openConversationImpl(conversationId, options));
   }
 
@@ -646,19 +655,10 @@ export class TabManager implements TabManagerInterface {
       }
     }
 
-    // Check if conversation is open in another view (split workspace scenario).
-    // Compare owning leaves: each live view owns exactly one workspace leaf, so
-    // this is reference-equivalent to comparing the views themselves, and it
-    // stays valid now that findConversationAcrossViews returns the narrowed
-    // ChatViewHandle (which no longer overlaps the concrete TabManagerViewHost).
-    const crossViewResult = this.plugin.findConversationAcrossViews(conversationId);
-    const isSameView = crossViewResult?.view.leaf === this.view.leaf;
-    if (crossViewResult && !isSameView) {
-      // Focus the other view and switch to its tab instead of opening duplicate
-      await revealWorkspaceLeaf(this.plugin.app.workspace, crossViewResult.view.leaf);
-      await crossViewResult.view.getTabManager()?.switchToTab(crossViewResult.tabId);
-      return;
-    }
+    // Defensive TOCTOU re-check (Round-61): a hit here means the conversation raced into ANOTHER
+    // leaf after openConversation()'s pre-tail check (the same-view loop already handled THIS view).
+    // Bail without a duplicate — never await its queued switchToTab under our tail (the deadlock).
+    if (this.plugin.findConversationAcrossViews(conversationId)) return;
 
     // Open in current tab or new tab
     if (preferNewTab && this.canCreateTab()) {
