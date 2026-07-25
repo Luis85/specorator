@@ -120,6 +120,79 @@ describe('TeamChatView.selectAgent — resolve → cross-view reuse / create', (
     expect(createTab).toHaveBeenCalledWith('conv-3', undefined, { activate: true, kind: 'chat' });
   });
 
+  // Fix A (new): two overlapping selects for the SAME agent (rapid double-click,
+  // or simultaneous clicks in two leaves sharing the plugin-scoped coordinator)
+  // must collapse — resolveOrCreate serializes only the mapping, so without the
+  // open-coordinator both would see findConversationAcrossViews==null and each
+  // createTab, double-mounting one DM.
+  it('serializes overlapping selects of the same DM: createTab runs once, the second switches (Fix A)', async () => {
+    let createdTabId: string | null = null;
+    const thisLeaf = { id: 'leaf-this' };
+    const switchToTab = jest.fn().mockResolvedValue(undefined);
+    // createTab registers the tab only AFTER a yield, so a racing second caller
+    // can't observe it synchronously (models real tab-creation latency).
+    const createTab = jest.fn().mockImplementation(async () => {
+      await Promise.resolve();
+      createdTabId = 'tab-1';
+      return { id: 'tab-1' };
+    });
+    const store = { resolveOrCreate: jest.fn().mockResolvedValue('conv-1') };
+    const view = makeView({
+      leaf: thisLeaf,
+      plugin: {
+        getTeamChatThreadStore: () => store,
+        findConversationAcrossViews: jest.fn(() =>
+          createdTabId
+            ? { view: { leaf: thisLeaf, getTabManager: () => ({ switchToTab }) }, tabId: createdTabId }
+            : null),
+      },
+    });
+    view.tabManager = { createTab, switchToTab };
+
+    await Promise.all([view.selectAgent('roster:a'), view.selectAgent('roster:a')]);
+
+    expect(createTab).toHaveBeenCalledTimes(1);
+    // The queued second caller re-ran the open, found the just-created tab, and switched.
+    expect(switchToTab).toHaveBeenCalledWith('tab-1');
+  });
+
+  // Fix B (new): the source leaf never opened a tab for this agent (the DM lives
+  // in another leaf), so its optimistic selection must roll back or the roster
+  // highlight + empty state desync against the still-showing prior transcript.
+  it('rolls the source leaf selection back to its prior value on a cross-view reveal (Fix B)', async () => {
+    const observer = jest.fn();
+    const otherSwitch = jest.fn().mockResolvedValue(undefined);
+    const otherLeaf = { id: 'leaf-other' };
+    const revealLeaf = jest.fn().mockResolvedValue(undefined);
+    const createTab = jest.fn();
+    const view = makeView({
+      leaf: { id: 'leaf-this' },
+      plugin: {
+        app: { workspace: { revealLeaf } },
+        getTeamChatThreadStore: () => ({ resolveOrCreate: jest.fn().mockResolvedValue('conv-2') }),
+        findConversationAcrossViews: jest.fn(() => ({
+          view: { leaf: otherLeaf, getTabManager: () => ({ switchToTab: otherSwitch }) },
+          tabId: 'tab-9',
+        })),
+      },
+    });
+    view.selectedAgentId = 'roster:prev'; // a DM was already showing in this leaf
+    view.teamChatObservers = new Set([observer]);
+    view.tabManager = { createTab, switchToTab: jest.fn() };
+
+    await view.selectAgent('roster:new');
+
+    // Source-leaf selection is restored so its projection matches its visible pane.
+    expect(view.selectedAgentId).toBe('roster:prev');
+    // The owning leaf is revealed + switched; this leaf never double-mounts.
+    expect(revealLeaf).toHaveBeenCalledWith(otherLeaf);
+    expect(otherSwitch).toHaveBeenCalledWith('tab-9');
+    expect(createTab).not.toHaveBeenCalled();
+    // Optimistic set to the clicked agent, then rolled back to the prior one.
+    expect(observer).toHaveBeenNthCalledWith(1, { selectedAgentId: 'roster:new' });
+    expect(observer).toHaveBeenLastCalledWith({ selectedAgentId: 'roster:prev' });
+  });
+
   it('reverts the selection, re-emits, and shows a Notice when createTab hits the tab cap', async () => {
     const observer = jest.fn();
     const createTab = jest.fn().mockResolvedValue(null); // tab cap reached

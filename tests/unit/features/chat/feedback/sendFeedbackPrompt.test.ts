@@ -106,6 +106,25 @@ describe('sendFeedbackPrompt', () => {
     ).not.toThrow();
   });
 
+  // Fix C (new): when Team Chat is the ONLY open surface, getView() (sidebar-
+  // scoped) is null but the owning tab is still reachable via
+  // findConversationAcrossViews. Feedback must resolve the cross-view tab FIRST
+  // rather than no-op on the null sidebar view.
+  it('runs on the cross-view tab when getView() (sidebar) is null (Fix C)', () => {
+    const tab = makeTab('tab-tc');
+    const teamChatView = { getTabManager: () => makeTabManager([tab], null) };
+    const plugin = makePlugin({
+      view: null, // no sidebar leaf open
+      crossView: { view: teamChatView, tabId: 'tab-tc' },
+    });
+
+    sendFeedbackPrompt(plugin as never, makeMessage(), 'conv-tc', 'up');
+
+    expect(tab.controllers.inputController.sendMessage).toHaveBeenCalledWith({
+      content: t('chat.feedback.thumbsUp.prompt'),
+    });
+  });
+
   it('does nothing when no active tab and no cross-view match exist', () => {
     const tabManager = makeTabManager([], null);
     const view = { getTabManager: () => tabManager };

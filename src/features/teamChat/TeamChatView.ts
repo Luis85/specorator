@@ -7,6 +7,7 @@ import type { ChatViewHandle } from '../../core/types/PluginContext';
 import { t } from '../../i18n/i18n';
 import type SpecoratorPlugin from '../../main';
 import { TabManager } from '../chat/tabs/TabManager';
+import { getTeamChatDmOpenCoordinator } from './TeamChatDmOpenCoordinator';
 import type { TeamChatThreadStore } from './TeamChatThreadStore';
 import { createTeamChatPinia } from './ui/vue/globalPinia';
 import { CALLBACKS_KEY, CONTENT_HOST_KEY, PLUGIN_KEY, VIEW_KEY } from './ui/vue/keys';
@@ -206,14 +207,43 @@ export class TeamChatView extends ItemView implements ChatViewHandle {
     const manager = this.tabManager;
     if (!manager) return; // engine not built yet (defensive; clicks only fire post-mount)
     const conversationId = await this.getThreadStore().resolveOrCreate(agentId);
+    // Serialize the find→open plugin-wide, keyed by conversationId, so two
+    // overlapping selects of the SAME DM (rapid double-click, or simultaneous
+    // clicks in two Team Chat leaves) collapse into ONE open. resolveOrCreate
+    // serializes only the roomKey→id mapping; without this both callers would see
+    // findConversationAcrossViews == null (neither tab created yet) and each
+    // createTab, double-mounting one conversation (concurrent streams/saves
+    // corrupt it). The queued second caller re-runs openResolvedDm, now finds the
+    // tab, and switches. Optimistic selection above stays unserialized for
+    // responsiveness; only the resolve→open must be race-free.
+    await getTeamChatDmOpenCoordinator(this.plugin).serialize(conversationId, () =>
+      this.openResolvedDm(conversationId, previousAgentId, manager));
+  }
+
+  /**
+   * Body of the serialized DM open: reuse an already-open tab (this leaf or
+   * another), else create one here. Re-run safe — a queued second caller for the
+   * same conversation re-enters after the first created the tab, finds it, and
+   * switches instead of double-mounting.
+   */
+  private async openResolvedDm(
+    conversationId: string,
+    previousAgentId: string | null,
+    manager: TabManager,
+  ): Promise<void> {
     // Span every Specorator leaf (sidebar + all Team Chat views): a DM already
-    // open in another leaf must be revealed, never double-mounted — two
-    // controllers on one conversation stream/save concurrently and corrupt it.
+    // open in another leaf must be revealed, never double-mounted.
     const existing = this.plugin.findConversationAcrossViews(conversationId);
     if (existing) {
       if (existing.view.leaf === this.leaf) {
         await manager.switchToTab(existing.tabId);
       } else {
+        // The DM is owned by ANOTHER leaf, so this leaf never opened a tab for it
+        // and its visible pane still shows the prior transcript. Roll this leaf's
+        // optimistic selection back (else the roster highlight + empty state
+        // desync, persisting via getState) before revealing + switching the owner.
+        this.selectedAgentId = previousAgentId;
+        this.emitTeamChatChange();
         await this.plugin.app.workspace.revealLeaf(existing.view.leaf);
         await existing.view.getTabManager()?.switchToTab(existing.tabId);
       }
