@@ -1,5 +1,20 @@
 import { createMockEl } from '@test/helpers/mockElement';
 
+// Stub only vue's createApp so onOpen can run without a real Vue mount; keep the
+// rest of vue real (markRaw, and pinia's internal vue usage) via requireActual.
+jest.mock('vue', () => {
+  const actual = jest.requireActual('vue');
+  return {
+    ...actual,
+    createApp: jest.fn(() => ({
+      use: jest.fn(),
+      provide: jest.fn(),
+      mount: jest.fn(),
+      unmount: jest.fn(),
+    })),
+  };
+});
+
 // Mock the engine so the view's ChatViewHandle conformance can be exercised
 // without constructing the real tab stack (controllers, runtimes, islands).
 jest.mock('@/features/chat/tabs/TabManager', () => ({
@@ -212,6 +227,31 @@ describe('TeamChatView — persisted DM tab restore', () => {
 
     expect(view.tabManager.restoreState).not.toHaveBeenCalled();
     expect(view.areTabsRestored()).toBe(true);
+  });
+
+  // Round-29 (:90): a re-entrant onOpen (leaf move/pop-out, no interleaved onClose)
+  // must capture the LIVE layout before destroying the prior engine — the initial
+  // setState layout was already consumed by the first initTabEngine, so otherwise
+  // the rebuilt engine restores nothing and the pane goes blank.
+  it('re-entrant onOpen captures the live layout before destroy so the rebuild restores it (:90)', async () => {
+    const order: string[] = [];
+    const layout = {
+      openTabs: [{ tabId: 't1', conversationId: 'c1', kind: 'chat' as const }],
+      activeTabId: 't1',
+    };
+    const view = makeView();
+    view.pendingTabManagerState = null; // initial setState layout already consumed by the first init
+    view.tabManager = {
+      getPersistedState: jest.fn(() => { order.push('capture'); return layout; }),
+      destroy: jest.fn(() => { order.push('destroy'); return Promise.resolve(); }),
+    };
+
+    await view.onOpen();
+
+    // The live layout is stashed for the rebuilt engine's restore (Round-24 restore
+    // test above proves initTabEngine then reopens it) — captured BEFORE destroy.
+    expect(view.pendingTabManagerState).toEqual(layout);
+    expect(order).toEqual(['capture', 'destroy']);
   });
 });
 

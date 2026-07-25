@@ -86,6 +86,12 @@ export class TeamChatView extends ItemView implements ChatViewHandle {
     // prior engine so it can't leak pointing at the about-to-be-emptied host. No
     // leaf persist here — setViewState during onOpen would re-enter.
     if (this.tabManager) {
+      // Capture the LIVE DM layout before destroying: the initial setState layout
+      // was already consumed by the first initTabEngine, so without this the rebuilt
+      // engine restores nothing and the pane goes blank while selectedAgentId still
+      // references the old agent (:90). This live capture supersedes the (already
+      // consumed) initial state; the rebuilt initTabEngine reopens these tabs.
+      this.pendingTabManagerState = this.tabManager.getPersistedState();
       await this.tabManager.destroy();
       this.tabManager = null;
     }
@@ -279,7 +285,12 @@ export class TeamChatView extends ItemView implements ChatViewHandle {
     // / replaced (see isSelectionStale) and bail before any stale side effect.
     const generation = ++this.selectionGeneration;
     const manager = this.tabManager;
-    if (!manager) return; // engine not built yet (defensive; clicks only fire post-mount)
+    // Gate on both: no engine yet (defensive; clicks only fire post-mount), AND
+    // restore still in flight — during initTabEngine's restoreState the manager is
+    // already non-null but tabsRestored is false, so opening now would createTab a
+    // DM restoreState is about to recreate → a duplicate controller for one
+    // conversation. Ignore the click; the saved layout reopens the DMs anyway (:274).
+    if (!manager || !this.tabsRestored) return;
     const conversationId = await this.getThreadStore().resolveOrCreate(agentId);
     // Bail if the leaf closed/re-opened or a newer agent was selected while
     // resolveOrCreate was in flight — otherwise the open would mount into a

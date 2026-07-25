@@ -29,6 +29,7 @@ function makeView(overrides: { leaf?: unknown; plugin?: Record<string, unknown> 
   view.tabManager = null;
   view.selectedAgentId = null;
   view.selectionGeneration = 0; // class-field initializer is skipped by Object.create
+  view.tabsRestored = true;     // these flows assume a restored engine (Round-29 gate)
   view.teamChatObservers = new Set();
   return view;
 }
@@ -51,6 +52,34 @@ describe('TeamChatView.selectAgent — resolve → cross-view reuse / create', (
   beforeEach(() => {
     jest.clearAllMocks();
     mockNotice.mockClear();
+  });
+
+  // Round-29 (:274): a roster click during initTabEngine's restoreState (manager
+  // already non-null, tabsRestored still false) must be ignored — opening now would
+  // createTab a DM restoreState is about to recreate, duplicating its controller.
+  it('ignores roster clicks while restore is in progress, then opens after (:274)', async () => {
+    const resolveOrCreate = jest.fn().mockResolvedValue('conv-1');
+    const createTab = jest.fn().mockResolvedValue({ id: 'tab-1' });
+    const view = makeView({
+      plugin: {
+        getTeamChatThreadStore: () => ({ resolveOrCreate }),
+        findConversationAcrossViews: jest.fn(() => null),
+      },
+    });
+    view.tabManager = { createTab, switchToTab: jest.fn() };
+    view.tabsRestored = false; // restore still in flight (manager already built)
+
+    await view.selectAgent('roster:a');
+
+    // Bailed before touching the thread store or the engine — no tab created mid-restore.
+    expect(resolveOrCreate).not.toHaveBeenCalled();
+    expect(createTab).not.toHaveBeenCalled();
+
+    // Once restore completes, selection works normally.
+    view.tabsRestored = true;
+    await view.selectAgent('roster:a');
+    expect(resolveOrCreate).toHaveBeenCalledWith('roster:a');
+    expect(createTab).toHaveBeenCalledWith('conv-1', undefined, { activate: true, kind: 'chat' });
   });
 
   it('does NOT set selectedAgentId optimistically — the tab projection owns it', async () => {
