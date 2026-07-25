@@ -111,15 +111,18 @@ export class PluginViewActivator {
     const workOrderHosts = views.filter(
       (view) => view.leaf.view.getViewType() === VIEW_TYPE_SPECORATOR,
     );
+    // Computed once and consulted in BOTH branches below: a sidebar leaf may be deferred (persisted
+    // but not yet instantiated, so absent from getAllViews) whether or not a LIVE work-order host
+    // already exists, and either way it restores WO tabs the loop can't yet count.
+    const sidebarLeaves = this.plugin.app.workspace.getLeavesOfType(VIEW_TYPE_SPECORATOR);
     if (workOrderHosts.length === 0) {
       // No LIVE work-order host. A persisted sidebar leaf may be deferred — not yet instantiated,
       // so absent from getAllViews — but will restore its WO tabs later, so count its persisted
       // tabs; otherwise the queue would read free capacity and over-launch before restore.
-      const leaves = this.plugin.app.workspace.getLeavesOfType(VIEW_TYPE_SPECORATOR);
-      if (leaves.length === 0) {
+      if (sidebarLeaves.length === 0) {
         return { used: this.plugin.chatTabReservations.pending, max };
       }
-      if (leaves.every((leaf) => leaf.isDeferred)) {
+      if (sidebarLeaves.every((leaf) => leaf.isDeferred)) {
         const persistedWorkOrderTabs = this.getLastKnownOpenTabCountFor('work-order');
         return {
           used: persistedWorkOrderTabs + this.plugin.chatTabReservations.pending,
@@ -130,7 +133,10 @@ export class PluginViewActivator {
     }
 
     let used = this.plugin.chatTabReservations.pending;
-    let anyMidRestore = false;
+    // A deferred sidebar leaf will restore WO tabs we can't yet count (its manager isn't live, so
+    // it's absent from getAllViews) — treat it like a mid-restore host and report full usage so the
+    // queue waits, rather than letting a LIVE host mask it and over-launch (P1, second Round-47 hole).
+    let anyMidRestore = sidebarLeaves.some((leaf) => leaf.isDeferred);
     for (const view of workOrderHosts) {
       const tabManager = view.getTabManager();
       if (!tabManager || !view.areTabsRestored()) {

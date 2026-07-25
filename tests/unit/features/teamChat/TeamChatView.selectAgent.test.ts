@@ -719,4 +719,27 @@ describe('TeamChatView.selectAgent — queued restore-time selection (Round-48 F
     // No manager → the click can't be honored later either, so it is not queued.
     expect(view.pendingAgentSelection).toBeNull();
   });
+
+  // Round-50 (second-order of Fix C): a REAL (post-restore) selection that proceeds must clear any
+  // restore-time pick still queued, so the post-reconcile drain can't replay that stale pick over
+  // the newer one. Without the clear, a click during the reconcile await would be clobbered by the
+  // drain replaying the older queued agent — violating last-click-wins.
+  it('a proceeding (post-restore) selection clears a queued restore-time pick — last-click-wins (Round-50)', async () => {
+    const createTab = jest.fn().mockResolvedValue({ id: 'tab-c' });
+    const view = makeView({
+      plugin: {
+        getTeamChatThreadStore: () => ({ get: jest.fn().mockResolvedValue(null), resolveOrCreate: jest.fn().mockResolvedValue('conv-c') }),
+        findConversationAcrossViews: jest.fn(() => null),
+      },
+    });
+    view.tabManager = { createTab, switchToTab: jest.fn() };
+    view.tabsRestored = true;
+    view.pendingAgentSelection = 'roster:stale'; // an earlier restore-time click, still queued
+
+    await view.selectAgent('roster:c');
+
+    // C opened, and it superseded the queued restore-time pick so a later drain sees null.
+    expect(createTab).toHaveBeenCalledWith('conv-c', undefined, { activate: true, kind: 'chat', bypassTabLimit: true });
+    expect(view.pendingAgentSelection).toBeNull();
+  });
 });

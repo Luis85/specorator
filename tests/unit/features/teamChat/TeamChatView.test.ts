@@ -631,6 +631,43 @@ describe('TeamChatView — persisted DM tab restore', () => {
 
     expect(selectAgent).not.toHaveBeenCalled();
   });
+
+  // Round-50 (second-order of Fix C): the drain reads pendingAgentSelection AFTER the (possibly slow)
+  // reconcileRestoredDmProviders await. A newer roster click (C) landing DURING that await proceeds
+  // (tabsRestored is already true) and, per the fix, clears the queued restore-time pick (B) — so the
+  // drain sees null and does NOT replay the stale B over C (last-click-wins).
+  it('a newer selection during the post-restore reconcile is not clobbered by the drain (Round-50)', async () => {
+    const reconcileGate = deferred<void>();
+    const view = makeView();
+    view.pendingTabManagerState = null;
+    view.pendingAgentSelection = 'roster:B'; // B was clicked while tabs were still restoring
+    view.tabManager = {
+      getActiveTab: jest.fn(() => null),
+      getAllTabs: jest.fn(() => []),
+      getTabCount: jest.fn(() => 0),
+      countTabsByKind: jest.fn(() => 0),
+    };
+    view.tabsRestored = false;
+    // A parking thread store so the injected C selection reaches the proceed-path clear then awaits
+    // get() forever — it never needs to fully open, which keeps this test off the engine machinery.
+    view.plugin.getTeamChatThreadStore = () => ({ get: () => new Promise(() => {}), resolveOrCreate: jest.fn() });
+    // Gate the post-restore reconcile so a newer roster click can interleave before the drain runs.
+    jest.spyOn(view, 'refreshProviderAvailability').mockReturnValue(reconcileGate.promise);
+    const selectAgent = jest.spyOn(view, 'selectAgent'); // call-through: records calls AND runs the real clear
+
+    const restoring = view.restoreTabsThenMarkReady();
+    await flushMicrotasks(); // reach the gated reconcile; tabsRestored is now true
+
+    void view.selectAgent('roster:C'); // newer click DURING the reconcile await → clears the queued B
+    await flushMicrotasks();
+    reconcileGate.resolve();
+    await restoring;
+
+    // C was honored; the drain saw the cleared pick and did NOT replay the stale B.
+    expect(selectAgent).toHaveBeenCalledWith('roster:C');
+    expect(selectAgent).not.toHaveBeenCalledWith('roster:B');
+    expect(view.pendingAgentSelection).toBeNull();
+  });
 });
 
 describe('TeamChatView — onClose teardown', () => {

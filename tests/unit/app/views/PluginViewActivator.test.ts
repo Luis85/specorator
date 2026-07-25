@@ -313,4 +313,28 @@ describe('PluginViewActivator.getTabSlotUsage (work-order budget)', () => {
     // 3 persisted WO tabs + 1 pending reservation; pre-fix this wrongly returned { used: 1 }.
     expect(activator.getTabSlotUsage()).toEqual({ used: 4, max: 5 });
   });
+
+  it('blocks capacity when a deferred sidebar leaf coexists with a LIVE restored sidebar host (Round-50)', () => {
+    // Second hole in the Round-47 fix: a LIVE restored VIEW_TYPE_SPECORATOR host makes
+    // workOrderHosts non-empty, so the deferred-recovery branch (workOrderHosts.length === 0) is
+    // skipped and the loop counts only the live manager's WO tabs — missing a SEPARATE deferred
+    // sidebar leaf whose persisted WO tabs restore later. getLastKnownOpenTabCountFor reads a single
+    // plugin-level state (ambiguous across leaves), so we can't sum it; instead treat the deferred
+    // leaf like a mid-restore host and report full usage so the queue waits.
+    const liveSidebar = {
+      getTabManager: () => ({ countTabsByKind: (k: string) => (k === 'work-order' ? 1 : 0) }),
+      areTabsRestored: () => true,
+      leaf: { view: { getViewType: () => VIEW_TYPE_SPECORATOR } },
+    };
+    const { plugin } = createPlugin({
+      existingViewLeaves: [{ isDeferred: false }, { isDeferred: true }],
+      pendingReservations: 1,
+      agentBoardQueueCap: 5,
+    });
+    (plugin.getAllViews as jest.Mock).mockReturnValue([liveSidebar]);
+    const activator = new PluginViewActivator(plugin);
+    // Pre-fix this wrongly returned { used: 2 } (live WO 1 + pending 1), masking the deferred
+    // leaf's uncountable WO tabs; the queue could then over-launch before it restores.
+    expect(activator.getTabSlotUsage()).toEqual({ used: 5, max: 5 });
+  });
 });

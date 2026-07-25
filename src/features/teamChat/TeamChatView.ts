@@ -394,6 +394,7 @@ export class TeamChatView extends ItemView implements ChatViewHandle {
     // DM restoreState is about to recreate. Queue the LATEST click and drain it after restore, so a
     // select of an agent absent from the saved layout isn't discarded (Round-48 Fix C; :274/:400).
     if (!this.tabsRestored) { this.pendingAgentSelection = agentId; return; }
+    this.pendingAgentSelection = null; // a proceeding (post-restore) selection supersedes any queued restore-time pick, so the post-reconcile drain can't replay a stale click over this newer one — last-click-wins (Round-50)
     // Snapshot the currently-mapped DM before resolveOrCreate: a provider change
     // rotates the mapping to a FRESH conversation (Round-21/26), and the old tab
     // would otherwise stay attached — its old-provider runtime streaming and holding
