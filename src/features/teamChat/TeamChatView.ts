@@ -103,6 +103,14 @@ export class TeamChatView extends ItemView implements ChatViewHandle {
       // initTabEngine always flips it back true after the new restore (Round-31), so
       // it never stays false forever (:90).
       this.tabsRestored = false;
+      // Cancel the armed pending-persist debounce: its callback calls
+      // leaf.setViewState (the very re-entry onOpen avoids) and would race the newly
+      // mounting manager. destroyTabRuntime clears it via persistTabStateImmediate,
+      // but this re-entrant path never calls that, so it must clear its own (:109).
+      if (this.pendingPersist !== null) {
+        window.clearTimeout(this.pendingPersist);
+        this.pendingPersist = null;
+      }
       // Capture the LIVE DM layout before destroying: the initial setState layout
       // was already consumed by the first initTabEngine, so without this the rebuilt
       // engine restores nothing and the pane goes blank while selectedAgentId still
@@ -180,18 +188,26 @@ export class TeamChatView extends ItemView implements ChatViewHandle {
   /** Restores persisted DM tabs, then flips `tabsRestored` (mirror of
    *  SpecoratorView: the budget gate must not read a half-built tab set). */
   private async restoreTabsThenMarkReady(): Promise<void> {
+    // Capture the manager this restore belongs to. If onOpen re-enters and swaps in a
+    // replacement while we await restoreState, a superseded restore reaching its
+    // finally would re-open the gate (Round-32 reset it to false) and re-emit —
+    // letting a roster click createTab concurrent with the NEW restore (:185). Only
+    // the current manager's restore may publish (mirrors selectAgent's identity guard).
+    const manager = this.tabManager;
     try {
       await this.restoreTabs();
     } catch (error) {
       this.plugin.logger.scope('team-chat').error('team chat tab restore failed', error);
     } finally {
-      this.tabsRestored = true;
-      // Capacity is readable again now that tabsRestored is true (getTabSlotUsage
-      // reported FULL while it was false). Mirror SpecoratorView: fire chat:tabs-changed
-      // once (shared tabCountsPayload) so the Agent Board work-order queue re-ticks and
-      // drains any runnable card, instead of stalling until an unrelated tab change
-      // nudges it (:171).
-      this.plugin.events.emit('chat:tabs-changed', tabCountsPayload(this.tabManager));
+      if (this.tabManager === manager) {
+        this.tabsRestored = true;
+        // Capacity is readable again now that tabsRestored is true (getTabSlotUsage
+        // reported FULL while it was false). Mirror SpecoratorView: fire chat:tabs-changed
+        // once (shared tabCountsPayload) so the Agent Board work-order queue re-ticks and
+        // drains any runnable card, instead of stalling until an unrelated tab change
+        // nudges it (:171).
+        this.plugin.events.emit('chat:tabs-changed', tabCountsPayload(this.tabManager));
+      }
     }
   }
 

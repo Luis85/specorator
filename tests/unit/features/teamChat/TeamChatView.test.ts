@@ -261,6 +261,82 @@ describe('TeamChatView — persisted DM tab restore', () => {
     });
   });
 
+  // Round-33 (:185): if onOpen re-enters and swaps in a replacement manager while
+  // the OLD manager is still pre-hydrating, the OLD restore reaching its finally
+  // must NOT publish readiness (Round-32 reset the gate to false) — otherwise a
+  // roster click passes selectAgent's gate and duplicates a tab concurrent with the
+  // NEW restore. Only the current manager's restore may publish.
+  it('a superseded manager restore does not publish readiness (:185)', async () => {
+    const restoreGate = deferred<void>();
+    const view = makeView();
+    const m1 = {
+      restoreState: jest.fn(() => restoreGate.promise),
+      getTabCount: jest.fn(() => 0),
+      countTabsByKind: jest.fn(() => 0),
+    };
+    view.tabManager = m1;
+    view.tabsRestored = false;
+    view.pendingTabManagerState = { openTabs: [{ tabId: 't1', conversationId: 'c1', kind: 'chat' }], activeTabId: 't1' };
+
+    const restoring = view.restoreTabsThenMarkReady(); // captures m1, awaits m1.restoreState (suspended)
+    await flushMicrotasks();
+    expect(view.areTabsRestored()).toBe(false);
+
+    // A re-entrant onOpen swapped in a replacement manager while m1's restore hung.
+    view.tabManager = {};
+
+    restoreGate.resolve();      // m1's now-stale restore completes and hits its finally
+    await restoring;
+
+    // The stale restore stayed silent — it did not re-open the gate or re-emit.
+    expect(view.areTabsRestored()).toBe(false);
+    expect(view.plugin.events.emit).not.toHaveBeenCalled();
+  });
+
+  it('the current manager restore publishes readiness (:185)', async () => {
+    const view = makeView();
+    const m1 = {
+      restoreState: jest.fn().mockResolvedValue(undefined),
+      getTabCount: jest.fn(() => 0),
+      countTabsByKind: jest.fn(() => 0),
+    };
+    view.tabManager = m1;
+    view.tabsRestored = false;
+    view.pendingTabManagerState = null; // no-persisted-layout path; tabManager stays m1 through the finally
+
+    await view.restoreTabsThenMarkReady();
+
+    expect(view.areTabsRestored()).toBe(true);
+    expect(view.plugin.events.emit).toHaveBeenCalledWith('chat:tabs-changed', expect.anything());
+  });
+
+  // Round-33 (:109): the re-entrant onOpen branch tears down the old manager but must
+  // also cancel the armed pending-persist debounce — its callback calls setViewState
+  // (the very re-entry onOpen avoids) and can race the newly mounting manager.
+  it('re-entrant onOpen cancels the armed pending-persist debounce (:109)', async () => {
+    jest.useFakeTimers();
+    try {
+      const setViewState = jest.fn().mockResolvedValue(undefined);
+      const view = makeView();
+      view.leaf = { setViewState };
+      view.tabManager = {
+        getPersistedState: jest.fn(() => ({ openTabs: [], activeTabId: null })),
+        destroy: jest.fn().mockResolvedValue(undefined),
+      };
+
+      view.persistTabState();                 // arms the 300ms debounce (as a tab callback would)
+      expect(view.pendingPersist).not.toBeNull();
+
+      await view.onOpen();                     // re-entrant branch must cancel it before rebuilding
+
+      expect(view.pendingPersist).toBeNull();
+      jest.advanceTimersByTime(1000);
+      expect(setViewState).not.toHaveBeenCalled(); // the canceled timer never fired
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+
   // Round-30 (:90): the re-entrant onOpen teardown must bump selectionGeneration
   // (like destroyTabRuntime does), or an in-flight open whose resolveOrCreate settles
   // during the teardown window still passes isSelectionStale (manager not yet nulled)
