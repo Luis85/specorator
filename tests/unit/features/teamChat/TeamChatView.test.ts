@@ -37,6 +37,7 @@ function makeView(): any {
   view.tabManager = null;
   view.tabsRestored = false;
   view.selectedAgentId = null;
+  view.selectionGeneration = 0; // class-field initializer is skipped by Object.create
   view.pendingTabManagerState = null;
   view.pendingPersist = null;
   view.vueApp = null;

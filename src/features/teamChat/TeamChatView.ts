@@ -51,6 +51,14 @@ export class TeamChatView extends ItemView implements ChatViewHandle {
   /** Persisted tab layout stashed by `setState`, consumed once by the restore in
    *  `initTabEngine` (mirror of SpecoratorView's `viewTabManagerState`). */
   private pendingTabManagerState: PersistedTabManagerState | null = null;
+  /**
+   * Bumped at the start of every `selectAgent`. Its async open yields twice
+   * (`resolveOrCreate` + the serialized open); a newer select (generation bump) or
+   * a teardown/replace of the engine (manager identity change) during those yields
+   * must invalidate the in-flight open so it can't `createTab`/reveal/switch after
+   * being superseded or into a detached manager (:209).
+   */
+  private selectionGeneration = 0;
   private pendingPersist: number | null = null;
   // Store-reprojection observers (mirror of chat's chatShellObservers). The
   // routing composable subscribes here and fans each snapshot into the Pinia
@@ -258,19 +266,38 @@ export class TeamChatView extends ItemView implements ChatViewHandle {
    * to it rather than creating a duplicate.
    */
   async selectAgent(agentId: string): Promise<void> {
+    // Stamp this selection + capture the current engine, so the async open below
+    // can detect being superseded by a newer select or the engine being torn down
+    // / replaced (see isSelectionStale) and bail before any stale side effect.
+    const generation = ++this.selectionGeneration;
     const manager = this.tabManager;
     if (!manager) return; // engine not built yet (defensive; clicks only fire post-mount)
     const conversationId = await this.getThreadStore().resolveOrCreate(agentId);
+    // Bail if the leaf closed/re-opened or a newer agent was selected while
+    // resolveOrCreate was in flight — otherwise the open would mount into a
+    // detached manager or open a DM the user already navigated away from (:209).
+    if (this.isSelectionStale(generation, manager)) return;
     // Serialize the find→open plugin-wide, keyed by conversationId, so two
-    // overlapping selects of the SAME DM (rapid double-click, or simultaneous
-    // clicks in two Team Chat leaves) collapse into ONE open. resolveOrCreate
-    // serializes only the roomKey→id mapping; without this both callers would see
-    // findConversationAcrossViews == null (neither tab created yet) and each
-    // createTab, double-mounting one conversation (concurrent streams/saves
-    // corrupt it). The queued second caller re-runs openResolvedDm, now finds the
-    // tab, and switches.
+    // overlapping selects of the SAME DM (simultaneous clicks in two Team Chat
+    // leaves — each leaf has its own generation, so neither supersedes the other)
+    // collapse into ONE open. resolveOrCreate serializes only the roomKey→id
+    // mapping; without this both callers would see findConversationAcrossViews ==
+    // null (neither tab created yet) and each createTab, double-mounting one
+    // conversation (concurrent streams/saves corrupt it). The queued second caller
+    // re-runs openResolvedDm, now finds the tab, and switches.
     await getTeamChatDmOpenCoordinator(this.plugin).serialize(conversationId, () =>
-      this.openResolvedDm(conversationId, manager));
+      this.openResolvedDm(conversationId, manager, generation));
+  }
+
+  /**
+   * True once this selection was superseded by a newer select (generation bump) OR
+   * the engine was torn down / replaced (manager identity changed — catches
+   * `onClose` nulling `tabManager` and a re-entrant `onOpen` swapping it). Every
+   * post-await side effect in the open path guards on this so a superseded/detached
+   * open is a silent no-op instead of mounting a runtime into a dead manager (:209).
+   */
+  private isSelectionStale(generation: number, manager: TabManager): boolean {
+    return this.selectionGeneration !== generation || this.tabManager !== manager;
   }
 
   /**
@@ -280,7 +307,14 @@ export class TeamChatView extends ItemView implements ChatViewHandle {
    * switches instead of double-mounting. Touches no selection state: the activated
    * tab's `onTabSwitched`/`onTabCreated` drives the `selectedAgentId` projection.
    */
-  private async openResolvedDm(conversationId: string, manager: TabManager): Promise<void> {
+  private async openResolvedDm(
+    conversationId: string,
+    manager: TabManager,
+    generation: number,
+  ): Promise<void> {
+    // The serialized body may have queued behind another open (or the leaf may have
+    // been torn down since it was enqueued); re-check before touching anything.
+    if (this.isSelectionStale(generation, manager)) return;
     // Span every Specorator leaf (sidebar + all Team Chat views): a DM already
     // open in another leaf must be revealed, never double-mounted.
     const existing = this.plugin.findConversationAcrossViews(conversationId);
@@ -292,15 +326,17 @@ export class TeamChatView extends ItemView implements ChatViewHandle {
         // selectedAgentId projects off its OWN active tab, so it correctly stays
         // put; the destination leaf's onTabSwitched projects ITS selection.
         await this.plugin.app.workspace.revealLeaf(existing.view.leaf);
+        // revealLeaf awaited — re-check before the cross-leaf switch.
+        if (this.isSelectionStale(generation, manager)) return;
         await existing.view.getTabManager()?.switchToTab(existing.tabId);
       }
       return;
     }
     const created = await manager.createTab(conversationId, undefined, { activate: true, kind: 'chat' });
-    if (!created) {
-      // Tab cap reached (createTab returned null). No selection to revert — it
-      // already reflects the real active tab — so just tell the user why nothing
-      // opened. (LRU eviction is a later increment.)
+    // Surface the cap Notice only for a genuine, still-current cap hit — a stale
+    // open that lost the race isn't a user-facing error. No selection to revert
+    // either; it already reflects the real active tab. (LRU eviction is later.)
+    if (!created && !this.isSelectionStale(generation, manager)) {
       new Notice(t('teamChat.tabCapReached'));
     }
   }

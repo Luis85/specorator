@@ -28,8 +28,17 @@ function makeView(overrides: { leaf?: unknown; plugin?: Record<string, unknown> 
   view.contentEl = createMockEl();
   view.tabManager = null;
   view.selectedAgentId = null;
+  view.selectionGeneration = 0; // class-field initializer is skipped by Object.create
   view.teamChatObservers = new Set();
   return view;
+}
+
+/** A promise plus its resolver, so a test can settle resolveOrCreate on demand
+ *  (to interleave a teardown / a newer select while the open is pending). */
+function deferred<T>() {
+  let resolve!: (value: T) => void;
+  const promise = new Promise<T>((r) => (resolve = r));
+  return { promise, resolve };
 }
 
 describe('TeamChatView.selectAgent — resolve → cross-view reuse / create', () => {
@@ -122,40 +131,126 @@ describe('TeamChatView.selectAgent — resolve → cross-view reuse / create', (
     expect(createTab).toHaveBeenCalledWith('conv-3', undefined, { activate: true, kind: 'chat' });
   });
 
-  // Fix A (new): two overlapping selects for the SAME agent (rapid double-click,
-  // or simultaneous clicks in two leaves sharing the plugin-scoped coordinator)
-  // must collapse — resolveOrCreate serializes only the mapping, so without the
-  // open-coordinator both would see findConversationAcrossViews==null and each
-  // createTab, double-mounting one DM.
-  it('serializes overlapping selects of the same DM: createTab runs once, the second switches (Fix A)', async () => {
+  // Fix A (Round-22) — now scoped to the CROSS-LEAF case: the per-view generation
+  // guard (Round-25) handles same-view double-clicks (the second supersedes the
+  // first), so the plugin-wide coordinator's job is collapsing simultaneous opens
+  // of the same DM in DIFFERENT leaves (independent generation counters). One leaf
+  // creates the tab; the other finds it and reveals+switches — never a duplicate.
+  it('collapses simultaneous same-DM opens across leaves: createTab once, the other reveals+switches (Fix A)', async () => {
     let createdTabId: string | null = null;
-    const thisLeaf = { id: 'leaf-this' };
-    const switchToTab = jest.fn().mockResolvedValue(undefined);
-    // createTab registers the tab only AFTER a yield, so a racing second caller
-    // can't observe it synchronously (models real tab-creation latency).
-    const createTab = jest.fn().mockImplementation(async () => {
+    const leafA = { id: 'leaf-a' };
+    const leafB = { id: 'leaf-b' };
+    const revealLeaf = jest.fn().mockResolvedValue(undefined);
+    // Leaf A's create registers the tab only after a yield (real latency), so B's
+    // queued open can't observe it until A finishes.
+    const createTabA = jest.fn().mockImplementation(async () => {
       await Promise.resolve();
       createdTabId = 'tab-1';
       return { id: 'tab-1' };
     });
-    const store = { resolveOrCreate: jest.fn().mockResolvedValue('conv-1') };
+    const switchA = jest.fn().mockResolvedValue(undefined);
+    const createTabB = jest.fn();
+    const viewA = makeView({ leaf: leafA });
+    const viewB = makeView({ leaf: leafB });
+    viewA.tabManager = { createTab: createTabA, switchToTab: switchA };
+    viewB.tabManager = { createTab: createTabB, switchToTab: jest.fn() };
+    // ONE shared plugin object → both leaves resolve the SAME DM-open coordinator
+    // (it is WeakMap-keyed by plugin).
+    const sharedPlugin = {
+      logger: { scope: () => ({ error: jest.fn() }) },
+      app: { workspace: { revealLeaf } },
+      getTeamChatThreadStore: () => ({ resolveOrCreate: jest.fn().mockResolvedValue('conv-1') }),
+      findConversationAcrossViews: jest.fn(() =>
+        createdTabId
+          ? { view: { leaf: leafA, getTabManager: () => viewA.tabManager }, tabId: createdTabId }
+          : null),
+    };
+    viewA.plugin = sharedPlugin;
+    viewB.plugin = sharedPlugin;
+
+    await Promise.all([viewA.selectAgent('roster:a'), viewB.selectAgent('roster:a')]);
+
+    // Exactly one create; the other leaf found the tab and revealed+switched it.
+    expect(createTabA).toHaveBeenCalledTimes(1);
+    expect(createTabB).not.toHaveBeenCalled();
+    expect(revealLeaf).toHaveBeenCalledWith(leafA);
+    expect(switchA).toHaveBeenCalledWith('tab-1');
+  });
+
+  // Round-25 (:209 disposal): the leaf closes (onClose nulls tabManager) while the
+  // open is pending — the continuation must NOT mount into the detached manager.
+  it('does not open into a torn-down manager when the leaf closes mid-resolve (:209)', async () => {
+    const resolveConv = deferred<string>();
+    const createTab = jest.fn().mockResolvedValue({ id: 'tab-1' });
+    const switchToTab = jest.fn();
     const view = makeView({
-      leaf: thisLeaf,
       plugin: {
-        getTeamChatThreadStore: () => store,
-        findConversationAcrossViews: jest.fn(() =>
-          createdTabId
-            ? { view: { leaf: thisLeaf, getTabManager: () => ({ switchToTab }) }, tabId: createdTabId }
-            : null),
+        getTeamChatThreadStore: () => ({ resolveOrCreate: jest.fn(() => resolveConv.promise) }),
+        findConversationAcrossViews: jest.fn(() => null),
       },
     });
     view.tabManager = { createTab, switchToTab };
 
-    await Promise.all([view.selectAgent('roster:a'), view.selectAgent('roster:a')]);
+    const pending = view.selectAgent('roster:a'); // parks on resolveOrCreate
+    view.tabManager = null;                       // onClose → destroyTabRuntime
+    resolveConv.resolve('conv-1');
+    await pending;
 
+    expect(createTab).not.toHaveBeenCalled();
+    expect(switchToTab).not.toHaveBeenCalled();
+  });
+
+  // Round-25 (:209 re-entrant onOpen): the manager is REPLACED (not nulled) while
+  // the open is pending — the stale open bails via the manager-identity check, and
+  // must not leak into the fresh manager either.
+  it('does not open into a replaced manager when the engine is swapped mid-resolve (:209)', async () => {
+    const resolveConv = deferred<string>();
+    const staleCreate = jest.fn().mockResolvedValue({ id: 'tab-1' });
+    const view = makeView({
+      plugin: {
+        getTeamChatThreadStore: () => ({ resolveOrCreate: jest.fn(() => resolveConv.promise) }),
+        findConversationAcrossViews: jest.fn(() => null),
+      },
+    });
+    view.tabManager = { createTab: staleCreate, switchToTab: jest.fn() };
+
+    const pending = view.selectAgent('roster:a');
+    const freshCreate = jest.fn();
+    view.tabManager = { createTab: freshCreate, switchToTab: jest.fn() }; // re-entrant onOpen
+    resolveConv.resolve('conv-1');
+    await pending;
+
+    expect(staleCreate).not.toHaveBeenCalled(); // detached manager untouched
+    expect(freshCreate).not.toHaveBeenCalled(); // this open was for the OLD manager
+  });
+
+  // Round-25 (:209 superseded): two selects for DIFFERENT agents where the FIRST's
+  // resolveOrCreate settles LAST — the superseded first must not open; only the
+  // latest selection acts.
+  it('a superseded selection does not open after a newer select landed first (:209)', async () => {
+    const first = deferred<string>();
+    const second = deferred<string>();
+    const createTab = jest.fn().mockResolvedValue({ id: 'tab-new' });
+    const view = makeView({
+      plugin: {
+        getTeamChatThreadStore: () => ({
+          resolveOrCreate: jest.fn((agentId: string) =>
+            agentId === 'roster:a' ? first.promise : second.promise),
+        }),
+        findConversationAcrossViews: jest.fn(() => null),
+      },
+    });
+    view.tabManager = { createTab, switchToTab: jest.fn() };
+
+    const a = view.selectAgent('roster:a'); // generation 1
+    const b = view.selectAgent('roster:b'); // generation 2 (latest)
+    second.resolve('conv-b'); // latest lands first
+    first.resolve('conv-a');  // superseded settles last
+    await Promise.all([a, b]);
+
+    // Only the latest selection opened; the stale first bailed after resolveOrCreate.
     expect(createTab).toHaveBeenCalledTimes(1);
-    // The queued second caller re-ran the open, found the just-created tab, and switched.
-    expect(switchToTab).toHaveBeenCalledWith('tab-1');
+    expect(createTab).toHaveBeenCalledWith('conv-b', undefined, { activate: true, kind: 'chat' });
   });
 
   // Round-24 (replaces Round-22 Fix B manual rollback): the source leaf never
