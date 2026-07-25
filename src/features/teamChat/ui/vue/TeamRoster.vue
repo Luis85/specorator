@@ -4,7 +4,7 @@ import { inject, onMounted, onUnmounted, watch } from 'vue';
 import { t } from '../../../../i18n/i18n';
 import { withErrorNotice } from '../../../../shared/uiAction';
 import { useRosterStore } from '../../../library/vue/stores/rosterStore';
-import { PLUGIN_KEY } from './keys';
+import { CALLBACKS_KEY, PLUGIN_KEY } from './keys';
 import { useTeamChatStore } from './stores/teamChatStore';
 import TeamRosterAvatar from './TeamRosterAvatar.vue';
 
@@ -13,6 +13,17 @@ const ROSTER_RELOAD_DEBOUNCE_MS = 300;
 
 const plugin = inject(PLUGIN_KEY);
 if (!plugin) throw new Error('TeamRoster mounted without PLUGIN_KEY');
+
+const callbacks = inject(CALLBACKS_KEY);
+if (!callbacks) throw new Error('TeamRoster mounted without CALLBACKS_KEY');
+
+// The engine resolves-or-opens the DM and projects the selection back through
+// the store, so the row handler is a thin delegator (no optimistic store write).
+// `callbacks?.` mirrors this file's `plugin?.` convention: a hoisted function
+// declaration is typed before the `if (!callbacks) throw` guard narrows it.
+function selectAgent(agentId: string): void {
+  callbacks?.onSelectAgent(agentId);
+}
 
 // Reuse the library roster store as the loader (vault I/O stays there); mirror
 // its list into this leaf's read-model, which the DM surface reads (selected
@@ -71,11 +82,19 @@ function fail(error: unknown): void {
     >
       {{ t('teamChat.rosterEmpty') }}
     </div>
-    <!-- Read-only in Phase 4a: no @click DM wiring — roster-click → live DM is 4b. -->
+    <!-- Interactive (4b): a row click / Enter / Space opens the agent's DM. -->
     <div
       v-for="agent in teamChatStore.agents"
       :key="agent.id"
       class="specorator-team-roster-row"
+      :class="{ 'is-selected': teamChatStore.selectedAgentId === agent.id }"
+      role="button"
+      tabindex="0"
+      :aria-pressed="teamChatStore.selectedAgentId === agent.id"
+      :aria-label="agent.name"
+      @click="selectAgent(agent.id)"
+      @keydown.enter.prevent="selectAgent(agent.id)"
+      @keydown.space.prevent="selectAgent(agent.id)"
     >
       <TeamRosterAvatar
         :agent="agent"
@@ -119,6 +138,18 @@ function fail(error: unknown): void {
   gap: var(--sp-space-s);
   padding: var(--sp-space-2xs);
   border-radius: var(--sp-radius-s);
+  cursor: pointer;
+}
+.specorator-team-roster-row:hover {
+  background: var(--sp-surface-hover);
+}
+.specorator-team-roster-row.is-selected {
+  background: var(--sp-surface-raised);
+  box-shadow: inset 2px 0 0 var(--sp-accent);
+}
+.specorator-team-roster-row:focus-visible {
+  outline: 2px solid var(--sp-border-focus);
+  outline-offset: -2px;
 }
 .specorator-team-roster-meta {
   min-width: 0;

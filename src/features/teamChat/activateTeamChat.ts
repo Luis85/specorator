@@ -4,9 +4,9 @@ import { VIEW_TYPE_TEAM_CHAT } from './viewType';
 
 /**
  * Reveals (or opens) the Team Chat leaf in the main area. Mirrors
- * `activateLibrary`. The optional `agentId` is accepted here so callers (the
- * roster "message" affordance) have a stable entry point; in Phase 4a it only
- * seeds the view's selected-agent state — opening the live DM is Phase 4b.
+ * `activateLibrary`. The optional `agentId` (the roster "message" affordance's
+ * entry point) opens or resumes that agent's persistent DM once the real view is
+ * reached; a rejected open propagates to the awaiting caller.
  */
 export async function activateTeamChat(plugin: SpecoratorPlugin, agentId?: string): Promise<void> {
   const { workspace } = plugin.app;
@@ -19,5 +19,5 @@ export async function activateTeamChat(plugin: SpecoratorPlugin, agentId?: strin
   // A workspace-restored leaf may still hold a DeferredView placeholder
   // (Obsidian >= 1.7.2) — load it so the call below reaches the real view.
   await leaf.loadIfDeferred();
-  if (agentId && leaf.view instanceof TeamChatView) leaf.view.selectAgent(agentId);
+  if (agentId && leaf.view instanceof TeamChatView) await leaf.view.selectAgent(agentId);
 }

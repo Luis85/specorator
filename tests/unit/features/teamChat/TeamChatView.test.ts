@@ -88,9 +88,11 @@ describe('TeamChatView — leaf-owned persistence', () => {
     expect(state.tabManagerState).toEqual({ openTabs: [], activeTabId: null });
   });
 
-  it('selectAgent seeds selectedAgentId for the getState round-trip', () => {
+  it('selectAgent seeds selectedAgentId for the getState round-trip', async () => {
     const view = makeView();
-    view.selectAgent('roster:y');
+    // No engine on this prototype view, so selectAgent records the selection and
+    // returns without opening a tab; the sync record is all getState needs.
+    await view.selectAgent('roster:y');
     expect(view.getState().selectedAgentId).toBe('roster:y');
   });
 });

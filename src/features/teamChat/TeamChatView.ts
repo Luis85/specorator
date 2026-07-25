@@ -2,14 +2,19 @@ import type { ViewStateResult, WorkspaceLeaf } from 'obsidian';
 import { ItemView } from 'obsidian';
 import { type App as VueApp, createApp, markRaw } from 'vue';
 
+import { ProviderRegistry } from '../../core/providers/ProviderRegistry';
 import type { ProviderId } from '../../core/providers/types';
+import type { Conversation } from '../../core/types/chat';
 import type { ChatViewHandle } from '../../core/types/PluginContext';
+import { asSettingsBag } from '../../core/types/settings';
 import { t } from '../../i18n/i18n';
 import type SpecoratorPlugin from '../../main';
+import { resolveAgentProvider } from '../agents/roster/resolveAgentProvider';
 import { TabManager } from '../chat/tabs/TabManager';
+import { TeamChatThreadStore } from './TeamChatThreadStore';
 import { createTeamChatPinia } from './ui/vue/globalPinia';
 import { CALLBACKS_KEY, CONTENT_HOST_KEY, PLUGIN_KEY, VIEW_KEY } from './ui/vue/keys';
-import type { TeamChatCallbacks } from './ui/vue/teamChatCallbacks';
+import type { TeamChatCallbacks, TeamChatSnapshot } from './ui/vue/teamChatCallbacks';
 import TeamChatRoot from './ui/vue/TeamChatRoot.vue';
 import { VIEW_TYPE_TEAM_CHAT } from './viewType';
 
@@ -35,13 +40,15 @@ export class TeamChatView extends ItemView implements ChatViewHandle {
   private tabContentEl: HTMLElement | null = null;
   // False until the engine is built; the T4 duck-type + Agent Board queue gate on it.
   private tabsRestored = false;
-  /** Agent whose DM 4b reopens on restore; 4a only records it for getState. */
+  /** Agent whose DM is the active thread; reopened on restore, recorded for getState. */
   private selectedAgentId: string | null = null;
   private pendingPersist: number | null = null;
-  // Store-reprojection observers (mirror of chat's chatShellObservers). Empty in
-  // 4a — no header/composer island subscribes yet — but the seam is live so the
-  // ChatViewHandle refresh methods have a real re-project target in 4b.
-  private readonly teamChatObservers = new Set<() => void>();
+  /** roomKey→conversationId map for the agent DMs (adopt-then-create), built lazily. */
+  private teamChatThreadStore: TeamChatThreadStore | null = null;
+  // Store-reprojection observers (mirror of chat's chatShellObservers). The
+  // routing composable subscribes here and fans each snapshot into the Pinia
+  // store; the ChatViewHandle refresh methods re-project through the same seam.
+  private readonly teamChatObservers = new Set<(snapshot: TeamChatSnapshot) => void>();
 
   constructor(leaf: WorkspaceLeaf, private readonly plugin: SpecoratorPlugin) {
     super(leaf);
@@ -106,9 +113,15 @@ export class TeamChatView extends ItemView implements ChatViewHandle {
       onTabConversationChanged: () => { this.emitTeamChatChange(); this.persistTabState(); },
       onTabProviderChanged: () => this.emitTeamChatChange(),
     });
-    // 4a mounts no DM tabs; 4b restores selectedAgentId's DM here. The engine is
-    // enumerable immediately (getTabManager()), so getAllViews (T4) reaches it.
+    // The engine is enumerable immediately (getTabManager()), so getAllViews
+    // (T4) reaches it.
     this.tabsRestored = true;
+    // Reopen the last DM if setState restored a selection. setState runs before
+    // onOpen for a restored leaf (SpecoratorView's stash-then-consume pattern),
+    // so selectedAgentId is populated by the time the engine builds.
+    if (this.selectedAgentId) {
+      this.openAgentDm(this.selectedAgentId);
+    }
   }
 
   /** Force-persists the leaf state then destroys the tab engine. Mirrors
@@ -185,10 +198,75 @@ export class TeamChatView extends ItemView implements ChatViewHandle {
     this.emitTeamChatChange(); // Phase 4b: DM-scoped refresh
   }
 
-  /** Seeds the agent whose DM 4b will open; 4a only records it for the getState
-   *  round-trip (the DM surface itself is deferred). */
-  selectAgent(agentId: string): void {
+  /**
+   * Opens or resumes the agent's single persistent DM: record + project the
+   * selection immediately (so the roster highlights and the right-pane empty
+   * state clears without waiting on I/O), then resolve the DM's conversation and
+   * either switch to its open tab or create one. Idempotent per agent — a repeat
+   * select of an already-open DM switches to it rather than creating a duplicate.
+   */
+  async selectAgent(agentId: string): Promise<void> {
     this.selectedAgentId = agentId;
+    this.emitTeamChatChange();
+    const manager = this.tabManager;
+    if (!manager) return; // engine not built yet (defensive; clicks only fire post-mount)
+    const conversationId = await this.getThreadStore().resolveOrCreate(agentId);
+    const existing = manager.findTabByConversation(conversationId);
+    if (existing) {
+      await manager.switchToTab(existing.tabId);
+    } else {
+      await manager.createTab(conversationId, undefined, { activate: true, kind: 'chat' });
+    }
+  }
+
+  /** Fire-and-forget DM open with error logging — the Vue seam + restore path
+   *  both delegate here so a rejected resolve/open never becomes an unhandled
+   *  rejection. */
+  private openAgentDm(agentId: string): void {
+    void this.selectAgent(agentId).catch((error) =>
+      this.plugin.logger.scope('team-chat').error('selectAgent failed', error));
+  }
+
+  /** Lazily builds the agent-DM thread store (roomKey→conversationId map). The
+   *  injected `createConversation` resolves the agent's provider from the roster
+   *  policy BEFORE creating, so the DM runs on the agent's own provider/model. */
+  private getThreadStore(): TeamChatThreadStore {
+    if (!this.teamChatThreadStore) {
+      this.teamChatThreadStore = new TeamChatThreadStore({
+        adapter: this.plugin.vaultFileAdapter,
+        createConversation: (agentId) => this.createDmConversation(agentId),
+        conversationExists: (id) => this.plugin.getConversationSync(id) != null,
+        findAdoptable: (agentId) => this.plugin.findTeamChatConversationForAgent(agentId),
+        events: this.plugin.events,
+      });
+    }
+    return this.teamChatThreadStore;
+  }
+
+  /**
+   * Creates the agent's DM conversation on its roster-policy provider — the
+   * explicit `providerOverride`, else the provider implied by `modelSelection`,
+   * else the active/default enabled provider (mirror of `startChatWithRosterAgent`
+   * for the team-chat surface). Resolving the provider BEFORE creation is
+   * load-bearing: `resolveBoundAgent` only forwards the agent's model when the
+   * conversation already runs on the model's provider, so a naive
+   * `providerOverride ?? default` would silently drop a cross-provider model.
+   */
+  private async createDmConversation(agentId: string): Promise<Conversation> {
+    const agent = await this.plugin.agentRosterStore.get(agentId);
+    const settings = asSettingsBag(this.plugin.settings);
+    const providerId = agent
+      ? resolveAgentProvider(
+          agent,
+          (candidate) => ProviderRegistry.isEnabled(candidate, settings),
+          ProviderRegistry.resolveSettingsProviderId(settings),
+        )
+      : undefined;
+    return this.plugin.createConversation({
+      boundAgentId: agentId,
+      surface: 'team-chat',
+      ...(providerId ? { providerId } : {}),
+    });
   }
 
   // ============================================
@@ -203,12 +281,18 @@ export class TeamChatView extends ItemView implements ChatViewHandle {
           this.teamChatObservers.delete(onChange);
         };
       },
+      onSelectAgent: (agentId) => this.openAgentDm(agentId),
     };
+  }
+
+  private buildSnapshot(): TeamChatSnapshot {
+    return { selectedAgentId: this.selectedAgentId };
   }
 
   /** Notifies every registered store observer (mirror of emitChatShellChange). */
   private emitTeamChatChange(): void {
-    for (const observer of this.teamChatObservers) observer();
+    const snapshot = this.buildSnapshot();
+    for (const observer of this.teamChatObservers) observer(snapshot);
   }
 
   // ============================================

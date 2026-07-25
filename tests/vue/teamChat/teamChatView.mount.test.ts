@@ -3,7 +3,7 @@ import { createPinia, setActivePinia } from 'pinia';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { RosterAgent } from '@/features/agents/roster/rosterTypes';
-import { CONTENT_HOST_KEY, PLUGIN_KEY } from '@/features/teamChat/ui/vue/keys';
+import { CALLBACKS_KEY, CONTENT_HOST_KEY, PLUGIN_KEY } from '@/features/teamChat/ui/vue/keys';
 import TeamChatRoot from '@/features/teamChat/ui/vue/TeamChatRoot.vue';
 
 // The avatar renderer is imperative (setIcon/createSpan); stub it so the mount
@@ -30,7 +30,18 @@ function makePlugin(agents: RosterAgent[]) {
   } as never;
 }
 
-function mountRoot(plugin: unknown, mountHost: (el: HTMLElement) => void = vi.fn()) {
+// Interactive-roster callbacks: `subscribe` feeds the store projection seam and
+// `onSelectAgent` opens a DM. Both are stubbed so these mount assertions stay
+// about rendering, not DM wiring (exercised in rosterSelect.test.ts).
+function makeCallbacks() {
+  return { subscribe: vi.fn(() => vi.fn()), onSelectAgent: vi.fn() };
+}
+
+function mountRoot(
+  plugin: unknown,
+  mountHost: (el: HTMLElement) => void = vi.fn(),
+  callbacks: unknown = makeCallbacks(),
+) {
   const pinia = createPinia();
   setActivePinia(pinia);
   return render(TeamChatRoot, {
@@ -38,6 +49,7 @@ function mountRoot(plugin: unknown, mountHost: (el: HTMLElement) => void = vi.fn
       plugins: [pinia],
       provide: {
         [PLUGIN_KEY as symbol]: plugin,
+        [CALLBACKS_KEY as symbol]: callbacks,
         [CONTENT_HOST_KEY as symbol]: mountHost,
       },
     },

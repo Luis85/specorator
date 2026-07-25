@@ -2,13 +2,20 @@
 import { inject, onMounted, ref } from 'vue';
 
 import { t } from '../../../../i18n/i18n';
-import { CONTENT_HOST_KEY } from './keys';
+import { CALLBACKS_KEY, CONTENT_HOST_KEY } from './keys';
 import { useTeamChatStore } from './stores/teamChatStore';
 import TeamRoster from './TeamRoster.vue';
+import { useTeamChatEventRouting } from './useTeamChatEventRouting';
 
 const store = useTeamChatStore();
 const hostEl = ref<HTMLElement | null>(null);
 const mountHost = inject(CONTENT_HOST_KEY);
+
+const callbacks = inject(CALLBACKS_KEY);
+if (!callbacks) throw new Error('TeamChatRoot mounted without CALLBACKS_KEY');
+// Subscribe before the content-host onMounted below builds the engine, so a
+// restore-time selection emit projects into the store.
+useTeamChatEventRouting(callbacks.subscribe);
 
 // Capture the opaque tab-content host synchronously on mount, before the engine
 // needs it. Same "leave-me-alone host" contract as chat's TabContentHost: Vue
