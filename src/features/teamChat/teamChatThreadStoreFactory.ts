@@ -16,10 +16,15 @@ export function createTeamChatThreadStore(plugin: SpecoratorPlugin): TeamChatThr
     adapter: plugin.vaultFileAdapter,
     resolveExpectedProvider: (agentId) => resolveTeamChatAgentProvider(plugin, agentId),
     createConversation: (agentId) => createTeamChatDmConversation(plugin, agentId),
-    isConversationUsable: (id, expectedProvider) => {
+    isConversationUsable: (id, agentId, expectedProvider) => {
       const conversation = plugin.getConversationSync(id);
+      // A mapping is only usable when the conversation is THIS agent's own team-chat
+      // DM on the expected provider — reject an ordinary conversation or another
+      // agent's DM that a corrupt/synced threads.json may have mapped here.
       return (
         conversation != null &&
+        conversation.surface === 'team-chat' &&
+        conversation.boundAgentId === agentId &&
         (expectedProvider === undefined || conversation.providerId === expectedProvider)
       );
     },

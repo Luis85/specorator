@@ -25,11 +25,16 @@ export interface TeamChatThreadStoreDeps {
   /** Wraps `plugin.createConversation({ boundAgentId, surface: 'team-chat', providerId })`. */
   createConversation: (agentId: string) => Promise<Conversation>;
   /**
-   * Is the mapped conversation still live AND running on `expectedProvider`? A DM's
-   * `providerId` is immutable, so a conversation on a different provider is stale
-   * (the agent was re-pointed at another backend) and must NOT be reused.
+   * Is the mapped conversation a live DM that this agent OWNS and that runs on
+   * `expectedProvider`? Usable requires all of: the conversation exists, it is a
+   * `surface === 'team-chat'` DM, its `boundAgentId` is `agentId`, and its provider
+   * matches. The ownership + surface checks reject a corrupt/synced/hand-edited
+   * `threads.json` that maps the agent key onto an ordinary conversation or another
+   * agent's DM; the provider check rejects a DM stranded on a rotated-away backend
+   * (a DM's `providerId` is immutable). Any failure forces a fresh DM instead of
+   * reusing an unrelated transcript with the wrong bound persona.
    */
-  isConversationUsable: (id: string, expectedProvider: ProviderId | undefined) => boolean;
+  isConversationUsable: (id: string, agentId: string, expectedProvider: ProviderId | undefined) => boolean;
   /**
    * `plugin.findTeamChatConversationForAgent` scoped to `expectedProvider` — an
    * orphaned DM to adopt when the map is lost. Scoping is load-bearing: adopting
@@ -99,7 +104,7 @@ export class TeamChatThreadStore {
     // providerId is immutable, so if the user re-pointed the agent at a different
     // backend, the mapped conversation is stale and must rotate — not be returned.
     const mapped = rooms[key];
-    if (mapped && this.deps.isConversationUsable(mapped, expectedProvider)) return mapped;
+    if (mapped && this.deps.isConversationUsable(mapped, agentId, expectedProvider)) return mapped;
 
     // Adoption is a MISSING-mapping recovery mechanism (threads.json lost but the
     // conversation still exists → adopt to avoid a duplicate). It must NOT run when a
@@ -154,7 +159,7 @@ export class TeamChatThreadStore {
     if (
       pending
       && pending.providerId === expectedProvider
-      && this.deps.isConversationUsable(pending.id, expectedProvider)
+      && this.deps.isConversationUsable(pending.id, agentId, expectedProvider)
     ) {
       return pending.id;
     }

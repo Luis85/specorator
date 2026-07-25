@@ -14,7 +14,7 @@ import type { PersistedTabManagerState } from '../chat/tabs/types';
 import type { ComposerEditedFile } from '../chat/ui/vue/composer/stores/composerStore';
 import { basename, parentDir } from '../chat/utils/pathLabel';
 import { getTeamChatDmOpenCoordinator } from './TeamChatDmOpenCoordinator';
-import { applyDmEditedFilesSetting, refreshDmModelState, rotateChangedDmProviders } from './teamChatDmRefresh';
+import { applyDmEditedFilesSetting, applyDmHiddenCommands, refreshDmModelState, rotateChangedDmProviders } from './teamChatDmRefresh';
 import { reconcileRotation, restoreTeamChatDmTabs } from './teamChatDmTabs';
 import { projectCrossLeafPresence, type TeamChatPresence } from './teamChatPresence';
 import type { TeamChatThreadStore } from './TeamChatThreadStore';
@@ -326,7 +326,10 @@ export class TeamChatView extends ItemView implements ChatViewHandle {
   }
 
   updateHiddenProviderCommands(): void {
-    this.emitTeamChatChange(); // Phase 4b: DM-scoped refresh
+    // DM-scoped: repaint each open DM's persistent slash-command dropdown (mirror of
+    // SpecoratorView), then re-project the store.
+    applyDmHiddenCommands(this.plugin, this.tabManager?.getAllTabs() ?? []);
+    this.emitTeamChatChange();
   }
 
   /**

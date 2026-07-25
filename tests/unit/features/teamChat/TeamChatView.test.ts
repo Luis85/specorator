@@ -133,6 +133,25 @@ describe('TeamChatView — ChatViewHandle conformance', () => {
     expect(() => view.updateHiddenProviderCommands()).not.toThrow();
     return expect(view.refreshProviderAvailability()).resolves.toBeUndefined();
   });
+
+  // Round-36 Fix 1a: a hidden-command settings change must repaint each OPEN DM's
+  // persistent slash-command dropdown live (mirror of SpecoratorView), not just
+  // re-project the store — otherwise an open DM keeps offering a now-hidden command.
+  it('updateHiddenProviderCommands repaints each open DM dropdown with the provider hidden set', () => {
+    const view = makeView();
+    view.plugin.settings = { hiddenProviderCommands: { claude: ['commit', 'push'] } };
+    view.plugin.getConversationSync = jest.fn(() => ({ providerId: 'claude', boundAgentId: 'roster:a' }));
+    view.initTabEngine();
+    const setHiddenCommands = jest.fn();
+    view.tabManager.getAllTabs = jest.fn(() => [
+      { conversationId: 'conv-1', state: { isStreaming: false }, ui: { slashCommandDropdown: { setHiddenCommands } } },
+    ]);
+
+    view.updateHiddenProviderCommands();
+
+    // The provider (claude) hidden set is applied to the open DM's live dropdown.
+    expect(setHiddenCommands).toHaveBeenCalledWith(new Set(['commit', 'push']));
+  });
 });
 
 describe('TeamChatView — leaf-owned persistence', () => {

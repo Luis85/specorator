@@ -1,3 +1,4 @@
+import { getHiddenProviderCommandSet } from '../../core/providers/commands/hiddenCommands';
 import { ProviderRegistry } from '../../core/providers/ProviderRegistry';
 import { ProviderSettingsCoordinator } from '../../core/providers/ProviderSettingsCoordinator';
 import type SpecoratorPlugin from '../../main';
@@ -74,6 +75,21 @@ export function applyDmEditedFilesSetting(plugin: SpecoratorPlugin, tabs: readon
     } else {
       tab.state.clearEditedFiles();
     }
+  }
+}
+
+/**
+ * Mirror of `SpecoratorView.updateHiddenProviderCommands`: re-applies the
+ * provider-scoped `hiddenProviderCommands` set to each open DM's persistent
+ * slash-command dropdown, so a settings change repaints the LIVE dropdown rather
+ * than only the next-opened one. Extracted here (not inlined in `TeamChatView`) to
+ * keep the view under its LOC ceiling and to reuse the sidebar's exact per-tab call.
+ */
+export function applyDmHiddenCommands(plugin: SpecoratorPlugin, tabs: readonly TabData[]): void {
+  for (const tab of tabs) {
+    tab.ui.slashCommandDropdown?.setHiddenCommands(
+      getHiddenProviderCommandSet(plugin.settings, getTabProviderId(tab, plugin)),
+    );
   }
 }
 

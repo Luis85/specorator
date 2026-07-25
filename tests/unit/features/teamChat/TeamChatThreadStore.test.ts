@@ -93,9 +93,14 @@ function makeHarness(options: HarnessOptions = {}) {
     adapter,
     resolveExpectedProvider: async (agentId: string) => expectedProviderFor(agentId),
     createConversation,
-    isConversationUsable: (id: string, expected: ProviderId | undefined) => {
+    isConversationUsable: (id: string, agentId: string, expected: ProviderId | undefined) => {
       const c = conversationsById.get(id);
-      return c != null && (expected === undefined || c.providerId === expected);
+      return (
+        c != null
+        && c.surface === 'team-chat'
+        && c.boundAgentId === agentId
+        && (expected === undefined || c.providerId === expected)
+      );
     },
     findAdoptable: (agentId: string, expected: ProviderId | undefined) => {
       const candidate = adoptableByAgent.get(agentId) ?? createdByAgent.get(agentId) ?? null;
@@ -360,6 +365,54 @@ describe('TeamChatThreadStore', () => {
       expect(h.createConversation).not.toHaveBeenCalled();
       expect(h.readThreads()).toEqual({ version: 1, rooms: { 'roster:a': 'orphan-codex' } });
       expect(h.changed).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  describe('mapped-DM ownership validation (Round-36)', () => {
+    it('does not reuse a mapping that points at a non-team-chat (ordinary) conversation', async () => {
+      // A corrupt/hand-edited threads.json maps the agent key to an ordinary chat
+      // conversation. Provider matches, but it is not a DM — it must NOT be reused.
+      const ordinary: Conversation = { ...conversation('ordinary-1', 'roster:a'), surface: 'chat' };
+      const h = makeHarness({
+        seedFile: JSON.stringify({ version: 1, rooms: { 'roster:a': 'ordinary-1' } }),
+        existingConversations: [ordinary],
+      });
+
+      const id = await h.store.resolveOrCreate('roster:a');
+
+      expect(id).not.toBe('ordinary-1'); // the ordinary conversation is rejected
+      expect(h.createConversation).toHaveBeenCalledTimes(1); // a fresh DM is created instead
+      expect(h.readThreads()).toEqual({ version: 1, rooms: { 'roster:a': id } });
+    });
+
+    it('does not reuse a team-chat DM bound to a DIFFERENT agent on the same provider', async () => {
+      // A sync/merge corruption maps roster:a's key onto roster:b's DM (same provider).
+      // Reusing it would send with the WRONG bound persona — the mapping must be rejected.
+      const otherAgentDm = conversationOn('dm-b', 'roster:b', DEFAULT_PROVIDER);
+      const h = makeHarness({
+        seedFile: JSON.stringify({ version: 1, rooms: { 'roster:a': 'dm-b' } }),
+        existingConversations: [otherAgentDm],
+      });
+
+      const id = await h.store.resolveOrCreate('roster:a');
+
+      expect(id).not.toBe('dm-b'); // never opens another persona's DM
+      expect(h.createConversation).toHaveBeenCalledTimes(1);
+      expect(h.readThreads()).toEqual({ version: 1, rooms: { 'roster:a': id } });
+    });
+
+    it('reuses the agent\'s OWN team-chat DM on the expected provider (all four checks pass)', async () => {
+      const ownDm = conversationOn('dm-a', 'roster:a', DEFAULT_PROVIDER);
+      const h = makeHarness({
+        seedFile: JSON.stringify({ version: 1, rooms: { 'roster:a': 'dm-a' } }),
+        existingConversations: [ownDm],
+      });
+
+      const id = await h.store.resolveOrCreate('roster:a');
+
+      expect(id).toBe('dm-a'); // exists + provider + surface + boundAgent all match → reuse
+      expect(h.createConversation).not.toHaveBeenCalled();
+      expect(h.writeAtomic).not.toHaveBeenCalled(); // pure cache-hit, no re-persist
     });
   });
 
