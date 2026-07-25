@@ -102,6 +102,11 @@ export class TabManager implements TabManagerInterface {
   /** Tracks nested mutation calls so internal follow-ups do not self-deadlock. */
   private tabMutationDepth = 0;
 
+  /** Set once destroy() begins so createTabImpl won't mount a tab into a manager
+   *  being torn down; the memoized promise makes destroy() idempotent. */
+  private isDestroying = false;
+  private destroyPromise: Promise<void> | null = null;
+
   private runTabMutation<T>(operation: () => Promise<T>): Promise<T> {
     if (this.tabMutationDepth > 0) {
       return operation();
@@ -267,6 +272,10 @@ export class TabManager implements TabManagerInterface {
     tabId?: TabId,
     options: CreateTabOptions = {},
   ): Promise<TabData | null> {
+    // Reject creates ISSUED after teardown began so one can't enqueue behind
+    // destroy's drain and mount a tab into a cleared manager. A create issued
+    // BEFORE destroy (already enqueued) still completes and is disposed by destroy (:1095).
+    if (this.isDestroying) return null;
     return this.runTabMutation(() => this.createTabImpl(conversationId, tabId, options));
   }
 
@@ -1086,12 +1095,24 @@ export class TabManager implements TabManagerInterface {
   // Cleanup
   // ============================================
 
-  /** Destroys all tabs and cleans up resources. Serialized behind in-flight
-   *  create/switch/close so a createTab still draining the queue completes and is
-   *  included in this.tabs before teardown, not stranded in the cleared map as a
-   *  leaked detached tab whose runtime is never disposed (:197). */
-  async destroy(): Promise<void> {
-    return this.runTabMutation(() => this.destroyImpl());
+  /** Destroys all tabs and cleans up resources. Drains any in-flight/queued tab
+   *  mutation FIRST (a createTab suspended mid-hydration must insert its tab before
+   *  teardown, not into a cleared map as a leaked runtime — :197). NOT via
+   *  runTabMutation: a suspended mutation keeps tabMutationDepth > 0, so it would
+   *  misclassify destroy as reentrant and run destroyImpl inline, out from under the
+   *  suspended create (:1095). Memoized for idempotent concurrent teardown. */
+  destroy(): Promise<void> {
+    if (this.destroyPromise) return this.destroyPromise;
+    this.isDestroying = true; // synchronously block creates issued after this point (createTab)
+    this.destroyPromise = this.drainThenDestroy();
+    return this.destroyPromise;
+  }
+
+  private async drainThenDestroy(): Promise<void> {
+    // Drain in-flight/queued mutations (swallow rejections so one can't wedge
+    // teardown), then destroy exactly once.
+    await this.tabMutationTail.catch(() => undefined);
+    await this.destroyImpl();
   }
 
   private async destroyImpl(): Promise<void> {

@@ -93,6 +93,13 @@ export class TeamChatView extends ItemView implements ChatViewHandle {
       // without this bump an open awaiting resolveOrCreate would pass isSelectionStale
       // (manager not yet nulled) and createTab into the manager being destroyed (:90).
       this.selectionGeneration++;
+      // Re-close the restore gate: the OLD engine left tabsRestored true, but the
+      // NEW manager's restoreState (in initTabEngine) runs async. Without this, a
+      // roster click in the rebuild window passes selectAgent's !tabsRestored gate
+      // (Round-29) and createTabs concurrently with the new restore → duplicate.
+      // initTabEngine always flips it back true after the new restore (Round-31), so
+      // it never stays false forever (:90).
+      this.tabsRestored = false;
       // Capture the LIVE DM layout before destroying: the initial setState layout
       // was already consumed by the first initTabEngine, so without this the rebuilt
       // engine restores nothing and the pane goes blank while selectedAgentId still

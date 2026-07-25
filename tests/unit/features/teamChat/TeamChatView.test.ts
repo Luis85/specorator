@@ -294,6 +294,33 @@ describe('TeamChatView — persisted DM tab restore', () => {
     expect(createTab).not.toHaveBeenCalled();
   });
 
+  // Round-32 (:90): the OLD engine leaves tabsRestored true; the NEW manager's
+  // restoreState runs async. Re-entrant onOpen must re-close the gate (tabsRestored
+  // false) before rebuilding, or a roster click in the window passes selectAgent's
+  // !tabsRestored gate and createTabs concurrently with the new restore → duplicate.
+  // initTabEngine flips it back true after the new restore (Round-31).
+  it('re-entrant onOpen re-closes then the rebuilt engine reopens the restore gate (:90)', async () => {
+    const view = makeView();
+    view.tabsRestored = true; // old engine had finished restoring
+    view.tabManager = {
+      getPersistedState: jest.fn(() => ({ openTabs: [], activeTabId: null })),
+      destroy: jest.fn().mockResolvedValue(undefined),
+    };
+
+    await view.onOpen();
+
+    // Gate re-closed during the rebuild window (new restoreState hasn't run yet).
+    expect(view.areTabsRestored()).toBe(false);
+
+    // Simulate the Vue host callback the stubbed mount skipped: build the new engine.
+    view.tabContentEl = createMockEl();
+    view.initTabEngine();
+    await flushMicrotasks();
+
+    // Reopened once the new restore completed.
+    expect(view.areTabsRestored()).toBe(true);
+  });
+
   // Round-29 (:90): a re-entrant onOpen (leaf move/pop-out, no interleaved onClose)
   // must capture the LIVE layout before destroying the prior engine — the initial
   // setState layout was already consumed by the first initTabEngine, so otherwise

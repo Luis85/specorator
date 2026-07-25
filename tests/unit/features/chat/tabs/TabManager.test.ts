@@ -2119,6 +2119,29 @@ describe('TabManager - destroy serialization (:197)', () => {
     expect(manager.getTabCount()).toBe(0);
     expect(mockDestroyTab).toHaveBeenCalledTimes(1);
   });
+
+  // Round-32 (:1095): the Round-28 test called destroy() SYNCHRONOUSLY after
+  // createTab() — before its queued mutation had even started — so tabMutationDepth
+  // was still 0 and destroy correctly queued. This flushes microtasks first, so the
+  // create is genuinely SUSPENDED mid-hydration (tabMutationDepth > 0) when destroy()
+  // runs. A depth-based inline destroy would then run destroyImpl immediately,
+  // clearing this.tabs out from under the suspended create → leak.
+  it('waits for a SUSPENDED in-flight createTab (tabMutationDepth > 0), not run destroyImpl inline (:1095)', async () => {
+    let releaseHydration!: () => void;
+    const hydration = new Promise<null>((resolve) => { releaseHydration = () => resolve(null); });
+    const plugin = createMockPlugin({ getConversationById: jest.fn(() => hydration) });
+    const manager = createManager({ plugin });
+
+    const creating = manager.createTab('conv-1'); // enqueues; its impl will park on hydration
+    await flushMicrotasks();                        // let it START → tabMutationDepth > 0, parked mid-hydration
+    const tearing = manager.destroy();              // must NOT run destroyImpl inline while a create is suspended
+    releaseHydration();                              // create resumes and inserts its tab
+    await Promise.all([creating, tearing]);
+
+    // The suspended create completed and its tab was torn down, not leaked.
+    expect(manager.getTabCount()).toBe(0);
+    expect(mockDestroyTab).toHaveBeenCalledTimes(1);
+  });
 });
 
 describe('TabManager - Callback Wiring', () => {
