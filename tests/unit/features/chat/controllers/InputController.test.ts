@@ -2168,6 +2168,35 @@ describe('InputController - Message Queue', () => {
       // The reserve-before-await consumed the composer, then restored it once the agent read null.
       expect(inputEl.value).toBe('hello');
     });
+
+    // Round-55: the reserve-before-await clears the composer UP FRONT, so if the user types a
+    // NEWER draft during the removed-agent roster await, the restore must NOT clobber it — the
+    // newer draft wins (mirrors the happy path above, where a newer draft also survives).
+    it('preserves a newer draft typed during the await over the removed-agent restore', async () => {
+      deps = makeDmDeps();
+      inputEl = deps.getInputEl() as ReturnType<typeof createMockInputEl>;
+      (deps.plugin.getConversationSync as any) = jest.fn().mockReturnValue({ surface: 'team-chat', boundAgentId: 'roster:gone' });
+      let resolveRoster: (v: any) => void = () => {};
+      (deps.plugin as any).agentRosterStore = { get: jest.fn(() => new Promise((r) => { resolveRoster = r; })) };
+      mockNotice.mockClear();
+      inputEl.value = 'hello';
+      controller = new InputController(deps);
+      const dispatch = jest.spyOn(controller as any, 'dispatchComposerTurn').mockResolvedValue(undefined);
+
+      const sendPromise = controller.sendMessage();
+      // Reserve-before-await consumed the composer up front.
+      expect(inputEl.value).toBe('');
+      // The user types a NEW draft while the removed-agent roster read is in flight.
+      inputEl.value = 'new draft';
+      resolveRoster!(null); // agent was removed
+      await sendPromise;
+
+      // Still blocked + noticed (removed-agent behavior unchanged)...
+      expect(mockNotice).toHaveBeenCalledWith(t('teamChat.agentRemoved'));
+      expect(dispatch).not.toHaveBeenCalled();
+      // ...but the newer draft is PRESERVED — the old submitted text does NOT overwrite it.
+      expect(inputEl.value).toBe('new draft');
+    });
   });
 
   describe('Built-in commands - /resume', () => {

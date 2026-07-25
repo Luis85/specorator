@@ -251,6 +251,11 @@ export function restoreReservedComposerInput(
   resetInputHeight: () => void,
 ): void {
   if (!snapshot.shouldRestoreInput) return;
+  // The composer was cleared UP FRONT (reserve-before-await), so anything here now is a NEWER
+  // draft the user typed during the roster await. Writing the old submitted text back would
+  // clobber it (data loss) — the newer draft wins. Restore only when the composer is still empty
+  // (trimmed-empty, matching how resolveComposerSend/resolveEmptyComposerSend define "empty").
+  if (send.inputEl.value.trim() !== '') return;
   send.inputEl.value = snapshot.inputText;
   resetInputHeight();
 }
