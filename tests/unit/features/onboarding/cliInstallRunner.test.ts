@@ -268,12 +268,32 @@ describe('runCliInstall', () => {
       const handle = runCliInstall(npmMethod, { onOutput: () => {} });
       handle.cancel();
 
-      // Async advance: the grace timer is only armed after the reaper's promise
-      // resolves, so a synchronous advance would run before it exists and the
-      // wait would never end.
       await jest.advanceTimersByTimeAsync(ABORT_REAP_GRACE_MS);
 
       expect(await handle.done).toMatchObject({ ok: false, cancelled: true });
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+
+  it('answers anyway if the reaper itself never returns', async () => {
+    // On Windows the reaper is a spawned `taskkill /T /F`, which can walk a large
+    // installer tree without ever emitting `close`. Timing only the wait AFTER it
+    // resolved would leave Cancel and the 10-minute timeout pending forever on
+    // exactly that failure, with Setup stuck reading "installing".
+    jest.useFakeTimers();
+    try {
+      const child = mountChild();
+      jest.mocked(forceKillProcessGroup).mockImplementation(() => new Promise<void>(() => {}));
+
+      const handle = runCliInstall(npmMethod, { onOutput: () => {} });
+      handle.cancel();
+      await jest.advanceTimersByTimeAsync(ABORT_REAP_GRACE_MS);
+
+      expect(await handle.done).toMatchObject({ ok: false, cancelled: true });
+      // The tree walk never answered, so the direct child is signalled instead —
+      // at least the wrapper dies.
+      expect(child.killed).toBe(true);
     } finally {
       jest.useRealTimers();
     }

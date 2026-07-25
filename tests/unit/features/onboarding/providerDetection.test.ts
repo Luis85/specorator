@@ -1,5 +1,3 @@
-import * as path from 'path';
-
 import { ProviderRegistry } from '@/core/providers/ProviderRegistry';
 import { ProviderWorkspaceRegistry } from '@/core/providers/ProviderWorkspaceRegistry';
 import type { ProviderCliResolver, ProviderId, ProviderRegistration } from '@/core/providers/types';
@@ -112,6 +110,19 @@ afterEach(() => {
 function makePlugin(settings: Record<string, unknown> = {}) {
   return { settings } as never;
 }
+
+// Detection's launchability rules are platform-dependent (Windows decides what
+// can start a file by extension, POSIX by the permission bit), and these
+// fixtures use POSIX-shaped paths — so the suite pins the platform instead of
+// inheriting the runner's. The Windows-specific cases override it locally.
+const REAL_PLATFORM = process.platform;
+
+function setPlatform(platform: NodeJS.Platform): void {
+  Object.defineProperty(process, 'platform', { value: platform, configurable: true });
+}
+
+beforeEach(() => setPlatform('linux'));
+afterAll(() => setPlatform(REAL_PLATFORM));
 
 describe('detectProviderCli', () => {
   it('reports found with the path the provider resolver returns', () => {
@@ -296,8 +307,9 @@ describe('detectProviderCli', () => {
 
     detectProviderCli(plugin, 'det-alpha');
 
-    const searched = jest.mocked(findNodeExecutable).mock.calls[0][0] ?? '';
-    expect(searched.split(path.delimiter)).toContain('/opt/node/bin');
+    // Substring, not a delimiter split: the separator is platform-dependent and
+    // what matters is that the provider's entry reached the search at all.
+    expect(jest.mocked(findNodeExecutable).mock.calls[0][0] ?? '').toContain('/opt/node/bin');
   });
 
   it('prefers the LAST case-insensitive PATH declaration, as the runtime env does', () => {
@@ -322,8 +334,7 @@ describe('detectProviderCli', () => {
     ProviderWorkspaceRegistry.setServices('det-nobatch', {
       cliResolver: stubResolver('C:\\npm\\nobatch.cmd'),
     } as never);
-    const platform = process.platform;
-    Object.defineProperty(process, 'platform', { value: 'win32', configurable: true });
+    setPlatform('win32');
     try {
       expect(detectProviderCli(makePlugin(), 'det-nobatch')).toMatchObject({
         status: 'missing',
@@ -331,7 +342,7 @@ describe('detectProviderCli', () => {
         unusable: { path: 'C:\\npm\\nobatch.cmd', reason: 'batch-shim' },
       });
     } finally {
-      Object.defineProperty(process, 'platform', { value: platform, configurable: true });
+      setPlatform('linux');
     }
   });
 
@@ -342,15 +353,14 @@ describe('detectProviderCli', () => {
     ProviderWorkspaceRegistry.setServices('det-alpha', {
       cliResolver: stubResolver('C:\\npm\\alpha'),
     } as never);
-    const platform = process.platform;
-    Object.defineProperty(process, 'platform', { value: 'win32', configurable: true });
+    setPlatform('win32');
     try {
       expect(detectProviderCli(makePlugin(), 'det-alpha')).toMatchObject({
         status: 'missing',
         unusable: { path: 'C:\\npm\\alpha', reason: 'unsupported-form' },
       });
     } finally {
-      Object.defineProperty(process, 'platform', { value: platform, configurable: true });
+      setPlatform('linux');
     }
   });
 
@@ -362,8 +372,7 @@ describe('detectProviderCli', () => {
       cliResolver: stubResolver('C:\\npm\\node_modules\\alpha\\cli.js'),
     } as never);
     jest.mocked(cliPathRequiresNode).mockReturnValue(true);
-    const platform = process.platform;
-    Object.defineProperty(process, 'platform', { value: 'win32', configurable: true });
+    setPlatform('win32');
     try {
       // Claude-shaped: Node prefix declared, so the entry point launches.
       expect(detectProviderCli(makePlugin(), 'det-nobatch').status).toBe('found');
@@ -373,7 +382,7 @@ describe('detectProviderCli', () => {
         unusable: { reason: 'unsupported-form' },
       });
     } finally {
-      Object.defineProperty(process, 'platform', { value: platform, configurable: true });
+      setPlatform('linux');
     }
   });
 
@@ -381,12 +390,11 @@ describe('detectProviderCli', () => {
     ProviderWorkspaceRegistry.setServices('det-alpha', {
       cliResolver: stubResolver('C:\\npm\\alpha.cmd'),
     } as never);
-    const platform = process.platform;
-    Object.defineProperty(process, 'platform', { value: 'win32', configurable: true });
+    setPlatform('win32');
     try {
       expect(detectProviderCli(makePlugin(), 'det-alpha').status).toBe('found');
     } finally {
-      Object.defineProperty(process, 'platform', { value: platform, configurable: true });
+      setPlatform('linux');
     }
   });
 

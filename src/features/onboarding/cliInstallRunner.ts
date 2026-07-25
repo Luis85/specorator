@@ -156,20 +156,40 @@ export function runCliInstall(
    * so there it has normally fired by now). Bounded, because a process wedged in
    * uninterruptible sleep must not hang the UI — after that the user gets their
    * answer and SIGKILL finishes the job regardless.
+   *
+   * The grace covers the REAPER as well as the wait, and is armed before it: on
+   * Windows the reaper is itself a spawned `taskkill /T /F`, which can walk a
+   * large installer tree without ever emitting `close`. Timing only the wait
+   * would leave both Cancel and the 10-minute timeout pending forever on exactly
+   * that failure. When the grace wins, the direct child is signalled anyway, so
+   * the wrapper dies even though the tree walk never answered.
    */
   const abort = async (reason: 'cancelled' | 'timeout'): Promise<void> => {
     if (settled || abortReason) return;
     abortReason = reason;
-    await forceKillProcessGroup(child);
+
     let graceTimer: number | undefined;
+    let graceExpired = false;
+    const grace = new Promise<void>((resolve) => {
+      graceTimer = window.setTimeout(() => {
+        graceExpired = true;
+        resolve();
+      }, ABORT_REAP_GRACE_MS);
+    });
+
     await Promise.race([
-      childClosed,
-      new Promise<void>((resolve) => {
-        graceTimer = window.setTimeout(resolve, ABORT_REAP_GRACE_MS);
-      }),
+      forceKillProcessGroup(child).then(() => childClosed),
+      grace,
     ]);
     // Whichever won, the loser must not leave a timer pending.
     if (graceTimer !== undefined) window.clearTimeout(graceTimer);
+    if (graceExpired) {
+      try {
+        child.kill('SIGKILL');
+      } catch {
+        // Already gone, or not killable — the answer below is owed either way.
+      }
+    }
     settle(abortResult());
   };
 
