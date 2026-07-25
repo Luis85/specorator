@@ -105,6 +105,7 @@ function buildPackageContext(seams: {
   fetchBody: PackageInstallContext['fetchBody'];
   installSkill: PackageInstallContext['installSkill'];
   requireSkillTarget: PackageInstallContext['requireSkillTarget'];
+  assertTargetInstallable: PackageInstallContext['assertTargetInstallable'];
   deps: () => MarketplaceInstallDeps;
   byId: ReadonlyMap<string, MarketplaceItem>;
 }): PackageInstallContext {
@@ -121,6 +122,7 @@ function buildPackageContext(seams: {
         ? skillInstalledAtTarget(member, seams.requireSkillTarget(chosen), seams.deps())
         : isItemInstalled(member, seams.deps()),
     requireSkillTarget: seams.requireSkillTarget,
+    assertTargetInstallable: seams.assertTargetInstallable,
   };
 }
 
@@ -366,6 +368,7 @@ export const useMarketplaceStore = defineStore('marketplace', () => {
       fetchBody: fetchBodyFrom,
       installSkill: installSkillAt,
       requireSkillTarget,
+      assertTargetInstallable: (chosen) => assertUserScopeStillInstallable(chosen, requirePlugin()),
       deps: () => buildInstallDeps(requirePlugin(), installSource), // pinned — see buildPackageContext
       byId,
     });

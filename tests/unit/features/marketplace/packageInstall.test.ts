@@ -14,8 +14,11 @@ function makeContext(
   outcomes: Record<string, InstallOutcome | Error> = {},
   /** Ids the vault already holds at the chosen target (the preflight's answer). */
   present: string[] = [],
+  /** Set to make the chosen target invalid under "current settings". */
+  targetLost = false,
 ) {
   const writes: string[] = [];
+  const asserted: SkillInstallTarget[] = [];
   const fetched: string[] = [];
   const boundSkillsFor: Record<string, string[]> = {};
   const settle = (id: string): Promise<InstallOutcome> => {
@@ -46,8 +49,12 @@ function makeContext(
       if (!chosen) throw new Error('no target');
       return chosen;
     },
+    assertTargetInstallable: (chosen) => {
+      asserted.push(chosen);
+      if (targetLost) throw new Error('target no longer installable');
+    },
   };
-  return { ctx, writes, fetched, boundSkillsFor };
+  return { ctx, writes, fetched, boundSkillsFor, asserted };
 }
 
 describe('installPackage', () => {
@@ -136,5 +143,36 @@ describe('installPackage preflight', () => {
     const result = await installPackage(agent, 'REVIEWED', [brief, raid], target, 'https://src/', ctx);
     expect(result).toMatchObject({ outcome: 'installed', installed: 0, skipped: 2 });
     expect(writes).toEqual(['item:agents/pm:REVIEWED']);
+  });
+});
+
+describe('installPackage target revalidation', () => {
+  const agent = item('agents/pm', 'agent');
+  const brief = item('skills/brief', 'skill');
+  const loop = item('loops/x', 'loop');
+
+  it('re-checks the target before the root even when every skill was already present', async () => {
+    // The skill installer's own check is never reached for a pre-installed skill
+    // (it returns 'skipped' first), so without this the same package + settings +
+    // target would abort or proceed purely on whether the skills happened to exist.
+    const { ctx, writes } = makeContext({}, ['skills/brief'], true);
+    await expect(
+      installPackage(agent, 'REVIEWED', [brief], target, 'https://src/', ctx),
+    ).rejects.toThrow('target no longer installable');
+    expect(writes.some((w) => w.startsWith('item:agents/pm'))).toBe(false);
+  });
+
+  it('re-checks with the chosen target when skills did get written', async () => {
+    const { ctx, asserted } = makeContext();
+    await installPackage(agent, 'REVIEWED', [brief], target, 'https://src/', ctx);
+    expect(asserted).toEqual([target]);
+  });
+
+  it('does not re-check a package with no skills in it', async () => {
+    // No skill dependency means the target was never used, so there is nothing
+    // whose validity could have lapsed.
+    const { ctx, asserted } = makeContext();
+    await installPackage(agent, 'REVIEWED', [loop], target, 'https://src/', ctx);
+    expect(asserted).toEqual([]);
   });
 });

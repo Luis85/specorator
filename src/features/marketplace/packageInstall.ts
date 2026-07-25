@@ -39,6 +39,14 @@ export interface PackageInstallContext {
   isInstalled: (item: MarketplaceItem, target: SkillInstallTarget | undefined) => Promise<boolean>;
   /** Resolves the target for a skill write, throwing when none was chosen. */
   requireSkillTarget: (target?: SkillInstallTarget) => SkillInstallTarget;
+  /**
+   * Throws if the chosen target is no longer installable under the CURRENT
+   * settings (a provider losing user-scope support mid-install). The skill
+   * installer applies this itself before each write; the package applies it once
+   * more before the root, so the outcome can't depend on whether the skills
+   * happened to be pre-installed — see `installPackage`.
+   */
+  assertTargetInstallable: (target: SkillInstallTarget) => void;
 }
 
 export interface PackageInstallResult {
@@ -88,6 +96,16 @@ export async function installPackage(
     if (outcome === 'installed') installed += 1;
     else skipped += 1;
     written.push(dependency.id);
+  }
+  // Re-check the target before committing the root. A skill dependency that was
+  // already present never reaches the skill installer's own check (it returns
+  // 'skipped' first), so without this the SAME package, settings and target
+  // behave differently depending on whether the skills happened to be installed
+  // already: one skill needing a write aborts with a clear error, all present
+  // proceeds silently. Skipped when the root is itself a skill (its own write
+  // asserts) or when no dependency needed a target at all.
+  if (target && root.type !== 'skill' && dependencies.some((member) => member.type === 'skill')) {
+    ctx.assertTargetInstallable(target);
   }
   const outcome = await installOne(root, reviewedBody, target, source, ctx);
   written.push(root.id);
