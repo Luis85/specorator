@@ -81,6 +81,13 @@ surfaces to use the island pattern; this is one.
     classification is what stops that repeating.
   - **A candidate is `found` only once it is confirmed to be a file this
     host can run AND this provider's launch path accepts** (`classifyResolvedPath`).
+    Existence is checked FIRST: the Windows-form rules below are statements about
+    a file on this host and say nothing about a command that runs somewhere else,
+    so a Codex WSL guest command (extensionless, therefore `unsupported-form` by
+    Windows extension rules) must reach the `external` branch instead of being
+    called broken. Nothing else lands there non-existent — a configured path
+    resolves only when it is a real file, and the probe returns only what it
+    found — so "not on this host" really does mean an external target.
     Two ways a real file is still `missing`, both carrying the path and a reason
     through `unusable` rather than a bare "not found" that sends the user hunting
     for a file they can see:

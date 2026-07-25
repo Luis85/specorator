@@ -385,6 +385,24 @@ describe('detectProviderCli', () => {
     });
   });
 
+  it('does not judge a WSL guest command by Windows extension rules', () => {
+    // Codex in WSL mode resolves to a guest command the runtime hands to
+    // `wsl.exe`. Judged as a Windows path it is an extensionless file — which
+    // reads as `unsupported-form` — and Setup would call a working Codex missing
+    // and offer host-side installers that could never reach the distro.
+    setPlatform('win32');
+    ProviderWorkspaceRegistry.setServices('det-alpha', {
+      cliResolver: stubResolver('codex'),
+    } as never);
+    jest.mocked(isExistingFile).mockReturnValue(false);
+
+    expect(detectProviderCli(makePlugin(), 'det-alpha')).toMatchObject({
+      status: 'unknown',
+      unknownReason: 'external-target',
+      cliPath: null,
+    });
+  });
+
   it('refuses a Windows batch shim that runs Node when no interpreter is reachable', () => {
     // "This provider can wrap batch files" says cmd.exe will START the shim, not
     // that the wrapped command survives: npm's `.cmd` runs `node <pkg>/bin/cli.js`

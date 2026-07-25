@@ -210,12 +210,22 @@ function classifyResolvedPath(
   resolved: string,
   runtimePath: string | undefined,
 ): ResolvedPathVerdict {
+  // Existence FIRST, because the Windows-form rules are statements about a file
+  // on this host and say nothing about a command that runs somewhere else. Codex
+  // in WSL mode resolves to a guest command (`codex`, or a configured Linux
+  // path) which the runtime hands to `wsl.exe`: judged by Windows extension it
+  // looks like an `unsupported-form` pin, and Setup would call a working Codex
+  // missing and offer host-side installers that could never reach the distro.
+  //
+  // Nothing else lands here non-existent — `resolveConfiguredCliPath` returns a
+  // configured path only when it is a real file, and the PATH probe only returns
+  // what it found — so "not on this host" really does mean an external target.
+  if (!isExistingFile(resolved)) {
+    return { kind: 'external' };
+  }
   const rejected = unusableReason(providerId, resolved);
   if (rejected) {
     return { kind: 'unusable', reason: rejected };
-  }
-  if (!isExistingFile(resolved)) {
-    return { kind: 'external' };
   }
 
   // A Node-backed entry point under a provider that rewrites it to
