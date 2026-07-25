@@ -44,6 +44,26 @@ export class PluginLifecycle {
   }
 
   /**
+   * Runs the post-`onLayoutReady` startup work, then the first-run Setup open.
+   *
+   * The open is sequenced with an unconditional continuation, not chained onto
+   * success: `completeDeferredOnload` bails out when provider workspace
+   * initialization fails and can reject outright when a cache hydration throws,
+   * and a vault where that happens is precisely where the user most needs the
+   * Setup view (CLI detection already degrades to `unknown` without workspace
+   * services). Gating onboarding on unrelated startup success would leave a
+   * fresh vault with no first-run surface at all.
+   */
+  async runDeferredStartup(completeDeferredOnload: () => Promise<void>): Promise<void> {
+    try {
+      await completeDeferredOnload();
+    } catch (error) {
+      this.plugin.logger.scope('onload').error('deferred onload failed', error);
+    }
+    await this.openOnboardingIfFirstRun();
+  }
+
+  /**
    * Opens the guided Setup view on a genuine first run. Failure is logged, never
    * propagated: a plugin load must not break because an onboarding leaf would not
    * open.

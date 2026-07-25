@@ -229,7 +229,7 @@ export default class SpecoratorPlugin extends Plugin implements PluginContext {
     // finished" signal; provider services don't have to exist for view
     // restoration since runtime services are lazy-initialized per tab.
     this.app.workspace.onLayoutReady(() => {
-      void this.completeDeferredOnload();
+      void this.lifecycle.runDeferredStartup(() => this.completeDeferredOnload());
     });
   }
 
@@ -266,10 +266,6 @@ export default class SpecoratorPlugin extends Plugin implements PluginContext {
     if (this.unloaded) return;
     this.quickActionLastUsedStore = lastUsedStore;
     await this.lifecycle.refreshRestoredViews();
-    // First run in this vault: open the guided Setup view. Deferred to here (not
-    // onload) so provider workspace services exist and CLI detection reports
-    // what the runtime would actually resolve.
-    await this.lifecycle.openOnboardingIfFirstRun();
   }
 
   onunload(): void {

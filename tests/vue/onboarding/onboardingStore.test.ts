@@ -9,6 +9,9 @@ import type { CliInstallHandle, CliInstallResult } from '@/features/onboarding/c
 import type * as SettingsModule from '@/features/onboarding/onboardingSettings';
 import type { ProviderCliDetection } from '@/features/onboarding/providerDetection';
 
+vi.mock('@/shared/settings/cliPathSetting', () => ({
+  broadcastCliPathRuntimeCleanup: vi.fn(async () => {}),
+}));
 vi.mock('@/features/onboarding/providerDetection', () => ({
   detectProviderClis: vi.fn(() => []),
 }));
@@ -52,6 +55,7 @@ import {
 } from '@/features/onboarding/onboardingSettings';
 import { detectProviderClis } from '@/features/onboarding/providerDetection';
 import { useOnboardingStore } from '@/features/onboarding/vue/stores/onboardingStore';
+import { broadcastCliPathRuntimeCleanup } from '@/shared/settings/cliPathSetting';
 
 const method: ProviderCliInstallMethod = {
   id: 'npm',
@@ -110,6 +114,7 @@ beforeEach(() => {
   vi.mocked(ensureOnboardingFolders).mockReset().mockResolvedValue([]);
   vi.mocked(readOnboardingFolders).mockReset().mockResolvedValue([]);
   vi.mocked(setFolderSetting).mockClear();
+  vi.mocked(broadcastCliPathRuntimeCleanup).mockClear();
   for (const view of views) {
     view.refreshModelSelector.mockClear();
     view.refreshProviderAvailability.mockClear();
@@ -162,6 +167,17 @@ describe('onboarding store', () => {
       expect.any(String),
       '/opt/alpha',
     );
+  });
+
+  it('recycles live runtimes after a path change, like the provider CLI-path widgets', async () => {
+    // A persistent Codex/Cursor/OpenCode process holds the OLD executable, so
+    // without this the card reads "detected" while chats spawn the previous one.
+    const store = useOnboardingStore();
+    store.init(plugin);
+
+    await store.setCliPath('alpha', '/opt/alpha');
+
+    expect(broadcastCliPathRuntimeCleanup).toHaveBeenCalledWith(plugin);
   });
 
   it('streams install output into the per-provider run state', async () => {

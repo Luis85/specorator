@@ -3,6 +3,7 @@ import { computed, inject } from 'vue';
 
 import { t } from '@/i18n/i18n';
 
+import { setDefaultModel } from '../../onboardingSettings';
 import { PLUGIN_KEY } from '../onboardingKeys';
 import { useOnboardingStore } from '../stores/onboardingStore';
 import { useAppSetting } from '../useAppSetting';
@@ -14,9 +15,19 @@ if (!injectedPlugin) throw new Error('DefaultsStep mounted without PLUGIN_KEY');
 const plugin = injectedPlugin;
 
 const store = useOnboardingStore();
-const [model, setModel] = useAppSetting<string>(plugin, 'model', 'haiku');
+const [model, setModelSetting] = useAppSetting<string>(plugin, 'model', 'haiku');
 const [permissionMode, setPermissionMode] = useAppSetting<string>(plugin, 'permissionMode', 'normal');
 const [autoTitles, setAutoTitles] = useAppSetting<boolean>(plugin, 'enableAutoTitleGeneration', true);
+
+/**
+ * A model choice has to be committed to the provider that owns it, or the
+ * per-provider projection replaces it with that provider's fallback and the
+ * default silently never applies (see `setDefaultModel`).
+ */
+async function setModel(next: string): Promise<void> {
+  setModelSetting(next);
+  await setDefaultModel(plugin, next);
+}
 
 const hasProvider = computed(() => store.enabledProviderIds.length > 0);
 /** Grouped by provider display name so a shared model id reads unambiguously. */

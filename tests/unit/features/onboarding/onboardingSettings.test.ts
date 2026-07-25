@@ -1,3 +1,5 @@
+import { ProviderRegistry } from '@/core/providers/ProviderRegistry';
+import type { ProviderId, ProviderRegistration } from '@/core/providers/types';
 import type { PluginContext } from '@/core/types/PluginContext';
 import {
   completeOnboarding,
@@ -6,6 +8,7 @@ import {
   ONBOARDING_FOLDER_KEYS,
   readOnboardingFolders,
   setAppSetting,
+  setDefaultModel,
   setFolderSetting,
   setProviderCliPathForHost,
   setProviderEnabled,
@@ -149,6 +152,90 @@ describe('folder setup', () => {
 
     expect(harness.settings.agentBoardLoopFolder).toBe('Board/loops');
     expect(harness.saves).toBe(1);
+  });
+});
+
+describe('setDefaultModel', () => {
+  // Two stub providers so a cross-provider pick is exercised: writing only the
+  // top-level `model` would be reverted by the owning provider's projection.
+  const OWNER = 'model-beta' as ProviderId;
+
+  beforeAll(() => {
+    for (const [id, model] of [['model-alpha', 'alpha-1'], ['model-beta', 'beta-1']] as const) {
+      ProviderRegistry.register(id as ProviderId, {
+        displayName: id,
+        firstRunBlurb: `${id} CLI`,
+        cliCommand: id,
+        isEnabled: () => true,
+        chatUIConfig: {
+          getModelOptions: () => [{ value: model, label: model }],
+          getCustomModelIds: () => [],
+          ownsModel: (candidate: string) => candidate === model,
+          isAdaptiveReasoningModel: () => false,
+          getReasoningOptions: () => [],
+          normalizeModelVariant: (candidate: string) => candidate,
+          isDefaultModel: (candidate: string) => candidate === model,
+          applyModelDefaults: () => {},
+        },
+      } as unknown as ProviderRegistration);
+    }
+  });
+
+  it('records the model against the provider that owns it, not just the top level', async () => {
+    const harness = makeHarness({ settingsProvider: 'model-alpha', model: 'alpha-1' });
+
+    await setDefaultModel(harness.plugin, 'beta-1');
+
+    expect(harness.settings.model).toBe('beta-1');
+    expect((harness.settings.savedProviderModel as Record<string, string>)[OWNER]).toBe('beta-1');
+    expect(harness.saves).toBe(1);
+  });
+
+  it('points the active provider at the owner, so a blank chat prefers it', async () => {
+    const harness = makeHarness({ settingsProvider: 'model-alpha', model: 'alpha-1' });
+
+    await setDefaultModel(harness.plugin, 'beta-1');
+
+    expect(harness.settings.settingsProvider).toBe(OWNER);
+  });
+
+  it('writes the projection entry the coordinator resolves from (the regression)', async () => {
+    // `resolveProjectionModel` prefers `savedProviderModel[provider]` over the
+    // provider's first option — that entry is precisely what stops a later
+    // projection from replacing the pick with a foreign-provider fallback.
+    // Asserted at that contract rather than by driving the real coordinator,
+    // which would need a full ProviderChatUIConfig stub for every branch it
+    // touches (reasoning options, variants, tier/budget toggles).
+    const harness = makeHarness({ settingsProvider: 'model-alpha', model: 'alpha-1' });
+
+    await setDefaultModel(harness.plugin, 'beta-1');
+
+    expect(harness.settings.savedProviderModel).toEqual({ [OWNER]: 'beta-1' });
+  });
+
+  it('applies the chosen model\'s own reasoning defaults', async () => {
+    const applied: string[] = [];
+    ProviderRegistry.register(OWNER, {
+      displayName: 'beta',
+      firstRunBlurb: 'beta CLI',
+      cliCommand: 'beta',
+      isEnabled: () => true,
+      chatUIConfig: {
+        getModelOptions: () => [{ value: 'beta-1', label: 'beta-1' }],
+        getCustomModelIds: () => [],
+        ownsModel: (candidate: string) => candidate === 'beta-1',
+        isAdaptiveReasoningModel: () => false,
+        getReasoningOptions: () => [],
+        normalizeModelVariant: (candidate: string) => candidate,
+        isDefaultModel: (candidate: string) => candidate === 'beta-1',
+        applyModelDefaults: (model: string) => applied.push(model),
+      },
+    } as unknown as ProviderRegistration);
+    const harness = makeHarness({ settingsProvider: 'model-alpha', model: 'alpha-1' });
+
+    await setDefaultModel(harness.plugin, 'beta-1');
+
+    expect(applied).toContain('beta-1');
   });
 });
 

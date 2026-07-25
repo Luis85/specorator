@@ -6,6 +6,7 @@ import type { ProviderCliInstallMethod, ProviderId } from '@/core/providers/type
 import { VaultFileAdapter } from '@/core/storage/VaultFileAdapter';
 import { asSettingsBag } from '@/core/types';
 import type SpecoratorPlugin from '@/main';
+import { broadcastCliPathRuntimeCleanup } from '@/shared/settings/cliPathSetting';
 import { getHostnameKey } from '@/utils/env';
 
 import {
@@ -105,7 +106,20 @@ export const useOnboardingStore = defineStore('specorator-onboarding', () => {
   }
 
   async function setCliPath(providerId: ProviderId, cliPath: string): Promise<void> {
-    await setProviderCliPathForHost(requirePlugin(), providerId, getHostnameKey(), cliPath);
+    const active = requirePlugin();
+    await setProviderCliPathForHost(active, providerId, getHostnameKey(), cliPath);
+    // Same runtime recycle the provider CLI-path widgets perform: a persistent
+    // Codex/Cursor/OpenCode process already holds the OLD executable, so
+    // without this the card would read "detected" while live chats kept
+    // spawning the previous binary. refreshDetections() resets the resolver;
+    // this restarts the runtimes that resolved through it.
+    //
+    // Residual: OpenCode's widget additionally clears its discovery state
+    // (model/mode catalog) via a provider-internal helper the features layer
+    // cannot reach — so an OpenCode path change made here can leave a stale
+    // model list until its next discovery. Closing that needs a
+    // registration-level "CLI path changed" hook, not a provider import.
+    await broadcastCliPathRuntimeCleanup(active);
     refreshDetections();
   }
 

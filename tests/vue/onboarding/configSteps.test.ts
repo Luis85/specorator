@@ -2,6 +2,8 @@ import { fireEvent, render } from '@testing-library/vue';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { markRaw, reactive } from 'vue';
 
+// Namespace type import: `typeof import(...)` annotations are lint-forbidden.
+import type * as SettingsModule from '@/features/onboarding/onboardingSettings';
 import type { OnboardingFolderState } from '@/features/onboarding/onboardingSettings';
 import { CLOSE_VIEW_KEY, PLUGIN_KEY } from '@/features/onboarding/vue/onboardingKeys';
 
@@ -15,6 +17,10 @@ vi.mock('@/core/providers/ProviderRegistry', () => ({
     getChatUIConfig: () => ({ getModelOptions: () => [] }),
   },
 }));
+vi.mock('@/features/onboarding/onboardingSettings', async (importOriginal) => {
+  const actual = await importOriginal<typeof SettingsModule>();
+  return { ...actual, setDefaultModel: vi.fn(async () => {}) };
+});
 vi.mock('@/features/marketplace/activateMarketplace', () => ({
   activateMarketplace: vi.fn(async () => {}),
 }));
@@ -24,6 +30,7 @@ vi.mock('@/features/marketplace/marketplaceNetworkGate', () => ({
 
 import { activateMarketplace } from '@/features/marketplace/activateMarketplace';
 import { maybeWarnMarketplaceNetwork } from '@/features/marketplace/marketplaceNetworkGate';
+import { setDefaultModel } from '@/features/onboarding/onboardingSettings';
 import DefaultsStep from '@/features/onboarding/vue/components/DefaultsStep.vue';
 import FinishStep from '@/features/onboarding/vue/components/FinishStep.vue';
 import FoldersStep from '@/features/onboarding/vue/components/FoldersStep.vue';
@@ -84,6 +91,7 @@ beforeEach(() => {
   hoisted.store = null;
   vi.mocked(activateMarketplace).mockClear();
   vi.mocked(maybeWarnMarketplaceNetwork).mockClear();
+  vi.mocked(setDefaultModel).mockClear();
 });
 
 describe('DefaultsStep', () => {
@@ -103,6 +111,24 @@ describe('DefaultsStep', () => {
 
     expect(container.querySelector('optgroup')?.getAttribute('label')).toBe('Alpha');
     expect(container.querySelector('option')?.textContent).toContain('Model One');
+  });
+
+  it('commits the chosen model to its owning provider, not just the top level', async () => {
+    // Writing `settings.model` alone is reverted by the owning provider's
+    // projection when several providers are enabled — see setDefaultModel.
+    const store = makeStore({
+      enabledProviderIds: ['alpha'],
+      modelOptions: [
+        { value: 'm1', label: 'Model One', group: 'Alpha' },
+        { value: 'm2', label: 'Model Two', group: 'Alpha' },
+      ],
+    });
+    const { container, plugin } = mount(DefaultsStep, store, makePlugin({ model: 'm1' }));
+
+    await fireEvent.update(container.querySelector('[data-field="model"]')!, 'm2');
+    await flushMicrotasks();
+
+    expect(setDefaultModel).toHaveBeenCalledWith(plugin, 'm2');
   });
 
   it('writes the chosen model through the plugin settings save path', async () => {

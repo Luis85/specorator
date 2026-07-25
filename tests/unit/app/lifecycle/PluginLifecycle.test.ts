@@ -94,10 +94,48 @@ describe('PluginLifecycle.refreshRestoredViews', () => {
   });
 });
 
+describe('PluginLifecycle.runDeferredStartup', () => {
+  function createStartupPlugin() {
+    return {
+      settings: { firstRunDismissed: true },
+      app: { workspace: { getLeavesOfType: jest.fn().mockReturnValue([]), getLeaf: jest.fn() } },
+      logger: { scope: () => ({ error: jest.fn() }) },
+    } as unknown as SpecoratorPlugin;
+  }
+
+  it('runs the first-run open after the deferred work', async () => {
+    const plugin = createStartupPlugin();
+    const lifecycle = new PluginLifecycle(plugin);
+    const open = jest.spyOn(lifecycle, 'openOnboardingIfFirstRun').mockResolvedValue(undefined);
+    const order: string[] = [];
+
+    await lifecycle.runDeferredStartup(async () => { order.push('deferred'); });
+    order.push('open');
+
+    expect(open).toHaveBeenCalledTimes(1);
+    expect(order).toEqual(['deferred', 'open']);
+  });
+
+  it('still opens Setup when the deferred work rejects', async () => {
+    // A vault whose provider init or cache hydration failed is exactly where the
+    // setup view is most needed; detection degrades to `unknown` without services.
+    const plugin = createStartupPlugin();
+    const lifecycle = new PluginLifecycle(plugin);
+    const open = jest.spyOn(lifecycle, 'openOnboardingIfFirstRun').mockResolvedValue(undefined);
+
+    await expect(
+      lifecycle.runDeferredStartup(() => Promise.reject(new Error('provider init failed'))),
+    ).resolves.toBeUndefined();
+
+    expect(open).toHaveBeenCalledTimes(1);
+  });
+});
+
 describe('PluginLifecycle.openOnboardingIfFirstRun', () => {
   it('opens the Setup view on a first run', async () => {
     const plugin = {
       settings: { firstRunDismissed: false },
+      saveSettings: jest.fn().mockResolvedValue(undefined),
       app: { workspace: { getLeavesOfType: jest.fn().mockReturnValue([]), getLeaf: jest.fn(), revealLeaf: jest.fn() } },
       logger: { scope: () => ({ error: jest.fn() }) },
     } as unknown as SpecoratorPlugin;
@@ -127,6 +165,7 @@ describe('PluginLifecycle.openOnboardingIfFirstRun', () => {
     const error = jest.fn();
     const plugin = {
       settings: { firstRunDismissed: false },
+      saveSettings: jest.fn().mockResolvedValue(undefined),
       app: {
         workspace: {
           getLeavesOfType: jest.fn().mockReturnValue([]),

@@ -1,6 +1,8 @@
 import { normalizePath } from 'obsidian';
 
 import { getProviderConfig, setProviderConfig } from '@/core/providers/providerConfig';
+import { ProviderRegistry } from '@/core/providers/ProviderRegistry';
+import { ProviderSettingsCoordinator } from '@/core/providers/ProviderSettingsCoordinator';
 import type { ProviderId } from '@/core/providers/types';
 import type { PluginContext } from '@/core/types/PluginContext';
 import { asSettingsBag } from '@/core/types/settings';
@@ -81,6 +83,37 @@ export async function setAppSetting(
   value: string | number | boolean,
 ): Promise<void> {
   asSettingsBag(plugin.settings)[key] = value;
+  await plugin.saveSettings();
+}
+
+/**
+ * Commits a default-model choice to the provider that OWNS the model.
+ *
+ * Writing only the top-level `model` does not survive: `ProviderSettingsCoordinator`
+ * projects per-provider state, and projecting a provider that doesn't own the
+ * current model replaces it with that provider's own first option. With Claude
+ * and Codex both enabled, picking a Codex model and writing `model` alone
+ * therefore reverts to a Claude model the next time Claude's state is projected
+ * — the chosen default silently never applies.
+ *
+ * So this does what the settings-tab and chat pickers do:
+ * - points `settingsProvider` at the owning provider, so it is the one a blank
+ *   chat prefers (and so the projection treats the model as "current"),
+ * - applies the model's own reasoning defaults (`applyModelDefaults`), and
+ * - persists the projection maps (`savedProviderModel[owner]` and friends) via
+ *   `persistProjectedProviderState`, which is what makes the choice durable
+ *   across later projections.
+ */
+export async function setDefaultModel(plugin: PluginContext, model: string): Promise<void> {
+  const settings = asSettingsBag(plugin.settings);
+  const owner = ProviderRegistry.resolveProviderForModel(model, settings, {
+    onlyEnabledProviders: true,
+  });
+
+  settings.model = model;
+  settings.settingsProvider = owner;
+  ProviderRegistry.getChatUIConfig(owner).applyModelDefaults(model, settings);
+  ProviderSettingsCoordinator.persistProjectedProviderState(settings, owner);
   await plugin.saveSettings();
 }
 

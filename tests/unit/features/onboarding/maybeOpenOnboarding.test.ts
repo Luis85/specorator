@@ -28,7 +28,7 @@ beforeEach(() => {
 });
 
 function makePlugin(settings: Partial<SpecoratorSettings>) {
-  return { settings } as never;
+  return { settings, saveSettings: jest.fn().mockResolvedValue(undefined) } as never;
 }
 
 describe('shouldOpenOnboarding', () => {
@@ -38,6 +38,17 @@ describe('shouldOpenOnboarding', () => {
 
   it('stays closed once the flow was completed or dismissed', () => {
     expect(shouldOpenOnboarding(makePlugin({ firstRunDismissed: true }))).toBe(false);
+  });
+
+  it('stays closed once the view has auto-opened, however the user closed it', () => {
+    // Obsidian's own tab-close control never reaches our code, so the trigger
+    // cannot key on an explicit dismissal or it re-steals focus every load.
+    const plugin = makePlugin({
+      firstRunDismissed: false,
+      onboardingAutoOpened: true,
+    } as Partial<SpecoratorSettings>);
+
+    expect(shouldOpenOnboarding(plugin)).toBe(false);
   });
 
   it('stays closed for a user who is already set up, whatever the flag says', () => {
@@ -55,6 +66,27 @@ describe('maybeOpenOnboarding', () => {
     await maybeOpenOnboarding(makePlugin({ firstRunDismissed: false }));
 
     expect(activateOnboarding).toHaveBeenCalledTimes(1);
+  });
+
+  it('records the auto-open BEFORE activating, so a failed open cannot re-ambush', async () => {
+    const plugin = makePlugin({ firstRunDismissed: false });
+    jest.mocked(activateOnboarding).mockRejectedValueOnce(new Error('no workspace'));
+
+    await expect(maybeOpenOnboarding(plugin)).rejects.toThrow('no workspace');
+
+    expect((plugin as unknown as { settings: SpecoratorSettings }).settings.onboardingAutoOpened)
+      .toBe(true);
+  });
+
+  it('persists the auto-open flag so the next load does not reopen', async () => {
+    const plugin = makePlugin({ firstRunDismissed: false });
+
+    await maybeOpenOnboarding(plugin);
+
+    const typed = plugin as unknown as { settings: SpecoratorSettings; saveSettings: jest.Mock };
+    expect(typed.settings.onboardingAutoOpened).toBe(true);
+    expect(typed.saveSettings).toHaveBeenCalled();
+    expect(shouldOpenOnboarding(plugin)).toBe(false);
   });
 
   it('does nothing otherwise', async () => {
