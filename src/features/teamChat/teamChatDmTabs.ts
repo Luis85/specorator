@@ -102,9 +102,10 @@ export async function restoreTeamChatDmTabs(
   // one conversation (a hand-edited/synced layout). Trimming first lets those duplicates consume
   // budget slots the open coordinator later skips (it early-returns on an already-open conversation),
   // silently dropping a valid DM (e.g. [A(active), B, A] at budget 2 → trim keeps [A, A], drops B →
-  // second A skipped → B lost). First-occurrence-wins preserves order, so trim's "keep active +
-  // earliest" still holds on the distinct set (Round-58).
-  const distinctRestorable = dedupeByConversationId(allRestorable);
+  // second A skipped → B lost). The dedup is ACTIVE-AWARE — a duplicated conversation keeps its
+  // persisted-active occurrence — so trim's "keep active + earliest" holds even when the active
+  // duplicate comes AFTER an older one (Round-58, Round-59).
+  const distinctRestorable = dedupeByConversationId(allRestorable, persisted.activeTabId);
   // Honor Team Chat's OWN budget on restore, not the generic maxChatTabs the createTab cap
   // would otherwise enforce (dropping DMs within maxTeamChatDms): keep at most maxTeamChatDms,
   // trimming the least-recent extras but always keeping the persisted-active one (Round-40).
@@ -304,15 +305,31 @@ export function resolveMaxTeamChatDms(settings: { maxTeamChatDms?: number } | un
   return Math.max(2, settings?.maxTeamChatDms ?? DEFAULT_MAX_TEAM_CHAT_DMS);
 }
 
-/** Order-preserving dedup of a restorable DM set by conversationId (first occurrence wins). Persisted
- *  layouts can carry duplicate entries for one conversation; collapsing them BEFORE the budget trim
- *  keeps duplicates from consuming distinct slots the open coordinator later skips (already-open).
+/** Active-aware, order-preserving dedup of a restorable DM set by conversationId. Persisted layouts
+ *  can carry duplicate entries for one conversation; collapsing them BEFORE the budget trim keeps
+ *  duplicates from consuming distinct slots the open coordinator later skips (already-open). For a
+ *  duplicated conversation the persisted-ACTIVE occurrence wins (else, when it comes after an older
+ *  one, trimRestorableDmsToBudget drops the retained older entry as LRU and the ACTIVE DM never
+ *  restores, moving focus — Round-59); every other conversation keeps its first occurrence.
  *  Non-string ids are left as-is (they're filtered out upstream, so this only guards the type). */
-function dedupeByConversationId<T extends { conversationId: string | null }>(tabs: readonly T[]): T[] {
+function dedupeByConversationId<T extends { tabId: string; conversationId: string | null }>(
+  tabs: readonly T[],
+  activeTabId: string | null,
+): T[] {
+  // First pass: conversationIds that have a persisted-active occurrence — that occurrence must win.
+  const withActiveOccurrence = new Set<string>();
+  for (const tab of tabs) {
+    if (typeof tab.conversationId === 'string' && tab.tabId === activeTabId) {
+      withActiveOccurrence.add(tab.conversationId);
+    }
+  }
+  // Second pass: keep the active occurrence for those ids, the first for the rest — order-preserving
+  // over the kept set so trimRestorableDmsToBudget's keep-active+earliest still holds.
   const seen = new Set<string>();
   return tabs.filter((tab) => {
     if (typeof tab.conversationId !== 'string') return true;
     if (seen.has(tab.conversationId)) return false;
+    if (withActiveOccurrence.has(tab.conversationId) && tab.tabId !== activeTabId) return false;
     seen.add(tab.conversationId);
     return true;
   });

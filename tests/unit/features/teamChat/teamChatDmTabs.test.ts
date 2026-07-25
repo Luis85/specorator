@@ -201,6 +201,46 @@ describe('restoreTeamChatDmTabs — dedup + validate (:225)', () => {
     expect(created.has('B')).toBe(true);   // B is NOT dropped
     expect(createTab).toHaveBeenCalledTimes(2);
   });
+
+  // Round-59 Fix 2: dedupeByConversationId was first-occurrence-wins, so when the ACTIVE duplicate
+  // comes AFTER an older occurrence it discarded the entry whose tabId === activeTabId. Then
+  // trimRestorableDmsToBudget drops the retained OLDER occurrence as LRU (it isn't the active tab)
+  // → the ACTIVE DM never restores and focus moves. Make the dedup active-aware: keep the active
+  // occurrence for a duplicated conversationId.
+  it('keeps the ACTIVE duplicate (not the earlier one) so the active DM survives the trim (Round-59)', async () => {
+    const createdCids = new Set<string>();
+    const createdTabs = new Set<string>();
+    const createTab = jest.fn().mockImplementation(async (cid: string, tabId: string) => {
+      createdCids.add(cid); createdTabs.add(tabId); return { id: tabId };
+    });
+    const switchToTab = jest.fn();
+    const plugin = {
+      settings: { maxTeamChatDms: 2 },
+      getConversationSync: jest.fn(() => teamChatConv),
+      getConversationById: jest.fn().mockResolvedValue(teamChatConv),
+      findConversationAcrossViews: jest.fn((id: string) => (createdCids.has(id) ? { view: {}, tabId: `t-${id}` } : null)),
+    } as never;
+    const m = { createTab, hasTab: jest.fn((id: string) => createdTabs.has(id)), switchToTab } as never;
+
+    // Persisted [A(old, tA1), B, C, A(active, tA2)] at budget 2. First-occurrence-wins keeps A(tA1),
+    // then the trim drops it (not the active tab) → active A lost, restoring [B, C]. Active-aware
+    // dedup keeps A(tA2) → the active A survives (restored + one other), NOT dropped.
+    await restoreTeamChatDmTabs(plugin, m, {
+      openTabs: [
+        { tabId: 'tA1', conversationId: 'A', kind: 'chat' as const },
+        { tabId: 'tB', conversationId: 'B', kind: 'chat' as const },
+        { tabId: 'tC', conversationId: 'C', kind: 'chat' as const },
+        { tabId: 'tA2', conversationId: 'A', kind: 'chat' as const },
+      ],
+      activeTabId: 'tA2',
+    });
+
+    expect(createdCids.has('A')).toBe(true);        // the ACTIVE A is restored, not dropped
+    expect(createTab).toHaveBeenCalledTimes(2);      // budget 2: active A + one other
+    // The active A restores via its OWN persisted tabId (tA2), so the final switch lands on it.
+    expect(createTab).toHaveBeenCalledWith('A', 'tA2', expect.objectContaining({ kind: 'chat' }));
+    expect(switchToTab).toHaveBeenCalledWith('tA2');
+  });
 });
 
 describe('restoreTeamChatDmTabs — Team Chat cap governs restore (Round-40 Fix 1)', () => {

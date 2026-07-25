@@ -396,17 +396,13 @@ export class QueuedMessageController {
     this.updateQueueIndicator();
 
     // A Team Chat DM whose agent was removed from the roster is read-only: steering would commit a
-    // turn WITHOUT the agent's persona/model. Block it and notify — the same guard
-    // InputController.sendMessage applies, which `steerQueuedMessage` bypasses. Un-reserve so the
-    // queued message is left intact, and re-creating the agent lets the user steer it
-    // (self-healing). The sync surface check short-circuits before any roster lookup on the sidebar.
+    // turn WITHOUT the agent's persona/model. Gate it with the same guard InputController.sendMessage
+    // applies, which `steerQueuedMessage` bypasses. `confirmSteerDmAgentOrRestore` rolls the
+    // reservation back (leaving the queued message editable) when the agent is gone OR the roster
+    // read fails, so the queue is never stranded mid-"Steering". The sync surface check
+    // short-circuits before any roster lookup on the sidebar.
     const dmAgentId = teamChatDmBoundAgentId(this.deps.plugin, state.currentConversationId);
-    if (dmAgentId && (await this.deps.plugin.agentRosterStore.get(dmAgentId)) === null) {
-      state.queuedMessage = queuedMessage;
-      this.pendingSteerMessage = null;
-      this.steerInFlight = false;
-      this.updateQueueIndicator();
-      new Notice(t('teamChat.agentRemoved'));
+    if (dmAgentId && !(await this.confirmSteerDmAgentOrRestore(dmAgentId, queuedMessage))) {
       return;
     }
 
@@ -440,6 +436,39 @@ export class QueuedMessageController {
       this.restoreQueuedMessageAfterSteerFailure(queuedMessage);
       new Notice(t('chat.queue.steerFailed'));
     }
+  }
+
+  /**
+   * Team Chat DM removed-agent steer gate, run AFTER the reservation. Resolves `true` when the bound
+   * agent still exists (proceed on the reserved steer). Otherwise rolls the reservation back —
+   * restoring the queued message and clearing the pending-steer/in-flight flags so the queue is
+   * editable again — and notifies: the agent was removed (a hard state — pick another agent) OR the
+   * roster read REJECTS (transient — retry). Catching the rejection is load-bearing:
+   * `AgentRosterStore.get` awaits `adapter.exists` OUTSIDE its try/catch, so a vault-I/O error
+   * rejects the read; unhandled it would escape `steerQueuedMessage` AND strand the reservation in
+   * the non-editable "Steering" state until the turn ends. Blocking on a failed read is fail-safe —
+   * an unconfirmed agent must not steer a turn without its persona/model. The steer twin of the send
+   * path's `confirmDmAgentOrRestoreComposer` (Round-59).
+   */
+  private async confirmSteerDmAgentOrRestore(
+    dmAgentId: string,
+    reservedMessage: QueuedMessage,
+  ): Promise<boolean> {
+    const { state } = this.deps;
+    let removed = false;
+    try {
+      if ((await this.deps.plugin.agentRosterStore.get(dmAgentId)) !== null) return true;
+      removed = true;
+    } catch (error) {
+      this.deps.plugin.logger.scope('team-chat').error('roster read failed during steer guard', error);
+    }
+    state.queuedMessage = reservedMessage;
+    this.pendingSteerMessage = null;
+    this.steerInFlight = false;
+    this.updateQueueIndicator();
+    // agentRemoved is a hard state (pick another agent); agentVerifyFailed is transient (retry).
+    new Notice(t(removed ? 'teamChat.agentRemoved' : 'teamChat.agentVerifyFailed'));
+    return false;
   }
 
   private restoreQueuedMessageAfterSteerFailure(
