@@ -488,7 +488,7 @@ describe('TabManager - Tab Lifecycle', () => {
 
       await manager.switchToTab(tab2!.id);
 
-      const switchSpy = jest.spyOn(manager, 'switchToTab');
+      const switchSpy = jest.spyOn(manager as any, 'switchToTabImpl'); // nested fallback switch (:120)
 
       await manager.closeTab(tab2!.id);
 
@@ -504,7 +504,7 @@ describe('TabManager - Tab Lifecycle', () => {
 
       await manager.switchToTab(tab1!.id);
 
-      const switchSpy = jest.spyOn(manager, 'switchToTab');
+      const switchSpy = jest.spyOn(manager as any, 'switchToTabImpl'); // nested fallback switch (:120)
 
       await manager.closeTab(tab1!.id);
 
@@ -848,7 +848,7 @@ describe('TabManager - Conversation Management', () => {
       mockCreateTab.mockReturnValueOnce(tabWithConv);
       await manager.createTab();
 
-      const switchSpy = jest.spyOn(manager, 'switchToTab');
+      const switchSpy = jest.spyOn(manager as any, 'switchToTabImpl'); // nested fallback switch (:120)
       await manager.openConversation('conv-123');
 
       expect(switchSpy).toHaveBeenCalledWith('tab-with-conv');
@@ -866,7 +866,7 @@ describe('TabManager - Conversation Management', () => {
       mockCreateTab.mockReturnValueOnce(tabWithConv);
       await manager.createTab();
 
-      jest.spyOn(manager, 'switchToTab').mockResolvedValue(undefined);
+      jest.spyOn(manager as any, 'switchToTabImpl').mockResolvedValue(undefined); // nested reuse switch (:120)
 
       await manager.openConversation('conv-123');
 
@@ -2209,6 +2209,42 @@ describe('TabManager - destroy serialization (:197)', () => {
     expect(mockDestroyTab).not.toHaveBeenCalled();
 
     releaseSave();
+    await tearing;
+    expect(manager.getTabCount()).toBe(0);
+  });
+
+  // Round-40 (:120): the depth-ambiguity case Round-35's test missed. When destroy() begins
+  // while ANOTHER mutation is SUSPENDED (depth > 0), an external switch/close saw depth > 0 and
+  // slipped past the old `isDestroying && depth === 0` guard, taking runTabMutation's inline
+  // path and racing destroyImpl. The public/internal split rejects it unconditionally.
+  it('rejects an external switch/close while destroy() drains a SUSPENDED mutation (depth>0) (:120)', async () => {
+    let releaseSave!: () => void;
+    const saveGate = new Promise<void>((resolve) => { releaseSave = () => resolve(); });
+    const manager = createManager({
+      tabFactory: (n: number) => createMockTabData({ id: `tab-${n}`, conversationId: `conv-${n}` }),
+    });
+    const tab1 = await manager.createTab();
+    const tab2 = await manager.createTab();
+    // Hang tab1's save so its closeTab suspends INSIDE closeTabImpl at mutation depth 1.
+    tab1!.controllers.conversationController!.save = jest.fn(() => saveGate);
+
+    const closing = manager.closeTab(tab1!.id, true); // enters closeTabImpl, awaits save() → suspended (depth 1)
+    await flushMicrotasks();
+
+    const tearing = manager.destroy(); // isDestroying=true; drainThenDestroy awaits the suspended closeTab
+    mockActivateTab.mockClear();
+
+    // External mutations arriving during teardown WHILE the closeTab is suspended (depth>0):
+    const switched = manager.switchToTab(tab2!.id);
+    const closed = await manager.closeTab(tab2!.id, true);
+
+    // Rejected as no-ops — NOT run inline racing destroyImpl (the depth>0 case Round-35 missed).
+    await expect(switched).resolves.toBeUndefined();
+    expect(closed).toBe(false);
+    expect(mockActivateTab).not.toHaveBeenCalled();
+
+    releaseSave();                  // let the suspended closeTab finish; teardown then drains + destroys
+    await closing.catch(() => {});
     await tearing;
     expect(manager.getTabCount()).toBe(0);
   });

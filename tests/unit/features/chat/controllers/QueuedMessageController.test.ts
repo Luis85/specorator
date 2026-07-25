@@ -1,4 +1,5 @@
 import { createMockEl } from '@test/helpers/mockElement';
+import { Notice } from 'obsidian';
 
 import type { ProviderCapabilities } from '@/core/providers/types';
 import type { ChatRuntime } from '@/core/runtime/ChatRuntime';
@@ -8,6 +9,7 @@ import {
 } from '@/features/chat/controllers/QueuedMessageController';
 import { ChatState } from '@/features/chat/state/ChatState';
 import type { QueuedMessage } from '@/features/chat/state/types';
+import { t } from '@/i18n/i18n';
 
 function createCapabilities(overrides: Partial<ProviderCapabilities> = {}): ProviderCapabilities {
   return {
@@ -79,6 +81,8 @@ interface Harness {
   imageContextManager: ReturnType<typeof createMockImageContextManager>;
   requestSend: jest.Mock;
   onSteerCommitted: jest.Mock;
+  plugin: { getConversationSync: jest.Mock; agentRosterStore: { get: jest.Mock } };
+  rosterGet: jest.Mock;
 }
 
 function createHarness(overrides: Partial<QueuedMessageControllerDeps> = {}): Harness {
@@ -94,8 +98,17 @@ function createHarness(overrides: Partial<QueuedMessageControllerDeps> = {}): Ha
   const requestSend = jest.fn();
   const onSteerCommitted = jest.fn();
 
+  // Default plugin: no Team Chat DM surface (getConversationSync → null), so the sidebar
+  // steer guard short-circuits before any roster lookup. DM tests override getConversationSync.
+  const rosterGet = jest.fn().mockResolvedValue({ id: 'roster:a' });
+  const plugin = {
+    getConversationSync: jest.fn(() => null),
+    agentRosterStore: { get: rosterGet },
+  } as unknown as QueuedMessageControllerDeps['plugin'];
+
   const deps: QueuedMessageControllerDeps = {
     state,
+    plugin,
     getAgentService: () => agentService,
     getActiveCapabilities: () => createCapabilities(),
     getInputEl: () => inputEl as unknown as HTMLTextAreaElement,
@@ -118,6 +131,8 @@ function createHarness(overrides: Partial<QueuedMessageControllerDeps> = {}): Ha
     imageContextManager,
     requestSend,
     onSteerCommitted,
+    plugin: plugin as unknown as Harness['plugin'],
+    rosterGet,
   };
 }
 
@@ -229,6 +244,51 @@ describe('QueuedMessageController', () => {
       }));
       // pending steer state is left in flight until the host reconciles the boundary
       expect((controller as any).pendingSteerMessage).not.toBeNull();
+    });
+
+    // Round-40 Fix 3: steerQueuedMessage bypasses InputController.sendMessage's removed-agent
+    // guard, so it must apply the same gate — otherwise "Steer Now" commits a turn in a
+    // read-only (agent-removed) DM without the agent's persona/model.
+    it('blocks + notices steering a DM whose agent was removed from the roster (Round-40)', async () => {
+      const { controller, state, agentService, plugin, rosterGet } = setupSteerable();
+      (Notice as jest.Mock).mockClear();
+      state.currentConversationId = 'conv-dm';
+      plugin.getConversationSync.mockReturnValue({ surface: 'team-chat', boundAgentId: 'roster:gone' });
+      rosterGet.mockResolvedValue(null); // agent deleted from the roster
+      state.queuedMessage = makeQueuedMessage('steer into removed DM');
+
+      await (controller as any).steerQueuedMessage();
+
+      // Turn blocked (no prepare/steer), queued message intact (self-healing), user notified.
+      expect(agentService.prepareTurn).not.toHaveBeenCalled();
+      expect(agentService.steer).not.toHaveBeenCalled();
+      expect(state.queuedMessage?.content).toBe('steer into removed DM');
+      expect((controller as any).steerInFlight).toBe(false);
+      expect(Notice).toHaveBeenCalledWith(t('teamChat.agentRemoved'));
+    });
+
+    it('steers normally in a DM whose bound agent is still present', async () => {
+      const { controller, state, agentService, plugin, rosterGet } = setupSteerable();
+      state.currentConversationId = 'conv-dm';
+      plugin.getConversationSync.mockReturnValue({ surface: 'team-chat', boundAgentId: 'roster:a' });
+      rosterGet.mockResolvedValue({ id: 'roster:a' }); // present
+      state.queuedMessage = makeQueuedMessage('steer present DM');
+
+      await (controller as any).steerQueuedMessage();
+
+      expect(agentService.steer).toHaveBeenCalled();
+    });
+
+    it('never consults the roster when steering a sidebar chat (no DM surface)', async () => {
+      const { controller, state, agentService, rosterGet } = setupSteerable();
+      // Default plugin.getConversationSync → null → not a Team Chat DM; the sync surface
+      // check short-circuits before the roster lookup (microtask-free sidebar path).
+      state.queuedMessage = makeQueuedMessage('steer sidebar');
+
+      await (controller as any).steerQueuedMessage();
+
+      expect(rosterGet).not.toHaveBeenCalled();
+      expect(agentService.steer).toHaveBeenCalled();
     });
 
     it('guards against concurrent steer while one is in flight', async () => {

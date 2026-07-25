@@ -75,8 +75,12 @@ export async function restoreTeamChatDmTabs(
   manager: TabManager,
   persisted: PersistedTabManagerState,
 ): Promise<void> {
-  const restorable = persisted.openTabs.filter((tab) => isRestorableTeamChatDm(plugin, tab.conversationId));
-  if (restorable.length === 0) return;
+  const allRestorable = persisted.openTabs.filter((tab) => isRestorableTeamChatDm(plugin, tab.conversationId));
+  if (allRestorable.length === 0) return;
+  // Honor Team Chat's OWN budget on restore, not the generic maxChatTabs the createTab cap
+  // would otherwise enforce (dropping DMs within maxTeamChatDms): keep at most maxTeamChatDms,
+  // trimming the least-recent extras but always keeping the persisted-active one (Round-40).
+  const restorable = trimRestorableDmsToBudget(allRestorable, persisted.activeTabId, resolveMaxTeamChatDms(plugin.settings));
 
   // Pre-warm hydration in parallel (BaseHistoryService dedupes the createTab
   // re-fetch); without this the UI freezes for the sum of every transcript load.
@@ -95,7 +99,9 @@ export async function restoreTeamChatDmTabs(
       // Skip a DM already open — in another leaf, an earlier iteration, or the first
       // of two concurrent same-id restores/opens.
       if (plugin.findConversationAcrossViews(conversationId)) return;
-      await manager.createTab(conversationId, tab.tabId, { activate: false, kind: 'chat' });
+      // bypassTabLimit: Team Chat's DM budget is maxTeamChatDms (capped above), not the shared
+      // maxChatTabs — matching the interactive open path so restore doesn't clip within budget.
+      await manager.createTab(conversationId, tab.tabId, { activate: false, kind: 'chat', bypassTabLimit: true });
     });
   }
 
@@ -225,6 +231,24 @@ export const DEFAULT_MAX_TEAM_CHAT_DMS = 5;
  *  a new DM can always displace a non-active one). */
 export function resolveMaxTeamChatDms(settings: { maxTeamChatDms?: number } | undefined): number {
   return Math.max(2, settings?.maxTeamChatDms ?? DEFAULT_MAX_TEAM_CHAT_DMS);
+}
+
+/** Trims a restorable DM set to the hot-DM budget, ALWAYS keeping the persisted-active DM and
+ *  dropping the least-recent extras first. Restore has no live activation recency yet, so the
+ *  persisted layout order is the age proxy — the recency-less equivalent of the interactive
+ *  `pickLruDmEviction` (keep active, evict oldest) applied to the saved set. */
+export function trimRestorableDmsToBudget<T extends { tabId: string }>(
+  restorable: readonly T[],
+  activeTabId: string | null,
+  max: number,
+): readonly T[] {
+  if (restorable.length <= max) return restorable;
+  let toDrop = restorable.length - max;
+  return restorable.filter((tab) => {
+    if (tab.tabId === activeTabId || toDrop === 0) return true;
+    toDrop -= 1;
+    return false; // drop the earliest non-active DMs (least-recent) down to the budget
+  });
 }
 
 /** Minimal open-DM-tab shape the LRU reads (satisfied by `TabData`: `id` + `conversationId`). */

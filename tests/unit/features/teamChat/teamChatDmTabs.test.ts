@@ -6,6 +6,7 @@ import {
   reconcileRotation,
   restoreTeamChatDmTabs,
   touchDmRecency,
+  trimRestorableDmsToBudget,
 } from '@/features/teamChat/teamChatDmTabs';
 
 const teamChatConv = { surface: 'team-chat', boundAgentId: 'roster:a', providerId: 'claude' };
@@ -111,7 +112,8 @@ describe('restoreTeamChatDmTabs — dedup + validate (:225)', () => {
 
     await restoreTeamChatDmTabs(plugin, m, layout('c1'));
 
-    expect(createTab).toHaveBeenCalledWith('c1', 't1', { activate: false, kind: 'chat' });
+    // bypassTabLimit: restore honors Team Chat's own budget (maxTeamChatDms), not maxChatTabs (Round-40).
+    expect(createTab).toHaveBeenCalledWith('c1', 't1', { activate: false, kind: 'chat', bypassTabLimit: true });
     expect(switchToTab).toHaveBeenCalledWith('t1');
   });
 
@@ -127,6 +129,71 @@ describe('restoreTeamChatDmTabs — dedup + validate (:225)', () => {
     await restoreTeamChatDmTabs(plugin, m, layout('c-gone'));
 
     expect(createTab).not.toHaveBeenCalled();
+  });
+});
+
+describe('restoreTeamChatDmTabs — Team Chat cap governs restore (Round-40 Fix 1)', () => {
+  /** A layout of `count` team-chat DMs (tab tN / conversation cN), active = `t${activeIndex}`. */
+  function dmLayout(count: number, activeIndex: number) {
+    return {
+      openTabs: Array.from({ length: count }, (_v, i) => ({ tabId: `t${i}`, conversationId: `c${i}`, kind: 'chat' as const })),
+      activeTabId: `t${activeIndex}`,
+    };
+  }
+
+  it('restores every DM within maxTeamChatDms, not clipped at the smaller maxChatTabs', async () => {
+    const created = new Set<string>();
+    const createTab = jest.fn().mockImplementation(async (_cid: string, tabId: string) => { created.add(tabId); return { id: tabId }; });
+    const plugin = {
+      settings: { maxTeamChatDms: 5 }, // maxChatTabs (default 3) would otherwise clip to 3
+      getConversationSync: jest.fn(() => teamChatConv),
+      getConversationById: jest.fn().mockResolvedValue(teamChatConv),
+      findConversationAcrossViews: jest.fn(() => null),
+    } as never;
+    const m = { createTab, hasTab: jest.fn((id: string) => created.has(id)), switchToTab: jest.fn() } as never;
+
+    await restoreTeamChatDmTabs(plugin, m, dmLayout(4, 0));
+
+    expect(createTab).toHaveBeenCalledTimes(4);
+    for (const call of createTab.mock.calls) {
+      expect(call[2]).toEqual({ activate: false, kind: 'chat', bypassTabLimit: true });
+    }
+  });
+
+  it('trims a persisted set beyond maxTeamChatDms to the budget, keeping the persisted-active DM', async () => {
+    const createdCids = new Set<string>();
+    const createTab = jest.fn().mockImplementation(async (cid: string, tabId: string) => { createdCids.add(cid); return { id: tabId }; });
+    const plugin = {
+      settings: { maxTeamChatDms: 5 },
+      getConversationSync: jest.fn(() => teamChatConv),
+      getConversationById: jest.fn().mockResolvedValue(teamChatConv),
+      findConversationAcrossViews: jest.fn(() => null),
+    } as never;
+    const m = { createTab, hasTab: jest.fn(() => true), switchToTab: jest.fn() } as never;
+
+    // 6 DMs with the LAST (c5/t5) active → trim to 5, dropping the earliest non-active (c0).
+    await restoreTeamChatDmTabs(plugin, m, dmLayout(6, 5));
+
+    expect(createTab).toHaveBeenCalledTimes(5);
+    expect(createdCids.has('c5')).toBe(true);  // persisted-active always kept
+    expect(createdCids.has('c0')).toBe(false); // earliest (least-recent) trimmed
+  });
+});
+
+describe('trimRestorableDmsToBudget', () => {
+  const tabs = (ids: string[]) => ids.map((tabId) => ({ tabId }));
+
+  it('returns the set unchanged when within budget', () => {
+    const set = tabs(['a', 'b', 'c']);
+    expect(trimRestorableDmsToBudget(set, 'b', 5)).toBe(set);
+  });
+
+  it('trims to the budget, keeping the active and dropping the earliest others', () => {
+    expect(trimRestorableDmsToBudget(tabs(['a', 'b', 'c', 'd']), 'd', 2).map((t) => t.tabId)).toEqual(['c', 'd']);
+  });
+
+  it('keeps the active even when it is the earliest tab', () => {
+    expect(trimRestorableDmsToBudget(tabs(['a', 'b', 'c', 'd']), 'a', 2).map((t) => t.tabId)).toEqual(['a', 'd']);
   });
 });
 

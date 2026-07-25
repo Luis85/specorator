@@ -185,6 +185,7 @@ export class InputController {
     });
     this.queuedMessages = new QueuedMessageController({
       state: deps.state,
+      plugin: deps.plugin,
       getAgentService: () => this.getAgentService(),
       getActiveCapabilities: () => this.getActiveCapabilities(),
       getInputEl: deps.getInputEl,

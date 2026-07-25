@@ -10,11 +10,13 @@ import {
 import type { ChatTurnRequest } from '../../../core/runtime/types';
 import type { ChatMessage } from '../../../core/types';
 import { t } from '../../../i18n/i18n';
+import type SpecoratorPlugin from '../../../main';
 import { appendMarkdownSnippet } from '../../../utils/markdown';
 import type { ChatState } from '../state/ChatState';
 import type { QueuedMessage } from '../state/types';
 import type { FileContextManager } from '../ui/FileContext';
 import type { ImageContextManager } from '../ui/ImageContext';
+import { teamChatDmBoundAgentId } from './teamChatSurface';
 
 /** Snapshot pushed when a steered turn is accepted, so the host can reconcile provider message boundaries. */
 export interface SteerCommittedMessage {
@@ -31,6 +33,8 @@ export interface SteerCommittedMessage {
  */
 export interface QueuedMessageControllerDeps {
   state: ChatState;
+  /** For the Team Chat removed-agent steer guard (mirrors InputController.sendMessage). */
+  plugin: SpecoratorPlugin;
   getAgentService: () => ChatRuntime | null;
   getActiveCapabilities: () => ProviderCapabilities;
   getInputEl: () => HTMLTextAreaElement;
@@ -344,6 +348,17 @@ export class QueuedMessageController {
     const { state } = this.deps;
     const agentService = this.deps.getAgentService();
     if (!state.queuedMessage || !this.canSteerQueuedMessage() || !agentService?.steer) {
+      return;
+    }
+
+    // A Team Chat DM whose agent was removed from the roster is read-only: steering would
+    // commit a turn WITHOUT the agent's persona/model. Block it and notify — the same guard
+    // InputController.sendMessage applies, which `steerQueuedMessage` bypasses. The queued
+    // message is left intact, so re-creating the agent lets the user steer it (self-healing).
+    // The sync surface check short-circuits before any roster lookup on the sidebar path.
+    const dmAgentId = teamChatDmBoundAgentId(this.deps.plugin, state.currentConversationId);
+    if (dmAgentId && (await this.deps.plugin.agentRosterStore.get(dmAgentId)) === null) {
+      new Notice(t('teamChat.agentRemoved'));
       return;
     }
 
