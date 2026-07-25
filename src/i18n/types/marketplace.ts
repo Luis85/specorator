@@ -32,6 +32,7 @@ export type MarketplaceTranslationKey =
   | 'marketplace.installedNotice'
   | 'marketplace.skippedNotice'
   | 'marketplace.failedNotice'
+  | 'marketplace.failedNoticeReason'
   | 'marketplace.installedPackageNotice'
   | 'marketplace.completedPackageNotice'
   | 'marketplace.package.heading'

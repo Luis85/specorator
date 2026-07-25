@@ -4,9 +4,9 @@
  * first, the reviewed body only for the root, the fail-before-the-root contract —
  * are testable without a plugin, and so the store stays a thin reactive shell.
  *
- * The three I/O seams (`fetchBody`, `installSkill`, `installItem`) are injected:
- * skill installs must go through the store's per-destination queue, and the vault
- * deps are rebuilt per write from live settings.
+ * Every seam it needs is injected (`PackageInstallContext`): skill installs must
+ * go through the store's per-destination queue, and the vault deps are rebuilt
+ * per write from live settings.
  */
 import type { MarketplaceItem } from './catalogTypes';
 import type { InstallOutcome, MarketplaceInstallOptions } from './installerTypes';
@@ -79,59 +79,74 @@ export async function installPackage(
   let installed = 0;
   let skipped = 0;
   for (const dependency of dependencies) {
-    // Skip a dependency that is already there BEFORE fetching anything. Fetching
-    // regardless let a transient catalog failure abort a package whose
-    // dependencies were all satisfied — blocking even the root, which needs no
-    // network at all — and it defeated the skill install's own "already here,
-    // don't download" preflight by spending a request before it could run.
-    if (await ctx.isInstalled(dependency, target)) {
-      skipped += 1;
-      written.push(dependency.id);
-      continue;
-    }
-    // A dependency is listed in the detail but not individually previewed, so its
-    // body is fetched here rather than passed in like the root's reviewed one.
-    const body = await ctx.fetchBody(dependency, source);
-    const outcome = await installOne(dependency, body, target, source, ctx);
+    // A dependency is listed in the detail but not individually previewed, so it
+    // has no reviewed body — `installMember` fetches one if it needs to write.
+    const outcome = await installMember(dependency, null, target, source, ctx);
     if (outcome === 'installed') installed += 1;
     else skipped += 1;
     written.push(dependency.id);
   }
-  // Preflight the root with the SAME predicate the Installed badge uses, exactly
-  // like a dependency. Completing a partly-installed package re-runs the root,
-  // and the installers dedup on a NARROWER key than the badge does — an agent
-  // dedups on its name-slug roster id while the badge also matches the
-  // source-scoped catalog id, so a catalog-side rename would slip past the
-  // installer and write a SECOND agent. (Cross-rename idempotency is deferred
-  // update-management; this only stops the package flow from tripping it, since
-  // before packages an installed root was never offered for install at all.)
-  let outcome: InstallOutcome = 'skipped';
-  if (!(await ctx.isInstalled(root, target))) {
-    // Re-check the target only when actually committing the root. A skill
-    // dependency that was already present never reaches the skill installer's own
-    // check (it returns 'skipped' first), so without this the SAME package,
-    // settings and target behave differently depending on whether the skills
-    // happened to be installed already: one skill needing a write aborts with a
-    // clear error, all present proceeds silently. Skipped when the root is itself
-    // a skill (its own write asserts) or no dependency needed a target at all.
-    if (target && root.type !== 'skill' && dependencies.some((member) => member.type === 'skill')) {
-      ctx.assertTargetInstallable(target);
-    }
-    outcome = await installOne(root, reviewedBody, target, source, ctx);
-  }
+  // The root goes through the SAME path, reviewed body in hand, plus one guard
+  // that only applies to it (see `assertRootTarget`).
+  const outcome = await installMember(root, reviewedBody, target, source, ctx, () =>
+    assertRootTarget(root, dependencies, target, ctx),
+  );
   written.push(root.id);
   return { outcome, installed, skipped, written };
 }
 
-async function installOne(
+/**
+ * Installs one member of a package: skip when it is already present, otherwise
+ * write it — fetching its body first if the caller has no reviewed one.
+ *
+ * Every member goes through here, root included, so the preflight can't apply to
+ * some and not others. That matters twice over. Skipping BEFORE the fetch means a
+ * transient catalog failure can't abort a package whose members are all satisfied
+ * (the root needs no network at all), and it stops a request being spent ahead of
+ * the skill installer's own "already here, don't download" check. And preflighting
+ * with the same predicate the Installed badge uses covers the installers' NARROWER
+ * dedup keys — an agent dedups on its name-slug roster id while the badge also
+ * matches the source-scoped catalog id, so completing a package after a
+ * catalog-side rename would otherwise write a SECOND agent. (Cross-rename
+ * idempotency stays deferred update-management; this only keeps the package flow
+ * from reaching it, since before packages an installed item was never offered for
+ * install at all.)
+ *
+ * `beforeWrite` runs only when a write is actually going to happen.
+ */
+async function installMember(
   item: MarketplaceItem,
-  body: string,
+  reviewedBody: string | null,
   target: SkillInstallTarget | undefined,
   source: string,
   ctx: PackageInstallContext,
+  beforeWrite?: () => void,
 ): Promise<InstallOutcome> {
+  if (await ctx.isInstalled(item, target)) return 'skipped';
+  const body = reviewedBody ?? (await ctx.fetchBody(item, source));
+  beforeWrite?.();
   if (item.type === 'skill') {
     return ctx.installSkill(item, body, ctx.requireSkillTarget(target), source);
   }
   return ctx.installItem(item, body, { boundSkills: ctx.boundSkills(item) });
+}
+
+/**
+ * Re-checks the chosen target immediately before the root is committed. A skill
+ * dependency that was already present never reaches the skill installer's own
+ * check (it returns 'skipped' first), so without this the same package, settings
+ * and target would behave differently depending on whether the skills happened to
+ * be installed already: one needing a write aborts with a clear error, all present
+ * proceeds silently. Nothing to re-check when the root is itself a skill (its own
+ * write asserts) or when no dependency needed a target.
+ */
+function assertRootTarget(
+  root: MarketplaceItem,
+  dependencies: readonly MarketplaceItem[],
+  target: SkillInstallTarget | undefined,
+  ctx: PackageInstallContext,
+): void {
+  if (target && root.type !== 'skill' && dependencies.some((member) => member.type === 'skill')) {
+    ctx.assertTargetInstallable(target);
+  }
 }

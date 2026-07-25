@@ -13,7 +13,9 @@ import {
   type MarketplaceItem,
   type MarketplaceItemType,
 } from '../catalogTypes';
+import { MarketplaceError } from '../MarketplaceCatalogClient';
 import { maybeWarnMarketplaceNetwork } from '../marketplaceNetworkGate';
+import type { PackageInstallResult } from '../packageInstall';
 import { describePackageFailure, indexCatalog, isPackage, resolvePackage } from '../packageResolution';
 import {
   SKILL_PROVIDER_TARGETS,
@@ -357,8 +359,8 @@ async function install(item: MarketplaceItem, target?: SkillInstallTarget): Prom
   installing[item.id] = true;
   try {
     new Notice(installNotice(item, await store.install(item, body, target)));
-  } catch {
-    new Notice(t('marketplace.failedNotice', { name: item.name }));
+  } catch (error) {
+    new Notice(failureNotice(item, error));
   } finally {
     installing[item.id] = false;
   }
@@ -369,7 +371,7 @@ async function install(item: MarketplaceItem, target?: SkillInstallTarget): Prom
  * "installed" and "completed what was missing" read differently — the plain
  * single-item notices stay exactly as they were when nothing else was written.
  */
-function installNotice(item: MarketplaceItem, result: { outcome: string; installed: number }): string {
+function installNotice(item: MarketplaceItem, result: PackageInstallResult): string {
   const params = { name: item.name, count: result.installed };
   if (result.outcome === 'installed') {
     return result.installed > 0
@@ -379,6 +381,19 @@ function installNotice(item: MarketplaceItem, result: { outcome: string; install
   return result.installed > 0
     ? t('marketplace.completedPackageNotice', params)
     : t('marketplace.skippedNotice', params);
+}
+
+/**
+ * Why an install failed. A `MarketplaceError` carries a message written FOR the
+ * user and usually names the fix ("re-open the skill and choose a target
+ * again"), so it is worth showing — packages fail in several actionable ways a
+ * bare "couldn't install" would hide. Anything else is an unexpected internal
+ * error whose message would be noise, so it keeps the generic notice.
+ */
+function failureNotice(item: MarketplaceItem, error: unknown): string {
+  return error instanceof MarketplaceError
+    ? t('marketplace.failedNoticeReason', { name: item.name, reason: error.message })
+    : t('marketplace.failedNotice', { name: item.name });
 }
 </script>
 

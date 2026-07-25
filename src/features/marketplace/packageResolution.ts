@@ -13,8 +13,9 @@
 import type { MarketplaceItem } from './catalogTypes';
 
 /**
- * The most items one package may contain (root + transitive dependencies). Also
- * bounds the resolver's recursion depth. Matches the marketplace validator's cap.
+ * The most items one package may contain (root + transitive dependencies), and
+ * the bound the walk enforces as it descends — so an oversized graph is refused
+ * without being traversed. Matches the marketplace validator's cap.
  */
 export const MAX_PACKAGE_ITEMS = 100;
 

@@ -47,8 +47,9 @@
     "installedNotice": "Installed \"{name}\".",
     "skippedNotice": "\"{name}\" is already installed.",
     "failedNotice": "Couldn't install \"{name}\".",
-    "installedPackageNotice": "Installed \"{name}\" and {count} required items.",
-    "completedPackageNotice": "\"{name}\" was already installed — added {count} missing items.",
+    "failedNoticeReason": "Couldn't install \"{name}\": {reason}",
+    "installedPackageNotice": "Installed \"{name}\" and {count} of its required items.",
+    "completedPackageNotice": "\"{name}\" was already installed — added {count} of its required items.",
     "type": {
       "quickAction": "Quick Action",
       "agent": "Agent",

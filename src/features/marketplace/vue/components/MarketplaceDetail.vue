@@ -61,17 +61,17 @@ const isPackage = computed(() => dependencies.value.length > 0);
 const needsSkillTarget = computed(
   () => isSkill.value || dependencies.value.some((dependency) => dependency.type === 'skill'),
 );
-// A package counts as installed only when the item AND every dependency is
-// present, so a partially-installed package still offers Install to complete it.
-const packageInstalled = computed(
-  () =>
-    props.installed &&
-    dependencies.value.every((dependency) => props.installedIds?.has(dependency.id) ?? false),
+// What "installed" means in the HEADER differs by case. With a target panel the
+// header only reports "installed somewhere" — the per-target truth lives in the
+// panel. Without one the header speaks for the whole package, so every dependency
+// must be present too, and a partially-installed package still offers Install to
+// complete itself.
+const headerInstalled = computed(() =>
+  needsSkillTarget.value
+    ? props.installed
+    : props.installed &&
+      dependencies.value.every((dependency) => props.installedIds?.has(dependency.id) ?? false),
 );
-// What "installed" means in the HEADER chip differs by case: an item driven by
-// the target panel shows "installed somewhere" (its per-target state lives in the
-// panel), while a header-driven item shows the whole package's state.
-const headerInstalled = computed(() => (needsSkillTarget.value ? props.installed : packageInstalled.value));
 // The target the panel below currently has selected (null until it publishes one).
 const selectedTarget = ref<SkillInstallTarget | null>(null);
 const targetInstalledIds = useDependencyInstalledSet(

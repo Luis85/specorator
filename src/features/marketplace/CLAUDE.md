@@ -301,8 +301,9 @@ Modeled on — and reuses the components of — `features/library`.
 `tests/unit/features/marketplace/` (catalog types incl. skill-`files` and
 `requires` sanitization, client, cache, installer incl. `installSkillItem`/target
 routing and agent skill binding, `packageResolution`, `packageInstall`,
-`skillInstallTargets`) and `tests/vue/marketplace/` (root, store incl. skill
-install, and the storefront components: nav, home, grid, card, detail incl. the
-skill provider/scope panel, plus the installed-refresh composable). The
+`skillInstallTargets`) and `tests/vue/marketplace/` (root, store incl. skill and
+package install, and the storefront components: nav, home, grid, card, detail
+incl. the skill provider/scope panel and the target-scoped dependency list, plus
+the installed-refresh and `useDependencyInstalledSet` composables). The
 settings-tab rendering regression lives in
 `tests/integration/settings/marketplaceTab.test.ts`.
