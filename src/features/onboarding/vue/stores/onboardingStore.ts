@@ -14,6 +14,7 @@ import {
   type CliInstallHandle,
   runCliInstall,
 } from '../../cliInstallRunner';
+import { acquireInstallLock, installingProvider, releaseInstallLock } from '../../installLock';
 import {
   completeOnboarding,
   ensureOnboardingFolders,
@@ -107,18 +108,18 @@ export const useOnboardingStore = defineStore('specorator-onboarding', () => {
   }
 
   /**
-   * The one provider currently installing, store-wide — installs do not overlap.
+   * The one provider currently installing anywhere — installs do not overlap.
    *
    * Three of the four providers install through a global `npm install -g`, which
    * mutates one shared prefix and one shared metadata tree. Two package managers
    * doing that at once is not two independent installs: they contend, and one can
-   * fail or clobber the other's result. Per-provider phase alone would allow it,
-   * since confirming a second card is a couple of clicks away from the first.
+   * fail or clobber the other's result.
+   *
+   * Read from the module-scope lock rather than this store's own runs, because
+   * Setup mounts one Pinia PER LEAF: a lock derived from `runs` would serialize
+   * within a leaf and not across two of them. See `installLock`.
    */
-  const installingProviderId = computed<ProviderId | null>(() => {
-    const entry = Object.entries(runs.value).find(([, run]) => run.phase === 'running');
-    return entry?.[0] ?? null;
-  });
+  const installingProviderId = computed<ProviderId | null>(() => installingProvider.value);
 
   /** Synchronous: every probe is a `statSync` walk of PATH, never a subprocess. */
   function refreshDetections(): void {
@@ -171,8 +172,8 @@ export const useOnboardingStore = defineStore('specorator-onboarding', () => {
    * the user having to press anything.
    */
   function startInstall(providerId: ProviderId, method: ProviderCliInstallMethod): void {
-    // Store-wide, not per-provider: see `installingProviderId`.
-    if (installingProviderId.value) return;
+    // Process-wide, not per-provider and not per leaf: see `installLock`.
+    if (!acquireInstallLock(providerId)) return;
 
     patchRun(providerId, { phase: 'running', methodId: method.id, lines: [], error: null });
     const handle = runCliInstall(method, {
@@ -184,6 +185,7 @@ export const useOnboardingStore = defineStore('specorator-onboarding', () => {
 
     void handle.done.then((result) => {
       handles.delete(providerId);
+      releaseInstallLock(providerId);
       if (result.cancelled) {
         // A cancel can still carry a warning — an abort whose process tree was
         // never observed to exit. Dropping it would re-arm Install with nothing

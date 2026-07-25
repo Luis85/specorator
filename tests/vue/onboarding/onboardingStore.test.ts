@@ -46,6 +46,7 @@ vi.mock('@/features/onboarding/onboardingSettings', async (importOriginal) => {
 });
 
 import { runCliInstall } from '@/features/onboarding/cliInstallRunner';
+import { resetInstallLock } from '@/features/onboarding/installLock';
 import {
   completeOnboarding,
   ensureOnboardingFolders,
@@ -114,6 +115,9 @@ function makePlugin(settings: Record<string, unknown>) {
 
 beforeEach(() => {
   setActivePinia(createPinia());
+  // Module scope, so it outlives the per-test Pinia — a leaked lock would make
+  // every later startInstall a silent no-op.
+  resetInstallLock();
   vi.mocked(detectProviderClis).mockReset().mockReturnValue([]);
   vi.mocked(runCliInstall).mockReset();
   vi.mocked(setProviderEnabled).mockReset().mockResolvedValue(undefined);
@@ -303,6 +307,55 @@ describe('onboarding store', () => {
 
     store.startInstall('beta', method);
     expect(runCliInstall).toHaveBeenCalledTimes(2);
+  });
+
+  it('serializes installs across Setup LEAVES, not just within one store', async () => {
+    // Setup mounts a fresh Pinia per leaf (wizard progress is per leaf), so a
+    // lock derived from this store's own runs would serialize within a leaf and
+    // not across two — duplicate the tab, restore a layout, or pop one out, and
+    // both could start `npm install -g` against the same global prefix.
+    const controlled = deferredHandle();
+    const first = useOnboardingStore();
+    first.init(plugin);
+    first.startInstall('alpha', method);
+
+    // A second leaf: its own Pinia, its own store instance, empty run state.
+    setActivePinia(createPinia());
+    const second = useOnboardingStore();
+    second.init(plugin);
+
+    expect(second.runFor('alpha').phase).toBe('idle');
+    expect(second.installingProviderId).toBe('alpha');
+    second.startInstall('beta', method);
+    second.startInstall('alpha', method);
+    expect(runCliInstall).toHaveBeenCalledTimes(1);
+
+    controlled.finish({ ok: true, exitCode: 0 });
+    await Promise.resolve();
+    await Promise.resolve();
+
+    expect(second.installingProviderId).toBeNull();
+  });
+
+  it('a settle from a closed leaf cannot free an install started after it', async () => {
+    // Release is holder-scoped: the stale run's completion must not unlock a
+    // different provider's install that took the lock in the meantime.
+    const stale = deferredHandle();
+    const store = useOnboardingStore();
+    store.init(plugin);
+    store.startInstall('alpha', method);
+
+    resetInstallLock();
+    const live = deferredHandle();
+    store.startInstall('beta', method);
+    expect(store.installingProviderId).toBe('beta');
+
+    stale.finish({ ok: false, exitCode: null, cancelled: true });
+    await Promise.resolve();
+    await Promise.resolve();
+
+    expect(store.installingProviderId).toBe('beta');
+    live.finish({ ok: true, exitCode: 0 });
   });
 
   it('dispose cancels in-flight installs so a closed leaf leaves no orphan child', () => {

@@ -161,12 +161,20 @@ surfaces to use the island pattern; this is one.
   path. Cursor is entirely copy-only for this reason. Further rails: an explicit
   per-run confirm naming the exact command, a bounded output ring, a 10-minute
   timeout, and `onUnmounted` cancel so a closed leaf leaves nothing running.
-  **Installs are serialized store-wide** (`installingProviderId`), not merely
-  per-provider: three of the four providers install through a global
+  **Installs are serialized process-wide** (`installLock`), not per-provider and
+  not per store: three of the four providers install through a global
   `npm install -g`, which mutates one shared prefix and one shared metadata tree,
   so two package managers running at once contend and one can clobber the other's
-  result — and confirming a second card is two clicks from the first. Every other
-  card's Run is disabled (not hidden) and names the provider it is waiting on.
+  result — and confirming a second card is two clicks from the first. The lock
+  lives at MODULE scope because `OnboardingView` mounts a fresh Pinia per leaf
+  (wizard progress is deliberately per leaf), so a store-derived lock would
+  serialize within a leaf and not across a duplicated tab, a restored layout, or
+  a pop-out. Release is holder-scoped, so a late settle from a closed leaf cannot
+  free an install that took the lock after it. Every card whose panel is not
+  already showing that run has its Run disabled (not hidden) and names the
+  provider it is waiting on — the exemption is "this leaf owns the run", not
+  "same provider", or a second leaf would show a live Run on the very card the
+  lock is holding.
   **The abort owns settlement, and waits for the child to actually be gone**:
   the POSIX half of the reaper only SIGNALS (`process.kill(-pid)` returns when
   the signal is queued, not when the group is reaped), so the abort additionally

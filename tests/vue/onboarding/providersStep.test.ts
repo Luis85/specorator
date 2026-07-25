@@ -46,6 +46,7 @@ function makeStore(detections: ProviderCliDetection[], overrides: Record<string,
     enabledProviderIds: detections.filter((d) => d.enabled).map((d) => d.providerId),
     runs: {},
     runFor: () => ({ phase: 'idle', methodId: null, lines: [], error: null }),
+    installingProviderId: null,
     refreshDetections: vi.fn(),
     setEnabled: vi.fn(async () => {}),
     setCliPath: vi.fn(async () => {}),
@@ -191,6 +192,23 @@ describe('ProvidersStep', () => {
 
     expect(line.textContent).toContain('C:\\npm\\alpha');
     expect(line.textContent).toContain('.exe');
+  });
+
+  it('holds every Run action while an install runs in ANOTHER Setup leaf', async () => {
+    // The lock is process-wide but the store is per leaf, so in a second leaf the
+    // installing provider's own panel is idle. Exempting it by provider id would
+    // leave a live Run button on exactly the card the lock exists to hold.
+    const { container } = setup(makeStore(
+      [
+        detection({ providerId: 'alpha', status: 'missing', cliPath: null }),
+        detection({ providerId: 'beta', status: 'missing', cliPath: null }),
+      ],
+      { installingProviderId: 'alpha' },
+    ));
+
+    const buttons = [...container.querySelectorAll<HTMLButtonElement>('[data-action="install"]')];
+    expect(buttons).toHaveLength(2);
+    expect(buttons.every((button) => button.disabled)).toBe(true);
   });
 
   it('toggling the checkbox enables the provider through the store', async () => {

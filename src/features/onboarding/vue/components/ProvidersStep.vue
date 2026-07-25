@@ -21,12 +21,17 @@ function onInstall(providerId: ProviderId, method: ProviderCliInstallMethod): vo
 }
 
 /**
- * The OTHER provider currently installing, by display name — installs are
- * serialized store-wide, so every card but that one has its Run action held.
+ * The install currently holding the lock, by display name — every card whose
+ * panel is not already showing that run has its Run action held.
+ *
+ * The exemption is "this leaf owns the run", not "same provider": the lock is
+ * process-wide, so in a SECOND Setup leaf the installing provider's own card has
+ * an idle panel and would otherwise show a live Run button — the one click the
+ * lock exists to prevent.
  */
 function blockedBy(providerId: ProviderId): string | null {
   const active = store.installingProviderId;
-  if (!active || active === providerId) {
+  if (!active || (active === providerId && store.runFor(providerId).phase === 'running')) {
     return null;
   }
   return store.detections.find((d) => d.providerId === active)?.displayName ?? null;
