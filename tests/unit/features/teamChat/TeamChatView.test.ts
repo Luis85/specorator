@@ -39,6 +39,10 @@ jest.mock('@/features/chat/tabs/TabManager', () => ({
 jest.mock('@/features/teamChat/teamChatDmTabs', () => ({
   restoreTeamChatDmTabs: jest.fn().mockResolvedValue(undefined),
   closeRotatedDmTab: jest.fn().mockResolvedValue(undefined),
+  reconcileRotation: jest.fn().mockResolvedValue(undefined),
+  // T7 helpers the view now wires: recency touch (projection) + LRU eviction (open path).
+  touchDmRecency: jest.fn(),
+  evictLruDmIfNeeded: jest.fn().mockResolvedValue(undefined),
 }));
 
 import { TabManager } from '@/features/chat/tabs/TabManager';
@@ -76,6 +80,7 @@ function makeView(): any {
   view.tabsRestored = false;
   view.selectedAgentId = null;
   view.selectionGeneration = 0; // class-field initializer is skipped by Object.create
+  view.dmRecency = [];          // ditto — the LRU recency array (T7)
   view.pendingTabManagerState = null;
   view.pendingPersist = null;
   view.vueApp = null;

@@ -14,7 +14,7 @@ import type { PersistedTabManagerState } from '../chat/tabs/types';
 import type { ComposerEditedFile } from '../chat/ui/vue/composer/stores/composerStore';
 import { getTeamChatDmOpenCoordinator } from './TeamChatDmOpenCoordinator';
 import { applyDmEditedFilesSetting, applyDmHiddenCommands, projectActiveDmEditedFiles, refreshDmModelState, rotateChangedDmProviders } from './teamChatDmRefresh';
-import { reconcileRotation, restoreTeamChatDmTabs } from './teamChatDmTabs';
+import { evictLruDmIfNeeded, reconcileRotation, restoreTeamChatDmTabs, touchDmRecency } from './teamChatDmTabs';
 import { projectCrossLeafPresence, type TeamChatPresence } from './teamChatPresence';
 import type { TeamChatThreadStore } from './TeamChatThreadStore';
 import { createTeamChatPinia } from './ui/vue/globalPinia';
@@ -69,6 +69,9 @@ export class TeamChatView extends ItemView implements ChatViewHandle {
   /** Unsubscribe for the cross-leaf `teamChat:presence` broadcast (Fix 3): another
    *  leaf's DM streaming re-projects this leaf's presence so busy shows everywhere. */
   private presenceUnsubscribe: (() => void) | null = null;
+  /** DM conversationIds in activation order (most-recent last) — the LRU order the T7
+   *  hot-DM budget evicts from. Touched whenever a DM tab becomes active. */
+  private readonly dmRecency: string[] = [];
   // Store-reprojection observers (mirror of chat's chatShellObservers). The
   // routing composable subscribes here and fans each snapshot into the Pinia
   // store; the ChatViewHandle refresh methods re-project through the same seam.
@@ -189,6 +192,7 @@ export class TeamChatView extends ItemView implements ChatViewHandle {
    */
   private projectSelectedAgentFromActiveTab(): void {
     const conversationId = this.tabManager?.getActiveTab()?.conversationId ?? null;
+    if (conversationId) touchDmRecency(this.dmRecency, conversationId); // freshen LRU recency (T7)
     const boundAgentId = conversationId
       ? this.plugin.getConversationSync(conversationId)?.boundAgentId ?? null
       : null;
@@ -430,10 +434,14 @@ export class TeamChatView extends ItemView implements ChatViewHandle {
       }
       return;
     }
-    const created = await manager.createTab(conversationId, undefined, { activate: true, kind: 'chat' });
-    // Surface the cap Notice only for a genuine, still-current cap hit — a stale
-    // open that lost the race isn't a user-facing error. No selection to revert
-    // either; it already reflects the real active tab. (LRU eviction is later.)
+    // Enforce the hot-DM budget: evict the LRU DM before creating so a big roster browses
+    // gracefully instead of dead-ending at the cap (T7). Re-check staleness after the close.
+    await evictLruDmIfNeeded(this.plugin, manager, this.dmRecency, conversationId);
+    if (this.isSelectionStale(generation, manager)) return;
+    // Team Chat DMs carry their own budget (eviction above), so bypass the shared maxChatTabs.
+    const created = await manager.createTab(conversationId, undefined, { activate: true, kind: 'chat', bypassTabLimit: true });
+    // Last-resort cap Notice: with eviction + bypass, createTab returns null only on a
+    // teardown-window edge, never the ordinary budget path. A stale open isn't a user error.
     if (!created && !this.isSelectionStale(generation, manager)) {
       new Notice(t('teamChat.tabCapReached'));
     }

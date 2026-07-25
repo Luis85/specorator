@@ -1,4 +1,12 @@
-import { closeRotatedDmTab, reconcileRotation, restoreTeamChatDmTabs } from '@/features/teamChat/teamChatDmTabs';
+import {
+  closeRotatedDmTab,
+  closeTeamChatDmTab,
+  evictLruDmIfNeeded,
+  pickLruDmEviction,
+  reconcileRotation,
+  restoreTeamChatDmTabs,
+  touchDmRecency,
+} from '@/features/teamChat/teamChatDmTabs';
 
 const teamChatConv = { surface: 'team-chat', boundAgentId: 'roster:a', providerId: 'claude' };
 
@@ -123,9 +131,11 @@ describe('restoreTeamChatDmTabs — dedup + validate (:225)', () => {
 });
 
 describe('closeRotatedDmTab', () => {
-  it('force-closes the old tab only when the new tab actually opened', async () => {
+  it('force-closes the old tab only when the new tab actually opened, and broadcasts presence', async () => {
     const closeTab = jest.fn().mockResolvedValue(true);
+    const emit = jest.fn();
     const plugin = {
+      events: { emit },
       findConversationAcrossViews: jest.fn((id: string) =>
         id === 'c-new'
           ? { view: {}, tabId: 't-new' }
@@ -135,16 +145,120 @@ describe('closeRotatedDmTab', () => {
     await closeRotatedDmTab(plugin, 'c-old', 'c-new');
 
     expect(closeTab).toHaveBeenCalledWith('t-old', true);
+    // Round-37/T7 (:168): a force-close skips the streaming callback, so surviving leaves
+    // must be told to recompute presence or a still-streaming old DM stays busy forever.
+    expect(emit).toHaveBeenCalledWith('teamChat:presence');
   });
 
   it('no-ops when the new tab did not open (cap-blocked rotation)', async () => {
     const closeTab = jest.fn();
+    const emit = jest.fn();
     const plugin = {
+      events: { emit },
       findConversationAcrossViews: jest.fn((id: string) =>
         id === 'c-new' ? null : { view: { getTabManager: () => ({ closeTab }) }, tabId: 't-old' }),
     } as never;
 
     await closeRotatedDmTab(plugin, 'c-old', 'c-new');
+
+    expect(closeTab).not.toHaveBeenCalled();
+    expect(emit).not.toHaveBeenCalled();
+  });
+});
+
+describe('touchDmRecency', () => {
+  it('appends a newly-activated conversation as most-recent', () => {
+    const recency = ['a', 'b'];
+    touchDmRecency(recency, 'c');
+    expect(recency).toEqual(['a', 'b', 'c']);
+  });
+
+  it('moves an already-tracked conversation to the most-recent end (no duplicate)', () => {
+    const recency = ['a', 'b', 'c'];
+    touchDmRecency(recency, 'a');
+    expect(recency).toEqual(['b', 'c', 'a']);
+  });
+});
+
+describe('pickLruDmEviction', () => {
+  const tabs = [
+    { id: 't-a', conversationId: 'a' },
+    { id: 't-b', conversationId: 'b' },
+    { id: 't-c', conversationId: 'c' },
+  ];
+
+  it('evicts the least-recently-active tab (head of recency)', () => {
+    // Recency oldest→newest: a, b, c. b is active, opening d. LRU non-active = a.
+    expect(pickLruDmEviction(tabs, ['a', 'b', 'c'], 't-b', 'd')).toBe('t-a');
+  });
+
+  it('never evicts the active tab even when it is the least-recently-active', () => {
+    // a is oldest but is the active tab → skip it; next-oldest candidate is b.
+    expect(pickLruDmEviction(tabs, ['a', 'b', 'c'], 't-a', 'd')).toBe('t-b');
+  });
+
+  it('never evicts the conversation being opened', () => {
+    // Opening 'a' (a re-select) — its tab is excluded; LRU of the rest is b.
+    expect(pickLruDmEviction(tabs, ['a', 'b', 'c'], 't-c', 'a')).toBe('t-b');
+  });
+
+  it('treats a never-activated tab (absent from recency) as the oldest', () => {
+    // 'c' was never activated (not in recency) → oldest → evicted first.
+    expect(pickLruDmEviction(tabs, ['a', 'b'], 't-a', 'd')).toBe('t-c');
+  });
+
+  it('returns null when the only tab is the active one', () => {
+    expect(pickLruDmEviction([{ id: 't-a', conversationId: 'a' }], ['a'], 't-a', 'd')).toBeNull();
+  });
+});
+
+describe('closeTeamChatDmTab', () => {
+  it('force-closes the tab and broadcasts presence', async () => {
+    const closeTab = jest.fn().mockResolvedValue(true);
+    const emit = jest.fn();
+    const plugin = { events: { emit } } as never;
+
+    const closed = await closeTeamChatDmTab(plugin, { closeTab }, 't-1');
+
+    expect(closeTab).toHaveBeenCalledWith('t-1', true);
+    expect(emit).toHaveBeenCalledWith('teamChat:presence');
+    expect(closed).toBe(true);
+  });
+});
+
+describe('evictLruDmIfNeeded', () => {
+  function managerWith(tabs: { id: string; conversationId: string }[], activeTabId: string, closeTab = jest.fn().mockResolvedValue(true)) {
+    return { getAllTabs: () => tabs, getActiveTabId: () => activeTabId, closeTab };
+  }
+
+  it('evicts the LRU DM when the manager is at the budget', async () => {
+    const closeTab = jest.fn().mockResolvedValue(true);
+    const emit = jest.fn();
+    const plugin = { settings: { maxTeamChatDms: 2 }, events: { emit } } as never;
+    const manager = managerWith([{ id: 't-a', conversationId: 'a' }, { id: 't-b', conversationId: 'b' }], 't-b', closeTab);
+
+    await evictLruDmIfNeeded(plugin, manager, ['a', 'b'], 'c');
+
+    // At budget (2) → evict the LRU non-active DM (a / t-a) to free a slot, and broadcast.
+    expect(closeTab).toHaveBeenCalledWith('t-a', true);
+    expect(emit).toHaveBeenCalledWith('teamChat:presence');
+  });
+
+  it('does not evict when under the budget', async () => {
+    const closeTab = jest.fn();
+    const plugin = { settings: { maxTeamChatDms: 5 }, events: { emit: jest.fn() } } as never;
+    const manager = managerWith([{ id: 't-a', conversationId: 'a' }, { id: 't-b', conversationId: 'b' }], 't-b', closeTab);
+
+    await evictLruDmIfNeeded(plugin, manager, ['a', 'b'], 'c');
+
+    expect(closeTab).not.toHaveBeenCalled();
+  });
+
+  it('is a safe no-op when the manager cannot report its tabs', async () => {
+    const closeTab = jest.fn();
+    const plugin = { settings: { maxTeamChatDms: 1 }, events: { emit: jest.fn() } } as never;
+
+    await evictLruDmIfNeeded(plugin, { closeTab }, ['a'], 'c');
 
     expect(closeTab).not.toHaveBeenCalled();
   });
@@ -156,6 +270,7 @@ describe('reconcileRotation — deferred rotation close (:361)', () => {
     let replacementOpen = false; // the rotation's new tab hit the cap on the first attempt
     const plugin = {
       agentRosterStore: { get: jest.fn().mockResolvedValue({ name: 'Ada' }) },
+      events: { emit: jest.fn() },
       findConversationAcrossViews: jest.fn((id: string) => {
         if (id === 'c-new') return replacementOpen ? { view: {}, tabId: 't-new' } : null;
         if (id === 'c-old') return { view: { getTabManager: () => ({ closeTab }) }, tabId: 't-old' };
@@ -180,6 +295,7 @@ describe('reconcileRotation — deferred rotation close (:361)', () => {
     const closeTab = jest.fn().mockResolvedValue(true);
     const plugin = {
       agentRosterStore: { get: jest.fn().mockResolvedValue({ name: 'Ada' }) },
+      events: { emit: jest.fn() },
       findConversationAcrossViews: jest.fn((id: string) =>
         id === 'c-new'
           ? { view: {}, tabId: 't-new' }

@@ -193,6 +193,10 @@ export interface SpecoratorSettings {
 
   // UI preferences
   maxChatTabs: number;
+  /** Team Chat only: max simultaneously-open hot DM tabs per Team Chat manager. Opening
+   *  another agent's DM beyond this evicts the least-recently-used one (T7 LRU budget);
+   *  the evicted DM's mapping persists, so re-selecting the agent reopens it. */
+  maxTeamChatDms: number;
   tabBarPosition: TabBarPosition;
   enableAutoScroll: boolean;
   deferMathRenderingDuringStreaming: boolean;

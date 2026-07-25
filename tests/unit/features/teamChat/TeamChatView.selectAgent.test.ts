@@ -30,6 +30,7 @@ function makeView(overrides: { leaf?: unknown; plugin?: Record<string, unknown> 
   view.tabManager = null;
   view.selectedAgentId = null;
   view.selectionGeneration = 0; // class-field initializer is skipped by Object.create
+  view.dmRecency = [];          // ditto — the LRU recency array (T7)
   view.tabsRestored = true;     // these flows assume a restored engine (Round-29 gate)
   view.teamChatObservers = new Set();
   return view;
@@ -80,7 +81,7 @@ describe('TeamChatView.selectAgent — resolve → cross-view reuse / create', (
     view.tabsRestored = true;
     await view.selectAgent('roster:a');
     expect(resolveOrCreate).toHaveBeenCalledWith('roster:a');
-    expect(createTab).toHaveBeenCalledWith('conv-1', undefined, { activate: true, kind: 'chat' });
+    expect(createTab).toHaveBeenCalledWith('conv-1', undefined, { activate: true, kind: 'chat', bypassTabLimit: true });
   });
 
   it('does NOT set selectedAgentId optimistically — the tab projection owns it', async () => {
@@ -164,7 +165,74 @@ describe('TeamChatView.selectAgent — resolve → cross-view reuse / create', (
 
     await view.selectAgent('roster:c');
 
-    expect(createTab).toHaveBeenCalledWith('conv-3', undefined, { activate: true, kind: 'chat' });
+    expect(createTab).toHaveBeenCalledWith('conv-3', undefined, { activate: true, kind: 'chat', bypassTabLimit: true });
+  });
+
+  // T7: with the hot-DM budget full, opening a NEW agent's DM evicts the least-recently-used
+  // one (never the active or the one being opened) so a big roster browses gracefully instead
+  // of dead-ending at the cap. The evicted DM's mapping persists, so re-selecting reopens it.
+  it('evicts the LRU DM when opening a new one would exceed maxTeamChatDms (T7)', async () => {
+    const closeTab = jest.fn().mockResolvedValue(true);
+    const createTab = jest.fn().mockResolvedValue({ id: 'tab-3' });
+    const emit = jest.fn();
+    const view = makeView({
+      plugin: {
+        settings: { maxTeamChatDms: 2 },
+        events: { emit },
+        getTeamChatThreadStore: () => ({ get: jest.fn().mockResolvedValue(null), resolveOrCreate: jest.fn().mockResolvedValue('conv-3') }),
+        findConversationAcrossViews: jest.fn(() => null), // conv-3 open in no leaf → create path
+      },
+    });
+    // Two DMs already open (at budget). conv-2 is active/most-recent; conv-1 is the LRU.
+    view.dmRecency = ['conv-1', 'conv-2'];
+    view.tabManager = {
+      createTab,
+      switchToTab: jest.fn(),
+      getAllTabs: jest.fn(() => [{ id: 'tab-1', conversationId: 'conv-1' }, { id: 'tab-2', conversationId: 'conv-2' }]),
+      getActiveTabId: jest.fn(() => 'tab-2'),
+      closeTab,
+    };
+
+    await view.selectAgent('roster:c');
+
+    // The LRU DM (conv-1 / tab-1) is force-closed to free a slot, presence re-broadcast...
+    expect(closeTab).toHaveBeenCalledWith('tab-1', true);
+    expect(emit).toHaveBeenCalledWith('teamChat:presence');
+    // ...then the new DM opens (bypassing the shared maxChatTabs — Team Chat's budget is its own).
+    expect(createTab).toHaveBeenCalledWith('conv-3', undefined, { activate: true, kind: 'chat', bypassTabLimit: true });
+  });
+
+  // T7 composes with the Round-25 stale guard: a selection superseded before it opens must
+  // not evict anything (nor create) — only the latest selection acts.
+  it('does not evict when the selection was superseded before opening (T7)', async () => {
+    const closeTab = jest.fn();
+    const createTab = jest.fn().mockResolvedValue({ id: 'tab-3' });
+    const resolveGate = deferred<string>();
+    const view = makeView({
+      plugin: {
+        settings: { maxTeamChatDms: 2 },
+        events: { emit: jest.fn() },
+        getTeamChatThreadStore: () => ({ get: jest.fn().mockResolvedValue(null), resolveOrCreate: () => resolveGate.promise }),
+        findConversationAcrossViews: jest.fn(() => null),
+      },
+    });
+    view.dmRecency = ['conv-1', 'conv-2'];
+    view.tabManager = {
+      createTab,
+      switchToTab: jest.fn(),
+      getAllTabs: jest.fn(() => [{ id: 'tab-1', conversationId: 'conv-1' }, { id: 'tab-2', conversationId: 'conv-2' }]),
+      getActiveTabId: jest.fn(() => 'tab-2'),
+      closeTab,
+    };
+
+    const open = view.selectAgent('roster:c'); // parks on resolveOrCreate
+    view.selectionGeneration++;                 // a newer select supersedes this one
+    resolveGate.resolve('conv-3');
+    await open;
+
+    // Superseded → bailed at the stale check before touching the engine: no eviction, no create.
+    expect(closeTab).not.toHaveBeenCalled();
+    expect(createTab).not.toHaveBeenCalled();
   });
 
   // Fix A (Round-22) — now scoped to the CROSS-LEAF case: the per-view generation
@@ -305,7 +373,7 @@ describe('TeamChatView.selectAgent — resolve → cross-view reuse / create', (
 
     // Only the latest selection opened; the stale first bailed after resolveOrCreate.
     expect(createTab).toHaveBeenCalledTimes(1);
-    expect(createTab).toHaveBeenCalledWith('conv-b', undefined, { activate: true, kind: 'chat' });
+    expect(createTab).toHaveBeenCalledWith('conv-b', undefined, { activate: true, kind: 'chat', bypassTabLimit: true });
   });
 
   // Round-24 (replaces Round-22 Fix B manual rollback): the source leaf never
@@ -416,6 +484,7 @@ describe('TeamChatView.selectAgent — resolve → cross-view reuse / create', (
       leaf: { id: 'leaf-this' },
       plugin: {
         agentRosterStore: { get: jest.fn().mockResolvedValue({ name: 'Ada' }) },
+        events: { emit: jest.fn() }, // closeTeamChatDmTab broadcasts presence on the force-close (T7 :168)
         getTeamChatThreadStore: () => ({ get, resolveOrCreate }),
         findConversationAcrossViews: jest.fn((id: string) => {
           // The new DM registers only after createTab runs; the old DM lives in another leaf.
@@ -436,7 +505,7 @@ describe('TeamChatView.selectAgent — resolve → cross-view reuse / create', (
     await view.selectAgent('roster:a');
 
     // New DM opened; the orphaned old-provider tab force-closed in its owning leaf.
-    expect(createTab).toHaveBeenCalledWith('conv-new', undefined, { activate: true, kind: 'chat' });
+    expect(createTab).toHaveBeenCalledWith('conv-new', undefined, { activate: true, kind: 'chat', bypassTabLimit: true });
     expect(closeOldTab).toHaveBeenCalledWith('tab-old', true);
     // Fix 3 (:361): the rotation notice is emitted BEFORE the old tab is closed.
     expect(mockNotice).toHaveBeenCalledWith(t('teamChat.providerRotated', { agent: 'Ada' }));
@@ -462,7 +531,7 @@ describe('TeamChatView.selectAgent — resolve → cross-view reuse / create', (
 
     await view.selectAgent('roster:a');
 
-    expect(createTab).toHaveBeenCalledWith('conv-1', undefined, { activate: true, kind: 'chat' });
+    expect(createTab).toHaveBeenCalledWith('conv-1', undefined, { activate: true, kind: 'chat', bypassTabLimit: true });
     expect(closeTab).not.toHaveBeenCalled(); // no rotation → nothing to close
   });
 });

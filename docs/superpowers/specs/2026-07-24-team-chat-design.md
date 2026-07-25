@@ -200,10 +200,25 @@ roster-driven, single-visible-pane surface:
   (`TabManager.ts:124`) checks only its own `countTabsByKind`, and
   `PluginViewActivator.getTabSlotUsage` (`:96`) accounts **work-order tabs only**, so
   a sidebar manager and a Team Chat manager can each reserve up to `maxChatTabs`
-  independently. Decide explicitly: either extend the cross-host slot accounting to
-  the `chat` kind (plugin-level reservation, mirroring work-order), or give Team Chat
-  its **own** small DM budget — the per-manager local LRU cannot honor a shared cap
-  it can't see.
+  independently.
+  - **Resolved (T7, Round-39):** Team Chat gets its **own** per-manager DM budget,
+    `maxTeamChatDms` (default **5**, floored at 2), enforced by a **local LRU
+    eviction**, NOT the shared `maxChatTabs`. Team Chat DM `createTab` calls pass
+    `bypassTabLimit: true`, so `maxChatTabs` never gates them and the two hosts don't
+    contend for one cap; the LRU is the sole constraint. Recency is tracked per
+    manager by activation (`touchDmRecency`, freshened in
+    `projectSelectedAgentFromActiveTab`). Before opening a DM that would exceed the
+    budget, `selectAgent` evicts the least-recently-used DM tab
+    (`evictLruDmIfNeeded` → `pickLruDmEviction` → `closeTeamChatDmTab`), never the
+    active tab nor the one being opened; the Round-37 `autoCreateOnEmpty=false` on the
+    Team Chat manager means the eviction close spawns no blank tab. The evicted DM's
+    conversation stays mapped in the thread store, so re-selecting the agent reopens
+    it (`resolveOrCreate` finds the mapping). The cap-`Notice` remains only as a
+    true last-resort fallback (a teardown-window `createTab` null), not the ordinary
+    browse path. Eviction composes with the generation/stale guard (a superseded
+    selection never evicts) and the per-conversationId open coordinator.
+    (The chosen homes: LRU + eviction + close-with-presence helpers live in
+    `features/teamChat/teamChatDmTabs.ts`, keeping `TeamChatView` thin.)
 - **Tab-state persistence isolation.** Team Chat's tab layout must be **leaf-owned**
   — its own `getState()`/`setState()`, mirroring `SpecoratorView.ts:142`/`:146` (which
   the CLAUDE.md gotcha already marks "preferred over global plugin state on restore").

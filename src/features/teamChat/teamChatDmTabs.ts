@@ -58,6 +58,29 @@ export async function restoreTeamChatDmTabs(
   }
 }
 
+/** Minimal manager surface `closeTeamChatDmTab` needs — a bare `closeTab`, satisfied by
+ *  both a concrete `TabManager` and the cross-leaf `ChatTabManagerHandle`. */
+interface DmTabCloser {
+  closeTab(tabId: string, force?: boolean): Promise<boolean>;
+}
+
+/**
+ * Closes a Team Chat DM tab AND broadcasts `teamChat:presence` so surviving leaves
+ * recompute. A force-close (provider rotation, LRU eviction) tears the tab down without
+ * firing the streaming callback, so without this broadcast a still-streaming DM would
+ * leave other leaves showing its agent `busy` forever (:168). The one place a Team Chat
+ * DM tab should be programmatically closed.
+ */
+export async function closeTeamChatDmTab(
+  plugin: SpecoratorPlugin,
+  manager: DmTabCloser,
+  tabId: string,
+): Promise<boolean> {
+  const closed = await manager.closeTab(tabId, true);
+  plugin.events.emit('teamChat:presence');
+  return closed;
+}
+
 /**
  * Force-closes the old-provider DM tab a provider-change rotation left behind, in
  * whichever leaf owns it (cross-leaf via `findConversationAcrossViews`), so its
@@ -73,7 +96,8 @@ export async function closeRotatedDmTab(
   if (!plugin.findConversationAcrossViews(newConversationId)) return;
   const stale = plugin.findConversationAcrossViews(previousConversationId);
   if (!stale) return;
-  await stale.view.getTabManager()?.closeTab(stale.tabId, true);
+  const manager = stale.view.getTabManager();
+  if (manager) await closeTeamChatDmTab(plugin, manager, stale.tabId);
 }
 
 /** A persisted tab is restorable only if its conversation still exists AND is a real
@@ -130,4 +154,90 @@ export async function reconcileRotation(
     await closeRotatedDmTab(plugin, displacedId, conversationId);
     displaced.delete(agentId);
   }
+}
+
+// ============================================
+// T7 — bounded hot-DM budget + LRU eviction
+//
+// Team Chat keeps a small set of HOT DM tabs (active + a few LRU); browsing a large
+// roster past the budget evicts the least-recently-active DM instead of hitting the tab
+// cap. Team Chat DMs bypass the shared `maxChatTabs` (they carry their own budget), so
+// `maxTeamChatDms` is the sole constraint, enforced here by eviction. The evicted DM's
+// conversation stays mapped in the thread store, so re-selecting the agent reopens it.
+// ============================================
+
+/** Default hot-DM budget when `maxTeamChatDms` is unset — small on purpose (a handful of
+ *  live DM runtimes; the rest are one re-select away). */
+export const DEFAULT_MAX_TEAM_CHAT_DMS = 5;
+
+/** The hot-DM budget, floored at 2 (the active tab plus at least one evictable other, so
+ *  a new DM can always displace a non-active one). */
+export function resolveMaxTeamChatDms(settings: { maxTeamChatDms?: number } | undefined): number {
+  return Math.max(2, settings?.maxTeamChatDms ?? DEFAULT_MAX_TEAM_CHAT_DMS);
+}
+
+/** Minimal open-DM-tab shape the LRU reads (satisfied by `TabData`: `id` + `conversationId`). */
+interface DmTabRef {
+  readonly id: string;
+  readonly conversationId: string | null;
+}
+
+/** Manager surface `evictLruDmIfNeeded` drives. `getAllTabs`/`getActiveTabId` are optional
+ *  so a partially-built/torn-down manager (or a lean test double) makes eviction a safe
+ *  no-op rather than throwing; a real `TabManager` supplies all three. */
+interface DmEvictionManager extends DmTabCloser {
+  getAllTabs?(): readonly DmTabRef[];
+  getActiveTabId?(): string | null;
+}
+
+/** Records a DM as most-recently-active (move-to-end), so the head of `recency` is the
+ *  least-recently-used. Mutates in place — the view owns the recency array. */
+export function touchDmRecency(recency: string[], conversationId: string): void {
+  const at = recency.indexOf(conversationId);
+  if (at !== -1) recency.splice(at, 1);
+  recency.push(conversationId);
+}
+
+/** Picks the least-recently-active DM tab to evict — never the active tab, never the one
+ *  being opened. A conversation absent from `recency` (never activated) sorts oldest
+ *  (`indexOf` → -1). Returns the victim tabId, or null when nothing is evictable. */
+export function pickLruDmEviction(
+  tabs: readonly DmTabRef[],
+  recency: readonly string[],
+  activeTabId: string | null,
+  openingConversationId: string,
+): string | null {
+  const candidates = tabs.filter(
+    (tab) => tab.conversationId != null
+      && tab.id !== activeTabId
+      && tab.conversationId !== openingConversationId,
+  );
+  if (candidates.length === 0) return null;
+  let victim = candidates[0];
+  for (const candidate of candidates) {
+    if (recency.indexOf(candidate.conversationId as string) < recency.indexOf(victim.conversationId as string)) {
+      victim = candidate;
+    }
+  }
+  return victim.id;
+}
+
+/**
+ * Enforces the hot-DM budget before a NEW DM opens: if the manager already holds
+ * `maxTeamChatDms` DMs, evict its least-recently-used one (via `closeTeamChatDmTab`, which
+ * broadcasts presence) to free a slot. No-op under budget or when the manager can't report
+ * its tabs. The caller guards the surrounding generation/stale check; the evicted DM's
+ * mapping persists so re-selecting its agent reopens it.
+ */
+export async function evictLruDmIfNeeded(
+  plugin: SpecoratorPlugin,
+  manager: DmEvictionManager,
+  recency: readonly string[],
+  openingConversationId: string,
+): Promise<void> {
+  const tabs = manager.getAllTabs?.() ?? [];
+  if (tabs.length < resolveMaxTeamChatDms(plugin.settings)) return;
+  const victimTabId = pickLruDmEviction(tabs, recency, manager.getActiveTabId?.() ?? null, openingConversationId);
+  if (victimTabId == null) return;
+  await closeTeamChatDmTab(plugin, manager, victimTabId);
 }

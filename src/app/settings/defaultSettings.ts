@@ -59,6 +59,7 @@ export const DEFAULT_SPECORATOR_SETTINGS: SpecoratorSettings = {
   lastCustomModel: '',
 
   maxChatTabs: 3,
+  maxTeamChatDms: 5,
   tabBarPosition: 'input',
   enableAutoScroll: true,
   deferMathRenderingDuringStreaming: true,

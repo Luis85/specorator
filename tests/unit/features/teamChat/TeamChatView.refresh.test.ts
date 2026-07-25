@@ -66,6 +66,7 @@ function makeView(): any {
   view.leaf = { setViewState: jest.fn().mockResolvedValue(undefined) };
   view.contentEl = createMockEl();
   view.selectedAgentId = null;
+  view.dmRecency = []; // LRU recency array (T7); class-field initializer skipped by Object.create
   view.tabManager = {
     getAllTabs: jest.fn(() => []),
     getActiveTab: jest.fn(() => null),
