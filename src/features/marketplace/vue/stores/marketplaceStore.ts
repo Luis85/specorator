@@ -19,7 +19,11 @@ import {
   installMarketplaceItem,
   isItemInstalled,
 } from '../../MarketplaceInstaller';
-import { installPackage, type PackageInstallResult } from '../../packageInstall';
+import {
+  installPackage,
+  type PackageInstallContext,
+  type PackageInstallResult,
+} from '../../packageInstall';
 import { describePackageFailure, indexCatalog, resolvePackage } from '../../packageResolution';
 import { assertNoBinarySkillFiles, fetchSkillFiles } from '../../skillFileFetch';
 import { installSkillItem, isSkillInstalledAt as skillInstalledAtTarget } from '../../skillInstall';
@@ -84,6 +88,40 @@ function boundSkillNames(
   return resolution.dependencies
     .filter((dependency) => dependency.type === 'skill')
     .map((dependency) => normalizeInstallSlug(dependency.name));
+}
+
+/**
+ * Assembles the I/O surface `installPackage` writes through. Module-level so the
+ * store's setup stays small; the store passes in the seams that need its own
+ * state (the resolved catalog index, its queued skill install).
+ *
+ * `deps` must be PINNED to the source the install snapshotted, not rebuilt from
+ * the live `source.value`: a package awaits its dependencies before writing the
+ * root, so another leaf can commit a different catalog inside that window — and
+ * an agent whose body came from catalog A must not be stamped with B's URL, or
+ * B's reuse of that catalog id would satisfy A's installed check.
+ */
+function buildPackageContext(seams: {
+  fetchBody: PackageInstallContext['fetchBody'];
+  installSkill: PackageInstallContext['installSkill'];
+  requireSkillTarget: PackageInstallContext['requireSkillTarget'];
+  deps: () => MarketplaceInstallDeps;
+  byId: ReadonlyMap<string, MarketplaceItem>;
+}): PackageInstallContext {
+  return {
+    fetchBody: seams.fetchBody,
+    installSkill: seams.installSkill,
+    installItem: (member, body, options) =>
+      installMarketplaceItem(member, body, seams.deps(), Date.now(), options),
+    boundSkills: (member) => boundSkillNames(member, seams.byId),
+    // Presence judged where the member would actually land: a skill at the chosen
+    // provider + scope, anything else by its own store's natural key.
+    isInstalled: (member, chosen) =>
+      member.type === 'skill'
+        ? skillInstalledAtTarget(member, seams.requireSkillTarget(chosen), seams.deps())
+        : isItemInstalled(member, seams.deps()),
+    requireSkillTarget: seams.requireSkillTarget,
+  };
 }
 
 /**
@@ -324,20 +362,14 @@ export const useMarketplaceStore = defineStore('marketplace', () => {
     // leave an agent bound to skills that were never fetched.
     if (!resolution.ok) throw new MarketplaceError(describePackageFailure(resolution));
 
-    // Deps PINNED to `installSource` for the whole package, not rebuilt from the
-    // live `source.value`: a package awaits its dependencies before writing the
-    // root, so another leaf can commit a different catalog inside that window —
-    // and an agent whose body came from catalog A must not be stamped with B's
-    // URL (that would let B's reused catalog id satisfy A's installed check).
-    const pinnedDeps = (): MarketplaceInstallDeps => buildInstallDeps(requirePlugin(), installSource);
-    const result = await installPackage(item, body, resolution.dependencies, target, installSource, {
+    const ctx = buildPackageContext({
       fetchBody: fetchBodyFrom,
       installSkill: installSkillAt,
-      installItem: (member, memberBody, options) =>
-        installMarketplaceItem(member, memberBody, pinnedDeps(), Date.now(), options),
-      boundSkills: (member) => boundSkillNames(member, byId),
       requireSkillTarget,
+      deps: () => buildInstallDeps(requirePlugin(), installSource), // pinned — see buildPackageContext
+      byId,
     });
+    const result = await installPackage(item, body, resolution.dependencies, target, installSource, ctx);
 
     // If the catalog reloaded during the write (Refresh / source switch, possibly
     // from another leaf), a later refreshInstalled already recomputed installedIds

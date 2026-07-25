@@ -10,7 +10,11 @@ function item(id: string, type: MarketplaceItemType): MarketplaceItem {
 const target: SkillInstallTarget = { provider: 'claude', scope: 'project' };
 
 /** A context that records the order of every write, with per-item outcomes. */
-function makeContext(outcomes: Record<string, InstallOutcome | Error> = {}) {
+function makeContext(
+  outcomes: Record<string, InstallOutcome | Error> = {},
+  /** Ids the vault already holds at the chosen target (the preflight's answer). */
+  present: string[] = [],
+) {
   const writes: string[] = [];
   const fetched: string[] = [];
   const boundSkillsFor: Record<string, string[]> = {};
@@ -34,6 +38,10 @@ function makeContext(outcomes: Record<string, InstallOutcome | Error> = {}) {
       return settle(member.id);
     },
     boundSkills: (member) => (member.type === 'agent' ? ['brief', 'raid'] : []),
+    isInstalled: async (member, chosen) => {
+      if (member.type === 'skill' && !chosen) throw new Error('no target');
+      return present.includes(member.id);
+    },
     requireSkillTarget: (chosen) => {
       if (!chosen) throw new Error('no target');
       return chosen;
@@ -102,5 +110,31 @@ describe('installPackage', () => {
       installPackage(agent, 'REVIEWED', [brief], undefined, 'https://src/', ctx),
     ).rejects.toThrow('no target');
     expect(writes).toEqual([]); // nothing written, not even the first dependency
+  });
+});
+
+describe('installPackage preflight', () => {
+  const agent = item('agents/pm', 'agent');
+  const brief = item('skills/brief', 'skill');
+  const raid = item('skills/raid', 'skill');
+
+  it('never fetches a dependency that is already present', async () => {
+    const { ctx, fetched, writes } = makeContext({}, ['skills/brief']);
+    const result = await installPackage(agent, 'REVIEWED', [brief, raid], target, 'https://src/', ctx);
+    expect(fetched).toEqual(['skills/raid@https://src/']); // brief was never requested
+    expect(writes.some((w) => w.startsWith('skill:skills/brief'))).toBe(false);
+    expect(result).toMatchObject({ installed: 1, skipped: 1 });
+    // A skipped dependency is still "written" — it IS installed, so the badge counts it.
+    expect(result.written).toEqual(['skills/brief', 'skills/raid', 'agents/pm']);
+  });
+
+  it('installs the root during a catalog outage when every dependency is already there', async () => {
+    // The retry-after-partial-install case: the root needs no network (its body was
+    // reviewed), so a dead catalog must not block finishing the package.
+    const { ctx, writes } = makeContext({}, ['skills/brief', 'skills/raid']);
+    ctx.fetchBody = () => Promise.reject(new Error('catalog unreachable'));
+    const result = await installPackage(agent, 'REVIEWED', [brief, raid], target, 'https://src/', ctx);
+    expect(result).toMatchObject({ outcome: 'installed', installed: 0, skipped: 2 });
+    expect(writes).toEqual(['item:agents/pm:REVIEWED']);
   });
 });

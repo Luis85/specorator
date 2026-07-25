@@ -30,6 +30,13 @@ export interface PackageInstallContext {
   ) => Promise<InstallOutcome>;
   /** The skill names to grant an item on install (an agent's package skills). */
   boundSkills: (item: MarketplaceItem) => string[];
+  /**
+   * Whether a member is already present WHERE this install would write it — at
+   * the chosen target for a skill, in its own store for anything else. Advisory:
+   * the installers re-check race-safely at write, so this only decides whether
+   * the body is worth fetching.
+   */
+  isInstalled: (item: MarketplaceItem, target: SkillInstallTarget | undefined) => Promise<boolean>;
   /** Resolves the target for a skill write, throwing when none was chosen. */
   requireSkillTarget: (target?: SkillInstallTarget) => SkillInstallTarget;
 }
@@ -64,6 +71,16 @@ export async function installPackage(
   let installed = 0;
   let skipped = 0;
   for (const dependency of dependencies) {
+    // Skip a dependency that is already there BEFORE fetching anything. Fetching
+    // regardless let a transient catalog failure abort a package whose
+    // dependencies were all satisfied — blocking even the root, which needs no
+    // network at all — and it defeated the skill install's own "already here,
+    // don't download" preflight by spending a request before it could run.
+    if (await ctx.isInstalled(dependency, target)) {
+      skipped += 1;
+      written.push(dependency.id);
+      continue;
+    }
     // A dependency is listed in the detail but not individually previewed, so its
     // body is fetched here rather than passed in like the root's reviewed one.
     const body = await ctx.fetchBody(dependency, source);
