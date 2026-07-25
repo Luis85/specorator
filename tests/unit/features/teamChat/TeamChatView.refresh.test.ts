@@ -61,6 +61,10 @@ function makeView(): any {
   view.plugin = {
     logger: { scope: () => ({ error: jest.fn() }) },
     getConversationSync: jest.fn(() => null),
+    // refreshProviderAvailability now recomputes each DM's bound-agent display model first
+    // (Round-44), which reads these; default to unresolved so existing suites are unaffected.
+    getConversationById: jest.fn().mockResolvedValue(null),
+    resolveBoundAgent: jest.fn().mockResolvedValue(undefined),
     events: { emit: jest.fn() },
     settings: { showAgentEditedFiles: true },
     app: {},
@@ -208,6 +212,31 @@ describe('TeamChatView.refreshProviderAvailability — un-grey + agent-provider 
 
     await view.refreshProviderAvailability();
 
+    expect(selectAgent).not.toHaveBeenCalled();
+  });
+
+  // Round-44: a bound agent re-pointed at a DIFFERENT model on the SAME provider doesn't rotate
+  // (provider unchanged, conversation key stable), so only recomputing the display seed can track
+  // it. Mirrors SpecoratorView's roster:changed (refreshBoundAgentDisplayModels → refreshModelSelector).
+  it('recomputes an open DM bound-agent display model on a same-provider model change (no rotation)', async () => {
+    const view = makeView();
+    const tab: any = {
+      conversationId: 'c-a',
+      state: {},
+      composer: { emit: jest.fn() },
+      displayModel: { conversationId: 'c-a', model: 'claude-old' },
+    };
+    view.tabManager.getAllTabs = jest.fn(() => [tab]);
+    view.plugin.getConversationSync = jest.fn(() => ({ boundAgentId: 'roster:a', providerId: 'claude' }));
+    view.plugin.getConversationById = jest.fn().mockResolvedValue({ id: 'c-a', boundAgentId: 'roster:a', providerId: 'claude' });
+    view.plugin.resolveBoundAgent = jest.fn().mockResolvedValue({ model: 'claude-new' });
+    mockResolveProvider.mockResolvedValue('claude'); // provider unchanged → no rotation
+    const selectAgent = jest.spyOn(view, 'selectAgent').mockResolvedValue(undefined);
+
+    await view.refreshProviderAvailability();
+
+    // The selector now tracks the new model instead of the stale seed, with no rotation.
+    expect(tab.displayModel).toEqual({ conversationId: 'c-a', model: 'claude-new' });
     expect(selectAgent).not.toHaveBeenCalled();
   });
 

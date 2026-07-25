@@ -9,6 +9,7 @@ import { t } from '../../i18n/i18n';
 import type SpecoratorPlugin from '../../main';
 import { tabCountsPayload } from '../chat/events';
 import { TabManager } from '../chat/tabs/TabManager';
+import { refreshBoundAgentDisplayModels } from '../chat/tabs/tabShared';
 import { openEditedFile } from '../chat/tabs/tabUi';
 import type { PersistedTabManagerState } from '../chat/tabs/types';
 import type { ComposerEditedFile } from '../chat/ui/vue/composer/stores/composerStore';
@@ -332,8 +333,7 @@ export class TeamChatView extends ItemView implements ChatViewHandle {
 
   async refreshProviderAvailability(): Promise<void> {
     const tabs = this.tabManager?.getAllTabs() ?? [];
-    // Un-grey each open DM (also fires standalone from deferred init), then rotate any
-    // DM whose agent was re-pointed at another (immutable) provider via selectAgent.
+    await refreshBoundAgentDisplayModels(this.plugin, tabs); // recompute bound-agent display models before the un-grey/rotate below: a same-provider model change doesn't rotate, so the selector would keep the old model (mirror of SpecoratorView roster:changed)
     refreshDmModelState(this.plugin, tabs);
     await rotateChangedDmProviders(this.plugin, tabs, (agentId) => this.selectAgent(agentId));
     this.emitTeamChatChange();

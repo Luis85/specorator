@@ -925,6 +925,30 @@ describe('TabManager - Conversation Management', () => {
 
       expect(createNew).toHaveBeenCalled();
     });
+
+    // Round-44 (:120): createNewConversation is a public tab mutator; a new-session
+    // command / header click arriving AFTER destroy() set isDestroying but BEFORE
+    // destroyImpl cleared the tabs must no-op the reset, not race the teardown save.
+    it('no-ops when destroy() has begun (isDestroying) so the active tab is untouched (:120)', async () => {
+      const activeTab = manager.getActiveTab();
+      const createNew = jest.fn().mockResolvedValue(undefined);
+      activeTab!.controllers.conversationController = { createNew } as any;
+      (manager as any).isDestroying = true; // teardown window: tab still present, guard must reject before enqueue
+
+      await manager.createNewConversation();
+
+      expect(createNew).not.toHaveBeenCalled();
+    });
+
+    it('routes the reset through the mutation queue (createNewConversationImpl) when not destroying', async () => {
+      const activeTab = manager.getActiveTab();
+      activeTab!.controllers.conversationController = { createNew: jest.fn().mockResolvedValue(undefined) } as any;
+      const implSpy = jest.spyOn(manager as any, 'createNewConversationImpl'); // serialized body (:120)
+
+      await manager.createNewConversation();
+
+      expect(implSpy).toHaveBeenCalledTimes(1);
+    });
   });
 });
 
