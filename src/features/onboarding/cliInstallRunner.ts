@@ -1,0 +1,179 @@
+import { spawn } from 'child_process';
+
+import { buildFullSubprocessEnvironment } from '@/core/providers/subprocessEnvironmentAllowlist';
+import type { ProviderCliInstallMethod } from '@/core/providers/types';
+import { findBinaryOnPath } from '@/utils/cliBinaryLocator';
+import { getEnhancedPath } from '@/utils/env';
+import { wrapWindowsCmdShim } from '@/utils/windowsSpawn';
+
+/** Hard stop for a hung package manager. Global npm installs are slow, not eternal. */
+export const INSTALL_TIMEOUT_MS = 10 * 60 * 1000;
+/** Output lines retained for the console. Bounded so a chatty installer can't grow memory. */
+export const INSTALL_OUTPUT_LINE_CAP = 400;
+
+export interface CliInstallEvents {
+  /** One chunk of installer output (stdout and stderr interleaved, as the user would see it). */
+  onOutput(text: string): void;
+}
+
+export interface CliInstallResult {
+  ok: boolean;
+  exitCode: number | null;
+  /** Set when the run never produced an exit code (spawn failure, timeout, cancel). */
+  error?: string;
+  cancelled?: boolean;
+}
+
+export interface CliInstallHandle {
+  /** Resolves once the child exits, is cancelled, or fails to spawn. Never rejects. */
+  readonly done: Promise<CliInstallResult>;
+  cancel(): void;
+}
+
+/** Windows refuses to spawn `.cmd`/`.bat` shims without a shell (CVE-2024-27980 fix). */
+function isWindowsBatchShim(command: string): boolean {
+  return process.platform === 'win32' && /\.(cmd|bat)$/i.test(command);
+}
+
+/**
+ * Resolves a package-manager command to a real binary on the enhanced PATH.
+ * A GUI-launched Obsidian does not inherit the shell's PATH, so bare `npm`
+ * frequently fails to spawn even when a terminal finds it instantly.
+ */
+function resolveInstallCommand(command: string): string | null {
+  const candidates = process.platform === 'win32'
+    ? [command, `${command}.cmd`, `${command}.exe`, `${command}.bat`]
+    : [command];
+  // findBinaryOnPath scans the same enhanced PATH the child is given below.
+  return findBinaryOnPath(candidates);
+}
+
+/**
+ * Spawns a provider-declared CLI install command and streams its output.
+ *
+ * The security model is the `argv` shape, not sanitization: `command` and `args`
+ * come from a provider's static `cliInstall` registration and are passed to
+ * `spawn` with **no shell** (`shell` is never set), so there is no command
+ * string for anything to be interpolated into. A method whose real install
+ * needs a shell declares `argv: null` and is rejected here rather than being
+ * quietly upgraded to a shell execution.
+ */
+export function runCliInstall(
+  method: ProviderCliInstallMethod,
+  events: CliInstallEvents,
+): CliInstallHandle {
+  if (!method.argv) {
+    return {
+      done: Promise.resolve({
+        ok: false,
+        exitCode: null,
+        error: `Install method "${method.id}" must be run manually.`,
+      }),
+      cancel: () => {},
+    };
+  }
+
+  const enhancedPath = getEnhancedPath();
+  const resolvedCommand = resolveInstallCommand(method.argv.command);
+  if (!resolvedCommand) {
+    return {
+      done: Promise.resolve({
+        ok: false,
+        exitCode: null,
+        error: `"${method.argv.command}" was not found on PATH.`,
+      }),
+      cancel: () => {},
+    };
+  }
+
+  const args = [...method.argv.args];
+  const spawnPlan = isWindowsBatchShim(resolvedCommand)
+    ? wrapWindowsCmdShim(resolvedCommand, args)
+    : { command: resolvedCommand, args, windowsVerbatimArguments: undefined };
+
+  const child = spawn(spawnPlan.command, spawnPlan.args, {
+    env: buildFullSubprocessEnvironment({
+      processEnv: process.env,
+      customEnv: {},
+      pathOverride: enhancedPath,
+    }),
+    windowsVerbatimArguments: spawnPlan.windowsVerbatimArguments,
+    stdio: ['ignore', 'pipe', 'pipe'],
+  });
+
+  let settled = false;
+  let cancelled = false;
+  let resolveDone: (result: CliInstallResult) => void = () => {};
+  const done = new Promise<CliInstallResult>((resolve) => {
+    resolveDone = resolve;
+  });
+
+  const settle = (result: CliInstallResult): void => {
+    if (settled) return;
+    settled = true;
+    window.clearTimeout(timeout);
+    resolveDone(result);
+  };
+
+  const timeout = window.setTimeout(() => {
+    child.kill();
+    settle({
+      ok: false,
+      exitCode: null,
+      error: `Install timed out after ${INSTALL_TIMEOUT_MS / 60_000} minutes.`,
+    });
+  }, INSTALL_TIMEOUT_MS);
+
+  child.stdout?.on('data', (chunk: Buffer | string) => events.onOutput(String(chunk)));
+  child.stderr?.on('data', (chunk: Buffer | string) => events.onOutput(String(chunk)));
+  child.on('error', (error: Error) => {
+    settle({ ok: false, exitCode: null, error: error.message });
+  });
+  child.on('close', (code: number | null) => {
+    if (cancelled) {
+      settle({ ok: false, exitCode: code, cancelled: true });
+      return;
+    }
+    settle({ ok: code === 0, exitCode: code });
+  });
+
+  return {
+    done,
+    cancel: () => {
+      if (settled) return;
+      cancelled = true;
+      child.kill();
+    },
+  };
+}
+
+/**
+ * Appends installer output to a bounded line buffer, returning the new buffer.
+ * Keeps the tail (what a user watches) and drops the head once the cap is hit.
+ */
+export function appendInstallOutput(lines: readonly string[], text: string): string[] {
+  const incoming = text.split(/\r?\n/);
+  const next = [...lines];
+
+  // A chunk boundary can land mid-line, so the first incoming segment continues
+  // the last retained line instead of starting a new one.
+  const [first, ...rest] = incoming;
+  if (next.length > 0 && first !== undefined) {
+    next[next.length - 1] = `${next[next.length - 1]}${first}`;
+  } else if (first !== undefined) {
+    next.push(first);
+  }
+  next.push(...rest);
+
+  return next.length > INSTALL_OUTPUT_LINE_CAP
+    ? next.slice(next.length - INSTALL_OUTPUT_LINE_CAP)
+    : next;
+}
+
+/** Install methods applicable to the current platform, in declaration order. */
+export function platformInstallMethods(
+  methods: readonly ProviderCliInstallMethod[],
+  platform: NodeJS.Platform = process.platform,
+): ProviderCliInstallMethod[] {
+  return methods.filter((method) => !method.platforms || method.platforms.includes(platform));
+}

@@ -16,6 +16,32 @@ export const codexProviderRegistration: ProviderRegistration = {
   displayName: 'Codex',
   firstRunBlurb: 'OpenAI Codex CLI',
   cliCommand: 'codex',
+  cliInstall: {
+    docsUrl: 'https://github.com/openai/codex',
+    authCommand: 'codex',
+    methods: [
+      {
+        id: 'npm',
+        label: 'npm (global)',
+        displayCommand: 'npm install -g @openai/codex',
+        argv: { command: 'npm', args: ['install', '-g', '@openai/codex'] },
+      },
+      {
+        id: 'native',
+        label: 'PowerShell installer',
+        displayCommand: 'powershell -ExecutionPolicy ByPass -c "irm https://chatgpt.com/codex/install.ps1 | iex"',
+        argv: null,
+        platforms: ['win32'],
+      },
+      {
+        id: 'homebrew',
+        label: 'Homebrew',
+        displayCommand: 'brew install codex',
+        argv: { command: 'brew', args: ['install', 'codex'] },
+        platforms: ['darwin'],
+      },
+    ],
+  },
   blankTabOrder: 15,
   isEnabled: (settings) => getCodexProviderSettings(settings).enabled,
   // Run resolution stays default-true: in WSL the app-server runs INSIDE the distro

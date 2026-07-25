@@ -24,6 +24,32 @@ export const opencodeProviderRegistration: ProviderRegistration = {
   displayName: 'OpenCode',
   firstRunBlurb: 'Opencode CLI server',
   cliCommand: 'opencode',
+  cliInstall: {
+    docsUrl: 'https://opencode.ai/docs/',
+    authCommand: 'opencode auth login',
+    methods: [
+      {
+        id: 'npm',
+        label: 'npm (global)',
+        displayCommand: 'npm install -g opencode-ai',
+        argv: { command: 'npm', args: ['install', '-g', 'opencode-ai'] },
+      },
+      {
+        id: 'native',
+        label: 'Install script',
+        displayCommand: 'curl -fsSL https://opencode.ai/install | bash',
+        argv: null,
+        platforms: ['darwin', 'linux'],
+      },
+      {
+        id: 'scoop',
+        label: 'Scoop',
+        displayCommand: 'scoop install opencode',
+        argv: { command: 'scoop', args: ['install', 'opencode'] },
+        platforms: ['win32'],
+      },
+    ],
+  },
   environmentKeyPatterns: [/^OPENCODE_/i],
   historyService: new OpencodeConversationHistoryService(),
   isEnabled: (settings) => getOpencodeProviderSettings(settings).enabled,

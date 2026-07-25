@@ -20,6 +20,7 @@ import type {
 } from '../types';
 import type { PluginContext } from '../types/PluginContext';
 import type { ProviderId } from '../types/provider';
+import type { ProviderCliInstall, ProviderCliResolver } from './cliInstall';
 import type { ProviderCommandCatalog } from './commands/ProviderCommandCatalog';
 import type { ProviderSettingsTabRenderer } from './settingsWidgets';
 
@@ -82,8 +83,9 @@ export interface ProviderRegistration {
   displayName: string;
   /** One-line product blurb for the first-run onboarding banner — rendered from the registry, not a hardcoded provider list (tech-debt 2026-06-07). */
   firstRunBlurb: string;
-  /** CLI executable the provider requires on PATH (surfaced in onboarding copy). */
+  /** CLI the provider needs on PATH, plus how the setup view installs/authenticates it. */
   cliCommand: string;
+  cliInstall: ProviderCliInstall;
   blankTabOrder: number;
   isEnabled: (settings: Record<string, unknown>) => boolean;
   /** User-scope (global) skill capabilities, both default `true`: whether the runtime RESOLVES a
@@ -448,11 +450,6 @@ export interface ProviderChatUIConfig {
 // Provider-owned boundary services
 // ---------------------------------------------------------------------------
 
-export interface ProviderCliResolver {
-  resolveFromSettings(settings: Record<string, unknown>): string | null;
-  reset(): void;
-}
-
 export interface ProviderRuntimeCommandLoaderContext {
   // Shared command discovery may need a short-lived provider session; the tab
   // manager decides when that is allowed for the active tab.
@@ -750,3 +747,6 @@ export interface InlineEditService {
   continueConversation(message: string, contextFiles?: string[]): Promise<InlineEditResult>;
   cancel(): void;
 }
+
+// Re-exported so existing `./types` importers keep working after the extraction.
+export type { ProviderCliInstall, ProviderCliInstallMethod, ProviderCliResolver } from './cliInstall';

@@ -1319,5 +1319,117 @@
     "openLibrary": "Open Library",
     "openQuickActions": "Open Quick Actions",
     "cursorOpenAcpCaptures": "Cursor: open ACP capture folder"
+  },
+  "onboarding": {
+    "viewTitle": "Configuração",
+    "command": {
+      "open": "Abrir o guia de configuração"
+    },
+    "heading": "Configurar o Specorator",
+    "subheading": "Escolha os agentes de código que quer usar e confirme alguns padrões do cofre. Tudo isto também está nas Configurações, e cada alteração é guardada de imediato.",
+    "stepLabel": "Passos de configuração",
+    "next": "Avançar",
+    "back": "Voltar",
+    "finishButton": "Concluir",
+    "close": "Fechar",
+    "openSetup": "Abrir o guia de configuração",
+    "step": {
+      "providers": "Provedores",
+      "defaults": "Padrões",
+      "folders": "Pastas",
+      "workspace": "Espaço de trabalho",
+      "marketplace": "Marketplace",
+      "finish": "Concluir"
+    },
+    "providers": {
+      "heading": "Escolha os seus provedores",
+      "intro": "O Specorator controla CLIs de agentes que você instala. Os provedores já presentes nesta máquina aparecem primeiro — ative os que quiser usar.",
+      "detected": "Instalado",
+      "notDetected": "Não encontrado",
+      "unknown": "Ainda não verificado",
+      "rescan": "Verificar novamente",
+      "rescanning": "Verificando…",
+      "use": "Usar {name}",
+      "enabled": "Ativado",
+      "foundAt": "Encontrado em",
+      "needsCli": "Precisa do comando {command} no seu PATH.",
+      "authHint": "Ainda não entrou na conta? Execute {command} uma vez num terminal.",
+      "docs": "Documentação de instalação",
+      "noneEnabled": "Nenhum provedor ativado",
+      "enabledCount": "{count} ativados"
+    },
+    "install": {
+      "heading": "Instalar a CLI",
+      "method": "Método",
+      "run": "Instalar agora",
+      "running": "Instalando…",
+      "cancel": "Cancelar",
+      "manualOnly": "Este método executa um script de instalação, por isso precisa de ser corrido no seu próprio terminal. Copie o comando abaixo.",
+      "copy": "Copiar",
+      "copied": "Copiado",
+      "confirm": "O Specorator vai executar «{command}» nesta máquina. Continuar?",
+      "confirmRun": "Executar instalação",
+      "succeeded": "{name} instalado. Deteção atualizada.",
+      "failed": "A instalação falhou: {error}",
+      "cancelled": "Instalação cancelada.",
+      "consoleLabel": "Saída do instalador",
+      "manualPath": "Definir o caminho manualmente",
+      "manualPathPlaceholder": "Caminho completo do executável",
+      "manualPathSave": "Guardar caminho"
+    },
+    "defaults": {
+      "heading": "Padrões do chat",
+      "intro": "Pontos de partida sensatos para cada nova conversa. Pode alterar qualquer um destes na barra de ferramentas do chat.",
+      "model": "Modelo padrão",
+      "modelDesc": "Usado em novas conversas.",
+      "permission": "Aprovação de ferramentas",
+      "permissionDesc": "«Normal» pergunta antes de um agente escrever ficheiros ou executar comandos. «Plano» começa em modo leitura e pergunta antes de agir. Dispensar a aprovação por completo continua a ser uma escolha explícita na barra de ferramentas.",
+      "permissionNormal": "Normal — perguntar antes de agir",
+      "permissionPlan": "Plano — investigar primeiro",
+      "titles": "Nomear conversas automaticamente",
+      "titlesDesc": "Gera um título curto a partir da sua primeira mensagem.",
+      "needsProvider": "Ative um provedor no passo anterior para escolher um modelo padrão."
+    },
+    "folders": {
+      "heading": "Pastas do cofre",
+      "intro": "Ordens de trabalho, modelos, loops e ações rápidas são notas Markdown no seu cofre. Confirme onde devem ficar.",
+      "exists": "A pasta existe",
+      "willCreate": "Será criada",
+      "blank": "Não configurado — esta área fica desativada",
+      "create": "Criar pastas em falta",
+      "creating": "Criando…",
+      "created": "Todas as pastas existem",
+      "createFailed": "Não foi possível criar as pastas: {error}",
+      "workOrders": "Ordens de trabalho",
+      "templates": "Modelos de ordem de trabalho",
+      "loops": "Loops",
+      "archive": "Arquivo",
+      "quickActions": "Ações rápidas"
+    },
+    "workspace": {
+      "heading": "Onde fica o chat",
+      "intro": "O chat do Specorator pode ficar numa barra lateral ou ocupar um separador completo do editor.",
+      "placement": "Abrir o chat em",
+      "placementRight": "Barra lateral direita",
+      "placementLeft": "Barra lateral esquerda",
+      "placementMain": "Separador principal do editor",
+      "maxTabs": "Máximo de separadores de chat",
+      "maxTabsDesc": "Cada separador aberto mantém a sua própria sessão de agente ativa."
+    },
+    "marketplace": {
+      "heading": "Marketplace (opcional)",
+      "intro": "O Marketplace instala agentes, skills, loops, modelos e ações rápidas já prontos. Ele busca um catálogo remoto, por isso fica desligado até você o ativar.",
+      "enable": "Permitir que o Marketplace busque o catálogo",
+      "enabled": "A busca do catálogo está ativada",
+      "browse": "Explorar o Marketplace"
+    },
+    "finish": {
+      "heading": "Está tudo pronto",
+      "intro": "Abra um separador de chat e envie a sua primeira mensagem. A Biblioteca, o Agent Board e o Marketplace estão na faixa da esquerda.",
+      "providersReady": "Ativados: {names}",
+      "noProviders": "Nenhum provedor está ativado — o chat ficará vazio até ativar um.",
+      "openChat": "Abrir o chat",
+      "reopenHint": "Pode reabrir este guia a qualquer momento pela paleta de comandos: «Abrir o guia de configuração»."
+    }
   }
 }

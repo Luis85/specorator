@@ -9,6 +9,7 @@ import {
   type InstructionRefineService,
   type ProviderCapabilities,
   type ProviderChatUIConfig,
+  type ProviderCliInstall,
   type ProviderConversationHistoryService,
   type ProviderId,
   type ProviderRegistration,
@@ -163,6 +164,11 @@ export class ProviderRegistry {
 
   static getCliCommand(providerId: ProviderId): string {
     return this.getProviderRegistration(providerId).cliCommand;
+  }
+
+  /** Provider-contributed CLI install methods, auth command, and docs link (onboarding). */
+  static getCliInstall(providerId: ProviderId): ProviderCliInstall {
+    return this.getProviderRegistration(providerId).cliInstall;
   }
 
   /**

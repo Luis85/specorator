@@ -1319,5 +1319,117 @@
     "openLibrary": "Open Library",
     "openQuickActions": "Open Quick Actions",
     "cursorOpenAcpCaptures": "Cursor: open ACP capture folder"
+  },
+  "onboarding": {
+    "viewTitle": "設定",
+    "command": {
+      "open": "開啟設定指南"
+    },
+    "heading": "設定 Specorator",
+    "subheading": "選擇你想使用的程式設計代理，然後確認幾項儲存庫預設值。這裡的所有項目在設定中也能找到，每次變更都會立即儲存。",
+    "stepLabel": "設定步驟",
+    "next": "下一步",
+    "back": "上一步",
+    "finishButton": "完成",
+    "close": "關閉",
+    "openSetup": "開啟設定指南",
+    "step": {
+      "providers": "提供者",
+      "defaults": "預設值",
+      "folders": "資料夾",
+      "workspace": "工作區",
+      "marketplace": "市集",
+      "finish": "完成"
+    },
+    "providers": {
+      "heading": "選擇提供者",
+      "intro": "Specorator 會驅動你自行安裝的代理 CLI。本機已有的提供者會排在前面——開啟你想使用的即可。",
+      "detected": "已安裝",
+      "notDetected": "找不到",
+      "unknown": "尚未檢查",
+      "rescan": "重新檢查",
+      "rescanning": "正在檢查…",
+      "use": "使用 {name}",
+      "enabled": "已啟用",
+      "foundAt": "找到於",
+      "needsCli": "需要 PATH 中存在 {command} 指令。",
+      "authHint": "還沒登入？在終端機執行一次 {command}。",
+      "docs": "安裝文件",
+      "noneEnabled": "尚未啟用任何提供者",
+      "enabledCount": "已啟用 {count} 個"
+    },
+    "install": {
+      "heading": "安裝 CLI",
+      "method": "方式",
+      "run": "立即安裝",
+      "running": "正在安裝…",
+      "cancel": "取消",
+      "manualOnly": "這個方式會執行安裝腳本，因此必須在你自己的終端機中執行。請複製下面的指令。",
+      "copy": "複製",
+      "copied": "已複製",
+      "confirm": "Specorator 將在本機執行「{command}」。要繼續嗎？",
+      "confirmRun": "開始安裝",
+      "succeeded": "{name} 安裝完成，偵測結果已更新。",
+      "failed": "安裝失敗：{error}",
+      "cancelled": "已取消安裝。",
+      "consoleLabel": "安裝程式輸出",
+      "manualPath": "手動設定路徑",
+      "manualPathPlaceholder": "執行檔的完整路徑",
+      "manualPathSave": "儲存路徑"
+    },
+    "defaults": {
+      "heading": "聊天預設值",
+      "intro": "為每個新對話設定合理的起點。之後都可以在聊天工具列中修改。",
+      "model": "預設模型",
+      "modelDesc": "用於新的對話。",
+      "permission": "工具核准",
+      "permissionDesc": "「一般」會在代理寫入檔案或執行指令前詢問。「計畫」以唯讀方式開始，行動前詢問。完全略過核准仍然是工具列中需要主動開啟的開關。",
+      "permissionNormal": "一般 — 行動前詢問",
+      "permissionPlan": "計畫 — 先做研究",
+      "titles": "自動命名對話",
+      "titlesDesc": "根據你的第一則訊息產生簡短標題。",
+      "needsProvider": "請在上一步啟用一個提供者，才能選擇預設模型。"
+    },
+    "folders": {
+      "heading": "儲存庫資料夾",
+      "intro": "工單、範本、循環與快速動作都是儲存庫中的一般 Markdown 筆記。請確認它們的存放位置。",
+      "exists": "資料夾已存在",
+      "willCreate": "將會建立",
+      "blank": "未設定——此功能將保持停用",
+      "create": "建立缺少的資料夾",
+      "creating": "正在建立…",
+      "created": "所有資料夾都已存在",
+      "createFailed": "無法建立資料夾：{error}",
+      "workOrders": "工單",
+      "templates": "工單範本",
+      "loops": "循環",
+      "archive": "封存",
+      "quickActions": "快速動作"
+    },
+    "workspace": {
+      "heading": "聊天的位置",
+      "intro": "Specorator 聊天可以停靠在側邊欄，也可以佔用整個編輯器分頁。",
+      "placement": "在哪裡開啟聊天",
+      "placementRight": "右側邊欄",
+      "placementLeft": "左側邊欄",
+      "placementMain": "主編輯器分頁",
+      "maxTabs": "聊天分頁上限",
+      "maxTabsDesc": "每個開啟的分頁都會維持各自的即時代理工作階段。"
+    },
+    "marketplace": {
+      "heading": "市集（選用）",
+      "intro": "市集可以安裝現成的代理、技能、循環、範本與快速動作。它需要取得遠端目錄，因此在你啟用之前保持關閉。",
+      "enable": "允許市集取得其目錄",
+      "enabled": "已啟用目錄取得",
+      "browse": "瀏覽市集"
+    },
+    "finish": {
+      "heading": "一切就緒",
+      "intro": "開啟一個聊天分頁並送出第一則訊息。資料庫、Agent Board 與市集都在左側功能區。",
+      "providersReady": "已啟用：{names}",
+      "noProviders": "尚未啟用任何提供者——在你啟用之前，聊天會一直是空的。",
+      "openChat": "開啟聊天",
+      "reopenHint": "你可以隨時透過命令面板中的「開啟設定指南」重新開啟本指南。"
+    }
   }
 }

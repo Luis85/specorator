@@ -55,6 +55,30 @@ describe('provider registration contract', () => {
     expect(ProviderRegistry.getFirstRunBlurb(id)).toBeTruthy();
     expect(ProviderRegistry.getCliCommand(id)).toBeTruthy();
 
+    // Onboarding install metadata: the setup view's provider cards render from
+    // the registry, so a new provider must contribute install guidance rather
+    // than a feature-level `{claude: …}` table (noHardcodedProviderList).
+    const install = ProviderRegistry.getCliInstall(id);
+    expect(install.docsUrl).toMatch(/^https:\/\//);
+    expect(install.authCommand).toBeTruthy();
+    expect(install.methods.length).toBeGreaterThan(0);
+    expect(install.methods.map((m) => Boolean(m.id && m.label && m.displayCommand)))
+      .toEqual(install.methods.map(() => true));
+    // `argv: null` means copy-only; a spawnable method must carry a real
+    // single-token command plus at least one argument — never a command string
+    // waiting to be split by a shell.
+    const spawnable = install.methods.flatMap((m) => (m.argv ? [m.argv] : []));
+    expect(spawnable.map((argv) => Boolean(argv.command) && !/\s/.test(argv.command) && argv.args.length > 0))
+      .toEqual(spawnable.map(() => true));
+    // Every platform must be offered at least one route to the CLI, or its
+    // provider card would render an install panel with nothing in it.
+    const platforms: NodeJS.Platform[] = ['darwin', 'linux', 'win32'];
+    const perPlatform = platforms.map((platform) => [
+      platform,
+      install.methods.filter((m) => !m.platforms || m.platforms.includes(platform)).length > 0,
+    ]);
+    expect(perPlatform).toEqual(platforms.map((platform) => [platform, true]));
+
     const caps = ProviderRegistry.getCapabilities(id);
     expect(caps.providerId).toBe(id);
     expect(typeof caps.supportsPlanMode).toBe('boolean');

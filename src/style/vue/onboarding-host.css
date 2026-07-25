@@ -1,0 +1,15 @@
+/* Host-level rules for the Setup view. These target workspace chrome OUTSIDE
+   the island's contentEl, so they cannot be scoped SFC styles. */
+
+/* The island renders its own header; the per-view title bar would duplicate it
+   (same call as the Library and Marketplace host sheets). */
+.workspace-leaf-content[data-type="specorator-onboarding"] .view-header {
+  display: none;
+}
+
+/* Island padding — contentEl carries `.specorator-vue`, so `--sp-*` resolves
+   here. Scrolls internally: the flow is taller than a leaf on small windows. */
+.specorator-onboarding-vue-root {
+  overflow-y: auto;
+  padding: var(--sp-space-l);
+}

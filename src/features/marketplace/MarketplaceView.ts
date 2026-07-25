@@ -1,15 +1,18 @@
 import type { WorkspaceLeaf } from 'obsidian';
 import { ItemView } from 'obsidian';
 import type { App as VueApp, Ref } from 'vue';
-import { createApp, markRaw, ref } from 'vue';
+import { markRaw, ref } from 'vue';
 
 import { t } from '../../i18n/i18n';
 import type SpecoratorPlugin from '../../main';
+import { mountLeafIsland, unmountLeafIsland } from '../../shared/vue/leafIsland';
 import { VIEW_TYPE_MARKETPLACE } from './viewType';
 import { getMarketplacePinia } from './vue/globalPinia';
 import { PLUGIN_KEY, REQUESTED_VIEW_KEY } from './vue/marketplaceKeys';
 import MarketplaceRoot from './vue/MarketplaceRoot.vue';
 import type { MarketplaceView as MarketplaceViewTarget } from './vue/marketplaceView';
+
+const HOST_CLASS = 'specorator-marketplace-vue-root';
 
 export class MarketplaceView extends ItemView {
   /** One Vue app per leaf — Obsidian can open several Marketplace leaves at once. */
@@ -42,32 +45,20 @@ export class MarketplaceView extends ItemView {
   }
 
   async onOpen(): Promise<void> {
-    // Popout/move flows can run onOpen twice on one view instance (Hover
-    // Editor-style; see SpecoratorView) — drop any previous island before
-    // mounting a fresh one.
-    this.vueApp?.unmount();
-    this.vueApp = null;
-    this.contentEl.empty();
-    // Two calls, not one: Obsidian's real addClass is variadic but the shared
-    // test-lane polyfill (tests/setup/obsidianDom.ts) is single-arg.
-    this.contentEl.addClass('specorator-vue');
-    this.contentEl.addClass('specorator-marketplace-vue-root');
-    const app = createApp(MarketplaceRoot);
-    app.use(getMarketplacePinia());
-    // markRaw: Obsidian objects are large and cyclic; never deep-proxy them.
-    app.provide(PLUGIN_KEY, markRaw(this.plugin));
-    app.provide(REQUESTED_VIEW_KEY, this.requestedView);
-    app.mount(this.contentEl);
-    this.vueApp = app;
+    this.vueApp = mountLeafIsland(this.contentEl, this.vueApp, {
+      component: MarketplaceRoot,
+      pinia: getMarketplacePinia(),
+      hostClass: HOST_CLASS,
+      provide: (app) => {
+        // markRaw: Obsidian objects are large and cyclic; never deep-proxy them.
+        app.provide(PLUGIN_KEY, markRaw(this.plugin));
+        app.provide(REQUESTED_VIEW_KEY, this.requestedView);
+      },
+    });
   }
 
   async onClose(): Promise<void> {
-    // unmount() runs onUnmounted hooks; empty() drops any detached DOM +
-    // listeners (Vue's documented leak class when the container is kept).
-    this.vueApp?.unmount();
+    unmountLeafIsland(this.contentEl, this.vueApp, HOST_CLASS);
     this.vueApp = null;
-    this.contentEl.removeClass('specorator-vue');
-    this.contentEl.removeClass('specorator-marketplace-vue-root');
-    this.contentEl.empty();
   }
 }

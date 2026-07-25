@@ -1319,5 +1319,117 @@
     "openLibrary": "Open Library",
     "openQuickActions": "Open Quick Actions",
     "cursorOpenAcpCaptures": "Cursor: open ACP capture folder"
+  },
+  "onboarding": {
+    "viewTitle": "Setup",
+    "command": {
+      "open": "Open setup guide"
+    },
+    "heading": "Set up Specorator",
+    "subheading": "Pick the coding agents you want to use, then confirm a few vault defaults. Everything here is also in Settings, and every change saves as you make it.",
+    "stepLabel": "Setup steps",
+    "next": "Next",
+    "back": "Back",
+    "finishButton": "Finish",
+    "close": "Close",
+    "openSetup": "Open setup guide",
+    "step": {
+      "providers": "Providers",
+      "defaults": "Defaults",
+      "folders": "Folders",
+      "workspace": "Workspace",
+      "marketplace": "Marketplace",
+      "finish": "Finish"
+    },
+    "providers": {
+      "heading": "Choose your providers",
+      "intro": "Specorator drives agent CLIs you install yourself. Providers already on this machine are listed first — switch on the ones you want to use.",
+      "detected": "Installed",
+      "notDetected": "Not found",
+      "unknown": "Not checked yet",
+      "rescan": "Check again",
+      "rescanning": "Checking…",
+      "use": "Use {name}",
+      "enabled": "Enabled",
+      "foundAt": "Found at",
+      "needsCli": "Needs the {command} command on your PATH.",
+      "authHint": "Not signed in yet? Run {command} once in a terminal.",
+      "docs": "Install docs",
+      "noneEnabled": "No provider enabled yet",
+      "enabledCount": "{count} enabled"
+    },
+    "install": {
+      "heading": "Install the CLI",
+      "method": "Method",
+      "run": "Install now",
+      "running": "Installing…",
+      "cancel": "Cancel",
+      "manualOnly": "This method runs an installer script, so it has to be run in your own terminal. Copy the command below.",
+      "copy": "Copy",
+      "copied": "Copied",
+      "confirm": "Specorator will run \"{command}\" on this machine. Continue?",
+      "confirmRun": "Run install",
+      "succeeded": "{name} installed. Detection refreshed.",
+      "failed": "Install failed: {error}",
+      "cancelled": "Install cancelled.",
+      "consoleLabel": "Installer output",
+      "manualPath": "Set the path manually",
+      "manualPathPlaceholder": "Full path to the executable",
+      "manualPathSave": "Save path"
+    },
+    "defaults": {
+      "heading": "Chat defaults",
+      "intro": "Sensible starting points for every new conversation. You can change any of these from the chat toolbar later.",
+      "model": "Default model",
+      "modelDesc": "Used for new conversations.",
+      "permission": "Tool approval",
+      "permissionDesc": "Normal asks before an agent writes files or runs commands. Plan starts read-only and asks before acting. Skipping approval entirely stays a deliberate toolbar toggle.",
+      "permissionNormal": "Normal — ask before acting",
+      "permissionPlan": "Plan — research first",
+      "titles": "Name conversations automatically",
+      "titlesDesc": "Generates a short title from your first message.",
+      "needsProvider": "Enable a provider on the previous step to pick a default model."
+    },
+    "folders": {
+      "heading": "Vault folders",
+      "intro": "Work orders, templates, loops, and quick actions are plain Markdown notes in your vault. Confirm where they should live.",
+      "exists": "Folder exists",
+      "willCreate": "Will be created",
+      "blank": "Not configured — this surface stays disabled",
+      "create": "Create missing folders",
+      "creating": "Creating…",
+      "created": "All folders exist",
+      "createFailed": "Could not create folders: {error}",
+      "workOrders": "Work orders",
+      "templates": "Work order templates",
+      "loops": "Loops",
+      "archive": "Archive",
+      "quickActions": "Quick actions"
+    },
+    "workspace": {
+      "heading": "Where chat lives",
+      "intro": "Specorator chat can sit in a sidebar or take a full editor tab.",
+      "placement": "Open chat in",
+      "placementRight": "Right sidebar",
+      "placementLeft": "Left sidebar",
+      "placementMain": "Main editor tab",
+      "maxTabs": "Maximum chat tabs",
+      "maxTabsDesc": "Each open tab holds its own live agent session."
+    },
+    "marketplace": {
+      "heading": "Marketplace (optional)",
+      "intro": "The Marketplace installs ready-made agents, skills, loops, templates, and quick actions. It fetches a remote catalog, so it stays off until you enable it.",
+      "enable": "Allow the Marketplace to fetch its catalog",
+      "enabled": "Catalog fetching is enabled",
+      "browse": "Browse the Marketplace"
+    },
+    "finish": {
+      "heading": "You're set",
+      "intro": "Open a chat tab and send your first message. The Library, Agent Board, and Marketplace are on the left ribbon.",
+      "providersReady": "Enabled: {names}",
+      "noProviders": "No provider is enabled yet — chat will stay empty until you turn one on.",
+      "openChat": "Open chat",
+      "reopenHint": "You can reopen this guide any time from the command palette: \"Open setup guide\"."
+    }
   }
 }

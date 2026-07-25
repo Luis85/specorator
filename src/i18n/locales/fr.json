@@ -1319,5 +1319,117 @@
     "openLibrary": "Open Library",
     "openQuickActions": "Open Quick Actions",
     "cursorOpenAcpCaptures": "Cursor: open ACP capture folder"
+  },
+  "onboarding": {
+    "viewTitle": "Configuration",
+    "command": {
+      "open": "Ouvrir le guide de configuration"
+    },
+    "heading": "Configurer Specorator",
+    "subheading": "Choisissez les agents de code que vous voulez utiliser, puis confirmez quelques réglages du coffre. Tout est aussi dans les Paramètres, et chaque changement est enregistré immédiatement.",
+    "stepLabel": "Étapes de configuration",
+    "next": "Suivant",
+    "back": "Retour",
+    "finishButton": "Terminer",
+    "close": "Fermer",
+    "openSetup": "Ouvrir le guide de configuration",
+    "step": {
+      "providers": "Fournisseurs",
+      "defaults": "Valeurs par défaut",
+      "folders": "Dossiers",
+      "workspace": "Espace de travail",
+      "marketplace": "Place de marché",
+      "finish": "Terminer"
+    },
+    "providers": {
+      "heading": "Choisissez vos fournisseurs",
+      "intro": "Specorator pilote des CLI d’agents que vous installez vous-même. Les fournisseurs déjà présents sur cette machine sont listés en premier — activez ceux que vous voulez utiliser.",
+      "detected": "Installé",
+      "notDetected": "Introuvable",
+      "unknown": "Pas encore vérifié",
+      "rescan": "Vérifier à nouveau",
+      "rescanning": "Vérification…",
+      "use": "Utiliser {name}",
+      "enabled": "Activé",
+      "foundAt": "Trouvé à",
+      "needsCli": "Nécessite la commande {command} dans votre PATH.",
+      "authHint": "Pas encore connecté ? Lancez {command} une fois dans un terminal.",
+      "docs": "Docs d’installation",
+      "noneEnabled": "Aucun fournisseur activé",
+      "enabledCount": "{count} activé(s)"
+    },
+    "install": {
+      "heading": "Installer la CLI",
+      "method": "Méthode",
+      "run": "Installer maintenant",
+      "running": "Installation…",
+      "cancel": "Annuler",
+      "manualOnly": "Cette méthode exécute un script d’installation : elle doit être lancée dans votre propre terminal. Copiez la commande ci-dessous.",
+      "copy": "Copier",
+      "copied": "Copié",
+      "confirm": "Specorator va exécuter « {command} » sur cette machine. Continuer ?",
+      "confirmRun": "Lancer l’installation",
+      "succeeded": "{name} installé. Détection actualisée.",
+      "failed": "Échec de l’installation : {error}",
+      "cancelled": "Installation annulée.",
+      "consoleLabel": "Sortie de l’installateur",
+      "manualPath": "Définir le chemin manuellement",
+      "manualPathPlaceholder": "Chemin complet de l’exécutable",
+      "manualPathSave": "Enregistrer le chemin"
+    },
+    "defaults": {
+      "heading": "Valeurs par défaut du chat",
+      "intro": "Des points de départ raisonnables pour chaque nouvelle conversation. Vous pourrez tout modifier depuis la barre d’outils du chat.",
+      "model": "Modèle par défaut",
+      "modelDesc": "Utilisé pour les nouvelles conversations.",
+      "permission": "Approbation des outils",
+      "permissionDesc": "« Normal » demande avant qu’un agent écrive des fichiers ou lance des commandes. « Plan » démarre en lecture seule et demande avant d’agir. Ignorer complètement l’approbation reste un choix explicite dans la barre d’outils.",
+      "permissionNormal": "Normal — demander avant d’agir",
+      "permissionPlan": "Plan — étudier d’abord",
+      "titles": "Nommer les conversations automatiquement",
+      "titlesDesc": "Génère un titre court à partir de votre premier message.",
+      "needsProvider": "Activez un fournisseur à l’étape précédente pour choisir un modèle par défaut."
+    },
+    "folders": {
+      "heading": "Dossiers du coffre",
+      "intro": "Les ordres de travail, modèles, boucles et actions rapides sont de simples notes Markdown dans votre coffre. Confirmez où elles doivent vivre.",
+      "exists": "Dossier existant",
+      "willCreate": "Sera créé",
+      "blank": "Non configuré — cette surface reste désactivée",
+      "create": "Créer les dossiers manquants",
+      "creating": "Création…",
+      "created": "Tous les dossiers existent",
+      "createFailed": "Impossible de créer les dossiers : {error}",
+      "workOrders": "Ordres de travail",
+      "templates": "Modèles d’ordre de travail",
+      "loops": "Boucles",
+      "archive": "Archive",
+      "quickActions": "Actions rapides"
+    },
+    "workspace": {
+      "heading": "Où vit le chat",
+      "intro": "Le chat Specorator peut occuper une barre latérale ou un onglet d’éditeur complet.",
+      "placement": "Ouvrir le chat dans",
+      "placementRight": "Barre latérale droite",
+      "placementLeft": "Barre latérale gauche",
+      "placementMain": "Onglet d’éditeur principal",
+      "maxTabs": "Nombre maximal d’onglets de chat",
+      "maxTabsDesc": "Chaque onglet ouvert maintient sa propre session d’agent active."
+    },
+    "marketplace": {
+      "heading": "Place de marché (optionnel)",
+      "intro": "La place de marché installe des agents, compétences, boucles, modèles et actions rapides prêts à l’emploi. Elle récupère un catalogue distant, donc elle reste désactivée jusqu’à ce que vous l’activiez.",
+      "enable": "Autoriser la place de marché à récupérer son catalogue",
+      "enabled": "La récupération du catalogue est activée",
+      "browse": "Parcourir la place de marché"
+    },
+    "finish": {
+      "heading": "Tout est prêt",
+      "intro": "Ouvrez un onglet de chat et envoyez votre premier message. La Bibliothèque, l’Agent Board et la place de marché sont dans le ruban de gauche.",
+      "providersReady": "Activés : {names}",
+      "noProviders": "Aucun fournisseur activé — le chat restera vide jusqu’à ce que vous en activiez un.",
+      "openChat": "Ouvrir le chat",
+      "reopenHint": "Vous pouvez réouvrir ce guide à tout moment depuis la palette de commandes : « Ouvrir le guide de configuration »."
+    }
   }
 }

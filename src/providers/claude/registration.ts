@@ -17,6 +17,33 @@ export const claudeProviderRegistration: ProviderRegistration = {
   displayName: 'Claude',
   firstRunBlurb: 'Anthropic Claude Code',
   cliCommand: 'claude',
+  cliInstall: {
+    docsUrl: 'https://code.claude.com/docs/en/quickstart',
+    authCommand: 'claude',
+    methods: [
+      {
+        id: 'npm',
+        label: 'npm (global)',
+        displayCommand: 'npm install -g @anthropic-ai/claude-code',
+        argv: { command: 'npm', args: ['install', '-g', '@anthropic-ai/claude-code'] },
+      },
+      // Piped installer scripts need a shell, so they stay copy-only (argv: null).
+      {
+        id: 'native',
+        label: 'Native installer',
+        displayCommand: 'irm https://claude.ai/install.ps1 | iex',
+        argv: null,
+        platforms: ['win32'],
+      },
+      {
+        id: 'native',
+        label: 'Native installer',
+        displayCommand: 'curl -fsSL https://claude.ai/install.sh | bash',
+        argv: null,
+        platforms: ['darwin', 'linux'],
+      },
+    ],
+  },
   blankTabOrder: 20,
   isEnabled: (settings) => getClaudeProviderSettings(settings).enabled,
   // The SDK loads `~/.claude/skills` only when the `user` setting source is on,

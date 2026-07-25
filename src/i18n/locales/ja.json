@@ -1319,5 +1319,117 @@
     "openLibrary": "Open Library",
     "openQuickActions": "Open Quick Actions",
     "cursorOpenAcpCaptures": "Cursor: open ACP capture folder"
+  },
+  "onboarding": {
+    "viewTitle": "セットアップ",
+    "command": {
+      "open": "セットアップガイドを開く"
+    },
+    "heading": "Specorator のセットアップ",
+    "subheading": "使いたいコーディングエージェントを選び、保管庫の初期設定をいくつか確認します。ここの項目はすべて設定画面にもあり、変更は即座に保存されます。",
+    "stepLabel": "セットアップの手順",
+    "next": "次へ",
+    "back": "戻る",
+    "finishButton": "完了",
+    "close": "閉じる",
+    "openSetup": "セットアップガイドを開く",
+    "step": {
+      "providers": "プロバイダー",
+      "defaults": "既定値",
+      "folders": "フォルダー",
+      "workspace": "ワークスペース",
+      "marketplace": "マーケットプレイス",
+      "finish": "完了"
+    },
+    "providers": {
+      "heading": "プロバイダーを選ぶ",
+      "intro": "Specorator は自分でインストールしたエージェント CLI を操作します。この端末に既にあるプロバイダーが上に表示されます。使いたいものを有効にしてください。",
+      "detected": "インストール済み",
+      "notDetected": "見つかりません",
+      "unknown": "未確認",
+      "rescan": "再確認",
+      "rescanning": "確認中…",
+      "use": "{name} を使う",
+      "enabled": "有効",
+      "foundAt": "検出場所",
+      "needsCli": "PATH に {command} コマンドが必要です。",
+      "authHint": "まだサインインしていない場合は、ターミナルで {command} を一度実行してください。",
+      "docs": "インストール手順",
+      "noneEnabled": "有効なプロバイダーがありません",
+      "enabledCount": "{count} 件有効"
+    },
+    "install": {
+      "heading": "CLI をインストール",
+      "method": "方法",
+      "run": "今すぐインストール",
+      "running": "インストール中…",
+      "cancel": "キャンセル",
+      "manualOnly": "この方法はインストールスクリプトを実行するため、自分のターミナルで実行する必要があります。下のコマンドをコピーしてください。",
+      "copy": "コピー",
+      "copied": "コピーしました",
+      "confirm": "Specorator がこの端末で「{command}」を実行します。続行しますか？",
+      "confirmRun": "インストールを実行",
+      "succeeded": "{name} をインストールしました。検出結果を更新しました。",
+      "failed": "インストールに失敗しました: {error}",
+      "cancelled": "インストールを中止しました。",
+      "consoleLabel": "インストーラーの出力",
+      "manualPath": "パスを手動で指定",
+      "manualPathPlaceholder": "実行ファイルのフルパス",
+      "manualPathSave": "パスを保存"
+    },
+    "defaults": {
+      "heading": "チャットの既定値",
+      "intro": "新しい会話の出発点として妥当な設定です。あとからチャットのツールバーで変更できます。",
+      "model": "既定のモデル",
+      "modelDesc": "新しい会話で使用されます。",
+      "permission": "ツールの承認",
+      "permissionDesc": "「通常」はエージェントがファイルを書き込んだりコマンドを実行する前に確認します。「プラン」は読み取り専用で始め、行動前に確認します。承認を完全に省略する設定は、ツールバーでの明示的な切り替えのままです。",
+      "permissionNormal": "通常 — 実行前に確認",
+      "permissionPlan": "プラン — まず調査",
+      "titles": "会話に自動で名前を付ける",
+      "titlesDesc": "最初のメッセージから短いタイトルを生成します。",
+      "needsProvider": "既定のモデルを選ぶには、前の手順でプロバイダーを有効にしてください。"
+    },
+    "folders": {
+      "heading": "保管庫のフォルダー",
+      "intro": "作業指示、テンプレート、ループ、クイックアクションは保管庫内の通常の Markdown ノートです。保存先を確認してください。",
+      "exists": "フォルダーは存在します",
+      "willCreate": "作成されます",
+      "blank": "未設定 — この機能は無効のままです",
+      "create": "不足しているフォルダーを作成",
+      "creating": "作成中…",
+      "created": "すべてのフォルダーが存在します",
+      "createFailed": "フォルダーを作成できませんでした: {error}",
+      "workOrders": "作業指示",
+      "templates": "作業指示テンプレート",
+      "loops": "ループ",
+      "archive": "アーカイブ",
+      "quickActions": "クイックアクション"
+    },
+    "workspace": {
+      "heading": "チャットの表示場所",
+      "intro": "Specorator のチャットはサイドバーにも、エディターのタブ全体にも配置できます。",
+      "placement": "チャットを開く場所",
+      "placementRight": "右サイドバー",
+      "placementLeft": "左サイドバー",
+      "placementMain": "メインのエディタータブ",
+      "maxTabs": "チャットタブの上限",
+      "maxTabsDesc": "開いている各タブがそれぞれ独自のエージェントセッションを保持します。"
+    },
+    "marketplace": {
+      "heading": "マーケットプレイス（任意）",
+      "intro": "マーケットプレイスでは、すぐ使えるエージェント・スキル・ループ・テンプレート・クイックアクションをインストールできます。リモートのカタログを取得するため、有効にするまでオフのままです。",
+      "enable": "マーケットプレイスによるカタログ取得を許可する",
+      "enabled": "カタログの取得は有効です",
+      "browse": "マーケットプレイスを見る"
+    },
+    "finish": {
+      "heading": "準備完了",
+      "intro": "チャットタブを開いて最初のメッセージを送ってみましょう。ライブラリ、Agent Board、マーケットプレイスは左のリボンにあります。",
+      "providersReady": "有効: {names}",
+      "noProviders": "有効なプロバイダーがありません。1 つ有効にするまでチャットは空のままです。",
+      "openChat": "チャットを開く",
+      "reopenHint": "このガイドはコマンドパレットの「セットアップガイドを開く」からいつでも再表示できます。"
+    }
   }
 }

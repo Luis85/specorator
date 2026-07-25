@@ -16,6 +16,30 @@ export const cursorProviderRegistration: ProviderRegistration = {
   displayName: 'Cursor Agent',
   firstRunBlurb: 'Cursor Agent CLI',
   cliCommand: 'cursor-agent',
+  cliInstall: {
+    docsUrl: 'https://cursor.com/docs/cli/overview',
+    authCommand: 'cursor-agent login',
+    // The CLI ships two entry points for one binary; either satisfies the probe.
+    extraBinaryNames: ['agent'],
+    // Cursor publishes no package-manager install — only piped installer
+    // scripts, which need a shell. Copy-only by design (argv: null).
+    methods: [
+      {
+        id: 'native',
+        label: 'Native installer',
+        displayCommand: "irm 'https://cursor.com/install?win32=true' | iex",
+        argv: null,
+        platforms: ['win32'],
+      },
+      {
+        id: 'native',
+        label: 'Install script',
+        displayCommand: 'curl https://cursor.com/install -fsS | bash',
+        argv: null,
+        platforms: ['darwin', 'linux'],
+      },
+    ],
+  },
   blankTabOrder: 8,
   isEnabled: (settings) => getCursorProviderSettings(settings).enabled,
   defaultConfig: { ...DEFAULT_CURSOR_PROVIDER_SETTINGS },
