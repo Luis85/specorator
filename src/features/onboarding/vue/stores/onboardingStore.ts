@@ -20,6 +20,7 @@ import {
   type OnboardingFolderKey,
   type OnboardingFolderState,
   readOnboardingFolders,
+  setDefaultModel,
   setFolderSetting,
   setProviderCliPathForHost,
   setProviderEnabled,
@@ -65,14 +66,31 @@ export const useOnboardingStore = defineStore('specorator-onboarding', () => {
   const folderError = ref<string | null>(null);
   /** Per-provider install run state, replaced wholesale so watchers fire. */
   const runs = ref<Record<string, InstallRunState>>({});
+  /**
+   * The provider a blank chat currently prefers; disambiguates a shared model id.
+   *
+   * Reactive STATE mirrored from settings, deliberately not a computed reading
+   * `plugin.settings`: that bag is a plain object, so a computed over it
+   * registers no dependency and caches its first answer for the life of the
+   * store. Both the provider toggle and the model pick move `settingsProvider`,
+   * and a stale owner made the model selector resolve a shared id against the
+   * previous provider — the pick appeared to snap back to the old owner.
+   */
+  const settingsProviderId = ref('');
 
   function requirePlugin(): SpecoratorPlugin {
     if (!plugin) throw new Error('Onboarding store used before init()');
     return plugin;
   }
 
+  function syncSettingsProviderId(): void {
+    const current = plugin ? asSettingsBag(plugin.settings).settingsProvider : '';
+    settingsProviderId.value = typeof current === 'string' ? current : '';
+  }
+
   function init(next: SpecoratorPlugin): void {
     plugin = next;
+    syncSettingsProviderId();
     if (detections.value.length === 0) refreshDetections();
     if (folders.value.length === 0) void refreshFolders();
   }
@@ -110,6 +128,8 @@ export const useOnboardingStore = defineStore('specorator-onboarding', () => {
       view.refreshModelSelector();
       void view.refreshProviderAvailability();
     }
+    // The toggle re-projects the selection, so the preferred provider moved.
+    syncSettingsProviderId();
     refreshDetections();
   }
 
@@ -225,12 +245,17 @@ export const useOnboardingStore = defineStore('specorator-onboarding', () => {
     return options;
   });
 
-  /** The provider a blank chat currently prefers; disambiguates a shared model id. */
-  const settingsProviderId = computed<string>(() => {
-    if (!plugin) return '';
-    const current = asSettingsBag(plugin.settings).settingsProvider;
-    return typeof current === 'string' ? current : '';
-  });
+  /**
+   * Commits a model pick to the provider that OWNS it — taken from the selected
+   * option, never re-inferred from the model id. Lives here rather than in the
+   * step so the owner re-read below can't be forgotten at a call site; it was
+   * the one settings write the component made directly, which is exactly how
+   * `settingsProviderId` went stale.
+   */
+  async function selectModel(option: OnboardingModelOption): Promise<void> {
+    await setDefaultModel(requirePlugin(), option.value, option.providerId);
+    syncSettingsProviderId();
+  }
 
   function goTo(next: OnboardingStep): void {
     step.value = next;
@@ -267,6 +292,7 @@ export const useOnboardingStore = defineStore('specorator-onboarding', () => {
     refreshDetections,
     setEnabled,
     setCliPath,
+    selectModel,
     startInstall,
     cancelInstall,
     setFolder,

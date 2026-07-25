@@ -18,8 +18,10 @@ vi.mock('@/core/providers/ProviderRegistry', () => ({
   },
 }));
 vi.mock('@/features/onboarding/onboardingSettings', async (importOriginal) => {
+  // Partial: the config steps use the real scalar readers/writers against a stub
+  // plugin. The model commit is the store's job (see onboardingStore.test.ts).
   const actual = await importOriginal<typeof SettingsModule>();
-  return { ...actual, setDefaultModel: vi.fn(async () => {}) };
+  return { ...actual };
 });
 vi.mock('@/features/marketplace/activateMarketplace', () => ({
   activateMarketplace: vi.fn(async () => {}),
@@ -30,7 +32,6 @@ vi.mock('@/features/marketplace/marketplaceNetworkGate', () => ({
 
 import { activateMarketplace } from '@/features/marketplace/activateMarketplace';
 import { maybeWarnMarketplaceNetwork } from '@/features/marketplace/marketplaceNetworkGate';
-import { setDefaultModel } from '@/features/onboarding/onboardingSettings';
 import DefaultsStep from '@/features/onboarding/vue/components/DefaultsStep.vue';
 import FinishStep from '@/features/onboarding/vue/components/FinishStep.vue';
 import FoldersStep from '@/features/onboarding/vue/components/FoldersStep.vue';
@@ -56,6 +57,7 @@ function makeStore(overrides: Record<string, unknown> = {}) {
     enabledProviderIds: [] as string[],
     modelOptions: [] as Array<{ providerId: string; value: string; label: string; group: string }>,
     settingsProviderId: 'alpha',
+    selectModel: vi.fn(async () => {}),
     setFolder: vi.fn(async () => {}),
     createFolders: vi.fn(async () => {}),
     finish: vi.fn(async () => {}),
@@ -92,7 +94,6 @@ beforeEach(() => {
   hoisted.store = null;
   vi.mocked(activateMarketplace).mockClear();
   vi.mocked(maybeWarnMarketplaceNetwork).mockClear();
-  vi.mocked(setDefaultModel).mockClear();
 });
 
 describe('DefaultsStep', () => {
@@ -114,9 +115,10 @@ describe('DefaultsStep', () => {
     expect(container.querySelector('option')?.textContent).toContain('Model One');
   });
 
-  it('commits the chosen model to its owning provider, not just the top level', async () => {
+  it('commits the chosen model as a whole owner-tagged option', async () => {
     // Writing `settings.model` alone is reverted by the owning provider's
-    // projection when several providers are enabled — see setDefaultModel.
+    // projection when several providers are enabled — see setDefaultModel. The
+    // component hands the option over; the store performs the owner-aware save.
     const store = makeStore({
       enabledProviderIds: ['alpha'],
       modelOptions: [
@@ -124,7 +126,7 @@ describe('DefaultsStep', () => {
         { providerId: 'alpha', value: 'm2', label: 'Model Two', group: 'Alpha' },
       ],
     });
-    const { container, plugin } = mount(DefaultsStep, store, makePlugin({ model: 'm1' }));
+    const { container } = mount(DefaultsStep, store, makePlugin({ model: 'm1' }));
 
     await fireEvent.update(
       container.querySelector('[data-field="model"]')!,
@@ -132,7 +134,9 @@ describe('DefaultsStep', () => {
     );
     await flushMicrotasks();
 
-    expect(setDefaultModel).toHaveBeenCalledWith(plugin, 'm2', 'alpha');
+    expect(store.selectModel).toHaveBeenCalledWith(
+      expect.objectContaining({ providerId: 'alpha', value: 'm2' }),
+    );
   });
 
   it('commits a shared model id to the provider whose option was picked', async () => {
@@ -146,7 +150,7 @@ describe('DefaultsStep', () => {
         { providerId: 'beta', value: 'shared', label: 'Shared', group: 'Beta' },
       ],
     });
-    const { container, plugin } = mount(DefaultsStep, store, makePlugin({ model: 'shared' }));
+    const { container } = mount(DefaultsStep, store, makePlugin({ model: 'shared' }));
 
     // Both options survive — no dedup-by-value collapsing them into one entry.
     expect(container.querySelectorAll('[data-field="model"] option')).toHaveLength(2);
@@ -157,7 +161,9 @@ describe('DefaultsStep', () => {
     );
     await flushMicrotasks();
 
-    expect(setDefaultModel).toHaveBeenCalledWith(plugin, 'shared', 'beta');
+    expect(store.selectModel).toHaveBeenCalledWith(
+      expect.objectContaining({ providerId: 'beta', value: 'shared' }),
+    );
   });
 
   it('performs exactly one save for a model pick', async () => {
@@ -179,9 +185,10 @@ describe('DefaultsStep', () => {
     );
     await flushMicrotasks();
 
-    // The only persistence is setDefaultModel's own (mocked here), so the
-    // component itself must not have written settings.
+    // The only persistence is the store action's own, so the component itself
+    // must not have written settings.
     expect(plugin.saveSettings).not.toHaveBeenCalled();
+    expect(store.selectModel).toHaveBeenCalledTimes(1);
   });
 
   it('states the approval default instead of offering a choice that would not persist', () => {

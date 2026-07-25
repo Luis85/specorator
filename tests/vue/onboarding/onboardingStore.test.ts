@@ -36,6 +36,7 @@ vi.mock('@/features/onboarding/onboardingSettings', async (importOriginal) => {
   return {
     ...actual,
     setProviderEnabled: vi.fn(async () => {}),
+    setDefaultModel: vi.fn(async () => {}),
     setProviderCliPathForHost: vi.fn(async () => {}),
     setFolderSetting: vi.fn(async () => {}),
     completeOnboarding: vi.fn(async () => {}),
@@ -49,6 +50,7 @@ import {
   completeOnboarding,
   ensureOnboardingFolders,
   readOnboardingFolders,
+  setDefaultModel,
   setFolderSetting,
   setProviderCliPathForHost,
   setProviderEnabled,
@@ -104,11 +106,17 @@ function makeView() {
 const views = [makeView()];
 const plugin = { settings: {}, app: {}, getAllViews: () => views } as never;
 
+/** A plugin whose settings bag the test can mutate, as the real writers do. */
+function makePlugin(settings: Record<string, unknown>) {
+  return { settings, app: {}, getAllViews: () => views } as never;
+}
+
 beforeEach(() => {
   setActivePinia(createPinia());
   vi.mocked(detectProviderClis).mockReset().mockReturnValue([]);
   vi.mocked(runCliInstall).mockReset();
-  vi.mocked(setProviderEnabled).mockClear();
+  vi.mocked(setProviderEnabled).mockReset().mockResolvedValue(undefined);
+  vi.mocked(setDefaultModel).mockReset().mockResolvedValue(undefined);
   vi.mocked(setProviderCliPathForHost).mockClear();
   vi.mocked(completeOnboarding).mockClear();
   vi.mocked(ensureOnboardingFolders).mockReset().mockResolvedValue([]);
@@ -345,6 +353,56 @@ describe('onboarding store', () => {
 
     expect(store.folderError).toBeNull();
     expect(store.folders[0].exists).toBe(true);
+  });
+
+  it('mirrors the preferred provider into reactive state on init', () => {
+    const store = useOnboardingStore();
+
+    store.init(makePlugin({ settingsProvider: 'alpha' }));
+
+    expect(store.settingsProviderId).toBe('alpha');
+  });
+
+  it('re-reads the preferred provider after a model pick', async () => {
+    // A computed reading `plugin.settings` (a plain object) has NO reactive
+    // dependency, so it caches its first answer for the life of the store: with
+    // two providers sharing a model id, the selector kept resolving that id
+    // against the OLD owner and the pick looked like it snapped back.
+    const settings: Record<string, unknown> = { settingsProvider: 'alpha' };
+    vi.mocked(setDefaultModel).mockImplementation(async (_plugin, _model, owner) => {
+      settings.settingsProvider = owner;
+    });
+    const store = useOnboardingStore();
+    store.init(makePlugin(settings));
+    // Read it first, as the rendered selector does — a computed only caches once
+    // it has been evaluated, so the staleness needs that first read to appear.
+    expect(store.settingsProviderId).toBe('alpha');
+
+    await store.selectModel({
+      providerId: 'beta',
+      value: 'shared',
+      label: 'Shared',
+      group: 'Name:beta',
+    });
+
+    expect(setDefaultModel).toHaveBeenCalledWith(expect.anything(), 'shared', 'beta');
+    expect(store.settingsProviderId).toBe('beta');
+  });
+
+  it('re-reads the preferred provider after a provider toggle', async () => {
+    // `setProviderEnabled` re-projects the selection, so enabling a provider
+    // moves it too — same staleness, different trigger.
+    const settings: Record<string, unknown> = { settingsProvider: 'alpha' };
+    vi.mocked(setProviderEnabled).mockImplementation(async (_plugin, providerId) => {
+      settings.settingsProvider = providerId;
+    });
+    const store = useOnboardingStore();
+    store.init(makePlugin(settings));
+    expect(store.settingsProviderId).toBe('alpha');
+
+    await store.setEnabled('beta', true);
+
+    expect(store.settingsProviderId).toBe('beta');
   });
 
   it('finish marks the flow complete', async () => {

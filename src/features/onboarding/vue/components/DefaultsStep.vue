@@ -3,7 +3,7 @@ import { computed, inject, ref } from 'vue';
 
 import { t } from '@/i18n/i18n';
 
-import { readAppSetting, setDefaultModel } from '../../onboardingSettings';
+import { readAppSetting } from '../../onboardingSettings';
 import { PLUGIN_KEY } from '../onboardingKeys';
 import { useOnboardingStore } from '../stores/onboardingStore';
 import { useAppSetting } from '../useAppSetting';
@@ -21,7 +21,7 @@ const [autoTitles, setAutoTitles] = useAppSetting<boolean>(plugin, 'enableAutoTi
 // and a second concurrent save is both wasteful and unordered — `saveSettings`
 // re-runs `persistProjectedProviderState` for the CURRENT provider, so a save
 // fired before the owner switch can stamp the pick onto the outgoing provider's
-// projection. This ref is display-only; `setDefaultModel` performs the single,
+// projection. This ref is display-only; `store.selectModel` performs the single,
 // owner-aware save.
 const currentModel = readAppSetting(plugin, 'model');
 const model = ref(typeof currentModel === 'string' ? currentModel : 'haiku');
@@ -53,15 +53,16 @@ const selectedKey = computed(() => {
 });
 
 /**
- * Commits the pick to the provider that OWNS it, taken from the selected option
- * rather than re-inferred from the model id — `resolveProviderForModel` prefers a
- * non-current owner, so a shared id could land on the wrong provider.
+ * Hands the whole selected OPTION to the store, which commits it to the provider
+ * that owns it — the owner is never re-inferred from the model id, because
+ * `resolveProviderForModel` prefers a non-current owner and a shared id could
+ * land on the wrong provider.
  */
 async function setModel(key: string): Promise<void> {
   const option = store.modelOptions.find((candidate) => optionKey(candidate) === key);
   if (!option) return;
   model.value = option.value;
-  await setDefaultModel(plugin, option.value, option.providerId);
+  await store.selectModel(option);
 }
 </script>
 

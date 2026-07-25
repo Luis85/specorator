@@ -90,6 +90,20 @@ surfaces to use the island pattern; this is one.
   shows live state. Corollary: the step only renders controls whose value the app
   actually keeps — see the approval note below. Consequence: `useAppSetting` reads once at mount and writes
   on change — it does not watch `plugin.settings` (a plain non-reactive object).
+  Because persist-on-touch means two writes can overlap (two provider cards
+  toggled in a row), `SpecoratorSettingsStorage.save` chains its adapter writes:
+  each call still serializes its own snapshot synchronously, but an earlier write
+  can no longer land after a later one and leave the file holding a value the
+  user already changed. That fix is at the storage layer, so every settings
+  surface gets it.
+- **State the store derives from settings is mirrored, not computed.** Anything
+  read out of `plugin.settings` for the UI to react to (`settingsProviderId`)
+  lives in a `ref` refreshed by the actions that move it — a `computed` over that
+  plain object registers no dependency and caches its first answer for the life
+  of the store. That is also why the model commit is a store action
+  (`selectModel`) rather than a direct `setDefaultModel` call from the step: it
+  keeps the write and the re-read in one place, and it was the one settings write
+  a component made on its own.
 - **Enabling or disabling a provider re-projects the selection.** `setProviderEnabled`
   runs `normalizeProviderSelection` + `projectProviderState` before saving,
   because otherwise the provider selection and the top-level model disagree: a
