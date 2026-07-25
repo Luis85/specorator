@@ -110,12 +110,14 @@ export function runCliInstall(
   const args = [...method.argv.args];
   const spawnPlan = isWindowsBatchShim(resolvedCommand)
     ? wrapWindowsCmdShim(resolvedCommand, args)
-    : { command: resolvedCommand, args, windowsVerbatimArguments: undefined };
+    : { command: resolvedCommand, args, windowsVerbatimArguments: undefined, env: {} };
 
   const child = spawn(spawnPlan.command, spawnPlan.args, {
     env: buildFullSubprocessEnvironment({
       processEnv: process.env,
-      customEnv: {},
+      // The wrap moves any `%`-bearing value off the cmd.exe command line and
+      // into the environment; the command line references it from there.
+      customEnv: spawnPlan.env,
       pathOverride: enhancedPath,
     }),
     windowsVerbatimArguments: spawnPlan.windowsVerbatimArguments,

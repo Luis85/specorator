@@ -73,6 +73,25 @@ describe('startOpencodeAcpProcess', () => {
     expect((spec.args as string[])[3]).toContain('acp');
   });
 
+  it('keeps a percent in the vault path literal, via the environment', () => {
+    // `%` is legal in a Windows path, and cmd.exe expands `%NAME%` on its command
+    // line even inside quotes — with no command-line escape available. Left
+    // inline, `--cwd` would name a different directory and OpenCode would work in
+    // the wrong workspace (or fail to start).
+    onPlatform('win32', () => startOpencodeAcpProcess({
+      command: 'C:\\npm\\opencode.cmd',
+      cwd: 'C:\\notes\\%TEMP%\\vault',
+      env: { EXISTING: 'kept' },
+    }));
+
+    const spec = constructed[0];
+    const env = spec.env as Record<string, string>;
+    expect((spec.args as string[])[3]).not.toContain('%TEMP%');
+    expect(Object.values(env)).toContain('--cwd=C:\\notes\\%TEMP%\\vault');
+    // The launch env is merged, not replaced.
+    expect(env.EXISTING).toBe('kept');
+  });
+
   it('resolves a BARE command on Windows before wrapping it', () => {
     // No pin: the runtime falls back to `opencode`, whose Windows entry point is
     // an npm `.cmd`. Neither libuv nor CreateProcess can execute a batch file, and

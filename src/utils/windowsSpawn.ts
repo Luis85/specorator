@@ -27,6 +27,11 @@ export interface WindowsCmdShim {
   command: string;
   args: string[];
   windowsVerbatimArguments: true;
+  /**
+   * Entries the child's environment MUST carry — the command line references
+   * them. Empty unless some value contained `%`; see {@link wrapWindowsCmdShim}.
+   */
+  env: Record<string, string>;
 }
 
 /**
@@ -38,6 +43,12 @@ export interface BatchAwareSpawnSpec {
   command: string;
   args: string[];
   windowsVerbatimArguments?: boolean;
+  /**
+   * Entries the child's environment must carry when the command was wrapped
+   * through cmd.exe. Always present (empty when nothing needed indirection), so
+   * a caller cannot silently skip it by never seeing the field.
+   */
+  env: Record<string, string>;
 }
 
 /**
@@ -58,7 +69,7 @@ export function resolveBatchAwareSpawnSpec(
 ): BatchAwareSpawnSpec {
   const trimmed = command.trim();
   if (!trimmed || platform !== 'win32') {
-    return { command, args };
+    return { command, args, env: {} };
   }
 
   const lower = trimmed.toLowerCase();
@@ -66,17 +77,49 @@ export function resolveBatchAwareSpawnSpec(
     return wrapWindowsCmdShim(trimmed, args);
   }
 
-  return { command, args };
+  return { command, args, env: {} };
 }
 
+/**
+ * Prefix for the env entries that carry a `%`-bearing value out of the command
+ * line. Namespaced so it cannot collide with anything the CLI reads.
+ */
+const CMD_INDIRECT_ARG_PREFIX = 'SPECORATOR_CMD_ARG_';
+
 export function wrapWindowsCmdShim(command: string, args: readonly string[]): WindowsCmdShim {
+  const env: Record<string, string> = {};
   const shellCommand = [command, ...args]
-    .map((value) => quoteWindowsShellArgument(value))
+    .map((value, index) => indirectIfVolatile(value, index, env))
     .join(' ');
 
   return {
     command: process.env.ComSpec || process.env.comspec || 'cmd.exe',
     args: ['/d', '/s', '/c', `"${shellCommand}"`],
     windowsVerbatimArguments: true,
+    env,
   };
+}
+
+/**
+ * Keeps a `%`-bearing value literal by moving it OFF the command line.
+ *
+ * cmd.exe expands `%NAME%` on its command line even inside double quotes, and
+ * quoting cannot stop it — so a vault path like `C:\notes\%TEMP%\vault` reaches
+ * the CLI as a different directory, and the agent silently works in the wrong
+ * workspace. Escaping is not an option either: `%%` is a batch-FILE escape, not a
+ * command-line one.
+ *
+ * So the value travels in the environment instead, and the command line carries
+ * only a reference to it. Expansion is a single left-to-right pass — cmd does not
+ * re-scan what it substituted — so whatever `%` sequences the value contains
+ * arrive intact. Values without `%` are quoted inline exactly as before, which
+ * keeps the common case byte-identical.
+ */
+function indirectIfVolatile(value: string, index: number, env: Record<string, string>): string {
+  if (!value.includes('%')) {
+    return quoteWindowsShellArgument(value);
+  }
+  const name = `${CMD_INDIRECT_ARG_PREFIX}${index}`;
+  env[name] = value;
+  return `"%${name}%"`;
 }

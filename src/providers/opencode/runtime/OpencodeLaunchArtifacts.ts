@@ -283,7 +283,10 @@ export function startOpencodeAcpProcess(params: {
     args: spawnSpec.args,
     command: spawnSpec.command,
     cwd: params.cwd,
-    env: params.env,
+    // `spawnSpec.env` carries any `%`-bearing value (a vault path can hold one)
+    // that the wrap moved off the cmd.exe command line, which expands `%NAME%`
+    // even inside quotes. Dropping it would point `--cwd` at an unset variable.
+    env: { ...params.env, ...spawnSpec.env },
     windowsVerbatimArguments: spawnSpec.windowsVerbatimArguments,
   });
   process.start();

@@ -22,9 +22,13 @@ interface ResolvedCodexSpawnSpec {
 function resolveWindowsSpawnSpec(
   launchSpec: Pick<CodexLaunchSpec, 'command' | 'args' | 'spawnCwd' | 'env'>,
 ): ResolvedCodexSpawnSpec {
+  const spec = resolveBatchAwareSpawnSpec(launchSpec.command, launchSpec.args);
   return {
-    ...resolveBatchAwareSpawnSpec(launchSpec.command, launchSpec.args),
-    env: launchSpec.env,
+    ...spec,
+    // The wrap moves any `%`-bearing value off the cmd.exe command line and into
+    // the environment, so dropping `spec.env` would leave the command line
+    // referencing variables the child never receives.
+    env: { ...launchSpec.env, ...spec.env },
   };
 }
 

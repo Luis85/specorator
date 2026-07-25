@@ -61,6 +61,38 @@ describe('wrapWindowsCmdShim', () => {
     expect(spec.args[3]).toBe('""C:\\Program Files\\cli.cmd" plain "a b""');
   });
 
+  it('carries a %-bearing value in the environment, not on the command line', () => {
+    // cmd.exe expands `%NAME%` on its command line even inside double quotes, and
+    // there is no command-line escape for it (`%%` is a batch-FILE escape). A
+    // vault path like `C:\\notes\\%TEMP%\\vault` would reach the CLI as a
+    // different directory and the agent would work in the wrong workspace.
+    process.env.ComSpec = 'cmd.exe';
+    const spec = wrapWindowsCmdShim('cli.cmd', ['--cwd=C:\\notes\\%TEMP%\\vault']);
+
+    expect(spec.args[3]).toBe('"cli.cmd "%SPECORATOR_CMD_ARG_1%""');
+    // Expansion is a single pass, so the `%TEMP%` inside the VALUE is not
+    // re-scanned — it arrives literally.
+    expect(spec.env).toEqual({ SPECORATOR_CMD_ARG_1: '--cwd=C:\\notes\\%TEMP%\\vault' });
+  });
+
+  it('indirects the command itself when IT holds a percent', () => {
+    process.env.ComSpec = 'cmd.exe';
+    const spec = wrapWindowsCmdShim('C:\\%APPDATA%\\cli.cmd', ['plain']);
+
+    expect(spec.args[3]).toBe('""%SPECORATOR_CMD_ARG_0%" plain"');
+    expect(spec.env.SPECORATOR_CMD_ARG_0).toBe('C:\\%APPDATA%\\cli.cmd');
+  });
+
+  it('leaves the common case byte-identical — no percent, no environment', () => {
+    // The indirection must not become the default path: every existing Windows
+    // launch has to keep spawning exactly the command line it did before.
+    process.env.ComSpec = 'cmd.exe';
+    const spec = wrapWindowsCmdShim('C:\\Program Files\\cli.cmd', ['plain', 'a b']);
+
+    expect(spec.args[3]).toBe('""C:\\Program Files\\cli.cmd" plain "a b""');
+    expect(spec.env).toEqual({});
+  });
+
   it('falls back to cmd.exe when ComSpec is unset', () => {
     delete process.env.ComSpec;
     delete process.env.comspec;
