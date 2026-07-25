@@ -146,6 +146,41 @@ function classifyResolvedPath(
     : { kind: 'found' };
 }
 
+/** The identity half of a detection, before anything is known about the binary. */
+type DetectionBase = Omit<
+  ProviderCliDetection,
+  'status' | 'cliPath' | 'unknownReason' | 'unusable'
+>;
+
+/**
+ * Turns ONE candidate path into the detection it justifies.
+ *
+ * Both ways a candidate arrives — the provider's resolver and the PATH probe —
+ * go through here, so a launchability rule cannot end up applying to only one of
+ * them. Every rule added so far was first written on the resolver branch alone
+ * and then had to be extended to the probe.
+ */
+function detectionForCandidate(
+  base: DetectionBase,
+  providerId: ProviderId,
+  candidate: string,
+  runtimePath: string | undefined,
+): ProviderCliDetection {
+  const verdict = classifyResolvedPath(providerId, candidate, runtimePath);
+  if (verdict.kind === 'found') {
+    return { ...base, status: 'found', cliPath: candidate };
+  }
+  if (verdict.kind === 'unusable') {
+    return {
+      ...base,
+      status: 'missing',
+      cliPath: null,
+      unusable: { path: candidate, reason: verdict.reason },
+    };
+  }
+  return { ...base, status: 'unknown', unknownReason: 'external-target', cliPath: null };
+}
+
 /**
  * The host-scoped pin `setProviderCliPathForHost` writes, read back through the
  * same generic provider-config shape so the editor can show and clear it.
@@ -200,12 +235,15 @@ function providerPathOverride(
  *   probe is the authoritative answer, not a fallback. That probe searches the
  *   provider's own runtime PATH, not just the host's.
  *
- * A resolved value is only `found` once it is confirmed to be a file this host
- * can run AND this provider's launch path accepts. One that exists but lacks
- * `+x`, or is a Windows batch shim under a provider that cannot spawn one, is
- * `missing` with the offending path and the reason named (`unusable`); one that
- * isn't a host file at all (Codex in WSL mode names a command inside the distro)
- * is `unknown`/`external-target` rather than a promise we can't check.
+ * Whichever way a candidate arrives — resolver or probe — it becomes a detection
+ * through `detectionForCandidate`, so the launchability rules apply to both. A
+ * candidate is only `found` once it is a file this host can run, with whatever
+ * interpreter it needs, and this provider's launch path accepts. One that exists
+ * but lacks `+x`, needs an unreachable Node, or is a Windows batch shim under a
+ * provider that cannot spawn one, is `missing` with the offending path and the
+ * reason named (`unusable`); one that isn't a host file at all (Codex in WSL mode
+ * names a command inside the distro) is `unknown`/`external-target` rather than a
+ * promise we can't check.
  *
  * `reset()` before probing: `CachedCliResolver` memoizes on a settings-derived
  * key, and an install changes no setting, so a cached `null` would otherwise
@@ -233,19 +271,7 @@ export function detectProviderCli(
     resolver.reset();
     const resolved = resolver.resolveFromSettings(settings);
     if (resolved) {
-      const verdict = classifyResolvedPath(providerId, resolved, runtimePath);
-      if (verdict.kind === 'found') {
-        return { ...base, status: 'found', cliPath: resolved };
-      }
-      if (verdict.kind === 'unusable') {
-        return {
-          ...base,
-          status: 'missing',
-          cliPath: null,
-          unusable: { path: resolved, reason: verdict.reason },
-        };
-      }
-      return { ...base, status: 'unknown', unknownReason: 'external-target', cliPath: null };
+      return detectionForCandidate(base, providerId, resolved, runtimePath);
     }
     if (!spawnsBareCommand) {
       return { ...base, status: 'missing', cliPath: null };
@@ -256,7 +282,7 @@ export function detectProviderCli(
 
   const onPath = findBinaryOnPath(binaryCandidates(providerId), runtimePath);
   if (onPath) {
-    return { ...base, status: 'found', cliPath: onPath };
+    return detectionForCandidate(base, providerId, onPath, runtimePath);
   }
   // Nothing found: `missing` only when a resolver also looked, so an
   // uninitialized workspace never hardens into a false negative.

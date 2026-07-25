@@ -171,6 +171,23 @@ describe('detectProviderCli', () => {
     });
   });
 
+  it('applies the launchability rules to a PATH hit, not just a resolver answer', () => {
+    // The bare-command shape (OpenCode) treats the probe as authoritative, so a
+    // rule that only guards the resolver branch would leave that whole provider
+    // shape reporting ready off an unlaunchable file. Every rule so far was first
+    // written on the resolver branch alone — hence one shared classification.
+    ProviderWorkspaceRegistry.setServices('det-path', { cliResolver: stubResolver(null) } as never);
+    jest.mocked(findBinaryOnPath).mockReturnValue('/usr/local/bin/pathcli');
+    jest.mocked(cliPathRequiresNode).mockReturnValue(true);
+    jest.mocked(findNodeExecutable).mockReturnValue(null);
+
+    expect(detectProviderCli(makePlugin(), 'det-path')).toMatchObject({
+      status: 'missing',
+      cliPath: null,
+      unusable: { path: '/usr/local/bin/pathcli', reason: 'missing-node' },
+    });
+  });
+
   it('still reports missing for a bare-command provider with nothing on PATH', () => {
     ProviderWorkspaceRegistry.setServices('det-path', { cliResolver: stubResolver(null) } as never);
 

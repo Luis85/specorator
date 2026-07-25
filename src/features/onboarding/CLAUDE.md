@@ -55,7 +55,7 @@ surfaces to use the island pattern; this is one.
   `unknown` is never downgraded to `missing` without an authoritative look —
   claiming a CLI is absent when we could not properly look is worse than
   admitting we don't know.
-  Three further rules keep `found` honest:
+  Further rules keep `found` honest:
   - **The probe searches the provider's RUNTIME PATH**, i.e. the shared +
     provider-scoped env text (`getRuntimeEnvironmentVariables`), because a CLI
     installed only under a provider-scoped `PATH=` override is genuinely
@@ -63,7 +63,12 @@ surfaces to use the island pattern; this is one.
     from settings, never `plugin.getResolvedEnvironmentVariables`: that resolves
     SecretStorage refs and warns about missing ones, which a probe that reruns on
     every card interaction must not do.
-  - **A resolved value is `found` only once it is confirmed to be a file this
+  - **Every candidate becomes a detection through `detectionForCandidate`**,
+    whether it came from the resolver or the PATH probe, so a launchability rule
+    cannot apply to only one of them. Each rule below was first written on the
+    resolver branch alone and then had to be extended to the probe — the shared
+    classification is what stops that repeating.
+  - **A candidate is `found` only once it is confirmed to be a file this
     host can run AND this provider's launch path accepts** (`classifyResolvedPath`).
     Two ways a real file is still `missing`, both carrying the path and a reason
     through `unusable` rather than a bare "not found" that sends the user hunting
