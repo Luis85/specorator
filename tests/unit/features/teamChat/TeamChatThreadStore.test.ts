@@ -113,6 +113,11 @@ function makeHarness(options: HarnessOptions = {}) {
     changed,
     events,
     conversationsById,
+    // Re-point an agent at a different provider between resolves, to drive a
+    // rotation sequence (e.g. A→B→A) against one live store.
+    setExpectedProvider: (agentId: string, provider: ProviderId): void => {
+      expectedByAgent.set(agentId, provider);
+    },
     readThreads: (): { version: number; rooms: Record<string, string> } | null => {
       const raw = files.get(THREADS_PATH);
       return raw ? (JSON.parse(raw) as { version: number; rooms: Record<string, string> }) : null;
@@ -309,6 +314,71 @@ describe('TeamChatThreadStore', () => {
       expect(h.createConversation).not.toHaveBeenCalled();
       expect(h.readThreads()).toEqual({ version: 1, rooms: { 'roster:a': 'orphan-codex' } });
       expect(h.changed).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  describe('adoption recovers a missing mapping, not a stale one (Round-26)', () => {
+    it('creates a fresh thread instead of resurrecting an archived same-provider DM across an A→B→A rotation', async () => {
+      // Agent X's DM is mapped to convo-A on provider A (claude), and convo-A stays
+      // discoverable as an orphan on A after it is rotated away — the exact conversation
+      // the buggy present-but-stale fall-through re-adopts on the return to A.
+      const convoA = conversationOn('convo-A', 'roster:x', 'claude');
+      const h = makeHarness({
+        seedFile: JSON.stringify({ version: 1, rooms: { 'roster:x': 'convo-A' } }),
+        existingConversations: [convoA],
+        adoptable: { 'roster:x': convoA },
+        expectedProvider: { 'roster:x': 'codex' }, // now pointed at B, so the first resolve rotates A→B
+      });
+
+      // A→B: the mapped A DM is stale (wrong provider) → rotate to a fresh B conversation.
+      const bId = await h.store.resolveOrCreate('roster:x');
+      expect(bId).not.toBe('convo-A');
+      expect(h.conversationsById.get(bId)?.providerId).toBe('codex');
+
+      // B→A: point the agent back at A. The mapped B DM is now stale and the archived A
+      // DM is adoptable on A — but a PRESENT-yet-stale mapping must create fresh, not adopt,
+      // or the old A transcript (and its still-open tab) is resurrected.
+      h.setExpectedProvider('roster:x', 'claude');
+      h.createConversation.mockClear();
+
+      const aId = await h.store.resolveOrCreate('roster:x');
+
+      expect(aId).not.toBe('convo-A'); // did NOT resurrect the archived A DM
+      expect(aId).not.toBe(bId); // a third, fresh thread — not the B DM either
+      expect(h.conversationsById.get(aId)?.providerId).toBe('claude'); // freshly created, back on A
+      expect(h.createConversation).toHaveBeenCalledTimes(1); // created for this step, not adopted
+      expect(h.readThreads()).toEqual({ version: 1, rooms: { 'roster:x': aId } });
+    });
+
+    it('creates a fresh thread when the mapping is present but its conversation was deleted, even though an orphan is adoptable', async () => {
+      // Mapping present but its conversation is gone (deleted → not usable), while a
+      // same-provider orphan is discoverable. Present-but-stale creates fresh; adoption
+      // is reserved for a MISSING mapping, so the orphan must NOT be adopted here.
+      const orphan = conversation('orphan-1', 'roster:a'); // on the expected provider (claude)
+      const h = makeHarness({
+        seedFile: JSON.stringify({ version: 1, rooms: { 'roster:a': 'deleted-id' } }),
+        adoptable: { 'roster:a': orphan },
+      });
+
+      const id = await h.store.resolveOrCreate('roster:a');
+
+      expect(id).not.toBe('deleted-id'); // the deleted mapping is not reused
+      expect(id).not.toBe('orphan-1'); // and the adoptable orphan is NOT adopted
+      expect(h.createConversation).toHaveBeenCalledTimes(1); // fresh create instead
+      expect(h.readThreads()).toEqual({ version: 1, rooms: { 'roster:a': id } });
+    });
+
+    it('still adopts a matching-provider orphan when there is no mapping at all', async () => {
+      // The complement of the two above: with NO mapping present, adoption is the
+      // correct missing-mapping recovery (a lost threads.json) and must be preserved.
+      const orphan = conversation('orphan-1', 'roster:a');
+      const h = makeHarness({ adoptable: { 'roster:a': orphan } });
+
+      const id = await h.store.resolveOrCreate('roster:a');
+
+      expect(id).toBe('orphan-1'); // adopted, not re-created
+      expect(h.createConversation).not.toHaveBeenCalled();
+      expect(h.readThreads()).toEqual({ version: 1, rooms: { 'roster:a': 'orphan-1' } });
     });
   });
 });

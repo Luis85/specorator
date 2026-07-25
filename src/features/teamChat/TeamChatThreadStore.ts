@@ -57,11 +57,15 @@ export class TeamChatThreadStore {
   constructor(private readonly deps: TeamChatThreadStoreDeps) {}
 
   /**
-   * Returns the conversation id for the agent's DM: the mapped id when it still
-   * exists AND runs on the agent's expected provider, else an adoptable orphan on
-   * that provider, else a freshly created conversation — creating and persisting
-   * at most once even under concurrent calls. A provider change rotates to a fresh
-   * conversation (spec §4); the old one is left orphaned, never deleted.
+   * Returns the conversation id for the agent's DM. A usable mapping (still exists
+   * AND runs on the agent's expected provider) is reused. Otherwise:
+   *  - mapping PRESENT but stale (wrong provider after a rotation, or deleted) →
+   *    a freshly created conversation. Adoption is deliberately skipped here so a
+   *    prior rotation's archived same-provider DM is not resurrected.
+   *  - mapping ABSENT (new agent, or a lost threads.json) → an adoptable orphan on
+   *    the expected provider if one exists, else a freshly created conversation.
+   * Creates and persists at most once even under concurrent calls. A provider change
+   * rotates to a fresh conversation (spec §4); the old one is left orphaned, never deleted.
    */
   async resolveOrCreate(agentId: string): Promise<string> {
     return this.serialize(() => this.resolveOrCreateInner(agentId));
@@ -88,11 +92,24 @@ export class TeamChatThreadStore {
     const mapped = rooms[key];
     if (mapped && this.deps.isConversationUsable(mapped, expectedProvider)) return mapped;
 
-    // Adopt an orphaned DM before creating, so a lost threads.json can't duplicate
-    // it — but only one already on the expected provider. Adopting the agent's
-    // OLD-provider DM here would instantly undo the rotation and it would never move.
-    const adoptable = this.deps.findAdoptable(agentId, expectedProvider);
-    const id = adoptable ? adoptable.id : (await this.deps.createConversation(agentId)).id;
+    // Adoption is a MISSING-mapping recovery mechanism (threads.json lost but the
+    // conversation still exists → adopt to avoid a duplicate). It must NOT run when a
+    // mapping is present but stale, or an A→B→A rotation resurrects an old transcript:
+    // returning to A, the mapped B DM is stale and findAdoptable would re-adopt the
+    // archived A DM the first rotation orphaned, instead of creating the required
+    // fresh A thread.
+    let id: string;
+    if (mapped) {
+      // Mapping PRESENT but stale — wrong provider after a rotation, or its
+      // conversation was deleted. Create fresh; never adopt.
+      id = (await this.deps.createConversation(agentId)).id;
+    } else {
+      // Mapping ABSENT — a new agent, or a lost threads.json. Recover by adopting a
+      // matching-provider orphan if one exists (scoping guards against re-adopting an
+      // old-provider DM), else create.
+      const adoptable = this.deps.findAdoptable(agentId, expectedProvider);
+      id = adoptable ? adoptable.id : (await this.deps.createConversation(agentId)).id;
+    }
 
     // Order matters — durable write, THEN commit the cache, THEN notify:
     //  - Write first so a rejecting writeAtomic (transient vault I/O) leaves
