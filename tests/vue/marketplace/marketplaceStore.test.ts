@@ -59,11 +59,16 @@ vi.mock('@/features/marketplace/MarketplaceCache', () => ({
   },
 }));
 
+// Skill installs live in their own module since the installer split; the store
+// imports from both, so both are mocked.
+vi.mock('@/features/marketplace/skillInstall', () => ({
+  installSkillItem: installSkillSpy,
+  isSkillInstalledAt: isSkillInstalledAtSpy,
+}));
+
 vi.mock('@/features/marketplace/MarketplaceInstaller', () => ({
   installMarketplaceItem: installSpy,
-  installSkillItem: installSkillSpy,
   isItemInstalled: isInstalledSpy,
-  isSkillInstalledAt: isSkillInstalledAtSpy,
   // Faithful stand-in: refreshInstalled uses this to precompute the agent key set
   // (roster ids + catalog ids). Kept real so an agent-item test can't silently
   // fall through the try/catch to an empty set.
@@ -225,13 +230,14 @@ describe('marketplaceStore install', () => {
   it('installs the passed (reviewed) body with no network request of its own', async () => {
     const store = useMarketplaceStore();
     store.init(fakePlugin(true));
-    const outcome = await store.install(item, 'REVIEWED BODY');
-    expect(outcome).toBe('installed');
+    const result = await store.install(item, 'REVIEWED BODY');
+    expect(result.outcome).toBe('installed');
     expect(installSpy).toHaveBeenCalledWith(
       item,
       'REVIEWED BODY',
       expect.any(Object),
       expect.any(Number),
+      { boundSkills: [] }, // a standalone item grants no package skills
     );
     // The reviewed body is written verbatim — install never re-fetches.
     expect(fetchBodySpy).not.toHaveBeenCalled();
@@ -522,8 +528,8 @@ describe('marketplaceStore skill install', () => {
     const plugin = fakePlugin(true);
     store.init(plugin);
     mockSkillSource('SKILL BODY');
-    const outcome = await store.install(skillItem, 'SKILL BODY', { provider: 'codex', scope: 'user' });
-    expect(outcome).toBe('installed');
+    const result = await store.install(skillItem, 'SKILL BODY', { provider: 'codex', scope: 'user' });
+    expect(result.outcome).toBe('installed');
 
     // Supporting files are fetched, and the marker is re-fetched to verify it hasn't
     // drifted since preview — but the reviewed SKILL.md body is what gets written.
@@ -583,8 +589,8 @@ describe('marketplaceStore skill install', () => {
     const markerOnly: MarketplaceItem = { ...skillItem, files: ['skills/project-setup/SKILL.md'] };
     const store = useMarketplaceStore();
     store.init(fakePlugin(true));
-    const outcome = await store.install(markerOnly, 'SKILL BODY', { provider: 'claude', scope: 'project' });
-    expect(outcome).toBe('installed');
+    const result = await store.install(markerOnly, 'SKILL BODY', { provider: 'claude', scope: 'project' });
+    expect(result.outcome).toBe('installed');
     // A marker-only skill has no supporting files, so there's no hybrid to guard
     // against — the reviewed body is written verbatim with no network request at all.
     expect(fetchBodySpy).not.toHaveBeenCalled();
@@ -621,8 +627,8 @@ describe('marketplaceStore skill install', () => {
     await new Promise((resolve) => setTimeout(resolve)); // let the first reach its held write
     expect(startedSecond()).toBe(false); // queued behind the first, not racing it
     finishFirst();
-    expect(await first).toBe('installed');
-    expect(await second).toBe('installed');
+    expect((await first).outcome).toBe('installed');
+    expect((await second).outcome).toBe('installed');
     expect(startedSecond()).toBe(true); // it ran only after the first finished
   });
 
@@ -738,8 +744,8 @@ describe('marketplaceStore skill install', () => {
     const store = useMarketplaceStore();
     store.init(fakePlugin(true));
     mockSkillSource('SKILL BODY');
-    const outcome = await store.install(skillItem, 'SKILL BODY', { provider: 'claude', scope: 'project' });
-    expect(outcome).toBe('installed'); // project scope is unaffected by the user-scope gate
+    const result = await store.install(skillItem, 'SKILL BODY', { provider: 'claude', scope: 'project' });
+    expect(result.outcome).toBe('installed'); // project scope is unaffected by the user-scope gate
     expect(installSkillSpy).toHaveBeenCalled();
   });
 
@@ -871,8 +877,8 @@ describe('marketplaceStore skill install', () => {
     isSkillInstalledAtSpy.mockResolvedValue(true); // preflight: already installed here
     const store = useMarketplaceStore();
     store.init(fakePlugin(true));
-    const outcome = await store.install(skillItem, 'SKILL BODY', { provider: 'claude', scope: 'project' });
-    expect(outcome).toBe('skipped');
+    const result = await store.install(skillItem, 'SKILL BODY', { provider: 'claude', scope: 'project' });
+    expect(result.outcome).toBe('skipped');
     expect(fetchBodySpy).not.toHaveBeenCalled(); // no needless folder download
     expect(installSkillSpy).not.toHaveBeenCalled(); // installer not reached
   });
@@ -914,5 +920,167 @@ describe('marketplaceStore skill install', () => {
     ).rejects.toThrow(/disabled/i);
     expect(calls).toBeLessThan(8); // not every file was fetched — later ones were blocked
     expect(installSkillSpy).not.toHaveBeenCalled();
+  });
+});
+
+describe('marketplaceStore package install', () => {
+  const briefSkill: MarketplaceItem = {
+    id: 'skills/project-brief',
+    type: 'skill',
+    name: 'project-brief',
+    description: 'd',
+    path: 'skills/project-brief/SKILL.md',
+    files: ['skills/project-brief/SKILL.md'],
+    tags: [],
+  };
+  const raidSkill: MarketplaceItem = { ...briefSkill, id: 'skills/raid-log', name: 'raid-log', path: 'skills/raid-log/SKILL.md', files: ['skills/raid-log/SKILL.md'] };
+  const pmAgent: MarketplaceItem = {
+    id: 'agents/project-manager',
+    type: 'agent',
+    name: 'Project Manager',
+    description: 'd',
+    path: 'agents/project-manager.md',
+    tags: [],
+    requires: ['skills/project-brief', 'skills/raid-log'],
+  };
+  const packageManifest: MarketplaceManifest = {
+    schemaVersion: 1,
+    catalog: 'specorator-marketplace',
+    count: 3,
+    items: [pmAgent, briefSkill, raidSkill],
+  };
+  const target = { provider: 'claude', scope: 'project' } as const;
+
+  beforeEach(() => {
+    setActivePinia(createPinia());
+    vi.clearAllMocks();
+    installSpy.mockResolvedValue('installed');
+    installSkillSpy.mockResolvedValue('installed');
+    isSkillInstalledAtSpy.mockResolvedValue(false);
+    isInstalledSpy.mockResolvedValue(false);
+    fetchIndexSpy.mockResolvedValue(packageManifest);
+    fetchBodySpy.mockImplementation(async (repoPath: string) => `BODY:${repoPath}`);
+    refreshCatalogSpy.mockResolvedValue(undefined);
+    installsUserScopeSpy.mockReturnValue(true);
+    cacheWrite.mockResolvedValue(undefined);
+    cacheRead.mockResolvedValue(null);
+  });
+
+  async function loadedStore() {
+    const store = useMarketplaceStore();
+    store.init(fakePlugin(true));
+    await store.load();
+    return store;
+  }
+
+  it('installs the required skills before the agent, and grants them to it', async () => {
+    const store = await loadedStore();
+    const result = await store.install(pmAgent, 'AGENT BODY', target);
+
+    expect(installSkillSpy).toHaveBeenCalledTimes(2);
+    expect(installSkillSpy.mock.calls.map((c) => (c[0] as MarketplaceItem).id)).toEqual([
+      'skills/project-brief',
+      'skills/raid-log',
+    ]);
+    // The agent is written last, with the package's skills bound by name.
+    expect(installSpy).toHaveBeenCalledWith(pmAgent, 'AGENT BODY', expect.any(Object), expect.any(Number), {
+      boundSkills: ['project-brief', 'raid-log'],
+    });
+    expect(result).toMatchObject({ outcome: 'installed', installed: 2, skipped: 0 });
+    // Every member is marked installed, so the badges update without a rescan.
+    expect(store.installedIds.has('agents/project-manager')).toBe(true);
+    expect(store.installedIds.has('skills/project-brief')).toBe(true);
+  });
+
+  it('counts already-present dependencies as skipped instead of rewriting them', async () => {
+    const store = await loadedStore();
+    installSkillSpy.mockResolvedValueOnce('skipped');
+    const result = await store.install(pmAgent, 'AGENT BODY', target);
+    expect(result).toMatchObject({ installed: 1, skipped: 1 });
+  });
+
+  it('refuses the whole package when a dependency is absent from the catalog', async () => {
+    fetchIndexSpy.mockResolvedValue({ ...packageManifest, count: 1, items: [pmAgent] });
+    const store = await loadedStore();
+    await expect(store.install(pmAgent, 'AGENT BODY', target)).rejects.toThrow(/not in this catalog/);
+    // Nothing is written — an agent bound to skills that were never fetched is
+    // worse than no install at all.
+    expect(installSpy).not.toHaveBeenCalled();
+    expect(installSkillSpy).not.toHaveBeenCalled();
+  });
+
+  it('fetches each dependency body from the source the install committed to', async () => {
+    const store = await loadedStore();
+    await store.install(pmAgent, 'AGENT BODY', target);
+    // Dependency SKILL.md bodies are fetched (they are listed, not previewed);
+    // the agent's reviewed body is never re-fetched.
+    expect(fetchBodySpy).toHaveBeenCalledWith('skills/project-brief/SKILL.md');
+    expect(fetchBodySpy).not.toHaveBeenCalledWith('agents/project-manager.md');
+    for (const call of clientCtor.mock.calls) expect(call[0]).toBe(store.source);
+  });
+});
+
+describe('marketplaceStore package source pinning', () => {
+  const briefSkill: MarketplaceItem = {
+    id: 'skills/project-brief',
+    type: 'skill',
+    name: 'project-brief',
+    description: 'd',
+    path: 'skills/project-brief/SKILL.md',
+    files: ['skills/project-brief/SKILL.md'],
+    tags: [],
+  };
+  const pmAgent: MarketplaceItem = {
+    id: 'agents/project-manager',
+    type: 'agent',
+    name: 'Project Manager',
+    description: 'd',
+    path: 'agents/project-manager.md',
+    tags: [],
+    requires: ['skills/project-brief'],
+  };
+  const packageManifest: MarketplaceManifest = {
+    schemaVersion: 1,
+    catalog: 'specorator-marketplace',
+    count: 2,
+    items: [pmAgent, briefSkill],
+  };
+
+  beforeEach(() => {
+    setActivePinia(createPinia());
+    vi.clearAllMocks();
+    installSpy.mockResolvedValue('installed');
+    installSkillSpy.mockResolvedValue('installed');
+    isSkillInstalledAtSpy.mockResolvedValue(false);
+    isInstalledSpy.mockResolvedValue(false);
+    fetchIndexSpy.mockResolvedValue(packageManifest);
+    fetchBodySpy.mockImplementation(async (p: string) => `BODY:${p}`);
+    refreshCatalogSpy.mockResolvedValue(undefined);
+    installsUserScopeSpy.mockReturnValue(true);
+    cacheWrite.mockResolvedValue(undefined);
+    cacheRead.mockResolvedValue(null);
+  });
+
+  it('stamps the source the install began at, even when another leaf reloads mid-package', async () => {
+    const p = fakePlugin(true);
+    p.settings.marketplaceSourceUrl = 'https://a.example/';
+    const store = useMarketplaceStore();
+    store.init(p);
+    await store.load();
+
+    // A package awaits its dependencies before writing the agent — a real window
+    // in which another leaf can switch the catalog. Simulate that switch inside it.
+    installSkillSpy.mockImplementation(async () => {
+      p.settings.marketplaceSourceUrl = 'https://b.example/';
+      await store.load();
+      return 'installed';
+    });
+    await store.install(pmAgent, 'AGENT BODY', { provider: 'claude', scope: 'project' });
+
+    expect(store.source).toBe('https://b.example/'); // the catalog really did switch
+    // …but the agent's provenance stays bound to the catalog its body came from,
+    // so B's reused ids can't satisfy an installed check for an A-sourced agent.
+    const deps = installSpy.mock.calls.at(-1)?.[2] as { catalogUrl: string };
+    expect(deps.catalogUrl).toBe('https://a.example/');
   });
 });

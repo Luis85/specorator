@@ -178,3 +178,192 @@ describe('MarketplaceDetail — skill install panel', () => {
     await screen.findByRole('button', { name: 'Install' }); // button flips back, no reopen needed
   });
 });
+
+describe('MarketplaceDetail packages', () => {
+  const brief: MarketplaceItem = {
+    id: 'skills/project-brief',
+    type: 'skill',
+    name: 'project-brief',
+    description: '',
+    path: 'skills/project-brief/SKILL.md',
+    tags: [],
+  };
+  const raid: MarketplaceItem = { ...brief, id: 'skills/raid-log', name: 'raid-log', path: 'skills/raid-log/SKILL.md' };
+  const agent = base({
+    id: 'agents/project-manager',
+    type: 'agent',
+    name: 'Project Manager',
+    path: 'agents/project-manager.md',
+    requires: ['skills/project-brief', 'skills/raid-log'],
+  });
+  const typeLabels = { 'quick-action': 'Quick Action', agent: 'Agent', loop: 'Loop', template: 'Template', skill: 'Skill' };
+
+  function renderPackage(props: Record<string, unknown> = {}) {
+    return renderDetail({
+      item: agent,
+      typeLabel: 'Agent',
+      dependencies: [brief, raid],
+      typeLabels,
+      installedIds: new Set<string>(),
+      skillProviderOptions: [{ id: 'claude', label: 'Claude', userScope: true }],
+      ...props,
+    });
+  }
+
+  it('lists what comes with the item, marking what is already installed', () => {
+    renderPackage({ installedIds: new Set(['skills/raid-log']) });
+    expect(screen.getByText('Included with this install')).toBeTruthy();
+    expect(screen.getByText('project-brief')).toBeTruthy();
+    expect(screen.getByText('raid-log')).toBeTruthy();
+    // One "Installed" marker — for the dependency that is already present.
+    expect(screen.getAllByText('Installed')).toHaveLength(1);
+  });
+
+  it('asks for a skill root when the package brings skills, even though the item is an agent', async () => {
+    // The bundled skills need a provider + scope just like a standalone skill,
+    // so the target panel drives the install instead of the header button.
+    const { emitted } = renderPackage();
+    expect(screen.getByText('The skills in this package install into:')).toBeTruthy();
+    const install = screen.getByRole('button', { name: 'Install all (3)' }) as HTMLButtonElement;
+    expect(install.disabled).toBe(false);
+    await fireEvent.click(install);
+    expect(emitted().install?.[0]).toEqual([{ provider: 'claude', scope: 'project' }]);
+  });
+
+  it('keeps the plain header button for a package with no skills in it', () => {
+    const loopDep: MarketplaceItem = { ...brief, id: 'loops/x', type: 'loop', name: 'X', path: 'loops/x.md' };
+    renderPackage({ dependencies: [loopDep] });
+    expect(screen.queryByText('The skills in this package install into:')).toBeNull();
+    expect(screen.getByRole('button', { name: 'Install all (2)' })).toBeTruthy();
+  });
+
+  it('reads Installed only when the item AND every dependency is present', () => {
+    const loopDep: MarketplaceItem = { ...brief, id: 'loops/x', type: 'loop', name: 'X', path: 'loops/x.md' };
+    // Item installed but a dependency missing: Install stays offered so the
+    // package can be completed.
+    renderPackage({ dependencies: [loopDep], installed: true, installedIds: new Set(['agents/project-manager']) });
+    expect(screen.getByRole('button', { name: 'Install all (2)' })).toBeTruthy();
+  });
+
+  it('refuses install and explains when the package cannot be resolved', () => {
+    renderPackage({ packageError: 'This item requires skills/absent, which is not in this catalog.' });
+    expect(screen.getByRole('alert').textContent).toContain('skills/absent');
+    // The dependency list is replaced by the reason — there is nothing valid to list.
+    expect(screen.queryByText('Included with this install')).toBeNull();
+    expect((screen.getByRole('button', { name: 'Install all (3)' }) as HTMLButtonElement).disabled).toBe(true);
+  });
+});
+
+describe('MarketplaceDetail package target completeness', () => {
+  const brief: MarketplaceItem = {
+    id: 'skills/project-brief',
+    type: 'skill',
+    name: 'project-brief',
+    description: '',
+    path: 'skills/project-brief/SKILL.md',
+    tags: [],
+  };
+  const agent = base({
+    id: 'agents/project-manager',
+    type: 'agent',
+    name: 'Project Manager',
+    path: 'agents/project-manager.md',
+    requires: ['skills/project-brief'],
+  });
+
+  it('still offers the install when the package is present elsewhere but not at the selected target', async () => {
+    // Everything reads installed by the catalog-wide badge (it was installed into
+    // Claude), but the selected target (say Codex) doesn't have the skills — the
+    // button must stay live so the package can be installed there too.
+    const { findByRole } = renderDetail({
+      item: agent,
+      typeLabel: 'Agent',
+      dependencies: [brief],
+      installed: true,
+      installedIds: new Set(['agents/project-manager', 'skills/project-brief']),
+      typeLabels: { 'quick-action': 'Quick Action', agent: 'Agent', loop: 'Loop', template: 'Template', skill: 'Skill' },
+      skillProviderOptions: [{ id: 'claude', label: 'Claude', userScope: true }],
+      skillInstalledChecker: () => Promise.resolve(false),
+    });
+    const install = (await findByRole('button', { name: 'Install all (2)' })) as HTMLButtonElement;
+    expect(install.disabled).toBe(false);
+  });
+
+  it('reads "Installed here" once the selected target holds the whole package', async () => {
+    const { findByRole } = renderDetail({
+      item: agent,
+      typeLabel: 'Agent',
+      dependencies: [brief],
+      installed: true,
+      installedIds: new Set(['agents/project-manager', 'skills/project-brief']),
+      typeLabels: { 'quick-action': 'Quick Action', agent: 'Agent', loop: 'Loop', template: 'Template', skill: 'Skill' },
+      skillProviderOptions: [{ id: 'claude', label: 'Claude', userScope: true }],
+      skillInstalledChecker: () => Promise.resolve(true),
+    });
+    const install = (await findByRole('button', { name: 'Installed here' })) as HTMLButtonElement;
+    expect(install.disabled).toBe(true);
+  });
+});
+
+describe('MarketplaceDetail dependency badges follow the selected target', () => {
+  const brief: MarketplaceItem = {
+    id: 'skills/project-brief',
+    type: 'skill',
+    name: 'project-brief',
+    description: '',
+    path: 'skills/project-brief/SKILL.md',
+    tags: [],
+  };
+  const loop: MarketplaceItem = {
+    id: 'loops/x',
+    type: 'loop',
+    name: 'Loop X',
+    description: '',
+    path: 'loops/x.md',
+    tags: [],
+  };
+  const agent = base({
+    id: 'agents/project-manager',
+    type: 'agent',
+    name: 'Project Manager',
+    path: 'agents/project-manager.md',
+    requires: ['skills/project-brief', 'loops/x'],
+  });
+  const typeLabels = { 'quick-action': 'Quick Action', agent: 'Agent', loop: 'Loop', template: 'Template', skill: 'Skill' };
+
+  it('marks a dependency Installed only when it is present at the chosen target', async () => {
+    // The catalog-wide set says the skill is installed (it is — under a DIFFERENT
+    // provider). Scoped to the selected target it is not, and the list must say so,
+    // or it contradicts the target-scoped button right beside it.
+    const { queryAllByText, findByText } = renderDetail({
+      item: agent,
+      typeLabel: 'Agent',
+      dependencies: [brief, loop],
+      typeLabels,
+      installedIds: new Set(['skills/project-brief', 'loops/x']),
+      skillProviderOptions: [{ id: 'claude', label: 'Claude', userScope: true }],
+      skillInstalledChecker: () => Promise.resolve(false),
+      // The loop has one vault home, so it stays installed at every target; the
+      // skill is absent from the one selected.
+      memberInstalledAt: (member: MarketplaceItem) => Promise.resolve(member.type !== 'skill'),
+    });
+    await findByText('Loop X');
+    await vi.waitFor(() => {
+      // Exactly one "Installed" marker — the loop's. The skill's is gone.
+      expect(queryAllByText('Installed')).toHaveLength(1);
+    });
+  });
+
+  it('falls back to the catalog-wide set when no target is being chosen', async () => {
+    // A package with no skills shows no target panel, so there is no destination
+    // to scope to and "installed anywhere" is the honest answer.
+    const { queryAllByText } = renderDetail({
+      item: agent,
+      typeLabel: 'Agent',
+      dependencies: [loop],
+      typeLabels,
+      installedIds: new Set(['loops/x']),
+    });
+    expect(queryAllByText('Installed')).toHaveLength(1);
+  });
+});
