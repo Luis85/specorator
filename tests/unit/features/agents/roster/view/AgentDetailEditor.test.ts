@@ -271,3 +271,51 @@ describe('AgentDetailEditor voice + emoji fields', () => {
     expect(callbacks.onSaved).toHaveBeenCalledWith(expect.objectContaining({ avatarEmoji: '🧪' }));
   });
 });
+
+describe('AgentDetailEditor image field', () => {
+  it('persists an edited avatarImage path (trimmed)', async () => {
+    const { editor, callbacks, root } = await renderEditor(makeAgent());
+    const image = root.querySelector('.specorator-roster-appearance-image') as HTMLInputElement;
+    expect(image).toBeTruthy();
+    image.value = '  avatars/researcher.png  ';
+    image.dispatchEvent(new Event('input'));
+    expect(editor.isDirty()).toBe(true);
+    saveButton(root).click();
+    await flush();
+    expect(callbacks.onSaved).toHaveBeenCalledWith(
+      expect.objectContaining({ avatarImage: 'avatars/researcher.png' }),
+    );
+  });
+
+  it('seeds the field from an existing avatarImage', async () => {
+    const { root } = await renderEditor(makeAgent({ avatarImage: 'avatars/old.png' }));
+    const image = root.querySelector('.specorator-roster-appearance-image') as HTMLInputElement;
+    expect(image.value).toBe('avatars/old.png');
+  });
+
+  it('clearing the field text removes avatarImage', async () => {
+    const { editor, callbacks, root } = await renderEditor(makeAgent({ avatarImage: 'avatars/old.png' }));
+    const image = root.querySelector('.specorator-roster-appearance-image') as HTMLInputElement;
+    image.value = '';
+    image.dispatchEvent(new Event('input'));
+    expect(editor.isDirty()).toBe(true);
+    saveButton(root).click();
+    await flush();
+    const saved = (callbacks.onSaved as jest.Mock).mock.calls[0][0];
+    expect('avatarImage' in saved ? saved.avatarImage : undefined).toBeUndefined();
+  });
+
+  it('the clear affordance empties the field and removes avatarImage', async () => {
+    const { editor, callbacks, root } = await renderEditor(makeAgent({ avatarImage: 'avatars/old.png' }));
+    const clear = root.querySelector('.specorator-roster-appearance-image-clear') as HTMLButtonElement;
+    expect(clear).toBeTruthy();
+    clear.click();
+    const image = root.querySelector('.specorator-roster-appearance-image') as HTMLInputElement;
+    expect(image.value).toBe('');
+    expect(editor.isDirty()).toBe(true);
+    saveButton(root).click();
+    await flush();
+    const saved = (callbacks.onSaved as jest.Mock).mock.calls[0][0];
+    expect(saved.avatarImage).toBeUndefined();
+  });
+});

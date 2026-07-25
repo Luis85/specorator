@@ -53,6 +53,13 @@ describe('isRosterAgentDirty', () => {
     expect(isRosterAgentDirty(a, { ...a, avatarEmoji: '🔬' })).toBe(true);
     expect(isRosterAgentDirty({ ...a, avatarEmoji: '🔬' }, { ...a, avatarEmoji: '🔬' })).toBe(false);
   });
+
+  it('detects an avatarImage change', () => {
+    const a = base();
+    expect(isRosterAgentDirty(a, { ...a, avatarImage: 'avatars/a.png' })).toBe(true);
+    expect(isRosterAgentDirty({ ...a, avatarImage: 'avatars/a.png' }, { ...a, avatarImage: 'avatars/b.png' })).toBe(true);
+    expect(isRosterAgentDirty({ ...a, avatarImage: 'avatars/a.png' }, { ...a, avatarImage: 'avatars/a.png' })).toBe(false);
+  });
 });
 
 function agent(over: Partial<RosterAgent> = {}): RosterAgent {

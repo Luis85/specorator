@@ -1,11 +1,15 @@
 <script setup lang="ts">
-import { computed, ref, watchEffect } from 'vue';
+import { computed, inject, ref, watchEffect } from 'vue';
 
 import { t } from '../../../../../i18n/i18n';
 import { renderAgentAvatar } from '../../../../agents/agentAvatar';
+import { PLUGIN_KEY } from '../chatShellKeys';
 import type { ChatBoundAgent } from '../stores/chatShellStore';
 
 const props = defineProps<{ agent: ChatBoundAgent }>();
+// App resolves an image-avatar path to a vault resource URL; without it the chip
+// falls through to the persona's emoji/icon/initials.
+const plugin = inject(PLUGIN_KEY, null);
 
 // Mirrors SpecoratorView.syncBoundAgentChip's tooltip/aria-label: the core
 // "Chatting with X" message, mirrored into aria-label since `title` is
@@ -22,7 +26,7 @@ watchEffect(() => {
   const el = avatarHost.value;
   if (!el) return;
   el.textContent = '';
-  renderAgentAvatar(el, props.agent.persona, 18);
+  renderAgentAvatar(el, props.agent.persona, 18, plugin?.app);
 });
 </script>
 

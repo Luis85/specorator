@@ -185,6 +185,41 @@ export class AgentDetailEditor {
       this.refreshAvatar();
       this.updateDirty();
     });
+
+    this.renderImageControl(row);
+  }
+
+  /**
+   * Vault-image avatar control: a path input (highest avatar precedence) plus a
+   * clear affordance. No dedicated file picker exists in the repo, so this is a
+   * plain vault-relative path input; an unresolvable path just falls through the
+   * avatar precedence chain at render time.
+   */
+  private renderImageControl(row: HTMLElement): void {
+    const wrap = row.createDiv({ cls: 'specorator-roster-appearance-image-wrap' });
+    const image = wrap.createEl('input', { cls: 'specorator-roster-appearance-image', type: 'text' });
+    image.value = this.draft.avatarImage ?? '';
+    image.placeholder = t('agentRoster.avatarImagePlaceholder');
+    image.setAttribute('aria-label', t('agentRoster.avatarImage'));
+
+    const apply = (): void => {
+      this.draft.avatarImage = image.value.trim() || undefined;
+      this.refreshAvatar();
+      this.updateDirty();
+    };
+    image.addEventListener('input', apply);
+
+    // The visible '×' glyph is decorative and lives in CSS ::before (no keyed JS
+    // literal); the accessible name is the keyed aria-label.
+    const clear = wrap.createEl('button', {
+      cls: 'specorator-roster-appearance-image-clear',
+      attr: { type: 'button' },
+    });
+    clear.setAttribute('aria-label', t('agentRoster.avatarImageClear'));
+    clear.addEventListener('click', () => {
+      image.value = '';
+      apply();
+    });
   }
 
   private renderVoiceRow(parent: HTMLElement): void {
@@ -364,6 +399,6 @@ export class AgentDetailEditor {
   private refreshAvatar(): void {
     if (!this.avatarHost) return;
     this.avatarHost.empty();
-    renderAgentAvatar(this.avatarHost, rosterAgentToPersona(this.draft), DETAIL_AVATAR_SIZE);
+    renderAgentAvatar(this.avatarHost, rosterAgentToPersona(this.draft), DETAIL_AVATAR_SIZE, this.plugin.app);
   }
 }

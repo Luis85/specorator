@@ -259,3 +259,42 @@
   font-size: calc(var(--agent-avatar-size) * 0.62);
   line-height: 1;
 }
+
+/* Image avatar: the <img> fills the circular chip (cover-cropped), clipped by the
+   avatar's own border-radius so any aspect ratio reads as a round avatar. */
+.specorator-agent-avatar--image {
+  overflow: hidden;
+  padding: 0;
+}
+
+.specorator-agent-avatar-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: 50%;
+  display: block;
+}
+
+/* Vault-image path input + its clear affordance in the appearance row. */
+.specorator-roster-appearance-image-wrap {
+  display: flex;
+  align-items: center;
+  gap: var(--size-4-1);
+}
+
+.specorator-roster-appearance-image {
+  width: 12em;
+}
+
+.specorator-roster-appearance-image-clear {
+  padding: 0 var(--size-4-2);
+  color: var(--text-muted);
+  background: var(--background-modifier-border);
+  box-shadow: none;
+}
+
+/* Decorative clear glyph — kept out of JS so no untranslated literal reaches a
+   render sink (the button's accessible name is its aria-label). */
+.specorator-roster-appearance-image-clear::before {
+  content: '\00d7';
+}

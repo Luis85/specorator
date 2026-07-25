@@ -21,6 +21,12 @@ export interface AgentPersona {
   icon?: string;
   /** Emoji glyph; takes precedence over icon/initials for non-builtin personas. */
   emoji?: string;
+  /**
+   * Vault-relative image path for an image avatar. Highest precedence when it
+   * resolves (image → emoji → icon → initials); the renderer needs vault access
+   * to turn this into a resource URL, and falls through when it can't resolve.
+   */
+  image?: string;
   /** True only for the built-in `standard` persona. */
   builtin?: boolean;
 }
