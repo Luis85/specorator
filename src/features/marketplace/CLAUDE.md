@@ -9,7 +9,9 @@ Modeled on — and reuses the components of — `features/library`.
 
 | File | Role |
 |------|------|
-| `catalogTypes.ts` | `MarketplaceItem`/`MarketplaceManifest` types (skills carry a `files[]`), `parseManifest` (validates `schemaVersion`, drops malformed items, dedupes by id **and** per-type install key, **sanitizes each skill's `files`** to safe under-folder paths with `SKILL.md` always present), `INSTALLABLE_ITEM_TYPES` (**all five types**, skills included) + `isInstallableType`, `skillFolderPrefix` |
+| `catalogTypes.ts` | `MarketplaceItem`/`MarketplaceManifest` types (skills carry a `files[]`; any item may carry a `requires[]`), `parseManifest` (validates `schemaVersion`, drops malformed items, dedupes by id **and** per-type install key, **sanitizes each skill's `files`** to safe under-folder paths with `SKILL.md` always present, and **sanitizes `requires`** to safe, de-duplicated, non-self-referencing catalog ids under `MAX_ITEM_REQUIRES`), `INSTALLABLE_ITEM_TYPES` (**all five types**, skills included) + `isInstallableType`, `skillFolderPrefix` |
+| `packageResolution.ts` | `resolvePackage(item, byId)` → the item's transitive `requires` closure, **dependencies before dependents, the root last**; reports `missing` / `cycle` / `too-large` as data (the catalog is untrusted, so resolution is total and bounded by `MAX_PACKAGE_ITEMS`). Plus `indexCatalog`, `isPackage`, `describePackageFailure`. Mirrors the marketplace repo's `scripts/lib/catalog.mjs` resolver, which enforces the same rules at the source |
+| `packageInstall.ts` | `installPackage(root, reviewedBody, dependencies, target, source, ctx)` — writes every dependency (body fetched from the snapshotted source) then the root (its **reviewed** body), returning `{ outcome, installed, skipped, written }`. I/O is injected so the ordering contract is testable without a plugin |
 | `skillInstallTargets.ts` | Skill install-target model: `SkillProviderTarget` (`claude`/`codex`/`cursor` — the three that own a skill root; OpenCode reads Claude/Codex, so it's not a separate target), `SkillInstallScope` (`project`/`user`), `skillRootFor(target)` → `.claude/skills` etc. (relative path resolved under vault or home by scope), and `hasUnsafePathSegment` (shared traversal guard). Allowlisted in `noHardcodedProviderList` — a sanctioned enumeration (roots can't come from the registry, features→providers boundary) |
 | `MarketplaceCatalogClient.ts` | HTTP fetch over Obsidian `requestUrl`; `fetchIndex()` + `fetchItemBody(path)`. Injectable `request`/`vet` seams (default: `requestUrl` + `assertSafeRemoteUrl`) |
 | `MarketplaceCache.ts` | Schema-versioned JSON cache at `.specorator/cache/marketplace-index.json`; cold-safe `read()`/`write()` via `writeAtomic` |
@@ -234,10 +236,42 @@ Modeled on — and reuses the components of — `features/library`.
   enforces the same rule by content at the source. The card/grid badge means
   "installed in **any** root"; the detail button reflects the **selected** target.
 
+- **A package installs whole, dependencies first.** An item may declare
+  `requires` — catalog ids installed **with** it (the Project Manager agent and
+  the thirteen project-artifact skills it works through). `store.install`
+  resolves the transitive closure against the LOADED catalog and writes
+  dependencies before the root, so an agent is never installed bound to skills
+  that aren't there. A resolution failure (a dependency absent from this
+  catalog, a cycle, over `MAX_PACKAGE_ITEMS`) installs **nothing** and is
+  surfaced in the detail up front, not on click. A dependency failure mid-install
+  throws BEFORE the root is written; dependencies already written are
+  deliberately NOT rolled back (each is a valid, independently useful vault item
+  owned by its own store, and a retry re-runs the package and skips what landed).
+  Everything already present is skipped, never overwritten. The whole package is
+  fetched from ONE snapshotted source, so a concurrent leaf's refresh can't pair
+  an agent from one catalog with skills from another. `install` returns
+  `{ outcome, installed, skipped }` — `outcome` is the root's own result (what
+  the badge keys on), the counts are its dependencies (what the notice reports).
+  **A skill dependency binds to its agent**: `boundSkillNames` maps the package's
+  skill items to their install slugs and `installAgent` writes them to
+  `RosterAgent.skills`, so a Marketplace agent reaches its skills with no manual
+  granting. An agent that already exists is skipped, so re-granting skills onto a
+  user-owned agent is deferred update-management, not part of install.
+  Only the ROOT item's body is the reviewed one; a dependency is **listed** in
+  the detail (name + type + installed state) but not individually previewed, and
+  its body is fetched at install time — the review contract is per-item, and a
+  package's members are named up front so the user knows what one click writes.
+- **A package that brings skills needs a skill root.** `MarketplaceDetail` shows
+  the provider + scope panel when the item is a skill **or** its dependencies
+  include one, and that panel's button becomes the package install ("Install all
+  (N)"). A package reads Installed only when the root AND every dependency is
+  present, so a partially-installed package still offers to complete itself.
+
 ## Tests
 
-`tests/unit/features/marketplace/` (catalog types incl. skill-`files`
-sanitization, client, cache, installer incl. `installSkillItem`/target routing,
+`tests/unit/features/marketplace/` (catalog types incl. skill-`files` and
+`requires` sanitization, client, cache, installer incl. `installSkillItem`/target
+routing and agent skill binding, `packageResolution`, `packageInstall`,
 `skillInstallTargets`) and `tests/vue/marketplace/` (root, store incl. skill
 install, and the storefront components: nav, home, grid, card, detail incl. the
 skill provider/scope panel, plus the installed-refresh composable). The

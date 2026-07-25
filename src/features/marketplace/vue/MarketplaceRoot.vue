@@ -14,6 +14,7 @@ import {
   type MarketplaceItemType,
 } from '../catalogTypes';
 import { maybeWarnMarketplaceNetwork } from '../marketplaceNetworkGate';
+import { describePackageFailure, indexCatalog, isPackage, resolvePackage } from '../packageResolution';
 import {
   SKILL_PROVIDER_TARGETS,
   type SkillInstallTarget,
@@ -107,6 +108,23 @@ const showHome = computed(
 );
 const showSkeleton = computed(() => store.loading && store.items.length === 0);
 const detailItem = computed(() => store.items.find((item) => item.id === detailId.value) ?? null);
+
+// The open item's package, resolved against the loaded catalog. Only computed for
+// an item that actually declares dependencies, so the common single-item detail
+// never builds the id index. A failure (an absent dependency, a cycle) surfaces in
+// the detail and blocks Install — the store refuses the same resolution anyway, so
+// showing it up front beats failing on click.
+const detailPackage = computed(() => {
+  const item = detailItem.value;
+  if (!item || !isPackage(item)) return null;
+  return resolvePackage(item, indexCatalog(store.items));
+});
+const detailDependencies = computed(() =>
+  detailPackage.value?.ok ? detailPackage.value.dependencies : [],
+);
+const detailPackageError = computed(() =>
+  detailPackage.value && !detailPackage.value.ok ? describePackageFailure(detailPackage.value) : null,
+);
 
 // Fall a stranded category back to Home — whether it leaves a reloaded catalog
 // (counts change), a deep-link selects a category the loaded catalog has zero of
@@ -310,17 +328,29 @@ async function install(item: MarketplaceItem, target?: SkillInstallTarget): Prom
   if (body === undefined) return;
   installing[item.id] = true;
   try {
-    const outcome = await store.install(item, body, target);
-    new Notice(
-      outcome === 'installed'
-        ? t('marketplace.installedNotice', { name: item.name })
-        : t('marketplace.skippedNotice', { name: item.name }),
-    );
+    new Notice(installNotice(item, await store.install(item, body, target)));
   } catch {
     new Notice(t('marketplace.failedNotice', { name: item.name }));
   } finally {
     installing[item.id] = false;
   }
+}
+
+/**
+ * What one install actually did. A package reports the dependencies it added, so
+ * "installed" and "completed what was missing" read differently — the plain
+ * single-item notices stay exactly as they were when nothing else was written.
+ */
+function installNotice(item: MarketplaceItem, result: { outcome: string; installed: number }): string {
+  const params = { name: item.name, count: result.installed };
+  if (result.outcome === 'installed') {
+    return result.installed > 0
+      ? t('marketplace.installedPackageNotice', params)
+      : t('marketplace.installedNotice', params);
+  }
+  return result.installed > 0
+    ? t('marketplace.completedPackageNotice', params)
+    : t('marketplace.skippedNotice', params);
 }
 </script>
 
@@ -384,6 +414,10 @@ async function install(item: MarketplaceItem, target?: SkillInstallTarget): Prom
       :installing="!!installing[detailItem.id]"
       :installed="store.installedIds.has(detailItem.id)"
       :installable="isInstallableType(detailItem.type)"
+      :dependencies="detailDependencies"
+      :package-error="detailPackageError"
+      :type-labels="typeLabels"
+      :installed-ids="store.installedIds"
       :skill-provider-options="skillProviderOptions"
       :skill-installed-checker="skillInstalledChecker(detailItem)"
       :installed-signal="store.installedIds"

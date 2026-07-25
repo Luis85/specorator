@@ -47,6 +47,8 @@
     "installedNotice": "Installed \"{name}\".",
     "skippedNotice": "\"{name}\" is already installed.",
     "failedNotice": "Couldn't install \"{name}\".",
+    "installedPackageNotice": "Installed \"{name}\" and {count} required items.",
+    "completedPackageNotice": "\"{name}\" was already installed — added {count} missing items.",
     "type": {
       "quickAction": "Quick Action",
       "agent": "Agent",
@@ -61,6 +63,11 @@
       "scopeUser": "User (all vaults)",
       "installedHere": "Installed here",
       "userScopeHint": "User scope installs to your home directory (outside this vault), shared across all your vaults."
+    },
+    "package": {
+      "heading": "Included with this install",
+      "install": "Install all ({count})",
+      "skillTargetHint": "The skills in this package install into:"
     }
   },
   "common": {

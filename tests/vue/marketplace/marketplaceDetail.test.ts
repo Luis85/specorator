@@ -178,3 +178,78 @@ describe('MarketplaceDetail — skill install panel', () => {
     await screen.findByRole('button', { name: 'Install' }); // button flips back, no reopen needed
   });
 });
+
+describe('MarketplaceDetail packages', () => {
+  const brief: MarketplaceItem = {
+    id: 'skills/project-brief',
+    type: 'skill',
+    name: 'project-brief',
+    description: '',
+    path: 'skills/project-brief/SKILL.md',
+    tags: [],
+  };
+  const raid: MarketplaceItem = { ...brief, id: 'skills/raid-log', name: 'raid-log', path: 'skills/raid-log/SKILL.md' };
+  const agent = base({
+    id: 'agents/project-manager',
+    type: 'agent',
+    name: 'Project Manager',
+    path: 'agents/project-manager.md',
+    requires: ['skills/project-brief', 'skills/raid-log'],
+  });
+  const typeLabels = { 'quick-action': 'Quick Action', agent: 'Agent', loop: 'Loop', template: 'Template', skill: 'Skill' };
+
+  function renderPackage(props: Record<string, unknown> = {}) {
+    return renderDetail({
+      item: agent,
+      typeLabel: 'Agent',
+      dependencies: [brief, raid],
+      typeLabels,
+      installedIds: new Set<string>(),
+      skillProviderOptions: [{ id: 'claude', label: 'Claude', userScope: true }],
+      ...props,
+    });
+  }
+
+  it('lists what comes with the item, marking what is already installed', () => {
+    renderPackage({ installedIds: new Set(['skills/raid-log']) });
+    expect(screen.getByText('Included with this install')).toBeTruthy();
+    expect(screen.getByText('project-brief')).toBeTruthy();
+    expect(screen.getByText('raid-log')).toBeTruthy();
+    // One "Installed" marker — for the dependency that is already present.
+    expect(screen.getAllByText('Installed')).toHaveLength(1);
+  });
+
+  it('asks for a skill root when the package brings skills, even though the item is an agent', async () => {
+    // The bundled skills need a provider + scope just like a standalone skill,
+    // so the target panel drives the install instead of the header button.
+    const { emitted } = renderPackage();
+    expect(screen.getByText('The skills in this package install into:')).toBeTruthy();
+    const install = screen.getByRole('button', { name: 'Install all (3)' }) as HTMLButtonElement;
+    expect(install.disabled).toBe(false);
+    await fireEvent.click(install);
+    expect(emitted().install?.[0]).toEqual([{ provider: 'claude', scope: 'project' }]);
+  });
+
+  it('keeps the plain header button for a package with no skills in it', () => {
+    const loopDep: MarketplaceItem = { ...brief, id: 'loops/x', type: 'loop', name: 'X', path: 'loops/x.md' };
+    renderPackage({ dependencies: [loopDep] });
+    expect(screen.queryByText('The skills in this package install into:')).toBeNull();
+    expect(screen.getByRole('button', { name: 'Install all (2)' })).toBeTruthy();
+  });
+
+  it('reads Installed only when the item AND every dependency is present', () => {
+    const loopDep: MarketplaceItem = { ...brief, id: 'loops/x', type: 'loop', name: 'X', path: 'loops/x.md' };
+    // Item installed but a dependency missing: Install stays offered so the
+    // package can be completed.
+    renderPackage({ dependencies: [loopDep], installed: true, installedIds: new Set(['agents/project-manager']) });
+    expect(screen.getByRole('button', { name: 'Install all (2)' })).toBeTruthy();
+  });
+
+  it('refuses install and explains when the package cannot be resolved', () => {
+    renderPackage({ packageError: 'This item requires skills/absent, which is not in this catalog.' });
+    expect(screen.getByRole('alert').textContent).toContain('skills/absent');
+    // The dependency list is replaced by the reason — there is nothing valid to list.
+    expect(screen.queryByText('Included with this install')).toBeNull();
+    expect((screen.getByRole('button', { name: 'Install all (3)' }) as HTMLButtonElement).disabled).toBe(true);
+  });
+});
