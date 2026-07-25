@@ -67,8 +67,15 @@ export class TeamChatThreadStore {
     const adoptable = this.deps.findAdoptable(agentId);
     const id = adoptable ? adoptable.id : (await this.deps.createConversation(agentId)).id;
 
-    rooms[key] = id;
-    await this.persist(rooms);
+    // Commit to the in-memory cache ONLY after the durable write succeeds. If
+    // writeAtomic rejects (a transient vault I/O failure), leaving `this.rooms`
+    // unmutated means a retry re-attempts persistence — it re-adopts the
+    // just-created conversation and re-emits — instead of returning a
+    // "recovered" id whose mapping never reached disk and whose
+    // teamChat:threads-changed never fired.
+    const next = { ...rooms, [key]: id };
+    await this.persist(next);
+    this.rooms = next;
     return id;
   }
 

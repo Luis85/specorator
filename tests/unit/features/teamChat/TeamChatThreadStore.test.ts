@@ -54,11 +54,17 @@ function makeHarness(options: HarnessOptions = {}) {
   } as unknown as VaultFileAdapter;
 
   let seq = 0;
+  // A freshly created team-chat DM is itself adoptable from then on, mirroring
+  // production's findTeamChatConversationForAgent (which scans every conversation
+  // by boundAgentId + surface). This is what lets a retry after a failed persist
+  // adopt the just-created conversation instead of creating a duplicate.
+  const createdByAgent = new Map<string, Conversation>();
   const createConversation = jest.fn(async (agentId: string) => {
     await Promise.resolve();
     const created = conversation(`created-${++seq}`, agentId);
     // A freshly created conversation exists from then on.
     existing.add(created.id);
+    createdByAgent.set(agentId, created);
     return created;
   });
 
@@ -70,7 +76,7 @@ function makeHarness(options: HarnessOptions = {}) {
     adapter,
     createConversation,
     conversationExists: (id: string) => existing.has(id),
-    findAdoptable: (agentId: string) => adoptable.get(agentId) ?? null,
+    findAdoptable: (agentId: string) => adoptable.get(agentId) ?? createdByAgent.get(agentId) ?? null,
     events,
   });
 
@@ -172,5 +178,25 @@ describe('TeamChatThreadStore', () => {
     // Absent file: a read-only `get` returns null rather than throwing.
     const absent = makeHarness();
     await expect(absent.store.get('roster:zzz')).resolves.toBeNull();
+  });
+
+  it('re-persists and re-emits on retry after writeAtomic fails (no stale disk state)', async () => {
+    const h = makeHarness();
+    h.writeAtomic.mockRejectedValueOnce(new Error('transient vault io'));
+
+    // First attempt: the conversation is created but the durable write rejects, so
+    // the call rejects and — crucially — nothing is cached, persisted, or emitted.
+    await expect(h.store.resolveOrCreate('roster:a')).rejects.toThrow('transient vault io');
+    expect(h.readThreads()).toBeNull(); // threads.json was never written
+    expect(h.changed).not.toHaveBeenCalled(); // no emit for a write that didn't land
+
+    // Retry: because the cache was NOT mutated on failure, the retry re-resolves,
+    // adopts the orphaned just-created conversation (no duplicate create), and this
+    // time persists + emits. The pre-fix bug left the cache mapped so the retry
+    // returned a "recovered" id while threads.json stayed empty.
+    const id = await h.store.resolveOrCreate('roster:a');
+    expect(h.createConversation).toHaveBeenCalledTimes(1); // adopted, not re-created
+    expect(h.readThreads()).toEqual({ version: 1, rooms: { 'roster:a': id } });
+    expect(h.changed).toHaveBeenCalledTimes(1);
   });
 });
