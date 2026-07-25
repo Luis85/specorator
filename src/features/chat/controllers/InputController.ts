@@ -72,6 +72,7 @@ import { ResumeSessionDropdownCoordinator, type ResumeSessionDropdownDeps } from
 import type { SelectionController } from './SelectionController';
 import type { StreamController } from './StreamController';
 import { activateStreamingAssistantMessage, discardStreamingAssistantMessage } from './streamingMessageLifecycle';
+import { isTeamChatSurfaceConversation, teamChatDmBoundAgentId } from './teamChatSurface';
 
 export interface InputControllerDeps {
   plugin: SpecoratorPlugin;
@@ -180,8 +181,7 @@ export class InputController {
       getDropdownCoordinator: () => this.deps.getDropdownCoordinator?.() ?? null,
       // Team Chat DMs bind one fixed thread per agent, so `$` resume is suppressed
       // on that surface (surface-driven; non-team-chat and blank tabs unchanged).
-      isResumeDisabled: () =>
-        this.deps.plugin.getConversationSync(this.deps.state.currentConversationId ?? '')?.surface === 'team-chat',
+      isResumeDisabled: () => isTeamChatSurfaceConversation(this.deps.plugin, this.deps.state.currentConversationId),
     });
     this.queuedMessages = new QueuedMessageController({
       state: deps.state,
@@ -270,16 +270,25 @@ export class InputController {
       fileContextManager: this.deps.getFileContextManager(),
       overrides: options,
     });
-    if (!send.content && !send.hasImages) {
-      if (!send.shouldUseInput) return { ok: false, finalAssistantContent: '', error: 'No content to send' };
-      return;
-    }
+    const emptyResult = this.resolveEmptyComposerSend(send);
+    if (emptyResult !== 'proceed') return emptyResult;
 
     // Check for built-in commands first (e.g., /clear, /new, /add-dir)
     const builtInCmd = detectBuiltInCommand(send.content);
     if (builtInCmd) {
       clearConsumedComposerInput(send, () => this.deps.resetInputHeight());
       await this.executeBuiltInCommand(builtInCmd.command, builtInCmd.args);
+      return;
+    }
+
+    // A Team Chat DM whose agent was deleted from the roster is read-only: block the
+    // turn (it would otherwise run WITHOUT the agent's persona/model) and tell the user.
+    // The surface check is sync, so `&&` short-circuits before the roster lookup on every
+    // non-DM send (no added microtask). After the built-in-command branch, so a command
+    // still routes through its own gate. Self-healing: a re-created agent lets sends resume.
+    const dmAgentId = teamChatDmBoundAgentId(this.deps.plugin, this.deps.state.currentConversationId);
+    if (dmAgentId && (await this.deps.plugin.agentRosterStore.get(dmAgentId)) === null) {
+      new Notice(t('teamChat.agentRemoved'));
       return;
     }
 
@@ -305,6 +314,20 @@ export class InputController {
     return state.isCreatingConversation
       || state.isSwitchingConversation
       || state.isHydrating;
+  }
+
+  /**
+   * Classifies an empty composer send: `'proceed'` when there is content or images to send,
+   * otherwise the early result to return — an error result for a programmatic no-content send
+   * (`!shouldUseInput`), or `undefined` to silently drop an empty user send. Extracted so the
+   * self-contained empty-send branches don't inflate `sendMessage`'s complexity.
+   */
+  private resolveEmptyComposerSend(
+    send: ComposerSendContext,
+  ): ProgrammaticSendResult | undefined | 'proceed' {
+    if (send.content || send.hasImages) return 'proceed';
+    if (!send.shouldUseInput) return { ok: false, finalAssistantContent: '', error: 'No content to send' };
+    return undefined;
   }
 
   private async persistComposerImages(send: ComposerSendContext): Promise<void> {
@@ -715,7 +738,7 @@ export class InputController {
     turn: FinishedTurn,
     didCancelThisTurn: boolean,
   ): Promise<void> {
-    const { state, conversationController } = this.deps;
+    const { state } = this.deps;
 
     // Provider-agnostic post-plan approval: show UI and await decision before auto-send
     const approval = await this.resolvePlanApprovalOutcome(ctx, turn, didCancelThisTurn);
@@ -744,12 +767,25 @@ export class InputController {
       const planContent = state.pendingNewSessionPlan;
       if (planContent) {
         state.pendingNewSessionPlan = null;
-        await conversationController.createNew();
-        this.autoResumeWith(planContent);
+        await this.resumeApprovedPlanFromExitMode(planContent);
       } else if (approval.shouldProcessQueuedMessage) {
         this.queuedMessages.processQueuedMessage();
       }
     }
+  }
+
+  /**
+   * Implements an "Approve (new session)" exit-plan decision. On the sidebar it does
+   * what the label says — a fresh conversation, then the plan auto-resumes there. On a
+   * Team Chat DM (one fixed thread per agent) a new session would UNBIND the DM and leak
+   * the transcript into ordinary chat history, so the approved plan is implemented in
+   * THIS thread instead (surface-scoped; the sidebar path is byte-identical to before).
+   */
+  private async resumeApprovedPlanFromExitMode(planContent: string): Promise<void> {
+    if (!isTeamChatSurfaceConversation(this.deps.plugin, this.deps.state.currentConversationId)) {
+      await this.deps.conversationController.createNew();
+    }
+    this.autoResumeWith(planContent);
   }
 
   private async resolvePlanApprovalOutcome(
@@ -1175,8 +1211,21 @@ export class InputController {
   // Built-in Commands
   // ============================================
 
+  /**
+   * `/clear` starts a fresh conversation — but on a Team Chat DM (one fixed thread per
+   * agent) that would mint an unbound conversation and leak into ordinary chat history,
+   * so it is disabled there. Extracted from the command switch to keep that gate's branch
+   * out of the already-complex `executeBuiltInCommand`.
+   */
+  private async runClearCommand(): Promise<void> {
+    if (isTeamChatSurfaceConversation(this.deps.plugin, this.deps.state.currentConversationId)) {
+      new Notice(t('teamChat.actionUnavailableInDm'));
+      return;
+    }
+    await this.deps.conversationController.createNew();
+  }
+
   private async executeBuiltInCommand(command: BuiltInCommand, args: string): Promise<void> {
-    const { conversationController } = this.deps;
     const capabilities = this.getActiveCapabilities();
 
     if (!isBuiltInCommandSupported(command, capabilities)) {
@@ -1186,7 +1235,7 @@ export class InputController {
 
     switch (command.action) {
       case 'clear':
-        await conversationController.createNew();
+        await this.runClearCommand();
         break;
       case 'add-dir': {
         const externalContextSelector = this.deps.getExternalContextSelector();

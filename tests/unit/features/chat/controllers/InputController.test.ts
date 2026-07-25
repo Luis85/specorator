@@ -3,6 +3,7 @@ import { Notice } from 'obsidian';
 
 import { InputController, type InputControllerDeps } from '@/features/chat/controllers/InputController';
 import { ChatState } from '@/features/chat/state/ChatState';
+import { t } from '@/i18n/i18n';
 import { encodeClaudeTurn } from '@/providers/claude/prompt/ClaudeTurnEncoder';
 import { ResumeSessionDropdown } from '@/shared/components/ResumeSessionDropdown';
 
@@ -1978,6 +1979,8 @@ describe('InputController - Message Queue', () => {
   });
 
   describe('Built-in commands - /clear', () => {
+    // Characterization (sidebar unchanged): the default mock conversation is not a
+    // team-chat DM, so /clear still mints a fresh conversation.
     it('should call conversationController.createNew on /clear', async () => {
       (deps.conversationController as any).createNew = jest.fn().mockResolvedValue(undefined);
       inputEl.value = '/clear';
@@ -1987,6 +1990,111 @@ describe('InputController - Message Queue', () => {
 
       expect((deps.conversationController as any).createNew).toHaveBeenCalled();
       expect(inputEl.value).toBe('');
+    });
+
+    // Round-39 (Concern B): /clear mints an unbound conversation via createNew, which on
+    // the Team Chat surface would unbind the DM and leak into ordinary chat history — so
+    // it is disabled there (notice, no createNew).
+    it('does NOT createNew on /clear on the Team Chat surface (disabled, notice shown)', async () => {
+      (deps.conversationController as any).createNew = jest.fn().mockResolvedValue(undefined);
+      deps.state.currentConversationId = 'dm-1';
+      (deps.plugin.getConversationSync as any) = jest.fn().mockReturnValue({ surface: 'team-chat', boundAgentId: 'roster:a' });
+      mockNotice.mockClear();
+      inputEl.value = '/clear';
+      controller = new InputController(deps);
+
+      await controller.sendMessage();
+
+      expect((deps.conversationController as any).createNew).not.toHaveBeenCalled();
+      expect(mockNotice).toHaveBeenCalledWith(t('teamChat.actionUnavailableInDm'));
+    });
+  });
+
+  // Round-39 (Concern B): the post-plan "Approve (new session)" branch consumes
+  // state.pendingNewSessionPlan and calls createNew — gated on the surface.
+  describe('post-plan "Approve (new session)" gate (surface-scoped)', () => {
+    beforeEach(() => {
+      deps = createSendableDeps();
+      inputEl = deps.getInputEl() as ReturnType<typeof createMockInputEl>;
+      (deps.conversationController as any).createNew = jest.fn().mockResolvedValue(undefined);
+    });
+
+    // Characterization (sidebar unchanged): a fresh conversation, then the plan resumes there.
+    it('sidebar: mints a fresh conversation then resumes the plan', async () => {
+      (deps.plugin.getConversationSync as any) = jest.fn().mockReturnValue({ surface: 'chat' });
+      controller = new InputController(deps);
+      const autoResume = jest.spyOn(controller as any, 'autoResumeWith').mockImplementation(() => {});
+
+      await (controller as any).resumeApprovedPlanFromExitMode('Implement this plan.');
+
+      expect((deps.conversationController as any).createNew).toHaveBeenCalledTimes(1);
+      expect(autoResume).toHaveBeenCalledWith('Implement this plan.');
+    });
+
+    it('team-chat DM: implements the plan in THIS thread — no new session minted', async () => {
+      deps.state.currentConversationId = 'dm-1';
+      (deps.plugin.getConversationSync as any) = jest.fn().mockReturnValue({ surface: 'team-chat', boundAgentId: 'roster:a' });
+      controller = new InputController(deps);
+      const autoResume = jest.spyOn(controller as any, 'autoResumeWith').mockImplementation(() => {});
+
+      await (controller as any).resumeApprovedPlanFromExitMode('Implement this plan.');
+
+      // A DM is one fixed thread: no createNew (no unbind/leak), but the approved plan still runs.
+      expect((deps.conversationController as any).createNew).not.toHaveBeenCalled();
+      expect(autoResume).toHaveBeenCalledWith('Implement this plan.');
+    });
+  });
+
+  // Round-39 (Concern A): a Team Chat DM whose bound agent was deleted from the roster
+  // is read-only — a turn would resolve no persona/model, so sending is blocked.
+  describe('Team Chat DM read-only when the bound agent is removed', () => {
+    beforeEach(() => {
+      deps = createSendableDeps();
+      inputEl = deps.getInputEl() as ReturnType<typeof createMockInputEl>;
+      mockNotice.mockClear();
+    });
+
+    it('blocks the turn + notices when the DM agent was deleted from the roster', async () => {
+      deps.state.currentConversationId = 'dm-1';
+      (deps.plugin.getConversationSync as any) = jest.fn().mockReturnValue({ surface: 'team-chat', boundAgentId: 'roster:gone' });
+      (deps.plugin as any).agentRosterStore = { get: jest.fn().mockResolvedValue(null) };
+      inputEl.value = 'hello';
+      controller = new InputController(deps);
+      const dispatch = jest.spyOn(controller as any, 'dispatchComposerTurn').mockResolvedValue(undefined);
+
+      await controller.sendMessage();
+
+      expect(mockNotice).toHaveBeenCalledWith(t('teamChat.agentRemoved'));
+      expect(dispatch).not.toHaveBeenCalled();
+    });
+
+    it('lets the turn through once the agent exists again (self-healing, same id)', async () => {
+      deps.state.currentConversationId = 'dm-1';
+      (deps.plugin.getConversationSync as any) = jest.fn().mockReturnValue({ surface: 'team-chat', boundAgentId: 'roster:a' });
+      (deps.plugin as any).agentRosterStore = { get: jest.fn().mockResolvedValue({ id: 'roster:a', name: 'Ada' }) };
+      inputEl.value = 'hello';
+      controller = new InputController(deps);
+      const dispatch = jest.spyOn(controller as any, 'dispatchComposerTurn').mockResolvedValue(undefined);
+
+      await controller.sendMessage();
+
+      expect(mockNotice).not.toHaveBeenCalledWith(t('teamChat.agentRemoved'));
+      expect(dispatch).toHaveBeenCalled();
+    });
+
+    // A non-team-chat tab (default mock conversation) never pays the roster lookup and
+    // dispatches normally — the guard is strictly surface-scoped.
+    it('sidebar: never consults the roster and dispatches normally', async () => {
+      const rosterGet = jest.fn();
+      (deps.plugin as any).agentRosterStore = { get: rosterGet };
+      inputEl.value = 'hello';
+      controller = new InputController(deps);
+      const dispatch = jest.spyOn(controller as any, 'dispatchComposerTurn').mockResolvedValue(undefined);
+
+      await controller.sendMessage();
+
+      expect(rosterGet).not.toHaveBeenCalled();
+      expect(dispatch).toHaveBeenCalled();
     });
   });
 

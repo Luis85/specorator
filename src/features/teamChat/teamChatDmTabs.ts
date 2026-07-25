@@ -1,10 +1,61 @@
-import { Notice } from 'obsidian';
+import { Notice, type WorkspaceLeaf } from 'obsidian';
 
 import { t } from '../../i18n/i18n';
 import type SpecoratorPlugin from '../../main';
 import type { TabManager } from '../chat/tabs/TabManager';
 import type { PersistedTabManagerState } from '../chat/tabs/types';
 import { getTeamChatDmOpenCoordinator } from './TeamChatDmOpenCoordinator';
+
+/**
+ * Body of the serialized DM open, extracted from `TeamChatView.openResolvedDm` (Round-39)
+ * to keep the view a thin host: reuse an already-open tab (this leaf or another), else
+ * create one here. Re-run safe — a queued second caller for the same conversation re-enters
+ * after the first created the tab, finds it, and switches instead of double-mounting.
+ * Touches no selection state: the activated tab's `onTabSwitched`/`onTabCreated` drives the
+ * view's `selectedAgentId` projection. `isStale()` (the view's generation + manager-identity
+ * guard) is re-checked after every await, so a superseded/detached open is a silent no-op
+ * rather than a mount into a torn-down or replaced manager.
+ */
+export async function openResolvedTeamChatDm(
+  plugin: SpecoratorPlugin,
+  manager: TabManager,
+  leaf: WorkspaceLeaf,
+  dmRecency: readonly string[],
+  conversationId: string,
+  isStale: () => boolean,
+): Promise<void> {
+  // The serialized body may have queued behind another open (or the leaf may have been torn
+  // down since it was enqueued); re-check before touching anything.
+  if (isStale()) return;
+  // Span every Specorator leaf (sidebar + all Team Chat views): a DM already open in another
+  // leaf must be revealed, never double-mounted.
+  const existing = plugin.findConversationAcrossViews(conversationId);
+  if (existing) {
+    if (existing.view.leaf === leaf) {
+      await manager.switchToTab(existing.tabId);
+    } else {
+      // Owned by ANOTHER leaf — reveal + switch it there. This leaf's selectedAgentId
+      // projects off its OWN active tab, so it correctly stays put; the destination leaf's
+      // onTabSwitched projects ITS selection.
+      await plugin.app.workspace.revealLeaf(existing.view.leaf);
+      // revealLeaf awaited — re-check before the cross-leaf switch.
+      if (isStale()) return;
+      await existing.view.getTabManager()?.switchToTab(existing.tabId);
+    }
+    return;
+  }
+  // Enforce the hot-DM budget: evict the LRU DM before creating so a big roster browses
+  // gracefully instead of dead-ending at the cap (T7). Re-check staleness after the close.
+  await evictLruDmIfNeeded(plugin, manager, dmRecency, conversationId);
+  if (isStale()) return;
+  // Team Chat DMs carry their own budget (eviction above), so bypass the shared maxChatTabs.
+  const created = await manager.createTab(conversationId, undefined, { activate: true, kind: 'chat', bypassTabLimit: true });
+  // Last-resort cap Notice: with eviction + bypass, createTab returns null only on a
+  // teardown-window edge, never the ordinary budget path. A stale open isn't a user error.
+  if (!created && !isStale()) {
+    new Notice(t('teamChat.tabCapReached'));
+  }
+}
 
 /**
  * Restores persisted Team Chat DM tabs with the SAME guards the `selectAgent` open

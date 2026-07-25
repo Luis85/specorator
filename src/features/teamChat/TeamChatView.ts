@@ -1,5 +1,5 @@
 import type { ViewStateResult, WorkspaceLeaf } from 'obsidian';
-import { ItemView, Notice } from 'obsidian';
+import { ItemView } from 'obsidian';
 import { type App as VueApp, createApp, markRaw } from 'vue';
 
 import { validateTabManagerState } from '../../core/bootstrap/tabManagerState';
@@ -13,8 +13,8 @@ import { openEditedFile } from '../chat/tabs/tabUi';
 import type { PersistedTabManagerState } from '../chat/tabs/types';
 import type { ComposerEditedFile } from '../chat/ui/vue/composer/stores/composerStore';
 import { getTeamChatDmOpenCoordinator } from './TeamChatDmOpenCoordinator';
-import { applyDmEditedFilesSetting, applyDmHiddenCommands, projectActiveDmEditedFiles, refreshDmModelState, rotateChangedDmProviders } from './teamChatDmRefresh';
-import { evictLruDmIfNeeded, reconcileRotation, restoreTeamChatDmTabs, touchDmRecency } from './teamChatDmTabs';
+import { applyDmEditedFilesSetting, applyDmHiddenCommands, noticeRemovedAgentDms, projectActiveDmEditedFiles, refreshDmModelState, rotateChangedDmProviders } from './teamChatDmRefresh';
+import { openResolvedTeamChatDm, reconcileRotation, restoreTeamChatDmTabs, touchDmRecency } from './teamChatDmTabs';
 import { projectCrossLeafPresence, type TeamChatPresence } from './teamChatPresence';
 import type { TeamChatThreadStore } from './TeamChatThreadStore';
 import { createTeamChatPinia } from './ui/vue/globalPinia';
@@ -69,6 +69,13 @@ export class TeamChatView extends ItemView implements ChatViewHandle {
   /** Unsubscribe for the cross-leaf `teamChat:presence` broadcast (Fix 3): another
    *  leaf's DM streaming re-projects this leaf's presence so busy shows everywhere. */
   private presenceUnsubscribe: (() => void) | null = null;
+  /** Unsubscribe for `roster:changed` (Round-39): reconciles OPEN DM tabs on a roster edit
+   *  — provider-change rotation + un-grey (reused T5 reconcile), plus read-only for deleted
+   *  agents. Mirrors `presenceUnsubscribe`'s onOpen/onClose + re-entrant lifecycle. */
+  private rosterChangedUnsubscribe: (() => void) | null = null;
+  /** Open DMs already flagged agent-removed (Round-39), so a later unrelated `roster:changed`
+   *  doesn't re-notice; a re-created agent clears its entry. Owned here, mutated by the helper. */
+  private readonly removedAgentDmsNotified = new Set<string>();
   /** DM conversationIds in activation order (most-recent last) — the LRU order the T7
    *  hot-DM budget evicts from. Touched whenever a DM tab becomes active. */
   private readonly dmRecency: string[] = [];
@@ -155,6 +162,12 @@ export class TeamChatView extends ItemView implements ChatViewHandle {
     // drops the prior subscription first so it never double-subscribes).
     this.presenceUnsubscribe?.();
     this.presenceUnsubscribe = this.plugin.events.on('teamChat:presence', () => this.emitTeamChatChange());
+    // Reconcile OPEN DM tabs on a roster edit: provider-change rotation + un-grey (the reused
+    // T5 reconcile) and read-only for deleted agents. Same re-entrant-safe `?.()` shape as
+    // presence (SpecoratorView's roster:changed is likewise undebounced — the rotation only
+    // fires on an actual provider mismatch, so an unrelated edit is cheap).
+    this.rosterChangedUnsubscribe?.();
+    this.rosterChangedUnsubscribe = this.plugin.events.on('roster:changed', () => void this.reconcileDmsOnRosterChange());
   }
 
   /** Builds the tab engine into the Vue-provided content host, then restores the
@@ -265,6 +278,8 @@ export class TeamChatView extends ItemView implements ChatViewHandle {
   async onClose(): Promise<void> {
     this.presenceUnsubscribe?.();
     this.presenceUnsubscribe = null;
+    this.rosterChangedUnsubscribe?.();
+    this.rosterChangedUnsubscribe = null;
     await this.destroyTabRuntime();
     // Streaming DMs gone; surviving leaves recompute presence (destroyTab skips the callbacks) (:261).
     this.plugin.events.emit('teamChat:presence');
@@ -318,6 +333,23 @@ export class TeamChatView extends ItemView implements ChatViewHandle {
     refreshDmModelState(this.plugin, tabs);
     await rotateChangedDmProviders(this.plugin, tabs, (agentId) => this.selectAgent(agentId));
     this.emitTeamChatChange();
+  }
+
+  /**
+   * Reconciles OPEN DM tabs on a `roster:changed` edit: the reused T5 reconcile
+   * (`refreshProviderAvailability` — un-grey each DM + rotate any whose agent was re-pointed
+   * at another immutable-per-conversation provider), then the deleted-agent handling (a DM
+   * whose bound agent left the roster goes read-only via a deduped notice; the send-side
+   * block is `InputController`'s `teamChatDmBoundAgentId` guard). Only open DM tabs are
+   * touched. Errors are logged, never left as an unhandled rejection off the event handler.
+   */
+  private async reconcileDmsOnRosterChange(): Promise<void> {
+    try {
+      await this.refreshProviderAvailability();
+      await noticeRemovedAgentDms(this.plugin, this.tabManager?.getAllTabs() ?? [], this.removedAgentDmsNotified);
+    } catch (error) {
+      this.plugin.logger.scope('team-chat').error('roster reconcile failed', error);
+    }
   }
 
   updateLayoutForPosition(): void {
@@ -379,9 +411,12 @@ export class TeamChatView extends ItemView implements ChatViewHandle {
     // mapping; without this both callers would see findConversationAcrossViews ==
     // null (neither tab created yet) and each createTab, double-mounting one
     // conversation (concurrent streams/saves corrupt it). The queued second caller
-    // re-runs openResolvedDm, now finds the tab, and switches.
+    // re-runs the open, now finds the tab, and switches. The serialized body lives in
+    // `openResolvedTeamChatDm` (teamChatDmTabs) so the view stays a thin host; its
+    // staleness guard is this leaf's live generation+manager identity check.
     await getTeamChatDmOpenCoordinator(this.plugin).serialize(conversationId, () =>
-      this.openResolvedDm(conversationId, manager, generation));
+      openResolvedTeamChatDm(this.plugin, manager, this.leaf, this.dmRecency, conversationId,
+        () => this.isSelectionStale(generation, manager)));
     // Reconcile a provider-change rotation: record + notify a new rotation, and close
     // any displaced old-provider tab once its replacement is open — deferred, so a
     // cap-blocked rotation's stale tab is closed on the retry that finally opens the
@@ -400,51 +435,6 @@ export class TeamChatView extends ItemView implements ChatViewHandle {
    */
   private isSelectionStale(generation: number, manager: TabManager): boolean {
     return this.selectionGeneration !== generation || this.tabManager !== manager;
-  }
-
-  /**
-   * Body of the serialized DM open: reuse an already-open tab (this leaf or
-   * another), else create one here. Re-run safe — a queued second caller for the
-   * same conversation re-enters after the first created the tab, finds it, and
-   * switches instead of double-mounting. Touches no selection state: the activated
-   * tab's `onTabSwitched`/`onTabCreated` drives the `selectedAgentId` projection.
-   */
-  private async openResolvedDm(
-    conversationId: string,
-    manager: TabManager,
-    generation: number,
-  ): Promise<void> {
-    // The serialized body may have queued behind another open (or the leaf may have
-    // been torn down since it was enqueued); re-check before touching anything.
-    if (this.isSelectionStale(generation, manager)) return;
-    // Span every Specorator leaf (sidebar + all Team Chat views): a DM already
-    // open in another leaf must be revealed, never double-mounted.
-    const existing = this.plugin.findConversationAcrossViews(conversationId);
-    if (existing) {
-      if (existing.view.leaf === this.leaf) {
-        await manager.switchToTab(existing.tabId);
-      } else {
-        // Owned by ANOTHER leaf — reveal + switch it there. This leaf's
-        // selectedAgentId projects off its OWN active tab, so it correctly stays
-        // put; the destination leaf's onTabSwitched projects ITS selection.
-        await this.plugin.app.workspace.revealLeaf(existing.view.leaf);
-        // revealLeaf awaited — re-check before the cross-leaf switch.
-        if (this.isSelectionStale(generation, manager)) return;
-        await existing.view.getTabManager()?.switchToTab(existing.tabId);
-      }
-      return;
-    }
-    // Enforce the hot-DM budget: evict the LRU DM before creating so a big roster browses
-    // gracefully instead of dead-ending at the cap (T7). Re-check staleness after the close.
-    await evictLruDmIfNeeded(this.plugin, manager, this.dmRecency, conversationId);
-    if (this.isSelectionStale(generation, manager)) return;
-    // Team Chat DMs carry their own budget (eviction above), so bypass the shared maxChatTabs.
-    const created = await manager.createTab(conversationId, undefined, { activate: true, kind: 'chat', bypassTabLimit: true });
-    // Last-resort cap Notice: with eviction + bypass, createTab returns null only on a
-    // teardown-window edge, never the ordinary budget path. A stale open isn't a user error.
-    if (!created && !this.isSelectionStale(generation, manager)) {
-      new Notice(t('teamChat.tabCapReached'));
-    }
   }
 
   /** Fire-and-forget DM open with error logging — the Vue roster-click seam

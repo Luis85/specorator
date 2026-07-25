@@ -1,6 +1,9 @@
+import { Notice } from 'obsidian';
+
 import { getHiddenProviderCommandSet } from '../../core/providers/commands/hiddenCommands';
 import { ProviderRegistry } from '../../core/providers/ProviderRegistry';
 import { ProviderSettingsCoordinator } from '../../core/providers/ProviderSettingsCoordinator';
+import { t } from '../../i18n/i18n';
 import type SpecoratorPlugin from '../../main';
 import { getTabProviderId } from '../chat/tabs/providerResolution';
 import { onProviderAvailabilityChanged } from '../chat/tabs/tabProviderSync';
@@ -147,5 +150,33 @@ export async function rotateChangedDmProviders(
 ): Promise<void> {
   for (const agentId of await collectDmsNeedingProviderRotation(plugin, tabs)) {
     await rotate(agentId);
+  }
+}
+
+/**
+ * Surfaces the read-only notice for every open DM whose bound agent was DELETED from the
+ * roster (Round-39 Concern A). Deduped through `notified` (conversationId set) so a
+ * `roster:changed` for an UNRELATED edit does not re-notice an already-flagged DM; a
+ * re-created agent (same id) clears its entry so a later deletion re-notices. The
+ * send-side read-only block lives in `InputController` (`teamChatDmBoundAgentId`); this is
+ * only the proactive surfacing. One roster `list()` per call, not per DM.
+ */
+export async function noticeRemovedAgentDms(
+  plugin: SpecoratorPlugin,
+  tabs: readonly TabData[],
+  notified: Set<string>,
+): Promise<void> {
+  if (tabs.length === 0) return;
+  const live = new Set((await plugin.agentRosterStore.list()).map((agent) => agent.id));
+  for (const tab of tabs) {
+    const conversationId = tab.conversationId;
+    const conversation = conversationId ? plugin.getConversationSync(conversationId) : null;
+    if (!conversationId || conversation?.surface !== 'team-chat' || !conversation.boundAgentId) continue;
+    if (live.has(conversation.boundAgentId)) {
+      notified.delete(conversationId); // agent present (or re-created) → allow a future re-notice
+    } else if (!notified.has(conversationId)) {
+      notified.add(conversationId);
+      new Notice(t('teamChat.agentRemoved'));
+    }
   }
 }

@@ -8,4 +8,8 @@ export type TeamChatTranslationKey =
   | 'teamChat.presenceIdle'
   | 'teamChat.presenceBusy'
   // Provider-change rotation notice (a fresh thread was started on the new provider)
-  | 'teamChat.providerRotated';
+  | 'teamChat.providerRotated'
+  // Bound agent deleted from the roster: the open DM is read-only until a new agent is picked
+  | 'teamChat.agentRemoved'
+  // A reused-island action (fork / clear / new-session) that a DM's one-fixed-thread model disallows
+  | 'teamChat.actionUnavailableInDm';

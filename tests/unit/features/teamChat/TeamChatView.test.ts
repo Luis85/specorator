@@ -642,4 +642,18 @@ describe('TeamChatView — onClose teardown', () => {
     expect(view.plugin.events.emit).toHaveBeenCalledWith('teamChat:presence');
     expect(order).toEqual(['destroy', 'emit:teamChat:presence']);
   });
+
+  // Round-39 Concern A: onOpen wires the roster:changed reconcile subscription (mirror of
+  // presence), onClose tears it down — so a closed leaf stops reacting to roster edits.
+  it('subscribes to roster:changed on open and unsubscribes on close', async () => {
+    const view = makeView();
+    const rosterOff = jest.fn();
+    view.plugin.events.on = jest.fn((event: string) => (event === 'roster:changed' ? rosterOff : jest.fn()));
+
+    await view.onOpen();
+    expect(view.plugin.events.on).toHaveBeenCalledWith('roster:changed', expect.any(Function));
+
+    await view.onClose();
+    expect(rosterOff).toHaveBeenCalledTimes(1);
+  });
 });

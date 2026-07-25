@@ -9,6 +9,7 @@ import {
   maybeWarnYoloMode,
 } from '@/features/chat/tabs/Tab';
 import { mountTranscript } from '@/features/chat/ui/vue/transcript/mountTranscript';
+import { t } from '@/i18n/i18n';
 
 import {
   createMockBrowserSelectionController,
@@ -643,6 +644,26 @@ describe('Tab - handleForkAll (via /fork command)', () => {
     await onForkAll();
 
     expect(mockNotice).toHaveBeenCalled();
+    expect(forkRequestCallback).not.toHaveBeenCalled();
+  });
+
+  // Round-39: the /fork COMMAND path (handleForkAll → canFork) is disabled on a Team
+  // Chat DM — a fork would mint an unbound conversation that escapes the surface filter
+  // (the message fork button is already hidden via isForkEligible). Notice, no fork.
+  it('team-chat DM: /fork is disabled (canFork gates the command path)', async () => {
+    const plugin = createMockPlugin({
+      getConversationSync: jest.fn().mockReturnValue({ surface: 'team-chat' }),
+    });
+    const { tab, onForkAll, forkRequestCallback } = setupForkAllTest({ plugin });
+    tab.conversationId = 'dm-1';
+    tab.state.messages = [
+      { id: 'u1', role: 'user', content: 'hello', timestamp: 1, userMessageId: 'user-u' },
+      { id: 'a1', role: 'assistant', content: 'resp', timestamp: 2, assistantMessageId: 'asst-1' },
+    ];
+
+    await onForkAll();
+
+    expect(mockNotice).toHaveBeenCalledWith(t('teamChat.actionUnavailableInDm'));
     expect(forkRequestCallback).not.toHaveBeenCalled();
   });
 

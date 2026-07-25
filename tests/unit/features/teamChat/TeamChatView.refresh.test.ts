@@ -44,11 +44,16 @@ jest.mock('@/features/teamChat/resolveTeamChatAgentProvider', () => ({
   resolveTeamChatAgentProvider: jest.fn(),
 }));
 
+import { Notice } from 'obsidian';
+
 import { ChatState } from '@/features/chat/state/ChatState';
 import { resolveTeamChatAgentProvider } from '@/features/teamChat/resolveTeamChatAgentProvider';
+import { noticeRemovedAgentDms } from '@/features/teamChat/teamChatDmRefresh';
 import { TeamChatView } from '@/features/teamChat/TeamChatView';
+import { t } from '@/i18n/i18n';
 
 const mockResolveProvider = resolveTeamChatAgentProvider as jest.Mock;
+const mockNotice = Notice as jest.Mock;
 
 /** Prototype-only view wired just enough to drive the refresh surface. */
 function makeView(): any {
@@ -67,6 +72,7 @@ function makeView(): any {
   view.contentEl = createMockEl();
   view.selectedAgentId = null;
   view.dmRecency = []; // LRU recency array (T7); class-field initializer skipped by Object.create
+  view.removedAgentDmsNotified = new Set(); // agent-removed dedupe (Round-39); ditto
   view.tabManager = {
     getAllTabs: jest.fn(() => []),
     getActiveTab: jest.fn(() => null),
@@ -227,5 +233,99 @@ describe('TeamChatView.refreshTabControls / updateLayoutForPosition — re-proje
     view.updateLayoutForPosition();
 
     expect(observer).toHaveBeenCalledTimes(2);
+  });
+});
+
+// Round-39 Concern A: TeamChatView reacts to `roster:changed` for its OPEN DM tabs —
+// (b) the reused T5 reconcile (refreshProviderAvailability: un-grey + provider rotation)
+// AND (a) read-only handling for DMs whose bound agent was deleted from the roster.
+describe('TeamChatView.reconcileDmsOnRosterChange — roster:changed reconcile', () => {
+  beforeEach(() => jest.clearAllMocks());
+
+  it('runs the T5 provider reconcile AND surfaces the removal notice for a deleted-agent DM', async () => {
+    const view = makeView();
+    // Two open DMs: roster:live (agent still present), roster:gone (agent deleted).
+    view.tabManager.getAllTabs = jest.fn(() => [
+      { conversationId: 'c-live', state: {}, composer: { emit: jest.fn() } },
+      { conversationId: 'c-gone', state: {}, composer: { emit: jest.fn() } },
+    ]);
+    view.plugin.getConversationSync = jest.fn((id: string) =>
+      id === 'c-live'
+        ? { surface: 'team-chat', boundAgentId: 'roster:live', providerId: 'claude' }
+        : { surface: 'team-chat', boundAgentId: 'roster:gone', providerId: 'claude' });
+    view.plugin.agentRosterStore = { list: jest.fn().mockResolvedValue([{ id: 'roster:live' }]) };
+    // The (b) reconcile is exercised by its own suite above; here assert it is invoked.
+    const refreshSpy = jest.spyOn(view, 'refreshProviderAvailability').mockResolvedValue(undefined);
+
+    await view.reconcileDmsOnRosterChange();
+
+    expect(refreshSpy).toHaveBeenCalledTimes(1);
+    // Only the deleted-agent DM goes read-only (its notice fires); the live DM is untouched.
+    expect(mockNotice).toHaveBeenCalledWith(t('teamChat.agentRemoved'));
+    expect(mockNotice).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not re-notice an already-flagged removed DM on a later roster:changed (deduped)', async () => {
+    const view = makeView();
+    view.tabManager.getAllTabs = jest.fn(() => [{ conversationId: 'c-gone', state: {}, composer: { emit: jest.fn() } }]);
+    view.plugin.getConversationSync = jest.fn(() => ({ surface: 'team-chat', boundAgentId: 'roster:gone', providerId: 'claude' }));
+    view.plugin.agentRosterStore = { list: jest.fn().mockResolvedValue([]) };
+    jest.spyOn(view, 'refreshProviderAvailability').mockResolvedValue(undefined);
+
+    await view.reconcileDmsOnRosterChange();
+    await view.reconcileDmsOnRosterChange();
+
+    expect(mockNotice).toHaveBeenCalledTimes(1); // flagged once, not on every subsequent edit
+  });
+
+  it('logs (never rejects) when the reconcile throws', async () => {
+    const view = makeView();
+    view.tabManager.getAllTabs = jest.fn(() => []);
+    jest.spyOn(view, 'refreshProviderAvailability').mockRejectedValue(new Error('boom'));
+
+    await expect(view.reconcileDmsOnRosterChange()).resolves.toBeUndefined();
+  });
+});
+
+// Direct coverage of the deleted-agent detection helper: notice once per newly-removed DM,
+// clear the flag when the agent re-appears, and leave non-team-chat / bound-less tabs alone.
+describe('noticeRemovedAgentDms — deleted-agent read-only surfacing', () => {
+  beforeEach(() => jest.clearAllMocks());
+
+  function pluginWith(live: string[]): any {
+    return {
+      agentRosterStore: { list: jest.fn().mockResolvedValue(live.map((id) => ({ id }))) },
+      getConversationSync: jest.fn((id: string) =>
+        id === 'dm-gone'
+          ? { surface: 'team-chat', boundAgentId: 'roster:gone' }
+          : id === 'dm-live'
+            ? { surface: 'team-chat', boundAgentId: 'roster:live' }
+            : { surface: 'chat' }), // a sidebar conversation
+    };
+  }
+
+  it('re-notices after the agent is re-created under the same id (flag cleared)', async () => {
+    const plugin = pluginWith([]); // roster:gone absent
+    const tabs = [{ conversationId: 'dm-gone' }];
+    const notified = new Set<string>();
+
+    await noticeRemovedAgentDms(plugin, tabs as any, notified);
+    expect(mockNotice).toHaveBeenCalledTimes(1);
+    expect(notified.has('dm-gone')).toBe(true);
+
+    // Agent re-created → present in the roster → the flag clears so a future deletion re-notices.
+    plugin.agentRosterStore.list = jest.fn().mockResolvedValue([{ id: 'roster:gone' }]);
+    await noticeRemovedAgentDms(plugin, tabs as any, notified);
+    expect(notified.has('dm-gone')).toBe(false);
+    expect(mockNotice).toHaveBeenCalledTimes(1); // no new notice while present
+  });
+
+  it('ignores non-team-chat tabs and DMs whose agent still exists', async () => {
+    const plugin = pluginWith(['roster:live']);
+    const tabs = [{ conversationId: 'dm-live' }, { conversationId: 'sidebar-1' }];
+
+    await noticeRemovedAgentDms(plugin, tabs as any, new Set());
+
+    expect(mockNotice).not.toHaveBeenCalled();
   });
 });
