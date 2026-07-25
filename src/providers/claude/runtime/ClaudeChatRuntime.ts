@@ -24,6 +24,8 @@ import type {
 import { query as agentQuery } from '@anthropic-ai/claude-agent-sdk';
 import { Notice } from 'obsidian';
 
+import { pickEnvValueCaseInsensitive } from '@/core/providers/subprocessEnvironmentAllowlist';
+
 import { vetActiveServersForRuntime } from '../../../core/mcp/mcpRuntimeVetting';
 import type { McpServerManager } from '../../../core/mcp/McpServerManager';
 import { ProviderSettingsCoordinator } from '../../../core/providers/ProviderSettingsCoordinator';
@@ -647,9 +649,6 @@ export class ClaudeChatRuntime implements ChatRuntime {
     );
   }
 
-  /**
-   * Builds the base query options context from current state.
-   */
   private getScopedSettings(): SpecoratorSettings {
     return ProviderSettingsCoordinator.getProviderSettingsSnapshot(
       this.plugin.settings,
@@ -659,7 +658,7 @@ export class ClaudeChatRuntime implements ChatRuntime {
 
   private buildQueryOptionsContext(vaultPath: string, cliPath: string): QueryOptionsContext {
     const customEnv = this.plugin.getResolvedEnvironmentVariables(this.providerId);
-    const enhancedPath = getEnhancedPath(customEnv.PATH, cliPath);
+    const enhancedPath = getEnhancedPath(pickEnvValueCaseInsensitive(customEnv, 'PATH'), cliPath);
 
     return {
       vaultPath,
@@ -1236,7 +1235,7 @@ export class ClaudeChatRuntime implements ChatRuntime {
     }
 
     const customEnv = this.plugin.getResolvedEnvironmentVariables(this.providerId);
-    const enhancedPath = getEnhancedPath(customEnv.PATH, cliPath);
+    const enhancedPath = getEnhancedPath(pickEnvValueCaseInsensitive(customEnv, 'PATH'), cliPath);
     const missingNodeError = getMissingNodeError(cliPath, enhancedPath);
     if (missingNodeError) {
       return { ok: false, error: missingNodeError };

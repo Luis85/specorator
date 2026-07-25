@@ -1,6 +1,8 @@
 import type { SlashCommand as SDKSlashCommand } from '@anthropic-ai/claude-agent-sdk';
 import { query as agentQuery } from '@anthropic-ai/claude-agent-sdk';
 
+import { buildFullSubprocessEnvironment, pickEnvValueCaseInsensitive } from '@/core/providers/subprocessEnvironmentAllowlist';
+
 import type { SlashCommand } from '../../../core/types';
 import type { PluginContext } from '../../../core/types/PluginContext';
 import { getEnhancedPath } from '../../../utils/env';
@@ -38,7 +40,7 @@ export async function probeRuntimeCommands(plugin: PluginContext): Promise<Slash
   if (!cliPath) return [];
 
   const customEnv = plugin.getResolvedEnvironmentVariables('claude');
-  const enhancedPath = getEnhancedPath(customEnv.PATH, cliPath);
+  const enhancedPath = getEnhancedPath(pickEnvValueCaseInsensitive(customEnv, 'PATH'), cliPath);
   const claudeSettings = getClaudeProviderSettings(
     plugin.settings,
   );
@@ -57,7 +59,11 @@ export async function probeRuntimeCommands(plugin: PluginContext): Promise<Slash
         cwd: vaultPath,
         abortController,
         pathToClaudeCodeExecutable: cliPath,
-        env: { ...process.env, ...customEnv, PATH: enhancedPath },
+        env: buildFullSubprocessEnvironment({
+          processEnv: process.env,
+          customEnv,
+          pathOverride: enhancedPath,
+        }),
         permissionMode: 'bypassPermissions',
         allowDangerouslySkipPermissions: true,
         // SEC-2: the command probe parses local config (incl. project settings);
