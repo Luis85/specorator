@@ -285,4 +285,32 @@ describe('PluginViewActivator.getTabSlotUsage (work-order budget)', () => {
     const activator = new PluginViewActivator(plugin);
     expect(activator.getTabSlotUsage()).toEqual({ used: 2, max: 5 });
   });
+
+  it('counts deferred sidebar WO tabs even when a live Team Chat view exists', () => {
+    // Regression (Round-47): a live Team Chat leaf makes getAllViews() non-empty, yet it hosts
+    // only chat-kind DM tabs — never a work-order run tab. A deferred VIEW_TYPE_SPECORATOR leaf
+    // is not yet instantiated (so absent from getAllViews) but still restores its persisted WO
+    // tabs later. The Team Chat view must not mask that deferred sidebar's persisted budget, or
+    // the queue reads free capacity and over-launches before the sidebar restores.
+    const teamChatLive = {
+      getTabManager: () => ({ countTabsByKind: () => 0 }),
+      areTabsRestored: () => true,
+      leaf: { view: { getViewType: () => VIEW_TYPE_TEAM_CHAT } },
+    };
+    const { plugin } = createPlugin({
+      existingViewLeaves: [{ isDeferred: true }],
+      lastKnownOpenTabs: [
+        { tabId: 'chat-1', conversationId: null, kind: 'chat' },
+        { tabId: 'wo-1', conversationId: 'conv-1', kind: 'work-order' },
+        { tabId: 'wo-2', conversationId: 'conv-2', kind: 'work-order' },
+        { tabId: 'wo-3', conversationId: 'conv-3', kind: 'work-order' },
+      ],
+      pendingReservations: 1,
+      agentBoardQueueCap: 5,
+    });
+    (plugin.getAllViews as jest.Mock).mockReturnValue([teamChatLive]);
+    const activator = new PluginViewActivator(plugin);
+    // 3 persisted WO tabs + 1 pending reservation; pre-fix this wrongly returned { used: 1 }.
+    expect(activator.getTabSlotUsage()).toEqual({ used: 4, max: 5 });
+  });
 });
