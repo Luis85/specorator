@@ -89,7 +89,16 @@ function deferredHandle(): { handle: CliInstallHandle; finish: (r: CliInstallRes
   };
 }
 
-const plugin = { settings: {}, app: {} } as never;
+/** A view handle pair, so the post-enable refresh can be asserted. */
+function makeView() {
+  return {
+    refreshModelSelector: vi.fn(),
+    refreshProviderAvailability: vi.fn().mockResolvedValue(undefined),
+  };
+}
+
+const views = [makeView()];
+const plugin = { settings: {}, app: {}, getAllViews: () => views } as never;
 
 beforeEach(() => {
   setActivePinia(createPinia());
@@ -101,6 +110,10 @@ beforeEach(() => {
   vi.mocked(ensureOnboardingFolders).mockReset().mockResolvedValue([]);
   vi.mocked(readOnboardingFolders).mockReset().mockResolvedValue([]);
   vi.mocked(setFolderSetting).mockClear();
+  for (const view of views) {
+    view.refreshModelSelector.mockClear();
+    view.refreshProviderAvailability.mockClear();
+  }
 });
 
 describe('onboarding store', () => {
@@ -123,6 +136,18 @@ describe('onboarding store', () => {
 
     expect(setProviderEnabled).toHaveBeenCalledWith(plugin, 'alpha', true);
     expect(store.enabledProviderIds).toEqual(['alpha']);
+  });
+
+  it('enabling refreshes open chat views so a no-provider placeholder leaf promotes', async () => {
+    // Parity with the canonical toggle in settings/ui/GeneralTabSections.ts:
+    // Finish reveals an EXISTING leaf, so without this the leaf stays unusable.
+    const store = useOnboardingStore();
+    store.init(plugin);
+
+    await store.setEnabled('alpha', true);
+
+    expect(views[0].refreshModelSelector).toHaveBeenCalled();
+    expect(views[0].refreshProviderAvailability).toHaveBeenCalled();
   });
 
   it('a manual path write goes through the host-scoped setter and re-probes', async () => {

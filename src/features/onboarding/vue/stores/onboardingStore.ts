@@ -90,7 +90,17 @@ export const useOnboardingStore = defineStore('specorator-onboarding', () => {
   }
 
   async function setEnabled(providerId: ProviderId, enabled: boolean): Promise<void> {
-    await setProviderEnabled(requirePlugin(), providerId, enabled);
+    const active = requirePlugin();
+    await setProviderEnabled(active, providerId, enabled);
+    // Same post-save refresh as the canonical toggle in
+    // `settings/ui/GeneralTabSections.ts`: a chat leaf that was already open
+    // mounted the no-provider placeholder, and Finish REVEALS that leaf rather
+    // than building a new one — without this it would sit there unusable until
+    // the user reloaded the plugin.
+    for (const view of active.getAllViews()) {
+      view.refreshModelSelector();
+      void view.refreshProviderAvailability();
+    }
     refreshDetections();
   }
 
