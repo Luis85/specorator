@@ -7,3 +7,15 @@
 .workspace-leaf-content[data-type="specorator-team-chat"] .view-header {
   display: none;
 }
+
+/* The two-pane island fills the whole leaf. Zero the default view-content padding
+   so the roster rail's border-right reaches the bottom edge instead of stopping
+   short at the padding; each pane owns its own internal spacing (roster/top-bar
+   padding, the content-host inline gutter, and the composer's margin-bottom).
+   Mirrors the Agent Board host sheet's full-bleed treatment; contentEl also carries
+   `.specorator-vue`, so this stays a plain host rule. */
+.workspace-leaf-content[data-type="specorator-team-chat"] .view-content {
+  padding: 0;
+  min-height: 0;
+  overflow: hidden;
+}
