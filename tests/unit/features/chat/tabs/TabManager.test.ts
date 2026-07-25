@@ -2250,6 +2250,81 @@ describe('TabManager - destroy serialization (:197)', () => {
   });
 });
 
+// Round-42 (:118): once the nested follow-ups were repointed at the *Impl methods, the
+// `if (tabMutationDepth > 0) return operation()` inline path in runTabMutation was only ever
+// hit by an EXTERNAL top-level public mutation arriving while ANOTHER mutation was SUSPENDED
+// (e.g. a createTab awaiting hydration → depth > 0, NO teardown). It ran that external op
+// INLINE against half-built tab state instead of joining tabMutationTail, so a user
+// switch/close raced the suspended op and observed/clobbered mid-flight state. Public
+// mutations must ALWAYS enqueue.
+describe('TabManager - public mutations always enqueue while a mutation is suspended (:118)', () => {
+  it('queues an external switchToTab behind a SUSPENDED createTab instead of running it inline (:118)', async () => {
+    let releaseHydration!: () => void;
+    const hydration = new Promise<null>((resolve) => { releaseHydration = () => resolve(null); });
+    const plugin = createMockPlugin({ getConversationById: jest.fn(() => hydration) });
+    const callbacks: TabManagerCallbacks = { onTabSwitched: jest.fn(), onTabCreated: jest.fn() };
+    const manager = createManager({
+      plugin,
+      callbacks,
+      tabFactory: (n: number) => createMockTabData({ id: `tab-${n}` }),
+    });
+
+    // An already-active tab to switch back to (no conversationId → completes without a hydration gate).
+    const existing = await manager.createTab();
+    // Suspend a second create mid-hydration: its impl parks on getConversationById, so the
+    // mutation is in-flight and SUSPENDED (tabMutationDepth > 0) with NO teardown.
+    const creating = manager.createTab('conv-suspended');
+    await flushMicrotasks();
+    (callbacks.onTabSwitched as jest.Mock).mockClear();
+
+    // External switch arrives while the create is suspended.
+    const switching = manager.switchToTab(existing!.id);
+    await flushMicrotasks();
+    // Must be QUEUED behind the suspended create, NOT run inline against the mid-create tab set.
+    expect(callbacks.onTabSwitched).not.toHaveBeenCalled();
+
+    // Release the suspended create; it completes (inserts + activates its tab) FIRST, then the
+    // queued switch runs and wins — so the user's switch is the FINAL active tab, not clobbered
+    // by the mid-flight create's own activate (the inline path let the create supersede it).
+    releaseHydration();
+    await Promise.all([creating, switching]);
+    expect(callbacks.onTabSwitched).toHaveBeenCalled();
+    expect(manager.getActiveTabId()).toBe(existing!.id);
+  });
+
+  it('queues an external closeTab behind a SUSPENDED createTab instead of running it inline (:118)', async () => {
+    let releaseHydration!: () => void;
+    const hydration = new Promise<null>((resolve) => { releaseHydration = () => resolve(null); });
+    const plugin = createMockPlugin({ getConversationById: jest.fn(() => hydration) });
+    const manager = createManager({
+      plugin,
+      tabFactory: (n: number) => createMockTabData({ id: `tab-${n}` }),
+    });
+
+    await manager.createTab();               // tab-1
+    const doomed = await manager.createTab(); // tab-2 (active)
+    // Suspend a third create mid-hydration (depth > 0, no teardown).
+    const creating = manager.createTab('conv-suspended');
+    await flushMicrotasks();
+    expect(mockDestroyTab).not.toHaveBeenCalled();
+
+    // External close arrives while the create is suspended.
+    const closing = manager.closeTab(doomed!.id, true);
+    await flushMicrotasks();
+    // Queued behind the suspended create — the tab is NOT torn down mid-create.
+    expect(mockDestroyTab).not.toHaveBeenCalled();
+    expect(manager.hasTab(doomed!.id)).toBe(true);
+
+    // Release; the create completes (inserts tab-3), THEN the queued close runs against the
+    // settled tab set and tears down exactly the doomed tab.
+    releaseHydration();
+    const [, closed] = await Promise.all([creating, closing]);
+    expect(closed).toBe(true);
+    expect(mockDestroyTab).toHaveBeenCalledTimes(1);
+    expect(manager.hasTab(doomed!.id)).toBe(false);
+  });
+});
+
 describe('TabManager - Callback Wiring', () => {
   beforeEach(() => {
     jest.clearAllMocks();

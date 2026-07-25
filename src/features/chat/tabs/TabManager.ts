@@ -102,31 +102,28 @@ export class TabManager implements TabManagerInterface {
   /** In-flight tab creations reserved against the per-kind cap. */
   private pendingTabReservations = new Map<TabKind, number>();
 
-  /** Tracks nested mutation calls so internal follow-ups do not self-deadlock. */
-  private tabMutationDepth = 0;
-
-  /** Set once destroy() begins. Every PUBLIC mutation entry point rejects/no-ops on this
-   *  regardless of `tabMutationDepth`: a global depth counter can't tell a genuine nested
-   *  call (from inside an *Impl body) from an unrelated external call arriving while another
-   *  mutation is suspended (depth > 0), so the Round-35 `&& depth === 0` let the latter slip
-   *  through and race destroyImpl. Nested calls no longer go through the public methods — they
-   *  invoke the `*Impl` variants directly — so an unconditional guard here is safe (:120).
-   *  The memoized promise makes destroy() idempotent. */
+  /** Set once destroy() begins. Every PUBLIC mutation entry point (createTab / switchToTab /
+   *  closeTab / openConversation) rejects/no-ops on this BEFORE it enqueues, so a click or the
+   *  cross-leaf rotation-close arriving during teardown can't append work behind destroy's
+   *  drain and race destroyImpl. Public mutations ALWAYS enqueue (the depth-based inline path
+   *  was removed Round-42 :118) and nested follow-ups call the `*Impl` variants directly, so
+   *  this flag is the sole gate keeping late external mutations out. The memoized promise makes
+   *  destroy() idempotent. */
   private isDestroying = false;
   private destroyPromise: Promise<void> | null = null;
 
+  /**
+   * Serializes every PUBLIC tab mutation onto `tabMutationTail`: each op waits for the prior one
+   * to settle, so an external switch/close/open can never run against the half-built state of a
+   * create SUSPENDED mid-hydration. It ALWAYS enqueues — the old `if (tabMutationDepth > 0)
+   * return operation()` inline path (a reentrancy signal from when nested calls went through the
+   * public methods) was only ever reached by an unrelated external mutation arriving while
+   * another was suspended, and ran it inline racing that op (Round-42 :118). Nested follow-ups
+   * do NOT come through here — they call the `*Impl` variants directly — so joining the tail
+   * unconditionally can't self-deadlock.
+   */
   private runTabMutation<T>(operation: () => Promise<T>): Promise<T> {
-    if (this.tabMutationDepth > 0) {
-      return operation();
-    }
-    const result = this.tabMutationTail.then(async () => {
-      this.tabMutationDepth += 1;
-      try {
-        return await operation();
-      } finally {
-        this.tabMutationDepth -= 1;
-      }
-    });
+    const result = this.tabMutationTail.then(() => operation());
     this.tabMutationTail = result.then(
       () => undefined,
       () => undefined,
@@ -1111,9 +1108,10 @@ export class TabManager implements TabManagerInterface {
   /** Destroys all tabs and cleans up resources. Drains any in-flight/queued tab
    *  mutation FIRST (a createTab suspended mid-hydration must insert its tab before
    *  teardown, not into a cleared map as a leaked runtime — :197). NOT via
-   *  runTabMutation: a suspended mutation keeps tabMutationDepth > 0, so it would
-   *  misclassify destroy as reentrant and run destroyImpl inline, out from under the
-   *  suspended create (:1095). Memoized for idempotent concurrent teardown. */
+   *  runTabMutation: destroy must DRAIN the existing tail then run destroyImpl exactly
+   *  once, while `isDestroying` blocks any new public mutation from enqueueing after it
+   *  (routing destroy through the tail could interleave it with a late external op —
+   *  :1095). Memoized for idempotent concurrent teardown. */
   destroy(): Promise<void> {
     if (this.destroyPromise) return this.destroyPromise;
     this.isDestroying = true; // synchronously block creates issued after this point (createTab)

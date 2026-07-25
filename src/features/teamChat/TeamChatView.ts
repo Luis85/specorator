@@ -13,7 +13,7 @@ import { openEditedFile } from '../chat/tabs/tabUi';
 import type { PersistedTabManagerState } from '../chat/tabs/types';
 import type { ComposerEditedFile } from '../chat/ui/vue/composer/stores/composerStore';
 import { getTeamChatDmOpenCoordinator } from './TeamChatDmOpenCoordinator';
-import { applyDmEditedFilesSetting, applyDmHiddenCommands, noticeRemovedAgentDms, projectActiveDmEditedFiles, refreshDmModelState, rotateChangedDmProviders } from './teamChatDmRefresh';
+import { applyDmEditedFilesSetting, applyDmHiddenCommands, noticeRemovedAgentDms, projectActiveDmEditedFiles, reconcileRestoredDmProviders, refreshDmModelState, rotateChangedDmProviders } from './teamChatDmRefresh';
 import { openResolvedTeamChatDm, reconcileRotation, restoreTeamChatDmTabs, touchDmRecency } from './teamChatDmTabs';
 import { projectCrossLeafPresence, type TeamChatPresence } from './teamChatPresence';
 import type { TeamChatThreadStore } from './TeamChatThreadStore';
@@ -237,6 +237,10 @@ export class TeamChatView extends ItemView implements ChatViewHandle {
         // drains any runnable card, instead of stalling until an unrelated tab change
         // nudges it (:171).
         this.plugin.events.emit('chat:tabs-changed', tabCountsPayload(this.tabManager));
+        // Round-42: reconcile restored DMs against their agent's CURRENT provider — no startup
+        // event does after a deferred/closed-leaf restore. AFTER tabsRestored so selectAgent's
+        // restore gate is open; its generation + manager-identity guards drop a superseded rebuild.
+        await reconcileRestoredDmProviders(this.plugin, () => this.refreshProviderAvailability());
       }
     }
   }

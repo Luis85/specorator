@@ -287,6 +287,67 @@ describe('TeamChatView.reconcileDmsOnRosterChange — roster:changed reconcile',
   });
 });
 
+// Round-42: after a deferred/closed leaf restores its DM tabs, no startup event guarantees a
+// provider reconcile (the live roster:changed path only covers edits made while open). So
+// restoreTabsThenMarkReady runs refreshProviderAvailability over the restored DMs — a DM whose
+// agent now resolves to a different provider rotates to a fresh conversation on the new
+// provider; a matching-provider DM is left untouched.
+describe('TeamChatView — restored DM provider reconcile (Round-42, :329)', () => {
+  beforeEach(() => jest.clearAllMocks());
+
+  /** A view whose engine already holds two RESTORED DMs: agent A re-pointed at codex (its DM
+   *  still on claude → stale), agent B unchanged (claude === claude → fine). */
+  function restoredView(): any {
+    const view = makeView();
+    view.pendingTabManagerState = null; // restore itself is covered elsewhere; drive the POST-restore reconcile
+    view.tabsRestored = false;
+    view.tabManager.getAllTabs = jest.fn(() => [
+      { conversationId: 'c-a', state: {}, composer: { emit: jest.fn() } },
+      { conversationId: 'c-b', state: {}, composer: { emit: jest.fn() } },
+    ]);
+    view.tabManager.getActiveTab = jest.fn(() => null);
+    view.tabManager.getTabCount = jest.fn(() => 2);       // read by tabCountsPayload in the finally
+    view.tabManager.countTabsByKind = jest.fn(() => 2);
+    view.plugin.getConversationSync = jest.fn((id: string) =>
+      id === 'c-a'
+        ? { boundAgentId: 'roster:a', providerId: 'claude' }
+        : { boundAgentId: 'roster:b', providerId: 'claude' });
+    mockResolveProvider.mockImplementation(async (_plugin: unknown, agentId: string) =>
+      agentId === 'roster:a' ? 'codex' : 'claude');
+    return view;
+  }
+
+  it('rotates a restored DM whose agent now resolves to a different provider, leaving a matching DM untouched', async () => {
+    const view = restoredView();
+    const selectAgent = jest.spyOn(view, 'selectAgent').mockResolvedValue(undefined);
+
+    await view.restoreTabsThenMarkReady();
+
+    // The stale-provider DM rotates through selectAgent (fresh conversation on the new provider);
+    // the matching-provider DM is never rotated.
+    expect(selectAgent).toHaveBeenCalledTimes(1);
+    expect(selectAgent).toHaveBeenCalledWith('roster:a');
+    // The reconcile ran AFTER the restore gate opened, so selectAgent's own !tabsRestored gate
+    // would not have short-circuited the rotation.
+    expect(view.areTabsRestored()).toBe(true);
+  });
+
+  it('does not rotate a superseded restore (manager swapped mid-restore)', async () => {
+    const view = restoredView();
+    const selectAgent = jest.spyOn(view, 'selectAgent').mockResolvedValue(undefined);
+    // restoreTabsThenMarkReady captures this.tabManager at entry; a re-entrant rebuild swaps it
+    // during the (immediate) restore, so the manager-identity guard must skip BOTH the readiness
+    // publish AND the reconcile.
+    const original = view.tabManager;
+    view.restoreTabs = jest.fn(async () => { view.tabManager = { ...original }; });
+
+    await view.restoreTabsThenMarkReady();
+
+    expect(selectAgent).not.toHaveBeenCalled();
+    expect(view.areTabsRestored()).toBe(false);
+  });
+});
+
 // Direct coverage of the deleted-agent detection helper: notice once per newly-removed DM,
 // clear the flag when the agent re-appears, and leave non-team-chat / bound-less tabs alone.
 describe('noticeRemovedAgentDms — deleted-agent read-only surfacing', () => {

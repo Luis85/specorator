@@ -154,6 +154,28 @@ export async function rotateChangedDmProviders(
 }
 
 /**
+ * Round-42: reconcile the just-restored DM tabs against their agents' CURRENT provider. After a
+ * deferred/closed Team Chat leaf restores, no startup event guarantees a provider reconcile (the
+ * live `roster:changed` path only fires for edits made while the leaf was open), so a DM whose
+ * agent's provider changed while closed stays on its immutable old-provider conversation and runs
+ * its first turn on the stale provider. This runs the view's existing reconcile (un-grey + rotate
+ * any DM whose agent was re-pointed) over the restored DMs, rotating the stale one to a fresh
+ * conversation on the new provider. Errors are logged, never left unhandled off the fire-and-forget
+ * restore seam. Kept here (not inlined in the view) so `TeamChatView` stays a thin host — the same
+ * reason the DM-scoped refresh loops above live in this module.
+ */
+export async function reconcileRestoredDmProviders(
+  plugin: SpecoratorPlugin,
+  refreshProviderAvailability: () => Promise<void>,
+): Promise<void> {
+  try {
+    await refreshProviderAvailability();
+  } catch (error) {
+    plugin.logger.scope('team-chat').error('restored DM provider reconcile failed', error);
+  }
+}
+
+/**
  * Surfaces the read-only notice for every open DM whose bound agent was DELETED from the
  * roster (Round-39 Concern A). Deduped through `notified` (conversationId set) so a
  * `roster:changed` for an UNRELATED edit does not re-notice an already-flagged DM; a
