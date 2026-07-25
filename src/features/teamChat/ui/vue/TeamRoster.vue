@@ -4,6 +4,7 @@ import { inject, onMounted, onUnmounted, watch } from 'vue';
 import { t } from '../../../../i18n/i18n';
 import { withErrorNotice } from '../../../../shared/uiAction';
 import { useRosterStore } from '../../../library/vue/stores/rosterStore';
+import { activateMarketplace } from '../../../marketplace/activateMarketplace';
 import PresenceDot from './components/PresenceDot.vue';
 import { CALLBACKS_KEY, PLUGIN_KEY } from './keys';
 import { useTeamChatStore } from './stores/teamChatStore';
@@ -24,6 +25,16 @@ if (!callbacks) throw new Error('TeamRoster mounted without CALLBACKS_KEY');
 // declaration is typed before the `if (!callbacks) throw` guard narrows it.
 function selectAgent(agentId: string): void {
   callbacks?.onSelectAgent(agentId);
+}
+
+// Empty-roster CTA: deep-link the Marketplace's Agents category so a first-time
+// user with no team can get/create agents (mirrors the Library's "Browse
+// Marketplace" link). `'agent'` is the real MarketplaceItemType the deep-link
+// expects — the design doc's `'agents'` predates the singular category id.
+// `plugin?` guard (not the narrowed const): like selectAgent/fail above, a hoisted
+// function declaration is typed before the `if (!plugin) throw` guard narrows it.
+function browseMarketplace(): void {
+  if (plugin) void activateMarketplace(plugin, 'agent');
 }
 
 // Reuse the library roster store as the loader (vault I/O stays there); mirror
@@ -81,7 +92,17 @@ function fail(error: unknown): void {
       v-if="teamChatStore.agents.length === 0"
       class="specorator-team-roster-empty"
     >
-      {{ t('teamChat.rosterEmpty') }}
+      <p class="specorator-team-roster-empty-text">
+        {{ t('teamChat.rosterEmpty') }}
+      </p>
+      <!-- First-run bridge into the Marketplace so an empty team isn't a dead end. -->
+      <button
+        type="button"
+        class="specorator-team-roster-empty-cta"
+        @click="browseMarketplace()"
+      >
+        {{ t('teamChat.rosterEmptyCta') }}
+      </button>
     </div>
     <!-- Interactive (4b): a row click / Enter / Space opens the agent's DM. -->
     <div
@@ -132,9 +153,34 @@ function fail(error: unknown): void {
   padding: var(--sp-space-2xs) var(--sp-space-2xs) var(--sp-space-xs);
 }
 .specorator-team-roster-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--sp-space-s);
+  padding: var(--sp-space-2xs);
+}
+.specorator-team-roster-empty-text {
+  margin: 0;
   color: var(--sp-text-muted);
   font-size: var(--sp-font-small);
-  padding: var(--sp-space-2xs);
+}
+.specorator-team-roster-empty-cta {
+  font-weight: var(--sp-weight-medium);
+  font-size: var(--sp-font-small);
+  color: var(--sp-text-on-accent);
+  background: var(--sp-accent);
+  border: 1px solid var(--sp-accent);
+  border-radius: var(--sp-radius-s);
+  padding: var(--sp-space-2xs) var(--sp-space-s);
+  cursor: pointer;
+}
+.specorator-team-roster-empty-cta:hover {
+  background: var(--sp-accent-hover);
+  border-color: var(--sp-accent-hover);
+}
+.specorator-team-roster-empty-cta:focus-visible {
+  outline: 2px solid var(--sp-border-focus);
+  outline-offset: 2px;
 }
 .specorator-team-roster-row {
   display: flex;

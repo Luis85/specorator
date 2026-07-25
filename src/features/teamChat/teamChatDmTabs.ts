@@ -44,11 +44,21 @@ export async function openResolvedTeamChatDm(
     }
     return;
   }
-  // Enforce the hot-DM budget: evict the LRU DM before creating so a big roster browses
-  // gracefully instead of dead-ending at the cap (T7). Re-check staleness after the close.
-  await evictLruDmIfNeeded(plugin, manager, dmRecency, conversationId);
+  // Enforce the hot-DM budget and learn whether a slot is free: evict the LRU DM before
+  // creating so a big roster browses gracefully instead of dead-ending at the cap (T7).
+  const hasDmSlot = await evictLruDmIfNeeded(plugin, manager, dmRecency, conversationId);
+  // Re-check staleness after the eviction close.
   if (isStale()) return;
-  // Team Chat DMs carry their own budget (eviction above), so bypass the shared maxChatTabs.
+  // No slot: the budget is full AND every inactive DM is mid-turn, so eviction freed nothing
+  // (streaming DMs are never force-closed — Round-41). Opening now would exceed the hot-DM
+  // budget and spawn an over-budget runtime, so surface the same cap Notice the createTab
+  // dead-end uses and DON'T open. The stale guard just ran, so this is a live selection (Round-43).
+  if (!hasDmSlot) {
+    new Notice(t('teamChat.tabCapReached'));
+    return;
+  }
+  // Team Chat DMs carry their own budget (eviction above confirmed a slot), so bypass the
+  // shared maxChatTabs.
   const created = await manager.createTab(conversationId, undefined, { activate: true, kind: 'chat', bypassTabLimit: true });
   // Last-resort cap Notice: with eviction + bypass, createTab returns null only on a
   // teardown-window edge, never the ordinary budget path. A stale open isn't a user error.
@@ -307,21 +317,27 @@ export function pickLruDmEviction(
 }
 
 /**
- * Enforces the hot-DM budget before a NEW DM opens: if the manager already holds
- * `maxTeamChatDms` DMs, evict its least-recently-used one (via `closeTeamChatDmTab`, which
- * broadcasts presence) to free a slot. No-op under budget or when the manager can't report
- * its tabs. The caller guards the surrounding generation/stale check; the evicted DM's
- * mapping persists so re-selecting its agent reopens it.
+ * Enforces the hot-DM budget before a NEW DM opens AND reports whether a slot is free for it
+ * (Round-43). Under budget (or when the manager can't report its tabs) → `true`, no eviction.
+ * At/over budget → evict the least-recently-used IDLE DM (via `closeTeamChatDmTab`, which
+ * broadcasts presence) and return whether that close actually freed a slot. Returns `false`
+ * when nothing idle is evictable — every inactive DM is mid-turn, so `pickLruDmEviction`
+ * skips them all (Round-41): the caller must then NOT bypass the cap with an over-budget
+ * runtime and instead surfaces the cap Notice. The caller guards the surrounding
+ * generation/stale check; an evicted DM's mapping persists so re-selecting its agent reopens it.
  */
 export async function evictLruDmIfNeeded(
   plugin: SpecoratorPlugin,
   manager: DmEvictionManager,
   recency: readonly string[],
   openingConversationId: string,
-): Promise<void> {
+): Promise<boolean> {
   const tabs = manager.getAllTabs?.() ?? [];
-  if (tabs.length < resolveMaxTeamChatDms(plugin.settings)) return;
+  if (tabs.length < resolveMaxTeamChatDms(plugin.settings)) return true;
   const victimTabId = pickLruDmEviction(tabs, recency, manager.getActiveTabId?.() ?? null, openingConversationId);
-  if (victimTabId == null) return;
-  await closeTeamChatDmTab(plugin, manager, victimTabId);
+  if (victimTabId == null) return false;
+  // A successful eviction close frees exactly the one slot the new DM needs (the budget is
+  // enforced on every open, so the manager is at most one over). Propagate the close result:
+  // a rare failed close freed nothing, so the caller must not then bypass the cap.
+  return closeTeamChatDmTab(plugin, manager, victimTabId);
 }

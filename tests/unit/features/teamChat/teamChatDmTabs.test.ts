@@ -1,13 +1,19 @@
+import { Notice } from 'obsidian';
+
 import {
   closeRotatedDmTab,
   closeTeamChatDmTab,
   evictLruDmIfNeeded,
+  openResolvedTeamChatDm,
   pickLruDmEviction,
   reconcileRotation,
   restoreTeamChatDmTabs,
   touchDmRecency,
   trimRestorableDmsToBudget,
 } from '@/features/teamChat/teamChatDmTabs';
+import { t } from '@/i18n/i18n';
+
+const mockNotice = Notice as jest.Mock;
 
 const teamChatConv = { surface: 'team-chat', boundAgentId: 'roster:a', providerId: 'claude' };
 
@@ -383,6 +389,77 @@ describe('evictLruDmIfNeeded', () => {
     await evictLruDmIfNeeded(plugin, manager, ['a', 'b'], 'c');
 
     expect(closeTab).not.toHaveBeenCalled();
+  });
+});
+
+// Round-43 (:451/:52): the open path must not create an over-budget DM when eviction frees
+// no slot. `evictLruDmIfNeeded` now REPORTS slot availability; `openResolvedTeamChatDm` only
+// bypasses the shared maxChatTabs once a Team Chat slot is confirmed, else it surfaces the
+// same `tabCapReached` Notice the createTab dead-end uses — never an extra runtime.
+describe('openResolvedTeamChatDm — budget-gated open (Round-43)', () => {
+  beforeEach(() => mockNotice.mockClear());
+
+  const notOpenAnywhere = { findConversationAcrossViews: jest.fn(() => null) };
+
+  it('surfaces the cap Notice and does NOT createTab when the budget is full and every inactive DM is streaming', async () => {
+    const createTab = jest.fn();
+    const closeTab = jest.fn();
+    const plugin = { settings: { maxTeamChatDms: 2 }, events: { emit: jest.fn() }, ...notOpenAnywhere } as never;
+    // At budget (2): t-a is mid-turn, t-b is active → no idle victim → eviction frees nothing.
+    const manager = {
+      getAllTabs: () => [
+        { id: 't-a', conversationId: 'a', state: { isStreaming: true } },
+        { id: 't-b', conversationId: 'b', state: { isStreaming: false } },
+      ],
+      getActiveTabId: () => 't-b',
+      closeTab,
+      createTab,
+    } as never;
+
+    await openResolvedTeamChatDm(plugin, manager, {} as never, ['a', 'b'], 'c', () => false);
+
+    expect(closeTab).not.toHaveBeenCalled();  // a streaming DM is never force-closed
+    expect(createTab).not.toHaveBeenCalled(); // and no over-budget runtime is spawned
+    expect(mockNotice).toHaveBeenCalledWith(t('teamChat.tabCapReached'));
+  });
+
+  it('evicts an idle LRU DM and opens the new one when the budget is full', async () => {
+    const createTab = jest.fn().mockResolvedValue({ id: 't-new' });
+    const closeTab = jest.fn().mockResolvedValue(true);
+    const plugin = { settings: { maxTeamChatDms: 2 }, events: { emit: jest.fn() }, ...notOpenAnywhere } as never;
+    const manager = {
+      getAllTabs: () => [
+        { id: 't-a', conversationId: 'a', state: { isStreaming: false } }, // idle LRU
+        { id: 't-b', conversationId: 'b', state: { isStreaming: false } }, // active
+      ],
+      getActiveTabId: () => 't-b',
+      closeTab,
+      createTab,
+    } as never;
+
+    await openResolvedTeamChatDm(plugin, manager, {} as never, ['a', 'b'], 'c', () => false);
+
+    expect(closeTab).toHaveBeenCalledWith('t-a', true);
+    expect(createTab).toHaveBeenCalledWith('c', undefined, { activate: true, kind: 'chat', bypassTabLimit: true });
+    expect(mockNotice).not.toHaveBeenCalled();
+  });
+
+  it('opens with no eviction or Notice when under the hot-DM budget', async () => {
+    const createTab = jest.fn().mockResolvedValue({ id: 't-new' });
+    const closeTab = jest.fn();
+    const plugin = { settings: { maxTeamChatDms: 5 }, events: { emit: jest.fn() }, ...notOpenAnywhere } as never;
+    const manager = {
+      getAllTabs: () => [{ id: 't-a', conversationId: 'a', state: { isStreaming: false } }],
+      getActiveTabId: () => 't-a',
+      closeTab,
+      createTab,
+    } as never;
+
+    await openResolvedTeamChatDm(plugin, manager, {} as never, ['a'], 'c', () => false);
+
+    expect(closeTab).not.toHaveBeenCalled();
+    expect(createTab).toHaveBeenCalledWith('c', undefined, { activate: true, kind: 'chat', bypassTabLimit: true });
+    expect(mockNotice).not.toHaveBeenCalled();
   });
 });
 

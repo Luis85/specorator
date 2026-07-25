@@ -1332,6 +1332,7 @@
     "viewTitle": "Team Chat",
     "emptyState": "Select an agent to start chatting.",
     "rosterEmpty": "No agents in your team yet.",
+    "rosterEmptyCta": "Find agents in the Marketplace",
     "tabCapReached": "Tab limit reached. Close a tab to open this chat.",
     "presenceIdle": "Idle",
     "presenceBusy": "Busy",

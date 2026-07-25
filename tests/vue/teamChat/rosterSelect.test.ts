@@ -5,10 +5,18 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { RosterAgent } from '@/features/agents/roster/rosterTypes';
 import { CALLBACKS_KEY, CONTENT_HOST_KEY, PLUGIN_KEY } from '@/features/teamChat/ui/vue/keys';
 import TeamChatRoot from '@/features/teamChat/ui/vue/TeamChatRoot.vue';
+import { t } from '@/i18n/i18n';
 
 // Avatar rendering is imperative (setIcon/createSpan); stub it so the assertions
 // are about row interaction, not avatar internals.
 vi.mock('@/features/agents/agentAvatar', () => ({ renderAgentAvatar: vi.fn() }));
+
+// The empty-roster CTA routes through activateMarketplace; stub it so the click is
+// asserted without opening a real Marketplace leaf (mirrors libraryView.test.ts).
+const { activateMarketplaceMock } = vi.hoisted(() => ({ activateMarketplaceMock: vi.fn() }));
+vi.mock('@/features/marketplace/activateMarketplace', () => ({
+  activateMarketplace: activateMarketplaceMock,
+}));
 
 function agent(id: string, name: string): RosterAgent {
   return {
@@ -100,5 +108,36 @@ describe('TeamRoster (Phase 4b: interactive roster → DM)', () => {
     mountRoot(makePlugin([agent('roster:a', 'Ada')]), callbacks);
     await screen.findByText('Ada');
     expect(callbacks.onSelectAgent).not.toHaveBeenCalled();
+  });
+});
+
+// Round-43: an empty roster is a first-run dead end without a way to get agents, so the
+// empty state carries a CTA that deep-links the Marketplace's Agents category.
+describe('TeamRoster empty-roster Marketplace CTA (Round-43)', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    setActivePinia(createPinia());
+  });
+
+  it('renders a Marketplace CTA when the roster is empty', async () => {
+    mountRoot(makePlugin([]), makeCallbacks());
+    expect(await screen.findByRole('button', { name: t('teamChat.rosterEmptyCta') })).toBeTruthy();
+  });
+
+  it('deep-links the Marketplace Agents category when the CTA is clicked', async () => {
+    const plugin = makePlugin([]);
+    mountRoot(plugin, makeCallbacks());
+    const cta = await screen.findByRole('button', { name: t('teamChat.rosterEmptyCta') });
+
+    await fireEvent.click(cta);
+
+    // 'agent' (singular) is the real MarketplaceItemType — matching the Library deep-link.
+    expect(activateMarketplaceMock).toHaveBeenCalledWith(plugin, 'agent');
+  });
+
+  it('does not render the CTA once the roster has agents', async () => {
+    mountRoot(makePlugin([agent('roster:a', 'Ada')]), makeCallbacks());
+    await screen.findByText('Ada');
+    expect(screen.queryByRole('button', { name: t('teamChat.rosterEmptyCta') })).toBeNull();
   });
 });

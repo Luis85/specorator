@@ -3,6 +3,8 @@ export type TeamChatTranslationKey =
   | 'teamChat.viewTitle'
   | 'teamChat.emptyState'
   | 'teamChat.rosterEmpty'
+  // Empty-roster CTA: deep-links the Marketplace's Agents category (first-run bridge)
+  | 'teamChat.rosterEmptyCta'
   | 'teamChat.tabCapReached'
   // Roster presence dots (idle / busy)
   | 'teamChat.presenceIdle'
