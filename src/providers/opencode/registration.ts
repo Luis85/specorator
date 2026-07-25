@@ -27,6 +27,10 @@ export const opencodeProviderRegistration: ProviderRegistration = {
   cliInstall: {
     docsUrl: 'https://opencode.ai/docs/',
     authCommand: 'opencode auth login',
+    // `OpencodeChatRuntime` spawns `getResolvedProviderCliPath('opencode') ?? 'opencode'`
+    // and `resolveOpencodeCliPath` intentionally checks configured paths only,
+    // so a PATH install resolves at spawn time with no path setting at all.
+    runtimeFallsBackToPathLookup: true,
     methods: [
       {
         id: 'npm',

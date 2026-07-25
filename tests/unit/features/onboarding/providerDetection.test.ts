@@ -12,10 +12,20 @@ import { findBinaryOnPath } from '@/utils/cliBinaryLocator';
 // Stub registrations rather than importing `@/providers`: the real aggregator
 // drags the MCP SDK's ESM-only deps in, and detection only needs the registry's
 // name/blurb/cli/install surface.
-const STUBS: Array<{ id: ProviderId; name: string; cli: string; extra?: string[] }> = [
+interface Stub {
+  id: ProviderId;
+  name: string;
+  cli: string;
+  extra?: string[];
+  /** Models OpenCode: the runtime spawns the bare command, so PATH counts. */
+  pathFallback?: boolean;
+}
+
+const STUBS: Stub[] = [
   { id: 'det-alpha', name: 'Alpha', cli: 'alpha' },
   { id: 'det-beta', name: 'Beta', cli: 'beta' },
   { id: 'det-gamma', name: 'Gamma', cli: 'gamma', extra: ['gamma-alt'] },
+  { id: 'det-path', name: 'Path', cli: 'pathcli', extra: ['pathcli-alt'], pathFallback: true },
 ];
 
 function stubResolver(resolved: string | null): ProviderCliResolver & { resetCalls: number } {
@@ -45,6 +55,7 @@ beforeAll(() => {
         docsUrl: 'https://example.test/docs',
         authCommand: `${stub.cli} login`,
         extraBinaryNames: stub.extra,
+        runtimeFallsBackToPathLookup: stub.pathFallback,
         methods: [],
       },
       isEnabled: (settings: Record<string, unknown>) => Boolean(
@@ -98,28 +109,62 @@ describe('detectProviderCli', () => {
     expect(findBinaryOnPath).not.toHaveBeenCalled();
   });
 
-  it('falls back to a PATH probe and reports unknown (never missing) with no workspace resolver', () => {
+  it('reports unknown (never missing) with no workspace resolver', () => {
     const detection = detectProviderCli(makePlugin(), 'det-beta');
 
     expect(detection.status).toBe('unknown');
     expect(detection.cliPath).toBeNull();
-    expect(findBinaryOnPath).toHaveBeenCalled();
   });
 
-  it('accepts a fallback hit as found', () => {
+  it('does NOT claim a PATH hit is usable when the runtime needs a resolved path', () => {
+    // Without a workspace resolver `getResolvedProviderCliPath` returns null and
+    // Claude/Codex/Cursor runtimes refuse to start, so a bare PATH match must not
+    // be reported as ready.
     jest.mocked(findBinaryOnPath).mockReturnValue('/opt/bin/beta');
 
     expect(detectProviderCli(makePlugin(), 'det-beta')).toMatchObject({
-      status: 'found',
-      cliPath: '/opt/bin/beta',
+      status: 'unknown',
+      cliPath: null,
     });
   });
 
+  it('treats a PATH install as found when the runtime spawns the bare command', () => {
+    // OpenCode's resolver is configured-paths-only, so its null means "no pin,
+    // use PATH" — reporting missing would call a working install broken.
+    ProviderWorkspaceRegistry.setServices('det-path', { cliResolver: stubResolver(null) } as never);
+    jest.mocked(findBinaryOnPath).mockReturnValue('/usr/local/bin/pathcli');
+
+    expect(detectProviderCli(makePlugin(), 'det-path')).toMatchObject({
+      status: 'found',
+      cliPath: '/usr/local/bin/pathcli',
+    });
+  });
+
+  it('still reports missing for a bare-command provider with nothing on PATH', () => {
+    ProviderWorkspaceRegistry.setServices('det-path', { cliResolver: stubResolver(null) } as never);
+
+    expect(detectProviderCli(makePlugin(), 'det-path')).toMatchObject({
+      status: 'missing',
+      cliPath: null,
+    });
+  });
+
+  it('a configured path still wins for a bare-command provider', () => {
+    ProviderWorkspaceRegistry.setServices('det-path', {
+      cliResolver: stubResolver('/pinned/pathcli'),
+    } as never);
+
+    expect(detectProviderCli(makePlugin(), 'det-path').cliPath).toBe('/pinned/pathcli');
+    expect(findBinaryOnPath).not.toHaveBeenCalled();
+  });
+
   it('probes the provider-declared extra binary names alongside the primary command', () => {
-    detectProviderCli(makePlugin(), 'det-gamma');
+    ProviderWorkspaceRegistry.setServices('det-path', { cliResolver: stubResolver(null) } as never);
+
+    detectProviderCli(makePlugin(), 'det-path');
 
     const [candidates] = jest.mocked(findBinaryOnPath).mock.calls[0];
-    expect(candidates).toEqual(expect.arrayContaining(['gamma', 'gamma-alt']));
+    expect(candidates).toEqual(expect.arrayContaining(['pathcli', 'pathcli-alt']));
   });
 
   it('reflects the provider enabled flag from live settings', () => {
@@ -139,7 +184,7 @@ describe('detectProviderClis', () => {
     // det-beta has no resolver → 'unknown' via the fallback probe.
 
     const ordered = detectProviderClis(makePlugin())
-      .filter((detection) => registryIds().includes(detection.providerId));
+      .filter((detection) => ['det-alpha', 'det-beta', 'det-gamma'].includes(detection.providerId));
 
     expect(ordered.map((detection) => [detection.providerId, detection.status])).toEqual([
       ['det-gamma', 'found'],

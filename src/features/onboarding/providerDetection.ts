@@ -40,13 +40,24 @@ function binaryCandidates(providerId: ProviderId): string[] {
 }
 
 /**
- * Probes one provider's CLI through the provider's OWN resolver, so what the
- * setup view reports is exactly what the runtime will find at spawn time — not
- * a second search path that can drift from it.
+ * Probes one provider's CLI the way that provider's RUNTIME will at spawn time,
+ * so the setup view can't report something the runtime disagrees with.
  *
- * `reset()` first: `CachedCliResolver` memoizes on a settings-derived key, and
- * an install changes no setting, so a cached `null` would otherwise outlive the
- * install that fixed it and the card would stay stuck on "not found".
+ * Two provider shapes, distinguished by `cliInstall.runtimeFallsBackToPathLookup`:
+ *
+ * - **Runtime needs a resolved path** (Claude, Codex, Cursor). Their resolvers
+ *   already scan PATH, so a `null` is authoritative → `missing`. With no
+ *   resolver at all (workspace init failed, or hasn't run), a bare PATH hit
+ *   proves nothing — `getResolvedProviderCliPath` still returns `null` and the
+ *   runtime refuses to start — so that stays `unknown` rather than a `found`
+ *   that would promise a provider the user can't actually use.
+ * - **Runtime spawns the bare command** (OpenCode). Its resolver is
+ *   configured-paths-only by design, so `null` means "no pin, use PATH" and the
+ *   probe is the authoritative answer, not a fallback.
+ *
+ * `reset()` before probing: `CachedCliResolver` memoizes on a settings-derived
+ * key, and an install changes no setting, so a cached `null` would otherwise
+ * outlive the install that fixed it and the card would stay stuck on "not found".
  */
 export function detectProviderCli(
   plugin: PluginContext,
@@ -60,20 +71,30 @@ export function detectProviderCli(
     cliCommand: ProviderRegistry.getCliCommand(providerId),
     enabled: ProviderRegistry.isEnabled(providerId, settings),
   };
+  const spawnsBareCommand = ProviderRegistry
+    .getCliInstall(providerId).runtimeFallsBackToPathLookup === true;
 
   const resolver = ProviderWorkspaceRegistry.getCliResolver(providerId);
   if (resolver) {
     resolver.reset();
     const resolved = resolver.resolveFromSettings(settings);
-    return resolved
-      ? { ...base, status: 'found', cliPath: resolved }
-      : { ...base, status: 'missing', cliPath: null };
+    if (resolved) {
+      return { ...base, status: 'found', cliPath: resolved };
+    }
+    if (!spawnsBareCommand) {
+      return { ...base, status: 'missing', cliPath: null };
+    }
+  } else if (!spawnsBareCommand) {
+    return { ...base, status: 'unknown', cliPath: null };
   }
 
-  const fallback = findBinaryOnPath(binaryCandidates(providerId));
-  return fallback
-    ? { ...base, status: 'found', cliPath: fallback }
-    : { ...base, status: 'unknown', cliPath: null };
+  const onPath = findBinaryOnPath(binaryCandidates(providerId));
+  if (onPath) {
+    return { ...base, status: 'found', cliPath: onPath };
+  }
+  // Nothing found: `missing` only when a resolver also looked, so an
+  // uninitialized workspace never hardens into a false negative.
+  return { ...base, status: resolver ? 'missing' : 'unknown', cliPath: null };
 }
 
 /**

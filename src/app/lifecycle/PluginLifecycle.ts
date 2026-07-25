@@ -54,12 +54,20 @@ export class PluginLifecycle {
    * services). Gating onboarding on unrelated startup success would leave a
    * fresh vault with no first-run surface at all.
    */
-  async runDeferredStartup(completeDeferredOnload: () => Promise<void>): Promise<void> {
+  async runDeferredStartup(
+    completeDeferredOnload: () => Promise<void>,
+    isUnloaded: () => boolean,
+  ): Promise<void> {
     try {
       await completeDeferredOnload();
     } catch (error) {
       this.plugin.logger.scope('onload').error('deferred onload failed', error);
     }
+    // Unload is the one case that must NOT continue: the flow persists its
+    // auto-open flag before activating, so opening a leaf on a torn-down plugin
+    // would burn the one auto-open the vault gets. An ordinary init failure
+    // still continues — that is the whole point of the unconditional path.
+    if (isUnloaded()) return;
     await this.openOnboardingIfFirstRun();
   }
 

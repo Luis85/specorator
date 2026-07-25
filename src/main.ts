@@ -229,7 +229,10 @@ export default class SpecoratorPlugin extends Plugin implements PluginContext {
     // finished" signal; provider services don't have to exist for view
     // restoration since runtime services are lazy-initialized per tab.
     this.app.workspace.onLayoutReady(() => {
-      void this.lifecycle.runDeferredStartup(() => this.completeDeferredOnload());
+      void this.lifecycle.runDeferredStartup(
+        () => this.completeDeferredOnload(),
+        () => this.unloaded,
+      );
     });
   }
 

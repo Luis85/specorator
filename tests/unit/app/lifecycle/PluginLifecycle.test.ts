@@ -109,11 +109,22 @@ describe('PluginLifecycle.runDeferredStartup', () => {
     const open = jest.spyOn(lifecycle, 'openOnboardingIfFirstRun').mockResolvedValue(undefined);
     const order: string[] = [];
 
-    await lifecycle.runDeferredStartup(async () => { order.push('deferred'); });
+    await lifecycle.runDeferredStartup(async () => { order.push('deferred'); }, () => false);
     order.push('open');
 
     expect(open).toHaveBeenCalledTimes(1);
     expect(order).toEqual(['deferred', 'open']);
+  });
+
+  it('skips the open when the plugin unloaded mid-startup', async () => {
+    // The flow persists its auto-open flag before activating, so opening a leaf
+    // on a torn-down plugin would burn the vault's one auto-open.
+    const lifecycle = new PluginLifecycle(createStartupPlugin());
+    const open = jest.spyOn(lifecycle, 'openOnboardingIfFirstRun').mockResolvedValue(undefined);
+
+    await lifecycle.runDeferredStartup(async () => {}, () => true);
+
+    expect(open).not.toHaveBeenCalled();
   });
 
   it('still opens Setup when the deferred work rejects', async () => {
@@ -124,7 +135,10 @@ describe('PluginLifecycle.runDeferredStartup', () => {
     const open = jest.spyOn(lifecycle, 'openOnboardingIfFirstRun').mockResolvedValue(undefined);
 
     await expect(
-      lifecycle.runDeferredStartup(() => Promise.reject(new Error('provider init failed'))),
+      lifecycle.runDeferredStartup(
+        () => Promise.reject(new Error('provider init failed')),
+        () => false,
+      ),
     ).resolves.toBeUndefined();
 
     expect(open).toHaveBeenCalledTimes(1);

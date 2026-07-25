@@ -35,15 +35,26 @@ surfaces to use the island pattern; this is one.
 
 ## Contracts & invariants
 
-- **Detection uses the provider's own resolver, and resets it first.** What the
-  setup view reports is exactly what the runtime will find at spawn time — not a
-  second search path that can drift. `CachedCliResolver` memoizes on a
-  settings-derived key and an install changes no setting, so without the
-  `reset()` a cached `null` would outlive the install that fixed it and the card
-  would stay stuck on "not found". A provider with no workspace resolver yet
-  (services initialize on `onLayoutReady`) reports `unknown`, **never**
-  `missing` — claiming a CLI is absent when we could not properly look is worse
-  than admitting we don't know.
+- **Detection mirrors what the provider's RUNTIME does at spawn time**, and
+  resets the resolver first (`CachedCliResolver` memoizes on a settings-derived
+  key and an install changes no setting, so a cached `null` would outlive the
+  install that fixed it). Two provider shapes, split by
+  `cliInstall.runtimeFallsBackToPathLookup`:
+  - **Runtime needs a resolved path** (Claude, Codex, Cursor — their resolvers
+    already scan PATH). A resolver `null` is authoritative → `missing`. With NO
+    resolver (workspace init failed, or hasn't run) the status is `unknown` and
+    no PATH probe is consulted: `getResolvedProviderCliPath` would still return
+    `null` and the runtime would refuse to start, so a bare PATH hit must not be
+    reported as ready.
+  - **Runtime spawns the bare command** (OpenCode —
+    `getResolvedProviderCliPath('opencode') ?? 'opencode'`, and
+    `resolveOpencodeCliPath` checks configured paths only). Here a resolver
+    `null` means "no pin, use PATH", so the probe IS the authoritative answer;
+    treating it as `missing` would call a working install broken and keep saying
+    so after a successful in-app install.
+  `unknown` is never downgraded to `missing` without an authoritative look —
+  claiming a CLI is absent when we could not properly look is worse than
+  admitting we don't know.
 - **The install `argv` IS the security model.** `ProviderRegistration.cliInstall`
   declares each method's `argv` statically; the runner spawns it with **no
   shell**, so there is no command string for anything to be interpolated into. A
@@ -81,12 +92,14 @@ surfaces to use the island pattern; this is one.
   without configuring still has a quiet nudge with a way back in. Auto-open
   additionally requires that no provider is enabled (`hasAnyProviderEnabled`),
   so an existing user who set up from the settings tab is never ambushed.
-- **The auto-open survives a broken startup.** `PluginLifecycle.runDeferredStartup`
-  sequences it with an unconditional continuation after `completeDeferredOnload`
-  rather than chaining onto its success: that method bails out when provider
-  workspace init fails and can reject when a cache hydration throws, and a vault
-  where that happens is exactly where the setup view is most needed (detection
-  already degrades to `unknown` without workspace services).
+- **The auto-open survives a broken startup, but not an unload.**
+  `PluginLifecycle.runDeferredStartup` sequences it after
+  `completeDeferredOnload` unconditionally rather than chaining onto success:
+  that method bails out when provider workspace init fails and can reject when a
+  cache hydration throws, and a vault where that happens is exactly where the
+  setup view is most needed. The one exception is `isUnloaded()` — the flow
+  persists its auto-open flag *before* activating, so continuing into a
+  torn-down plugin would burn the single auto-open the vault gets.
 - **A model choice is committed to the provider that owns it.** Writing only the
   top-level `model` does not survive: `ProviderSettingsCoordinator` projects
   per-provider state, and projecting a provider that doesn't own the current
@@ -99,11 +112,14 @@ surfaces to use the island pattern; this is one.
   `broadcastCliPathRuntimeCleanup` the provider CLI-path widgets use: a
   persistent Codex/Cursor/OpenCode process already holds the OLD executable, so
   without it the card would read "detected" while live chats kept spawning the
-  previous binary. Residual: OpenCode's widget additionally clears its
-  discovery state (model/mode catalog) through a provider-internal helper the
-  features layer cannot reach, so an OpenCode path change made here can leave a
-  stale model list until the next discovery — closing that needs a
-  registration-level "CLI path changed" hook, not a provider import.
+  previous binary. That helper now iterates `getAllViews()` (it used to clean
+  only `getView()`, silently leaving secondary leaves on the old executable —
+  fixed for the provider settings widgets too). Residual: OpenCode's widget
+  additionally clears its discovery state (model/mode catalog) through a
+  provider-internal helper the features layer cannot reach, so an OpenCode path
+  change made here can leave a stale model list until the next discovery —
+  closing that needs a registration-level "CLI path changed" hook, not a
+  provider import.
 - **Provider metadata comes from the registry.** `cliInstall` lives on each
   `ProviderRegistration` (like `firstRunBlurb` / `cliCommand` before it — see
   tech-debt 2026-06-07); a feature-level `{claude: …, codex: …}` table would trip

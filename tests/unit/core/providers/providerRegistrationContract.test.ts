@@ -61,6 +61,9 @@ describe('provider registration contract', () => {
     const install = ProviderRegistry.getCliInstall(id);
     expect(install.docsUrl).toMatch(/^https:\/\//);
     expect(install.authCommand).toBeTruthy();
+    // Optional, but must be a boolean when present: onboarding reads it to
+    // decide whether a resolver `null` means "missing" or "resolves via PATH".
+    expect(['boolean', 'undefined']).toContain(typeof install.runtimeFallsBackToPathLookup);
     expect(install.methods.length).toBeGreaterThan(0);
     expect(install.methods.map((m) => Boolean(m.id && m.label && m.displayCommand)))
       .toEqual(install.methods.map(() => true));
