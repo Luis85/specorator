@@ -2100,6 +2100,27 @@ describe('TabManager - Cleanup', () => {
   });
 });
 
+describe('TabManager - destroy serialization (:197)', () => {
+  it('waits for an in-flight createTab before tearing down, so no tab leaks', async () => {
+    // Gate conversation hydration so createTab parks mid-flight (before this.tabs.set),
+    // exactly where a concurrent destroy() could clear the map out from under it.
+    let releaseHydration!: () => void;
+    const hydration = new Promise<null>((resolve) => { releaseHydration = () => resolve(null); });
+    const plugin = createMockPlugin({ getConversationById: jest.fn(() => hydration) });
+    const manager = createManager({ plugin });
+
+    const creating = manager.createTab('conv-1'); // parks on getConversationById
+    const tearing = manager.destroy();            // must queue behind the createTab mutation
+    releaseHydration();                            // let createTab finish
+    await Promise.all([creating, tearing]);
+
+    // The just-created tab was included in teardown (destroyed), not stranded in a
+    // cleared map as an undisposed detached tab.
+    expect(manager.getTabCount()).toBe(0);
+    expect(mockDestroyTab).toHaveBeenCalledTimes(1);
+  });
+});
+
 describe('TabManager - Callback Wiring', () => {
   beforeEach(() => {
     jest.clearAllMocks();

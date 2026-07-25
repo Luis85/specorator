@@ -1086,8 +1086,15 @@ export class TabManager implements TabManagerInterface {
   // Cleanup
   // ============================================
 
-  /** Destroys all tabs and cleans up resources. */
+  /** Destroys all tabs and cleans up resources. Serialized behind in-flight
+   *  create/switch/close so a createTab still draining the queue completes and is
+   *  included in this.tabs before teardown, not stranded in the cleared map as a
+   *  leaked detached tab whose runtime is never disposed (:197). */
   async destroy(): Promise<void> {
+    return this.runTabMutation(() => this.destroyImpl());
+  }
+
+  private async destroyImpl(): Promise<void> {
     // Save all conversations in parallel (independent per-tab)
     await Promise.all(
       Array.from(this.tabs.values()).map(

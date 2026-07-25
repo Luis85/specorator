@@ -188,6 +188,14 @@ export class TeamChatView extends ItemView implements ChatViewHandle {
    *  runtime-only disposeAllRuntimes, which leaks controllers/listeners/islands
    *  and skips the per-conversation saves). */
   private async destroyTabRuntime(): Promise<void> {
+    // Invalidate any in-flight selectAgent open BEFORE persist/destroy: teardown
+    // never bumps the generation otherwise, and it doesn't null tabManager until
+    // after these awaits, so an open still mid-resolve would pass isSelectionStale
+    // (manager unchanged) and createTab a tab AFTER destroy() snapshotted the tab
+    // set — a detached runtime that never gets disposed (:197). Do NOT null
+    // tabManager first: persistTabStateImmediate → getState reads it for the final
+    // layout; the generation bump is what invalidates the in-flight opens.
+    this.selectionGeneration++;
     await this.persistTabStateImmediate();
     await this.tabManager?.destroy();
     this.tabManager = null;

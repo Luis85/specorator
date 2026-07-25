@@ -233,4 +233,34 @@ describe('TeamChatView — onClose teardown', () => {
     expect(manager.disposeAllRuntimes).not.toHaveBeenCalled();
     expect(view.getTabManager()).toBeNull();
   });
+
+  // Round-28 (:197): teardown must invalidate in-flight selectAgent opens FIRST —
+  // before persist/destroy — otherwise an open still mid-resolve passes the stale
+  // check (manager not yet nulled) and createTabs into a manager whose tabs
+  // destroy() already snapshotted, leaking that runtime.
+  it('bumps selectionGeneration before awaiting persist/destroy', async () => {
+    const view = makeView();
+    let genAtPersist = -1;
+    let genAtDestroy = -1;
+    view.selectionGeneration = 7;
+    view.pendingPersist = null;
+    view.tabManager = {
+      getPersistedState: jest.fn(() => {
+        genAtPersist = view.selectionGeneration; // read while getState persists the layout
+        return { openTabs: [], activeTabId: null };
+      }),
+      destroy: jest.fn(() => {
+        genAtDestroy = view.selectionGeneration;
+        return Promise.resolve();
+      }),
+    };
+
+    await view.destroyTabRuntime();
+
+    // The bump happens FIRST, so both persist and destroy observe the incremented
+    // generation — any in-flight open is already invalidated.
+    expect(genAtPersist).toBe(8);
+    expect(genAtDestroy).toBe(8);
+    expect(view.getTabManager()).toBeNull();
+  });
 });

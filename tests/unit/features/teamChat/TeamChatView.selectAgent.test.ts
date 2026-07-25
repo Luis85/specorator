@@ -41,6 +41,12 @@ function deferred<T>() {
   return { promise, resolve };
 }
 
+/** Drain all pending microtasks (to a macrotask boundary), so an awaited teardown
+ *  can progress through persist into destroy() before the test resumes an open. */
+function flushAsync(): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, 0));
+}
+
 describe('TeamChatView.selectAgent — resolve → cross-view reuse / create', () => {
   beforeEach(() => {
     jest.clearAllMocks();
@@ -177,27 +183,45 @@ describe('TeamChatView.selectAgent — resolve → cross-view reuse / create', (
     expect(switchA).toHaveBeenCalledWith('tab-1');
   });
 
-  // Round-25 (:209 disposal): the leaf closes (onClose nulls tabManager) while the
-  // open is pending — the continuation must NOT mount into the detached manager.
-  it('does not open into a torn-down manager when the leaf closes mid-resolve (:209)', async () => {
+  // Round-28 (:197) — replaces the Round-25 immediate-null model with the REAL
+  // teardown ordering. destroyTabRuntime does NOT null tabManager up-front; it
+  // bumps the generation, then awaits persist + destroy, nulling tabManager only
+  // afterwards. So an open whose resolveOrCreate settles DURING that window still
+  // sees tabManager === the captured manager — only the generation bump invalidates
+  // it, preventing a createTab into a manager whose tabs destroy() already
+  // snapshotted (an undisposed, leaked runtime).
+  it('does not createTab when destroyTabRuntime tears the leaf down mid-resolve (:197)', async () => {
     const resolveConv = deferred<string>();
+    const destroyGate = deferred<void>();
     const createTab = jest.fn().mockResolvedValue({ id: 'tab-1' });
-    const switchToTab = jest.fn();
+    const destroy = jest.fn(() => destroyGate.promise);
     const view = makeView({
+      leaf: { id: 'leaf-this', setViewState: jest.fn().mockResolvedValue(undefined) },
       plugin: {
         getTeamChatThreadStore: () => ({ resolveOrCreate: jest.fn(() => resolveConv.promise) }),
         findConversationAcrossViews: jest.fn(() => null),
       },
     });
-    view.tabManager = { createTab, switchToTab };
+    view.pendingPersist = null;
+    view.tabManager = {
+      createTab,
+      switchToTab: jest.fn(),
+      getPersistedState: jest.fn(() => ({ openTabs: [], activeTabId: null })),
+      destroy,
+    };
 
-    const pending = view.selectAgent('roster:a'); // parks on resolveOrCreate
-    view.tabManager = null;                       // onClose → destroyTabRuntime
-    resolveConv.resolve('conv-1');
-    await pending;
+    const open = view.selectAgent('roster:a'); // parks on resolveOrCreate
+    const teardown = view.destroyTabRuntime();  // bumps generation, then parks on destroy()
+    await flushAsync();                          // teardown reaches destroy() (tabManager still set)
+    resolveConv.resolve('conv-1');               // open resumes DURING the teardown window
+    await open;
+    destroyGate.resolve();                       // let destroy() finish
+    await teardown;
 
+    // The generation bump at teardown start invalidated the in-flight open, so no
+    // tab is mounted into the tearing-down manager.
     expect(createTab).not.toHaveBeenCalled();
-    expect(switchToTab).not.toHaveBeenCalled();
+    expect(destroy).toHaveBeenCalledTimes(1);
   });
 
   // Round-25 (:209 re-entrant onOpen): the manager is REPLACED (not nulled) while
