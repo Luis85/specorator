@@ -92,7 +92,12 @@ surfaces to use the island pattern; this is one.
       directory so a Node shipped beside it counts. `findNodeDirectory` requires
       `X_OK` on the interpreter itself, so a `node` without `+x` neither counts
       here nor stops the scan (`src/utils/env.ts` — the probe and the spawn read
-      the same answer by construction).
+      the same answer by construction). Also asked of a Windows `.cmd`/`.bat`
+      that runs Node one level down (`batchShimInvokesNode` reads the shim's
+      head): npm generates `<name>.cmd` as a wrapper around
+      `node "<pkg>/bin/cli.js"`, so cmd.exe starts it whether or not Node is
+      reachable and the wrapped command dies immediately — "this provider can
+      wrap batch files" is not on its own a promise that anything runs.
     - `batch-shim` / `unsupported-form` — a Windows file the provider's spawn
       cannot start. Windows has no shebang support, so what runs is decided by
       HOW each provider spawns, and each declares that as
@@ -159,7 +164,10 @@ surfaces to use the island pattern; this is one.
   MUST declare `argv: null` — the runner refuses it and the UI renders a
   copyable command plus docs link instead of gaining a hidden `shell: true`
   path. Cursor is entirely copy-only for this reason. Further rails: an explicit
-  per-run confirm naming the exact command, a bounded output ring, a 10-minute
+  per-run confirm naming the exact command, a bounded output ring (bounded in
+  BOTH directions — a lone `\r` is a line boundary and each line is capped, or a
+  `\r`-redrawn progress bar makes the 400-line ring one string that grows for the
+  whole run and is copied on every chunk), a 10-minute
   timeout, and `onUnmounted` cancel so a closed leaf leaves nothing running.
   **Installs are serialized process-wide** (`installLock`), not per-provider and
   not per store: three of the four providers install through a global

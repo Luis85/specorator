@@ -8,6 +8,7 @@ import type { ProviderId } from '@/core/providers/types';
 import type { PluginContext } from '@/core/types/PluginContext';
 import { asSettingsBag } from '@/core/types/settings';
 import {
+  batchShimInvokesNode,
   executableCandidateNames,
   findBinaryOnPath,
   isExecutableFile,
@@ -194,12 +195,16 @@ function classifyResolvedPath(
   }
 
   // Everything else the kernel opens itself, so the permission bit is the
-  // question — and for a `#!…node` script that the provider spawns directly,
-  // the shebang's interpreter must be reachable on top of it.
+  // question — and for anything that reaches Node one level down, that
+  // interpreter must be reachable on top of it: a `#!…node` script the provider
+  // spawns directly, or a Windows `.cmd` shim that runs `node <pkg>/bin/cli.js`
+  // internally. The batch case is invisible from the outside — cmd.exe starts the
+  // shim happily and the wrapped command dies — so the shim is read.
   if (!isExecutableFile(resolved)) {
     return { kind: 'unusable', reason: 'not-executable' };
   }
-  return cliPathRequiresNode(resolved) && !nodeReachable()
+  const needsNode = cliPathRequiresNode(resolved) || batchShimInvokesNode(resolved);
+  return needsNode && !nodeReachable()
     ? { kind: 'unusable', reason: 'missing-node' }
     : { kind: 'found' };
 }

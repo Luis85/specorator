@@ -21,9 +21,11 @@ jest.mock('@/utils/cliBinaryLocator', () => ({
   // every resolver but Codex's WSL branch guarantees; the other shapes override.
   isExistingFile: jest.fn(() => true),
   isExecutableFile: jest.fn(() => true),
+  batchShimInvokesNode: jest.fn(() => false),
 }));
 
 import {
+  batchShimInvokesNode,
   findBinaryOnPath,
   isExecutableFile,
   isExistingFile,
@@ -103,6 +105,7 @@ afterEach(() => {
   jest.mocked(isExistingFile).mockReturnValue(true);
   jest.mocked(isExecutableFile).mockReset();
   jest.mocked(isExecutableFile).mockReturnValue(true);
+  jest.mocked(batchShimInvokesNode).mockReset().mockReturnValue(false);
   jest.mocked(cliPathRequiresNode).mockReset().mockReturnValue(false);
   jest.mocked(findNodeExecutable).mockReset().mockReturnValue('/usr/bin/node');
 });
@@ -343,6 +346,33 @@ describe('detectProviderCli', () => {
       status: 'unknown',
       cliPath: null,
     });
+  });
+
+  it('refuses a Windows batch shim that runs Node when no interpreter is reachable', () => {
+    // "This provider can wrap batch files" says cmd.exe will START the shim, not
+    // that the wrapped command survives: npm's `.cmd` runs `node <pkg>/bin/cli.js`
+    // internally, so with Node gone the shim launches and dies immediately.
+    setPlatform('win32');
+    ProviderWorkspaceRegistry.setServices('det-alpha', {
+      cliResolver: stubResolver('C:\\npm\\alpha.cmd'),
+    } as never);
+    jest.mocked(batchShimInvokesNode).mockReturnValue(true);
+    jest.mocked(findNodeExecutable).mockReturnValue(null);
+
+    expect(detectProviderCli(makePlugin(), 'det-alpha')).toMatchObject({
+      status: 'missing',
+      unusable: { path: 'C:\\npm\\alpha.cmd', reason: 'missing-node' },
+    });
+  });
+
+  it('accepts that same shim once Node is reachable', () => {
+    setPlatform('win32');
+    ProviderWorkspaceRegistry.setServices('det-alpha', {
+      cliResolver: stubResolver('C:\\npm\\alpha.cmd'),
+    } as never);
+    jest.mocked(batchShimInvokesNode).mockReturnValue(true);
+
+    expect(detectProviderCli(makePlugin(), 'det-alpha').status).toBe('found');
   });
 
   it('accepts the same Node entry point once an interpreter is reachable', () => {

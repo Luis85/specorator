@@ -25,6 +25,12 @@ export const UNCONFIRMED_TEARDOWN_ERROR =
   + 'Check for a running install before starting another.';
 /** Output lines retained for the console. Bounded so a chatty installer can't grow memory. */
 export const INSTALL_OUTPUT_LINE_CAP = 400;
+/**
+ * Characters retained per line. The line cap bounds the buffer only if lines are
+ * themselves bounded — a stream with no newline at all is otherwise ONE line that
+ * grows for the whole run, and every chunk copies it.
+ */
+export const INSTALL_OUTPUT_LINE_CHARS = 2_000;
 
 export interface CliInstallEvents {
   /** One chunk of installer output (stdout and stderr interleaved, as the user would see it). */
@@ -218,6 +224,12 @@ export function runCliInstall(
   child.stdout?.on('data', (chunk: Buffer | string) => events.onOutput(String(chunk)));
   child.stderr?.on('data', (chunk: Buffer | string) => events.onOutput(String(chunk)));
   child.on('error', (error: Error) => {
+    // Same yield as `close` below: once an abort has started it owns settlement.
+    // An `error` raised by the abort's own `child.kill()` — a failed Windows
+    // taskkill, a process that no longer exists — would otherwise settle here
+    // while the reaper is still running, releasing the install lock early and
+    // reporting a clean stop with the unconfirmed-teardown warning dropped.
+    if (abortReason) return;
     settle({ ok: false, exitCode: null, error: error.message });
   });
   child.on('close', (code: number | null) => {
@@ -242,24 +254,39 @@ export function runCliInstall(
 /**
  * Appends installer output to a bounded line buffer, returning the new buffer.
  * Keeps the tail (what a user watches) and drops the head once the cap is hit.
+ *
+ * Bounded in BOTH directions, because the line cap alone bounds nothing: output
+ * that never emits `\n` — a bare `\r` progress bar, a chatty lifecycle script —
+ * lands entirely on the one retained last line, which every later chunk then
+ * copies and re-renders for the full ten-minute run. A lone `\r` is a line
+ * boundary here (it is what redraws a terminal line, so the ring keeps the last
+ * frames rather than one string of all of them), and any single line is capped
+ * at `INSTALL_OUTPUT_LINE_CHARS`.
  */
 export function appendInstallOutput(lines: readonly string[], text: string): string[] {
-  const incoming = text.split(/\r?\n/);
+  const incoming = text.split(/\r\n|\r|\n/);
   const next = [...lines];
 
   // A chunk boundary can land mid-line, so the first incoming segment continues
   // the last retained line instead of starting a new one.
   const [first, ...rest] = incoming;
   if (next.length > 0 && first !== undefined) {
-    next[next.length - 1] = `${next[next.length - 1]}${first}`;
+    next[next.length - 1] = capLine(`${next[next.length - 1]}${first}`);
   } else if (first !== undefined) {
-    next.push(first);
+    next.push(capLine(first));
   }
-  next.push(...rest);
+  next.push(...rest.map(capLine));
 
   return next.length > INSTALL_OUTPUT_LINE_CAP
     ? next.slice(next.length - INSTALL_OUTPUT_LINE_CAP)
     : next;
+}
+
+/** Keeps the tail of an over-long line — the end is where a progress bar's state is. */
+function capLine(line: string): string {
+  return line.length > INSTALL_OUTPUT_LINE_CHARS
+    ? line.slice(line.length - INSTALL_OUTPUT_LINE_CHARS)
+    : line;
 }
 
 /** Install methods applicable to the current platform, in declaration order. */

@@ -28,6 +28,47 @@ export function isExecutableFile(filePath: string): boolean {
   }
 }
 
+const BATCH_EXTENSIONS = /\.(cmd|bat)$/i;
+/**
+ * A `node` / `node.exe` COMMAND, not the substring. Deliberately excludes
+ * `node_modules` (a word char follows, so no boundary) — that appears in every
+ * npm shim and would make this always true.
+ */
+const NODE_INVOCATION = /(?:^|[\s"'\\/])node(?:\.exe)?(?=["'\s]|$)/im;
+/** Enough for any real shim; bounded because the pinned path is user-supplied. */
+const BATCH_SHIM_READ_BYTES = 8 * 1024;
+
+/**
+ * True when a Windows batch shim starts Node internally.
+ *
+ * npm generates `<name>.cmd` as a wrapper that runs `node "<pkg>/bin/cli.js"`,
+ * so the shim is launchable while Node is not reachable and the wrapped command
+ * dies immediately. Nothing about the `.cmd` itself shows that — hence the read.
+ * Only the head is read: the path can be hand-pinned to any file.
+ */
+export function batchShimInvokesNode(filePath: string): boolean {
+  if (!BATCH_EXTENSIONS.test(filePath.trim())) {
+    return false;
+  }
+  let fd: number | undefined;
+  try {
+    fd = fs.openSync(filePath, 'r');
+    const buffer = Buffer.alloc(BATCH_SHIM_READ_BYTES);
+    const read = fs.readSync(fd, buffer, 0, BATCH_SHIM_READ_BYTES, 0);
+    return NODE_INVOCATION.test(buffer.subarray(0, read).toString('utf8'));
+  } catch {
+    return false;
+  } finally {
+    if (fd !== undefined) {
+      try {
+        fs.closeSync(fd);
+      } catch {
+        // Nothing to do; the probe's answer is already decided.
+      }
+    }
+  }
+}
+
 /** True when the path points at a real file on THIS host. */
 export function isExistingFile(filePath: string): boolean {
   try {

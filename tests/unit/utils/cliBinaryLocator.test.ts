@@ -3,6 +3,7 @@ import * as os from 'os';
 import * as path from 'path';
 
 import {
+  batchShimInvokesNode,
   executableCandidateNames,
   findBinaryOnPath,
   isExecutableFile,
@@ -96,5 +97,58 @@ describe('findBinaryOnPath', () => {
     fs.writeFileSync(path.join(dir, 'tool'), '#!/bin/sh\n', { mode: 0o644 });
 
     expect(findBinaryOnPath(['tool'], dir)).toBeNull();
+  });
+});
+
+/**
+ * npm generates `<name>.cmd` as a wrapper that runs `node "<pkg>/bin/cli.js"`.
+ * cmd.exe starts that shim happily whether or not Node is reachable, and the
+ * wrapped command then dies — so "the provider can wrap batch files" is not on
+ * its own enough to call the CLI ready.
+ */
+describe('batchShimInvokesNode', () => {
+  let dir: string;
+
+  beforeEach(() => {
+    dir = fs.mkdtempSync(path.join(os.tmpdir(), 'specorator-shim-'));
+  });
+
+  afterEach(() => {
+    fs.rmSync(dir, { recursive: true, force: true });
+  });
+
+  function writeShim(name: string, body: string): string {
+    const filePath = path.join(dir, name);
+    fs.writeFileSync(filePath, body);
+    return filePath;
+  }
+
+  it('recognizes the npm-generated wrapper', () => {
+    const shim = writeShim('codex.cmd', [
+      '@ECHO off',
+      'IF EXIST "%~dp0\\node.exe" (',
+      '  "%~dp0\\node.exe"  "%~dp0\\..\\pkg\\bin\\cli.js" %*',
+      ') ELSE (',
+      '  node  "%~dp0\\..\\pkg\\bin\\cli.js" %*',
+      ')',
+    ].join('\r\n'));
+
+    expect(batchShimInvokesNode(shim)).toBe(true);
+  });
+
+  it('does not fire on `node_modules` alone, which every shim mentions', () => {
+    // A substring match would make this always true and turn a missing Node into
+    // a blanket verdict on every batch-launched CLI.
+    const shim = writeShim('native.cmd', '@"%~dp0\\..\\node_modules\\pkg\\native.exe" %*');
+
+    expect(batchShimInvokesNode(shim)).toBe(false);
+  });
+
+  it('ignores anything that is not a batch shim, without reading it', () => {
+    expect(batchShimInvokesNode(writeShim('cli.exe', 'node'))).toBe(false);
+  });
+
+  it('answers false for a path it cannot read rather than throwing', () => {
+    expect(batchShimInvokesNode(path.join(dir, 'absent.cmd'))).toBe(false);
   });
 });

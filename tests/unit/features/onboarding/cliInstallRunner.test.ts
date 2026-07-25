@@ -20,6 +20,7 @@ import {
   ABORT_REAP_GRACE_MS,
   appendInstallOutput,
   INSTALL_OUTPUT_LINE_CAP,
+  INSTALL_OUTPUT_LINE_CHARS,
   platformInstallMethods,
   runCliInstall,
   UNCONFIRMED_TEARDOWN_ERROR,
@@ -337,6 +338,46 @@ describe('runCliInstall', () => {
     expect(forceKillProcessGroup).toHaveBeenCalledTimes(1);
   });
 
+  it('an error raised by the abort\'s own kill does not settle ahead of the reaper', async () => {
+    // `close` already yields to the abort; this parallel terminal handler must
+    // too. A failed Windows taskkill fallback can raise `error` from
+    // `child.kill()` while the reaper is still walking the tree — settling here
+    // would free the install lock early and report a clean stop, dropping the
+    // unconfirmed-teardown warning the abort is about to attach.
+    jest.useFakeTimers();
+    try {
+      const child = mountChild();
+      jest.mocked(forceKillProcessGroup).mockImplementation(() => new Promise<void>(() => {}));
+
+      const handle = runCliInstall(npmMethod, { onOutput: () => {} });
+      handle.cancel();
+      child.emit('error', new Error('taskkill failed'));
+
+      let settledEarly = false;
+      void handle.done.then(() => { settledEarly = true; });
+      await Promise.resolve();
+      expect(settledEarly).toBe(false);
+
+      await jest.advanceTimersByTimeAsync(ABORT_REAP_GRACE_MS);
+
+      expect(await handle.done).toMatchObject({
+        cancelled: true,
+        error: UNCONFIRMED_TEARDOWN_ERROR,
+      });
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+
+  it('a spawn error before any abort still settles normally', async () => {
+    const child = mountChild();
+
+    const handle = runCliInstall(npmMethod, { onOutput: () => {} });
+    child.emit('error', new Error('ENOENT'));
+
+    expect(await handle.done).toMatchObject({ ok: false, error: 'ENOENT' });
+  });
+
   it('a cancel after settling is a no-op', async () => {
     const child = mountChild();
 
@@ -367,6 +408,30 @@ describe('appendInstallOutput', () => {
 
   it('splits on newlines', () => {
     expect(appendInstallOutput([], 'a\nb\nc')).toEqual(['a', 'b', 'c']);
+  });
+
+  it('treats a lone carriage return as a line boundary', () => {
+    // A terminal progress bar redraws with `\r`, never `\n`. Folding those into
+    // one line makes the "400-line ring" a single string that grows for the whole
+    // run, and every later chunk copies and re-renders it.
+    expect(appendInstallOutput([], '10%\r50%\r100%')).toEqual(['10%', '50%', '100%']);
+  });
+
+  it('caps a single line, so output with no newline at all stays bounded', () => {
+    let lines: string[] = [];
+    for (let i = 0; i < 40; i += 1) {
+      lines = appendInstallOutput(lines, 'x'.repeat(500));
+    }
+
+    expect(lines).toHaveLength(1);
+    expect(lines[0].length).toBe(INSTALL_OUTPUT_LINE_CHARS);
+  });
+
+  it('keeps the END of an over-long line, where a progress bar\'s state is', () => {
+    const lines = appendInstallOutput([], `${'a'.repeat(INSTALL_OUTPUT_LINE_CHARS)}TAIL`);
+
+    expect(lines[0].endsWith('TAIL')).toBe(true);
+    expect(lines[0].length).toBe(INSTALL_OUTPUT_LINE_CHARS);
   });
 
   it('keeps the tail once the cap is reached so memory stays flat', () => {
