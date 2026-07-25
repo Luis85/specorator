@@ -53,6 +53,15 @@ export class TeamChatThreadStore {
   private rooms: Record<string, string> | null = null;
   private loading: Promise<Record<string, string>> | null = null;
   private queue: Promise<unknown> = Promise.resolve();
+  /**
+   * Replacements created this session but not yet durably mapped, keyed by roomKey.
+   * If `writeThreads` rejects after a create, Round-17's rollback leaves the stale
+   * cache, so a retry re-enters the (never-adopt) create path — reuse this entry
+   * instead of orphaning the first replacement with a second create. Provider-tagged
+   * + this-session-only, so archived rotations are never resurrected. Cleared on the
+   * key's first successful write (:105).
+   */
+  private readonly pendingCreated = new Map<string, { id: string; providerId: ProviderId | undefined }>();
 
   constructor(private readonly deps: TeamChatThreadStoreDeps) {}
 
@@ -101,28 +110,57 @@ export class TeamChatThreadStore {
     let id: string;
     if (mapped) {
       // Mapping PRESENT but stale — wrong provider after a rotation, or its
-      // conversation was deleted. Create fresh; never adopt.
-      id = (await this.deps.createConversation(agentId)).id;
+      // conversation was deleted. Create fresh (never adopt), reusing a prior
+      // attempt's un-persisted replacement if one is still valid.
+      id = await this.createOrReusePending(agentId, key, expectedProvider);
     } else {
       // Mapping ABSENT — a new agent, or a lost threads.json. Recover by adopting a
       // matching-provider orphan if one exists (scoping guards against re-adopting an
-      // old-provider DM), else create.
+      // old-provider DM), else create (reusing a prior un-persisted replacement).
       const adoptable = this.deps.findAdoptable(agentId, expectedProvider);
-      id = adoptable ? adoptable.id : (await this.deps.createConversation(agentId)).id;
+      id = adoptable ? adoptable.id : await this.createOrReusePending(agentId, key, expectedProvider);
     }
 
     // Order matters — durable write, THEN commit the cache, THEN notify:
     //  - Write first so a rejecting writeAtomic (transient vault I/O) leaves
-    //    `this.rooms` unmutated; a retry re-resolves (re-adopting the
-    //    just-created conversation) and re-emits, rather than returning a
-    //    "recovered" id whose mapping never reached disk and never emitted.
+    //    `this.rooms` unmutated; a retry re-resolves (reusing the just-created
+    //    replacement) and re-emits, rather than returning a "recovered" id whose
+    //    mapping never reached disk and never emitted.
     //  - Swap the cache BEFORE emitting so a synchronous teamChat:threads-changed
     //    subscriber that calls get() observes the new mapping, not the stale one.
     const next = { ...rooms, [key]: id };
     await this.writeThreads(next);
+    // Replacement is now durably mapped — drop the retry-reuse record so a later
+    // (genuine) provider rotation creates fresh instead of reviving this one.
+    this.pendingCreated.delete(key);
     this.rooms = next;
     this.deps.events?.emit('teamChat:threads-changed');
     return id;
+  }
+
+  /**
+   * Creates the agent's replacement DM, or reuses one created on a PRIOR attempt
+   * whose `writeThreads` rejected (Round-17's rollback re-enters the create path).
+   * The pending replacement is reused only while it still matches the CURRENT
+   * expected provider AND still exists, so a later provider change — or an archived
+   * old-provider DM — is never resurrected (:105).
+   */
+  private async createOrReusePending(
+    agentId: string,
+    key: string,
+    expectedProvider: ProviderId | undefined,
+  ): Promise<string> {
+    const pending = this.pendingCreated.get(key);
+    if (
+      pending
+      && pending.providerId === expectedProvider
+      && this.deps.isConversationUsable(pending.id, expectedProvider)
+    ) {
+      return pending.id;
+    }
+    const created = await this.deps.createConversation(agentId);
+    this.pendingCreated.set(key, { id: created.id, providerId: expectedProvider });
+    return created.id;
   }
 
   /**

@@ -232,6 +232,52 @@ describe('TeamChatThreadStore', () => {
     expect(h.changed).toHaveBeenCalledTimes(1);
   });
 
+  // Round-30 (:105): the stale-mapping (rotation) branch NEVER adopts (Round-26),
+  // so a failed persist on the fresh replacement, followed by Round-17's cache
+  // rollback, used to create ANOTHER conversation on retry — orphaning the first.
+  it('reuses the in-flight replacement across a failed persist in the stale-mapping branch (:105)', async () => {
+    const h = makeHarness({
+      seedFile: JSON.stringify({ version: 1, rooms: { 'roster:a': 'old-claude' } }),
+      existingConversations: [conversationOn('old-claude', 'roster:a', 'claude')],
+      expectedProvider: { 'roster:a': 'codex' }, // agent re-pointed → mapped DM is stale (rotation)
+    });
+    h.writeAtomic.mockRejectedValueOnce(new Error('transient vault io'));
+
+    // First attempt: the stale mapping forces a fresh codex replacement; the write rejects.
+    await expect(h.store.resolveOrCreate('roster:a')).rejects.toThrow('transient vault io');
+    expect(h.createConversation).toHaveBeenCalledTimes(1);
+
+    // Retry: pendingCreated reuses the just-created codex conversation instead of
+    // creating (and orphaning) another — exactly ONE create across both attempts.
+    const id = await h.store.resolveOrCreate('roster:a');
+    expect(h.createConversation).toHaveBeenCalledTimes(1);
+    expect(h.readThreads()).toEqual({ version: 1, rooms: { 'roster:a': id } });
+  });
+
+  // Round-30 (:105): the pending replacement must be provider-matched so a genuine
+  // later provider change still rotates instead of reviving the wrong-provider entry.
+  it('does not reuse a stale-provider pending entry when a later provider change rotates again (:105)', async () => {
+    const h = makeHarness({
+      seedFile: JSON.stringify({ version: 1, rooms: { 'roster:a': 'old-claude' } }),
+      existingConversations: [conversationOn('old-claude', 'roster:a', 'claude')],
+      expectedProvider: { 'roster:a': 'codex' },
+    });
+    h.writeAtomic.mockRejectedValueOnce(new Error('io'));
+
+    // First attempt records a pending codex replacement, then fails to persist.
+    await expect(h.store.resolveOrCreate('roster:a')).rejects.toThrow('io');
+    // Re-point the agent to a THIRD provider before the retry.
+    h.setExpectedProvider('roster:a', 'opencode');
+
+    const id = await h.store.resolveOrCreate('roster:a');
+
+    // The codex pending entry is provider-mismatched → NOT reused; a fresh opencode
+    // conversation is created (two creates total: codex then opencode).
+    expect(h.createConversation).toHaveBeenCalledTimes(2);
+    expect(h.conversationsById.get(id)?.providerId).toBe('opencode');
+    expect(h.readThreads()).toEqual({ version: 1, rooms: { 'roster:a': id } });
+  });
+
   it('commits the mapping to the cache before emitting, so a subscriber reading during the event sees it', async () => {
     const h = makeHarness();
     // Capture the read a subscriber issues the moment it is notified. `get`'s

@@ -86,6 +86,12 @@ export class TeamChatView extends ItemView implements ChatViewHandle {
     // prior engine so it can't leak pointing at the about-to-be-emptied host. No
     // leaf persist here — setViewState during onOpen would re-enter.
     if (this.tabManager) {
+      // Invalidate any in-flight selectAgent open before tearing down (mirror of
+      // destroyTabRuntime's Round-28 bump): this re-entrant path destroys the manager
+      // directly and can't call destroyTabRuntime (onOpen must not setViewState), so
+      // without this bump an open awaiting resolveOrCreate would pass isSelectionStale
+      // (manager not yet nulled) and createTab into the manager being destroyed (:90).
+      this.selectionGeneration++;
       // Capture the LIVE DM layout before destroying: the initial setState layout
       // was already consumed by the first initTabEngine, so without this the rebuilt
       // engine restores nothing and the pane goes blank while selectedAgentId still
@@ -291,6 +297,11 @@ export class TeamChatView extends ItemView implements ChatViewHandle {
     // DM restoreState is about to recreate → a duplicate controller for one
     // conversation. Ignore the click; the saved layout reopens the DMs anyway (:274).
     if (!manager || !this.tabsRestored) return;
+    // Snapshot the currently-mapped DM before resolveOrCreate: a provider change
+    // rotates the mapping to a FRESH conversation (Round-21/26), and the old tab
+    // would otherwise stay attached — its old-provider runtime streaming and holding
+    // a chat slot forever (:283).
+    const previousConversationId = await this.getThreadStore().get(agentId);
     const conversationId = await this.getThreadStore().resolveOrCreate(agentId);
     // Bail if the leaf closed/re-opened or a newer agent was selected while
     // resolveOrCreate was in flight — otherwise the open would mount into a
@@ -306,6 +317,30 @@ export class TeamChatView extends ItemView implements ChatViewHandle {
     // re-runs openResolvedDm, now finds the tab, and switches.
     await getTeamChatDmOpenCoordinator(this.plugin).serialize(conversationId, () =>
       this.openResolvedDm(conversationId, manager, generation));
+    // A provider-change rotation left the old-provider DM tab attached; close it
+    // (across leaves) so its runtime tears down and its slot frees. Skip if a newer
+    // selection superseded this one.
+    if (
+      previousConversationId
+      && previousConversationId !== conversationId
+      && !this.isSelectionStale(generation, manager)
+    ) {
+      await this.closeRotatedDmTab(previousConversationId, conversationId);
+    }
+  }
+
+  /**
+   * Force-closes the old-provider DM tab a provider-change rotation left behind, in
+   * whichever leaf owns it (cross-leaf via findConversationAcrossViews), so its
+   * runtime disposes and its chat slot frees. No-ops unless the NEW tab actually
+   * opened, so a cap-blocked rotation can't strand the agent with no tab. The old
+   * tab is located by the OLD conversationId (≠ new), so it is never the just-opened one.
+   */
+  private async closeRotatedDmTab(previousConversationId: string, newConversationId: string): Promise<void> {
+    if (!this.plugin.findConversationAcrossViews(newConversationId)) return;
+    const stale = this.plugin.findConversationAcrossViews(previousConversationId);
+    if (!stale) return;
+    await stale.view.getTabManager()?.closeTab(stale.tabId, true);
   }
 
   /**

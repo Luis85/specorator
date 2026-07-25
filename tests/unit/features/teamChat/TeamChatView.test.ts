@@ -38,6 +38,13 @@ function flushMicrotasks(): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, 0));
 }
 
+/** A promise plus its resolver, to interleave a teardown while an open is pending. */
+function deferred<T>() {
+  let resolve!: (value: T) => void;
+  const promise = new Promise<T>((r) => (resolve = r));
+  return { promise, resolve };
+}
+
 /** Prototype-only view wired just enough to drive the engine seam + persistence
  *  (mirrors SpecoratorView.test's harness). */
 function makeView(): any {
@@ -227,6 +234,41 @@ describe('TeamChatView — persisted DM tab restore', () => {
 
     expect(view.tabManager.restoreState).not.toHaveBeenCalled();
     expect(view.areTabsRestored()).toBe(true);
+  });
+
+  // Round-30 (:90): the re-entrant onOpen teardown must bump selectionGeneration
+  // (like destroyTabRuntime does), or an in-flight open whose resolveOrCreate settles
+  // during the teardown window still passes isSelectionStale (manager not yet nulled)
+  // and createTabs into the manager being destroyed → a leaked runtime.
+  it('re-entrant onOpen bumps the generation so an in-flight open cannot createTab into the tearing-down manager (:90)', async () => {
+    const resolveConv = deferred<string>();
+    const destroyGate = deferred<void>();
+    const createTab = jest.fn().mockResolvedValue({ id: 'tab-new' });
+    const view = makeView();
+    view.tabsRestored = true;
+    view.plugin.getTeamChatThreadStore = () => ({
+      get: jest.fn().mockResolvedValue(null),
+      resolveOrCreate: jest.fn(() => resolveConv.promise),
+    });
+    view.plugin.findConversationAcrossViews = jest.fn(() => null);
+    view.tabManager = {
+      createTab,
+      switchToTab: jest.fn(),
+      getPersistedState: jest.fn(() => ({ openTabs: [], activeTabId: null })),
+      destroy: jest.fn(() => destroyGate.promise),
+    };
+
+    const open = view.selectAgent('roster:a'); // parks on resolveOrCreate
+    const reopen = view.onOpen();               // re-entrant: bumps generation, parks on destroy()
+    await flushMicrotasks();                     // onOpen reaches destroy() (tabManager still set)
+    resolveConv.resolve('conv-1');               // open resumes DURING the teardown window
+    await open;
+    destroyGate.resolve();
+    await reopen;
+
+    // The generation bump invalidated the in-flight open — no tab mounted into the
+    // manager being destroyed.
+    expect(createTab).not.toHaveBeenCalled();
   });
 
   // Round-29 (:90): a re-entrant onOpen (leaf move/pop-out, no interleaved onClose)

@@ -22,7 +22,7 @@ function makeView(overrides: { leaf?: unknown; plugin?: Record<string, unknown> 
     logger: { scope: () => ({ error: jest.fn() }) },
     app: { workspace: { revealLeaf: jest.fn().mockResolvedValue(undefined) } },
     findConversationAcrossViews: jest.fn(() => null),
-    getTeamChatThreadStore: jest.fn(() => ({ resolveOrCreate: jest.fn().mockResolvedValue('conv-1') })),
+    getTeamChatThreadStore: jest.fn(() => ({ get: jest.fn().mockResolvedValue(null), resolveOrCreate: jest.fn().mockResolvedValue('conv-1') })),
     ...overrides.plugin,
   };
   view.contentEl = createMockEl();
@@ -62,7 +62,7 @@ describe('TeamChatView.selectAgent — resolve → cross-view reuse / create', (
     const createTab = jest.fn().mockResolvedValue({ id: 'tab-1' });
     const view = makeView({
       plugin: {
-        getTeamChatThreadStore: () => ({ resolveOrCreate }),
+        getTeamChatThreadStore: () => ({ get: jest.fn().mockResolvedValue(null), resolveOrCreate }),
         findConversationAcrossViews: jest.fn(() => null),
       },
     });
@@ -108,7 +108,7 @@ describe('TeamChatView.selectAgent — resolve → cross-view reuse / create', (
     const view = makeView({
       leaf: thisLeaf,
       plugin: {
-        getTeamChatThreadStore: () => ({ resolveOrCreate: jest.fn().mockResolvedValue('conv-1') }),
+        getTeamChatThreadStore: () => ({ get: jest.fn().mockResolvedValue(null), resolveOrCreate: jest.fn().mockResolvedValue('conv-1') }),
         // Same leaf ref as the host → "found in this view".
         findConversationAcrossViews: jest.fn(() => ({
           view: { leaf: thisLeaf, getTabManager: () => ({ switchToTab: jest.fn() }) },
@@ -134,7 +134,7 @@ describe('TeamChatView.selectAgent — resolve → cross-view reuse / create', (
       leaf: { id: 'leaf-this' },
       plugin: {
         app: { workspace: { revealLeaf } },
-        getTeamChatThreadStore: () => ({ resolveOrCreate: jest.fn().mockResolvedValue('conv-2') }),
+        getTeamChatThreadStore: () => ({ get: jest.fn().mockResolvedValue(null), resolveOrCreate: jest.fn().mockResolvedValue('conv-2') }),
         findConversationAcrossViews: jest.fn(() => ({
           view: { leaf: otherLeaf, getTabManager: () => ({ switchToTab: otherSwitch }) },
           tabId: 'tab-9',
@@ -155,7 +155,7 @@ describe('TeamChatView.selectAgent — resolve → cross-view reuse / create', (
     const createTab = jest.fn().mockResolvedValue({ id: 'tab-new' });
     const view = makeView({
       plugin: {
-        getTeamChatThreadStore: () => ({ resolveOrCreate: jest.fn().mockResolvedValue('conv-3') }),
+        getTeamChatThreadStore: () => ({ get: jest.fn().mockResolvedValue(null), resolveOrCreate: jest.fn().mockResolvedValue('conv-3') }),
         findConversationAcrossViews: jest.fn(() => null),
       },
     });
@@ -194,7 +194,7 @@ describe('TeamChatView.selectAgent — resolve → cross-view reuse / create', (
     const sharedPlugin = {
       logger: { scope: () => ({ error: jest.fn() }) },
       app: { workspace: { revealLeaf } },
-      getTeamChatThreadStore: () => ({ resolveOrCreate: jest.fn().mockResolvedValue('conv-1') }),
+      getTeamChatThreadStore: () => ({ get: jest.fn().mockResolvedValue(null), resolveOrCreate: jest.fn().mockResolvedValue('conv-1') }),
       findConversationAcrossViews: jest.fn(() =>
         createdTabId
           ? { view: { leaf: leafA, getTabManager: () => viewA.tabManager }, tabId: createdTabId }
@@ -227,7 +227,7 @@ describe('TeamChatView.selectAgent — resolve → cross-view reuse / create', (
     const view = makeView({
       leaf: { id: 'leaf-this', setViewState: jest.fn().mockResolvedValue(undefined) },
       plugin: {
-        getTeamChatThreadStore: () => ({ resolveOrCreate: jest.fn(() => resolveConv.promise) }),
+        getTeamChatThreadStore: () => ({ get: jest.fn().mockResolvedValue(null), resolveOrCreate: jest.fn(() => resolveConv.promise) }),
         findConversationAcrossViews: jest.fn(() => null),
       },
     });
@@ -261,7 +261,7 @@ describe('TeamChatView.selectAgent — resolve → cross-view reuse / create', (
     const staleCreate = jest.fn().mockResolvedValue({ id: 'tab-1' });
     const view = makeView({
       plugin: {
-        getTeamChatThreadStore: () => ({ resolveOrCreate: jest.fn(() => resolveConv.promise) }),
+        getTeamChatThreadStore: () => ({ get: jest.fn().mockResolvedValue(null), resolveOrCreate: jest.fn(() => resolveConv.promise) }),
         findConversationAcrossViews: jest.fn(() => null),
       },
     });
@@ -287,6 +287,7 @@ describe('TeamChatView.selectAgent — resolve → cross-view reuse / create', (
     const view = makeView({
       plugin: {
         getTeamChatThreadStore: () => ({
+          get: jest.fn().mockResolvedValue(null),
           resolveOrCreate: jest.fn((agentId: string) =>
             agentId === 'roster:a' ? first.promise : second.promise),
         }),
@@ -320,7 +321,7 @@ describe('TeamChatView.selectAgent — resolve → cross-view reuse / create', (
       leaf: { id: 'leaf-this' },
       plugin: {
         app: { workspace: { revealLeaf } },
-        getTeamChatThreadStore: () => ({ resolveOrCreate: jest.fn().mockResolvedValue('conv-2') }),
+        getTeamChatThreadStore: () => ({ get: jest.fn().mockResolvedValue(null), resolveOrCreate: jest.fn().mockResolvedValue('conv-2') }),
         findConversationAcrossViews: jest.fn(() => ({
           view: { leaf: otherLeaf, getTabManager: () => ({ switchToTab: otherSwitch }) },
           tabId: 'tab-9',
@@ -348,7 +349,7 @@ describe('TeamChatView.selectAgent — resolve → cross-view reuse / create', (
     const createTab = jest.fn().mockResolvedValue(null); // tab cap reached
     const view = makeView({
       plugin: {
-        getTeamChatThreadStore: () => ({ resolveOrCreate: jest.fn().mockResolvedValue('conv-4') }),
+        getTeamChatThreadStore: () => ({ get: jest.fn().mockResolvedValue(null), resolveOrCreate: jest.fn().mockResolvedValue('conv-4') }),
         findConversationAcrossViews: jest.fn(() => null),
       },
     });
@@ -372,7 +373,7 @@ describe('TeamChatView.selectAgent — resolve → cross-view reuse / create', (
   it('leaves selectedAgentId unchanged when resolveOrCreate throws (:208)', async () => {
     const view = makeView({
       plugin: {
-        getTeamChatThreadStore: () => ({ resolveOrCreate: jest.fn().mockRejectedValue(new Error('resolve boom')) }),
+        getTeamChatThreadStore: () => ({ get: jest.fn().mockResolvedValue(null), resolveOrCreate: jest.fn().mockRejectedValue(new Error('resolve boom')) }),
         findConversationAcrossViews: jest.fn(() => null),
       },
     });
@@ -388,7 +389,7 @@ describe('TeamChatView.selectAgent — resolve → cross-view reuse / create', (
     const createTab = jest.fn().mockRejectedValue(new Error('create boom'));
     const view = makeView({
       plugin: {
-        getTeamChatThreadStore: () => ({ resolveOrCreate: jest.fn().mockResolvedValue('conv-x') }),
+        getTeamChatThreadStore: () => ({ get: jest.fn().mockResolvedValue(null), resolveOrCreate: jest.fn().mockResolvedValue('conv-x') }),
         findConversationAcrossViews: jest.fn(() => null),
       },
     });
@@ -398,5 +399,65 @@ describe('TeamChatView.selectAgent — resolve → cross-view reuse / create', (
     await expect(view.selectAgent('roster:new')).rejects.toThrow('create boom');
 
     expect(view.selectedAgentId).toBe('roster:current');
+  });
+
+  // Round-30 (:283): a provider change rotates the mapping to a FRESH conversation
+  // (resolveOrCreate returns a new id). selectAgent opens the new DM and must close
+  // the OLD-provider tab it left behind (cross-leaf), freeing its slot.
+  it('closes the old-provider DM tab when a provider change rotates the conversation (:283)', async () => {
+    let newTabOpen = false;
+    const get = jest.fn().mockResolvedValue('conv-old');            // currently mapped (old provider)
+    const resolveOrCreate = jest.fn().mockResolvedValue('conv-new'); // rotated to a fresh conversation
+    const createTab = jest.fn().mockImplementation(async () => { newTabOpen = true; return { id: 'tab-new' }; });
+    const closeOldTab = jest.fn().mockResolvedValue(true);
+    const otherLeaf = { id: 'leaf-other' };
+    const view = makeView({
+      leaf: { id: 'leaf-this' },
+      plugin: {
+        getTeamChatThreadStore: () => ({ get, resolveOrCreate }),
+        findConversationAcrossViews: jest.fn((id: string) => {
+          // The new DM registers only after createTab runs; the old DM lives in another leaf.
+          if (id === 'conv-new') {
+            return newTabOpen
+              ? { view: { leaf: { id: 'leaf-this' }, getTabManager: () => ({ switchToTab: jest.fn() }) }, tabId: 'tab-new' }
+              : null;
+          }
+          if (id === 'conv-old') {
+            return { view: { leaf: otherLeaf, getTabManager: () => ({ closeTab: closeOldTab }) }, tabId: 'tab-old' };
+          }
+          return null;
+        }),
+      },
+    });
+    view.tabManager = { createTab, switchToTab: jest.fn() };
+
+    await view.selectAgent('roster:a');
+
+    // New DM opened; the orphaned old-provider tab force-closed in its owning leaf.
+    expect(createTab).toHaveBeenCalledWith('conv-new', undefined, { activate: true, kind: 'chat' });
+    expect(closeOldTab).toHaveBeenCalledWith('tab-old', true);
+  });
+
+  it('closes nothing when there is no rotation (mapping unchanged) (:283)', async () => {
+    let tabOpen = false;
+    const get = jest.fn().mockResolvedValue('conv-1');             // mapped == resolved → no rotation
+    const resolveOrCreate = jest.fn().mockResolvedValue('conv-1');
+    const createTab = jest.fn().mockImplementation(async () => { tabOpen = true; return { id: 'tab-1' }; });
+    const closeTab = jest.fn();
+    const view = makeView({
+      plugin: {
+        getTeamChatThreadStore: () => ({ get, resolveOrCreate }),
+        findConversationAcrossViews: jest.fn((id: string) =>
+          id === 'conv-1' && tabOpen
+            ? { view: { leaf: { id: 'x' }, getTabManager: () => ({ closeTab }) }, tabId: 'tab-1' }
+            : null),
+      },
+    });
+    view.tabManager = { createTab, switchToTab: jest.fn() };
+
+    await view.selectAgent('roster:a');
+
+    expect(createTab).toHaveBeenCalledWith('conv-1', undefined, { activate: true, kind: 'chat' });
+    expect(closeTab).not.toHaveBeenCalled(); // no rotation → nothing to close
   });
 });
