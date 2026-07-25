@@ -14,6 +14,7 @@ import type { PersistedTabManagerState } from '../chat/tabs/types';
 import type { ComposerEditedFile } from '../chat/ui/vue/composer/stores/composerStore';
 import { basename, parentDir } from '../chat/utils/pathLabel';
 import { getTeamChatDmOpenCoordinator } from './TeamChatDmOpenCoordinator';
+import { applyDmEditedFilesSetting, refreshDmModelState, rotateChangedDmProviders } from './teamChatDmRefresh';
 import { closeRotatedDmTab, restoreTeamChatDmTabs } from './teamChatDmTabs';
 import { projectTeamChatPresence, type TeamChatPresence } from './teamChatPresence';
 import type { TeamChatThreadStore } from './TeamChatThreadStore';
@@ -279,31 +280,40 @@ export class TeamChatView extends ItemView implements ChatViewHandle {
   }
 
   // ============================================
-  // ChatViewHandle — UI-refresh surface
-  //
-  // Minimal-but-correct in 4a: with no composer/header island mounted yet,
-  // re-projecting the store is all there is to refresh. Each gains its DM-scoped
-  // body in 4b.
+  // ChatViewHandle — UI-refresh surface. DM-scoped: a settings/env broadcast fans out
+  // to the open DM tabs via the shared per-tab helpers (`teamChatDmRefresh`, mirroring
+  // SpecoratorView), then re-projects the store. refreshTabControls/updateLayoutForPosition
+  // re-project only — no Team-Chat tab-strip / tab-bar knob (as in SpecoratorView).
   // ============================================
 
   refreshModelSelector(): void {
-    this.emitTeamChatChange(); // Phase 4b: DM-scoped refresh
+    // Per-tab model-selector + usage refresh; the view owns the emit + runtime prime.
+    refreshDmModelState(this.plugin, this.tabManager?.getAllTabs() ?? []);
+    this.emitTeamChatChange();
+    this.tabManager?.primeProviderRuntime();
   }
 
   async refreshProviderAvailability(): Promise<void> {
-    this.emitTeamChatChange(); // Phase 4b: DM-scoped refresh
+    const tabs = this.tabManager?.getAllTabs() ?? [];
+    // Un-grey each open DM (also fires standalone from deferred init), then rotate any
+    // DM whose agent was re-pointed at another (immutable) provider via selectAgent.
+    refreshDmModelState(this.plugin, tabs);
+    await rotateChangedDmProviders(this.plugin, tabs, (agentId) => this.selectAgent(agentId));
+    this.emitTeamChatChange();
   }
 
   updateLayoutForPosition(): void {
-    this.emitTeamChatChange(); // Phase 4b: DM-scoped refresh
+    this.emitTeamChatChange();
   }
 
   refreshTabControls(): void {
-    this.emitTeamChatChange(); // Phase 4b: DM-scoped refresh
+    this.emitTeamChatChange();
   }
 
   applyEditedFilesSetting(): void {
-    this.emitTeamChatChange(); // Phase 4b: DM-scoped refresh
+    // Clear (disabled) or derive (enabled) each open DM's edited files (mirror of SV).
+    applyDmEditedFilesSetting(this.plugin, this.tabManager?.getAllTabs() ?? []);
+    this.emitTeamChatChange();
   }
 
   updateHiddenProviderCommands(): void {
