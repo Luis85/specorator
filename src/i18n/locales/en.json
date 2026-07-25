@@ -1356,6 +1356,7 @@
       "foundAt": "Found at",
       "needsCli": "Needs the {command} command on your PATH.",
       "notExecutable": "There's a file at {path}, but it isn't executable — fix its permissions or reinstall.",
+      "batchShim": "{path} is a .cmd shim, which {command} can't be launched from — point this at the native executable (.exe) instead.",
       "authHint": "Not signed in yet? Run {command} once in a terminal.",
       "docs": "Install docs",
       "noneEnabled": "No provider enabled yet",

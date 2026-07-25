@@ -1356,6 +1356,7 @@
       "foundAt": "Trouvé à",
       "needsCli": "Nécessite la commande {command} dans votre PATH.",
       "notExecutable": "Un fichier existe à {path}, mais il n'est pas exécutable — corrigez ses permissions ou réinstallez.",
+      "batchShim": "{path} est un shim .cmd, depuis lequel {command} ne peut pas être lancé — pointez plutôt vers l'exécutable natif (.exe).",
       "authHint": "Pas encore connecté ? Lancez {command} une fois dans un terminal.",
       "docs": "Docs d’installation",
       "noneEnabled": "Aucun fournisseur activé",

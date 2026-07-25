@@ -34,6 +34,8 @@ interface Stub {
   extra?: string[];
   /** Models OpenCode: the runtime spawns the bare command, so PATH counts. */
   pathFallback?: boolean;
+  /** Models Claude: the SDK owns stdio, so a `.cmd` shim cannot be launched. */
+  noBatchShim?: boolean;
 }
 
 const STUBS: Stub[] = [
@@ -41,6 +43,7 @@ const STUBS: Stub[] = [
   { id: 'det-beta', name: 'Beta', cli: 'beta' },
   { id: 'det-gamma', name: 'Gamma', cli: 'gamma', extra: ['gamma-alt'] },
   { id: 'det-path', name: 'Path', cli: 'pathcli', extra: ['pathcli-alt'], pathFallback: true },
+  { id: 'det-nobatch', name: 'NoBatch', cli: 'nobatch', noBatchShim: true },
 ];
 
 function stubResolver(resolved: string | null): ProviderCliResolver & { resetCalls: number } {
@@ -71,6 +74,7 @@ beforeAll(() => {
         authCommand: `${stub.cli} login`,
         extraBinaryNames: stub.extra,
         runtimeFallsBackToPathLookup: stub.pathFallback,
+        windowsBatchShimUnsupported: stub.noBatchShim,
         methods: [],
       },
       isEnabled: (settings: Record<string, unknown>) => Boolean(
@@ -218,8 +222,41 @@ describe('detectProviderCli', () => {
     expect(detectProviderCli(makePlugin(), 'det-alpha')).toMatchObject({
       status: 'missing',
       cliPath: null,
-      unusablePath: '/usr/local/bin/alpha',
+      unusable: { path: '/usr/local/bin/alpha', reason: 'not-executable' },
     });
+  });
+
+  it('refuses a Windows batch shim under a provider whose launch path cannot run one', () => {
+    // npm installs `claude.cmd` on Windows and nothing stops a user pinning it
+    // by hand, but the SDK owns the stdio stream — so the file being real and
+    // "executable" (an existence check on Windows) is not enough.
+    ProviderWorkspaceRegistry.setServices('det-nobatch', {
+      cliResolver: stubResolver('C:\\npm\\nobatch.cmd'),
+    } as never);
+    const platform = process.platform;
+    Object.defineProperty(process, 'platform', { value: 'win32', configurable: true });
+    try {
+      expect(detectProviderCli(makePlugin(), 'det-nobatch')).toMatchObject({
+        status: 'missing',
+        cliPath: null,
+        unusable: { path: 'C:\\npm\\nobatch.cmd', reason: 'batch-shim' },
+      });
+    } finally {
+      Object.defineProperty(process, 'platform', { value: platform, configurable: true });
+    }
+  });
+
+  it('accepts the same batch shim for a provider that wraps it through cmd.exe', () => {
+    ProviderWorkspaceRegistry.setServices('det-alpha', {
+      cliResolver: stubResolver('C:\\npm\\alpha.cmd'),
+    } as never);
+    const platform = process.platform;
+    Object.defineProperty(process, 'platform', { value: 'win32', configurable: true });
+    try {
+      expect(detectProviderCli(makePlugin(), 'det-alpha').status).toBe('found');
+    } finally {
+      Object.defineProperty(process, 'platform', { value: platform, configurable: true });
+    }
   });
 
   it('does not promise ready for a command that runs on another target', () => {

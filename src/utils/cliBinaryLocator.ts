@@ -70,7 +70,16 @@ export function executableCandidateNames(
     : [base];
 }
 
-/** Scans the enhanced PATH for the first existing binary among the given candidate names. */
+/**
+ * Scans the enhanced PATH for the first RUNNABLE binary among the candidate names.
+ *
+ * Executability, not mere existence: a non-executable file on PATH is not what
+ * the shell would run, so returning it would hand the caller a path that fails
+ * at spawn while a working binary further along PATH went unfound. (A configured
+ * path is different — `resolveConfiguredCliPath` still accepts any file, so a
+ * caller that pins something unusable can say so precisely instead of reporting
+ * a bare "not found" for a file the user can see.)
+ */
 export function findBinaryOnPath(binaryNames: string[], additionalPath?: string): string | null {
   const searchEntries = parsePathEntries(getEnhancedPath(additionalPath));
 
@@ -79,7 +88,7 @@ export function findBinaryOnPath(binaryNames: string[], additionalPath?: string)
 
     for (const binaryName of binaryNames) {
       const candidate = path.join(dir, binaryName);
-      if (isExistingFile(candidate)) {
+      if (isExecutableFile(candidate)) {
         return candidate;
       }
     }

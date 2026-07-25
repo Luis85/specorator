@@ -1356,6 +1356,7 @@
       "foundAt": "경로",
       "needsCli": "PATH에 {command} 명령이 필요합니다.",
       "notExecutable": "{path} 에 파일은 있지만 실행할 수 없습니다. 권한을 수정하거나 다시 설치하세요.",
+      "batchShim": "{path} 은(는) .cmd 심으로, 여기서는 {command} 을(를) 실행할 수 없습니다. 네이티브 실행 파일(.exe)을 지정하세요.",
       "authHint": "아직 로그인하지 않았다면 터미널에서 {command}를 한 번 실행하세요.",
       "docs": "설치 문서",
       "noneEnabled": "활성화된 제공자가 없습니다",

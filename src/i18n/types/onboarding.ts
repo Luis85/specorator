@@ -29,6 +29,7 @@ export type OnboardingTranslationKey =
   | 'onboarding.providers.foundAt'
   | 'onboarding.providers.needsCli'
   | 'onboarding.providers.notExecutable'
+  | 'onboarding.providers.batchShim'
   | 'onboarding.providers.authHint'
   | 'onboarding.providers.docs'
   | 'onboarding.providers.noneEnabled'

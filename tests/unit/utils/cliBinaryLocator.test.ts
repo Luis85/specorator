@@ -2,7 +2,11 @@ import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
 
-import { executableCandidateNames, isExecutableFile } from '@/utils/cliBinaryLocator';
+import {
+  executableCandidateNames,
+  findBinaryOnPath,
+  isExecutableFile,
+} from '@/utils/cliBinaryLocator';
 
 /**
  * The single definition of "which names can this platform actually run", shared
@@ -57,5 +61,40 @@ describe('isExecutableFile', () => {
   it('rejects a directory and a missing path', () => {
     expect(isExecutableFile(dir)).toBe(false);
     expect(isExecutableFile(path.join(dir, 'nope'))).toBe(false);
+  });
+});
+
+/** POSIX-only: `X_OK` is an existence check on Windows, so there is nothing to skip. */
+const itPosix = process.platform === 'win32' ? it.skip : it;
+
+describe('findBinaryOnPath', () => {
+  let dir: string;
+  let other: string;
+
+  beforeEach(() => {
+    dir = fs.mkdtempSync(path.join(os.tmpdir(), 'specorator-path-a-'));
+    other = fs.mkdtempSync(path.join(os.tmpdir(), 'specorator-path-b-'));
+  });
+
+  afterEach(() => {
+    fs.rmSync(dir, { recursive: true, force: true });
+    fs.rmSync(other, { recursive: true, force: true });
+  });
+
+  itPosix('skips a non-executable hit and keeps scanning', () => {
+    // Returning the first *existing* file would hand back a path that fails at
+    // spawn while the working binary further along PATH went unfound — and the
+    // setup view would report the provider ready off it.
+    fs.writeFileSync(path.join(dir, 'tool'), '#!/bin/sh\n', { mode: 0o644 });
+    const runnable = path.join(other, 'tool');
+    fs.writeFileSync(runnable, '#!/bin/sh\n', { mode: 0o755 });
+
+    expect(findBinaryOnPath(['tool'], `${dir}${path.delimiter}${other}`)).toBe(runnable);
+  });
+
+  itPosix('returns null when every hit is unusable', () => {
+    fs.writeFileSync(path.join(dir, 'tool'), '#!/bin/sh\n', { mode: 0o644 });
+
+    expect(findBinaryOnPath(['tool'], dir)).toBeNull();
   });
 });

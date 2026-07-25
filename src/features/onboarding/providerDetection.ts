@@ -35,6 +35,13 @@ export type ProviderCliUnknownReason =
   /** The resolver named a command that runs somewhere this host can't stat. */
   | 'external-target';
 
+/** Why a file that is genuinely there still cannot be launched. */
+export type ProviderCliUnusableReason =
+  /** No execute permission — the spawn would fail with `EACCES`. */
+  | 'not-executable'
+  /** A Windows `.cmd`/`.bat` this provider's launch path cannot run. */
+  | 'batch-shim';
+
 export interface ProviderCliDetection {
   providerId: ProviderId;
   displayName: string;
@@ -46,10 +53,11 @@ export interface ProviderCliDetection {
   /** Set only when `status === 'unknown'`. */
   unknownReason?: ProviderCliUnknownReason;
   /**
-   * A path that exists but cannot be executed — set with `status === 'missing'`
-   * so the card can name it instead of claiming nothing is there.
+   * A real file the runtime still could not launch — set with
+   * `status === 'missing'` so the card can name it, and say WHY, instead of
+   * claiming nothing is there.
    */
-  unusablePath?: string;
+  unusable?: { path: string; reason: ProviderCliUnusableReason };
   /**
    * The path pinned for THIS host, if any — distinct from `cliPath`, which may
    * have come from a PATH scan. The manual-path editor shows it so a wrong pin
@@ -72,6 +80,58 @@ export function binaryCandidates(
   const primary = ProviderRegistry.getCliCommand(providerId);
   const extra = ProviderRegistry.getCliInstall(providerId).extraBinaryNames ?? [];
   return [primary, ...extra].flatMap((name) => executableCandidateNames(name, platform));
+}
+
+/**
+ * A resolved path this provider's launch path refuses, whatever the filesystem
+ * says. Only one such fact exists today: a Windows batch shim under a provider
+ * that cannot route one through cmd.exe (Claude — the SDK owns its stdio
+ * stream), and the provider declares it rather than the feature layer inferring
+ * it. Nothing stops a user pinning `claude.cmd` by hand, and npm installs
+ * exactly that on Windows.
+ */
+function unusableReason(
+  providerId: ProviderId,
+  resolved: string,
+  platform: NodeJS.Platform = process.platform,
+): ProviderCliUnusableReason | null {
+  if (platform !== 'win32'
+    || !ProviderRegistry.getCliInstall(providerId).windowsBatchShimUnsupported) {
+    return null;
+  }
+  return /\.(cmd|bat)$/i.test(resolved.trim()) ? 'batch-shim' : null;
+}
+
+/**
+ * What a resolver's answer is actually worth.
+ *
+ * - `found` — a file this host can run and this provider's launch path accepts.
+ * - `unusable` — a real file the runtime still could not launch. Named with its
+ *   path rather than folded into a bare "not found", which would send the user
+ *   looking for a file they can see.
+ * - `external` — not a host file at all. Codex in WSL mode resolves to `codex`
+ *   (or a configured Linux path) which the runtime hands to `wsl.exe` to run
+ *   inside the guest; verifying that would mean spawning a subprocess into the
+ *   distro, and probing the host PATH would answer a different question. Better
+ *   to admit we don't know than to promise a ready provider — or to offer a host
+ *   install that would never reach the guest.
+ */
+type ResolvedPathVerdict =
+  | { kind: 'found' }
+  | { kind: 'unusable'; reason: ProviderCliUnusableReason }
+  | { kind: 'external' };
+
+function classifyResolvedPath(providerId: ProviderId, resolved: string): ResolvedPathVerdict {
+  const rejected = unusableReason(providerId, resolved);
+  if (rejected) {
+    return { kind: 'unusable', reason: rejected };
+  }
+  if (isExecutableFile(resolved)) {
+    return { kind: 'found' };
+  }
+  return isExistingFile(resolved)
+    ? { kind: 'unusable', reason: 'not-executable' }
+    : { kind: 'external' };
 }
 
 /**
@@ -128,11 +188,12 @@ function providerPathOverride(
  *   probe is the authoritative answer, not a fallback. That probe searches the
  *   provider's own runtime PATH, not just the host's.
  *
- * A resolved value is only `found` once it is confirmed to be an EXECUTABLE file
- * on THIS host. One that exists but lacks `+x` would fail at spawn, so it is
- * `missing` with the offending path named (`unusablePath`); one that isn't a host
- * file at all (Codex in WSL mode names a command inside the distro) is
- * `unknown`/`external-target` rather than a promise we can't check.
+ * A resolved value is only `found` once it is confirmed to be a file this host
+ * can run AND this provider's launch path accepts. One that exists but lacks
+ * `+x`, or is a Windows batch shim under a provider that cannot spawn one, is
+ * `missing` with the offending path and the reason named (`unusable`); one that
+ * isn't a host file at all (Codex in WSL mode names a command inside the distro)
+ * is `unknown`/`external-target` rather than a promise we can't check.
  *
  * `reset()` before probing: `CachedCliResolver` memoizes on a settings-derived
  * key, and an install changes no setting, so a cached `null` would otherwise
@@ -158,24 +219,19 @@ export function detectProviderCli(
   if (resolver) {
     resolver.reset();
     const resolved = resolver.resolveFromSettings(settings);
-    if (resolved && isExecutableFile(resolved)) {
-      return { ...base, status: 'found', cliPath: resolved };
-    }
-    if (resolved && isExistingFile(resolved)) {
-      // The file is right there but cannot be run (no `+x` — a partially
-      // installed or copied script), so the runtime would fail with EACCES.
-      // Reported as a confirmed problem with the path named, rather than as a
-      // bare "not found" that sends the user looking for a file they have.
-      return { ...base, status: 'missing', cliPath: null, unusablePath: resolved };
-    }
     if (resolved) {
-      // A resolver can name a command that does not exist on THIS host: Codex in
-      // WSL mode resolves to `codex` (or a configured Linux path), which the
-      // runtime hands to `wsl.exe` to run inside the guest. Verifying it would
-      // mean spawning a subprocess into the distro, and probing the host PATH
-      // would answer a different question — so admit we don't know instead of
-      // promising a ready provider (and instead of offering a host install that
-      // would not reach the guest anyway).
+      const verdict = classifyResolvedPath(providerId, resolved);
+      if (verdict.kind === 'found') {
+        return { ...base, status: 'found', cliPath: resolved };
+      }
+      if (verdict.kind === 'unusable') {
+        return {
+          ...base,
+          status: 'missing',
+          cliPath: null,
+          unusable: { path: resolved, reason: verdict.reason },
+        };
+      }
       return { ...base, status: 'unknown', unknownReason: 'external-target', cliPath: null };
     }
     if (!spawnsBareCommand) {

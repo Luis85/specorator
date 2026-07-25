@@ -63,14 +63,25 @@ surfaces to use the island pattern; this is one.
     from settings, never `plugin.getResolvedEnvironmentVariables`: that resolves
     SecretStorage refs and warns about missing ones, which a probe that reruns on
     every card interaction must not do.
-  - **A resolved value is `found` only once it is confirmed to be an EXECUTABLE
-    file on this host** (`isExecutableFile` — `stat().isFile()` plus `X_OK`, a
-    no-op on Windows where the extension decides). A file that exists without
-    `+x` (a partially installed or copied script) would fail at spawn with
-    `EACCES`, so it is `missing` with the path named through `unusablePath`
-    instead of a bare "not found" that sends the user hunting for a file they
-    have. The resolvers keep existence-only semantics, so provider CLI resolution
-    is unchanged — detection just refuses to promise more than it verified.
+  - **A resolved value is `found` only once it is confirmed to be a file this
+    host can run AND this provider's launch path accepts** (`classifyResolvedPath`).
+    Two ways a real file is still `missing`, both carrying the path and a reason
+    through `unusable` rather than a bare "not found" that sends the user hunting
+    for a file they can see:
+    - `not-executable` — no `+x` (`isExecutableFile` = `stat().isFile()` plus
+      `X_OK`, which is a no-op on Windows where the extension decides). A
+      partially installed or copied script would fail at spawn with `EACCES`.
+    - `batch-shim` — a Windows `.cmd`/`.bat` under a provider that declares
+      `cliInstall.windowsBatchShimUnsupported`. Claude is the one: the SDK owns
+      its stdio stream, so a cmd.exe wrapper is not available to it the way it is
+      to the self-spawning providers — which is exactly why `findClaudeCLIPath`
+      skips `.cmd` while probing. Nothing stops a user pinning `claude.cmd` by
+      hand, and npm installs precisely that on Windows. The fact is declared on
+      the registration, never inferred from a provider id here.
+    `findBinaryOnPath` now requires executability too, so a PATH scan skips a
+    non-runnable hit and keeps looking instead of returning something that fails
+    at spawn. `resolveConfiguredCliPath` deliberately stays existence-only: a pin
+    must still resolve so detection can say *why* it is unusable.
     Codex in WSL mode resolves to a command inside the distro (`codex`, or a
     configured Linux path), which the runtime hands to `wsl.exe`; verifying it
     would mean spawning into the guest, and the host PATH answers a different

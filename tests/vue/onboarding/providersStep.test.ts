@@ -132,7 +132,11 @@ describe('ProvidersStep', () => {
     // A copied or partially installed script without +x: "needs the command on
     // your PATH" would send the user looking for a file they already have.
     const { container } = setup(makeStore([
-      detection({ status: 'missing', cliPath: null, unusablePath: '/opt/alpha/alpha' }),
+      detection({
+        status: 'missing',
+        cliPath: null,
+        unusable: { path: '/opt/alpha/alpha', reason: 'not-executable' },
+      }),
     ]));
     const line = container.querySelector('[data-state="not-executable"]')!;
 
@@ -140,6 +144,23 @@ describe('ProvidersStep', () => {
     expect(container.textContent).not.toContain('on your PATH');
     // Still a confirmed absence, so the install and manual-path remedies stay.
     expect(container.querySelector('.specorator-onboarding-install')).not.toBeNull();
+  });
+
+  it('explains a batch shim the provider cannot launch, rather than reporting it ready', async () => {
+    // Claude's SDK owns the stdio stream, so a `.cmd` cannot be routed through
+    // cmd.exe the way the self-spawning providers do — and npm installs exactly
+    // that on Windows, so a hand-pinned `claude.cmd` would look ready and fail.
+    const { container } = setup(makeStore([
+      detection({
+        status: 'missing',
+        cliPath: null,
+        unusable: { path: 'C:\\npm\\alpha.cmd', reason: 'batch-shim' },
+      }),
+    ]));
+    const line = container.querySelector('[data-state="batch-shim"]')!;
+
+    expect(line.textContent).toContain('alpha.cmd');
+    expect(line.textContent).toContain('.exe');
   });
 
   it('toggling the checkbox enables the provider through the store', async () => {

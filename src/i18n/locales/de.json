@@ -1356,6 +1356,7 @@
       "foundAt": "Gefunden unter",
       "needsCli": "Benötigt den Befehl {command} in deinem PATH.",
       "notExecutable": "Unter {path} liegt eine Datei, die aber nicht ausführbar ist – korrigiere die Berechtigungen oder installiere neu.",
+      "batchShim": "{path} ist ein .cmd-Shim, aus dem {command} nicht gestartet werden kann – verweise stattdessen auf die native Programmdatei (.exe).",
       "authHint": "Noch nicht angemeldet? Führe {command} einmal im Terminal aus.",
       "docs": "Installationsdoku",
       "noneEnabled": "Noch kein Anbieter aktiviert",

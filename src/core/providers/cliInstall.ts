@@ -62,6 +62,19 @@ export interface ProviderCliInstall {
    * about usability.
    */
   runtimeFallsBackToPathLookup?: boolean;
+  /**
+   * True when this provider's launch path CANNOT run a Windows `.cmd`/`.bat`
+   * shim, so such a path must never be reported as ready however real the file
+   * is.
+   *
+   * The other providers spawn their CLI themselves and route batch shims through
+   * cmd.exe (`utils/windowsSpawn`), so they leave this unset. Claude does not
+   * spawn a command — the SDK owns the stdio stream and a cmd.exe wrapper breaks
+   * it, which is why `findClaudeCLIPath` deliberately skips `.cmd` while probing
+   * and prefers `claude.exe`. Nothing stops a user from PINNING `claude.cmd` by
+   * hand, though, and npm installs exactly that on Windows.
+   */
+  windowsBatchShimUnsupported?: boolean;
   methods: readonly ProviderCliInstallMethod[];
 }
 

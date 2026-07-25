@@ -48,14 +48,16 @@ const isMissing = computed(() => props.detection.status === 'missing');
  * `v-else`.
  */
 const statusLine = computed<{ state: string; text: string } | null>(() => {
-  const { status, unusablePath, unknownReason, cliCommand } = props.detection;
+  const { status, unusable, unknownReason, cliCommand } = props.detection;
   if (status === 'found') {
     return null;
   }
-  if (unusablePath) {
+  if (unusable) {
     return {
-      state: 'not-executable',
-      text: t('onboarding.providers.notExecutable', { path: unusablePath }),
+      state: unusable.reason,
+      text: unusable.reason === 'batch-shim'
+        ? t('onboarding.providers.batchShim', { path: unusable.path, command: cliCommand })
+        : t('onboarding.providers.notExecutable', { path: unusable.path }),
     };
   }
   if (status === 'missing') {

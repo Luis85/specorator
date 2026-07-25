@@ -20,6 +20,10 @@ export const claudeProviderRegistration: ProviderRegistration = {
   cliInstall: {
     docsUrl: 'https://code.claude.com/docs/en/quickstart',
     authCommand: 'claude',
+    // The SDK owns the stdio stream, so a `.cmd` shim cannot be routed through
+    // cmd.exe the way the self-spawning providers do — the same reason
+    // `findClaudeCLIPath` skips `.cmd` while probing and prefers `claude.exe`.
+    windowsBatchShimUnsupported: true,
     methods: [
       {
         id: 'npm',
