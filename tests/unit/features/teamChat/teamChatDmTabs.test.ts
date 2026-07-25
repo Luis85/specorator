@@ -136,6 +136,39 @@ describe('restoreTeamChatDmTabs — dedup + validate (:225)', () => {
 
     expect(createTab).not.toHaveBeenCalled();
   });
+
+  // Round-53 Fix 3: one DM's createTab rejecting (e.g. a corrupt transcript's history loader
+  // throws) escaped the serialized callback and aborted the WHOLE loop, silently omitting every
+  // valid DM after it until reopen. Per-tab catch: log and continue (matches TabManager.restoreState).
+  it('continues restoring the remaining DMs when one tab createTab rejects (Round-53 Fix 3)', async () => {
+    const created = new Set<string>();
+    const errorLog = jest.fn();
+    const createTab = jest.fn().mockImplementation(async (cid: string, tabId: string) => {
+      if (cid === 'c1') throw new Error('corrupt transcript history');
+      created.add(tabId);
+      return { id: tabId };
+    });
+    const plugin = {
+      getConversationSync: jest.fn(() => teamChatConv),
+      getConversationById: jest.fn().mockResolvedValue(teamChatConv),
+      findConversationAcrossViews: jest.fn(() => null),
+      logger: { scope: jest.fn(() => ({ error: errorLog })) },
+    } as never;
+    const m = { createTab, hasTab: jest.fn((id: string) => created.has(id)), switchToTab: jest.fn() } as never;
+
+    await restoreTeamChatDmTabs(plugin, m, {
+      openTabs: [
+        { tabId: 't1', conversationId: 'c1', kind: 'chat' as const },
+        { tabId: 't2', conversationId: 'c2', kind: 'chat' as const },
+      ],
+      activeTabId: 't1',
+    });
+
+    // The first DM threw, but the loop continued and restored the second (not aborted).
+    expect(createTab).toHaveBeenCalledWith('c1', 't1', expect.objectContaining({ kind: 'chat' }));
+    expect(createTab).toHaveBeenCalledWith('c2', 't2', expect.objectContaining({ kind: 'chat' }));
+    expect(errorLog).toHaveBeenCalledWith('team chat DM restore failed for one tab', expect.any(Error));
+  });
 });
 
 describe('restoreTeamChatDmTabs — Team Chat cap governs restore (Round-40 Fix 1)', () => {

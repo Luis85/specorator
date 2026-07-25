@@ -383,22 +383,32 @@ export class QueuedMessageController {
       return;
     }
 
-    // A Team Chat DM whose agent was removed from the roster is read-only: steering would
-    // commit a turn WITHOUT the agent's persona/model. Block it and notify — the same guard
-    // InputController.sendMessage applies, which `steerQueuedMessage` bypasses. The queued
-    // message is left intact, so re-creating the agent lets the user steer it (self-healing).
-    // The sync surface check short-circuits before any roster lookup on the sidebar path.
-    const dmAgentId = teamChatDmBoundAgentId(this.deps.plugin, state.currentConversationId);
-    if (dmAgentId && (await this.deps.plugin.agentRosterStore.get(dmAgentId)) === null) {
-      new Notice(t('teamChat.agentRemoved'));
-      return;
-    }
-
+    // Reserve BEFORE the async roster read so the queue mutation is atomic: clone the queued
+    // message, null the queue, and set steerInFlight synchronously. A concurrent double-steer then
+    // bails on the steerInFlight guard above, and a discard/edit racing the read operates on the
+    // already-nulled queue instead of tearing cloneQueuedMessage(state.queuedMessage) apart
+    // mid-read (null deref) — the bug when the removed-agent guard's await ran BEFORE the
+    // reservation (Round-53).
     const queuedMessage = this.cloneQueuedMessage(state.queuedMessage);
     state.queuedMessage = null;
     this.pendingSteerMessage = queuedMessage;
     this.steerInFlight = true;
     this.updateQueueIndicator();
+
+    // A Team Chat DM whose agent was removed from the roster is read-only: steering would commit a
+    // turn WITHOUT the agent's persona/model. Block it and notify — the same guard
+    // InputController.sendMessage applies, which `steerQueuedMessage` bypasses. Un-reserve so the
+    // queued message is left intact, and re-creating the agent lets the user steer it
+    // (self-healing). The sync surface check short-circuits before any roster lookup on the sidebar.
+    const dmAgentId = teamChatDmBoundAgentId(this.deps.plugin, state.currentConversationId);
+    if (dmAgentId && (await this.deps.plugin.agentRosterStore.get(dmAgentId)) === null) {
+      state.queuedMessage = queuedMessage;
+      this.pendingSteerMessage = null;
+      this.steerInFlight = false;
+      this.updateQueueIndicator();
+      new Notice(t('teamChat.agentRemoved'));
+      return;
+    }
 
     try {
       const { displayContent, request } = this.toQueuedChatTurn(queuedMessage);

@@ -2098,6 +2098,78 @@ describe('InputController - Message Queue', () => {
     });
   });
 
+  // Round-53 Fix 1: the removed-agent roster read awaits BETWEEN composer capture and consume.
+  // Reserve-before-await consumes the composer UP FRONT for a DM send, so a draft typed during
+  // the await isn't erased (data loss) and a second submit in the window reads an empty composer
+  // (no duplicate); a removed agent restores the composer.
+  describe('Team Chat DM reserve-before-await (Round-53)', () => {
+    function makeDmDeps() {
+      const d = createSendableDeps();
+      d.state.currentConversationId = 'dm-1';
+      (d.plugin.getConversationSync as any) = jest.fn().mockReturnValue({ surface: 'team-chat', boundAgentId: 'roster:a' });
+      return d;
+    }
+
+    it('does not erase a draft typed during the roster await (consume happens up front)', async () => {
+      deps = makeDmDeps();
+      inputEl = deps.getInputEl() as ReturnType<typeof createMockInputEl>;
+      let resolveRoster: (v: any) => void = () => {};
+      (deps.plugin as any).agentRosterStore = { get: jest.fn(() => new Promise((r) => { resolveRoster = r; })) };
+      (deps as any).mockAgentService.query = jest.fn().mockImplementation(() => createMockStream([{ type: 'done' }]));
+      inputEl.value = 'hello';
+      controller = new InputController(deps);
+
+      const sendPromise = controller.sendMessage();
+      // Reserve-before-await: the composer was consumed synchronously BEFORE the roster read.
+      expect(inputEl.value).toBe('');
+      // The user types a NEW draft while the roster read is in flight.
+      inputEl.value = 'new draft';
+      resolveRoster!({ id: 'roster:a' });
+      await sendPromise;
+
+      // The send used the captured text; the new draft survives (not erased by a late consume).
+      expect(inputEl.value).toBe('new draft');
+    });
+
+    it('does not dispatch twice when a second submit races the roster await', async () => {
+      deps = makeDmDeps();
+      inputEl = deps.getInputEl() as ReturnType<typeof createMockInputEl>;
+      let resolveRoster: (v: any) => void = () => {};
+      const rosterPromise = new Promise((r) => { resolveRoster = r; });
+      (deps.plugin as any).agentRosterStore = { get: jest.fn(() => rosterPromise) };
+      inputEl.value = 'hello';
+      controller = new InputController(deps);
+      const dispatch = jest.spyOn(controller as any, 'dispatchComposerTurn').mockResolvedValue(undefined);
+
+      const p1 = controller.sendMessage();
+      const p2 = controller.sendMessage(); // races p1's roster await
+      resolveRoster!({ id: 'roster:a' });
+      await Promise.all([p1, p2]);
+
+      // The second submit read an already-consumed (empty) composer and was dropped as empty.
+      expect(dispatch).toHaveBeenCalledTimes(1);
+      expect(deps.state.queuedMessage).toBeNull();
+    });
+
+    it('restores the composer + notices when the DM agent was removed', async () => {
+      deps = makeDmDeps();
+      inputEl = deps.getInputEl() as ReturnType<typeof createMockInputEl>;
+      (deps.plugin.getConversationSync as any) = jest.fn().mockReturnValue({ surface: 'team-chat', boundAgentId: 'roster:gone' });
+      (deps.plugin as any).agentRosterStore = { get: jest.fn().mockResolvedValue(null) };
+      mockNotice.mockClear();
+      inputEl.value = 'hello';
+      controller = new InputController(deps);
+      const dispatch = jest.spyOn(controller as any, 'dispatchComposerTurn').mockResolvedValue(undefined);
+
+      await controller.sendMessage();
+
+      expect(mockNotice).toHaveBeenCalledWith(t('teamChat.agentRemoved'));
+      expect(dispatch).not.toHaveBeenCalled();
+      // The reserve-before-await consumed the composer, then restored it once the agent read null.
+      expect(inputEl.value).toBe('hello');
+    });
+  });
+
   describe('Built-in commands - /resume', () => {
     const mockConversations = [
       { id: 'conv-1', title: 'Chat 1', createdAt: 1000, updatedAt: 1000, messageCount: 1, preview: '' },

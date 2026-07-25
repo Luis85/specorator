@@ -238,6 +238,23 @@ export function rollbackOptimisticOutgoingTurn(
   send.imageContextManager?.setImages(snapshot.attachedImages);
 }
 
+/**
+ * Restores a composer draft reserved (consumed) up front by the Team Chat DM send
+ * (`InputController.confirmDmAgentOrRestoreComposer`) when the bound agent turns out removed. Only the
+ * textarea text is consumed early — images and pill mentions are read LIVE at turn-build time and
+ * can't be cleared before then — so restoring the captured text is the complete undo. Reuses the
+ * same `ComposerRollbackSnapshot` the init-failure rollback captures (text-only slice of it).
+ */
+export function restoreReservedComposerInput(
+  send: ComposerSendContext,
+  snapshot: ComposerRollbackSnapshot,
+  resetInputHeight: () => void,
+): void {
+  if (!snapshot.shouldRestoreInput) return;
+  send.inputEl.value = snapshot.inputText;
+  resetInputHeight();
+}
+
 export function beginStreamingTurnState(
   state: ChatState,
   send: ComposerSendContext,

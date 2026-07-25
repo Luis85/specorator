@@ -115,14 +115,22 @@ export async function restoreTeamChatDmTabs(
   for (const tab of restorable) {
     const conversationId = tab.conversationId;
     if (typeof conversationId !== 'string') continue; // validated above; narrows the type
-    await coordinator.serialize(conversationId, async () => {
-      // Skip a DM already open — in another leaf, an earlier iteration, or the first
-      // of two concurrent same-id restores/opens.
-      if (plugin.findConversationAcrossViews(conversationId)) return;
-      // bypassTabLimit: Team Chat's DM budget is maxTeamChatDms (capped above), not the shared
-      // maxChatTabs — matching the interactive open path so restore doesn't clip within budget.
-      await manager.createTab(conversationId, tab.tabId, { activate: false, kind: 'chat', bypassTabLimit: true });
-    });
+    // Per-tab tolerance (matches TabManager.restoreState): a corrupt transcript's history loader
+    // can reject inside createTab; without this the rejection escapes the serialized callback and
+    // aborts the WHOLE loop, silently omitting every valid DM after it until the view is reopened.
+    // Log and continue — one bad DM must not omit the rest (Round-53).
+    try {
+      await coordinator.serialize(conversationId, async () => {
+        // Skip a DM already open — in another leaf, an earlier iteration, or the first
+        // of two concurrent same-id restores/opens.
+        if (plugin.findConversationAcrossViews(conversationId)) return;
+        // bypassTabLimit: Team Chat's DM budget is maxTeamChatDms (capped above), not the shared
+        // maxChatTabs — matching the interactive open path so restore doesn't clip within budget.
+        await manager.createTab(conversationId, tab.tabId, { activate: false, kind: 'chat', bypassTabLimit: true });
+      });
+    } catch (error) {
+      plugin.logger.scope('team-chat').error('team chat DM restore failed for one tab', error);
+    }
   }
 
   // Switch to the persisted active DM if its tab survived (its onTabSwitched drives

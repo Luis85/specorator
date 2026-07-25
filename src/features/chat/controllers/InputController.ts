@@ -60,6 +60,7 @@ import {
   type PlanApprovalOutcome,
   resolveComposerSend,
   resolveComposerSourceImages,
+  restoreReservedComposerInput,
   restoreResumeCheckpointIfNeeded,
   rollbackOptimisticOutgoingTurn,
 } from './composerSendPhases';
@@ -282,16 +283,19 @@ export class InputController {
       return;
     }
 
-    // A Team Chat DM whose agent was deleted from the roster is read-only: block the
-    // turn (it would otherwise run WITHOUT the agent's persona/model) and tell the user.
-    // The surface check is sync, so `&&` short-circuits before the roster lookup on every
-    // non-DM send (no added microtask). After the built-in-command branch, so a command
-    // still routes through its own gate. Self-healing: a re-created agent lets sends resume.
+    // Consume the composer EXACTLY once, up front. Reads send.content (captured at resolve), so
+    // clearing the textarea now can't affect the turn built later — and consuming BEFORE the DM
+    // roster read below reserves it, so a draft typed during that await isn't erased and a second
+    // submit in the window reads an empty composer (no data loss / duplicate). Non-DM sends keep
+    // their prior behavior: the consume is a no-op relative to the turn, and the `&&` short-circuit
+    // means they never await the roster read (no added microtask).
+    clearConsumedComposerInput(send, () => this.deps.resetInputHeight());
+
+    // A Team Chat DM whose agent was deleted from the roster is read-only: block the turn (it would
+    // otherwise run WITHOUT the agent's persona/model) and tell the user. The composer was reserved
+    // (consumed) above, so a removed agent restores it. Self-healing: a re-created agent resumes.
     const dmAgentId = teamChatDmBoundAgentId(this.deps.plugin, this.deps.state.currentConversationId);
-    if (dmAgentId && (await this.deps.plugin.agentRosterStore.get(dmAgentId)) === null) {
-      new Notice(t('teamChat.agentRemoved'));
-      return;
-    }
+    if (dmAgentId && !(await this.confirmDmAgentOrRestoreComposer(send, dmAgentId))) return;
 
     // Persist any pasted/dropped images to the vault BEFORE the queue branch —
     // both the streaming-queue (state.queuedMessage) and the steer-then-commit
@@ -340,6 +344,25 @@ export class InputController {
     }
   }
 
+  /**
+   * Team Chat DM removed-agent gate, run AFTER the composer was reserved (consumed) up front in
+   * sendMessage. Reads the roster: `true` when the bound agent still exists (proceed on the
+   * consumed composer); `false` when it was removed — the reserved composer is restored and the
+   * user notified (self-healing on re-create), so the caller must return. Only the textarea text
+   * was consumed early (images/pills are read live at turn-build time), so restoring the captured
+   * text is the complete undo — `captureComposerRollbackSnapshot` reads `send.content` (stable
+   * since resolve), not the already-cleared textarea, so capturing it here is correct.
+   */
+  private async confirmDmAgentOrRestoreComposer(
+    send: ComposerSendContext,
+    dmAgentId: string,
+  ): Promise<boolean> {
+    if ((await this.deps.plugin.agentRosterStore.get(dmAgentId)) !== null) return true;
+    restoreReservedComposerInput(send, captureComposerRollbackSnapshot(send), () => this.deps.resetInputHeight());
+    new Notice(t('teamChat.agentRemoved'));
+    return false;
+  }
+
   private queueComposerSendWhileStreaming(send: ComposerSendContext): ProgrammaticSendResult {
     const {
       state,
@@ -368,7 +391,8 @@ export class InputController {
     // so they don't linger in the composer after the user hits send while streaming.
     send.fileContextManager?.clearAttachedPills();
 
-    clearConsumedComposerInput(send, () => this.deps.resetInputHeight());
+    // The composer text is consumed once in sendMessage (before this branch); images are consumed
+    // here since they're read live off the manager for the queued turn above.
     if (send.shouldUseInput || send.consumesComposerDraft) {
       send.imageContextManager?.clearImages();
     }
@@ -383,7 +407,8 @@ export class InputController {
     send: ComposerSendContext,
     options?: ComposerTurnOptions,
   ): Promise<ProgrammaticSendResult | void> {
-    clearConsumedComposerInput(send, () => this.deps.resetInputHeight());
+    // The composer is consumed once in sendMessage (before this branch), so a DM reserve doesn't
+    // re-clear a draft typed during the roster await; nothing to consume here.
     // Bug — selected work-order model didn't reach the runtime: capture the
     // tab-pinned model BEFORE `ensureServiceInitialized` runs, since the tab
     // lifecycle clears `draftModel` during init. Plumbed into `query()` as

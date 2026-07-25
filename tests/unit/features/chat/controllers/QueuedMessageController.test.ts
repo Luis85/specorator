@@ -356,6 +356,65 @@ describe('QueuedMessageController', () => {
       expect(agentService.steer).toHaveBeenCalled();
     });
 
+    // Round-53 Fix 2: the removed-agent roster read ran BEFORE the reservation, so DURING the
+    // await state.queuedMessage was still mutable and steerInFlight false — a concurrent
+    // steer/discard could tear cloneQueuedMessage's input out from under it (null deref).
+    // Reserving BEFORE the roster read makes the queue mutation atomic.
+    it('does not null-deref when a second steer races the roster read (steers once) (Round-53)', async () => {
+      const { controller, state, agentService, plugin, rosterGet } = setupSteerable();
+      state.currentConversationId = 'conv-dm';
+      plugin.getConversationSync.mockReturnValue({ surface: 'team-chat', boundAgentId: 'roster:a' });
+      let resolveRoster: (v: any) => void = () => {};
+      rosterGet.mockReturnValue(new Promise((r) => { resolveRoster = r; }));
+      state.queuedMessage = makeQueuedMessage('steer once');
+
+      const p1 = (controller as any).steerQueuedMessage();
+      const p2 = (controller as any).steerQueuedMessage(); // races p1's roster await
+      resolveRoster!({ id: 'roster:a' });
+      await Promise.all([p1, p2]);
+
+      // The second steer bailed on the steerInFlight guard; no null-deref, steered exactly once.
+      expect(agentService.steer).toHaveBeenCalledTimes(1);
+    });
+
+    it('does not null-deref when the queue is discarded during the roster read (Round-53)', async () => {
+      const { controller, state, agentService, plugin, rosterGet } = setupSteerable();
+      state.currentConversationId = 'conv-dm';
+      plugin.getConversationSync.mockReturnValue({ surface: 'team-chat', boundAgentId: 'roster:a' });
+      let resolveRoster: (v: any) => void = () => {};
+      rosterGet.mockReturnValue(new Promise((r) => { resolveRoster = r; }));
+      state.queuedMessage = makeQueuedMessage('reserved steer');
+
+      const call = (controller as any).steerQueuedMessage();
+      // A discard lands while the roster read is in flight. Reserving first means it operates on
+      // the already-nulled queue instead of tearing cloneQueuedMessage(state.queuedMessage) apart.
+      controller.clearQueuedMessage();
+      resolveRoster!({ id: 'roster:a' });
+      await call; // buggy code null-derefs cloneQueuedMessage(null) here
+
+      expect(agentService.steer).toHaveBeenCalledTimes(1);
+      expect(state.queuedMessage).toBeNull();
+    });
+
+    // Round-53 Fix 2 (reordering keeps Round-40 intact): the removed-agent guard now runs AFTER
+    // the reservation, so a removed agent must UN-reserve — restore the queued message + notice.
+    it('restores the reservation when the DM agent was removed after reserving (Round-53)', async () => {
+      const { controller, state, agentService, plugin, rosterGet } = setupSteerable();
+      (Notice as jest.Mock).mockClear();
+      state.currentConversationId = 'conv-dm';
+      plugin.getConversationSync.mockReturnValue({ surface: 'team-chat', boundAgentId: 'roster:gone' });
+      rosterGet.mockResolvedValue(null); // agent deleted from the roster
+      state.queuedMessage = makeQueuedMessage('reserve then removed');
+
+      await (controller as any).steerQueuedMessage();
+
+      expect(agentService.steer).not.toHaveBeenCalled();
+      expect(state.queuedMessage?.content).toBe('reserve then removed'); // reservation restored
+      expect((controller as any).pendingSteerMessage).toBeNull();
+      expect((controller as any).steerInFlight).toBe(false);
+      expect(Notice).toHaveBeenCalledWith(t('teamChat.agentRemoved'));
+    });
+
     it('guards against concurrent steer while one is in flight', async () => {
       let resolveSteer: (v: boolean) => void = () => {};
       const steer = jest.fn().mockReturnValue(new Promise<boolean>((r) => { resolveSteer = r; }));
