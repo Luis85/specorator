@@ -172,6 +172,15 @@ export class ProviderRegistry {
   }
 
   /**
+   * Lets a provider invalidate state a CLI-path change makes stale (OpenCode's
+   * discovered model/mode catalog). Call BEFORE persisting so one save covers
+   * the path and the invalidation. Returns whether anything changed.
+   */
+  static notifyCliPathChanged(providerId: ProviderId, settings: Record<string, unknown>): boolean {
+    return this.getProviderRegistration(providerId).onCliPathChanged?.(settings) ?? false;
+  }
+
+  /**
    * Serializes a provider-neutral roster agent into the provider's native
    * subagent file (path + content), or `null` when the provider has no subagent
    * convention. Lets the app publish roster agents without importing provider

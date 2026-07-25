@@ -4,6 +4,7 @@ import { buildFullSubprocessEnvironment } from '@/core/providers/subprocessEnvir
 import type { ProviderCliInstallMethod } from '@/core/providers/types';
 import { findBinaryOnPath } from '@/utils/cliBinaryLocator';
 import { getEnhancedPath } from '@/utils/env';
+import { forceKillProcessGroup } from '@/utils/processKill';
 import { wrapWindowsCmdShim } from '@/utils/windowsSpawn';
 
 /** Hard stop for a hung package manager. Global npm installs are slow, not eternal. */
@@ -99,10 +100,17 @@ export function runCliInstall(
     }),
     windowsVerbatimArguments: spawnPlan.windowsVerbatimArguments,
     stdio: ['ignore', 'pipe', 'pipe'],
+    // POSIX: lead a process group so the teardown below can reap the whole tree.
+    // A package manager forks freely (lifecycle scripts, node-gyp), and a
+    // child-only SIGKILL would orphan those to init — they would keep installing
+    // after the user pressed Cancel. Skipped on Windows, where `detached` spawns
+    // a console window and `taskkill /T` walks the tree anyway.
+    detached: process.platform !== 'win32',
   });
 
   let settled = false;
-  let cancelled = false;
+  /** Set before the kill so `close` reports the abort, not a bare exit code. */
+  let abortReason: 'cancelled' | 'timeout' | null = null;
   let resolveDone: (result: CliInstallResult) => void = () => {};
   const done = new Promise<CliInstallResult>((resolve) => {
     resolveDone = resolve;
@@ -115,14 +123,32 @@ export function runCliInstall(
     resolveDone(result);
   };
 
-  const timeout = window.setTimeout(() => {
-    child.kill();
-    settle({
-      ok: false,
-      exitCode: null,
-      error: `Install timed out after ${INSTALL_TIMEOUT_MS / 60_000} minutes.`,
-    });
-  }, INSTALL_TIMEOUT_MS);
+  const abortResult = (): CliInstallResult => (
+    abortReason === 'timeout'
+      ? {
+        ok: false,
+        exitCode: null,
+        error: `Install timed out after ${INSTALL_TIMEOUT_MS / 60_000} minutes.`,
+      }
+      : { ok: false, exitCode: null, cancelled: true }
+  );
+
+  /**
+   * Reaps the whole tree, THEN settles — settling first would report the install
+   * stopped while npm was still writing to the global prefix. `forceKillProcessGroup`
+   * signals the POSIX group / `taskkill /T /F`s the Windows tree, so the
+   * `cmd.exe` wrapper can't survive as a live npm underneath a dead shim.
+   */
+  const abort = async (reason: 'cancelled' | 'timeout'): Promise<void> => {
+    if (settled || abortReason) return;
+    abortReason = reason;
+    await forceKillProcessGroup(child);
+    // `close` normally settles first (it fires once the tree is gone); this is
+    // the backstop for a process that was already dead.
+    settle(abortResult());
+  };
+
+  const timeout = window.setTimeout(() => { void abort('timeout'); }, INSTALL_TIMEOUT_MS);
 
   child.stdout?.on('data', (chunk: Buffer | string) => events.onOutput(String(chunk)));
   child.stderr?.on('data', (chunk: Buffer | string) => events.onOutput(String(chunk)));
@@ -130,8 +156,8 @@ export function runCliInstall(
     settle({ ok: false, exitCode: null, error: error.message });
   });
   child.on('close', (code: number | null) => {
-    if (cancelled) {
-      settle({ ok: false, exitCode: code, cancelled: true });
+    if (abortReason) {
+      settle(abortResult());
       return;
     }
     settle({ ok: code === 0, exitCode: code });
@@ -139,11 +165,7 @@ export function runCliInstall(
 
   return {
     done,
-    cancel: () => {
-      if (settled) return;
-      cancelled = true;
-      child.kill();
-    },
+    cancel: () => { void abort('cancelled'); },
   };
 }
 

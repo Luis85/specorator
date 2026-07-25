@@ -3,6 +3,7 @@ import { OpencodeInlineEditService } from './auxiliary/OpencodeInlineEditService
 import { OpencodeInstructionRefineService } from './auxiliary/OpencodeInstructionRefineService';
 import { OpencodeTitleGenerationService } from './auxiliary/OpencodeTitleGenerationService';
 import { OPENCODE_PROVIDER_CAPABILITIES } from './capabilities';
+import { clearOpencodeDiscoveryState } from './discoveryState';
 import { opencodeSettingsReconciler } from './env/OpencodeSettingsReconciler';
 import { OpencodeConversationHistoryService } from './history/OpencodeConversationHistoryService';
 import { OPENCODE_CANONICAL_TOOL_NAMES } from './normalization/opencodeToolNormalization';
@@ -55,6 +56,10 @@ export const opencodeProviderRegistration: ProviderRegistration = {
     ],
   },
   environmentKeyPatterns: [/^OPENCODE_/i],
+  // A different binary may not support the models/modes discovered from the old
+  // one, so drop the catalog whenever the CLI path changes — the same cleanup
+  // `mountOpencodeCliPathSetting` performs before its save.
+  onCliPathChanged: (settings) => clearOpencodeDiscoveryState(settings),
   historyService: new OpencodeConversationHistoryService(),
   isEnabled: (settings) => getOpencodeProviderSettings(settings).enabled,
   settingsReconciler: opencodeSettingsReconciler,

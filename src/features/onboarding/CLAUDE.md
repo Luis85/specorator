@@ -15,7 +15,7 @@ surfaces to use the island pattern; this is one.
 | File | Role |
 |------|------|
 | `providerDetection.ts` | `detectProviderCli` / `detectProviderClis` — probes each provider through the provider's OWN `ProviderCliResolver` (`reset()` first), falling back to a `findBinaryOnPath` sweep. Status is `found` / `missing` / `unknown` |
-| `cliInstallRunner.ts` | `runCliInstall` (shell-free `spawn` of a provider-declared argv, streamed output, cancel, 10-min timeout), `appendInstallOutput` (bounded line ring), `platformInstallMethods` |
+| `cliInstallRunner.ts` | `runCliInstall` (shell-free `spawn` of a provider-declared argv, streamed output, process-tree cancel/timeout, 10-min cap), `appendInstallOutput` (bounded line ring), `platformInstallMethods` |
 | `onboardingSettings.ts` | Every settings write the flow performs: provider enable, host-scoped CLI path pin, `setDefaultModel` (commits a model to its OWNING provider), the five folder settings (+ `ensureOnboardingFolders` / `readOnboardingFolders`), the enumerated scalar keys, and `completeOnboarding` / `isOnboardingComplete` |
 | `onboardingSteps.ts` | `ONBOARDING_STEPS` order + label keys |
 | `maybeOpenOnboarding.ts` | `shouldOpenOnboarding` (first-run predicate over `onboardingAutoOpened` + `firstRunDismissed` + provider-enabled state) + the activation wrapper called from `PluginLifecycle.runDeferredStartup()` |
@@ -63,10 +63,17 @@ surfaces to use the island pattern; this is one.
   copyable command plus docs link instead of gaining a hidden `shell: true`
   path. Cursor is entirely copy-only for this reason. Further rails: an explicit
   per-run confirm naming the exact command, a bounded output ring, a 10-minute
-  timeout, cancel-kills-child, `onUnmounted` cancels so a closed leaf leaves no
-  orphan child, `npm.cmd` resolution + the `cmd.exe` verbatim wrap on win32
-  (Node's CVE-2024-27980 batch-shim refusal), and `buildFullSubprocessEnvironment`
-  with the enhanced PATH (a GUI-launched host's PATH cannot find `npm`).
+  timeout, and `onUnmounted` cancel so a closed leaf leaves nothing running.
+  **Teardown is process-tree-wide, not child-only**: a package manager forks
+  (lifecycle scripts, node-gyp) and on win32 the direct child is the `cmd.exe`
+  wrapper, so a bare `child.kill()` would leave the real npm installing after
+  Cancel. The child leads its own POSIX process group (`detached`, skipped on
+  win32 where it would spawn a console) and is reaped through
+  `utils/processKill.forceKillProcessGroup` — `process.kill(-pid)` / `taskkill
+  /T /F` — and the run settles only AFTER that resolves. Plus `npm.cmd`
+  resolution + the `cmd.exe` verbatim wrap on win32 (Node's CVE-2024-27980
+  batch-shim refusal), and `buildFullSubprocessEnvironment` with the enhanced
+  PATH (a GUI-launched host's PATH cannot find `npm`).
 - **`yolo` is not offered.** The defaults step exposes `normal` and `plan` only;
   bypassing tool approval stays an explicit toolbar toggle behind its one-time
   warning (SEC-1), which a setup wizard has no business short-circuiting. The
@@ -100,26 +107,35 @@ surfaces to use the island pattern; this is one.
   setup view is most needed. The one exception is `isUnloaded()` — the flow
   persists its auto-open flag *before* activating, so continuing into a
   torn-down plugin would burn the single auto-open the vault gets.
-- **A model choice is committed to the provider that owns it.** Writing only the
-  top-level `model` does not survive: `ProviderSettingsCoordinator` projects
-  per-provider state, and projecting a provider that doesn't own the current
-  model replaces it with that provider's own first option — so with Claude and
-  Codex both enabled, picking a Codex model and writing `model` alone silently
-  reverts. `setDefaultModel` therefore points `settingsProvider` at the owner,
+- **A model choice is committed to the provider that owns it, in ONE save.**
+  Writing only the top-level `model` does not survive: `ProviderSettingsCoordinator`
+  projects per-provider state, and projecting a provider that doesn't own the
+  current model replaces it with that provider's own first option — so with
+  Claude and Codex both enabled, picking a Codex model and writing `model` alone
+  silently reverts. `setDefaultModel` points `settingsProvider` at the owner,
   calls `applyModelDefaults`, and persists the projection maps through
-  `persistProjectedProviderState`.
+  `persistProjectedProviderState`. The owner comes from the SELECTED OPTION, not
+  from re-inferring it from the model id: two providers can advertise the same
+  custom id, and `resolveProviderForModel` prefers a non-current owner, so
+  inference could commit the pick to the provider the user wasn't choosing —
+  which is also why `modelOptions` carries `providerId` and is not deduped by
+  value. The model field is deliberately NOT bound through `useAppSetting`:
+  that setter persists on its own, and `saveSettings` itself re-runs
+  `persistProjectedProviderState` for the CURRENT provider, so a second
+  unordered save could stamp the pick onto the outgoing provider's projection.
 - **A CLI-path change recycles live runtimes.** `setCliPath` calls the shared
   `broadcastCliPathRuntimeCleanup` the provider CLI-path widgets use: a
   persistent Codex/Cursor/OpenCode process already holds the OLD executable, so
   without it the card would read "detected" while live chats kept spawning the
-  previous binary. That helper now iterates `getAllViews()` (it used to clean
-  only `getView()`, silently leaving secondary leaves on the old executable —
-  fixed for the provider settings widgets too). Residual: OpenCode's widget
-  additionally clears its discovery state (model/mode catalog) through a
-  provider-internal helper the features layer cannot reach, so an OpenCode path
-  change made here can leave a stale model list until the next discovery —
-  closing that needs a registration-level "CLI path changed" hook, not a
-  provider import.
+  previous binary. That helper iterates `getAllViews()` (it used to clean only
+  `getView()`, silently leaving secondary leaves on the old executable — fixed
+  for the provider settings widgets too). Provider-specific invalidation runs
+  through `ProviderRegistration.onCliPathChanged`, called BEFORE the save so one
+  write persists both: OpenCode drops its discovered model/mode catalog there,
+  since a different binary may not support the old models. The hook exists
+  because that cleanup lives in a provider-internal module the features layer
+  cannot import — and a `providerId === 'opencode'` branch here would trip
+  `noHardcodedProviderList`.
 - **Provider metadata comes from the registry.** `cliInstall` lives on each
   `ProviderRegistration` (like `firstRunBlurb` / `cliCommand` before it — see
   tech-debt 2026-06-07); a feature-level `{claude: …, codex: …}` table would trip

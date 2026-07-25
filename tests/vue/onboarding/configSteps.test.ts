@@ -54,7 +54,8 @@ function makeStore(overrides: Record<string, unknown> = {}) {
     creatingFolders: false,
     folderError: null as string | null,
     enabledProviderIds: [] as string[],
-    modelOptions: [] as Array<{ value: string; label: string; group?: string }>,
+    modelOptions: [] as Array<{ providerId: string; value: string; label: string; group: string }>,
+    settingsProviderId: 'alpha',
     setFolder: vi.fn(async () => {}),
     createFolders: vi.fn(async () => {}),
     finish: vi.fn(async () => {}),
@@ -105,7 +106,7 @@ describe('DefaultsStep', () => {
   it('groups model options by provider once one is enabled', () => {
     const store = makeStore({
       enabledProviderIds: ['alpha'],
-      modelOptions: [{ value: 'm1', label: 'Model One', group: 'Alpha' }],
+      modelOptions: [{ providerId: 'alpha', value: 'm1', label: 'Model One', group: 'Alpha' }],
     });
     const { container } = mount(DefaultsStep, store);
 
@@ -119,32 +120,68 @@ describe('DefaultsStep', () => {
     const store = makeStore({
       enabledProviderIds: ['alpha'],
       modelOptions: [
-        { value: 'm1', label: 'Model One', group: 'Alpha' },
-        { value: 'm2', label: 'Model Two', group: 'Alpha' },
+        { providerId: 'alpha', value: 'm1', label: 'Model One', group: 'Alpha' },
+        { providerId: 'alpha', value: 'm2', label: 'Model Two', group: 'Alpha' },
       ],
     });
     const { container, plugin } = mount(DefaultsStep, store, makePlugin({ model: 'm1' }));
 
-    await fireEvent.update(container.querySelector('[data-field="model"]')!, 'm2');
+    await fireEvent.update(
+      container.querySelector('[data-field="model"]')!,
+      'alpha\u0000m2',
+    );
     await flushMicrotasks();
 
-    expect(setDefaultModel).toHaveBeenCalledWith(plugin, 'm2');
+    expect(setDefaultModel).toHaveBeenCalledWith(plugin, 'm2', 'alpha');
   });
 
-  it('writes the chosen model through the plugin settings save path', async () => {
+  it('commits a shared model id to the provider whose option was picked', async () => {
+    // Two providers advertising the same custom id: the pick must go to the one
+    // the user selected, not to whichever `resolveProviderForModel` prefers.
+    const store = makeStore({
+      enabledProviderIds: ['alpha', 'beta'],
+      settingsProviderId: 'alpha',
+      modelOptions: [
+        { providerId: 'alpha', value: 'shared', label: 'Shared', group: 'Alpha' },
+        { providerId: 'beta', value: 'shared', label: 'Shared', group: 'Beta' },
+      ],
+    });
+    const { container, plugin } = mount(DefaultsStep, store, makePlugin({ model: 'shared' }));
+
+    // Both options survive — no dedup-by-value collapsing them into one entry.
+    expect(container.querySelectorAll('[data-field="model"] option')).toHaveLength(2);
+
+    await fireEvent.update(
+      container.querySelector('[data-field="model"]')!,
+      'beta\u0000shared',
+    );
+    await flushMicrotasks();
+
+    expect(setDefaultModel).toHaveBeenCalledWith(plugin, 'shared', 'beta');
+  });
+
+  it('performs exactly one save for a model pick', async () => {
+    // `saveSettings` re-runs persistProjectedProviderState for the CURRENT
+    // provider, so a second unordered save could stamp the pick onto the
+    // outgoing provider's projection.
     const store = makeStore({
       enabledProviderIds: ['alpha'],
       modelOptions: [
-        { value: 'm1', label: 'Model One', group: 'Alpha' },
-        { value: 'm2', label: 'Model Two', group: 'Alpha' },
+        { providerId: 'alpha', value: 'm1', label: 'Model One', group: 'Alpha' },
+        { providerId: 'alpha', value: 'm2', label: 'Model Two', group: 'Alpha' },
       ],
     });
     const { container, plugin } = mount(DefaultsStep, store, makePlugin({ model: 'm1' }));
 
-    await fireEvent.update(container.querySelector('[data-field="model"]')!, 'm2');
+    await fireEvent.update(
+      container.querySelector('[data-field="model"]')!,
+      'alpha\u0000m2',
+    );
+    await flushMicrotasks();
 
-    expect(plugin.settings.model).toBe('m2');
-    expect(plugin.saveSettings).toHaveBeenCalled();
+    // The only persistence is setDefaultModel's own (mocked here), so the
+    // component itself must not have written settings.
+    expect(plugin.saveSettings).not.toHaveBeenCalled();
   });
 
   it('offers only the approval modes a wizard may set — never the bypass mode (SEC-1)', () => {

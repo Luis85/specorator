@@ -1,9 +1,9 @@
 <script setup lang="ts">
-import { computed, inject } from 'vue';
+import { computed, inject, ref } from 'vue';
 
 import { t } from '@/i18n/i18n';
 
-import { setDefaultModel } from '../../onboardingSettings';
+import { readAppSetting, setDefaultModel } from '../../onboardingSettings';
 import { PLUGIN_KEY } from '../onboardingKeys';
 import { useOnboardingStore } from '../stores/onboardingStore';
 import { useAppSetting } from '../useAppSetting';
@@ -15,32 +15,55 @@ if (!injectedPlugin) throw new Error('DefaultsStep mounted without PLUGIN_KEY');
 const plugin = injectedPlugin;
 
 const store = useOnboardingStore();
-const [model, setModelSetting] = useAppSetting<string>(plugin, 'model', 'haiku');
 const [permissionMode, setPermissionMode] = useAppSetting<string>(plugin, 'permissionMode', 'normal');
 const [autoTitles, setAutoTitles] = useAppSetting<boolean>(plugin, 'enableAutoTitleGeneration', true);
 
-/**
- * A model choice has to be committed to the provider that owns it, or the
- * per-provider projection replaces it with that provider's fallback and the
- * default silently never applies (see `setDefaultModel`).
- */
-async function setModel(next: string): Promise<void> {
-  setModelSetting(next);
-  await setDefaultModel(plugin, next);
+// The model is NOT bound through useAppSetting: that setter persists on its own,
+// and a second concurrent save is both wasteful and unordered — `saveSettings`
+// re-runs `persistProjectedProviderState` for the CURRENT provider, so a save
+// fired before the owner switch can stamp the pick onto the outgoing provider's
+// projection. This ref is display-only; `setDefaultModel` performs the single,
+// owner-aware save.
+const currentModel = readAppSetting(plugin, 'model');
+const model = ref(typeof currentModel === 'string' ? currentModel : 'haiku');
+
+/** Option keys must be unique, and a model id alone is not (two providers may share one). */
+function optionKey(option: { providerId: string; value: string }): string {
+  return `${option.providerId}\u0000${option.value}`;
 }
 
 const hasProvider = computed(() => store.enabledProviderIds.length > 0);
 /** Grouped by provider display name so a shared model id reads unambiguously. */
 const groups = computed(() => {
-  const byGroup = new Map<string, Array<{ value: string; label: string }>>();
+  const byGroup = new Map<string, Array<{ key: string; label: string }>>();
   for (const option of store.modelOptions) {
-    const group = option.group ?? '';
-    const bucket = byGroup.get(group) ?? [];
-    bucket.push({ value: option.value, label: option.label });
-    byGroup.set(group, bucket);
+    const bucket = byGroup.get(option.group) ?? [];
+    bucket.push({ key: optionKey(option), label: option.label });
+    byGroup.set(option.group, bucket);
   }
   return [...byGroup.entries()];
 });
+
+/** The selected option, matching the owning provider first so duplicates resolve. */
+const selectedKey = computed(() => {
+  const owned = store.modelOptions.find(
+    (option) => option.value === model.value && option.providerId === store.settingsProviderId,
+  );
+  const byValue = owned ?? store.modelOptions.find((option) => option.value === model.value);
+  return byValue ? optionKey(byValue) : '';
+});
+
+/**
+ * Commits the pick to the provider that OWNS it, taken from the selected option
+ * rather than re-inferred from the model id — `resolveProviderForModel` prefers a
+ * non-current owner, so a shared id could land on the wrong provider.
+ */
+async function setModel(key: string): Promise<void> {
+  const option = store.modelOptions.find((candidate) => optionKey(candidate) === key);
+  if (!option) return;
+  model.value = option.value;
+  await setDefaultModel(plugin, option.value, option.providerId);
+}
 </script>
 
 <template>
@@ -77,7 +100,7 @@ const groups = computed(() => {
         <select
           class="dropdown"
           data-field="model"
-          :value="model"
+          :value="selectedKey"
           :aria-label="t('onboarding.defaults.model')"
           @change="setModel(($event.target as HTMLSelectElement).value)"
         >
@@ -88,8 +111,8 @@ const groups = computed(() => {
           >
             <option
               v-for="option in options"
-              :key="option.value"
-              :value="option.value"
+              :key="option.key"
+              :value="option.key"
             >
               {{ option.label }}
             </option>

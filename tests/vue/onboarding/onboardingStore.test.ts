@@ -293,7 +293,9 @@ describe('onboarding store', () => {
     expect(store.step).toBe('marketplace');
   });
 
-  it('collects model options from every enabled provider, deduped and provider-grouped', () => {
+  it('keeps every provider\'s options tagged with its owner, duplicates included', () => {
+    // A shared model id must NOT be deduped: collapsing it would show one entry
+    // under the wrong provider and let ownership be re-inferred incorrectly.
     vi.mocked(detectProviderClis).mockReturnValue([
       detection({ providerId: 'alpha', enabled: true }),
       detection({ providerId: 'beta', enabled: true }),
@@ -302,10 +304,10 @@ describe('onboarding store', () => {
     store.init(plugin);
 
     expect(store.modelOptions).toEqual([
-      { value: 'shared', label: 'Shared', group: 'Name:alpha' },
-      { value: 'alpha-only', label: 'alpha only', group: 'Name:alpha' },
-      // 'shared' is NOT repeated for beta — first provider wins the entry.
-      { value: 'beta-only', label: 'beta only', group: 'Name:beta' },
+      { providerId: 'alpha', value: 'shared', label: 'Shared', group: 'Name:alpha' },
+      { providerId: 'alpha', value: 'alpha-only', label: 'alpha only', group: 'Name:alpha' },
+      { providerId: 'beta', value: 'shared', label: 'Shared', group: 'Name:beta' },
+      { providerId: 'beta', value: 'beta-only', label: 'beta only', group: 'Name:beta' },
     ]);
   });
 

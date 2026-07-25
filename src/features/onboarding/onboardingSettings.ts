@@ -53,6 +53,10 @@ export async function setProviderCliPathForHost(
   }
 
   setProviderConfig(settings, providerId, { ...config, cliPathsByHost: byHost });
+  // Before the save, so one write persists both the path and whatever the
+  // provider invalidates because of it (OpenCode: its discovered model/mode
+  // catalog, which a different binary may not support).
+  ProviderRegistry.notifyCliPathChanged(providerId, settings);
   await plugin.saveSettings();
 }
 
@@ -96,6 +100,12 @@ export async function setAppSetting(
  * therefore reverts to a Claude model the next time Claude's state is projected
  * — the chosen default silently never applies.
  *
+ * `owner` comes from the selected option rather than being re-inferred from the
+ * model id: two providers can advertise the same custom id, and
+ * `resolveProviderForModel` prefers a NON-current owner, so inference could
+ * commit the pick to the provider the user wasn't choosing. It stays as the
+ * fallback for callers that only have an id.
+ *
  * So this does what the settings-tab and chat pickers do:
  * - points `settingsProvider` at the owning provider, so it is the one a blank
  *   chat prefers (and so the projection treats the model as "current"),
@@ -104,9 +114,13 @@ export async function setAppSetting(
  *   `persistProjectedProviderState`, which is what makes the choice durable
  *   across later projections.
  */
-export async function setDefaultModel(plugin: PluginContext, model: string): Promise<void> {
+export async function setDefaultModel(
+  plugin: PluginContext,
+  model: string,
+  ownerProviderId?: ProviderId,
+): Promise<void> {
   const settings = asSettingsBag(plugin.settings);
-  const owner = ProviderRegistry.resolveProviderForModel(model, settings, {
+  const owner = ownerProviderId ?? ProviderRegistry.resolveProviderForModel(model, settings, {
     onlyEnabledProviders: true,
   });
 

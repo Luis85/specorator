@@ -5,6 +5,9 @@ import type { ProviderCliInstallMethod } from '@/core/providers/types';
 jest.mock('child_process', () => ({ spawn: jest.fn() }));
 jest.mock('@/utils/cliBinaryLocator', () => ({ findBinaryOnPath: jest.fn(() => '/usr/bin/npm') }));
 jest.mock('@/utils/env', () => ({ getEnhancedPath: jest.fn(() => '/enhanced/bin:/usr/bin') }));
+jest.mock('@/utils/processKill', () => ({
+  forceKillProcessGroup: jest.fn(async () => {}),
+}));
 
 import { spawn } from 'child_process';
 
@@ -15,6 +18,7 @@ import {
   runCliInstall,
 } from '@/features/onboarding/cliInstallRunner';
 import { findBinaryOnPath } from '@/utils/cliBinaryLocator';
+import { forceKillProcessGroup } from '@/utils/processKill';
 
 class FakeChild extends EventEmitter {
   stdout = new EventEmitter();
@@ -46,6 +50,7 @@ function mountChild(): FakeChild {
 }
 
 beforeEach(() => {
+  jest.mocked(forceKillProcessGroup).mockClear();
   jest.mocked(spawn).mockReset();
   jest.mocked(findBinaryOnPath).mockReset();
   jest.mocked(findBinaryOnPath).mockReturnValue('/usr/bin/npm');
@@ -126,15 +131,63 @@ describe('runCliInstall', () => {
     expect(await handle.done).toMatchObject({ ok: false, error: 'EACCES' });
   });
 
-  it('cancel kills the child and reports cancelled rather than failed', async () => {
+  it('cancel reaps the whole process tree, not just the direct child', async () => {
+    // On Windows the direct child is the `cmd.exe` wrapper; killing only that
+    // leaves the real npm (and its lifecycle scripts) installing.
     const child = mountChild();
 
     const handle = runCliInstall(npmMethod, { onOutput: () => {} });
     handle.cancel();
     child.emit('close', null);
 
-    expect(child.killed).toBe(true);
+    expect(forceKillProcessGroup).toHaveBeenCalledWith(child);
     expect(await handle.done).toMatchObject({ ok: false, cancelled: true });
+  });
+
+  it('leads its own process group on POSIX so the group kill can reap forks', async () => {
+    const child = mountChild();
+
+    const handle = runCliInstall(npmMethod, { onOutput: () => {} });
+    child.emit('close', 0);
+    await handle.done;
+
+    const options = jest.mocked(spawn).mock.calls[0][2] as { detached?: boolean };
+    expect(options.detached).toBe(process.platform !== 'win32');
+  });
+
+  it('settles only after the tree kill resolves', async () => {
+    // Settling first would tell the user the install stopped while npm was still
+    // writing to the global prefix.
+    mountChild();
+    const order: string[] = [];
+    let releaseKill: () => void = () => {};
+    jest.mocked(forceKillProcessGroup).mockImplementation(async () => {
+      order.push('kill:start');
+      await new Promise<void>((resolve) => { releaseKill = () => resolve(); });
+      order.push('kill:done');
+    });
+
+    const handle = runCliInstall(npmMethod, { onOutput: () => {} });
+    handle.cancel();
+    void handle.done.then(() => order.push('settled'));
+
+    expect(order).toEqual(['kill:start']);
+    releaseKill();
+    await handle.done;
+    await Promise.resolve();
+
+    expect(order).toEqual(['kill:start', 'kill:done', 'settled']);
+  });
+
+  it('a cancel after settling is a no-op', async () => {
+    const child = mountChild();
+
+    const handle = runCliInstall(npmMethod, { onOutput: () => {} });
+    child.emit('close', 0);
+    await handle.done;
+    handle.cancel();
+
+    expect(forceKillProcessGroup).not.toHaveBeenCalled();
   });
 
   it('settles exactly once — a late close after an error cannot re-resolve', async () => {

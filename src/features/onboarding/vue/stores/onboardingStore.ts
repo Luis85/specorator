@@ -38,6 +38,14 @@ export interface InstallRunState {
 
 const IDLE_RUN: InstallRunState = { phase: 'idle', methodId: null, lines: [], error: null };
 
+/** One selectable model, tagged with the provider that owns it. */
+export interface OnboardingModelOption {
+  providerId: ProviderId;
+  value: string;
+  label: string;
+  group: string;
+}
+
 /**
  * Setup-view store: a reactive projection over provider CLI detection, the
  * install runner, and the settings writers. Truth stays where it already lives
@@ -188,21 +196,40 @@ export const useOnboardingStore = defineStore('specorator-onboarding', () => {
     detections.value.filter((detection) => detection.enabled).map((d) => d.providerId)
   ));
 
-  /** Model options contributed by the enabled providers, deduped by value. */
-  const modelOptions = computed(() => {
+  /**
+   * Model options from every enabled provider, each carrying its OWNING
+   * provider.
+   *
+   * Deliberately NOT deduped by model id: two providers can advertise the same
+   * custom id, and collapsing them would show one entry under the wrong
+   * provider while `setDefaultModel` re-inferred ownership from the id alone
+   * (`resolveProviderForModel` prefers a non-current owner, so it could commit
+   * the pick to the other provider). Carrying `providerId` through the
+   * selection removes the inference entirely.
+   */
+  const modelOptions = computed<OnboardingModelOption[]>(() => {
     if (!plugin) return [];
     const settings = asSettingsBag(plugin.settings);
-    const seen = new Set<string>();
-    const options: Array<{ value: string; label: string; group?: string }> = [];
+    const options: OnboardingModelOption[] = [];
     for (const providerId of enabledProviderIds.value) {
       const displayName = ProviderRegistry.getProviderDisplayName(providerId);
       for (const option of ProviderRegistry.getChatUIConfig(providerId).getModelOptions(settings)) {
-        if (seen.has(option.value)) continue;
-        seen.add(option.value);
-        options.push({ value: option.value, label: option.label, group: displayName });
+        options.push({
+          providerId,
+          value: option.value,
+          label: option.label,
+          group: displayName,
+        });
       }
     }
     return options;
+  });
+
+  /** The provider a blank chat currently prefers; disambiguates a shared model id. */
+  const settingsProviderId = computed<string>(() => {
+    if (!plugin) return '';
+    const current = asSettingsBag(plugin.settings).settingsProvider;
+    return typeof current === 'string' ? current : '';
   });
 
   function goTo(next: OnboardingStep): void {
@@ -234,6 +261,7 @@ export const useOnboardingStore = defineStore('specorator-onboarding', () => {
     folderError,
     enabledProviderIds,
     modelOptions,
+    settingsProviderId,
     init,
     runFor,
     refreshDetections,

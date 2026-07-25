@@ -35,6 +35,33 @@ function makeHarness(initial: Record<string, unknown> = {}): Harness {
   return harness;
 }
 
+/** Structurally inert stub: enough registration surface to be swept safely. */
+function registerInertProvider(id: string, extra: Record<string, unknown> = {}): void {
+  ProviderRegistry.register(id as ProviderId, {
+    displayName: id,
+    firstRunBlurb: `${id} CLI`,
+    cliCommand: id,
+    isEnabled: () => true,
+    chatUIConfig: {
+      getModelOptions: () => [],
+      getCustomModelIds: () => [],
+      ownsModel: () => false,
+      isAdaptiveReasoningModel: () => false,
+      getReasoningOptions: () => [],
+      normalizeModelVariant: (candidate: string) => candidate,
+      isDefaultModel: () => false,
+    },
+    ...extra,
+  } as unknown as ProviderRegistration);
+}
+
+// The writers route through ProviderRegistry (an unregistered id is a hard error
+// by design), so every id this file passes must exist in the registry.
+beforeAll(() => {
+  registerInertProvider('claude');
+  registerInertProvider('codex');
+});
+
 function makeAdapter(existing: string[] = []) {
   const folders = new Set(existing);
   const created: string[] = [];
@@ -76,6 +103,39 @@ describe('provider writes', () => {
     const config = (harness.settings.providerConfigs as Record<string, Record<string, unknown>>).codex;
     expect(config.cliPathsByHost).toEqual({ laptop: '/opt/bin/codex' });
     expect(config.cliPath).toBeUndefined();
+  });
+
+  it('lets the provider invalidate state the path change staled, before the save', async () => {
+    // OpenCode drops its discovered model/mode catalog: a different binary may
+    // not support the old models. The hook must run BEFORE saveSettings so one
+    // write persists both.
+    const cleared: Array<Record<string, unknown>> = [];
+    registerInertProvider('hook-provider', {
+      onCliPathChanged: (settings: Record<string, unknown>) => {
+        settings.hookRan = true;
+        cleared.push(settings);
+        return true;
+      },
+    });
+    const harness = makeHarness();
+    const savedSnapshots: boolean[] = [];
+    const plugin = {
+      settings: harness.settings,
+      saveSettings: async () => { savedSnapshots.push(harness.settings.hookRan === true); },
+    } as unknown as PluginContext;
+
+    await setProviderCliPathForHost(plugin, 'hook-provider' as ProviderId, 'laptop', '/opt/hook');
+
+    expect(cleared).toHaveLength(1);
+    expect(savedSnapshots).toEqual([true]);
+  });
+
+  it('a provider with no invalidation hook still persists the path', async () => {
+    const harness = makeHarness();
+
+    await setProviderCliPathForHost(harness.plugin, 'claude', 'laptop', '/opt/claude');
+
+    expect(harness.saves).toBe(1);
   });
 
   it('a blank path clears the pin so auto-detection resumes', async () => {

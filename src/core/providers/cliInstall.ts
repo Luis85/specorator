@@ -64,3 +64,27 @@ export interface ProviderCliInstall {
   runtimeFallsBackToPathLookup?: boolean;
   methods: readonly ProviderCliInstallMethod[];
 }
+
+/**
+ * The CLI-facing half of a `ProviderRegistration`, grouped here with the
+ * resolver + install contracts it belongs with rather than scattered through
+ * `types.ts`.
+ */
+export interface ProviderCliContract {
+  /** CLI executable the provider requires on PATH. */
+  cliCommand: string;
+  /** How the onboarding setup view installs, authenticates, and documents this CLI. */
+  cliInstall: ProviderCliInstall;
+  /**
+   * Invalidates provider state that a CLI-path change makes stale, called
+   * BEFORE the settings save so one write persists both. Mutates the settings
+   * bag; returns whether anything changed.
+   *
+   * Exists because that cleanup is provider-specific (OpenCode drops its
+   * discovered model/mode catalog — a new binary may not support the old
+   * models) and lives in a provider-internal module the features layer cannot
+   * import. Onboarding's manual-path field routes through this hook so it gets
+   * the same invalidation as the provider's own settings widget.
+   */
+  onCliPathChanged?(settings: Record<string, unknown>): boolean;
+}

@@ -20,7 +20,7 @@ import type {
 } from '../types';
 import type { PluginContext } from '../types/PluginContext';
 import type { ProviderId } from '../types/provider';
-import type { ProviderCliInstall, ProviderCliResolver } from './cliInstall';
+import type { ProviderCliContract, ProviderCliResolver } from './cliInstall';
 import type { ProviderCommandCatalog } from './commands/ProviderCommandCatalog';
 import type { ProviderSettingsTabRenderer } from './settingsWidgets';
 
@@ -79,13 +79,10 @@ export interface RosterAgentProjection {
   color?: string;
 }
 
-export interface ProviderRegistration {
+export interface ProviderRegistration extends ProviderCliContract {
   displayName: string;
   /** One-line product blurb for the first-run onboarding banner — rendered from the registry, not a hardcoded provider list (tech-debt 2026-06-07). */
   firstRunBlurb: string;
-  /** CLI the provider needs on PATH, plus how the setup view installs/authenticates it. */
-  cliCommand: string;
-  cliInstall: ProviderCliInstall;
   blankTabOrder: number;
   isEnabled: (settings: Record<string, unknown>) => boolean;
   /** User-scope (global) skill capabilities, both default `true`: whether the runtime RESOLVES a
@@ -749,4 +746,4 @@ export interface InlineEditService {
 }
 
 // Re-exported so existing `./types` importers keep working after the extraction.
-export type { ProviderCliInstall, ProviderCliInstallMethod, ProviderCliResolver } from './cliInstall';
+export type { ProviderCliContract, ProviderCliInstall, ProviderCliInstallMethod, ProviderCliResolver } from './cliInstall';
