@@ -67,15 +67,17 @@ export class TeamChatThreadStore {
     const adoptable = this.deps.findAdoptable(agentId);
     const id = adoptable ? adoptable.id : (await this.deps.createConversation(agentId)).id;
 
-    // Commit to the in-memory cache ONLY after the durable write succeeds. If
-    // writeAtomic rejects (a transient vault I/O failure), leaving `this.rooms`
-    // unmutated means a retry re-attempts persistence — it re-adopts the
-    // just-created conversation and re-emits — instead of returning a
-    // "recovered" id whose mapping never reached disk and whose
-    // teamChat:threads-changed never fired.
+    // Order matters — durable write, THEN commit the cache, THEN notify:
+    //  - Write first so a rejecting writeAtomic (transient vault I/O) leaves
+    //    `this.rooms` unmutated; a retry re-resolves (re-adopting the
+    //    just-created conversation) and re-emits, rather than returning a
+    //    "recovered" id whose mapping never reached disk and never emitted.
+    //  - Swap the cache BEFORE emitting so a synchronous teamChat:threads-changed
+    //    subscriber that calls get() observes the new mapping, not the stale one.
     const next = { ...rooms, [key]: id };
-    await this.persist(next);
+    await this.writeThreads(next);
     this.rooms = next;
+    this.deps.events?.emit('teamChat:threads-changed');
     return id;
   }
 
@@ -131,9 +133,9 @@ export class TeamChatThreadStore {
     return out;
   }
 
-  private async persist(rooms: Record<string, string>): Promise<void> {
+  /** Write-only (no emit): the caller commits the cache and emits in order. */
+  private async writeThreads(rooms: Record<string, string>): Promise<void> {
     const file: ThreadsFile = { version: THREADS_VERSION, rooms };
     await this.deps.adapter.writeAtomic(THREADS_PATH, JSON.stringify(file, null, 2));
-    this.deps.events?.emit('teamChat:threads-changed');
   }
 }

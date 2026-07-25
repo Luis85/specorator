@@ -86,6 +86,7 @@ function makeHarness(options: HarnessOptions = {}) {
     writeAtomic,
     createConversation,
     changed,
+    events,
     readThreads: (): { version: number; rooms: Record<string, string> } | null => {
       const raw = files.get(THREADS_PATH);
       return raw ? (JSON.parse(raw) as { version: number; rooms: Record<string, string> }) : null;
@@ -198,5 +199,22 @@ describe('TeamChatThreadStore', () => {
     expect(h.createConversation).toHaveBeenCalledTimes(1); // adopted, not re-created
     expect(h.readThreads()).toEqual({ version: 1, rooms: { 'roster:a': id } });
     expect(h.changed).toHaveBeenCalledTimes(1);
+  });
+
+  it('commits the mapping to the cache before emitting, so a subscriber reading during the event sees it', async () => {
+    const h = makeHarness();
+    // Capture the read a subscriber issues the moment it is notified. `get`'s
+    // loadRooms reads `this.rooms` synchronously (no await before the cache
+    // check), so this promise reflects the cache state AT emit time — which must
+    // already hold the new mapping, not the stale one.
+    let readDuringEvent: Promise<string | null> | null = null;
+    h.events.on('teamChat:threads-changed', () => {
+      readDuringEvent = h.store.get('roster:a');
+    });
+
+    const id = await h.store.resolveOrCreate('roster:a');
+
+    expect(readDuringEvent).not.toBeNull(); // the change event actually fired
+    await expect(readDuringEvent).resolves.toBe(id); // not null / not a prior value
   });
 });
