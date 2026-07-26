@@ -140,6 +140,7 @@ export class TeamChatView extends ItemView implements ChatViewHandle {
       onPresenceChanged: () => this.emitTeamChatChange(),
       onRosterChanged: () => void this.reconcileDmsOnRosterChange(),
       onThreadsChanged: () => void this.refreshAgentThreads(),
+      onConversationSaved: () => this.emitTeamChatChange(),
       getActiveTab: () => this.tabManager?.getActiveTab() ?? null,
       containerEl: this.containerEl,
       registerEvent: (ref) => this.registerEvent(ref),

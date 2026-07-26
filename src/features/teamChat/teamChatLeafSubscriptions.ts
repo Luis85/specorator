@@ -27,6 +27,8 @@ export interface TeamChatLeafSubscriptionHost {
   onRosterChanged(): void;
   /** Re-read the roster's preview/timestamp source after a thread remap. */
   onThreadsChanged(): void;
+  /** Re-project after a conversation's save commits (roster preview / timestamp). */
+  onConversationSaved(): void;
   getActiveTab(): TabData | null;
   readonly containerEl: HTMLElement;
   registerEvent(ref: EventRef): void;
@@ -41,6 +43,9 @@ export interface TeamChatLeafSubscriptionHost {
  *    only runs on an actual provider mismatch, so an unrelated agent edit is cheap.
  *  - `teamChat:threads-changed` — a resolve, rotation, or adoption remaps an agent's DM, and
  *    the roster projection reads that map synchronously.
+ *  - `conversation:saved` — the roster's preview/timestamp read the STORED conversation, but
+ *    the projection also fires from `onTabStreamingChanged`, which runs before the turn's
+ *    save commits. Without this the rail sits one turn behind until an unrelated event.
  *  - the hydration banner and the DM host events (file-context freshness, mention click-away,
  *    Shift+Tab plan toggle), which own their own internal registrations.
  *
@@ -56,6 +61,7 @@ export function registerTeamChatLeafSubscriptions(
   const offPresence = plugin.events.on('teamChat:presence', () => host.onPresenceChanged());
   const offRoster = plugin.events.on('roster:changed', () => host.onRosterChanged());
   const offThreads = plugin.events.on('teamChat:threads-changed', () => host.onThreadsChanged());
+  const offSaved = plugin.events.on('conversation:saved', () => host.onConversationSaved());
   const hydrationBanner = createDmHydrationBanner(plugin, view);
   const disposeHostEvents = registerTeamChatDmHostEvents(
     plugin,
@@ -70,6 +76,7 @@ export function registerTeamChatLeafSubscriptions(
       offPresence();
       offRoster();
       offThreads();
+      offSaved();
       hydrationBanner.dispose();
       disposeHostEvents();
     },

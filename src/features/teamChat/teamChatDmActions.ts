@@ -24,8 +24,8 @@ interface DmTabSource {
  *
  * Refuses while that DM is streaming, matching `pickLruDmEviction`'s refusal to force-close
  * a live turn: the two must not disagree about whether truncating a running response is
- * acceptable. Both menus also hide the item in that state, so this is the authoritative
- * backstop for a race between the menu opening and the turn starting.
+ * acceptable. Both menus also hide the item in that state; the real backstop is the
+ * NON-FORCED close, which re-checks streaming inside the serialized tab mutation.
  *
  * Returns whether a tab was actually closed, so a caller can distinguish "nothing open"
  * from "refused because busy" only by checking presence itself — deliberately not encoded
@@ -40,8 +40,11 @@ export async function closeAgentDmTab(
     (candidate) => candidate.conversationId
       && plugin.getConversationSync(candidate.conversationId)?.boundAgentId === agentId,
   );
+  // The pre-check keeps the common case cheap, but it is NOT the guarantee: `force = false`
+  // makes `closeTabImpl` re-check `isStreaming` inside the serialized tab mutation, so a turn
+  // that starts while this close is queued still refuses.
   if (!manager || !tab || tab.state.isStreaming) return false;
-  return closeTeamChatDmTab(plugin, manager, tab.id);
+  return closeTeamChatDmTab(plugin, manager, tab.id, false);
 }
 
 /**

@@ -244,8 +244,21 @@ reaches `{ leaf, getTabManager() }`, so a second host is reuse, not a fork.
   grid track from it while `TeamRoster` decides what to render; branching on `railCollapsed`
   alone left a narrow leaf rendering expanded rows clipped inside a 56px track. `railNarrow`
   (layout) is intentionally not exposed — only the derived value and its setter are — so no
-  component can reintroduce that split. The toggle still writes the PREFERENCE, so widening
-  restores what the user chose.
+  component can reintroduce that split. The toggle derives its new value from the EFFECTIVE
+  state too: while narrow the button reads "Expand", and inverting the stored preference
+  (still false) would persist `collapsed: true` — leaving the rail collapsed once the pane
+  widens, the opposite of the action taken.
+- **A user-initiated DM close is NON-FORCED.** `closeTeamChatDmTab` forces by default
+  (eviction and rotation must close regardless of state), but the menu action passes
+  `force: false` so `closeTabImpl` re-checks `isStreaming` INSIDE `runTabMutation`. The
+  caller's own pre-check is stale once the close queues behind another tab mutation — a turn
+  can start in that window, and a forced close would truncate it.
+- **The roster's preview/timestamp read the STORED conversation, so they refresh on
+  `conversation:saved`.** The projection also fires from `onTabStreamingChanged`, which runs
+  BEFORE `ConversationController.save()` commits the turn, so without that subscription the
+  rail sat one turn behind (`conversation:renamed` is not a substitute — it only fires when
+  the title changes). Deliberately not read from the open tab's `ChatState.messages`: that
+  getter COPIES, and the projection runs per stream frame for every mapped agent.
 - **Row keystrokes belong to the focused control.** The listbox handler ignores keydowns
   originating in an interactive descendant; without that, Enter/Space on a row's `⋯` button
   bubbled up, got `preventDefault`ed, and opened the DM — making the keyboard-reachable action
@@ -280,6 +293,15 @@ attribution lives in `tests/vue/chat/transcript/messageIdentity.test.ts`.
 
 ## Known limitations
 
+- **A mapped DM that isn't open shows the agent description, not its last message, until
+  first opened.** `ConversationStore.loadConversations()` restores every conversation with
+  `messages: []` and Team Chat pre-warms only the tabs it restores, so a closed or
+  LRU-trimmed DM reaches `projectThreadMetas` with a valid conversation and no messages. The
+  row still carries the correct relative timestamp (that comes from metadata), and the
+  description is the same fallback a never-messaged agent shows, so it degrades gracefully.
+  Closing it needs either a persisted last-message preview in the session metadata schema or
+  an async hydration pass over mapped-but-closed threads — both beyond a UX pass; deferred
+  pending a decision.
 - **Spurious LRU eviction under a rare full-budget race.** When the hot-DM budget
   is full and a new-agent selection's eviction is mid-flight (the victim's async
   save/close), a second click on an ALREADY-OPEN DM supersedes the first: the first

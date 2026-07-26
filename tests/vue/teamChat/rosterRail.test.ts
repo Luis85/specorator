@@ -364,9 +364,11 @@ describe('narrow-leaf auto-collapse (effective vs preferred state)', () => {
     expect(names(list)).toEqual(['Ada', 'Bo', 'Cy']);
   });
 
-  // The toggle records intent even while a narrow leaf forces the icon rail, so widening
-  // honours what the user last chose.
-  it('still records the collapse preference while narrow', async () => {
+  // The toggle must derive the requested preference from the EFFECTIVE state. While narrow
+  // the button reads "Expand"; inverting the stored preference (still false) would persist
+  // `collapsed: true`, so widening the pane would leave the rail collapsed — the opposite of
+  // the action just taken.
+  it('persists EXPANDED when "Expand" is clicked on an auto-collapsed rail', async () => {
     const callbacks = makeCallbacks();
     mountRoot(makePlugin(TEAM), callbacks);
     await awaitRoster();
@@ -377,8 +379,9 @@ describe('narrow-leaf auto-collapse (effective vs preferred state)', () => {
     await fireEvent.click(screen.getByLabelText(t('teamChat.railExpand')));
 
     expect(callbacks.onRailGeometryChange).toHaveBeenCalledWith(
-      expect.objectContaining({ collapsed: true }),
+      expect.objectContaining({ collapsed: false }),
     );
+    expect(store.railCollapsed).toBe(false);
   });
 });
 

@@ -181,25 +181,25 @@ export async function restoreTeamChatDmTabs(
   }
 }
 
-/** Minimal manager surface `closeTeamChatDmTab` needs — a bare `closeTab`, satisfied by
- *  both a concrete `TabManager` and the cross-leaf `ChatTabManagerHandle`. */
+/** Minimal manager surface `closeTeamChatDmTab` needs (concrete `TabManager` or the
+ *  cross-leaf `ChatTabManagerHandle`). */
 interface DmTabCloser {
   closeTab(tabId: string, force?: boolean): Promise<boolean>;
 }
 
 /**
  * Closes a Team Chat DM tab AND broadcasts `teamChat:presence` so surviving leaves
- * recompute. A force-close (provider rotation, LRU eviction) tears the tab down without
- * firing the streaming callback, so without this broadcast a still-streaming DM would
- * leave other leaves showing its agent `busy` forever (:168). The one place a Team Chat
- * DM tab should be programmatically closed.
+ * recompute: a force-close tears the tab down without firing the streaming callback, so
+ * without this a still-streaming DM leaves other leaves showing its agent `busy` forever
+ * (:168). The one place a Team Chat DM tab should be programmatically closed.
  */
 export async function closeTeamChatDmTab(
   plugin: SpecoratorPlugin,
   manager: DmTabCloser,
   tabId: string,
+  force = true, // eviction/rotation force; a USER close passes false so closeTabImpl re-checks isStreaming INSIDE runTabMutation (a pre-check is stale once the close queues)
 ): Promise<boolean> {
-  const closed = await manager.closeTab(tabId, true);
+  const closed = await manager.closeTab(tabId, force);
   plugin.events.emit('teamChat:presence');
   return closed;
 }

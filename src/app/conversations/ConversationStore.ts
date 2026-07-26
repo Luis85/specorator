@@ -358,6 +358,12 @@ export class ConversationStore {
         });
       }
 
+      // AFTER the write lands, so a subscriber re-reading this conversation sees the
+      // committed state. Emitted on every successful update (not just a title change), which
+      // is what lets the Team Chat roster refresh its preview/timestamp at turn end — the
+      // projection itself runs before `save()` resolves.
+      this.deps.events.emit('conversation:saved', { conversationId: id });
+
       // Clear image data from memory after save (data is persisted by SDK).
       // Skip for pending forks: their deep-cloned images aren't in SDK storage yet.
       // `hasForkSupport` is the typed guard — providers without a `forkSupport`

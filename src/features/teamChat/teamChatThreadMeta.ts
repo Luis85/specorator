@@ -1,4 +1,4 @@
-import type { ChatMessage, Conversation } from '../../core/types';
+import type { ChatMessage } from '../../core/types';
 import type SpecoratorPlugin from '../../main';
 
 /** Longest preview we keep; the row clamps visually too, but an unbounded string
@@ -32,6 +32,14 @@ export interface TeamChatThreadMeta {
  * the view's snapshot projection, which runs on every stream frame, so it must not touch
  * vault I/O. An unmapped or not-yet-loaded conversation is simply omitted rather than
  * throwing or blocking the row.
+ *
+ * Reads the STORED conversation, which `ConversationController.save()` commits at turn end.
+ * The projection also fires from `onTabStreamingChanged` — which runs BEFORE that save — so
+ * a freshly finished turn would briefly project the previous preview; `conversation:saved`
+ * re-projects once the write lands, which is what closes that window (and closes it across
+ * leaves, where the live transcript isn't reachable anyway). Deliberately NOT read from the
+ * open tab's `ChatState.messages`: that getter COPIES, and this runs per stream frame for
+ * every mapped agent.
  */
 export function projectThreadMetas(
   plugin: SpecoratorPlugin,
@@ -43,7 +51,7 @@ export function projectThreadMetas(
     if (!conversation) continue; // deleted, or not hydrated in this session
     metas[agentId] = {
       conversationId,
-      preview: previewFromConversation(conversation),
+      preview: previewFromMessages(conversation.messages),
       updatedAt: conversation.lastResponseAt ?? conversation.updatedAt,
     };
   }
@@ -57,9 +65,9 @@ export function projectThreadMetas(
  * wire form. A message with no text (a pure tool call, or an image-only turn) walks
  * backwards to the last one that has some, so a tool-heavy tail doesn't blank the row.
  */
-function previewFromConversation(conversation: Conversation): string {
-  for (let i = conversation.messages.length - 1; i >= 0; i--) {
-    const text = flattenMessageText(conversation.messages[i]);
+function previewFromMessages(messages: readonly ChatMessage[]): string {
+  for (let i = messages.length - 1; i >= 0; i--) {
+    const text = flattenMessageText(messages[i]);
     if (text) return text;
   }
   return '';
