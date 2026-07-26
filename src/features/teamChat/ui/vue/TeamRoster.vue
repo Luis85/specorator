@@ -119,12 +119,9 @@ const collapseLabel = computed(() =>
 // persists it per leaf. Width is passed through untouched so expanding restores the
 // width the user dragged to rather than snapping back to the default.
 function toggleCollapse(): void {
-  // Derived from the EFFECTIVE state, not the stored preference. While a narrow leaf forces
-  // the icon rail the button reads "Expand" — and inverting the PREFERENCE there (still
-  // false) would persist `collapsed: true`, so widening the pane would leave the rail
-  // collapsed: the opposite of the action the user just took.
-  const collapsed = !teamChatStore.railIsCollapsed;
-  teamChatStore.setRailCollapsed(collapsed);
+  // The store owns the flip: it derives from the EFFECTIVE state (so a narrow-forced rail
+  // reads "Expand" and actually expands) and returns the preference to persist.
+  const collapsed = teamChatStore.toggleRail();
   callbacks?.onRailGeometryChange({ collapsed, width: teamChatStore.railWidth });
 }
 

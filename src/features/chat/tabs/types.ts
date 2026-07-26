@@ -379,6 +379,15 @@ export interface TabManagerCallbacks {
 
   /** Called when the active provider changes within a tab (blank tab model selection). */
   onTabProviderChanged?: (tabId: TabId, providerId: ProviderId) => void;
+
+  /**
+   * Called after a composer model pick is committed to provider settings. Distinct from
+   * `onTabProviderChanged`, which only fires when the pick crosses providers: a same-provider
+   * change re-projects the composer alone, so a host that renders the model ANYWHERE ELSE
+   * (Team Chat's top-bar chip) would otherwise keep showing the previous model until some
+   * unrelated event happened to re-project it.
+   */
+  onTabModelChanged?: (tabId: TabId) => void;
 }
 
 /**

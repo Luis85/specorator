@@ -55,11 +55,18 @@ export const useTeamChatStore = defineStore('team-chat', () => {
    *  component can accidentally branch on the preference alone (which is the bug this
    *  derivation exists to prevent). Written only through `setRailNarrow`. */
   const railNarrow = shallowRef(false);
+  /** True while the user has explicitly expanded a narrow-FORCED rail. Layout state, never
+   *  persisted, and cleared on any crossing of the narrow threshold so the width-driven
+   *  default re-asserts itself on the next resize. Without it the toggle was dead on a narrow
+   *  leaf: it wrote a preference that `railNarrow` then overrode, so the button labelled
+   *  "Expand" did nothing and the rail's search + row menus stayed unreachable (Round-68). */
+  const railNarrowOverride = shallowRef(false);
   /** The EFFECTIVE collapsed state — the one every consumer must render against. Derived in
    *  the store rather than per-component because the root sizes the grid track from it while
    *  the roster decides what to render; when those two disagreed, a narrow leaf rendered
    *  expanded rows clipped inside a 56px track. */
-  const railIsCollapsed = computed(() => railCollapsed.value || railNarrow.value);
+  const railIsCollapsed = computed(() =>
+    railCollapsed.value || (railNarrow.value && !railNarrowOverride.value));
 
   function setAgents(next: RosterAgent[]): void {
     agents.value = next;
@@ -98,11 +105,26 @@ export const useTeamChatStore = defineStore('team-chat', () => {
   }
 
   function setRailNarrow(next: boolean): void {
+    if (railNarrow.value === next) return;
     railNarrow.value = next;
+    railNarrowOverride.value = false; // a resize re-asserts the width-driven default
   }
 
   function setRailCollapsed(next: boolean): void {
     railCollapsed.value = next;
+  }
+
+  /**
+   * Flips the EFFECTIVE collapsed state and returns the preference to persist. Lives here, not
+   * in the rail, because expanding has to clear BOTH gates: on a narrow leaf `railNarrow`
+   * forces the icon rail whatever the preference says, so writing the preference alone leaves
+   * the rail collapsed — the "Expand" button doing nothing at all.
+   */
+  function toggleRail(): boolean {
+    const expanding = railIsCollapsed.value;
+    railCollapsed.value = !expanding;
+    railNarrowOverride.value = expanding && railNarrow.value;
+    return railCollapsed.value;
   }
 
   /** Clamped on the way in so neither a restored view state nor a drag can persist a
@@ -136,5 +158,6 @@ export const useTeamChatStore = defineStore('team-chat', () => {
     setRailCollapsed,
     setRailNarrow,
     setRailWidth,
+    toggleRail,
   };
 });

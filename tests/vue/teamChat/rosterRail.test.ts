@@ -412,6 +412,62 @@ describe('narrow-leaf auto-collapse (effective vs preferred state)', () => {
     );
     expect(store.railCollapsed).toBe(false);
   });
+
+  // Round-68: persisting the preference was necessary but NOT sufficient — `railNarrow` still
+  // forced the icon rail, so "Expand" was a button that did nothing and the rail's search and
+  // row menus stayed unreachable until the user resized the pane.
+  it('actually expands the rail when "Expand" is clicked while narrow-forced', async () => {
+    mountRoot(makePlugin(TEAM), makeCallbacks());
+    const list = await awaitRoster();
+    const store = useTeamChatStore();
+    store.setRailNarrow(true);
+    await nextTick();
+    expect(names(list)).toEqual([]);
+
+    await fireEvent.click(screen.getByLabelText(t('teamChat.railExpand')));
+    await nextTick();
+
+    expect(store.railIsCollapsed).toBe(false);
+    expect(names(list)).toEqual(['Ada', 'Bo', 'Cy']);
+    // And it is a real toggle from there, not a one-way door.
+    await fireEvent.click(screen.getByLabelText(t('teamChat.railCollapse')));
+    await nextTick();
+    expect(names(list)).toEqual([]);
+  });
+
+  // The same dead button, reached from the other side: narrow AND the preference already
+  // collapsed. Clearing the preference alone still leaves `railNarrow` forcing it.
+  it('expands a narrow rail whose stored preference was ALSO collapsed', async () => {
+    mountRoot(makePlugin(TEAM), makeCallbacks());
+    const list = await awaitRoster();
+    const store = useTeamChatStore();
+    store.setRailCollapsed(true);
+    store.setRailNarrow(true);
+    await nextTick();
+
+    await fireEvent.click(screen.getByLabelText(t('teamChat.railExpand')));
+    await nextTick();
+
+    expect(names(list)).toEqual(['Ada', 'Bo', 'Cy']);
+  });
+
+  // The override is layout state, not a preference: a resize must hand control back to the
+  // width, else a leaf that goes wide and narrow again would never auto-collapse.
+  it('drops the manual override once the leaf crosses the narrow threshold again', async () => {
+    mountRoot(makePlugin(TEAM), makeCallbacks());
+    const list = await awaitRoster();
+    const store = useTeamChatStore();
+    store.setRailNarrow(true);
+    await nextTick();
+    await fireEvent.click(screen.getByLabelText(t('teamChat.railExpand')));
+    await nextTick();
+
+    store.setRailNarrow(false); // widened…
+    store.setRailNarrow(true);  // …then narrow again
+    await nextTick();
+
+    expect(names(list)).toEqual([]);
+  });
 });
 
 describe('row menu button keyboard access', () => {

@@ -57,6 +57,13 @@ would let one leaf's projection overwrite another's (`ui/vue/globalPinia.ts`).
   or torn-down selection just re-reads live state (a null manager projects an empty snapshot),
   so there is nothing stale to publish. Any future post-open state that only the engine writes
   is covered by the same emit.
+- **A composer model pick re-projects through `onTabModelChanged`.** The top bar renders the
+  DM's model, but a SAME-provider pick fires no `onTabProviderChanged` and re-projects only
+  the composer — so the chip kept the previous model until an unrelated event landed, showing
+  two different active models at once. `mountTabComposer` fires the new hook AFTER the model
+  write settles (the write is async; notifying eagerly would hand back the old settings) and
+  fires it on failure too, since a partially-applied pick with a stale chip is the worse
+  outcome. It is optional on `TabManagerCallbacks`: `SpecoratorView` renders no model chip.
 - **`selectedAgentId` is a PURE PROJECTION of the active tab** — derived from the
   active DM's `boundAgentId` in `projectSelectedAgentFromActiveTab`
   (`TeamChatView.ts:207`), never set optimistically. So the roster highlight and the
@@ -259,6 +266,13 @@ reaches `{ leaf, getTabManager() }`, so a second host is reuse, not a fork.
   state too: while narrow the button reads "Expand", and inverting the stored preference
   (still false) would persist `collapsed: true` — leaving the rail collapsed once the pane
   widens, the opposite of the action taken.
+- **Expanding a narrow-forced rail needs `railNarrowOverride`, not just the preference.**
+  Persisting the right preference was necessary but not sufficient: `railNarrow` still forced
+  the icon rail, so "Expand" was a button that visibly did nothing and the rail's search and
+  row menus stayed unreachable until the user resized the pane. `store.toggleRail()` owns the
+  flip — it clears BOTH gates when expanding and returns the preference to persist — and the
+  override is layout state, never persisted, cleared by `setRailNarrow` on any threshold
+  crossing so the width-driven default re-asserts on the next resize.
 - **A user-initiated DM close is NON-FORCED and resolved CROSS-LEAF.** `closeTeamChatDmTab`
   forces by default (eviction and rotation must close regardless of state), but the menu
   action passes `force: false` so `closeTabImpl` re-checks `isStreaming` INSIDE

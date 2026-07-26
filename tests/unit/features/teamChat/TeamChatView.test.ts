@@ -280,6 +280,24 @@ describe('TeamChatView — selectedAgentId projects from the active tab', () => 
   });
 });
 
+describe('TeamChatView — composer model picks', () => {
+  beforeEach(() => jest.clearAllMocks());
+
+  // Round-68: the top bar renders the DM's model, but a SAME-provider pick fires no
+  // onTabProviderChanged and re-projects only the composer — so the chip kept the previous
+  // model until some unrelated Team Chat event landed, showing two different active models.
+  it('re-projects the snapshot on onTabModelChanged so the top-bar chip tracks the pick', () => {
+    const view = makeView();
+    view.initTabEngine();
+    const observer = jest.fn();
+    view.teamChatObservers = new Set([observer]);
+
+    callbacksFor().onTabModelChanged('tab-1');
+
+    expect(observer).toHaveBeenCalledTimes(1);
+  });
+});
+
 describe('TeamChatView — roster presence projection (idle/busy)', () => {
   beforeEach(() => jest.clearAllMocks());
 

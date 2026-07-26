@@ -155,8 +155,7 @@ export class TeamChatView extends ItemView implements ChatViewHandle {
     const containerEl = this.tabContentEl;
     if (!containerEl || this.tabManager) return;
     this.tabManager = new TabManager(this.plugin, containerEl, this, {
-      // The four tab-set-changing callbacks re-derive selectedAgentId from the
-      // now-active tab (the projection) and persist; the rest only re-emit.
+      // The four tab-set-changing callbacks re-derive selectedAgentId from the now-active tab (the projection) and persist; the rest only re-emit.
       onTabCreated: () => { this.projectSelectedAgentFromActiveTab(); this.persistTabState(); },
       onTabSwitched: () => { this.projectSelectedAgentFromActiveTab(); this.persistTabState(); },
       onTabClosed: () => { this.projectSelectedAgentFromActiveTab(); this.persistTabState(); },
@@ -165,6 +164,7 @@ export class TeamChatView extends ItemView implements ChatViewHandle {
       onTabAttentionChanged: () => this.emitTeamChatChange(),
       onTabConversationChanged: () => { this.projectSelectedAgentFromActiveTab(); this.persistTabState(); },
       onTabProviderChanged: () => this.emitTeamChatChange(),
+      onTabModelChanged: () => this.emitTeamChatChange(), // the top bar renders the model, and a SAME-provider pick fires no onTabProviderChanged (Round-68)
     });
     // Empty state is the roster; never auto-mint a blank unbound tab on last-DM close (:Fix1).
     this.tabManager.autoCreateOnEmpty = false;
