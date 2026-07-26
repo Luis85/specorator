@@ -226,6 +226,24 @@ describe('ProviderCommandAggregator', () => {
     expect(entries).toEqual([]);
   });
 
+  it('does not cache the disabled state, so re-enabling inside the TTL fetches live', async () => {
+    // An empty bucket committed while disabled would be served for the rest of
+    // the TTL, leaving a just-enabled provider looking command-less.
+    let now = 1_000;
+    const record = makeRecord({ isEnabled: false, entries: [makeEntry()] });
+    const aggregator = new ProviderCommandAggregator(() => [record], {
+      ttlMs: 60_000,
+      nowMs: () => now,
+    });
+
+    expect(await aggregator.listAll()).toEqual([]);
+
+    record.isEnabled = true;
+    now += 10; // well inside the TTL a cached empty bucket would have claimed
+
+    expect((await aggregator.listAll()).map((e) => e.name)).toEqual(['review']);
+  });
+
   it('keeps dimming rows cached before the provider was disabled', async () => {
     // Disabling mid-session must not blank the list — `mapEntries` re-tags
     // `providerEnabled` off the live record so the rows render dimmed.

@@ -42,14 +42,21 @@ export class ProviderCommandAggregator
       ttlMs: options.ttlMs ?? DEFAULT_TTL_MS,
       nowMs: options.nowMs ?? Date.now,
       ...(options.logger ? { logger: options.logger } : {}),
+      // Never ask a provider the user turned off. Unlike the skills aggregator's
+      // `listVaultEntries()` (a disk scan), a cold `listDropdownEntries()` can
+      // SPAWN: Claude's probes the SDK in a subprocess. Merely opening the tab
+      // must not launch a provider that is opted out.
+      //
+      // This is a `shouldFetch` guard rather than an early `return []` inside
+      // `fetchEntries` precisely so the disabled state is never COMMITTED: an
+      // empty bucket written here would be served for the rest of the TTL, and
+      // re-enabling the provider inside that window would show it as having no
+      // commands. Skipping the fetch leaves the bucket untouched, so the first
+      // pass after re-enabling fetches live. Rows cached from when it was
+      // enabled keep rendering (dimmed) — `mapEntries` re-tags `providerEnabled`
+      // from the live record on every read.
+      shouldFetch: (record) => record.isEnabled,
       fetchEntries: async (record) => {
-        // Never ask a provider the user turned off. Unlike the skills
-        // aggregator's `listVaultEntries()` (a disk scan), a cold
-        // `listDropdownEntries()` can SPAWN: Claude's probes the SDK in a
-        // subprocess. Merely opening the tab must not launch a provider that is
-        // opted out. Rows already cached from when it was enabled still render
-        // (dimmed) — `mapEntries` re-tags `providerEnabled` from the live record.
-        if (!record.isEnabled) return [];
         const first = await listCommandEntries(record);
         if (first.length > 0 || !options.warmRuntimeCommands) return first;
         // An empty listing from a runtime-backed catalog usually means nothing

@@ -26,6 +26,16 @@ export interface ProviderEntryAggregatorConfig<E, T> {
   logger?: Logger;
   /** Prefix for the warn breadcrumbs this aggregator emits. */
   label: string;
+  /**
+   * Guard consulted before every live fetch. Returning false skips the provider
+   * WITHOUT touching its bucket — it neither reads a fetch nor writes one — so
+   * a temporary "can't ask right now" state can never be cached as a real
+   * answer. Any entries cached from a time when the provider WAS askable keep
+   * projecting (re-tagged from the live record), and the moment the guard opens
+   * again the next pass fetches live rather than serving a poisoned empty
+   * bucket for the rest of the TTL. Omit to always fetch.
+   */
+  shouldFetch?: (record: ProviderRecord) => boolean;
   /** Invoked after any successful bucket commit (the skills index persist hook). */
   onBucketCommitted?: () => void;
 }
@@ -139,6 +149,9 @@ export abstract class ProviderEntryAggregator<E, T> {
   /** Returns the cached or freshly-fetched raw provider entries. */
   private fetchBucket(record: ProviderRecord): Promise<E[]> {
     const cached = this.cache.get(record.providerId);
+    if (this.config.shouldFetch && !this.config.shouldFetch(record)) {
+      return Promise.resolve(cached?.entries ?? []);
+    }
     // A `stale` bucket (hydrated from disk) serves the cold paint but forces one
     // revalidation here, so an offline change can't ride the persisted TTL.
     if (cached && !cached.stale && cached.expiresAt > this.nowMs()) {
