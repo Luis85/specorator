@@ -10,6 +10,7 @@ import type { TeamChatThreadMeta } from '../../../teamChatThreadMeta';
  *  32px avatar; the ceiling keeps the transcript's reading measure intact on a
  *  half-screen leaf. Collapsed is a separate mode, not `width = 0`. */
 export const MIN_RAIL_WIDTH = 200;
+/** Hard ceiling. The EFFECTIVE ceiling is narrower on a small leaf — see `fitRailWidth`. */
 export const MAX_RAIL_WIDTH = 420;
 export const DEFAULT_RAIL_WIDTH = 260;
 /** Icon-rail track: a 32px avatar plus the row's padding, and nothing else. */
@@ -112,7 +113,12 @@ export const useTeamChatStore = defineStore('team-chat', () => {
   }
 
   function setRailNarrow(next: boolean, leafWidth = 0): void {
-    if (leafWidth > 0) lastLeafWidth.value = leafWidth;
+    if (leafWidth > 0 && leafWidth !== lastLeafWidth.value) {
+      lastLeafWidth.value = leafWidth;
+      // Re-fit an over-wide rail to the new leaf. Display-only: the stored PREFERENCE is
+      // written from the drag handler, so a wider leaf later restores the width they chose.
+      railWidth.value = fitRailWidth(railWidth.value);
+    }
     if (railNarrow.value !== next) {
       railNarrow.value = next;
       railNarrowOverride.value = false; // a threshold crossing re-asserts the width-driven default
@@ -150,11 +156,27 @@ export const useTeamChatStore = defineStore('team-chat', () => {
     return railCollapsed.value;
   }
 
-  /** Clamped on the way in so neither a restored view state nor a drag can persist a
-   *  width that hides the rail or starves the transcript. */
+  /** Clamped on the way in so neither a restored view state nor a drag can hide the rail or
+   *  starve the transcript. */
   function setRailWidth(next: number): void {
-    railWidth.value = Math.min(MAX_RAIL_WIDTH, Math.max(MIN_RAIL_WIDTH, Math.round(next)));
-    dropOverrideIfCramped(); // a separator drag can squeeze the transcript with no leaf resize
+    railWidth.value = fitRailWidth(Math.round(next));
+    dropOverrideIfCramped(); // below the floor even a MINIMUM rail starves the chat: collapse instead
+  }
+
+  /**
+   * The rail width this leaf can actually afford. `MAX_RAIL_WIDTH` alone was a HALF-SCREEN
+   * ceiling, not a guarantee: a 721px leaf never trips `railNarrow`, so a 420px rail left the
+   * transcript ~301px with nothing to catch it — the stated "keeps the transcript's reading
+   * measure intact" was true only for wide leaves. The ceiling is therefore dynamic.
+   *
+   * `MIN_RAIL_WIDTH` still wins at the bottom: on a leaf too small for both, an expanded rail
+   * is the wrong answer entirely, and `dropOverrideIfCramped` collapses it to the icon rail.
+   */
+  function fitRailWidth(width: number): number {
+    const affordable = lastLeafWidth.value > 0
+      ? Math.max(MIN_RAIL_WIDTH, lastLeafWidth.value - MIN_TRANSCRIPT_WIDTH)
+      : MAX_RAIL_WIDTH;
+    return Math.min(MAX_RAIL_WIDTH, affordable, Math.max(MIN_RAIL_WIDTH, width));
   }
 
   return {

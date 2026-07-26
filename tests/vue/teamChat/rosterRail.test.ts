@@ -470,10 +470,11 @@ describe('narrow-leaf auto-collapse (effective vs preferred state)', () => {
     expect(names(list)).toEqual([]);
   });
 
-  // Round-70: dragging the SEPARATOR changes the rail width without changing the root's, so
-  // the ResizeObserver never fires. An override taken at 700px could be dragged out to a
-  // 420px rail beside a 280px transcript with nothing noticing.
-  it('drops the override when the rail is dragged wider than the pane can afford', async () => {
+  // Round-72: `MAX_RAIL_WIDTH` was a half-screen ceiling, not a guarantee — a 700px leaf
+  // (or a 721px one, which never even trips `railNarrow`) left a 420px rail beside a ~300px
+  // transcript. The ceiling is now dynamic, so the drag simply stops where the chat's floor
+  // begins instead of relying on the override to rescue it.
+  it('clamps a rail drag to what the leaf can afford, keeping the rail open', async () => {
     mountRoot(makePlugin(TEAM), makeCallbacks());
     const list = await awaitRoster();
     const store = useTeamChatStore();
@@ -481,12 +482,43 @@ describe('narrow-leaf auto-collapse (effective vs preferred state)', () => {
     await nextTick();
     await fireEvent.click(screen.getByLabelText(t('teamChat.railExpand')));
     await nextTick();
-    expect(names(list)).toEqual(['Ada', 'Bo', 'Cy']);
 
-    store.setRailWidth(420); // 700 - 420 = 280, under MIN_TRANSCRIPT_WIDTH
+    store.setRailWidth(420); // 700 - 420 = 280 would starve the transcript…
+
+    expect(store.railWidth).toBe(380);            // …so it stops at 700 - MIN_TRANSCRIPT_WIDTH
+    await nextTick();
+    expect(names(list)).toEqual(['Ada', 'Bo', 'Cy']); // and the rail stays open
+  });
+
+  // A leaf too small for MIN_RAIL_WIDTH + MIN_TRANSCRIPT_WIDTH can't be rescued by clamping;
+  // an expanded rail is simply the wrong answer there, so the override goes.
+  it('drops the override when even the MINIMUM rail would starve the transcript', async () => {
+    mountRoot(makePlugin(TEAM), makeCallbacks());
+    const list = await awaitRoster();
+    const store = useTeamChatStore();
+    store.setRailNarrow(true, 480); // 480 - 200 = 280, under the floor at any rail width
+    await nextTick();
+    await fireEvent.click(screen.getByLabelText(t('teamChat.railExpand')));
     await nextTick();
 
-    expect(names(list)).toEqual([]);
+    store.setRailWidth(420);
+    await nextTick();
+
+    expect(store.railWidth).toBe(200); // clamped to the floor…
+    expect(names(list)).toEqual([]);   // …and collapsed anyway, because the floor isn't enough
+  });
+
+  // The dynamic ceiling must also apply to a leaf that is WIDE by the responsive rule: 721px
+  // never sets `railNarrow`, so nothing in the override machinery was ever consulted.
+  it('clamps the rail on a leaf just above the narrow breakpoint', async () => {
+    mountRoot(makePlugin(TEAM), makeCallbacks());
+    await awaitRoster();
+    const store = useTeamChatStore();
+    store.setRailNarrow(false, 721);
+
+    store.setRailWidth(420);
+
+    expect(store.railWidth).toBe(401); // 721 - 320, not the 420 hard ceiling
   });
 
   it('keeps the override while the narrow pane still fits rail + transcript', async () => {

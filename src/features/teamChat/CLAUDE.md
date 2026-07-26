@@ -299,6 +299,14 @@ reaches `{ leaf, getTabManager() }`, so a second host is reuse, not a fork.
   width rather than a second hardcoded breakpoint. The same check runs from `setRailWidth`,
   because the other way to squeeze the transcript is dragging the SEPARATOR: the root's own
   width never changes, so no `ResizeObserver` callback ever fires.
+- **The rail's ceiling is DYNAMIC (`fitRailWidth`), not just `MAX_RAIL_WIDTH`.** 420px was a
+  half-screen ceiling, not a guarantee: a 721px leaf never trips `railNarrow` at all, so
+  nothing in the override machinery was consulted and a 420px rail left the transcript ~300px.
+  Every width now clamps to `leafWidth - MIN_TRANSCRIPT_WIDTH`, on drag AND on measurement, so
+  a shrinking leaf re-fits an over-wide rail. `MIN_RAIL_WIDTH` still wins at the bottom: below
+  `MIN_RAIL_WIDTH + MIN_TRANSCRIPT_WIDTH` no width works and `dropOverrideIfCramped` collapses
+  to the icon rail instead. The re-fit is display-only — the stored preference is written from
+  the drag handler, so a wider leaf later restores the width the user actually chose.
 - **A user-initiated DM close is NON-FORCED and resolved CROSS-LEAF.** `closeTeamChatDmTab`
   forces by default (eviction and rotation must close regardless of state), but the menu
   action passes `force: false` so `closeTabImpl` re-checks `isStreaming` INSIDE
