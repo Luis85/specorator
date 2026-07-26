@@ -123,6 +123,7 @@ export async function restoreTeamChatDmTabs(
   plugin: SpecoratorPlugin,
   manager: TabManager,
   persisted: PersistedTabManagerState,
+  setRestoring?: (conversationId: string, restoring: boolean) => void,
 ): Promise<void> {
   const allRestorable = persisted.openTabs.filter((tab) => isRestorableTeamChatDm(plugin, tab.conversationId));
   if (allRestorable.length === 0) return;
@@ -139,14 +140,12 @@ export async function restoreTeamChatDmTabs(
   // trimming the least-recent extras but always keeping the persisted-active one (Round-40).
   const restorable = trimRestorableDmsToBudget(distinctRestorable, persisted.activeTabId, resolveMaxTeamChatDms(plugin.settings));
 
-  // Pre-warm hydration in parallel (BaseHistoryService dedupes the createTab
-  // re-fetch); without this the UI freezes for the sum of every transcript load.
-  await Promise.all(
-    restorable
-      .map((tab) => tab.conversationId)
-      .filter((id): id is string => typeof id === 'string')
-      .map((id) => plugin.getConversationById(id).catch(() => null)),
-  );
+  const restorableIds = restorable.map((tab) => tab.conversationId).filter((id): id is string => typeof id === 'string');
+  // Round-66: mark each restoring DM opening so its pre-bind `conversation:hydration-failed` is owned by THIS leaf's banner gate (isOpeningConversation); cleared after the createTab loop below (a stale marker can't match).
+  restorableIds.forEach((id) => setRestoring?.(id, true));
+
+  // Pre-warm hydration in parallel (BaseHistoryService dedupes the createTab re-fetch); else the UI freezes for the sum of every transcript load.
+  await Promise.all(restorableIds.map((id) => plugin.getConversationById(id).catch(() => null)));
 
   const coordinator = getTeamChatDmOpenCoordinator(plugin);
   for (const tab of restorable) {
@@ -169,6 +168,8 @@ export async function restoreTeamChatDmTabs(
       plugin.logger.scope('team-chat').error('team chat DM restore failed for one tab', error);
     }
   }
+  // Round-66: hydration phase done (pre-warm + createTab); clear the markers before the non-hydrating switch, so a later cross-leaf open of the same DM can't match a stale one. The region above can't throw (per-tab try/catch + all-caught pre-warm), so no finally is needed.
+  restorableIds.forEach((id) => setRestoring?.(id, false));
 
   // Switch to the persisted active DM if its tab survived (its onTabSwitched drives
   // the selectedAgentId projection), else the first restored tab — never a blank one.

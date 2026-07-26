@@ -76,9 +76,9 @@ export class TeamChatView extends ItemView implements ChatViewHandle {
   private hydrationBanner: DmHydrationBannerController | null = null;
   /** Disposer for the DM host events — file-context vault/workspace events (Round-62/64) PLUS the mention click-away + Shift+Tab plan toggle (Round-65 Fix #1/#3). Dispose+recreate per onOpen so a re-entrant rebuild can't leak the prior listeners (mirrors presence/roster/banner). */
   private dmHostEventsDispose: (() => void) | null = null;
-  /** The DM this leaf is mid-open; the banner ownership gate reads it via `isOpeningConversation` so a pre-bind hydration error stashes on the OPENING leaf only, not every leaf (Round-64 Fix B). */
-  private openingConversationId: string | null = null;
-  readonly isOpeningConversation = (conversationId: string): boolean => this.openingConversationId === conversationId;
+  /** ConversationIds this leaf is mid-open (select) OR mid-restore (parallel pre-warm of many DMs); the banner ownership gate reads them via `isOpeningConversation` so a pre-bind hydration error stashes on the owning leaf only, not every leaf (Round-64 Fix B; restore set Round-66). */
+  private readonly openingConversationIds = new Set<string>();
+  readonly isOpeningConversation = (conversationId: string): boolean => this.openingConversationIds.has(conversationId);
   /** Open DMs already flagged agent-removed (Round-39), so a later unrelated `roster:changed`
    *  doesn't re-notice; a re-created agent clears its entry. Owned here, mutated by the helper. */
   private readonly removedAgentDmsNotified = new Set<string>();
@@ -265,7 +265,7 @@ export class TeamChatView extends ItemView implements ChatViewHandle {
     const manager = this.tabManager;
     const persisted = this.pendingTabManagerState;
     if (manager && persisted && persisted.openTabs.length > 0) {
-      await restoreTeamChatDmTabs(this.plugin, manager, persisted);
+      await restoreTeamChatDmTabs(this.plugin, manager, persisted, (id, restoring) => { if (restoring) this.openingConversationIds.add(id); else this.openingConversationIds.delete(id); });
       this.pendingTabManagerState = null; // consumed once (mirror of SpecoratorView)
     }
   }
@@ -435,7 +435,7 @@ export class TeamChatView extends ItemView implements ChatViewHandle {
       openTeamChatDmForSelection(this.plugin, manager, this.leaf, this.dmRecency, {
         conversationId, agentId, displaced, previousConversationId,
         isStale, preserveFocus: options.preserveFocus,
-        setOpening: (id) => { this.openingConversationId = id; },
+        setOpening: (id) => { if (id) this.openingConversationIds.add(id); else this.openingConversationIds.delete(conversationId); },
       }));
   }
 

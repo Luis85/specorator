@@ -34,6 +34,7 @@ function makeView(overrides: { leaf?: unknown; plugin?: Record<string, unknown> 
   view.dmRecency = [];          // ditto — the LRU recency array (T7)
   view.tabsRestored = true;     // these flows assume a restored engine (Round-29 gate)
   view.teamChatObservers = new Set();
+  view.openingConversationIds = new Set(); // Round-66: widened opening/restoring id set (Object.create skips field initializers)
   return view;
 }
 
@@ -172,10 +173,10 @@ describe('TeamChatView.selectAgent — resolve → cross-view reuse / create', (
   // Round-64 Fix B: the open brackets the createTab (pre-bind hydration) window with the opening-DM
   // marker so a `conversation:hydration-failed` fired before the tab binds is stashed by THIS leaf
   // only — then clears it so a later cross-leaf open of the same DM can't match a stale marker.
-  it('marks openingConversationId during the open and clears it after (Round-64 Fix B)', async () => {
-    let openingAtCreate: unknown = 'unset';
+  it('marks the opening DM during the open and clears it after (Round-64 Fix B)', async () => {
+    let openingAtCreate = false;
     const createTab = jest.fn(async () => {
-      openingAtCreate = view.openingConversationId; // captured inside the pre-bind hydration window
+      openingAtCreate = view.openingConversationIds.has('conv-open'); // captured inside the pre-bind hydration window
       return { id: 'tab-1' };
     });
     const view = makeView({
@@ -188,11 +189,11 @@ describe('TeamChatView.selectAgent — resolve → cross-view reuse / create', (
 
     await view.selectAgent('roster:a');
 
-    expect(openingAtCreate).toBe('conv-open');
-    expect(view.openingConversationId).toBeNull();
+    expect(openingAtCreate).toBe(true);
+    expect(view.openingConversationIds.size).toBe(0);
   });
 
-  it('clears openingConversationId even when the open throws (Round-64 Fix B)', async () => {
+  it('clears the opening marker even when the open throws (Round-64 Fix B)', async () => {
     const view = makeView({
       plugin: {
         getTeamChatThreadStore: () => ({ get: jest.fn().mockResolvedValue(null), resolveOrCreate: jest.fn().mockResolvedValue('conv-x') }),
@@ -204,7 +205,7 @@ describe('TeamChatView.selectAgent — resolve → cross-view reuse / create', (
     await expect(view.selectAgent('roster:a')).rejects.toThrow('create boom');
 
     // The finally in openTeamChatDmForSelection cleared the marker despite the throw.
-    expect(view.openingConversationId).toBeNull();
+    expect(view.openingConversationIds.size).toBe(0);
   });
 
   // T7: with the hot-DM budget full, opening a NEW agent's DM evicts the least-recently-used

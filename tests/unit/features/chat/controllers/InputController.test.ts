@@ -2,6 +2,7 @@ import { createMockEl } from '@test/helpers/mockElement';
 import { Notice } from 'obsidian';
 
 import { InputController, type InputControllerDeps } from '@/features/chat/controllers/InputController';
+import { persistPastedImages } from '@/features/chat/services/persistPastedImages';
 import { ChatState } from '@/features/chat/state/ChatState';
 import { t } from '@/i18n/i18n';
 import { encodeClaudeTurn } from '@/providers/claude/prompt/ClaudeTurnEncoder';
@@ -9,6 +10,11 @@ import { ResumeSessionDropdown } from '@/shared/components/ResumeSessionDropdown
 
 jest.mock('@/shared/components/ResumeSessionDropdown', () => ({
   ResumeSessionDropdown: jest.fn(),
+}));
+
+// Mocked so a send can simulate a vault-write rejection (the real impl swallows per-image errors).
+jest.mock('@/features/chat/services/persistPastedImages', () => ({
+  persistPastedImages: jest.fn(),
 }));
 
 beforeAll(() => {
@@ -4351,5 +4357,78 @@ describe('InputController - Message Queue', () => {
       expect(((deps.plugin as any).logger.scope as jest.Mock)).toHaveBeenCalledWith('input');
       expect(mockErrorFn).toHaveBeenCalledWith('sendMessage failed unexpectedly', testError);
     });
+  });
+});
+
+// P2 data-loss (Round-66): sendMessage consumes (clears) the composer UP FRONT, then persists any
+// pasted/dropped images. If that vault write REJECTS, the send must RESTORE the reserved draft and
+// abort with a Notice — never leave the composer empty with the turn silently dropped. Mirrors the
+// removed-agent DM guard (confirmDmAgentOrRestoreComposer): only the textarea text is reserved early
+// (images are read live, never cleared before the turn builds), so restoring the text is the full undo.
+describe('InputController - image persistence failure restores the composer', () => {
+  const pasteImage = (id: string, name: string) => ({
+    id, name, mediaType: 'image/png' as const, data: 'ZGF0YQ==', size: 4, source: 'paste' as const,
+  });
+
+  function makeImageSendDeps() {
+    const deps = createSendableDeps();
+    const inputEl = deps.getInputEl() as ReturnType<typeof createMockInputEl>;
+    const imageContextManager = deps.getImageContextManager()!;
+    (imageContextManager.hasImages as jest.Mock).mockReturnValue(true);
+    return { deps, inputEl, imageContextManager };
+  }
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+    (persistPastedImages as jest.Mock).mockReset();
+  });
+
+  it('restores the draft + images and aborts (no dispatch) when image persistence rejects', async () => {
+    const { deps, inputEl, imageContextManager } = makeImageSendDeps();
+    (imageContextManager.getAttachedImages as jest.Mock).mockReturnValue([pasteImage('img-1', 'a.png')]);
+    (persistPastedImages as jest.Mock).mockRejectedValueOnce(new Error('vault write failed'));
+    inputEl.value = 'important draft';
+    const controller = new InputController(deps);
+
+    // The send resolves (does not reject) — the failure is handled, not thrown up to the caller.
+    await expect(controller.sendMessage()).resolves.toBeUndefined();
+
+    // Draft restored into the reserved (cleared) composer; the turn never dispatched → no data loss.
+    expect(inputEl.value).toBe('important draft');
+    expect((deps as any).mockAgentService.query).not.toHaveBeenCalled();
+    expect(deps.state.messages).toHaveLength(0);
+    // Images were consumed only AFTER persist, so a failure leaves them intact for the retry.
+    expect(imageContextManager.clearImages).not.toHaveBeenCalled();
+    expect(mockNotice).toHaveBeenCalled();
+  });
+
+  it('sends normally when image persistence succeeds (success path unchanged)', async () => {
+    const { deps, inputEl, imageContextManager } = makeImageSendDeps();
+    (imageContextManager.getAttachedImages as jest.Mock).mockReturnValue([pasteImage('img-2', 'b.png')]);
+    (persistPastedImages as jest.Mock).mockResolvedValue(undefined);
+    (deps as any).mockAgentService.query = jest.fn().mockImplementation(() => createMockStream([{ type: 'done' }]));
+    inputEl.value = 'with image';
+    const controller = new InputController(deps);
+
+    await controller.sendMessage();
+
+    expect(persistPastedImages).toHaveBeenCalledTimes(1);
+    expect((deps as any).mockAgentService.query).toHaveBeenCalled();
+    expect(inputEl.value).toBe(''); // consumed on success
+    expect(imageContextManager.clearImages).toHaveBeenCalled();
+  });
+
+  it('does not persist (or restore) for a non-image send — byte-identical path', async () => {
+    const deps = createSendableDeps();
+    const inputEl = deps.getInputEl() as ReturnType<typeof createMockInputEl>;
+    (deps as any).mockAgentService.query = jest.fn().mockImplementation(() => createMockStream([{ type: 'done' }]));
+    inputEl.value = 'no images here';
+    const controller = new InputController(deps);
+
+    await controller.sendMessage();
+
+    expect(persistPastedImages).not.toHaveBeenCalled();
+    expect((deps as any).mockAgentService.query).toHaveBeenCalled();
+    expect(inputEl.value).toBe('');
   });
 });

@@ -32,7 +32,6 @@ import type { BrowserSelectionContext } from '../../../utils/browser';
 import type { CanvasSelectionContext } from '../../../utils/canvas';
 import type { EditorSelectionContext } from '../../../utils/editor';
 import { dedupeExternalContextPaths, filterRedundantExternalContextPaths } from '../../../utils/externalContextTurn';
-import { persistPastedImages } from '../services/persistPastedImages';
 import type { SubagentManager } from '../services/SubagentManager';
 import { applyTitleGenerationResult } from '../services/titleGenerationResult';
 import type { ChatState } from '../state/ChatState';
@@ -59,6 +58,7 @@ import {
   type FinishedTurn,
   normalizeTabModelOverride,
   type OutgoingTurn,
+  persistComposerImagesOrRestore,
   type PlanApprovalOutcome,
   resolveComposerSend,
   resolveComposerSourceImages,
@@ -302,14 +302,16 @@ export class InputController {
       resetInputHeight: () => this.deps.resetInputHeight(),
     }))) return;
 
-    // Persist any pasted/dropped images to the vault BEFORE the queue branch —
-    // both the streaming-queue (state.queuedMessage) and the steer-then-commit
-    // path reuse this image snapshot. Without persisting up front, queued or
-    // steered images can land in ConversationStore.save with `data` cleared
-    // and no `path` — leaving an unrenderable user bubble after reload.
-    if (send.hasImages) {
-      await this.persistComposerImages(send);
-    }
+    // Persist any pasted/dropped images to the vault BEFORE the queue branch — both the streaming-queue
+    // (state.queuedMessage) and steer-then-commit paths reuse this image snapshot (else queued/steered
+    // images land in ConversationStore.save with `data` cleared and no `path`). On a vault-write
+    // rejection, restore the reserved composer draft and abort with a Notice — the up-front consume
+    // must not silently drop the user's text (mirrors the removed-agent guard above).
+    if (send.hasImages && !(await persistComposerImagesOrRestore(send, {
+      app: this.deps.plugin.app,
+      logger: this.deps.plugin.logger,
+      resetInputHeight: () => this.deps.resetInputHeight(),
+    }))) return;
 
     // If agent is working, queue the message instead of dropping it
     if (state.isStreaming) {
@@ -338,15 +340,6 @@ export class InputController {
     if (send.content || send.hasImages) return 'proceed';
     if (!send.shouldUseInput) return { ok: false, finalAssistantContent: '', error: 'No content to send' };
     return undefined;
-  }
-
-  private async persistComposerImages(send: ComposerSendContext): Promise<void> {
-    const sourceImages = resolveComposerSourceImages(send);
-    if (sourceImages.length > 0) {
-      await persistPastedImages(this.deps.plugin.app, sourceImages, {
-        logger: this.deps.plugin.logger.scope('chat.images'),
-      });
-    }
   }
 
   private queueComposerSendWhileStreaming(send: ComposerSendContext): ProgrammaticSendResult {

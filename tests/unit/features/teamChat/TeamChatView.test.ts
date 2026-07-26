@@ -388,7 +388,8 @@ describe('TeamChatView — persisted DM tab restore', () => {
     await flushMicrotasks();
 
     // Restore routes through the guarded team-chat path (dedup + validate), not raw restoreState.
-    expect(restoreTeamChatDmTabs).toHaveBeenCalledWith(view.plugin, view.tabManager, twoDmLayout);
+    // The 4th arg is the Round-66 restore-time opening-marker setter (threaded from the view).
+    expect(restoreTeamChatDmTabs).toHaveBeenCalledWith(view.plugin, view.tabManager, twoDmLayout, expect.any(Function));
     expect(view.pendingTabManagerState).toBeNull(); // consumed exactly once
     expect(view.areTabsRestored()).toBe(true);
   });

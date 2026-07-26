@@ -1,3 +1,4 @@
+import { restoreTeamChatDmTabs } from '@/features/teamChat/teamChatDmTabs';
 import { createDmHydrationBanner } from '@/features/teamChat/teamChatHydrationBanner';
 
 /**
@@ -126,5 +127,56 @@ describe('createDmHydrationBanner', () => {
     controller.dispose();
 
     expect(off).toHaveBeenCalledTimes(1);
+  });
+});
+
+// Round-66: the RESTORE path (restoreTeamChatDmTabs) pre-warms hydration + createTabs its DMs
+// WITHOUT the selectAgent `setOpening` bracket, so a restored DM whose transcript is unreadable
+// emitted `conversation:hydration-failed` while `isOpeningConversation` was false → ownsDmConversation
+// rejected it and the restored DM showed blank with no inline banner. Restore now marks its DMs
+// opening for the duration, so THIS leaf owns the restore-time failure; a leaf NEITHER opening NOR
+// restoring it still rejects it (Round-64's multi-leaf guard holds).
+describe('createDmHydrationBanner — restore-time ownership (Round-66)', () => {
+  const teamChatConv = { surface: 'team-chat', boundAgentId: 'roster:a', providerId: 'claude' };
+  const layout = (conversationId: string) => ({
+    openTabs: [{ tabId: 't1', conversationId, kind: 'chat' as const }],
+    activeTabId: 't1',
+  });
+
+  it('the restoring leaf owns a restore-time pre-bind hydration failure; an idle sibling does not', async () => {
+    const restoring = new Set<string>();
+    const handlers: Array<(payload: unknown) => void> = [];
+    const plugin = {
+      events: {
+        on: jest.fn((event: string, handler: (payload: unknown) => void) => {
+          if (event === 'conversation:hydration-failed') handlers.push(handler);
+          return jest.fn();
+        }),
+        emit: jest.fn(),
+      },
+      // The pre-warm read fires a store-unreadable hydration failure for the DM being restored.
+      getConversationById: jest.fn(async (id: string) => {
+        handlers.forEach((h) => h({ conversationId: id, code: 'store-unreadable', message: 'boom' }));
+        return teamChatConv;
+      }),
+      getConversationSync: jest.fn(() => teamChatConv),
+      findConversationAcrossViews: jest.fn(() => null),
+      logger: { scope: () => ({ error: jest.fn() }) },
+    } as never;
+    // The restoring leaf's host reads the shared `restoring` set; the idle sibling never restores.
+    const makeHost = (set: Set<string>) => ({
+      getTabManager: () => ({ getAllTabs: () => [] }),
+      isOpeningConversation: (id: string) => set.has(id),
+    });
+    const restoringBanner = createDmHydrationBanner(plugin, makeHost(restoring) as never);
+    const idleBanner = createDmHydrationBanner(plugin, makeHost(new Set<string>()) as never);
+    const manager = { createTab: jest.fn().mockResolvedValue({ id: 't1' }), hasTab: jest.fn(() => true), switchToTab: jest.fn() } as never;
+
+    await restoreTeamChatDmTabs(plugin, manager, layout('c1'), (id, r) => {
+      if (r) restoring.add(id); else restoring.delete(id);
+    });
+
+    expect(restoringBanner.consumePendingHydrationError('c1')).toEqual({ code: 'store-unreadable', message: 'boom' });
+    expect(idleBanner.consumePendingHydrationError('c1')).toBeNull();
   });
 });

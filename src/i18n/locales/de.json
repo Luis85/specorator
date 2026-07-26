@@ -197,7 +197,8 @@
       "unknownCommand": "Unknown command: {command}",
       "noConversationsToResume": "No conversations to resume",
       "openConversationFailed": "Failed to open conversation: {error}",
-      "chatServiceInitFailed": "Failed to initialize chat service"
+      "chatServiceInitFailed": "Failed to initialize chat service",
+      "imagePersistFailed": "Couldn't save the image — your message was restored. Please try again."
     },
     "runtimeError": {
       "cliNotFound": {

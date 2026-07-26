@@ -22,6 +22,34 @@ function layout(conversationId: string, tabId = 't1') {
 }
 
 describe('restoreTeamChatDmTabs — dedup + validate (:225)', () => {
+  // Round-66: the restore path pre-warms hydration + createTabs its DMs WITHOUT the selectAgent
+  // `setOpening` bracket, so a restored DM with an unreadable transcript emitted
+  // `conversation:hydration-failed` while `isOpeningConversation` was false and its inline banner
+  // was dropped. Restore now marks each DM opening (via the threaded setter) BEFORE createTab and
+  // clears it AFTER, so the leaf owns its restore-time hydration failures.
+  it('marks each restoring DM opening before createTab, then clears it after (Round-66)', async () => {
+    const calls: Array<[string, boolean]> = [];
+    const createTab = jest.fn().mockResolvedValue({ id: 't1' });
+    const setRestoring = jest.fn((id: string, restoring: boolean) => { calls.push([id, restoring]); });
+    const plugin = {
+      getConversationSync: jest.fn(() => teamChatConv),
+      getConversationById: jest.fn().mockResolvedValue(teamChatConv),
+      findConversationAcrossViews: jest.fn(() => null),
+      logger: { scope: () => ({ error: jest.fn() }) },
+    } as never;
+    const m = { createTab, hasTab: jest.fn(() => true), switchToTab: jest.fn() } as never;
+
+    await restoreTeamChatDmTabs(plugin, m, layout('c1'), setRestoring);
+
+    expect(setRestoring).toHaveBeenCalledWith('c1', true);
+    expect(setRestoring).toHaveBeenCalledWith('c1', false);
+    // Bracketed: mark-opening precedes createTab which precedes clear-opening.
+    const trueOrder = setRestoring.mock.invocationCallOrder[calls.findIndex(([, r]) => r === true)];
+    const falseOrder = setRestoring.mock.invocationCallOrder[calls.findIndex(([, r]) => r === false)];
+    expect(trueOrder).toBeLessThan(createTab.mock.invocationCallOrder[0]);
+    expect(createTab.mock.invocationCallOrder[0]).toBeLessThan(falseOrder);
+  });
+
   it('collapses two leaves restoring the SAME DM to exactly one createTab (Fix 1)', async () => {
     const created = new Set<string>();
     const createTab1 = jest.fn().mockImplementation(async () => { created.add('leaf1'); return { id: 't1' }; });

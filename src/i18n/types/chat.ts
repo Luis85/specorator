@@ -151,6 +151,7 @@ export type ChatTranslationKey =
   | 'chat.input.noConversationsToResume'
   | 'chat.input.openConversationFailed'
   | 'chat.input.chatServiceInitFailed'
+  | 'chat.input.imagePersistFailed'
 
   // Chat - Actionable runtime error cards (UX-F/UX-J)
   | 'chat.runtimeError.cliNotFound.title'
