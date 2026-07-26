@@ -1,4 +1,19 @@
-import type { ComposerSendContext } from './composerSendPhases';
+import type { ComposerSendContext, ComposerTurnOptions } from './composerSendPhases';
+
+/**
+ * A turn replayed from a captured snapshot (the streaming-queue dequeue), rather
+ * than one built from the live composer.
+ *
+ * Such a turn OWNS its context: whatever it carries was folded in — and consumed
+ * — when it was queued, so anything sitting on the composer now was staged
+ * afterwards and belongs to the user's next turn. Consuming it here silently
+ * drops context the replayed request never contained. This is separate from the
+ * compact rules below because a merged queue (`ordinary\n\n/compact`) no longer
+ * reads as a compact invocation, so those predicates cannot catch it.
+ */
+export function isReplayedTurn(options?: ComposerTurnOptions): boolean {
+  return options?.turnRequestOverride !== undefined;
+}
 
 /**
  * What a `/compact` turn does and does not take from the composer.

@@ -4215,6 +4215,50 @@ describe('InputController - Message Queue', () => {
       expect(capturedRequests[0].text).toBe('/compact');
     });
 
+    it('does not clear live pills when dispatching a replayed queue snapshot', async () => {
+      // A dequeued turn already folded in (and cleared) the pills it captured at
+      // queue time, so anything staged since belongs to the user's NEXT turn.
+      // Reachable via a merged queue — `ordinary\n\n/compact` no longer reads as
+      // compact, so the compact guard can't catch it and the live pills were
+      // cleared without the replayed request ever containing them.
+      const fileContextManager = createMockFileContextManager();
+
+      const localDeps = createSendableDeps({
+        getFileContextManager: () => fileContextManager as any,
+      });
+      const mockAgentService = (localDeps as any).mockAgentService;
+      mockAgentService.query = jest.fn().mockReturnValue(createMockStream([{ type: 'done' }]));
+
+      await new InputController(localDeps).sendMessage({
+        content: 'ordinary\n\n/compact',
+        turnRequestOverride: {
+          text: 'ordinary\n\n/compact',
+          images: undefined,
+          editorSelection: null,
+          browserSelection: null,
+          canvasSelection: null,
+        } as any,
+      });
+
+      expect(fileContextManager.clearAttachedPills).not.toHaveBeenCalled();
+    });
+
+    it('still clears pills on an ordinary live send', async () => {
+      const fileContextManager = createMockFileContextManager();
+
+      const localDeps = createSendableDeps({
+        getFileContextManager: () => fileContextManager as any,
+      });
+      const mockAgentService = (localDeps as any).mockAgentService;
+      mockAgentService.query = jest.fn().mockReturnValue(createMockStream([{ type: 'done' }]));
+
+      const localInput = localDeps.getInputEl() as ReturnType<typeof createMockInputEl>;
+      localInput.value = 'ordinary message';
+      await new InputController(localDeps).sendMessage();
+
+      expect(fileContextManager.clearAttachedPills).toHaveBeenCalled();
+    });
+
     it('does not persist a pending image to the vault on /compact', async () => {
       // Persistence runs up front, before the compact branch strips images. It
       // would write an attachment file for a turn that never references it — and
