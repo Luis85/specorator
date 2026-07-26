@@ -223,7 +223,7 @@ describe('ProviderCommandAggregator', () => {
     });
     const warm = jest.fn().mockImplementation(() => {
       primed = true;
-      return Promise.resolve();
+      return Promise.resolve(true);
     });
     const aggregator = new ProviderCommandAggregator(() => [record], {
       warmRuntimeCommands: warm,
@@ -233,6 +233,19 @@ describe('ProviderCommandAggregator', () => {
 
     expect(warm).toHaveBeenCalledWith(record);
     expect(entries.map((e) => e.name)).toEqual(['test']);
+  });
+
+  it('does not re-read when the warmup primed nothing, sparing a second SDK probe', async () => {
+    // Claude has no runtime loader, so the hook primes nothing. Re-reading its
+    // catalog would run `ensureProbed()` again — a second subprocess for the
+    // same empty answer.
+    const record = makeRecord({ entries: [] });
+    const aggregator = new ProviderCommandAggregator(() => [record], {
+      warmRuntimeCommands: jest.fn().mockResolvedValue(false),
+    });
+
+    expect(await aggregator.listAll()).toEqual([]);
+    expect(record.commandCatalog.listDropdownEntries).toHaveBeenCalledTimes(1);
   });
 
   it('does not pay for the runtime warmup when the catalog already answered', async () => {

@@ -58,6 +58,10 @@ export interface ProviderCommandAggregatorOptions {
    * holds its commands only at runtime). Injected rather than imported so the
    * aggregator stays plugin-free, mirroring `getProviderRecords`. Omit to skip
    * runtime warmup entirely.
+   *
+   * MUST resolve `false` when it primed nothing, so the aggregator can skip the
+   * re-read: a provider with no runtime loader (Claude) would otherwise re-enter
+   * `listDropdownEntries` and spawn a second SDK probe for the same answer.
    */
-  warmRuntimeCommands?: (record: ProviderRecord) => Promise<void>;
+  warmRuntimeCommands?: (record: ProviderRecord) => Promise<boolean>;
 }

@@ -444,8 +444,8 @@ export class InputController {
     };
 
     // markCurrentNoteSent() is deferred to dispatchComposerTurn (post-runtime) so an init-failure rollback keeps the current-note state for retry.
-    // Added file/folder pills are consumed by this turn; clear them (keeps the current note).
-    send.fileContextManager?.clearAttachedPills();
+    // Added pills are consumed by this turn; clear them (keeps the current note). Not for `/compact`, which resolveTurnSubmission ships without the mention suffix so the pills were never folded in — clearing them would drop context the user still expects next turn.
+    if (!isCompact) send.fileContextManager?.clearAttachedPills();
 
     return { displayContent, turnRequest, imagesForMessage, isCompact };
   }

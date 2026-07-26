@@ -3881,6 +3881,28 @@ describe('InputController - Message Queue', () => {
       expect(capturedRequests[0].text).toBe('/compact');
     });
 
+    it('keeps attached pills after a /compact turn, which never folded them in', async () => {
+      // `/compact` passes through without the mention suffix so the provider
+      // recognises its built-in, so the pills were never consumed — clearing
+      // them would drop context the user still expects on their next turn.
+      const fileContextManager = createMockFileContextManager();
+      (fileContextManager.getAttachedMentionSuffix as jest.Mock).mockReturnValue(' @a.ts');
+
+      const localDeps = createSendableDeps({
+        getFileContextManager: () => fileContextManager as any,
+      });
+      const mockAgentService = (localDeps as any).mockAgentService;
+      mockAgentService.query = jest.fn().mockReturnValue(createMockStream([{ type: 'done' }]));
+
+      const localInput = localDeps.getInputEl() as ReturnType<typeof createMockInputEl>;
+      localInput.value = '/compact';
+      const localController = new InputController(localDeps);
+
+      await localController.sendMessage();
+
+      expect(fileContextManager.clearAttachedPills).not.toHaveBeenCalled();
+    });
+
     it('clears attached pills after send, with folded mentions already captured in turnRequest', async () => {
       const fileContextManager = createMockFileContextManager();
 

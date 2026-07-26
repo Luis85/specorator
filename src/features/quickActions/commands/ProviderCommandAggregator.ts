@@ -66,8 +66,13 @@ export class ProviderCommandAggregator
         // runtime to warm it. Prime it once, then re-read; otherwise the empty
         // bucket would be cached for the full TTL and the tab would report the
         // provider as having no commands at all.
-        await options.warmRuntimeCommands(record);
-        return listCommandEntries(record);
+        //
+        // Re-read ONLY when the hook reports it primed something. A provider
+        // with no runtime loader (Claude) primes nothing, and re-entering
+        // `listDropdownEntries` there would run `ensureProbed()` again — a
+        // second SDK subprocess for the same empty answer.
+        const primed = await options.warmRuntimeCommands(record);
+        return primed ? listCommandEntries(record) : first;
       },
       mapEntries: (raw, record) => mapCommandBucket(raw, record),
     });

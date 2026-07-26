@@ -25,14 +25,20 @@ import type { ProviderRecord } from '../skills/types';
  * and a disabled provider never spawns anything (`isAvailable` gates on the
  * provider's enabled flag). Failures propagate to the aggregator's
  * swallow-and-log handler.
+ *
+ * Returns whether the catalog was actually primed with entries — i.e. whether a
+ * re-read is worth doing. Claude has no runtime loader, so it returns false and
+ * the caller must NOT re-read: `ClaudeCommandCatalog.listDropdownEntries` would
+ * run `ensureProbed()` again and spawn a second SDK subprocess for the same
+ * empty answer.
  */
 export async function warmRuntimeCommands(
   plugin: SpecoratorPlugin,
   record: ProviderRecord,
-): Promise<void> {
-  if (!record.isEnabled) return;
+): Promise<boolean> {
+  if (!record.isEnabled) return false;
   const loader = ProviderWorkspaceRegistry.getRuntimeCommandLoader(record.providerId);
-  if (!loader?.isAvailable(asSettingsBag(plugin.settings))) return;
+  if (!loader?.isAvailable(asSettingsBag(plugin.settings))) return false;
 
   const commands = await loader.loadCommands({
     // No tab, so no session to reuse — the loader opens its own isolated
@@ -44,4 +50,5 @@ export async function warmRuntimeCommands(
     runtime: null,
   });
   record.commandCatalog.setRuntimeCommands(commands);
+  return commands.length > 0;
 }
