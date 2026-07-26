@@ -178,6 +178,7 @@ export class ClaudeCommandCatalog implements ProviderCommandCatalog {
       this.eventBus?.emit('vaultSkill.changed', { providerId: 'claude' });
     } else {
       await this.commandStorage.save(cmd);
+      this.notifyCommandsChanged();
     }
   }
 
@@ -187,7 +188,22 @@ export class ClaudeCommandCatalog implements ProviderCommandCatalog {
       this.eventBus?.emit('vaultSkill.changed', { providerId: 'claude' });
     } else {
       await this.commandStorage.delete(entry.id);
+      this.notifyCommandsChanged();
     }
+  }
+
+  /**
+   * Drops the warm SDK listing, THEN announces the change.
+   *
+   * Order matters and mirrors the skills seam: `listDropdownEntries` serves the
+   * SDK superset whenever `sdkCommands` is non-empty, so a consumer reacting to
+   * the event would otherwise re-read the pre-edit set and cache it for its full
+   * TTL — the newly authored command stays invisible and a deleted one keeps
+   * showing. Clearing first makes the next listing re-probe.
+   */
+  private notifyCommandsChanged(): void {
+    this.sdkCommands = [];
+    this.eventBus?.emit('providerCommand.changed', { providerId: 'claude' });
   }
 
   getDropdownConfig(): ProviderCommandDropdownConfig {

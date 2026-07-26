@@ -1,3 +1,5 @@
+import type { SpecoratorEventMap } from '../../../app/events/specoratorEvents';
+import type { EventBus } from '../../../core/events/EventBus';
 import type { Logger } from '../../../core/logging/Logger';
 import type { ProviderCommandScope } from '../../../core/providers/commands/ProviderCommandEntry';
 import type { ProviderId } from '../../../core/providers/types';
@@ -53,6 +55,8 @@ export interface ProviderCommandAggregatorOptions {
   ttlMs?: number;
   /** Clock injection for deterministic tests. Defaults to `Date.now`. */
   nowMs?: () => number;
+  /** When supplied, the aggregator subscribes to `providerCommand.changed`. */
+  eventBus?: EventBus<SpecoratorEventMap>;
   /**
    * Primes a runtime-backed catalog whose listing came back empty (Opencode
    * holds its commands only at runtime). Injected rather than imported so the

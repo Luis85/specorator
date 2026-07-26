@@ -2,7 +2,7 @@ import { Notice, type TAbstractFile } from 'obsidian';
 
 import { ProviderRegistry } from '@/core/providers/ProviderRegistry';
 import { asSettingsBag } from '@/core/types/settings';
-import { isCompactInvocation } from '@/features/chat/controllers/composerSendPhases';
+import { isCompactInvocation } from '@/features/chat/controllers/compactTurnRules';
 import type { TabData } from '@/features/chat/tabs/types';
 import { t } from '@/i18n/i18n';
 import type SpecoratorPlugin from '@/main';

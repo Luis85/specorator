@@ -77,7 +77,7 @@ function makeMockPlugin() {
     settings: { quickActionsFolder: 'Quick Actions' },
     storage: { getAdapter: jest.fn(() => ({})) },
     logger: undefined,
-    events: { emit: jest.fn() },
+    events: { emit: jest.fn(), on: jest.fn(() => () => {}) },
     getView: jest.fn(() => null),
     activateView: jest.fn().mockResolvedValue(undefined),
   };

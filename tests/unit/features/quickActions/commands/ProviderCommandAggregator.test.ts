@@ -342,3 +342,59 @@ describe('ProviderCommandAggregator', () => {
     expect(aggregator.listCachedNow()).toEqual([]);
   });
 });
+
+describe('providerCommand.changed invalidation', () => {
+  function makeBus() {
+    const handlers = new Map<string, ((p: any) => void)[]>();
+    return {
+      on: jest.fn((evt: string, fn: (p: any) => void) => {
+        handlers.set(evt, [...(handlers.get(evt) ?? []), fn]);
+        return () => handlers.set(evt, (handlers.get(evt) ?? []).filter((h) => h !== fn));
+      }),
+      emit: (evt: string, payload: any) => {
+        for (const fn of handlers.get(evt) ?? []) fn(payload);
+      },
+      count: (evt: string) => (handlers.get(evt) ?? []).length,
+    };
+  }
+
+  it('re-fetches a provider after its commands change, without waiting out the TTL', async () => {
+    // Authoring a command in provider settings is the one mutation with no other
+    // route to this cache: no file watcher, and Refresh only drops our bucket.
+    let listing = [makeEntry({ id: 'cmd-a', name: 'alpha' })];
+    const record = makeRecord({ entries: () => Promise.resolve(listing) });
+    const bus = makeBus();
+    const aggregator = new ProviderCommandAggregator(() => [record], { eventBus: bus as never });
+
+    expect((await aggregator.listAll()).map((e) => e.name)).toEqual(['alpha']);
+
+    listing = [makeEntry({ id: 'cmd-a', name: 'alpha' }), makeEntry({ id: 'cmd-b', name: 'beta' })];
+    // Without the event this would serve the cached bucket for the full TTL.
+    bus.emit('providerCommand.changed', { providerId: 'claude' });
+
+    expect((await aggregator.listAll()).map((e) => e.name)).toEqual(['alpha', 'beta']);
+  });
+
+  it('ignores a change announced for a different provider', async () => {
+    const record = makeRecord({ entries: [makeEntry({ id: 'cmd-a', name: 'alpha' })] });
+    const bus = makeBus();
+    const aggregator = new ProviderCommandAggregator(() => [record], { eventBus: bus as never });
+
+    await aggregator.listAll();
+    const callsAfterFirst = (record.commandCatalog.listDropdownEntries as jest.Mock).mock.calls.length;
+    bus.emit('providerCommand.changed', { providerId: 'codex' });
+    await aggregator.listAll();
+
+    expect((record.commandCatalog.listDropdownEntries as jest.Mock).mock.calls.length)
+      .toBe(callsAfterFirst);
+  });
+
+  it('releases the subscription on dispose', () => {
+    const bus = makeBus();
+    const aggregator = new ProviderCommandAggregator(() => [makeRecord()], { eventBus: bus as never });
+
+    expect(bus.count('providerCommand.changed')).toBe(1);
+    aggregator.dispose();
+    expect(bus.count('providerCommand.changed')).toBe(0);
+  });
+});

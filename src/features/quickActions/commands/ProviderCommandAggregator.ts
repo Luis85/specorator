@@ -33,6 +33,8 @@ const DEFAULT_TTL_MS = 60_000;
 export class ProviderCommandAggregator
   extends ProviderEntryAggregator<ProviderCommandEntry, CommandTabEntry>
   implements ProviderCommandSource {
+  private eventBusUnsubscribe: (() => void) | undefined;
+
   constructor(
     getProviderRecords: () => ProviderRecord[],
     options: ProviderCommandAggregatorOptions = {},
@@ -76,9 +78,21 @@ export class ProviderCommandAggregator
       },
       mapEntries: (raw, record) => mapCommandBucket(raw, record),
     });
+    // In-app command authoring (provider settings) has no other way to reach
+    // this cache: unlike a vault skill there is no file watcher, and the tab's
+    // Refresh only drops OUR bucket — the provider's own listing has to be
+    // stale-free first, which the emitter guarantees before it fires.
+    if (options.eventBus) {
+      this.eventBusUnsubscribe = options.eventBus.on(
+        'providerCommand.changed',
+        ({ providerId }) => this.invalidate(providerId),
+      );
+    }
   }
 
   dispose(): void {
+    this.eventBusUnsubscribe?.();
+    this.eventBusUnsubscribe = undefined;
     this.clearBuckets();
   }
 }

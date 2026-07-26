@@ -23,6 +23,7 @@ export function createProviderCommandAggregator(
 ): ProviderCommandSource {
   return new ProviderCommandAggregator(() => buildProviderRecords(plugin), {
     logger: plugin.logger,
+    eventBus: plugin.events,
     warmRuntimeCommands: (record) => warmRuntimeCommands(plugin, record),
   });
 }
