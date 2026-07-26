@@ -272,7 +272,12 @@ reaches `{ leaf, getTabManager() }`, so a second host is reuse, not a fork.
   row menus stayed unreachable until the user resized the pane. `store.toggleRail()` owns the
   flip — it clears BOTH gates when expanding and returns the preference to persist — and the
   override is layout state, never persisted, cleared by `setRailNarrow` on any threshold
-  crossing so the width-driven default re-asserts on the next resize.
+  crossing so the width-driven default re-asserts on the next resize. `setRailNarrow` also
+  takes the MEASURED width, because the boolean alone cannot tell a pane that merely stayed
+  narrow from one that kept shrinking: an override taken at ~700px otherwise survived all the
+  way down, leaving a 260px rail in a 400px pane. It is dropped once
+  `leafWidth - railWidth < MIN_TRANSCRIPT_WIDTH` — a bound that tracks the user's own rail
+  width rather than a second hardcoded breakpoint.
 - **A user-initiated DM close is NON-FORCED and resolved CROSS-LEAF.** `closeTeamChatDmTab`
   forces by default (eviction and rotation must close regardless of state), but the menu
   action passes `force: false` so `closeTabImpl` re-checks `isStreaming` INSIDE
@@ -298,7 +303,10 @@ reaches `{ leaf, getTabManager() }`, so a second host is reuse, not a fork.
   Switching inside that window made the `conversation:saved` re-projection light an unread
   badge on the DM you had just finished reading. The stamp doesn't blunt the signal: activity
   arriving after you leave still post-dates it. It never SEEDS an unstamped agent, which
-  would defeat the first-observation rule.
+  would defeat the first-observation rule, and it never stamps BELOW what is already seen or
+  projected — a synced record can carry a timestamp ahead of this device's clock (Obsidian
+  Sync from a machine with skew), and a bare `Date.now()` would then stamp the departing DM
+  behind activity the user had just read.
 - **The roster's preview/timestamp read the STORED conversation, so they refresh on
   `conversation:saved`.** The projection also fires from `onTabStreamingChanged`, which runs
   BEFORE `ConversationController.save()` commits the turn, so without that subscription the

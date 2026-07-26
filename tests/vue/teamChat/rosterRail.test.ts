@@ -451,6 +451,40 @@ describe('narrow-leaf auto-collapse (effective vs preferred state)', () => {
     expect(names(list)).toEqual(['Ada', 'Bo', 'Cy']);
   });
 
+  // Round-69: the narrow boolean can't tell a pane that merely STAYED narrow from one that
+  // kept shrinking. An override taken at ~700px used to survive all the way down, leaving a
+  // 260px rail in a 400px pane with the transcript squeezed to nothing.
+  it('drops the override when the pane keeps shrinking below a usable transcript', async () => {
+    mountRoot(makePlugin(TEAM), makeCallbacks());
+    const list = await awaitRoster();
+    const store = useTeamChatStore();
+    store.setRailNarrow(true, 700);
+    await nextTick();
+    await fireEvent.click(screen.getByLabelText(t('teamChat.railExpand')));
+    await nextTick();
+    expect(names(list)).toEqual(['Ada', 'Bo', 'Cy']); // held open at 700px
+
+    store.setRailNarrow(true, 400); // still narrow — but now far too narrow for both
+    await nextTick();
+
+    expect(names(list)).toEqual([]);
+  });
+
+  it('keeps the override while the narrow pane still fits rail + transcript', async () => {
+    mountRoot(makePlugin(TEAM), makeCallbacks());
+    const list = await awaitRoster();
+    const store = useTeamChatStore();
+    store.setRailNarrow(true, 700);
+    await nextTick();
+    await fireEvent.click(screen.getByLabelText(t('teamChat.railExpand')));
+    await nextTick();
+
+    store.setRailNarrow(true, 650); // shrank, but 650 - 260 still clears MIN_TRANSCRIPT_WIDTH
+    await nextTick();
+
+    expect(names(list)).toEqual(['Ada', 'Bo', 'Cy']);
+  });
+
   // The override is layout state, not a preference: a resize must hand control back to the
   // width, else a leaf that goes wide and narrow again would never auto-collapse.
   it('drops the manual override once the leaf crosses the narrow threshold again', async () => {

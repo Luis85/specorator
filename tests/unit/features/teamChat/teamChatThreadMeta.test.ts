@@ -260,6 +260,26 @@ describe('updateSeenBaseline + deriveUnreadAgents', () => {
     }
   });
 
+  // A synced record can carry a timestamp AHEAD of this device's clock (Obsidian Sync from a
+  // machine with skew). A bare `Date.now()` on departure would stamp the DM *behind* activity
+  // the user had just read, lighting the badge on the very next derivation.
+  it('never stamps a departing DM behind its own projected activity (clock skew)', () => {
+    const future = 9_999_999;
+    const seen = new Map<string, number>([['roster:a', future]]);
+    const tracker = { previousActiveAgentId: 'roster:a' };
+    const now = jest.spyOn(Date, 'now').mockReturnValue(5_000);
+
+    try {
+      const metas = { 'roster:a': meta(future) };
+      updateSeenBaseline(metas, seen, 'roster:b', tracker);
+
+      expect(seen.get('roster:a')).toBe(future);
+      expect(deriveUnreadAgents(metas, seen, 'roster:b')).toEqual({});
+    } finally {
+      now.mockRestore();
+    }
+  });
+
   // Seeding on departure would defeat the first-observation rule: an agent this leaf has
   // never projected must stay unseeded so its first real projection establishes the baseline.
   it('does not seed an unseeded agent on switch-away', () => {

@@ -87,7 +87,9 @@ onMounted(() => {
     // workspace leaf, a background tab, jsdom) reports 0, and treating that as "narrow"
     // would collapse the rail on every restore and un-hide. Zero means "no measurement
     // yet", so hold the current state until a real one arrives.
-    store.setRailNarrow(width > 0 && width < NARROW_LEAF_PX);
+    // The measured width goes along too: the boolean alone can't tell a pane that merely
+    // STAYED narrow from one that kept shrinking under a manual expand-override.
+    store.setRailNarrow(width > 0 && width < NARROW_LEAF_PX, width);
   });
   observer.observe(el);
 });

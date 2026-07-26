@@ -183,7 +183,15 @@ export function updateSeenBaseline(
   if (tracker) tracker.previousActiveAgentId = activeAgentId;
   // Only for an already-seeded agent: seeding one here would defeat the first-observation rule.
   if (departed !== null && departed !== activeAgentId && lastSeenByAgent.has(departed)) {
-    lastSeenByAgent.set(departed, Date.now());
+    // Never BELOW what is already seen or projected. A synced record can carry a timestamp
+    // ahead of this device's clock (Obsidian Sync from a machine with skew), and a bare
+    // `Date.now()` would then stamp the departing DM *behind* activity the user had just
+    // read — lighting the badge the very next derivation, the bug this rule exists to stop.
+    lastSeenByAgent.set(departed, Math.max(
+      Date.now(),
+      metas[departed]?.updatedAt ?? 0,
+      lastSeenByAgent.get(departed) ?? 0,
+    ));
   }
   for (const [agentId, meta] of Object.entries(metas)) {
     if (agentId === activeAgentId || !lastSeenByAgent.has(agentId)) {

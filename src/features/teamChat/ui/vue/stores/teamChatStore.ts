@@ -14,6 +14,10 @@ export const MAX_RAIL_WIDTH = 420;
 export const DEFAULT_RAIL_WIDTH = 260;
 /** Icon-rail track: a 32px avatar plus the row's padding, and nothing else. */
 export const COLLAPSED_RAIL_WIDTH = 56;
+/** Narrowest transcript an expanded rail may leave beside itself. Below this the manual
+ *  narrow-override is dropped: a pane that keeps shrinking past the point where the chat is
+ *  still readable has to get the icon rail back, whatever the user asked for at a wider size. */
+export const MIN_TRANSCRIPT_WIDTH = 320;
 
 /**
  * Reactive read-model for one Team Chat leaf: the roster projection, the
@@ -104,10 +108,19 @@ export const useTeamChatStore = defineStore('team-chat', () => {
     activeDmIsEmpty.value = next;
   }
 
-  function setRailNarrow(next: boolean): void {
-    if (railNarrow.value === next) return;
-    railNarrow.value = next;
-    railNarrowOverride.value = false; // a resize re-asserts the width-driven default
+  function setRailNarrow(next: boolean, leafWidth = 0): void {
+    if (railNarrow.value !== next) {
+      railNarrow.value = next;
+      railNarrowOverride.value = false; // a threshold crossing re-asserts the width-driven default
+      return;
+    }
+    // Already narrow and staying narrow, but the pane keeps SHRINKING. The boolean can't see
+    // that, so an override taken at 700px used to survive all the way down — a 420px rail in a
+    // 460px pane, with the transcript squeezed to nothing. Drop it once the chat stops fitting.
+    if (next && railNarrowOverride.value && leafWidth > 0
+      && leafWidth - railWidth.value < MIN_TRANSCRIPT_WIDTH) {
+      railNarrowOverride.value = false;
+    }
   }
 
   function setRailCollapsed(next: boolean): void {
