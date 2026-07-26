@@ -438,3 +438,67 @@ describe('relative timestamps advance with the clock', () => {
     }
   });
 });
+
+describe('roving focus survives reordering', () => {
+  // The default `recent` order re-sorts whenever a thread saves — which the
+  // `conversation:saved` re-projection makes routine. A numeric focus index would then
+  // re-point at whichever agent slid into that slot: the focused row loses `tabindex="0"`
+  // and Enter opens the wrong DM.
+  it('keeps focus on the same AGENT when the sort order changes', async () => {
+    const callbacks = makeCallbacks();
+    mountRoot(makePlugin(TEAM), callbacks);
+    const list = await awaitRoster();
+    const store = useTeamChatStore();
+    // Order starts alphabetical (no threads): Ada, Bo, Cy. Focus Bo.
+    await fireEvent.keyDown(list, { key: 'ArrowDown' });
+    expect((await rosterRow('Bo')).getAttribute('tabindex')).toBe('0');
+
+    // A save re-sorts the rail so Cy leads and Bo moves.
+    store.setThreads({ 'roster:c': thread(900, 'newest'), 'roster:b': thread(100, 'older') });
+    await nextTick();
+    expect(names(list)).toEqual(['Cy', 'Bo', 'Ada']);
+
+    // Focus is still on Bo — not on whatever now occupies index 1.
+    expect((await rosterRow('Bo')).getAttribute('tabindex')).toBe('0');
+    await fireEvent.keyDown(list, { key: 'Enter' });
+    expect(callbacks.onSelectAgent).toHaveBeenCalledWith('roster:b');
+  });
+
+  // A focused agent that disappears must not leave the list untabbable.
+  it('falls back to the first row when the focused agent is filtered out', async () => {
+    const big = [...TEAM, ...Array.from({ length: 4 }, (_, i) => agent(`roster:${i}`, `Filler ${i}`))];
+    mountRoot(makePlugin(big), makeCallbacks());
+    const list = await awaitRoster();
+    await fireEvent.keyDown(list, { key: 'End' });
+
+    await fireEvent.update(screen.getByPlaceholderText(t('teamChat.rosterSearchPlaceholder')), 'Ada');
+
+    const tabbable = list.querySelectorAll('[role="option"][tabindex="0"]');
+    expect(tabbable).toHaveLength(1);
+  });
+});
+
+describe('row-menu key guard is realm-neutral', () => {
+  // An Obsidian POPOUT leaf builds its nodes from another window's constructors, so an
+  // `instanceof Element` guard would fail there and let the menu button's Enter fall
+  // through to the listbox — opening the DM instead of the menu.
+  it('ignores menu-button keys from a foreign realm (no instanceof dependency)', async () => {
+    const callbacks = makeCallbacks();
+    mountRoot(makePlugin(TEAM), callbacks);
+    const list = await awaitRoster();
+    const button = (await rosterRow('Ada')).querySelector('.specorator-team-roster-row-menu');
+
+    // Simulate a cross-realm target: same duck-typed shape, but not `instanceof Element`
+    // in this realm.
+    const foreign = {
+      nodeType: 1,
+      closest: (sel: string) => (sel.includes('button') ? button : null),
+    };
+    const event = new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true });
+    Object.defineProperty(event, 'target', { value: foreign });
+    list.dispatchEvent(event);
+
+    expect(callbacks.onSelectAgent).not.toHaveBeenCalled();
+    expect(event.defaultPrevented).toBe(false);
+  });
+});

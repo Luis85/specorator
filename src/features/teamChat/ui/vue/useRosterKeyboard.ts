@@ -1,4 +1,4 @@
-import { type Ref, ref, watch } from 'vue';
+import { computed, type ComputedRef, ref } from 'vue';
 
 /**
  * Roving-tabindex keyboard navigation for the roster listbox (design §1.4).
@@ -10,45 +10,52 @@ import { type Ref, ref, watch } from 'vue';
  *    20-agent roster must not open 20 DMs — each open resolves a thread, spawns a
  *    runtime, and consumes an LRU slot, so select-follows-focus would be actively
  *    destructive here (unlike in a plain filter list).
- *  - **The focused index survives list changes.** Rows re-sort as previews arrive and
- *    re-filter as the user types, so the index is clamped against the live length
- *    rather than assumed valid.
+ *  - **Focus follows the AGENT, not the slot.** The rail's default `recent` order re-sorts
+ *    whenever a thread saves, so a numeric index silently re-points at a different agent:
+ *    the focused row would lose `tabindex="0"` and Enter would open whichever agent slid
+ *    into that position. Tracking the id and deriving the index makes reordering,
+ *    filtering, and deletion all fall out for free.
  */
 export interface RosterKeyboard {
-  /** Index of the row carrying `tabindex="0"`; every other row carries `-1`. */
-  focusedIndex: Ref<number>;
+  /** Index of the row carrying `tabindex="0"`; every other row carries `-1`. Derived from
+   *  the focused id, so it re-points at the same agent across a re-sort. */
+  focusedIndex: ComputedRef<number>;
   /** Keydown handler for the listbox container. */
   onKeydown: (event: KeyboardEvent) => void;
-  /** Point the roving focus at a row (e.g. on click/mousedown) without opening it. */
-  focusRow: (index: number) => void;
+  /** Point the roving focus at an agent (e.g. on click) without opening it. */
+  focusRow: (id: string) => void;
 }
 
 export function useRosterKeyboard(
-  count: () => number,
-  onActivate: (index: number) => void,
+  /** Row ids in render order. Re-read on every access, so a re-sort is picked up live. */
+  ids: () => readonly string[],
+  onActivate: (id: string) => void,
   /** DOM focus mover, so the composable stays testable without a real listbox. */
   focusRowElement: (index: number) => void,
 ): RosterKeyboard {
-  const focusedIndex = ref(0);
+  const focusedId = ref<string | null>(null);
 
-  // A shrinking or re-filtered list must never leave the roving index past the end —
-  // that would make the list untabbable (no row would carry tabindex="0").
-  watch(count, (length) => {
-    if (focusedIndex.value > length - 1) focusedIndex.value = Math.max(0, length - 1);
+  // Falls back to the first row whenever the focused agent is absent — filtered out,
+  // deleted, or never set. That keeps exactly one row tabbable at all times; an
+  // out-of-range index would leave the whole list unreachable by Tab.
+  const focusedIndex = computed(() => {
+    const index = focusedId.value === null ? -1 : ids().indexOf(focusedId.value);
+    return index === -1 ? 0 : index;
   });
 
   function move(next: number): void {
-    const length = count();
-    if (length === 0) return;
+    const list = ids();
+    if (list.length === 0) return;
     // Clamp rather than wrap: wrapping from the last row to the first on ArrowDown
     // reads as a jump in a list this short, and Home/End already cover the ends.
-    focusedIndex.value = Math.min(length - 1, Math.max(0, next));
-    focusRowElement(focusedIndex.value);
+    const target = Math.min(list.length - 1, Math.max(0, next));
+    focusedId.value = list[target];
+    focusRowElement(target);
   }
 
   function onKeydown(event: KeyboardEvent): void {
-    const length = count();
-    if (length === 0) return;
+    const list = ids();
+    if (list.length === 0) return;
     // Keystrokes that originated in an interactive descendant (the row's `⋯` menu button)
     // belong to that control, not the list. Without this, Enter/Space on the focused menu
     // button bubbles here, gets preventDefault'd, and opens the DM instead of the menu —
@@ -71,28 +78,42 @@ export function useRosterKeyboard(
         break;
       case 'End':
         event.preventDefault();
-        move(length - 1);
+        move(list.length - 1);
         break;
       case 'Enter':
       case ' ':
         event.preventDefault();
-        onActivate(focusedIndex.value);
+        // Always in range: the empty list returned above, and `focusedIndex` falls back
+        // to 0 whenever the focused id is absent.
+        onActivate(list[focusedIndex.value]);
         break;
       default:
         break; // every other key (including typing into the search box) passes through
     }
   }
 
-  /** True when the event started on a focusable control INSIDE a row, rather than on the
-   *  row itself. `closest` walks up from the target, and a row is a `div[role=option]`, so
-   *  only a real nested control matches. */
-  function isInteractiveDescendant(target: EventTarget | null): boolean {
-    return target instanceof Element && target.closest('button, a, input, select, textarea') !== null;
-  }
-
-  function focusRow(index: number): void {
-    if (index >= 0 && index < count()) focusedIndex.value = index;
+  function focusRow(id: string): void {
+    focusedId.value = id;
   }
 
   return { focusedIndex, onKeydown, focusRow };
+}
+
+/**
+ * True when the event started on a focusable control INSIDE a row, rather than on the row
+ * itself. `closest` walks up from the target, and a row is a `div[role=option]`, so only a
+ * real nested control matches.
+ *
+ * Checks `nodeType` rather than `instanceof Element`: an Obsidian POPOUT leaf lives in
+ * another window, so its nodes are built from that realm's constructors and would fail
+ * `instanceof` against this one — silently letting the menu button's Enter/Space fall
+ * through to the listbox and open the DM. The `closest` typeof guard covers the same
+ * cross-realm concern for the method itself.
+ */
+function isInteractiveDescendant(target: EventTarget | null): boolean {
+  const node = target as Node | null;
+  if (!node || node.nodeType !== 1 /* Node.ELEMENT_NODE */) return false;
+  const element = node as Element;
+  return typeof element.closest === 'function'
+    && element.closest('button, a, input, select, textarea') !== null;
 }

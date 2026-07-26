@@ -75,12 +75,12 @@ function focusRowElement(index: number): void {
   el?.focus();
 }
 
+// Keyed by agent id, not row index: the default `recent` order re-sorts whenever a
+// thread saves, and an index would then silently re-point at whichever agent slid into
+// that slot (see `useRosterKeyboard`).
 const keyboard = useRosterKeyboard(
-  () => rows.value.length,
-  (index) => {
-    const agent = rows.value[index];
-    if (agent) selectAgent(agent.id);
-  },
+  () => rows.value.map((agent) => agent.id),
+  (agentId) => selectAgent(agentId),
   focusRowElement,
 );
 
@@ -88,8 +88,7 @@ const keyboard = useRosterKeyboard(
 // elsewhere (a cross-leaf reveal, a restore, a rotation) so tabbing into the rail
 // lands on the DM the pane is showing rather than wherever focus was left.
 watch(() => teamChatStore.selectedAgentId, (agentId) => {
-  const index = rows.value.findIndex((agent) => agent.id === agentId);
-  if (index >= 0) keyboard.focusRow(index);
+  if (agentId) keyboard.focusRow(agentId);
 });
 
 // --- Rail collapse (design §1.6) ----------------------------------------------------
@@ -217,7 +216,7 @@ function fail(error: unknown): void {
         :selected="teamChatStore.selectedAgentId === agent.id"
         :tabbable="keyboard.focusedIndex.value === index"
         :collapsed="teamChatStore.railIsCollapsed"
-        @select="keyboard.focusRow(index); selectAgent(agent.id)"
+        @select="keyboard.focusRow(agent.id); selectAgent(agent.id)"
         @menu="openRowMenu(agent, $event)"
       />
     </div>

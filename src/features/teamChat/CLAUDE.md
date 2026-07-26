@@ -236,7 +236,10 @@ reaches `{ leaf, getTabManager() }`, so a second host is reuse, not a fork.
   agent-specific starters card is the empty state.
 - **The rail is a listbox, not a row of buttons.** One tab stop with a roving tabindex;
   arrows move FOCUS and Enter/Space commits, because each open resolves a thread, spawns a
-  runtime, and consumes an LRU slot — select-follows-focus would be destructive here.
+  runtime, and consumes an LRU slot — select-follows-focus would be destructive here. Focus
+  is tracked by AGENT ID and the index derived, because the default `recent` order re-sorts
+  on every `conversation:saved`: an index would silently re-point at whichever agent slid
+  into that slot, so the focused row lost `tabindex="0"` and Enter opened the wrong DM.
 - **A leaf reporting width 0 must not auto-collapse the rail.** The responsive collapse
   treats `0` as "not measured yet" (a deferred/hidden leaf, or jsdom), so a restore or
   un-hide can't silently collapse the rail against the user's stored preference.
@@ -262,7 +265,9 @@ reaches `{ leaf, getTabManager() }`, so a second host is reuse, not a fork.
 - **Row keystrokes belong to the focused control.** The listbox handler ignores keydowns
   originating in an interactive descendant; without that, Enter/Space on a row's `⋯` button
   bubbled up, got `preventDefault`ed, and opened the DM — making the keyboard-reachable action
-  menu unreachable by keyboard.
+  menu unreachable by keyboard. The check is `nodeType`-based, NOT `instanceof Element`: a
+  popout leaf's nodes come from another realm's constructors and would fail `instanceof`,
+  silently reinstating the bug in exactly the window this codebase already guards elsewhere.
 - **Relative timestamps ride a shared, ref-counted clock** (`useRelativeClock`). `Date.now()`
   inside a computed is not reactive, so a row labelled `now` would stay `now` indefinitely;
   one module-level interval serves every mounted row and stops with the last subscriber.
