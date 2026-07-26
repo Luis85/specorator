@@ -317,6 +317,70 @@ describe('ProviderEntryTabRenderer — Skills tab config', () => {
     });
   });
 
+  describe('superseded refreshes', () => {
+    it('ignores a retired pass that resolves after a newer one has painted', async () => {
+      // Refresh clicked mid-fetch: the aggregator's generation guard stops the
+      // retired fetch COMMITTING to the cache, but its promise still resolves
+      // and still delivers rows. Without the renderer's request token the older
+      // pass would overwrite the freshly painted list with stale commands.
+      const source = makeSource({ defer: true });
+      const renderer = makeSkillsRenderer(source);
+
+      const host = makeHost();
+      await renderer.render(host);
+      const firstPass = source._streamingCallbacks[0];
+
+      const refresh = host.querySelector(
+        '.specorator-quick-actions-search-refresh',
+      ) as HTMLButtonElement;
+      refresh.click();
+      const secondPass = source._streamingCallbacks[1];
+
+      secondPass('claude', [makeEntry({ id: 'claude:fresh', name: 'fresh' })]);
+      await flush();
+      firstPass('claude', [makeEntry({ id: 'claude:stale', name: 'stale' })]);
+      await flush();
+
+      const names = Array.from(
+        host.querySelectorAll('.specorator-quick-actions-skill-row:not(.is-skeleton) strong'),
+      ).map((el) => el.textContent);
+      expect(names).toEqual(['fresh']);
+    });
+
+    it('lets the newest pass keep patching after an older one is retired', async () => {
+      // The token must retire only OLDER passes — the current one still streams
+      // each provider in as it settles.
+      const source = makeSource({ defer: true });
+      const renderer = makeSkillsRenderer(source);
+
+      const host = makeHost();
+      await renderer.render(host);
+
+      const refresh = host.querySelector(
+        '.specorator-quick-actions-search-refresh',
+      ) as HTMLButtonElement;
+      refresh.click();
+      const secondPass = source._streamingCallbacks[1];
+
+      secondPass('claude', [makeEntry({ id: 'claude:a', name: 'alpha' })]);
+      secondPass('codex', [
+        makeEntry({
+          id: 'codex:b',
+          providerId: 'codex',
+          providerDisplayName: 'Codex',
+          insertPrefix: '$',
+          name: 'beta',
+        }),
+      ]);
+      await flush();
+
+      const names = Array.from(
+        host.querySelectorAll('.specorator-quick-actions-skill-row:not(.is-skeleton) strong'),
+      ).map((el) => el.textContent);
+      expect(names).toEqual(['alpha', 'beta']);
+    });
+  });
+
   describe('search filter', () => {
     it('filters displayed rows by name with case-insensitive substring match', async () => {
       const cached = [

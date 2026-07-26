@@ -80,6 +80,16 @@ export class ProviderEntryTabRenderer<T extends ProviderEntryRow> {
    * a provider that genuinely has no entries showed a skeleton forever.
    */
   private loaded = false;
+  /**
+   * Monotonic per-refresh token. Only the newest refresh may patch rows or flip
+   * `loaded`. The aggregator's generation guard stops a retired fetch from
+   * COMMITTING to the cache, but the retired promise still resolves and still
+   * delivers its rows — so a Refresh clicked mid-fetch could see the newer pass
+   * paint first and the older one overwrite it with stale commands. Token-gating
+   * here also covers a re-`render()` (tab switch away and back), where a late
+   * callback from the previous pass would otherwise patch into the new list.
+   */
+  private refreshToken = 0;
 
   constructor(private config: ProviderEntryTabConfig<T>) {}
 
@@ -101,9 +111,12 @@ export class ProviderEntryTabRenderer<T extends ProviderEntryRow> {
   }
 
   private async refresh(): Promise<void> {
+    const token = ++this.refreshToken;
     await this.config.source.listAllStreaming((providerId, entries) => {
+      if (token !== this.refreshToken) return;
       this.patchProvider(providerId, entries);
     });
+    if (token !== this.refreshToken) return;
     this.loaded = true;
     this.renderList();
   }
