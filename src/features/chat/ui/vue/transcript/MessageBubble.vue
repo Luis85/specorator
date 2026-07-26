@@ -13,6 +13,7 @@ import MessageActionBar from './cards/MessageActionBar.vue';
 import MessageContextCard from './cards/MessageContextCard.vue';
 import MessageIdentity from './cards/MessageIdentity.vue';
 import MessageImages from './cards/MessageImages.vue';
+import { useTranscriptStore } from './stores/transcriptStore';
 import { APP_KEY, CALLBACKS_KEY } from './transcriptKeys';
 import { hasVisibleBlock, hasVisibleText } from './visibleContentHelpers';
 
@@ -53,13 +54,16 @@ const callbacks = inject(CALLBACKS_KEY, undefined);
 const providerId = computed(() => callbacks?.getProviderId() ?? DEFAULT_CHAT_PROVIDER_ID);
 
 /**
- * The persona to attribute this message to, or null. Non-null only when ALL of: the
- * surface supplies an identity (`getMessageIdentity` is absent everywhere but Team Chat
- * DMs), this message opens an assistant run, and the bound agent still exists (the
- * callback returns null once it leaves the roster).
+ * The persona to attribute this message to, or null. Non-null only when this message opens
+ * an assistant run AND the surface projected an identity (null everywhere but a Team Chat
+ * DM whose bound agent still exists).
+ *
+ * Read from the STORE, not a callback: the persona is resolved asynchronously and pushed
+ * through the snapshot, so a computed over an untracked callback would cache its first
+ * value and leave restored transcripts anonymous and renamed agents stale.
  */
-const identity = computed(() =>
-  (props.startsRun ? callbacks?.getMessageIdentity?.() ?? null : null));
+const transcriptStore = useTranscriptStore();
+const identity = computed(() => (props.startsRun ? transcriptStore.messageIdentity : null));
 
 function isToolVisible(toolId: string): boolean {
   const toolCall = props.msg.toolCalls?.find((tc) => tc.id === toolId);

@@ -7,6 +7,7 @@ import type { TeamChatPresence } from '../../../teamChatPresence';
 import type { TeamChatThreadMeta } from '../../../teamChatThreadMeta';
 import { formatAbsoluteActivity, formatRelativeActivity, toIsoTimestamp } from '../relativeTime';
 import TeamRosterAvatar from '../TeamRosterAvatar.vue';
+import { useRelativeClock } from '../useRelativeClock';
 import PresenceDot from './PresenceDot.vue';
 
 /**
@@ -48,7 +49,11 @@ const emit = defineEmits<{
 const subtitle = computed(() => props.thread?.preview || props.agent.description || '—');
 
 const timestamp = computed(() => props.thread?.updatedAt ?? 0);
-const relativeTime = computed(() => formatRelativeActivity(timestamp.value));
+// Depends on the shared clock, not a bare `Date.now()`: the label has to ADVANCE as time
+// passes, and a plain read inside a computed is not reactive — a row would sit on `now`
+// indefinitely until some unrelated snapshot re-rendered it.
+const clock = useRelativeClock();
+const relativeTime = computed(() => formatRelativeActivity(timestamp.value, clock.value));
 const absoluteTime = computed(() => formatAbsoluteActivity(timestamp.value));
 
 /**

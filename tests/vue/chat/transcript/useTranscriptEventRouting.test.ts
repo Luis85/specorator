@@ -25,7 +25,7 @@ describe('useTranscriptEventRouting', () => {
       projectionRevision: 1,
       greeting: 'Good morning',
       loadingText: null,
-      hydrationError: null,
+      hydrationError: null, messageIdentity: null,
     });
     expect(store.messages).toHaveLength(1);
     expect(store.greeting).toBe('Good morning');

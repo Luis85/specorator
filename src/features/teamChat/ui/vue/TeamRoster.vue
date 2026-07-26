@@ -94,12 +94,14 @@ watch(() => teamChatStore.selectedAgentId, (agentId) => {
 
 // --- Rail collapse (design §1.6) ----------------------------------------------------
 const collapseLabel = computed(() =>
-  t(teamChatStore.railCollapsed ? 'teamChat.railExpand' : 'teamChat.railCollapse'));
+  t(teamChatStore.railIsCollapsed ? 'teamChat.railExpand' : 'teamChat.railCollapse'));
 
 // The store holds the live value (the root reads it for the grid template); the host
 // persists it per leaf. Width is passed through untouched so expanding restores the
 // width the user dragged to rather than snapping back to the default.
 function toggleCollapse(): void {
+  // Flips the PREFERENCE, not the effective value: while a narrow leaf forces the icon
+  // rail, expanding is a no-op until the pane grows — but the choice is still recorded.
   const collapsed = !teamChatStore.railCollapsed;
   teamChatStore.setRailCollapsed(collapsed);
   callbacks?.onRailGeometryChange({ collapsed, width: teamChatStore.railWidth });
@@ -156,29 +158,29 @@ function fail(error: unknown): void {
 <template>
   <div
     class="specorator-team-roster"
-    :class="{ 'is-collapsed': teamChatStore.railCollapsed }"
+    :class="{ 'is-collapsed': teamChatStore.railIsCollapsed }"
   >
     <!-- Header holds the collapse toggle in BOTH states; when collapsed the title drops
          and the toggle is all that remains, so the rail is never a one-way door. -->
     <div class="specorator-team-roster-header">
       <span
-        v-if="!teamChatStore.railCollapsed"
+        v-if="!teamChatStore.railIsCollapsed"
         class="specorator-team-roster-title"
       >{{ t('teamChat.viewTitle') }}</span>
       <button
         type="button"
         class="specorator-team-roster-collapse"
         :aria-label="collapseLabel"
-        :aria-expanded="!teamChatStore.railCollapsed"
+        :aria-expanded="!teamChatStore.railIsCollapsed"
         :title="collapseLabel"
         @click="toggleCollapse()"
       >
-        {{ teamChatStore.railCollapsed ? '»' : '«' }}
+        {{ teamChatStore.railIsCollapsed ? '»' : '«' }}
       </button>
     </div>
 
     <TeamRosterToolbar
-      v-if="!teamChatStore.railCollapsed && teamChatStore.agents.length > 0"
+      v-if="!teamChatStore.railIsCollapsed && teamChatStore.agents.length > 0"
       v-model:query="list.query.value"
       v-model:sort="sort"
       :show-search="showSearch"
@@ -189,7 +191,7 @@ function fail(error: unknown): void {
     <TeamRosterEmpty
       v-if="rows.length === 0"
       :is-roster-empty="teamChatStore.agents.length === 0"
-      :collapsed="teamChatStore.railCollapsed"
+      :collapsed="teamChatStore.railIsCollapsed"
       @browse="browseMarketplace()"
     />
     <!-- listbox/option, not button rows: "pick one of N, the pane shows the pick" is
@@ -212,7 +214,7 @@ function fail(error: unknown): void {
         :unread="Boolean(teamChatStore.unread[agent.id])"
         :selected="teamChatStore.selectedAgentId === agent.id"
         :tabbable="keyboard.focusedIndex.value === index"
-        :collapsed="teamChatStore.railCollapsed"
+        :collapsed="teamChatStore.railIsCollapsed"
         @select="keyboard.focusRow(index); selectAgent(agent.id)"
         @menu="openRowMenu(agent, $event)"
       />

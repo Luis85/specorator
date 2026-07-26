@@ -343,17 +343,6 @@ function buildTranscriptCallbacks(
       ?? (tab.conversationId
         ? plugin.getConversationSync(tab.conversationId)?.workOrderPath ?? null
         : null),
-    // Supplied on every tab but self-gating, rather than omitted for non-DM tabs: the
-    // callbacks are built ONCE at tab construction while `tab.conversationId` changes
-    // over the tab's life (history switch, rotation, rebind), so a build-time decision
-    // could attribute a later conversation wrongly. Returns null unless the tab is
-    // CURRENTLY a team-chat DM and its persona seed matches the CURRENT conversation —
-    // so a rotation invalidates the seed rather than mis-attributing the new thread.
-    getMessageIdentity: () => {
-      if (!isTeamChatSurface()) return null;
-      const seed = tab.boundAgentPersona;
-      return seed && seed.conversationId === tab.conversationId ? seed.persona : null;
-    },
   };
 }
 

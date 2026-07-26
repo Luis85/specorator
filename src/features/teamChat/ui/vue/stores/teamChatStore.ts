@@ -1,5 +1,5 @@
 import { defineStore } from 'pinia';
-import { shallowRef } from 'vue';
+import { computed, shallowRef } from 'vue';
 
 import type { RosterAgent } from '../../../../agents/roster/rosterTypes';
 import type { ComposerEditedFile } from '../../../../chat/ui/vue/composer/stores/composerStore';
@@ -49,6 +49,17 @@ export const useTeamChatStore = defineStore('team-chat', () => {
    *  shared reactive home. The view persists them (per leaf) off the same values. */
   const railCollapsed = shallowRef(false);
   const railWidth = shallowRef(DEFAULT_RAIL_WIDTH);
+  /** Layout state, NOT a preference: true while the leaf is too narrow for the full rail.
+   *  Kept separate from `railCollapsed` so widening restores exactly what the user chose,
+   *  and deliberately NOT exposed — consumers read the derived `railIsCollapsed`, so no
+   *  component can accidentally branch on the preference alone (which is the bug this
+   *  derivation exists to prevent). Written only through `setRailNarrow`. */
+  const railNarrow = shallowRef(false);
+  /** The EFFECTIVE collapsed state — the one every consumer must render against. Derived in
+   *  the store rather than per-component because the root sizes the grid track from it while
+   *  the roster decides what to render; when those two disagreed, a narrow leaf rendered
+   *  expanded rows clipped inside a 56px track. */
+  const railIsCollapsed = computed(() => railCollapsed.value || railNarrow.value);
 
   function setAgents(next: RosterAgent[]): void {
     agents.value = next;
@@ -86,6 +97,10 @@ export const useTeamChatStore = defineStore('team-chat', () => {
     activeDmIsEmpty.value = next;
   }
 
+  function setRailNarrow(next: boolean): void {
+    railNarrow.value = next;
+  }
+
   function setRailCollapsed(next: boolean): void {
     railCollapsed.value = next;
   }
@@ -107,6 +122,7 @@ export const useTeamChatStore = defineStore('team-chat', () => {
     unread,
     activeDmIsEmpty,
     railCollapsed,
+    railIsCollapsed,
     railWidth,
     setAgents,
     setSelected,
@@ -118,6 +134,7 @@ export const useTeamChatStore = defineStore('team-chat', () => {
     setUnread,
     setActiveDmIsEmpty,
     setRailCollapsed,
+    setRailNarrow,
     setRailWidth,
   };
 });

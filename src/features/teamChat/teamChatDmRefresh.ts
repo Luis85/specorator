@@ -118,18 +118,18 @@ export function projectActiveDmProviderId(plugin: SpecoratorPlugin, activeTab: T
 }
 
 /**
- * Resolves each DM tab's bound-agent persona into `tab.boundAgentPersona`, then re-projects
- * that tab's transcript so the attribution header repaints.
+ * Resolves each DM tab's bound-agent persona and PUSHES it into that tab's transcript
+ * projection, which re-emits so the attribution headers repaint.
  *
- * The indirection exists because the roster store is ASYNC while the transcript reads the
- * identity from a render computed — so it is resolved here, off-render, into a
- * conversation-keyed seed (mirroring `SpecoratorView.refreshBoundAgentChip`). Seeding by
- * conversation id is what makes a provider rotation safe: the new conversation doesn't match
- * the old seed, so the header disappears until this re-runs rather than attributing the fresh
- * thread to a stale persona.
+ * Pushed rather than pulled because the roster store is ASYNC while the transcript reads the
+ * identity from a render computed: a callback read there is untracked and would cache its
+ * first (usually null) value, leaving a restored transcript anonymous and a renamed agent
+ * stale. Mirrors `SpecoratorView.refreshBoundAgentChip`'s resolve-then-project shape.
  *
- * A deleted agent clears the seed (null), which is deliberate — a read-only DM whose agent
- * left the roster renders anonymously rather than over a name that no longer exists.
+ * The projection keys the persona by conversation id, so a provider-change rotation
+ * invalidates it rather than attributing the fresh thread to the previous agent. A deleted
+ * agent pushes null — a read-only DM renders anonymously rather than over a name that no
+ * longer exists.
  */
 export async function refreshDmAgentPersonas(
   plugin: SpecoratorPlugin,
@@ -139,19 +139,16 @@ export async function refreshDmAgentPersonas(
     const conversationId = tab.conversationId;
     const agentId = conversationId ? teamChatDmBoundAgentId(plugin, conversationId) : null;
     if (!agentId) {
-      tab.boundAgentPersona = null;
+      tab.transcript?.setMessageIdentity(null, conversationId);
       continue;
     }
     // Sequential, not Promise.all: the hot-DM budget caps this at a handful of tabs, and
     // the roster store's own read cache makes the repeated lookups cheap.
     const agent = await plugin.agentRosterStore?.get(agentId);
     // Re-check identity after the await — a rotation or close during the lookup must not
-    // write a seed for a conversation this tab no longer holds.
+    // publish a persona for a conversation this tab no longer holds.
     if (tab.conversationId !== conversationId) continue;
-    tab.boundAgentPersona = agent
-      ? { conversationId, persona: rosterAgentToPersona(agent) }
-      : null;
-    tab.transcript?.emit();
+    tab.transcript?.setMessageIdentity(agent ? rosterAgentToPersona(agent) : null, conversationId);
   }
 }
 

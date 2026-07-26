@@ -49,6 +49,11 @@ export function useRosterKeyboard(
   function onKeydown(event: KeyboardEvent): void {
     const length = count();
     if (length === 0) return;
+    // Keystrokes that originated in an interactive descendant (the row's `⋯` menu button)
+    // belong to that control, not the list. Without this, Enter/Space on the focused menu
+    // button bubbles here, gets preventDefault'd, and opens the DM instead of the menu —
+    // which would make the "keyboard-reachable" action menu unreachable by keyboard.
+    if (isInteractiveDescendant(event.target)) return;
     switch (event.key) {
       case 'ArrowDown':
         // preventDefault on every handled key: otherwise the arrow scrolls the pane
@@ -76,6 +81,13 @@ export function useRosterKeyboard(
       default:
         break; // every other key (including typing into the search box) passes through
     }
+  }
+
+  /** True when the event started on a focusable control INSIDE a row, rather than on the
+   *  row itself. `closest` walks up from the target, and a row is a `div[role=option]`, so
+   *  only a real nested control matches. */
+  function isInteractiveDescendant(target: EventTarget | null): boolean {
+    return target instanceof Element && target.closest('button, a, input, select, textarea') !== null;
   }
 
   function focusRow(index: number): void {

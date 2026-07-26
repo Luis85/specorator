@@ -216,25 +216,43 @@ reaches `{ leaf, getTabManager() }`, so a second host is reuse, not a fork.
   ACTIVE agent every frame, so watching a DM stream and then switching away never marks it
   unread). It resets on close: losing a badge across a restart beats persisting a wrong one,
   and it needs no new file. A dot, never a count — a count would imply per-message tracking.
-- **Transcript attribution is surface-gated and seeded off-render.** `TranscriptCallbacks`
-  gained an OPTIONAL `getMessageIdentity`; `buildTranscriptCallbacks` supplies a self-gating
-  implementation (checked live, because a tab's conversation changes over its life) that
-  returns null unless the tab is currently a team-chat DM. The roster store is async while
-  the transcript reads identity from a render computed, so the persona is resolved into a
-  CONVERSATION-KEYED seed (`TabData.boundAgentPersona`, same auto-invalidation contract as
-  `displayModel`) by `refreshDmAgentPersonas`, driven off `projectSelectedAgentFromActiveTab`
-  — the one event that means "a tab's conversation binding changed". A rotation invalidates
-  the seed rather than mis-attributing the new thread; a deleted agent clears it (the DM
-  renders anonymously rather than over a name that no longer exists). Consecutive assistant
-  messages group under one header, computed against the FULL message list so a "load earlier"
-  can't grow a spurious header at the window edge. Non-team-chat surfaces are byte-identical
-  — locked by `tests/vue/chat/transcript/messageIdentity.test.ts`'s absent-callback case.
+- **Transcript attribution is PUSHED through the projection, never pulled.** `messageIdentity`
+  is a `TranscriptSnapshot` field (an engine-pushed transient like `greeting`), set by
+  `refreshDmAgentPersonas` via `TabTranscriptProjection.setMessageIdentity(persona,
+  conversationId)` and driven off `projectSelectedAgentFromActiveTab` — the one event meaning
+  "a tab's conversation binding changed". Pushed, because the roster store is ASYNC: the
+  persona lands AFTER the transcript mounts (and again on rename / re-avatar / delete), and a
+  callback read from a render computed is untracked, so it would cache its first (null) value
+  and leave restored transcripts anonymous and renamed agents stale. The projection keys the
+  persona by conversation id, so a rotation invalidates it rather than attributing the fresh
+  thread to the previous agent; a deleted agent pushes null (the DM renders anonymously rather
+  than over a name that no longer exists). Consecutive assistant messages group under one
+  header, computed against the FULL message list so a "load earlier" can't grow a spurious
+  header at the window edge. Non-team-chat surfaces project null and so are byte-identical —
+  locked by `tests/vue/chat/transcript/messageIdentity.test.ts`.
+- **An empty DM shows ONE greeting.** The transcript's shared `WelcomeBanner` renders on
+  exactly the same condition as `TeamChatStarters` (`messages.length === 0`), so the
+  time-of-day greeting is suppressed on this surface (`greetingForSurface`) and the
+  agent-specific starters card is the empty state.
 - **The rail is a listbox, not a row of buttons.** One tab stop with a roving tabindex;
   arrows move FOCUS and Enter/Space commits, because each open resolves a thread, spawns a
   runtime, and consumes an LRU slot — select-follows-focus would be destructive here.
 - **A leaf reporting width 0 must not auto-collapse the rail.** The responsive collapse
   treats `0` as "not measured yet" (a deferred/hidden leaf, or jsdom), so a restore or
   un-hide can't silently collapse the rail against the user's stored preference.
+- **Collapsed is EFFECTIVE (`railIsCollapsed`), never the raw preference.** The root sizes the
+  grid track from it while `TeamRoster` decides what to render; branching on `railCollapsed`
+  alone left a narrow leaf rendering expanded rows clipped inside a 56px track. `railNarrow`
+  (layout) is intentionally not exposed — only the derived value and its setter are — so no
+  component can reintroduce that split. The toggle still writes the PREFERENCE, so widening
+  restores what the user chose.
+- **Row keystrokes belong to the focused control.** The listbox handler ignores keydowns
+  originating in an interactive descendant; without that, Enter/Space on a row's `⋯` button
+  bubbled up, got `preventDefault`ed, and opened the DM — making the keyboard-reachable action
+  menu unreachable by keyboard.
+- **Relative timestamps ride a shared, ref-counted clock** (`useRelativeClock`). `Date.now()`
+  inside a computed is not reactive, so a row labelled `now` would stay `now` indefinitely;
+  one module-level interval serves every mounted row and stops with the last subscriber.
 - **Both action menus share `showAgentActionMenu`**, so the roster row and the top bar can't
   drift about what a DM offers — or, more importantly, what it must NOT: fork, new session,
   and `/clear` are surface-gated off and must never reappear as a menu "convenience".

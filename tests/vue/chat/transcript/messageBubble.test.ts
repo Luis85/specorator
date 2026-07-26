@@ -3,6 +3,7 @@ import '@/providers';
 import { render } from '@testing-library/vue';
 import { flushPromises } from '@vue/test-utils';
 import { App, Component, MarkdownRenderer, TFile } from 'obsidian';
+import { createPinia, setActivePinia } from 'pinia';
 import { beforeEach, describe, expect, it, type Mock, vi } from 'vitest';
 
 import type { ChatMessage } from '@/core/types';
@@ -56,6 +57,7 @@ function mountBubble(msg: ChatMessage, callbacks?: TranscriptCallbacks, app: App
   return render(MessageBubble, {
     props: { msg },
     global: {
+      plugins: [createPinia()],
       provide: {
         [APP_KEY as symbol]: app,
         [COMPONENT_KEY as symbol]: new Component(),
@@ -67,6 +69,9 @@ function mountBubble(msg: ChatMessage, callbacks?: TranscriptCallbacks, app: App
 }
 
 beforeEach(() => {
+    // MessageBubble reads the transcript store for its agent attribution
+    // (null on every non-Team-Chat surface), so isolated mounts need a Pinia.
+    setActivePinia(createPinia());
   vi.clearAllMocks();
   renderMock.mockReset();
   renderMock.mockImplementation(async (md: string, el: HTMLElement) => {

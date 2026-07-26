@@ -81,7 +81,10 @@ describe('roster row content', () => {
     await awaitRoster();
     const store = useTeamChatStore();
 
-    store.setThreads({ 'roster:a': thread(Date.now() - 12 * 60_000, 'hi') });
+    // A second past the boundary, not exactly on it: the shared clock stamps on subscribe
+    // and then ticks, so it can trail `Date.now()` by a moment — an exactly-12-minute delta
+    // would flip between the 11m and 12m buckets depending on sub-second timing.
+    store.setThreads({ 'roster:a': thread(Date.now() - (12 * 60_000 + 1_000), 'hi') });
     await nextTick();
 
     const time = (await rosterRow('Ada')).querySelector('time');
@@ -326,5 +329,109 @@ describe('rail resize', () => {
     await awaitRoster();
 
     expect(screen.queryByRole('separator')).toBeNull();
+  });
+});
+
+// --- Review round: defects the automated reviewer caught on the first commit ----------
+
+describe('narrow-leaf auto-collapse (effective vs preferred state)', () => {
+  // The root sizes the grid track from the EFFECTIVE state while the roster decides what to
+  // render. When those disagreed, a narrow leaf shrank the track to 56px while the roster
+  // kept rendering expanded rows — names, previews, toolbar and menus merely clipped.
+  it('renders the icon rail when the leaf is narrow, even with the preference expanded', async () => {
+    mountRoot(makePlugin(TEAM), makeCallbacks());
+    const list = await awaitRoster();
+    const store = useTeamChatStore();
+    expect(names(list)).toEqual(['Ada', 'Bo', 'Cy']);
+
+    store.setRailNarrow(true);
+    await nextTick();
+
+    expect(names(list)).toEqual([]);
+    expect(store.railCollapsed).toBe(false); // the PREFERENCE is untouched
+  });
+
+  it('restores the expanded rail when the leaf widens again', async () => {
+    mountRoot(makePlugin(TEAM), makeCallbacks());
+    const list = await awaitRoster();
+    const store = useTeamChatStore();
+    store.setRailNarrow(true);
+    await nextTick();
+
+    store.setRailNarrow(false);
+    await nextTick();
+
+    expect(names(list)).toEqual(['Ada', 'Bo', 'Cy']);
+  });
+
+  // The toggle records intent even while a narrow leaf forces the icon rail, so widening
+  // honours what the user last chose.
+  it('still records the collapse preference while narrow', async () => {
+    const callbacks = makeCallbacks();
+    mountRoot(makePlugin(TEAM), callbacks);
+    await awaitRoster();
+    const store = useTeamChatStore();
+    store.setRailNarrow(true);
+    await nextTick();
+
+    await fireEvent.click(screen.getByLabelText(t('teamChat.railExpand')));
+
+    expect(callbacks.onRailGeometryChange).toHaveBeenCalledWith(
+      expect.objectContaining({ collapsed: true }),
+    );
+  });
+});
+
+describe('row menu button keyboard access', () => {
+  // Enter/Space on the focused `⋯` button bubbles to the listbox handler. Without an
+  // interactive-descendant guard the handler preventDefault'd it and opened the DM, making
+  // the advertised keyboard-reachable action menu unreachable by keyboard.
+  it('does not open the DM when Enter is pressed on the row menu button', async () => {
+    const callbacks = makeCallbacks();
+    mountRoot(makePlugin(TEAM), callbacks);
+    await awaitRoster();
+    const button = (await rosterRow('Ada')).querySelector('.specorator-team-roster-row-menu');
+
+    const event = new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true });
+    button?.dispatchEvent(event);
+
+    expect(callbacks.onSelectAgent).not.toHaveBeenCalled();
+    // Not consumed, so the button's own native activation still fires.
+    expect(event.defaultPrevented).toBe(false);
+  });
+
+  it('still handles Enter when the ROW itself has focus', async () => {
+    const callbacks = makeCallbacks();
+    mountRoot(makePlugin(TEAM), callbacks);
+    await awaitRoster();
+
+    await fireEvent.keyDown(await rosterRow('Ada'), { key: 'Enter' });
+
+    expect(callbacks.onSelectAgent).toHaveBeenCalledWith('roster:a');
+  });
+});
+
+describe('relative timestamps advance with the clock', () => {
+  // `Date.now()` read inside a computed is not reactive: without a shared clock a row
+  // labelled `now` stays `now` indefinitely unless an unrelated snapshot re-renders it.
+  it('re-labels a row as time passes without any new thread event', async () => {
+    vi.useFakeTimers();
+    try {
+      const mountedAt = Date.now();
+      mountRoot(makePlugin(TEAM), makeCallbacks());
+      const list = await awaitRoster();
+      const store = useTeamChatStore();
+      store.setThreads({ 'roster:a': thread(mountedAt, 'hi') });
+      await nextTick();
+      expect(within(list).getByText('now')).toBeTruthy();
+
+      // No store mutation here — only the wall clock moves.
+      await vi.advanceTimersByTimeAsync(5 * 60_000);
+      await nextTick();
+
+      expect(within(list).getByText('5m')).toBeTruthy();
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });

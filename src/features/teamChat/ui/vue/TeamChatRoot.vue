@@ -34,13 +34,16 @@ store.setRailCollapsed(geometry.collapsed);
 store.setRailWidth(geometry.width);
 
 /**
- * Auto-collapse on a narrow leaf WITHOUT writing the preference: `isNarrow` is layout
- * state, `store.railCollapsed` is the user's choice, and the rail renders collapsed when
- * either is true. Widening therefore restores exactly what the user last chose, and a
- * toggle made while narrow still persists for when the pane grows again.
+ * Auto-collapse on a narrow leaf WITHOUT writing the preference: the narrow flag is layout
+ * state, `store.railCollapsed` is the user's choice, and `railIsCollapsed` is the OR of the
+ * two. Widening therefore restores exactly what the user last chose, and a toggle made
+ * while narrow still persists for when the pane grows again.
+ *
+ * It lives in the STORE, not a local ref: this component sizes the grid track from it while
+ * `TeamRoster` decides what to render, and when those two disagreed a narrow leaf rendered
+ * expanded rows clipped inside a 56px track.
  */
-const isNarrow = ref(false);
-const collapsed = computed(() => store.railCollapsed || isNarrow.value);
+const collapsed = computed(() => store.railIsCollapsed);
 
 // Grid track for the rail. Collapsed is a fixed icon rail; expanded uses the stored
 // width, so the transcript keeps every pixel the rail isn't using.
@@ -84,7 +87,7 @@ onMounted(() => {
     // workspace leaf, a background tab, jsdom) reports 0, and treating that as "narrow"
     // would collapse the rail on every restore and un-hide. Zero means "no measurement
     // yet", so hold the current state until a real one arrives.
-    isNarrow.value = width > 0 && width < NARROW_LEAF_PX;
+    store.setRailNarrow(width > 0 && width < NARROW_LEAF_PX);
   });
   observer.observe(el);
 });

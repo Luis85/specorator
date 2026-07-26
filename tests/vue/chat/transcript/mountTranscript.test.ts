@@ -111,7 +111,7 @@ describe('mountTranscript', () => {
       projectionRevision: 0,
       greeting: '',
       loadingText: null,
-      hydrationError: null,
+      hydrationError: null, messageIdentity: null,
     });
 
     const mounted = mountTranscript(container, makePlugin(), new Component(), callbacks);
@@ -136,7 +136,7 @@ describe('mountTranscript', () => {
       projectionRevision: 0,
       greeting: '',
       loadingText: null,
-      hydrationError: null,
+      hydrationError: null, messageIdentity: null,
     });
 
     const mounted = mountTranscript(container, makePlugin(), new Component(), callbacks);
@@ -151,7 +151,7 @@ describe('mountTranscript', () => {
       projectionRevision: 0,
       greeting: '',
       loadingText: null,
-      hydrationError: null,
+      hydrationError: null, messageIdentity: null,
     });
     await flushPromises();
 
@@ -171,7 +171,7 @@ describe('mountTranscript', () => {
       projectionRevision: 0,
       greeting: '',
       loadingText: null,
-      hydrationError: null,
+      hydrationError: null, messageIdentity: null,
     });
 
     const plugin = makePlugin();
@@ -211,7 +211,7 @@ describe('mountTranscript', () => {
       projectionRevision: 0,
       greeting: '',
       loadingText: null,
-      hydrationError: null,
+      hydrationError: null, messageIdentity: null,
     });
 
     const plugin = makePlugin();
@@ -259,7 +259,7 @@ describe('mountTranscript', () => {
       projectionRevision: 0,
       greeting: '',
       loadingText: null,
-      hydrationError: null,
+      hydrationError: null, messageIdentity: null,
     });
 
     const mounted = mountTranscript(container, makePlugin(), new Component(), callbacks);
