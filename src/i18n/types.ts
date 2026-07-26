@@ -13,6 +13,7 @@ import type { RibbonTranslationKey } from './types/ribbon';
 import type { SecurityTranslationKey } from './types/security';
 import type { SettingsTranslationKey } from './types/settings';
 import type { TasksTranslationKey } from './types/tasks';
+import type { TeamChatTranslationKey } from './types/teamChat';
 import type { ToolLibraryTranslationKey } from './types/toolLibrary';
 import type { WorkOrderActivityTranslationKey } from './types/workOrderActivity';
 
@@ -49,5 +50,6 @@ export type TranslationKey =
   | ToolLibraryTranslationKey
   | RibbonTranslationKey
   | MarketplaceTranslationKey
+  | TeamChatTranslationKey
   | OnboardingTranslationKey
   | CommandsTranslationKey;

@@ -488,7 +488,7 @@ describe('TabManager - Tab Lifecycle', () => {
 
       await manager.switchToTab(tab2!.id);
 
-      const switchSpy = jest.spyOn(manager, 'switchToTab');
+      const switchSpy = jest.spyOn(manager as any, 'switchToTabImpl'); // nested fallback switch (:120)
 
       await manager.closeTab(tab2!.id);
 
@@ -504,7 +504,7 @@ describe('TabManager - Tab Lifecycle', () => {
 
       await manager.switchToTab(tab1!.id);
 
-      const switchSpy = jest.spyOn(manager, 'switchToTab');
+      const switchSpy = jest.spyOn(manager as any, 'switchToTabImpl'); // nested fallback switch (:120)
 
       await manager.closeTab(tab1!.id);
 
@@ -518,6 +518,45 @@ describe('TabManager - Tab Lifecycle', () => {
       await manager.closeTab(tab!.id, true);
 
       expect(manager.getTabCount()).toBe(1);
+    });
+
+    // Round-37 Fix 1: the sidebar default re-mints a blank home tab so the last-close
+    // never strands the user (a conversation-bound tab so it clears the sole-blank guard
+    // and actually reaches the zero-chat branch).
+    it('creates a blank fallback tab when the last chat DM closes (sidebar default)', async () => {
+      const manager = createManager({
+        callbacks,
+        tabFactory: (n: number) => createMockTabData({ id: `tab-${n}`, conversationId: `conv-${n}` }),
+      });
+
+      const tab = await manager.createTab();
+      expect(mockCreateTab).toHaveBeenCalledTimes(1);
+
+      await manager.closeTab(tab!.id, true);
+
+      // The zero-chat fallback minted a replacement blank home tab.
+      expect(mockCreateTab).toHaveBeenCalledTimes(2);
+      expect(manager.getTabCount()).toBe(1);
+    });
+
+    // Round-37 Fix 1: a Team Chat manager sets autoCreateOnEmpty=false — closing the last
+    // DM must end at zero tabs (roster + empty pane), never mint a blank unbound tab whose
+    // composer could start an ordinary conversation under the empty-state overlay.
+    it('suppresses the blank fallback when autoCreateOnEmpty is off (Team Chat) → zero tabs', async () => {
+      const manager = createManager({
+        callbacks,
+        tabFactory: (n: number) => createMockTabData({ id: `tab-${n}`, conversationId: `conv-${n}` }),
+      });
+      manager.autoCreateOnEmpty = false;
+
+      const tab = await manager.createTab();
+      expect(mockCreateTab).toHaveBeenCalledTimes(1);
+
+      await manager.closeTab(tab!.id, true);
+
+      // No second createTab — the leaf ends empty.
+      expect(mockCreateTab).toHaveBeenCalledTimes(1);
+      expect(manager.getTabCount()).toBe(0);
     });
 
     it('should save conversation before closing', async () => {
@@ -809,7 +848,7 @@ describe('TabManager - Conversation Management', () => {
       mockCreateTab.mockReturnValueOnce(tabWithConv);
       await manager.createTab();
 
-      const switchSpy = jest.spyOn(manager, 'switchToTab');
+      const switchSpy = jest.spyOn(manager as any, 'switchToTabImpl'); // nested fallback switch (:120)
       await manager.openConversation('conv-123');
 
       expect(switchSpy).toHaveBeenCalledWith('tab-with-conv');
@@ -827,7 +866,7 @@ describe('TabManager - Conversation Management', () => {
       mockCreateTab.mockReturnValueOnce(tabWithConv);
       await manager.createTab();
 
-      jest.spyOn(manager, 'switchToTab').mockResolvedValue(undefined);
+      jest.spyOn(manager as any, 'switchToTabImpl').mockResolvedValue(undefined); // nested reuse switch (:120)
 
       await manager.openConversation('conv-123');
 
@@ -885,6 +924,30 @@ describe('TabManager - Conversation Management', () => {
       await manager.createNewConversation();
 
       expect(createNew).toHaveBeenCalled();
+    });
+
+    // Round-44 (:120): createNewConversation is a public tab mutator; a new-session
+    // command / header click arriving AFTER destroy() set isDestroying but BEFORE
+    // destroyImpl cleared the tabs must no-op the reset, not race the teardown save.
+    it('no-ops when destroy() has begun (isDestroying) so the active tab is untouched (:120)', async () => {
+      const activeTab = manager.getActiveTab();
+      const createNew = jest.fn().mockResolvedValue(undefined);
+      activeTab!.controllers.conversationController = { createNew } as any;
+      (manager as any).isDestroying = true; // teardown window: tab still present, guard must reject before enqueue
+
+      await manager.createNewConversation();
+
+      expect(createNew).not.toHaveBeenCalled();
+    });
+
+    it('routes the reset through the mutation queue (createNewConversationImpl) when not destroying', async () => {
+      const activeTab = manager.getActiveTab();
+      activeTab!.controllers.conversationController = { createNew: jest.fn().mockResolvedValue(undefined) } as any;
+      const implSpy = jest.spyOn(manager as any, 'createNewConversationImpl'); // serialized body (:120)
+
+      await manager.createNewConversation();
+
+      expect(implSpy).toHaveBeenCalledTimes(1);
     });
   });
 });
@@ -2100,6 +2163,192 @@ describe('TabManager - Cleanup', () => {
   });
 });
 
+describe('TabManager - destroy serialization (:197)', () => {
+  it('waits for an in-flight createTab before tearing down, so no tab leaks', async () => {
+    // Gate conversation hydration so createTab parks mid-flight (before this.tabs.set),
+    // exactly where a concurrent destroy() could clear the map out from under it.
+    let releaseHydration!: () => void;
+    const hydration = new Promise<null>((resolve) => { releaseHydration = () => resolve(null); });
+    const plugin = createMockPlugin({ getConversationById: jest.fn(() => hydration) });
+    const manager = createManager({ plugin });
+
+    const creating = manager.createTab('conv-1'); // parks on getConversationById
+    const tearing = manager.destroy();            // must queue behind the createTab mutation
+    releaseHydration();                            // let createTab finish
+    await Promise.all([creating, tearing]);
+
+    // The just-created tab was included in teardown (destroyed), not stranded in a
+    // cleared map as an undisposed detached tab.
+    expect(manager.getTabCount()).toBe(0);
+    expect(mockDestroyTab).toHaveBeenCalledTimes(1);
+  });
+
+  // Round-32 (:1095): the Round-28 test called destroy() SYNCHRONOUSLY after
+  // createTab() — before its queued mutation had even started — so tabMutationDepth
+  // was still 0 and destroy correctly queued. This flushes microtasks first, so the
+  // create is genuinely SUSPENDED mid-hydration (tabMutationDepth > 0) when destroy()
+  // runs. A depth-based inline destroy would then run destroyImpl immediately,
+  // clearing this.tabs out from under the suspended create → leak.
+  it('waits for a SUSPENDED in-flight createTab (tabMutationDepth > 0), not run destroyImpl inline (:1095)', async () => {
+    let releaseHydration!: () => void;
+    const hydration = new Promise<null>((resolve) => { releaseHydration = () => resolve(null); });
+    const plugin = createMockPlugin({ getConversationById: jest.fn(() => hydration) });
+    const manager = createManager({ plugin });
+
+    const creating = manager.createTab('conv-1'); // enqueues; its impl will park on hydration
+    await flushMicrotasks();                        // let it START → tabMutationDepth > 0, parked mid-hydration
+    const tearing = manager.destroy();              // must NOT run destroyImpl inline while a create is suspended
+    releaseHydration();                              // create resumes and inserts its tab
+    await Promise.all([creating, tearing]);
+
+    // The suspended create completed and its tab was torn down, not leaked.
+    expect(manager.getTabCount()).toBe(0);
+    expect(mockDestroyTab).toHaveBeenCalledTimes(1);
+  });
+
+  // Round-35 (:1107): Round-32's guard only covered createTab. A switch/close issued
+  // AFTER destroy() begins (a click, or the cross-leaf rotation-close) would append
+  // after drainThenDestroy's captured tail and run concurrently with destroyImpl.
+  it('no-ops a switch/close issued while destroy() is tearing down (:1107)', async () => {
+    let releaseSave!: () => void;
+    const saveGate = new Promise<void>((resolve) => { releaseSave = () => resolve(); });
+    const manager = createManager();
+    const slowTab = createMockTabData({ id: 'tab-slow' });
+    slowTab.controllers.conversationController.save = jest.fn(() => saveGate); // hang destroyImpl mid-save
+    mockCreateTab.mockReturnValueOnce(slowTab);
+    const created = await manager.createTab();
+    mockActivateTab.mockClear();
+    mockDestroyTab.mockClear();
+
+    const tearing = manager.destroy();       // isDestroying=true; destroyImpl hangs on the save (tabs still present, depth 0)
+    await flushMicrotasks();
+
+    const switched = manager.switchToTab(created!.id);
+    const closed = await manager.closeTab(created!.id);
+
+    // Rejected: neither impl ran against the tearing-down tab set.
+    expect(closed).toBe(false);
+    await expect(switched).resolves.toBeUndefined();
+    expect(mockActivateTab).not.toHaveBeenCalled();
+    expect(mockDestroyTab).not.toHaveBeenCalled();
+
+    releaseSave();
+    await tearing;
+    expect(manager.getTabCount()).toBe(0);
+  });
+
+  // Round-40 (:120): the depth-ambiguity case Round-35's test missed. When destroy() begins
+  // while ANOTHER mutation is SUSPENDED (depth > 0), an external switch/close saw depth > 0 and
+  // slipped past the old `isDestroying && depth === 0` guard, taking runTabMutation's inline
+  // path and racing destroyImpl. The public/internal split rejects it unconditionally.
+  it('rejects an external switch/close while destroy() drains a SUSPENDED mutation (depth>0) (:120)', async () => {
+    let releaseSave!: () => void;
+    const saveGate = new Promise<void>((resolve) => { releaseSave = () => resolve(); });
+    const manager = createManager({
+      tabFactory: (n: number) => createMockTabData({ id: `tab-${n}`, conversationId: `conv-${n}` }),
+    });
+    const tab1 = await manager.createTab();
+    const tab2 = await manager.createTab();
+    // Hang tab1's save so its closeTab suspends INSIDE closeTabImpl at mutation depth 1.
+    tab1!.controllers.conversationController!.save = jest.fn(() => saveGate);
+
+    const closing = manager.closeTab(tab1!.id, true); // enters closeTabImpl, awaits save() → suspended (depth 1)
+    await flushMicrotasks();
+
+    const tearing = manager.destroy(); // isDestroying=true; drainThenDestroy awaits the suspended closeTab
+    mockActivateTab.mockClear();
+
+    // External mutations arriving during teardown WHILE the closeTab is suspended (depth>0):
+    const switched = manager.switchToTab(tab2!.id);
+    const closed = await manager.closeTab(tab2!.id, true);
+
+    // Rejected as no-ops — NOT run inline racing destroyImpl (the depth>0 case Round-35 missed).
+    await expect(switched).resolves.toBeUndefined();
+    expect(closed).toBe(false);
+    expect(mockActivateTab).not.toHaveBeenCalled();
+
+    releaseSave();                  // let the suspended closeTab finish; teardown then drains + destroys
+    await closing.catch(() => {});
+    await tearing;
+    expect(manager.getTabCount()).toBe(0);
+  });
+});
+
+// Round-42 (:118): once the nested follow-ups were repointed at the *Impl methods, the
+// `if (tabMutationDepth > 0) return operation()` inline path in runTabMutation was only ever
+// hit by an EXTERNAL top-level public mutation arriving while ANOTHER mutation was SUSPENDED
+// (e.g. a createTab awaiting hydration → depth > 0, NO teardown). It ran that external op
+// INLINE against half-built tab state instead of joining tabMutationTail, so a user
+// switch/close raced the suspended op and observed/clobbered mid-flight state. Public
+// mutations must ALWAYS enqueue.
+describe('TabManager - public mutations always enqueue while a mutation is suspended (:118)', () => {
+  it('queues an external switchToTab behind a SUSPENDED createTab instead of running it inline (:118)', async () => {
+    let releaseHydration!: () => void;
+    const hydration = new Promise<null>((resolve) => { releaseHydration = () => resolve(null); });
+    const plugin = createMockPlugin({ getConversationById: jest.fn(() => hydration) });
+    const callbacks: TabManagerCallbacks = { onTabSwitched: jest.fn(), onTabCreated: jest.fn() };
+    const manager = createManager({
+      plugin,
+      callbacks,
+      tabFactory: (n: number) => createMockTabData({ id: `tab-${n}` }),
+    });
+
+    // An already-active tab to switch back to (no conversationId → completes without a hydration gate).
+    const existing = await manager.createTab();
+    // Suspend a second create mid-hydration: its impl parks on getConversationById, so the
+    // mutation is in-flight and SUSPENDED (tabMutationDepth > 0) with NO teardown.
+    const creating = manager.createTab('conv-suspended');
+    await flushMicrotasks();
+    (callbacks.onTabSwitched as jest.Mock).mockClear();
+
+    // External switch arrives while the create is suspended.
+    const switching = manager.switchToTab(existing!.id);
+    await flushMicrotasks();
+    // Must be QUEUED behind the suspended create, NOT run inline against the mid-create tab set.
+    expect(callbacks.onTabSwitched).not.toHaveBeenCalled();
+
+    // Release the suspended create; it completes (inserts + activates its tab) FIRST, then the
+    // queued switch runs and wins — so the user's switch is the FINAL active tab, not clobbered
+    // by the mid-flight create's own activate (the inline path let the create supersede it).
+    releaseHydration();
+    await Promise.all([creating, switching]);
+    expect(callbacks.onTabSwitched).toHaveBeenCalled();
+    expect(manager.getActiveTabId()).toBe(existing!.id);
+  });
+
+  it('queues an external closeTab behind a SUSPENDED createTab instead of running it inline (:118)', async () => {
+    let releaseHydration!: () => void;
+    const hydration = new Promise<null>((resolve) => { releaseHydration = () => resolve(null); });
+    const plugin = createMockPlugin({ getConversationById: jest.fn(() => hydration) });
+    const manager = createManager({
+      plugin,
+      tabFactory: (n: number) => createMockTabData({ id: `tab-${n}` }),
+    });
+
+    await manager.createTab();               // tab-1
+    const doomed = await manager.createTab(); // tab-2 (active)
+    // Suspend a third create mid-hydration (depth > 0, no teardown).
+    const creating = manager.createTab('conv-suspended');
+    await flushMicrotasks();
+    expect(mockDestroyTab).not.toHaveBeenCalled();
+
+    // External close arrives while the create is suspended.
+    const closing = manager.closeTab(doomed!.id, true);
+    await flushMicrotasks();
+    // Queued behind the suspended create — the tab is NOT torn down mid-create.
+    expect(mockDestroyTab).not.toHaveBeenCalled();
+    expect(manager.hasTab(doomed!.id)).toBe(true);
+
+    // Release; the create completes (inserts tab-3), THEN the queued close runs against the
+    // settled tab set and tears down exactly the doomed tab.
+    releaseHydration();
+    const [, closed] = await Promise.all([creating, closing]);
+    expect(closed).toBe(true);
+    expect(mockDestroyTab).toHaveBeenCalledTimes(1);
+    expect(manager.hasTab(doomed!.id)).toBe(false);
+  });
+});
+
 describe('TabManager - Callback Wiring', () => {
   beforeEach(() => {
     jest.clearAllMocks();
@@ -2279,6 +2528,141 @@ describe('TabManager - openConversation Current Tab Path', () => {
     await manager.openConversation('conv-fresh', { requireNewTab: true });
 
     expect(manager.getTabCount()).toBe(before + 1);
+  });
+});
+
+// Round-61 (:126/:659): the cross-view reveal/switch must run OUTSIDE this manager's mutation
+// tail. Before the fix it ran INSIDE openConversationImpl (i.e. while runTabMutation held this
+// manager's tail) and awaited the OTHER manager's PUBLIC switchToTab, which since Round-42
+// unconditionally enqueues on that manager's tail. Two live leaves each cross-opening the
+// conversation the OTHER owns therefore each held their own tail while awaiting the other's
+// queued switch → circular wait → permanent deadlock (both managers' future mutations wedged
+// forever). The fix HOISTS the cross-view path into the public openConversation, before the
+// tail, so no manager awaits another's queued switch while holding its own tail.
+describe('TabManager - openConversation cross-view hoist (Round-61 deadlock)', () => {
+  it('resolves both concurrent cross-opens and leaves neither mutation tail wedged', async () => {
+    mockCreateTab.mockReset();
+    let counter = 0;
+    mockCreateTab.mockImplementation(() => createMockTabData({ id: `tab-${++counter}` }));
+
+    const plugin = createMockPlugin();
+    const viewA: any = { leaf: { id: 'leaf-A' }, getTabManager: jest.fn() };
+    const viewB: any = { leaf: { id: 'leaf-B' }, getTabManager: jest.fn() };
+    const managerA = new TabManager(plugin, createMockMcpManager(), createMockEl(), viewA, {});
+    const managerB = new TabManager(plugin, createMockMcpManager(), createMockEl(), viewB, {});
+    viewA.getTabManager.mockReturnValue(managerA);
+    viewB.getTabManager.mockReturnValue(managerB);
+
+    const tabA = await managerA.createTab(); // tab-1, lives in leaf-A
+    const tabB = await managerB.createTab(); // tab-2, lives in leaf-B
+    tabA!.conversationId = 'conv-A';
+    tabB!.conversationId = 'conv-B';
+
+    // conv-A is owned by leaf-A (managerA); conv-B is owned by leaf-B (managerB).
+    plugin.findConversationAcrossViews.mockImplementation((id: string) =>
+      id === 'conv-A' ? { view: viewA, tabId: tabA!.id }
+        : id === 'conv-B' ? { view: viewB, tabId: tabB!.id }
+          : null,
+    );
+
+    let aDone = false;
+    let bDone = false;
+    // A opens B's conversation and B opens A's — concurrently, both in flight, each targeting
+    // the other manager's mutation tail.
+    const openA = managerA.openConversation('conv-B').then(() => { aDone = true; });
+    const openB = managerB.openConversation('conv-A').then(() => { bDone = true; });
+
+    // Buggy code never settles these (each holds its tail awaiting the other's queued switch);
+    // the fixed out-of-tail path completes within a few microtasks. Flushing is independent of
+    // the (potentially) deadlocked promises, so this asserts without hanging the suite.
+    await flushMicrotasks(50);
+    expect(aDone).toBe(true);
+    expect(bDone).toBe(true);
+    await Promise.all([openA, openB]);
+
+    // The cross-view path focused each OTHER leaf (preserved behavior).
+    expect(plugin.app.workspace.revealLeaf).toHaveBeenCalledWith({ id: 'leaf-B' });
+    expect(plugin.app.workspace.revealLeaf).toHaveBeenCalledWith({ id: 'leaf-A' });
+
+    // Neither tail is wedged: each manager still processes a fresh mutation afterward.
+    await expect(managerA.switchToTab(tabA!.id)).resolves.toBeUndefined();
+    await expect(managerB.createTab()).resolves.toBeTruthy();
+  });
+
+  it('reveals the owning leaf and switches its tab for a plain cross-view open', async () => {
+    const plugin = createMockPlugin();
+    const manager = createManager({ plugin });
+    await manager.createTab();
+
+    const otherSwitch = jest.fn().mockResolvedValue(undefined);
+    plugin.findConversationAcrossViews.mockReturnValue({
+      view: { leaf: { id: 'other-leaf' }, getTabManager: () => ({ switchToTab: otherSwitch }) },
+      tabId: 'other-tab',
+    });
+
+    await manager.openConversation('conv-elsewhere');
+
+    expect(plugin.app.workspace.revealLeaf).toHaveBeenCalledWith({ id: 'other-leaf' });
+    expect(otherSwitch).toHaveBeenCalledWith('other-tab');
+    // Cross-view is handled entirely in the public method — the serialized impl never runs.
+    expect(mockCreateTab).toHaveBeenCalledTimes(1); // only the setup tab
+  });
+
+  it('does not mint a duplicate tab when a conversation races cross-view after the pre-tail check (TOCTOU)', async () => {
+    const plugin = createMockPlugin();
+    const manager = createManager({ plugin });
+    await manager.createTab();
+    const countBefore = manager.getTabCount();
+
+    // First lookup (public openConversation, pre-tail) sees no cross-view owner, so the open
+    // proceeds into the serialized impl. Between then and the impl's create, the conversation
+    // races open in ANOTHER leaf; the impl's defensive re-check (second lookup) must bail
+    // without minting a duplicate — and must NOT await the other manager's queued switch.
+    plugin.findConversationAcrossViews
+      .mockReturnValueOnce(null)
+      .mockReturnValue({
+        view: { leaf: { id: 'other-leaf' }, getTabManager: () => ({ switchToTab: jest.fn() }) },
+        tabId: 'other-tab',
+      });
+    plugin.getConversationById.mockResolvedValue({ id: 'conv-race' });
+
+    const createImplSpy = jest.spyOn(manager as any, 'createTabImpl');
+    await manager.openConversation('conv-race', { preferNewTab: true });
+
+    expect(createImplSpy).not.toHaveBeenCalled();
+    expect(manager.getTabCount()).toBe(countBefore);
+  });
+
+  // Round-63: Round-61 stopped the duplicate but left the raced open resolving with NOTHING shown —
+  // the impl bailed without revealing the winner. The impl now RETURNS the raced owner and the
+  // public openConversation reveals + switches it AFTER the tail releases (never awaiting the other
+  // manager's queued op under our own tail), so the user's action visibly surfaces the winning leaf.
+  it('reveals + switches the winning leaf when a conversation races cross-view after the pre-tail check (Round-63)', async () => {
+    const plugin = createMockPlugin();
+    const manager = createManager({ plugin });
+    await manager.createTab();
+    const countBefore = manager.getTabCount();
+
+    const winnerSwitch = jest.fn().mockResolvedValue(undefined);
+    // Pre-tail lookup misses (open proceeds into the tail); the impl's TOCTOU re-check AND the
+    // post-tail reveal find the racer that opened in ANOTHER leaf meanwhile.
+    plugin.findConversationAcrossViews
+      .mockReturnValueOnce(null)
+      .mockReturnValue({
+        view: { leaf: { id: 'winner-leaf' }, getTabManager: () => ({ switchToTab: winnerSwitch }) },
+        tabId: 'winner-tab',
+      });
+    plugin.getConversationById.mockResolvedValue({ id: 'conv-race' });
+
+    const createImplSpy = jest.spyOn(manager as any, 'createTabImpl');
+    await manager.openConversation('conv-race', { preferNewTab: true });
+
+    // No duplicate (Round-61 invariant preserved) ...
+    expect(createImplSpy).not.toHaveBeenCalled();
+    expect(manager.getTabCount()).toBe(countBefore);
+    // ... AND the winner is now revealed + its tab switched (Round-63 — the missing reveal).
+    expect(plugin.app.workspace.revealLeaf).toHaveBeenCalledWith({ id: 'winner-leaf' });
+    expect(winnerSwitch).toHaveBeenCalledWith('winner-tab');
   });
 });
 
@@ -3272,5 +3656,224 @@ describe('TabManager - buildForkTitle', () => {
 
     const updateCall = mockUpdateConversation.mock.calls[0][1];
     expect(updateCall.title).toBe('Fork: My Chat (#1) 4');
+  });
+});
+
+describe('TabManager - host migration (Group D)', () => {
+  describe('disposeAllRuntimes', () => {
+    it('cleans up a service even when serviceInitialized is false (guard is tab.service only)', () => {
+      const manager = createManager();
+      const cleanupInit = jest.fn();
+      const cleanupUninit = jest.fn();
+      (manager as any).tabs = new Map<string, any>([
+        ['a', { service: { cleanup: cleanupInit }, serviceInitialized: true }],
+        ['b', { service: { cleanup: cleanupUninit }, serviceInitialized: false }],
+        ['c', { service: null, serviceInitialized: false }],
+      ]);
+
+      manager.disposeAllRuntimes();
+
+      expect(cleanupInit).toHaveBeenCalledTimes(1);
+      expect(cleanupUninit).toHaveBeenCalledTimes(1);
+    });
+
+    it('swallows a throwing cleanup and still disposes the rest', () => {
+      const manager = createManager();
+      const ok = jest.fn();
+      (manager as any).tabs = new Map<string, any>([
+        ['a', { service: { cleanup: () => { throw new Error('boom'); } }, serviceInitialized: true }],
+        ['b', { service: { cleanup: ok }, serviceInitialized: true }],
+      ]);
+
+      expect(() => manager.disposeAllRuntimes()).not.toThrow();
+      expect(ok).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  describe('quiesceTabsForConversation', () => {
+    it('disposes, cancels, drains hydration, then saves matching tabs in order', async () => {
+      const manager = createManager();
+      const calls: string[] = [];
+      const cc = {
+        dispose: jest.fn(() => calls.push('dispose')),
+        whenHydrated: jest.fn(() => { calls.push('whenHydrated'); return Promise.resolve(); }),
+        save: jest.fn(() => { calls.push('save'); return Promise.resolve(); }),
+      };
+      const inputController = { cancelStreaming: jest.fn(() => calls.push('cancel')) };
+      const other = { conversationId: 'other', controllers: { conversationController: { dispose: jest.fn(), whenHydrated: jest.fn(), save: jest.fn() }, inputController: { cancelStreaming: jest.fn() } } };
+      (manager as any).tabs = new Map<string, any>([
+        ['a', { conversationId: 'c-1', controllers: { conversationController: cc, inputController } }],
+        ['b', other],
+      ]);
+
+      await manager.quiesceTabsForConversation('c-1');
+
+      expect(calls).toEqual(['dispose', 'cancel', 'whenHydrated', 'save']);
+      expect(other.controllers.conversationController.dispose).not.toHaveBeenCalled();
+    });
+
+    it('swallows whenHydrated/save rejections', async () => {
+      const manager = createManager();
+      const cc = {
+        dispose: jest.fn(),
+        whenHydrated: jest.fn().mockRejectedValue(new Error('h')),
+        save: jest.fn().mockRejectedValue(new Error('s')),
+      };
+      (manager as any).tabs = new Map<string, any>([
+        ['a', { conversationId: 'c-1', controllers: { conversationController: cc, inputController: { cancelStreaming: jest.fn() } } }],
+      ]);
+
+      await expect(manager.quiesceTabsForConversation('c-1')).resolves.toBeUndefined();
+    });
+  });
+
+  describe('repairTabsForConversation', () => {
+    it('recreates a fresh conversation (force) only on matching tabs', async () => {
+      const manager = createManager();
+      const match = { conversationId: 'c-1', controllers: { conversationController: { createNew: jest.fn().mockResolvedValue(undefined) } } };
+      const nonMatch = { conversationId: 'c-2', controllers: { conversationController: { createNew: jest.fn().mockResolvedValue(undefined) } } };
+      (manager as any).tabs = new Map<string, any>([['a', match], ['b', nonMatch]]);
+
+      await manager.repairTabsForConversation('c-1');
+
+      expect(match.controllers.conversationController.createNew).toHaveBeenCalledWith({ force: true });
+      expect(nonMatch.controllers.conversationController.createNew).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('cancelStreamingTabsForProviders / restartRuntimeTabs', () => {
+    function tab(overrides: any = {}) {
+      return {
+        providerId: overrides.providerId ?? 'claude',
+        state: { isStreaming: overrides.isStreaming ?? false },
+        service: 'service' in overrides ? overrides.service : {
+          cleanup: jest.fn(),
+          syncConversationState: jest.fn(),
+          resetSession: jest.fn(),
+          ensureReady: jest.fn().mockResolvedValue(undefined),
+        },
+        serviceInitialized: overrides.serviceInitialized ?? true,
+        conversationId: overrides.conversationId ?? null,
+        controllers: { inputController: { cancelStreaming: jest.fn() } },
+        ui: { externalContextSelector: undefined },
+      };
+    }
+
+    it('cancels only streaming affected tabs and returns all affected ids (streaming + idle, not other providers)', () => {
+      const manager = createManager();
+      const streamingClaude = tab({ isStreaming: true });
+      const idleClaude = tab({ isStreaming: false });
+      const streamingCodex = tab({ providerId: 'codex', isStreaming: true });
+      (manager as any).tabs = new Map<string, any>([['a', streamingClaude], ['b', idleClaude], ['c', streamingCodex]]);
+
+      const ids = manager.cancelStreamingTabsForProviders(['claude']);
+
+      // ALL affected tabs (streaming + idle) are frozen for restart; the codex tab is not.
+      expect(ids).toEqual(['a', 'b']);
+      expect(streamingClaude.controllers.inputController.cancelStreaming).toHaveBeenCalled();
+      expect(idleClaude.controllers.inputController.cancelStreaming).not.toHaveBeenCalled();
+      expect(streamingCodex.controllers.inputController.cancelStreaming).not.toHaveBeenCalled();
+    });
+
+    it('restartRuntimeTabs(ids, true) force-restarts initialized runtimes and drops the session', async () => {
+      const manager = createManager();
+      const t = tab();
+      (manager as any).tabs = new Map<string, any>([['a', t]]);
+
+      const failed = await manager.restartRuntimeTabs(['a'], true);
+
+      expect(failed).toBe(0);
+      expect(t.service.syncConversationState).toHaveBeenCalled();
+      expect(t.service.resetSession).toHaveBeenCalled();
+      expect(t.service.ensureReady).toHaveBeenCalledWith({ force: true });
+    });
+
+    it('restartRuntimeTabs(ids, false) does not drop the session but still force-restarts', async () => {
+      const manager = createManager();
+      const t = tab();
+      (manager as any).tabs = new Map<string, any>([['a', t]]);
+
+      await manager.restartRuntimeTabs(['a'], false);
+
+      expect(t.service.resetSession).not.toHaveBeenCalled();
+      expect(t.service.ensureReady).toHaveBeenCalledWith({ force: true });
+    });
+
+    it('syncs the tab live external-context selection over the conversation and persistent defaults', async () => {
+      const plugin = createMockPlugin();
+      const manager = createManager({ plugin });
+      const conversation = { id: 'c-1', messages: [{ id: 'm-1' }], externalContextPaths: ['/saved'] };
+      plugin.getConversationSync = jest.fn().mockReturnValue(conversation);
+      plugin.settings.persistentExternalContextPaths = ['/persistent'];
+      const t = tab({ conversationId: 'c-1' });
+      (t.ui as any).externalContextSelector = { getExternalContexts: jest.fn().mockReturnValue(['/live']) };
+      (manager as any).tabs = new Map<string, any>([['a', t]]);
+
+      const ids = manager.cancelStreamingTabsForProviders(['claude']);
+      await manager.restartRuntimeTabs(ids, true);
+
+      expect(t.service.syncConversationState).toHaveBeenCalledWith(conversation, ['/live']);
+      expect(t.service.resetSession).toHaveBeenCalledTimes(1);
+    });
+
+    it('skips uninitialized tabs as success and counts a throwing restart as one failure', async () => {
+      const manager = createManager();
+      const uninit = tab({ serviceInitialized: false });
+      const throwing = tab({
+        service: { cleanup: jest.fn(), syncConversationState: jest.fn(), resetSession: jest.fn(), ensureReady: jest.fn().mockRejectedValue(new Error('x')) },
+      });
+      (manager as any).tabs = new Map<string, any>([['a', uninit], ['b', throwing]]);
+
+      const failed = await manager.restartRuntimeTabs(['a', 'b'], false);
+
+      expect(failed).toBe(1);
+      expect(uninit.service.ensureReady).not.toHaveBeenCalled();
+    });
+
+    it('skips an id whose tab was closed between cancel and restart', async () => {
+      const manager = createManager();
+      const surviving = tab();
+      (manager as any).tabs = new Map<string, any>([['a', surviving]]);
+
+      const ids = manager.cancelStreamingTabsForProviders(['claude']);
+      (manager as any).tabs.delete('a'); // tab closed after the cancel pass
+
+      const failed = await manager.restartRuntimeTabs(ids, false);
+
+      expect(failed).toBe(0);
+      expect(surviving.service.ensureReady).not.toHaveBeenCalled();
+    });
+
+    it('restarts only the frozen id set — a tab created after cancel is not restarted', async () => {
+      const manager = createManager();
+      const first = tab();
+      (manager as any).tabs = new Map<string, any>([['first', first]]);
+      const ids = manager.cancelStreamingTabsForProviders(['claude']);
+      (manager as any).tabs.set('late', tab());          // created AFTER the cancel snapshot
+      await manager.restartRuntimeTabs(ids, false);
+      expect(first.service.ensureReady).toHaveBeenCalledTimes(1);
+      expect((manager as any).tabs.get('late').service.ensureReady).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('findTabByConversation / hasTab', () => {
+    it('returns the first tab id bound to a conversation, else null', () => {
+      const manager = createManager();
+      (manager as any).tabs = new Map<string, any>([
+        ['a', { id: 'a', conversationId: 'c-1' }],
+        ['b', { id: 'b', conversationId: 'c-2' }],
+      ]);
+
+      expect(manager.findTabByConversation('c-2')).toEqual({ tabId: 'b' });
+      expect(manager.findTabByConversation('missing')).toBeNull();
+    });
+
+    it('hasTab reflects open-tab membership', () => {
+      const manager = createManager();
+      (manager as any).tabs = new Map<string, any>([['a', { id: 'a' }]]);
+
+      expect(manager.hasTab('a')).toBe(true);
+      expect(manager.hasTab('z')).toBe(false);
+    });
   });
 });

@@ -36,6 +36,11 @@ export default defineConfig({
         // accessors) — tested in this lane and excluded from Jest collection
         // (jest.config.js); gate its coverage here where it is exercised.
         'src/features/marketplace/vue/**/*.{ts,vue}',
+        // Team Chat Vue island (store, pinia, keys, callbacks, TeamChatRoot/
+        // TeamRoster SFCs) — tested in this lane (tests/vue/teamChat) and
+        // excluded from Jest collection (jest.config.js); gate its coverage here
+        // where it is exercised.
+        'src/features/teamChat/ui/vue/**/*.{ts,vue}',
         // Setup (onboarding) Vue island (store, useAppSetting, root + step SFCs)
         // — tested in this lane and excluded from Jest collection
         // (jest.config.js); gate its coverage here where it is exercised.

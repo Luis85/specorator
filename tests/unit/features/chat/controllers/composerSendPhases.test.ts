@@ -197,6 +197,56 @@ describe('composer rollback snapshot restores the original draft', () => {
   });
 });
 
+// Round-60: the init-failure rollback's composer restore is newer-draft-safe (mirrors Round-55's
+// restoreReservedComposerInput). Only the composer-TEXT restore is guarded; placeholder removal and
+// image/pill restore stay unconditional.
+describe('rollbackOptimisticOutgoingTurn is newer-draft-safe on the composer text', () => {
+  it('skips the composer restore when a newer draft is present, still rolling back placeholders', () => {
+    const inputEl = makeInputEl('hello world');
+    const send = resolveComposerSend({ inputEl, imageContextManager: null, fileContextManager: null });
+    const snapshot = captureComposerRollbackSnapshot(send);
+    expect(snapshot.inputText).toBe('hello world');
+
+    // The send cleared the composer up front; the user then typed a NEWER draft while runtime init
+    // was still awaiting (common on a new DM whose CLI is unavailable — init fails a beat later).
+    inputEl.value = 'new draft';
+    const state = new ChatState();
+    state.messages = [
+      { id: 'u1', role: 'user', content: 'hello world', timestamp: 0 },
+      { id: 'a1', role: 'assistant', content: '', timestamp: 0 },
+    ] as ChatMessage[];
+
+    rollbackOptimisticOutgoingTurn(state, snapshot, send, 'u1', 'a1', () => {});
+
+    // The newer draft wins — the old submitted text does NOT clobber it...
+    expect(inputEl.value).toBe('new draft');
+    // ...but the optimistic user/assistant placeholders are still removed (rollback unchanged).
+    expect(state.messages).toHaveLength(0);
+  });
+
+  it('restores the submitted text when the composer is still empty (no newer draft)', () => {
+    const inputEl = makeInputEl('hello world');
+    const send = resolveComposerSend({ inputEl, imageContextManager: null, fileContextManager: null });
+    const snapshot = captureComposerRollbackSnapshot(send);
+
+    inputEl.value = ''; // the send cleared the composer; nothing newer typed
+    rollbackOptimisticOutgoingTurn(new ChatState(), snapshot, send, 'u1', 'a1', () => {});
+
+    expect(inputEl.value).toBe('hello world');
+  });
+
+  it('treats a whitespace-only composer as empty and restores the submitted text', () => {
+    const inputEl = makeInputEl('hello world');
+    const send = resolveComposerSend({ inputEl, imageContextManager: null, fileContextManager: null });
+    const snapshot = captureComposerRollbackSnapshot(send);
+
+    inputEl.value = '   '; // trimmed-empty — matches resolveComposerSend's notion of "empty"
+    rollbackOptimisticOutgoingTurn(new ChatState(), snapshot, send, 'u1', 'a1', () => {});
+
+    expect(inputEl.value).toBe('hello world');
+  });
+});
+
 describe('bakeResponseDurationFooter', () => {
   function makeAssistantMsg(): ChatMessage {
     return { id: 'a1', role: 'assistant', content: '', timestamp: 0, contentBlocks: [] };

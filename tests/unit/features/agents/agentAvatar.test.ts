@@ -3,6 +3,8 @@
  */
 import '../../../setup/obsidianDom';
 
+import type { App } from 'obsidian';
+
 import { renderAgentAvatar } from '../../../../src/features/agents/agentAvatar';
 import type { AgentPersona } from '../../../../src/features/agents/agentTypes';
 import { resolvePersona } from '../../../../src/features/agents/personaRegistry';
@@ -15,6 +17,26 @@ const CUSTOM: AgentPersona = {
   color: 'var(--color-purple)',
   initials: 'RF',
 };
+
+/** App whose vault resolves any path to a TFile-like value and a stable URL. */
+function appWithImage(): App {
+  return {
+    vault: {
+      getAbstractFileByPath: (p: string) => ({ path: p, basename: p.split('/').pop() ?? p }),
+      getResourcePath: (f: { path: string }) => `app://vault/${f.path}`,
+    },
+  } as unknown as App;
+}
+
+/** App whose vault cannot find the file — resolution fails, avatar must fall through. */
+function appMissingFile(): App {
+  return {
+    vault: {
+      getAbstractFileByPath: () => null,
+      getResourcePath: () => '',
+    },
+  } as unknown as App;
+}
 
 describe('renderAgentAvatar', () => {
   it('renders a circular avatar chip carrying the persona name as title + aria-label', () => {
@@ -98,5 +120,106 @@ describe('renderAgentAvatar', () => {
     const avatar = renderAgentAvatar(host, persona, 20);
     expect(avatar.getAttribute('data-icon')).toBe('cpu');
     expect(avatar.textContent).toBe('');
+  });
+
+  it('renders a non-builtin persona emoji as text, taking precedence over icon + initials', () => {
+    const host = document.createElement('div');
+    const persona: AgentPersona = {
+      id: 'sci', name: 'Scientist', color: 'var(--color-cyan)',
+      initials: 'SC', icon: 'flask-conical', emoji: '🔬',
+    };
+    const avatar = renderAgentAvatar(host, persona, 20);
+    expect(avatar.classList.contains('specorator-agent-avatar--emoji')).toBe(true);
+    expect(avatar.textContent).toBe('🔬');
+    expect(avatar.getAttribute('data-icon')).toBeNull();
+    expect(avatar.classList.contains('specorator-agent-avatar--initials')).toBe(false);
+  });
+
+  it('ignores emoji for the built-in persona (cpu still wins)', () => {
+    const host = document.createElement('div');
+    const persona: AgentPersona = {
+      id: 'standard', name: 'Standard', color: 'var(--color-base-90)', builtin: true, emoji: '🤖',
+    };
+    const avatar = renderAgentAvatar(host, persona, 20);
+    expect(avatar.getAttribute('data-icon')).toBe('cpu');
+    expect(avatar.textContent).toBe('');
+  });
+
+  it('renders an <img> with the resolved vault resource path when persona.image is set', () => {
+    const host = document.createElement('div');
+    const persona: AgentPersona = {
+      id: 'sci', name: 'Scientist', color: 'var(--color-cyan)', initials: 'SC', image: 'avatars/sci.png',
+    };
+    const avatar = renderAgentAvatar(host, persona, 20, appWithImage());
+    const img = avatar.querySelector('img');
+    expect(img).not.toBeNull();
+    expect(img?.getAttribute('src')).toBe('app://vault/avatars/sci.png');
+    expect(avatar.classList.contains('specorator-agent-avatar--image')).toBe(true);
+  });
+
+  it('renders the image ahead of emoji, icon, and initials (image-first precedence)', () => {
+    const host = document.createElement('div');
+    const persona: AgentPersona = {
+      id: 'sci', name: 'Scientist', color: 'var(--color-cyan)',
+      initials: 'SC', icon: 'flask-conical', emoji: '🔬', image: 'avatars/sci.png',
+    };
+    const avatar = renderAgentAvatar(host, persona, 20, appWithImage());
+    expect(avatar.querySelector('img')).not.toBeNull();
+    expect(avatar.getAttribute('data-icon')).toBeNull();
+    expect(avatar.textContent).toBe('');
+    expect(avatar.classList.contains('specorator-agent-avatar--emoji')).toBe(false);
+    expect(avatar.classList.contains('specorator-agent-avatar--initials')).toBe(false);
+  });
+
+  it('falls back to emoji when the image path cannot be resolved (broken/renamed file)', () => {
+    const host = document.createElement('div');
+    const persona: AgentPersona = {
+      id: 'sci', name: 'Scientist', color: 'var(--color-cyan)', emoji: '🔬', image: 'gone.png',
+    };
+    const avatar = renderAgentAvatar(host, persona, 20, appMissingFile());
+    expect(avatar.querySelector('img')).toBeNull();
+    expect(avatar.classList.contains('specorator-agent-avatar--emoji')).toBe(true);
+    expect(avatar.textContent).toBe('🔬');
+  });
+
+  it('falls through to initials when the image is unresolvable and nothing else is set', () => {
+    const host = document.createElement('div');
+    const persona: AgentPersona = {
+      id: 'sci', name: 'Scientist', color: 'var(--color-cyan)', initials: 'SC', image: 'gone.png',
+    };
+    const avatar = renderAgentAvatar(host, persona, 20, appMissingFile());
+    expect(avatar.querySelector('img')).toBeNull();
+    expect(avatar.classList.contains('specorator-agent-avatar--initials')).toBe(true);
+    expect(avatar.textContent).toBe('SC');
+  });
+
+  it('does not treat a whitespace-only image path as an image (emoji wins)', () => {
+    const host = document.createElement('div');
+    const persona: AgentPersona = {
+      id: 'sci', name: 'Scientist', color: 'var(--color-cyan)', emoji: '🔬', image: '   ',
+    };
+    const avatar = renderAgentAvatar(host, persona, 20, appWithImage());
+    expect(avatar.querySelector('img')).toBeNull();
+    expect(avatar.classList.contains('specorator-agent-avatar--emoji')).toBe(true);
+  });
+
+  it('ignores the image when no app is passed (falls through to emoji)', () => {
+    const host = document.createElement('div');
+    const persona: AgentPersona = {
+      id: 'sci', name: 'Scientist', color: 'var(--color-cyan)', emoji: '🔬', image: 'avatars/sci.png',
+    };
+    const avatar = renderAgentAvatar(host, persona, 20);
+    expect(avatar.querySelector('img')).toBeNull();
+    expect(avatar.classList.contains('specorator-agent-avatar--emoji')).toBe(true);
+  });
+
+  it('ignores the image for the built-in persona (cpu still wins)', () => {
+    const host = document.createElement('div');
+    const persona: AgentPersona = {
+      id: 'standard', name: 'Standard', color: 'var(--color-base-90)', builtin: true, image: 'avatars/sci.png',
+    };
+    const avatar = renderAgentAvatar(host, persona, 20, appWithImage());
+    expect(avatar.querySelector('img')).toBeNull();
+    expect(avatar.getAttribute('data-icon')).toBe('cpu');
   });
 });

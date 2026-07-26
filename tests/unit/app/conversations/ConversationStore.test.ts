@@ -31,6 +31,7 @@ function createMockSessions(metadata: SessionMetadata[] = []): MockSessions {
       sessionId: conv.sessionId,
       providerState: conv.providerState,
       boundAgentId: conv.boundAgentId,
+      surface: conv.surface,
     }) as unknown as SessionMetadata),
   };
 }
@@ -123,6 +124,15 @@ describe('ConversationStore', () => {
       // metadata must carry the field so it survives reload
       const savedMeta = sessions.saveMetadata.mock.calls[0][0];
       expect(savedMeta).toMatchObject({ boundAgentId: 'roster:researcher' });
+    });
+
+    it('persists surface when provided', async () => {
+      const { store, sessions } = createStore();
+
+      const conv = await store.createConversation({ surface: 'team-chat' });
+      expect(conv.surface).toBe('team-chat');
+      await store.updateConversation(conv.id, { title: 'x' });
+      expect(sessions.saveMetadata.mock.calls.at(-1)?.[0]).toMatchObject({ surface: 'team-chat' });
     });
   });
 
@@ -413,6 +423,30 @@ describe('ConversationStore', () => {
       expect(meta?.preview).toContain('Hello Claude');
       expect(meta?.messageCount).toBe(1);
     });
+
+    it('excludes team-chat conversations from getConversationList but keeps them in getConversations', async () => {
+      const { store } = createStore();
+      await store.createConversation({ surface: 'team-chat' });     // a DM
+      await store.createConversation({});                            // an ordinary chat (surface absent ⇒ 'chat')
+
+      const listed = store.getConversationList();
+
+      expect(listed.some((c) => c.surface === 'team-chat')).toBe(false);
+      expect(listed.length).toBe(1);
+      // Reconciliation sibling still sees ALL conversations (team-chat DMs need env reconciliation too):
+      expect(store.getConversations().length).toBe(2);
+    });
+  });
+
+  describe('findTeamChatConversationForAgent', () => {
+    it('findTeamChatConversationForAgent returns the agent-bound team-chat conversation, else null', async () => {
+      const { store } = createStore();
+      const dm = await store.createConversation({ boundAgentId: 'roster:a', surface: 'team-chat' });
+      await store.createConversation({ boundAgentId: 'roster:a' });          // ad-hoc, not team-chat
+      await store.createConversation({ boundAgentId: 'roster:b', surface: 'team-chat' }); // other agent
+      expect(store.findTeamChatConversationForAgent('roster:a')?.id).toBe(dm.id);
+      expect(store.findTeamChatConversationForAgent('roster:zzz')).toBeNull();
+    });
   });
 
   describe('loadConversations', () => {
@@ -468,6 +502,23 @@ describe('ConversationStore', () => {
       await store.loadConversations();
 
       expect(store.getConversationSync('conv-1')?.boundAgentId).toBe('roster:researcher');
+    });
+
+    it('loads surface from metadata on loadConversations', async () => {
+      const meta = {
+        id: 'c1',
+        providerId: 'claude' as const,
+        title: 'DM',
+        createdAt: 1,
+        updatedAt: 1,
+        sessionId: null,
+        surface: 'team-chat',
+      } as any;
+      const { store } = createStore({ sessions: createMockSessions([meta]) });
+
+      await store.loadConversations();
+
+      expect(store.getConversationSync('c1')?.surface).toBe('team-chat');
     });
   });
 

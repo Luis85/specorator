@@ -65,6 +65,7 @@ function createPlugin(): { plugin: SpecoratorPlugin; commands: AnyCommand[] } {
 
 const EXPECTED_COMMAND_IDS = [
   'open-view',
+  'open-team-chat',
   'open-agent-board',
   'run-next-ready-work-order',
   'open-marketplace',

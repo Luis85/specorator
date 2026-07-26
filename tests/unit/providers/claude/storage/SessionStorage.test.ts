@@ -549,6 +549,41 @@ describe('SessionStorage', () => {
     });
   });
 
+  describe('toSessionMetadata - surface', () => {
+    it('includes surface when set', () => {
+      const conversation: Conversation = {
+        id: 'conv-team-chat',
+        providerId: 'claude' as ProviderId,
+        title: 'DM',
+        createdAt: 1700000000,
+        updatedAt: 1700001000,
+        sessionId: 'sdk-session',
+        messages: [],
+        surface: 'team-chat',
+      };
+
+      const metadata = storage.toSessionMetadata(conversation);
+
+      expect(metadata.surface).toBe('team-chat');
+    });
+
+    it('omits surface when not set', () => {
+      const conversation: Conversation = {
+        id: 'conv-ad-hoc',
+        providerId: 'claude' as ProviderId,
+        title: 'Ad-hoc chat',
+        createdAt: 1700000000,
+        updatedAt: 1700001000,
+        sessionId: null,
+        messages: [],
+      };
+
+      const metadata = storage.toSessionMetadata(conversation);
+
+      expect(metadata.surface).toBeUndefined();
+    });
+  });
+
   describe('toSessionMetadata', () => {
     it('converts Conversation to SessionMetadata', () => {
       const usage: UsageInfo = {

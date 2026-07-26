@@ -1,16 +1,13 @@
 import { Notice } from 'obsidian';
 
-import { ProviderRegistry } from '../../../core/providers/ProviderRegistry';
-import { asSettingsBag } from '../../../core/types/settings';
 import { t } from '../../../i18n/i18n';
 import type SpecoratorPlugin from '../../../main';
-import { resolveAgentProvider } from './resolveAgentProvider';
-import type { RosterAgent } from './rosterTypes';
 
 /**
- * Roster actions consumed by the Vue `AgentsPanel` (extracted for the legacy
- * `AgentRosterView`, deleted 2026-07-04 — see ADR 0003), keeping the Notice
- * copy and provider-resolution rules in one place.
+ * Roster action consumed by the Vue `AgentsPanel` — the provider sync + its
+ * Notice copy (extracted for the legacy `AgentRosterView`, deleted 2026-07-04,
+ * ADR 0003). Starting a chat now opens the agent's Team Chat DM directly
+ * (`activateTeamChat`), so the former sidebar-launch helper was removed.
  */
 
 /** Sync every roster agent to the enabled providers, noticing both result branches. */
@@ -28,24 +25,4 @@ export async function syncRosterAgentsWithNotice(plugin: SpecoratorPlugin): Prom
         })
       : t('agentRoster.syncNone'),
   );
-}
-
-/**
- * Open a chat bound to the agent on a supported provider. The agent's
- * preferred provider (explicit `providerOverride`, else its model's provider)
- * wins only when that provider is actually enabled; otherwise it falls back to
- * the user's active/default enabled provider. This prevents defaulting to a
- * disabled Claude (which would error with "CLI not found") when, say, only
- * Cursor is enabled. Always opens a fresh tab so the agent never hijacks a
- * chat already in use (e.g. a streaming conversation in the active tab).
- */
-export async function startChatWithRosterAgent(plugin: SpecoratorPlugin, agent: RosterAgent): Promise<void> {
-  const settings = asSettingsBag(plugin.settings);
-  const providerId = resolveAgentProvider(
-    agent,
-    (p) => ProviderRegistry.isEnabled(p, settings),
-    ProviderRegistry.resolveSettingsProviderId(settings),
-  );
-  const conversation = await plugin.createConversation({ providerId, boundAgentId: agent.id });
-  await plugin.openConversation(conversation.id, { requireNewTab: true });
 }

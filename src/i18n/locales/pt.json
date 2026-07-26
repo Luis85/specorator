@@ -47,9 +47,6 @@
     "installedNotice": "Installed \"{name}\".",
     "skippedNotice": "\"{name}\" is already installed.",
     "failedNotice": "Couldn't install \"{name}\".",
-    "failedNoticeReason": "Couldn't install \"{name}\": {reason}",
-    "installedPackageNotice": "Installed \"{name}\" and {count} of its required items.",
-    "completedPackageNotice": "\"{name}\" was already installed — added {count} of its required items.",
     "type": {
       "quickAction": "Quick Action",
       "agent": "Agent",
@@ -65,6 +62,9 @@
       "installedHere": "Installed here",
       "userScopeHint": "User scope installs to your home directory (outside this vault), shared across all your vaults."
     },
+    "failedNoticeReason": "Couldn't install \"{name}\": {reason}",
+    "installedPackageNotice": "Installed \"{name}\" and {count} of its required items.",
+    "completedPackageNotice": "\"{name}\" was already installed — added {count} of its required items.",
     "package": {
       "heading": "Included with this install",
       "install": "Install all ({count})",
@@ -197,7 +197,8 @@
       "unknownCommand": "Unknown command: {command}",
       "noConversationsToResume": "No conversations to resume",
       "openConversationFailed": "Failed to open conversation: {error}",
-      "chatServiceInitFailed": "Failed to initialize chat service"
+      "chatServiceInitFailed": "Failed to initialize chat service",
+      "imagePersistFailed": "Couldn't save the image — your message was restored. Please try again."
     },
     "runtimeError": {
       "cliNotFound": {
@@ -1225,6 +1226,12 @@
     "colorNone": "None",
     "icon": "Ícone",
     "iconNone": "Padrão",
+    "emoji": "Emoji",
+    "avatarImage": "Image",
+    "avatarImagePlaceholder": "e.g. avatars/researcher.png",
+    "avatarImageClear": "Clear image",
+    "voice": "Voice / personality",
+    "voicePlaceholder": "e.g. Warm, concise mentor; explains with analogies",
     "bindingHint": "Inicie um novo chat para usar um agente diferente.",
     "navAriaLabel": "Seções da biblioteca",
     "removeCapability": "Remover {name}",
@@ -1303,7 +1310,8 @@
   "ribbon": {
     "openChat": "Open Co-Worker Chat",
     "openAgentBoard": "Open Agent Board",
-    "openLibrary": "Open Library"
+    "openLibrary": "Open Library",
+    "openTeamChat": "Open Team Chat"
   },
   "commands": {
     "openView": "Open chat view",
@@ -1326,7 +1334,22 @@
     "openLoopLibrary": "Open loop library",
     "openLibrary": "Open Library",
     "openQuickActions": "Open Quick Actions",
-    "cursorOpenAcpCaptures": "Cursor: open ACP capture folder"
+    "cursorOpenAcpCaptures": "Cursor: open ACP capture folder",
+    "openTeamChat": "Open Team Chat"
+  },
+  "teamChat": {
+    "viewTitle": "Team Chat",
+    "emptyState": "Select an agent to start chatting.",
+    "rosterEmpty": "No agents in your team yet.",
+    "rosterEmptyCta": "Find agents in the Marketplace",
+    "tabCapReached": "Tab limit reached. Close a tab to open this chat.",
+    "presenceIdle": "Idle",
+    "presenceBusy": "Busy",
+    "providerRotated": "{agent}: provider changed — started a new thread.",
+    "rotationInterrupted": "Response interrupted — the agent's provider changed.",
+    "agentRemoved": "This agent was removed from your team — the chat is read-only. Pick another agent to continue.",
+    "agentVerifyFailed": "Couldn't verify the agent — please try again.",
+    "actionUnavailableInDm": "Not available in Team Chat — each agent has one fixed thread."
   },
   "onboarding": {
     "viewTitle": "Configuração",

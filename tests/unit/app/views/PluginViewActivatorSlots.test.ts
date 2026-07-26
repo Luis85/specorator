@@ -1,4 +1,5 @@
 import { PluginViewActivator } from '../../../../src/app/views/PluginViewActivator';
+import { VIEW_TYPE_SPECORATOR } from '../../../../src/core/types';
 
 function fakeTabManager(chat: number, wo: number) {
   return {
@@ -37,6 +38,7 @@ function fakePlugin(opts: {
         ? [{
             getTabManager: () => tabManager,
             areTabsRestored: () => opts.restored ?? true,
+            leaf: { view: { getViewType: () => VIEW_TYPE_SPECORATOR } },
           }]
         : [],
     app: { workspace: { getLeavesOfType: () => [] } },

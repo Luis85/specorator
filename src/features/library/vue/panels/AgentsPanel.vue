@@ -5,10 +5,11 @@ import { inject, nextTick, onMounted, onUnmounted, ref, watch } from 'vue';
 import { t } from '../../../../i18n/i18n';
 import { confirm } from '../../../../shared/modals/ConfirmModal';
 import { withErrorNotice } from '../../../../shared/uiAction';
-import { startChatWithRosterAgent, syncRosterAgentsWithNotice } from '../../../agents/roster/rosterAgentActions';
+import { syncRosterAgentsWithNotice } from '../../../agents/roster/rosterAgentActions';
 import { rosterLibraryAccessors } from '../../../agents/roster/rosterLibraryAccessors';
 import type { RosterAgent } from '../../../agents/roster/rosterTypes';
 import { AgentDetailEditor } from '../../../agents/roster/view/AgentDetailEditor';
+import { activateTeamChat } from '../../../teamChat/activateTeamChat';
 import AgentCard from '../components/AgentCard.vue';
 import LibraryEmptyState from '../components/LibraryEmptyState.vue';
 import LibraryToolbar from '../components/LibraryToolbar.vue';
@@ -155,9 +156,9 @@ function onStartChat(agent: RosterAgent): void {
 
 async function startChat(agent: RosterAgent): Promise<void> {
   if (!plugin) return;
-  // Provider resolution + fresh-tab policy live in rosterAgentActions,
-  // shared with the legacy AgentRosterView.
-  await startChatWithRosterAgent(plugin, agent);
+  // Open (or resume) the agent's persistent Team Chat DM — its provider/model
+  // resolution and one-thread-per-agent policy live in the Team Chat surface.
+  await activateTeamChat(plugin, agent.id);
 }
 
 /**

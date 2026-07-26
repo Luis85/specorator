@@ -18,6 +18,31 @@ const AVATAR_COLORS = ['red', 'orange', 'yellow', 'green', 'cyan', 'blue', 'purp
 const ICON_CHOICES = ['bot', 'bug', 'wrench', 'telescope', 'flask-conical', 'map', 'shield-check', 'pencil', 'book-open', 'search', 'sparkles', 'code'];
 const DETAIL_AVATAR_SIZE = 48;
 
+/**
+ * Last grapheme cluster of `s` — keeps a multi-code-point emoji (e.g. a ZWJ family
+ * sequence) whole while dropping anything before it, so an avatar holds exactly one
+ * glyph AND inserting a new emoji after an existing one replaces it rather than being
+ * discarded. Falls back to the last code point where `Intl.Segmenter` is unavailable.
+ */
+function lastGrapheme(s: string): string {
+  if (!s) return '';
+  const Segmenter = (Intl as {
+    Segmenter?: new (
+      locales?: string,
+      options?: { granularity: 'grapheme' },
+    ) => { segment(input: string): Iterable<{ segment: string }> };
+  }).Segmenter;
+  if (Segmenter) {
+    let last = '';
+    for (const { segment } of new Segmenter(undefined, { granularity: 'grapheme' }).segment(s)) {
+      last = segment;
+    }
+    return last;
+  }
+  const points = Array.from(s);
+  return points[points.length - 1] ?? '';
+}
+
 export interface AgentDetailEditorCallbacks {
   onBack(): void;
   onStartChat(agent: RosterAgent): void;
@@ -104,6 +129,7 @@ export class AgentDetailEditor {
     descEl.addEventListener('input', () => { this.draft.description = descEl.value; this.updateDirty(); });
 
     this.renderAppearanceRow(fields);
+    this.renderVoiceRow(fields);
     this.renderRolesRow(fields);
     this.renderTagsRow(fields);
   }
@@ -141,6 +167,70 @@ export class AgentDetailEditor {
     iconSelect.addEventListener('change', () => {
       this.draft.icon = iconSelect.value || undefined;
       this.refreshAvatar();
+      this.updateDirty();
+    });
+
+    const emoji = row.createEl('input', { cls: 'specorator-roster-appearance-emoji', type: 'text' });
+    // No maxLength: a UTF-16 code-unit cap would truncate a valid multi-code-point
+    // emoji (e.g. a ZWJ family sequence) mid-grapheme and corrupt the avatar.
+    emoji.value = this.draft.avatarEmoji ?? '';
+    emoji.placeholder = t('agentRoster.emoji');
+    emoji.setAttribute('aria-label', t('agentRoster.emoji'));
+    emoji.addEventListener('input', () => {
+      const normalized = lastGrapheme(emoji.value.trim());
+      this.draft.avatarEmoji = normalized || undefined;
+      // Reflect the normalized single glyph back into the field so what's shown matches
+      // what's saved (a multi-glyph paste otherwise leaves the field out of sync).
+      if (emoji.value !== normalized) emoji.value = normalized;
+      this.refreshAvatar();
+      this.updateDirty();
+    });
+
+    this.renderImageControl(row);
+  }
+
+  /**
+   * Vault-image avatar control: a path input (highest avatar precedence) plus a
+   * clear affordance. No dedicated file picker exists in the repo, so this is a
+   * plain vault-relative path input; an unresolvable path just falls through the
+   * avatar precedence chain at render time.
+   */
+  private renderImageControl(row: HTMLElement): void {
+    const wrap = row.createDiv({ cls: 'specorator-roster-appearance-image-wrap' });
+    const image = wrap.createEl('input', { cls: 'specorator-roster-appearance-image', type: 'text' });
+    image.value = this.draft.avatarImage ?? '';
+    image.placeholder = t('agentRoster.avatarImagePlaceholder');
+    image.setAttribute('aria-label', t('agentRoster.avatarImage'));
+
+    const apply = (): void => {
+      this.draft.avatarImage = image.value.trim() || undefined;
+      this.refreshAvatar();
+      this.updateDirty();
+    };
+    image.addEventListener('input', apply);
+
+    // The visible '×' glyph is decorative and lives in CSS ::before (no keyed JS
+    // literal); the accessible name is the keyed aria-label.
+    const clear = wrap.createEl('button', {
+      cls: 'specorator-roster-appearance-image-clear',
+      attr: { type: 'button' },
+    });
+    clear.setAttribute('aria-label', t('agentRoster.avatarImageClear'));
+    clear.addEventListener('click', () => {
+      image.value = '';
+      apply();
+    });
+  }
+
+  private renderVoiceRow(parent: HTMLElement): void {
+    const row = parent.createDiv({ cls: 'specorator-roster-voice' });
+    const voice = row.createEl('textarea', { cls: 'specorator-roster-voice-input' });
+    voice.rows = 2;
+    voice.value = this.draft.voice ?? '';
+    voice.placeholder = t('agentRoster.voicePlaceholder');
+    voice.setAttribute('aria-label', t('agentRoster.voice'));
+    voice.addEventListener('input', () => {
+      this.draft.voice = voice.value.trim() ? voice.value : undefined;
       this.updateDirty();
     });
   }
@@ -309,6 +399,6 @@ export class AgentDetailEditor {
   private refreshAvatar(): void {
     if (!this.avatarHost) return;
     this.avatarHost.empty();
-    renderAgentAvatar(this.avatarHost, rosterAgentToPersona(this.draft), DETAIL_AVATAR_SIZE);
+    renderAgentAvatar(this.avatarHost, rosterAgentToPersona(this.draft), DETAIL_AVATAR_SIZE, this.plugin.app);
   }
 }

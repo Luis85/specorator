@@ -517,7 +517,7 @@ export class SpecoratorSettingTab extends PluginSettingTab {
               [providerId]: normalizeHiddenCommandList(value.split(/\r?\n/)),
             };
             await this.plugin.saveSettings();
-            this.plugin.getView()?.updateHiddenProviderCommands();
+            for (const view of this.plugin.getAllViews()) view.updateHiddenProviderCommands?.();
           });
         text.inputEl.rows = 4;
         text.inputEl.cols = 30;

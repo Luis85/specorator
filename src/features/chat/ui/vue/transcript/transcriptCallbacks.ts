@@ -31,8 +31,17 @@ export interface TranscriptCallbacks {
   onRewind: (messageId: string, mode?: ChatRewindMode) => Promise<void>;
   /** Fork from a user message. */
   onFork: (messageId: string) => Promise<void>;
-  /** Whether rewind/fork are eligible for this message index (findRewindContext). */
+  /** Whether rewind is eligible for this message index (findRewindContext). */
   isRewindEligible: (messageId: string) => boolean;
+  /**
+   * Whether fork is eligible for this message. Split from `isRewindEligible` so a
+   * surface can disable fork while keeping rewind — a Team Chat DM disables fork
+   * (an unbound ad-hoc fork would escape the surface filter) but rewind, being
+   * same-conversation, stays safe. Optional: when absent (older callback builders
+   * / unit fixtures) the renderer falls back to `isRewindEligible`, the pre-split
+   * behavior, so non-Team-Chat surfaces are byte-identical.
+   */
+  isForkEligible?: (messageId: string) => boolean;
   /** Open provider settings (runtime-error card, disabled-provider prompt). */
   openProviderSettings: (providerId: string) => void;
   /** Re-dispatch the user's last turn (runtime-error retry); null when unavailable. */

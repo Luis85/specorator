@@ -182,6 +182,7 @@ export class SessionStorage {
       messageCount: 0,
       preview: 'SDK session',
       titleGenerationStatus: meta.titleGenerationStatus,
+      surface: meta.surface,
     }));
 
     return metas.sort((a, b) =>
@@ -212,6 +213,7 @@ export class SessionStorage {
       resumeAtMessageId: conversation.resumeAtMessageId,
       workOrderPath: conversation.workOrderPath,
       boundAgentId: conversation.boundAgentId,
+      surface: conversation.surface,
     };
   }
 

@@ -7,6 +7,7 @@ import type { ChatMessage } from '../../../core/types';
 import { t } from '../../../i18n/i18n';
 import type SpecoratorPlugin from '../../../main';
 import { openSpecoratorProviderSettings } from '../../../utils/obsidianPrivateApi';
+import { isTeamChatSurfaceConversation } from '../controllers/teamChatSurface';
 import { eligibleMessageActions } from '../rendering/messageActions';
 import { findRewindContext } from '../rewind';
 import { mountTranscript } from '../ui/vue/transcript/mountTranscript';
@@ -114,6 +115,14 @@ function buildForkContext(
  * Surfaces the matching notice and returns false when forking can't proceed.
  */
 function canFork(tab: TabData, plugin: SpecoratorPlugin): boolean {
+  // A Team Chat DM is one fixed thread per agent, so forking (an unbound ad-hoc
+  // conversation that escapes the surface filter and desyncs the room map) is
+  // disabled — this closes the `/fork` COMMAND path (handleForkAll), the message
+  // fork button already being hidden via the transcript's `isForkEligible`.
+  if (isTeamChatSurfaceConversation(plugin, tab.conversationId)) {
+    new Notice(t('teamChat.actionUnavailableInDm'));
+    return false;
+  }
   if (!getTabCapabilities(tab, plugin).supportsFork) {
     new Notice(t('chat.fork.unsupportedProvider'));
     return false;
@@ -280,17 +289,33 @@ function buildTranscriptCallbacks(
   plugin: SpecoratorPlugin,
   forkMessageCallback?: (userMessageId: string) => Promise<void>,
 ): TranscriptCallbacks {
+  const isRewindEligible = (messageId: string): boolean => {
+    const msgs = tab.state.messages;
+    const idx = msgs.findIndex((m) => m.id === messageId);
+    if (idx === -1) return false;
+    const ctx = findRewindContext(msgs, idx);
+    return ctx.hasResponse && !!ctx.prevAssistantUuid;
+  };
+  // A Team Chat DM tab owns a `surface: 'team-chat'` conversation. Gate the
+  // reused-island actions that would otherwise resolve through the sidebar view
+  // on that surface: fork is disabled (an unbound ad-hoc fork would escape the
+  // surface filter and desync the room map), and message-action targeting rebases
+  // onto the owning tab. Shares the `isTeamChatSurfaceConversation` seam with the
+  // fork-command guard. Non-team-chat surfaces are byte-identical to before.
+  const isTeamChatSurface = (): boolean => isTeamChatSurfaceConversation(plugin, tab.conversationId);
+  // `getActiveConversationSnapshot()` reads the *sidebar* view, so on the Team
+  // Chat surface it mis-targets (or no-ops on) a DM; there, target the owning tab.
+  const resolveActionConversationId = (): string | null =>
+    isTeamChatSurface()
+      ? tab.conversationId ?? null
+      : plugin.getActiveConversationSnapshot()?.id ?? tab.conversationId ?? null;
+
   return {
     subscribe: tab.transcript!.subscribe,
     onRewind: (id, mode) => tab.controllers.conversationController?.rewind(id, mode) ?? Promise.resolve(),
     onFork: (id) => forkMessageCallback?.(id) ?? Promise.resolve(),
-    isRewindEligible: (messageId) => {
-      const msgs = tab.state.messages;
-      const idx = msgs.findIndex((m) => m.id === messageId);
-      if (idx === -1) return false;
-      const ctx = findRewindContext(msgs, idx);
-      return ctx.hasResponse && !!ctx.prevAssistantUuid;
-    },
+    isRewindEligible,
+    isForkEligible: (messageId) => !isTeamChatSurface() && isRewindEligible(messageId),
     openProviderSettings: (providerId) =>
       openSpecoratorProviderSettings(plugin.app, plugin.manifest.id, providerId),
     onRetryLastTurn: () => tab.controllers.inputController?.retryLastTurn(),
@@ -300,7 +325,7 @@ function buildTranscriptCallbacks(
         id: action.id,
         label: action.label,
         icon: action.icon,
-        run: () => action.run(msg, plugin.getActiveConversationSnapshot()?.id ?? tab.conversationId ?? null),
+        run: () => action.run(msg, resolveActionConversationId()),
       })),
     copyText: (text) => {
       void navigator.clipboard?.writeText(text);

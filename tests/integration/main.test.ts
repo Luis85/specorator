@@ -4,6 +4,7 @@ import { resetCommandHotkeysForTests } from '@/core/commands/commandHotkeyRegist
 import { TOOL_SUBAGENT } from '@/core/tools/toolNames';
 import { VIEW_TYPE_SPECORATOR } from '@/core/types';
 import { QuickActionFavoritesCache } from '@/features/quickActions/QuickActionFavoritesCache';
+import { VIEW_TYPE_TEAM_CHAT } from '@/features/teamChat/viewType';
 import * as sdkSession from '@/providers/claude/history/ClaudeHistoryStore';
 import { DEFAULT_SETTINGS } from '@/providers/claude/types/settings';
 
@@ -172,6 +173,25 @@ describe('SpecoratorPlugin', () => {
         id: 'open-view',
         name: 'Open chat view',
         callback: expect.any(Function),
+      });
+    });
+
+    it('registers the Team Chat view', async () => {
+      await plugin.onload();
+
+      expect((plugin.registerView as jest.Mock)).toHaveBeenCalledWith(
+        VIEW_TYPE_TEAM_CHAT,
+        expect.any(Function),
+      );
+    });
+
+    it('adds the open-team-chat command', async () => {
+      await plugin.onload();
+
+      // Throws if the command was never registered (getRegisteredCommand).
+      expect(getRegisteredCommand('open-team-chat')).toMatchObject({
+        id: 'open-team-chat',
+        name: 'Open Team Chat',
       });
     });
 
@@ -554,93 +574,67 @@ describe('SpecoratorPlugin', () => {
       expect(saveMetadataSpy).toHaveBeenCalled();
     });
 
-    it('broadcasts ensureReady with force when env changes without model change', async () => {
+    it('delegates a non-model env change to cancel + restart with changed=false', async () => {
       await plugin.onload();
 
-      // Mock getView to return a view with tabManager
-      const mockSyncConversationState = jest.fn();
-      const mockEnsureReady = jest.fn().mockResolvedValue(true);
+      const mockCancel = jest.fn().mockReturnValue(['t1']);
+      const mockRestart = jest.fn().mockResolvedValue(0);
       const mockTabManager = {
-        getAllTabs: jest.fn().mockReturnValue([{
-          providerId: 'claude',
-          conversationId: null,
-          state: { isStreaming: false },
-          serviceInitialized: true,
-          service: {
-            ensureReady: mockEnsureReady,
-            syncConversationState: mockSyncConversationState,
-          },
-          ui: { externalContextSelector: { getExternalContexts: jest.fn().mockReturnValue([]) } },
-        }]),
+        cancelStreamingTabsForProviders: mockCancel,
+        restartRuntimeTabs: mockRestart,
         getPersistedState: jest.fn().mockReturnValue({ tabs: [], activeTabId: null }),
+        disposeAllRuntimes: jest.fn(),
       };
-      const mockView = {
+      const mockView: Record<string, unknown> = {
         getTabManager: jest.fn().mockReturnValue(mockTabManager),
         invalidateProviderCommandCaches: jest.fn(),
         refreshModelSelector: jest.fn(),
+        getViewType: () => VIEW_TYPE_SPECORATOR,
       };
+      // Sidebar host carrying Obsidian's view.leaf.view back-reference, which the
+      // onunload persist path reads to scope the global tab-state write (T5).
+      mockView.leaf = { view: mockView };
       jest.spyOn(plugin, 'getAllViews').mockReturnValue([mockView as any]);
 
-      // Change env but not in a way that affects model
+      // A non-model env var does not invalidate the session (changed=false). The
+      // per-tab force-restart + external-context sync now lives inside
+      // TabManager.restartRuntimeTabs (pinned by the TabManager suite); here we pin
+      // only that the shell routes through the two-phase seam with the right flag.
       await plugin.applyEnvironmentVariables('shared', 'SOME_VAR=value');
 
-      expect(mockSyncConversationState).toHaveBeenCalledWith(null, []);
-      expect(mockEnsureReady).toHaveBeenCalledWith({ force: true });
+      expect(mockCancel).toHaveBeenCalledWith(expect.arrayContaining(['claude']));
+      expect(mockRestart).toHaveBeenCalledWith(['t1'], false);
     });
 
-    it('syncs live external contexts before restarting invalidated Claude runtimes', async () => {
+    it('delegates a model-invalidating env change to cancel + restart with changed=true', async () => {
       await plugin.onload();
 
-      const conversation = await plugin.createConversation({
-        providerId: 'claude',
-        sessionId: 'session-123',
-      });
-      await plugin.updateConversation(conversation.id, {
-        externalContextPaths: ['/saved/context'],
-        messages: [{
-          content: 'hi',
-          id: 'msg-1',
-          role: 'user',
-          timestamp: Date.now(),
-          userMessageId: 'msg-1',
-        }],
-      });
-
-      const mockSyncConversationState = jest.fn();
-      const mockResetSession = jest.fn();
-      const mockEnsureReady = jest.fn().mockResolvedValue(true);
+      const mockCancel = jest.fn().mockReturnValue(['t1']);
+      const mockRestart = jest.fn().mockResolvedValue(0);
       const mockTabManager = {
-        getAllTabs: jest.fn().mockReturnValue([{
-          conversationId: conversation.id,
-          providerId: 'claude',
-          state: { isStreaming: false },
-          serviceInitialized: true,
-          service: {
-            ensureReady: mockEnsureReady,
-            resetSession: mockResetSession,
-            syncConversationState: mockSyncConversationState,
-          },
-          ui: { externalContextSelector: { getExternalContexts: jest.fn().mockReturnValue(['/live/context']) } },
-        }]),
+        cancelStreamingTabsForProviders: mockCancel,
+        restartRuntimeTabs: mockRestart,
         getPersistedState: jest.fn().mockReturnValue({ tabs: [], activeTabId: null }),
+        disposeAllRuntimes: jest.fn(),
       };
-      const mockView = {
+      const mockView: Record<string, unknown> = {
         getTabManager: jest.fn().mockReturnValue(mockTabManager),
         invalidateProviderCommandCaches: jest.fn(),
         refreshModelSelector: jest.fn(),
+        getViewType: () => VIEW_TYPE_SPECORATOR,
       };
+      // Sidebar host carrying Obsidian's view.leaf.view back-reference, which the
+      // onunload persist path reads to scope the global tab-state write (T5).
+      mockView.leaf = { view: mockView };
       jest.spyOn(plugin, 'getAllViews').mockReturnValue([mockView as any]);
 
       await plugin.applyEnvironmentVariables('provider:claude', 'ANTHROPIC_MODEL=claude-sonnet-4-5');
 
-      expect(mockSyncConversationState).toHaveBeenCalledWith(
-        expect.objectContaining({ id: conversation.id }),
-        ['/live/context'],
-      );
-      expect(mockResetSession).toHaveBeenCalledTimes(1);
-      // Env-invalidated runtimes force a respawn so a persistent child can't keep
-      // stale credentials/base URL (a non-forced ensureReady early-returns).
-      expect(mockEnsureReady).toHaveBeenCalledWith({ force: true });
+      // A model-affecting change invalidates the session (changed=true). Per-tab
+      // session drop + live external-context precedence + forced respawn are
+      // pinned by the TabManager suite; here we pin the routing + the flag.
+      expect(mockCancel).toHaveBeenCalledWith(['claude']);
+      expect(mockRestart).toHaveBeenCalledWith(['t1'], true);
     });
   });
 
@@ -975,6 +969,107 @@ describe('SpecoratorPlugin', () => {
       const meta = list.find(c => c.id === conv.id);
 
       expect(meta?.preview).toContain('Hello Claude');
+    });
+
+    it('excludes team-chat conversations while keeping them reachable via getConversationSync', async () => {
+      await plugin.onload();
+
+      const dm = await plugin.createConversation({ surface: 'team-chat' });
+
+      const list = plugin.getConversationList();
+
+      expect(list.some(c => c.id === dm.id)).toBe(false);
+      expect(plugin.getConversationSync(dm.id)?.surface).toBe('team-chat');
+    });
+  });
+
+  describe('findTeamChatConversationForAgent', () => {
+    it('finds a created team-chat DM by bound agent and returns null for an unknown agent', async () => {
+      await plugin.onload();
+
+      const dm = await plugin.createConversation({ boundAgentId: 'roster:a', surface: 'team-chat' });
+      // An ad-hoc chat bound to the same agent must NOT be adopted as the DM.
+      await plugin.createConversation({ boundAgentId: 'roster:a' });
+
+      expect(plugin.findTeamChatConversationForAgent('roster:a')?.id).toBe(dm.id);
+      expect(plugin.findTeamChatConversationForAgent('roster:unknown')).toBeNull();
+    });
+  });
+
+  describe('getAllViews / getView host enumeration', () => {
+    // A tab-manager stub with the teardown surface onunload() reaches
+    // (dispose + persist) so the leaf stubs survive afterEach cleanly.
+    function fakeTabManager(overrides: Record<string, unknown> = {}) {
+      return {
+        disposeAllRuntimes: jest.fn(),
+        getPersistedState: jest.fn().mockReturnValue({ openTabs: [] }),
+        findTabByConversation: jest.fn().mockReturnValue(null),
+        ...overrides,
+      };
+    }
+
+    // A minimal chat-engine host leaf: `getViewType` distinguishes the two hosts
+    // and `getTabManager` (a function) is what the duck-type predicates key on.
+    // The view carries a back-reference to its leaf (Obsidian's `view.leaf.view
+    // === view` invariant) so the teardown persist path — PluginLifecycle scopes
+    // the global tab-state write via `view.leaf.view.getViewType()` (T5) — resolves.
+    function chatLeaf(viewType: string, tabManager: unknown = fakeTabManager()) {
+      const view: Record<string, unknown> = {
+        getViewType: () => viewType,
+        getTabManager: () => tabManager,
+      };
+      const leaf = { view };
+      view.leaf = leaf;
+      return leaf;
+    }
+
+    function stubLeavesByType(sidebar: unknown, teamChat: unknown): void {
+      mockApp.workspace.getLeavesOfType.mockImplementation((type: string) => {
+        if (type === VIEW_TYPE_SPECORATOR) return [sidebar];
+        if (type === VIEW_TYPE_TEAM_CHAT) return [teamChat];
+        return [];
+      });
+    }
+
+    it('getAllViews() enumerates both the sidebar and Team Chat hosts', async () => {
+      await plugin.onload();
+      const sidebar = chatLeaf(VIEW_TYPE_SPECORATOR);
+      const teamChat = chatLeaf(VIEW_TYPE_TEAM_CHAT);
+      stubLeavesByType(sidebar, teamChat);
+
+      const types = plugin
+        .getAllViews()
+        .map((v) => (v as unknown as { getViewType(): string }).getViewType());
+      expect(types).toHaveLength(2);
+      expect(types).toEqual(expect.arrayContaining([VIEW_TYPE_SPECORATOR, VIEW_TYPE_TEAM_CHAT]));
+    });
+
+    it('getView() stays sidebar-scoped even when a Team Chat leaf is open', async () => {
+      await plugin.onload();
+      const sidebar = chatLeaf(VIEW_TYPE_SPECORATOR);
+      const teamChat = chatLeaf(VIEW_TYPE_TEAM_CHAT);
+      stubLeavesByType(sidebar, teamChat);
+
+      // Deliberate asymmetry (T4.2): getAllViews spans both hosts, but getView
+      // answers "the active *sidebar* conversation" only, so a Team Chat leaf
+      // must never be returned here.
+      expect(plugin.getView()).toBe(sidebar.view);
+    });
+
+    it('findConversationAcrossViews() resolves a tab living in a Team Chat host', async () => {
+      await plugin.onload();
+      const sidebar = chatLeaf(VIEW_TYPE_SPECORATOR);
+      const teamChatManager = fakeTabManager({
+        findTabByConversation: jest.fn().mockReturnValue({ tabId: 'tc-tab' }),
+      });
+      const teamChat = chatLeaf(VIEW_TYPE_TEAM_CHAT, teamChatManager);
+      stubLeavesByType(sidebar, teamChat);
+
+      // Inherited from getAllViews() — findConversationAcrossViews delegates to it,
+      // so broadening enumeration is what lets it reach Team Chat DM tabs.
+      const match = plugin.findConversationAcrossViews('conv-in-team-chat');
+      expect(match).toEqual({ view: teamChat.view, tabId: 'tc-tab' });
+      expect(teamChatManager.findTabByConversation).toHaveBeenCalledWith('conv-in-team-chat');
     });
   });
 
@@ -1828,4 +1923,47 @@ describe('SpecoratorPlugin', () => {
     });
   });
 
+});
+
+describe('host-migration characterization', () => {
+  function viewWithTabs(convToTab: Record<string, string>, extra: Record<string, unknown> = {}) {
+    return {
+      leaf: { id: `leaf-${Math.random()}` },
+      getTabManager: () => ({
+        findTabByConversation: (id: string) => (id in convToTab ? { tabId: convToTab[id] } : null),
+      }),
+      ...extra,
+    };
+  }
+
+  it('findConversationAcrossViews returns the owning view + tab id via findTabByConversation', () => {
+    const view1 = viewWithTabs({ 'c-1': 't1' });
+    const view2 = viewWithTabs({ 'c-2': 't2' });
+    const ctx = { getAllViews: () => [view1, view2] } as unknown as SpecoratorPlugin;
+
+    const result = SpecoratorPlugin.prototype.findConversationAcrossViews.call(ctx, 'c-2');
+
+    expect(result).toEqual({ view: view2, tabId: 't2' });
+    expect(SpecoratorPlugin.prototype.findConversationAcrossViews.call(ctx, 'missing')).toBeNull();
+  });
+
+  it('quiesceViewsBeforeConversationDelete delegates to quiesceTabsForConversation per view', async () => {
+    const quiesce = jest.fn().mockResolvedValue(undefined);
+    const view = { leaf: {}, getTabManager: () => ({ quiesceTabsForConversation: quiesce }) };
+    const ctx = { getAllViews: () => [view] } as unknown as SpecoratorPlugin;
+
+    await (SpecoratorPlugin.prototype as any).quiesceViewsBeforeConversationDelete.call(ctx, 'c-1');
+
+    expect(quiesce).toHaveBeenCalledWith('c-1');
+  });
+
+  it('repairViewsAfterConversationDelete delegates to repairTabsForConversation per view', async () => {
+    const repair = jest.fn().mockResolvedValue(undefined);
+    const view = { leaf: {}, getTabManager: () => ({ repairTabsForConversation: repair }) };
+    const ctx = { getAllViews: () => [view] } as unknown as SpecoratorPlugin;
+
+    await (SpecoratorPlugin.prototype as any).repairViewsAfterConversationDelete.call(ctx, 'c-1');
+
+    expect(repair).toHaveBeenCalledWith('c-1');
+  });
 });

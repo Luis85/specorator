@@ -89,9 +89,9 @@ export class PluginViewActivator {
    * created, or created but still restoring its persisted tabs — report no
    * free capacity so the queue waits instead of racing the restore.
    *
-   * When no view exists at all, only reservations contribute to usage — there
-   * are no live WO tabs yet, so the queue may still launch up to the cap minus
-   * pending reservations.
+   * When no work-order host is live and no sidebar leaf is persisted, only
+   * reservations contribute to usage — there are no live or restorable WO tabs
+   * yet, so the queue may still launch up to the cap minus pending reservations.
    */
   getTabSlotUsage(): { used: number; max: number } {
     const max = this.getMaxTabsLimitFor('work-order');
@@ -101,12 +101,28 @@ export class PluginViewActivator {
           const view = this.plugin.getView();
           return view ? [view] : [];
         })();
-    if (views.length === 0) {
-      const leaves = this.plugin.app.workspace.getLeavesOfType(VIEW_TYPE_SPECORATOR);
-      if (leaves.length === 0) {
+    // Only the sidebar chat view (VIEW_TYPE_SPECORATOR) hosts work-order run tabs (launched via
+    // SpecoratorViewWorkOrderBridge → createTaskRunTab). A Team Chat leaf creates chat-kind DM
+    // tabs only, so its restore readiness must not gate work-order capacity. Filter to WO hosts
+    // FIRST so a live Team Chat leaf — which makes `views` non-empty — can't mask a deferred
+    // sidebar leaf that still restores WO tabs later; a mid-restore Team Chat leaf must also not
+    // trip the anyMidRestore block below and stall the queue. Allowlisting the WO host (rather
+    // than denylisting Team Chat) also excludes any future non-WO view type by default.
+    const workOrderHosts = views.filter(
+      (view) => view.leaf.view.getViewType() === VIEW_TYPE_SPECORATOR,
+    );
+    // Computed once and consulted in BOTH branches below: a sidebar leaf may be deferred (persisted
+    // but not yet instantiated, so absent from getAllViews) whether or not a LIVE work-order host
+    // already exists, and either way it restores WO tabs the loop can't yet count.
+    const sidebarLeaves = this.plugin.app.workspace.getLeavesOfType(VIEW_TYPE_SPECORATOR);
+    if (workOrderHosts.length === 0) {
+      // No LIVE work-order host. A persisted sidebar leaf may be deferred — not yet instantiated,
+      // so absent from getAllViews — but will restore its WO tabs later, so count its persisted
+      // tabs; otherwise the queue would read free capacity and over-launch before restore.
+      if (sidebarLeaves.length === 0) {
         return { used: this.plugin.chatTabReservations.pending, max };
       }
-      if (leaves.every((leaf) => leaf.isDeferred)) {
+      if (sidebarLeaves.every((leaf) => leaf.isDeferred)) {
         const persistedWorkOrderTabs = this.getLastKnownOpenTabCountFor('work-order');
         return {
           used: persistedWorkOrderTabs + this.plugin.chatTabReservations.pending,
@@ -117,8 +133,11 @@ export class PluginViewActivator {
     }
 
     let used = this.plugin.chatTabReservations.pending;
-    let anyMidRestore = false;
-    for (const view of views) {
+    // A deferred sidebar leaf will restore WO tabs we can't yet count (its manager isn't live, so
+    // it's absent from getAllViews) — treat it like a mid-restore host and report full usage so the
+    // queue waits, rather than letting a LIVE host mask it and over-launch (P1, second Round-47 hole).
+    let anyMidRestore = sidebarLeaves.some((leaf) => leaf.isDeferred);
+    for (const view of workOrderHosts) {
       const tabManager = view.getTabManager();
       if (!tabManager || !view.areTabsRestored()) {
         anyMidRestore = true;

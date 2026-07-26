@@ -64,6 +64,24 @@ describe('ResumeSessionDropdownCoordinator', () => {
     expect(noticeMock).toHaveBeenCalledTimes(1);
   });
 
+  // Characterization (sidebar surface unchanged): a false/absent disable flag
+  // opens the resume dropdown exactly as before.
+  it('opens normally when isResumeDisabled returns false', () => {
+    const { coordinator } = makeCoordinator({ isResumeDisabled: () => false });
+    coordinator.show();
+    expect(ResumeSessionDropdown).toHaveBeenCalledTimes(1);
+    expect(noticeMock).not.toHaveBeenCalled();
+  });
+
+  // Team Chat surface: resume is a fixed per-agent thread, so the affordance is
+  // suppressed entirely — no dropdown, and no "nothing to resume" Notice either.
+  it('suppresses the dropdown entirely when isResumeDisabled returns true', () => {
+    const { coordinator } = makeCoordinator({ isResumeDisabled: () => true });
+    coordinator.show();
+    expect(ResumeSessionDropdown).not.toHaveBeenCalled();
+    expect(noticeMock).not.toHaveBeenCalled();
+  });
+
   it('constructs the dropdown with conversations and the current id', () => {
     const { coordinator } = makeCoordinator();
     coordinator.show();

@@ -32,6 +32,22 @@ describe('formatBoundAgentPersona', () => {
     expect(formatBoundAgentPersona({ name: '   ', prompt: '  ' })).toBe('');
   });
 
+  it('injects a voice block after the identity and before the prompt', () => {
+    const text = formatBoundAgentPersona({
+      name: 'Mentor',
+      voice: 'Warm and concise',
+      prompt: 'Explain clearly.',
+    });
+    expect(text).toContain('Voice and manner: Warm and concise');
+    expect(text.indexOf('You are Mentor')).toBeLessThan(text.indexOf('Voice and manner'));
+    expect(text.indexOf('Voice and manner')).toBeLessThan(text.indexOf('Explain clearly'));
+  });
+
+  it('omits the voice block when voice is absent or whitespace', () => {
+    expect(formatBoundAgentPersona({ name: 'Mentor' })).not.toContain('Voice and manner');
+    expect(formatBoundAgentPersona({ name: 'Mentor', voice: '   ' })).not.toContain('Voice and manner');
+  });
+
   describe('skills block', () => {
     it('appends a skills block listing each granted skill', () => {
       const text = formatBoundAgentPersona({

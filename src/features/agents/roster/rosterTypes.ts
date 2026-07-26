@@ -22,6 +22,19 @@ export interface RosterAgent {
   initials?: string;
   icon?: string;
   /**
+   * Freeform voice/tone directive shaping how the agent speaks, distinct from the
+   * task `prompt`. Injected into the bound-agent persona directive.
+   */
+  voice?: string;
+  /** Emoji avatar glyph; takes precedence over icon/initials when set. */
+  avatarEmoji?: string;
+  /**
+   * Vault-relative path to an image avatar (e.g. `avatars/researcher.png`). Takes
+   * precedence over emoji/icon/initials when it resolves to a vault file; a
+   * missing/renamed path falls back down the avatar precedence chain.
+   */
+  avatarImage?: string;
+  /**
    * Set only on agents installed from the Marketplace (absent on hand-authored
    * ones). Records where the agent came from; `id` is the stable catalog id,
    * which survives a catalog-side display-name rebrand.
