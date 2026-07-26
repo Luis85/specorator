@@ -48,6 +48,22 @@ export class AgentRosterStore {
     }
   }
 
+  /**
+   * Identity-safe read (Round-63): `null` ONLY when the agent is genuinely absent (`exists()`
+   * returned false); THROWS on any vault-I/O or parse error (exists/read/JSON.parse), which `get()`
+   * deliberately swallows as null. The two IDENTITY resolvers — `resolveBoundAgent` and
+   * `resolveTeamChatAgentProvider` — read through this so a transient glitch BLOCKS + retries
+   * instead of proceeding under the WRONG identity (a turn with no persona/model, or a DM minted on
+   * the default provider with an immutable providerId). The removed-agent GUARDS keep using `get()`,
+   * whose null-on-uncertain fail-safe they depend on. No `onError` here — the throw carries the
+   * error to the caller, which logs and handles it.
+   */
+  async getStrict(id: string): Promise<RosterAgent | null> {
+    const path = fileNameForId(id);
+    if (!(await this.adapter.exists(path))) return null;
+    return JSON.parse(await this.adapter.read(path)) as RosterAgent;
+  }
+
   async save(agent: RosterAgent): Promise<void> {
     // writeAtomic ensures the parent folder (via write) and uses temp+rename so a
     // crash mid-write can't leave a truncated agent file.

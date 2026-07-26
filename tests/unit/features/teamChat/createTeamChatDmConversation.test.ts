@@ -22,7 +22,9 @@ function fakeAgent(overrides: Record<string, unknown>): any {
 
 function makePlugin(agent: unknown, createConversation: jest.Mock): any {
   return {
-    agentRosterStore: { get: jest.fn().mockResolvedValue(agent) },
+    // resolveTeamChatAgentProvider reads through getStrict (Round-63): genuine-absent → undefined,
+    // I/O error → THROW, so a DM is never minted on the DEFAULT provider under a transient glitch.
+    agentRosterStore: { getStrict: jest.fn().mockResolvedValue(agent) },
     settings: {},
     createConversation,
   };
@@ -69,5 +71,26 @@ describe('createTeamChatDmConversation — roster-policy provider (spec §2)', (
 
     await createTeamChatDmConversation(plugin, 'roster:gone');
     expect(createConversation).toHaveBeenCalledWith({ boundAgentId: 'roster:gone', surface: 'team-chat' });
+  });
+
+  // Round-63: a DM's providerId is IMMUTABLE, so minting it on the wrong (default) provider under a
+  // transient roster-read failure is a PERMANENT misassignment. The strict read THROWS on an I/O
+  // error, so DM creation REJECTS (blocked, no conversation created) — the selectAgent .catch logs
+  // it and the user retries; a genuine deletion (getStrict → null) still creates unbound as before.
+  it('rejects and creates NO conversation when the roster read fails with an I/O error', async () => {
+    const createConversation = jest.fn();
+    const plugin: any = {
+      // A total get() would still resolve the agent and mint the DM on the default provider (the bug);
+      // getStrict rejecting is what blocks it. Provide both to prove the resolver uses the strict read.
+      agentRosterStore: {
+        get: jest.fn().mockResolvedValue(fakeAgent({})),
+        getStrict: jest.fn().mockRejectedValue(new Error('vault io')),
+      },
+      settings: {},
+      createConversation,
+    };
+
+    await expect(createTeamChatDmConversation(plugin, 'roster:a')).rejects.toThrow('vault io');
+    expect(createConversation).not.toHaveBeenCalled();
   });
 });

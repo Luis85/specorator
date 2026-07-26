@@ -1401,6 +1401,35 @@ describe('InputController - Message Queue', () => {
       expect(queryOptions.model).toBeUndefined();
       expect(queryOptions.boundAgentModel).toBeUndefined();
     });
+
+    // Round-63: resolveBoundAgent now THROWS on a transient roster-read I/O error (vs. the old total
+    // read that silently returned no persona/model). The turn-option build runs BEFORE the first
+    // chunk, so a throw must BLOCK the turn AND hit the init-failure rollback — the optimistic
+    // user/assistant placeholders drop and the composer draft is restored — never run under the
+    // wrong identity and never lose the draft.
+    it('blocks the turn and preserves the composer draft when resolveBoundAgent throws (I/O error)', async () => {
+      const localDeps = createSendableDeps({ getTabModelOverride: () => null });
+      (localDeps.plugin.getConversationById as jest.Mock).mockResolvedValue({
+        id: 'conv-1',
+        boundAgentId: 'agent-abc',
+      });
+      (localDeps.plugin as any).resolveBoundAgent = jest.fn().mockRejectedValue(new Error('vault io'));
+      const query = jest.fn().mockImplementation(() => createMockStream([{ type: 'done' }]));
+      (localDeps as any).mockAgentService.query = query;
+      const localController = new InputController(localDeps);
+      const localInput = localDeps.getInputEl() as ReturnType<typeof createMockInputEl>;
+      localInput.value = 'help me with rust';
+
+      await localController.sendMessage();
+
+      // The turn never streams under the wrong (unbound) identity ...
+      expect(query).not.toHaveBeenCalled();
+      // ... the draft is restored for a clean retry ...
+      expect(localInput.value).toBe('help me with rust');
+      // ... and the optimistic user/assistant placeholders were rolled back.
+      expect(localDeps.state.messages).toHaveLength(0);
+      expect(localDeps.state.isStreaming).toBe(false);
+    });
   });
 
   describe('Conversation operation guards', () => {

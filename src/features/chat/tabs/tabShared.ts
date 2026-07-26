@@ -26,10 +26,14 @@ export async function resolveBoundAgentDisplayModel(
   conversation: Conversation | null | undefined,
 ): Promise<TabDisplayModel | null> {
   if (!conversation?.boundAgentId) return null;
-  const model = (await plugin.resolveBoundAgent?.(
-    conversation.boundAgentId,
-    conversation.providerId,
-  ))?.model?.trim();
+  // Best-effort display seed: resolveBoundAgent now THROWS on a strict-read I/O error (Round-63),
+  // but this is a cosmetic label (the per-turn model resolves live) — swallow to "no seed" so a
+  // transient glitch can't reject a display refresh into an unhandled rejection (e.g. the
+  // roster:changed handler's `void refreshBoundAgentDisplayModels(...)`).
+  const projection = await Promise.resolve(
+    plugin.resolveBoundAgent?.(conversation.boundAgentId, conversation.providerId),
+  ).catch(() => null);
+  const model = projection?.model?.trim();
   return model ? { conversationId: conversation.id, model } : null;
 }
 

@@ -57,9 +57,10 @@ function makeHarness() {
     vaultFileAdapter: adapter,
     events,
     settings: {},
-    // Agent absent → createTeamChatDmConversation skips provider resolution and
-    // creates provider-agnostically (keeps this test off the ProviderRegistry).
-    agentRosterStore: { get: jest.fn().mockResolvedValue(null) },
+    // Agent absent → resolveTeamChatAgentProvider's strict read returns undefined, so DM creation
+    // is provider-agnostic (keeps this test off the ProviderRegistry). Round-63: identity resolvers
+    // read through getStrict (throws on I/O, null on genuine absence).
+    agentRosterStore: { getStrict: jest.fn().mockResolvedValue(null) },
     createConversation,
     getConversationSync: jest.fn(() => null),
     findTeamChatConversationForAgent: jest.fn(() => null),

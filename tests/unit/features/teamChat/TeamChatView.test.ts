@@ -682,6 +682,34 @@ describe('TeamChatView — persisted DM tab restore', () => {
     expect(selectAgent).not.toHaveBeenCalled();
   });
 
+  // Round-63: the drained click is fire-and-forget (`void`), so a REJECTING drained selection
+  // (threads.json persist / conversation create failure) must route through the SAME catch+log path
+  // as the normal roster click (openAgentDm) — else it is an unhandled rejection + a silently lost
+  // click. restoreTabsThenMarkReady must still resolve, and the rejection must be caught + logged.
+  it('catches + logs a rejecting drained restore-time selection (Round-63)', async () => {
+    const view = makeView();
+    const error = jest.fn();
+    view.plugin.logger = { scope: () => ({ error }) };
+    view.pendingTabManagerState = null;
+    view.pendingAgentSelection = 'roster:queued';
+    view.tabManager = {
+      getActiveTab: jest.fn(() => null),
+      getAllTabs: jest.fn(() => []),
+      getTabCount: jest.fn(() => 0),
+      countTabsByKind: jest.fn(() => 0),
+    };
+    view.tabsRestored = false;
+    const failure = new Error('threads.json persist failed');
+    jest.spyOn(view, 'selectAgent').mockRejectedValue(failure);
+
+    // The restore drain itself resolves (never rejects) ...
+    await expect(view.restoreTabsThenMarkReady()).resolves.toBeUndefined();
+    await flushMicrotasks(); // let the drained open's .catch settle
+
+    // ... and the drained click's rejection was caught + logged, not left unhandled.
+    expect(error).toHaveBeenCalledWith('selectAgent failed', failure);
+  });
+
   // Round-50 (second-order of Fix C): the drain reads pendingAgentSelection AFTER the (possibly slow)
   // reconcileRestoredDmProviders await. A newer roster click (C) landing DURING that await proceeds
   // (tabsRestored is already true) and, per the fix, clears the queued restore-time pick (B) — so the

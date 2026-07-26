@@ -26,6 +26,7 @@ import type {
 } from '../../../core/runtime/types';
 import type { ApprovalDecision, ChatMessage, ExitPlanModeDecision, StreamChunk } from '../../../core/types';
 import { t } from '../../../i18n/i18n';
+import type { TranslationKey } from '../../../i18n/types';
 import type SpecoratorPlugin from '../../../main';
 import type { BrowserSelectionContext } from '../../../utils/browser';
 import type { CanvasSelectionContext } from '../../../utils/canvas';
@@ -406,14 +407,16 @@ export class InputController {
     const outgoing = this.buildOutgoingTurn(send, options);
     const { userMsg, assistantMsg, deferredAiTitleGeneration } = await this.presentOutgoingTurn(outgoing);
 
-    const agentService = await this.acquireTurnRuntime(
+    const acquired = await this.acquireTurnRuntime(
+      tabModelOverride,
       deferredAiTitleGeneration,
       composerRollback,
       send,
       userMsg.id,
       assistantMsg.id,
     );
-    if (!agentService) return;
+    if (!acquired) return;
+    const { agentService, queryOptions } = acquired;
 
     // Deferred from buildOutgoingTurn: mark only after the runtime is acquired.
     send.fileContextManager?.markCurrentNoteSent();
@@ -428,6 +431,7 @@ export class InputController {
       assistantMsg,
       streamGeneration,
       tabModelOverride,
+      queryOptions,
       deferredAiTitleGeneration,
     };
 
@@ -546,49 +550,48 @@ export class InputController {
     return { userMsg, assistantMsg, deferredAiTitleGeneration };
   }
 
-  /** Lazy initialization: ensure service is ready before first query. */
+  /**
+   * Lazy initialization: ensure the runtime is ready AND resolve the bound-agent turn options,
+   * BEFORE the first chunk. Resolving the options here (not mid-stream) is load-bearing: the strict
+   * roster read now THROWS on a transient I/O error (Round-63), and a throw here reuses the
+   * init-failure rollback — optimistic placeholders drop and the composer draft/pills/images are
+   * restored — so the turn BLOCKS instead of running under the wrong identity (no persona/model) or
+   * losing the draft to the mid-stream `**Error:**` path. A genuinely-gone agent does NOT throw
+   * (options fall back to base) and runs unbound as before. Returns null to abort the send.
+   */
   private async acquireTurnRuntime(
+    tabModelOverride: string | null,
     deferredAiTitleGeneration: (() => void) | null,
     composerRollback: ReturnType<typeof captureComposerRollbackSnapshot>,
     send: ComposerSendContext,
     userMsgId: string,
     assistantMsgId: string,
-  ): Promise<ChatRuntime | null> {
+  ): Promise<{ agentService: ChatRuntime; queryOptions: ChatRuntimeQueryOptions } | null> {
     const { state, streamController } = this.deps;
-    const rollback = (): void => {
-      rollbackOptimisticOutgoingTurn(
-        state,
-        composerRollback,
-        send,
-        userMsgId,
-        assistantMsgId,
-        () => this.deps.resetInputHeight(),
-      );
-      this.emit();
-    };
-    if (this.deps.ensureServiceInitialized) {
-      const ready = await this.deps.ensureServiceInitialized();
-      if (!ready) {
-        new Notice(t('chat.input.initFailed'));
-        streamController.hideThinkingIndicator();
-        this.activeStreamingAssistantMessage = null;
-        this.resetProviderMessageBoundaryState();
-        deferredAiTitleGeneration?.();
-        rollback();
-        return null;
-      }
-    }
-
-    const agentService = this.getAgentService();
-    if (!agentService) {
-      new Notice(t('chat.input.serviceUnavailable'));
+    const failAndRollback = (noticeKey: TranslationKey): null => {
+      new Notice(t(noticeKey));
+      streamController.hideThinkingIndicator();
       this.activeStreamingAssistantMessage = null;
       this.resetProviderMessageBoundaryState();
       deferredAiTitleGeneration?.();
-      rollback();
+      rollbackOptimisticOutgoingTurn(state, composerRollback, send, userMsgId, assistantMsgId, () => this.deps.resetInputHeight());
+      this.emit();
       return null;
+    };
+    if (this.deps.ensureServiceInitialized) {
+      const ready = await this.deps.ensureServiceInitialized();
+      if (!ready) return failAndRollback('chat.input.initFailed');
     }
-    return agentService;
+    const agentService = this.getAgentService();
+    if (!agentService) return failAndRollback('chat.input.serviceUnavailable');
+
+    try {
+      const queryOptions = await resolveBoundAgentQueryOptions(this.deps.plugin, state.currentConversationId, tabModelOverride);
+      return { agentService, queryOptions };
+    } catch (error) {
+      this.deps.plugin.logger.scope('input').error('bound-agent query-option resolution failed; blocking turn', error);
+      return failAndRollback('chat.input.initFailed');
+    }
   }
 
   private async streamPreparedTurn(
@@ -610,12 +613,9 @@ export class InputController {
     // Pass history WITHOUT current turn (userMsg + assistantMsg we just added)
     // This prevents duplication when rebuilding context for new sessions
     const previousMessages = state.messages.slice(0, -2);
-    const queryOptions: ChatRuntimeQueryOptions = await resolveBoundAgentQueryOptions(
-      this.deps.plugin,
-      state.currentConversationId,
-      ctx.tabModelOverride,
-    );
-    for await (const chunk of ctx.agentService.query(preparedTurn, previousMessages, queryOptions)) {
+    // queryOptions were resolved in acquireTurnRuntime (before the first chunk) so a strict-roster
+    // read throw blocks the turn with the draft-preserving rollback, not here mid-stream.
+    for await (const chunk of ctx.agentService.query(preparedTurn, previousMessages, ctx.queryOptions)) {
       if (state.streamGeneration !== ctx.streamGeneration) {
         wasInvalidated = true;
         break;

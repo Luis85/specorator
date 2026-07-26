@@ -145,4 +145,55 @@ describe('AgentRosterStore', () => {
       expect(onError).toHaveBeenCalledWith(`${ROSTER_DIR}/reviewer.json`, expect.any(Error));
     });
   });
+
+  // Round-63: get() is deliberately TOTAL (null-on-uncertain) for the removed-agent guards,
+  // but that conflates "genuinely gone" with "transient I/O error" — fatal for the two IDENTITY
+  // resolvers (resolveBoundAgent / resolveTeamChatAgentProvider), which would then run under the
+  // WRONG identity. getStrict() is the identity-safe read: null ONLY on genuine absence, THROW on
+  // any exists/read/parse error, so the caller blocks + retries instead of proceeding unbound.
+  describe('getStrict', () => {
+    it('reads and parses an existing agent by id', async () => {
+      const agent = createRosterAgent('Reviewer', 1);
+      const files = { [`${ROSTER_DIR}/reviewer.json`]: JSON.stringify(agent) };
+      const store = new AgentRosterStore(makeAdapter(files));
+
+      const got = await store.getStrict('roster:reviewer');
+
+      expect(got?.id).toBe('roster:reviewer');
+    });
+
+    it('returns null for a genuinely absent agent (exists() === false)', async () => {
+      const store = new AgentRosterStore(makeAdapter({}));
+
+      await expect(store.getStrict('roster:ghost')).resolves.toBeNull();
+    });
+
+    it('THROWS (does not swallow) when exists() throws', async () => {
+      const adapter = {
+        exists: jest.fn().mockRejectedValue(new Error('vault io')),
+        read: jest.fn(),
+      } as unknown as VaultFileAdapter;
+      const store = new AgentRosterStore(adapter);
+
+      await expect(store.getStrict('roster:reviewer')).rejects.toThrow('vault io');
+      expect(adapter.read).not.toHaveBeenCalled();
+    });
+
+    it('THROWS when read() throws', async () => {
+      const adapter = {
+        exists: jest.fn().mockResolvedValue(true),
+        read: jest.fn().mockRejectedValue(new Error('read fail')),
+      } as unknown as VaultFileAdapter;
+      const store = new AgentRosterStore(adapter);
+
+      await expect(store.getStrict('roster:reviewer')).rejects.toThrow('read fail');
+    });
+
+    it('THROWS when the stored json is malformed (parse error)', async () => {
+      const files = { [`${ROSTER_DIR}/reviewer.json`]: '{not json' };
+      const store = new AgentRosterStore(makeAdapter(files));
+
+      await expect(store.getStrict('roster:reviewer')).rejects.toThrow();
+    });
+  });
 });

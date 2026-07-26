@@ -28,8 +28,11 @@ function makeService(overrides: {
   settings?: Partial<SpecoratorSettings>;
 } = {}) {
   const get = jest.fn(async () => overrides.agent ?? null);
+  // resolveBoundAgent reads through getStrict (Round-63): genuine-absent → null, I/O error → THROW,
+  // so a transient glitch blocks the turn instead of running it under the wrong identity.
+  const getStrict = jest.fn(async () => overrides.agent ?? null);
   const list = jest.fn(async () => overrides.agents ?? []);
-  const rosterStore = { get, list } as unknown as AgentRosterStore;
+  const rosterStore = { get, getStrict, list } as unknown as AgentRosterStore;
   const aggregator = {
     listAll: jest.fn(async () => overrides.catalog ?? []),
   } as unknown as VaultSkillAggregator;
@@ -40,15 +43,24 @@ function makeService(overrides: {
     getSettings: () => (overrides.settings ?? {}) as SpecoratorSettings,
     getSkillAggregator: () => aggregator,
   };
-  return { service: new RosterAgentService(deps), get, list };
+  return { service: new RosterAgentService(deps), get, getStrict, list };
 }
 
 describe('RosterAgentService', () => {
   describe('resolveBoundAgent', () => {
-    it('returns null when the id is not a known roster agent', async () => {
-      const { service, get } = makeService({ agent: null });
+    it('returns null when the id is not a known roster agent (genuine absence)', async () => {
+      const { service, getStrict } = makeService({ agent: null });
       await expect(service.resolveBoundAgent('roster:missing')).resolves.toBeNull();
-      expect(get).toHaveBeenCalledWith('roster:missing');
+      expect(getStrict).toHaveBeenCalledWith('roster:missing');
+    });
+
+    // Round-63: a transient vault-I/O/parse error must NOT read as "agent gone" here — that would
+    // build the turn with NO persona and NO bound model. getStrict THROWS; resolveBoundAgent
+    // propagates so the send path blocks + rolls back (draft preserved) rather than running unbound.
+    it('propagates a strict-read I/O error instead of returning a bare (unbound) projection', async () => {
+      const { service, getStrict } = makeService({ agent: makeAgent() });
+      getStrict.mockRejectedValueOnce(new Error('vault io'));
+      await expect(service.resolveBoundAgent('roster:atlas')).rejects.toThrow('vault io');
     });
 
     it('bakes the granted skills into the persona prompt', async () => {

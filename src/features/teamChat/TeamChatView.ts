@@ -241,11 +241,11 @@ export class TeamChatView extends ItemView implements ChatViewHandle {
         // event does after a deferred/closed-leaf restore. AFTER tabsRestored so selectAgent's
         // restore gate is open; its generation + manager-identity guards drop a superseded rebuild.
         await reconcileRestoredDmProviders(this.plugin, () => this.refreshProviderAvailability());
-        // Drain a roster click queued while restoring (Round-48 Fix C): open it as a normal
-        // focus-taking selection now the gate is up; generation/staleness guards supersede it if stale.
+        // Drain a roster click queued while restoring (Round-48 Fix C) through openAgentDm so a
+        // rejecting drained open is caught+logged, not unhandled (Round-63); guards supersede if stale.
         const pending = this.pendingAgentSelection;
         this.pendingAgentSelection = null;
-        if (pending) void this.selectAgent(pending);
+        if (pending) void this.openAgentDm(pending);
       }
     }
   }
@@ -457,6 +457,10 @@ export class TeamChatView extends ItemView implements ChatViewHandle {
     return this.plugin.getTeamChatThreadStore();
   }
 
+  private openAgentDm(agentId: string): Promise<void> {
+    return this.selectAgent(agentId).catch((error) => this.plugin.logger.scope('team-chat').error('selectAgent failed', error));
+  }
+
   // ============================================
   // Vue → engine seam
   // ============================================
@@ -469,9 +473,7 @@ export class TeamChatView extends ItemView implements ChatViewHandle {
           this.teamChatObservers.delete(onChange);
         };
       },
-      // Fire-and-forget roster-click open; a rejected resolve/open is logged, never unhandled.
-      onSelectAgent: (agentId) => void this.selectAgent(agentId).catch((error) =>
-        this.plugin.logger.scope('team-chat').error('selectAgent failed', error)),
+      onSelectAgent: (agentId) => void this.openAgentDm(agentId),
       onOpenEditedFile: (path) => openEditedFile(this.plugin.app, path),
     };
   }

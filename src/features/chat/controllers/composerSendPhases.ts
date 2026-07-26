@@ -1,7 +1,7 @@
 import { Notice } from 'obsidian';
 
 import type { ChatRuntime } from '../../../core/runtime/ChatRuntime';
-import type { ChatTurnMetadata, ChatTurnRequest } from '../../../core/runtime/types';
+import type { ChatRuntimeQueryOptions, ChatTurnMetadata, ChatTurnRequest } from '../../../core/runtime/types';
 import { TOOL_EXIT_PLAN_MODE } from '../../../core/tools/toolNames';
 import type { ChatMessage, ImageAttachment, PlanApprovalDecision } from '../../../core/types';
 import { t } from '../../../i18n/i18n';
@@ -62,6 +62,9 @@ export interface DispatchedTurnContext {
   assistantMsg: ChatMessage;
   streamGeneration: number;
   tabModelOverride: string | null;
+  // Resolved up front in acquireTurnRuntime (before the first chunk) so a strict-roster-read throw
+  // blocks the turn WITH the init-failure rollback, never mid-stream where the draft is already gone.
+  queryOptions: ChatRuntimeQueryOptions;
   deferredAiTitleGeneration: (() => void) | null;
 }
 

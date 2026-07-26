@@ -9,7 +9,6 @@ import type { Conversation } from '../../../core/types/chat';
 import { t } from '../../../i18n/i18n';
 import type SpecoratorPlugin from '../../../main';
 import { chooseForkTarget } from '../../../shared/modals/ForkTargetModal';
-import { revealWorkspaceLeaf } from '../../../utils/obsidianCompat';
 import { getTabProviderId } from './providerResolution';
 import {
   activateTab,
@@ -23,6 +22,7 @@ import {
 } from './Tab';
 import { mountTabChrome } from './tabChromeMount';
 import { mountTabComposer } from './tabComposerMount';
+import { type CrossViewConversation, revealCrossViewConversation } from './tabCrossViewReveal';
 import { TabProviderCommandCoordinator } from './TabProviderCommandCoordinator';
 import { activateOpenConversationTab, applyPostActivateAction, deactivatePreviousTab } from './tabSwitchHelpers';
 import {
@@ -258,10 +258,11 @@ export class TabManager implements TabManagerInterface {
   ): Promise<{ pinnedModel?: string; displayModel?: string }> {
     if (options.pinnedModel) return { pinnedModel: options.pinnedModel };
     if (!conversation?.boundAgentId) return {};
-    const projection = await this.plugin.resolveBoundAgent?.(
-      conversation.boundAgentId,
-      conversation.providerId,
-    );
+    // Best-effort display seed — a strict-read I/O error (Round-63) must NOT reject tab creation
+    // (the per-turn model still resolves live), so swallow to no seed.
+    const projection = await Promise.resolve(
+      this.plugin.resolveBoundAgent?.(conversation.boundAgentId, conversation.providerId),
+    ).catch(() => null);
     return { displayModel: projection?.model?.trim() || undefined };
   }
 
@@ -621,31 +622,27 @@ export class TabManager implements TabManagerInterface {
     options: boolean | OpenConversationOptions = false,
   ): Promise<void> {
     if (this.isDestroying) return; // no-op an external open issued after teardown began (:120)
-    // Round-61: the cross-view reveal/switch is HOISTED out of the mutation tail. It only focuses
-    // ANOTHER leaf and awaits that leaf's queued switchToTab — holding our own tail across that await
-    // deadlocked two leaves each cross-opening the other's conversation. It never mutates OUR tabs.
+    // Round-61: the cross-view reveal/switch is HOISTED out of the mutation tail — holding our own
+    // tail across another leaf's queued switchToTab deadlocked two leaves cross-opening each other.
+    // Round-63: the conversation can still race cross-view AFTER this check but before the tail runs;
+    // openConversationImpl returns that raced owner (never awaiting its op under our tail) so we
+    // reveal the winner here too, tail released — else the open resolves with nothing shown.
     const crossView = this.plugin.findConversationAcrossViews(conversationId);
     if (crossView && crossView.view.leaf !== this.view.leaf) {
-      await revealWorkspaceLeaf(this.plugin.app.workspace, crossView.view.leaf);
-      await crossView.view.getTabManager()?.switchToTab(crossView.tabId);
+      await revealCrossViewConversation(this.plugin.app.workspace, crossView);
       return;
     }
-    return this.runTabMutation(() => this.openConversationImpl(conversationId, options));
+    const raced = await this.runTabMutation(() => this.openConversationImpl(conversationId, options));
+    if (raced && raced.view.leaf !== this.view.leaf) await revealCrossViewConversation(this.plugin.app.workspace, raced);
   }
 
   private async openConversationImpl(
     conversationId: string,
     options: boolean | OpenConversationOptions = false,
-  ): Promise<void> {
-    const requireNewTab = typeof options === 'boolean'
-      ? false
-      : options.requireNewTab ?? false;
-    const preferNewTab = typeof options === 'boolean'
-      ? options
-      : (options.preferNewTab ?? false) || requireNewTab;
-    const activate = typeof options === 'boolean'
-      ? true
-      : options.activate ?? true;
+  ): Promise<CrossViewConversation | void> {
+    const requireNewTab = typeof options === 'boolean' ? false : options.requireNewTab ?? false;
+    const preferNewTab = typeof options === 'boolean' ? options : (options.preferNewTab ?? false) || requireNewTab;
+    const activate = typeof options === 'boolean' ? true : options.activate ?? true;
 
     // Check if conversation is already open in this view's tabs
     for (const tab of this.tabs.values()) {
@@ -655,10 +652,12 @@ export class TabManager implements TabManagerInterface {
       }
     }
 
-    // Defensive TOCTOU re-check (Round-61): a hit here means the conversation raced into ANOTHER
+    // Defensive TOCTOU re-check (Round-61/63): a hit here means the conversation raced into ANOTHER
     // leaf after openConversation()'s pre-tail check (the same-view loop already handled THIS view).
-    // Bail without a duplicate — never await its queued switchToTab under our tail (the deadlock).
-    if (this.plugin.findConversationAcrossViews(conversationId)) return;
+    // RETURN the raced owner — never await its queued switchToTab under our tail (the deadlock);
+    // openConversation reveals it post-tail so the user's open still surfaces the winner.
+    const raced = this.plugin.findConversationAcrossViews(conversationId);
+    if (raced) return raced;
 
     // Open in current tab or new tab
     if (preferNewTab && this.canCreateTab()) {

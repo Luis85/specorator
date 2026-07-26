@@ -258,3 +258,16 @@ edited-files strip, presence, view mount).
   because it consumed no textarea its rollback can't restore the queued text/images.
   Sub-second window + requires deleting the agent exactly as a steer dispatches; the
   content is user-recoverable by re-typing.
+- **`TeamChatThreadStore`'s session cache can clobber a mapping synced in mid-session
+  (multi-device).** `loadRooms()` reads `threads.json` once and caches `this.rooms`
+  for the session; `resolveOrCreateInner` then rewrites the WHOLE file from that cache
+  (`writeThreads({ ...rooms, [key]: id })`). So a `roomKey → conversationId` mapping
+  another device added via Obsidian Sync AFTER this session's initial read is not in
+  the cache and is dropped on the next local `resolveOrCreate` write. The clobbered
+  entry's *conversation* survives on disk (it is a separate conversation file), so
+  re-selecting that agent can re-adopt it through the absent-mapping recovery
+  (`findAdoptable` → provider-scoped orphan). Narrow: requires an external/sync writer
+  updating `threads.json` between this leaf's first read and its next write. Documented,
+  not fixed (human decision, Round-63). Fix direction: re-read + merge `threads.json`
+  from disk inside the serialized write (in place of writing from the session cache),
+  so a concurrently-synced mapping is preserved rather than overwritten.

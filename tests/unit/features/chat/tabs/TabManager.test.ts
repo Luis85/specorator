@@ -2632,6 +2632,38 @@ describe('TabManager - openConversation cross-view hoist (Round-61 deadlock)', (
     expect(createImplSpy).not.toHaveBeenCalled();
     expect(manager.getTabCount()).toBe(countBefore);
   });
+
+  // Round-63: Round-61 stopped the duplicate but left the raced open resolving with NOTHING shown —
+  // the impl bailed without revealing the winner. The impl now RETURNS the raced owner and the
+  // public openConversation reveals + switches it AFTER the tail releases (never awaiting the other
+  // manager's queued op under our own tail), so the user's action visibly surfaces the winning leaf.
+  it('reveals + switches the winning leaf when a conversation races cross-view after the pre-tail check (Round-63)', async () => {
+    const plugin = createMockPlugin();
+    const manager = createManager({ plugin });
+    await manager.createTab();
+    const countBefore = manager.getTabCount();
+
+    const winnerSwitch = jest.fn().mockResolvedValue(undefined);
+    // Pre-tail lookup misses (open proceeds into the tail); the impl's TOCTOU re-check AND the
+    // post-tail reveal find the racer that opened in ANOTHER leaf meanwhile.
+    plugin.findConversationAcrossViews
+      .mockReturnValueOnce(null)
+      .mockReturnValue({
+        view: { leaf: { id: 'winner-leaf' }, getTabManager: () => ({ switchToTab: winnerSwitch }) },
+        tabId: 'winner-tab',
+      });
+    plugin.getConversationById.mockResolvedValue({ id: 'conv-race' });
+
+    const createImplSpy = jest.spyOn(manager as any, 'createTabImpl');
+    await manager.openConversation('conv-race', { preferNewTab: true });
+
+    // No duplicate (Round-61 invariant preserved) ...
+    expect(createImplSpy).not.toHaveBeenCalled();
+    expect(manager.getTabCount()).toBe(countBefore);
+    // ... AND the winner is now revealed + its tab switched (Round-63 — the missing reveal).
+    expect(plugin.app.workspace.revealLeaf).toHaveBeenCalledWith({ id: 'winner-leaf' });
+    expect(winnerSwitch).toHaveBeenCalledWith('winner-tab');
+  });
 });
 
 describe('TabManager - Service Initialization Errors', () => {
