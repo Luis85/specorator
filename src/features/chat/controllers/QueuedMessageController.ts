@@ -227,7 +227,14 @@ export class QueuedMessageController {
       () => {
         this.deps.requestSend({
           content: queuedMessage.content,
-          images: queuedMessage.images,
+          // `?? []` is load-bearing: `resolveComposerSend` treats an UNDEFINED image
+          // override as "read the live composer", so a snapshot queued without images
+          // would pick up whatever the user staged afterwards — and the merged content
+          // may no longer read as `/compact`, so the compact guards can't stop it. The
+          // transcript then showed an image the provider never received (the queued
+          // turnRequest has none). For a dequeued turn the snapshot IS the turn: an
+          // empty array means "no images", not "go look".
+          images: queuedMessage.images ?? [],
           turnRequestOverride: this.toQueuedChatTurn(queuedMessage).request,
         });
       },

@@ -43,6 +43,7 @@ import type { AddExternalContextResult, McpServerSelector } from '../ui/toolbar/
 import { resolveBoundAgentQueryOptions } from './boundAgentQueryOptions';
 import type { BrowserSelectionController } from './BrowserSelectionController';
 import type { CanvasSelectionController } from './CanvasSelectionController';
+import { isCompactInvocation, shouldPersistComposerImages } from './compactTurnRules';
 import {
   applyPlanApprovalDecision,
   bakeResponseDurationFooter,
@@ -57,7 +58,6 @@ import {
   createOutgoingUserMessage,
   type DispatchedTurnContext,
   type FinishedTurn,
-  isCompactInvocation,
   normalizeTabModelOverride,
   type OutgoingTurn,
   persistComposerImagesOrRestore,
@@ -305,12 +305,11 @@ export class InputController {
       resetInputHeight: () => this.deps.resetInputHeight(),
     }))) return;
 
-    // Persist any pasted/dropped images to the vault BEFORE the queue branch — both the streaming-queue
-    // (state.queuedMessage) and steer-then-commit paths reuse this image snapshot (else queued/steered
-    // images land in ConversationStore.save with `data` cleared and no `path`). On a vault-write
-    // rejection, restore the reserved composer draft and abort with a Notice — the up-front consume
-    // must not silently drop the user's text (mirrors the removed-agent guard above).
-    if (send.hasImages && !(await persistComposerImagesOrRestore(send, {
+    // Persist pasted/dropped images BEFORE the queue branch — the streaming-queue and
+    // steer-then-commit paths reuse this snapshot, else they save with `data` cleared and no
+    // `path`. A write rejection restores the reserved composer draft and aborts with a Notice.
+    // `shouldPersistComposerImages` also excludes `/compact`, which carries no images.
+    if (shouldPersistComposerImages(send) && !(await persistComposerImagesOrRestore(send, {
       app: this.deps.plugin.app,
       logger: this.deps.plugin.logger,
       resetInputHeight: () => this.deps.resetInputHeight(),
@@ -415,8 +414,7 @@ export class InputController {
     if (!acquired) return;
     const { agentService, queryOptions } = acquired;
 
-    // markCurrentNoteSent() moved into applyPreparedTurnToUserMessage — only the
-    // prepared turn knows whether this provider actually took the note.
+    // markCurrentNoteSent() lives in applyPreparedTurnToUserMessage — only the prepared turn knows.
     await restoreResumeCheckpointIfNeeded(agentService, this.deps.state, this.deps.plugin);
 
     const ctx: DispatchedTurnContext = {
@@ -594,10 +592,10 @@ export class InputController {
 
   /**
    * Reconciles the optimistic user message with what the provider prepared, and
-   * consumes the current note only if the provider took it. Unlike pills and
-   * images (stripped from the request upstream), `currentNotePath` rides along
-   * and each runtime decides — Claude/Codex drop it on compact, Opencode has no
-   * compact and renders it — so only `preparedTurn.isCompact` can answer this.
+   * consumes the current note only if the provider took it. Unlike pills/images
+   * (stripped upstream), `currentNotePath` rides along and each runtime decides —
+   * Claude/Codex drop it on compact, Opencode renders it — so only
+   * `preparedTurn.isCompact` can answer this.
    */
   private applyPreparedTurnToUserMessage(
     ctx: DispatchedTurnContext,

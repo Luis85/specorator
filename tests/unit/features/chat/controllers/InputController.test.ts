@@ -4215,6 +4215,54 @@ describe('InputController - Message Queue', () => {
       expect(capturedRequests[0].text).toBe('/compact');
     });
 
+    it('does not persist a pending image to the vault on /compact', async () => {
+      // Persistence runs up front, before the compact branch strips images. It
+      // would write an attachment file for a turn that never references it — and
+      // once the user removes the still-staged image, that file is orphaned. A
+      // write failure would also abort a compaction unrelated to the image.
+      (persistPastedImages as jest.Mock).mockClear();
+      const imageContextManager = {
+        hasImages: jest.fn(() => true),
+        getAttachedImages: jest.fn(() => [{ id: 'img-1', data: 'x', mimeType: 'image/png' }]),
+        clearImages: jest.fn(),
+      };
+
+      const localDeps = createSendableDeps({
+        getImageContextManager: () => imageContextManager as any,
+      });
+      const mockAgentService = (localDeps as any).mockAgentService;
+      mockAgentService.query = jest.fn().mockReturnValue(createMockStream([{ type: 'done' }]));
+
+      const localInput = localDeps.getInputEl() as ReturnType<typeof createMockInputEl>;
+      localInput.value = '/compact';
+      await new InputController(localDeps).sendMessage();
+
+      expect(persistPastedImages).not.toHaveBeenCalled();
+      // Still staged — not transmitted, not consumed, not written to the vault.
+      expect(imageContextManager.clearImages).not.toHaveBeenCalled();
+    });
+
+    it('still persists a pending image on a NON-compact send', async () => {
+      (persistPastedImages as jest.Mock).mockClear();
+      const imageContextManager = {
+        hasImages: jest.fn(() => true),
+        getAttachedImages: jest.fn(() => [{ id: 'img-1', data: 'x', mimeType: 'image/png' }]),
+        clearImages: jest.fn(),
+      };
+
+      const localDeps = createSendableDeps({
+        getImageContextManager: () => imageContextManager as any,
+      });
+      const mockAgentService = (localDeps as any).mockAgentService;
+      mockAgentService.query = jest.fn().mockReturnValue(createMockStream([{ type: 'done' }]));
+
+      const localInput = localDeps.getInputEl() as ReturnType<typeof createMockInputEl>;
+      localInput.value = 'look at this';
+      await new InputController(localDeps).sendMessage();
+
+      expect(persistPastedImages).toHaveBeenCalled();
+    });
+
     it('neither transmits nor consumes a pending image on /compact', async () => {
       // The compact special case suppressed the mention suffix but not images,
       // so a pasted image rode along with the bare invocation — and, on a plain

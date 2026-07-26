@@ -214,6 +214,42 @@ describe('QueuedMessageController', () => {
       }
     });
 
+    it('dequeues an explicit empty image list so the live composer is not read', () => {
+      // `resolveComposerSend` treats an UNDEFINED image override as "read the live
+      // composer". A turn queued without images would therefore pick up whatever the
+      // user staged afterwards, and since a merged queue (`text\n\n/compact`) no longer
+      // reads as compact, the compact guards can't stop it — the transcript rendered an
+      // image the queued turnRequest never carried. The snapshot is the turn.
+      jest.useFakeTimers();
+      try {
+        const { controller, state, requestSend } = createHarness();
+        state.queuedMessage = makeQueuedMessage('queued without images');
+
+        controller.processQueuedMessage();
+        jest.runAllTimers();
+
+        expect(requestSend).toHaveBeenCalledWith(expect.objectContaining({ images: [] }));
+      } finally {
+        jest.useRealTimers();
+      }
+    });
+
+    it('passes the queued images through when the snapshot has them', () => {
+      jest.useFakeTimers();
+      try {
+        const { controller, state, requestSend } = createHarness();
+        const images = [{ id: 'img1', name: 'a.png' }] as any;
+        state.queuedMessage = makeQueuedMessage('queued with images', { images });
+
+        controller.processQueuedMessage();
+        jest.runAllTimers();
+
+        expect(requestSend).toHaveBeenCalledWith(expect.objectContaining({ images }));
+      } finally {
+        jest.useRealTimers();
+      }
+    });
+
     it('no-ops when there is no queued message', () => {
       jest.useFakeTimers();
       try {
