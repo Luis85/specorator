@@ -214,6 +214,42 @@ describe('QueuedMessageController', () => {
       }
     });
 
+    it('dequeues an explicit empty image list so the live composer is not read', () => {
+      // `resolveComposerSend` treats an UNDEFINED image override as "read the live
+      // composer". A turn queued without images would therefore pick up whatever the
+      // user staged afterwards, and since a merged queue (`text\n\n/compact`) no longer
+      // reads as compact, the compact guards can't stop it — the transcript rendered an
+      // image the queued turnRequest never carried. The snapshot is the turn.
+      jest.useFakeTimers();
+      try {
+        const { controller, state, requestSend } = createHarness();
+        state.queuedMessage = makeQueuedMessage('queued without images');
+
+        controller.processQueuedMessage();
+        jest.runAllTimers();
+
+        expect(requestSend).toHaveBeenCalledWith(expect.objectContaining({ images: [] }));
+      } finally {
+        jest.useRealTimers();
+      }
+    });
+
+    it('passes the queued images through when the snapshot has them', () => {
+      jest.useFakeTimers();
+      try {
+        const { controller, state, requestSend } = createHarness();
+        const images = [{ id: 'img1', name: 'a.png' }] as any;
+        state.queuedMessage = makeQueuedMessage('queued with images', { images });
+
+        controller.processQueuedMessage();
+        jest.runAllTimers();
+
+        expect(requestSend).toHaveBeenCalledWith(expect.objectContaining({ images }));
+      } finally {
+        jest.useRealTimers();
+      }
+    });
+
     it('no-ops when there is no queued message', () => {
       jest.useFakeTimers();
       try {
@@ -313,6 +349,37 @@ describe('QueuedMessageController', () => {
       }));
       // pending steer state is left in flight until the host reconciles the boundary
       expect((controller as any).pendingSteerMessage).not.toBeNull();
+    });
+
+    it('consumes neither the pills nor the current note when steering a /compact turn', async () => {
+      // Third consumption site for the same rule: the provider drops the whole
+      // context envelope for compact, so the steered turn carried neither the
+      // mention suffix nor the current note. Clearing the pills would drop
+      // context still staged, and marking the note sent would omit it from the
+      // next ordinary prompt.
+      const { controller, state, fileContextManager } = setupSteerable({
+        prepareTurn: jest.fn().mockImplementation((request: any) => ({
+          request,
+          persistedContent: request.text,
+          isCompact: true,
+        })),
+      });
+      state.queuedMessage = makeQueuedMessage('/compact');
+
+      await (controller as any).steerQueuedMessage();
+
+      expect(fileContextManager.clearAttachedPills).not.toHaveBeenCalled();
+      expect(fileContextManager.markCurrentNoteSent).not.toHaveBeenCalled();
+    });
+
+    it('still consumes both when steering a NON-compact turn', async () => {
+      const { controller, state, fileContextManager } = setupSteerable();
+      state.queuedMessage = makeQueuedMessage('ordinary steer');
+
+      await (controller as any).steerQueuedMessage();
+
+      expect(fileContextManager.clearAttachedPills).toHaveBeenCalled();
+      expect(fileContextManager.markCurrentNoteSent).toHaveBeenCalled();
     });
 
     // Round-40 Fix 3: steerQueuedMessage bypasses InputController.sendMessage's removed-agent

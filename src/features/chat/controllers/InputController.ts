@@ -23,6 +23,7 @@ import type {
   ApprovalCallbackOptions,
   ChatRuntimeQueryOptions,
   ChatTurnRequest,
+  PreparedChatTurn,
 } from '../../../core/runtime/types';
 import type { ApprovalDecision, ChatMessage, ExitPlanModeDecision, StreamChunk } from '../../../core/types';
 import { t } from '../../../i18n/i18n';
@@ -42,6 +43,7 @@ import type { AddExternalContextResult, McpServerSelector } from '../ui/toolbar/
 import { resolveBoundAgentQueryOptions } from './boundAgentQueryOptions';
 import type { BrowserSelectionController } from './BrowserSelectionController';
 import type { CanvasSelectionController } from './CanvasSelectionController';
+import { isCompactInvocation, shouldPersistComposerImages } from './compactTurnRules';
 import {
   applyPlanApprovalDecision,
   bakeResponseDurationFooter,
@@ -56,7 +58,6 @@ import {
   createOutgoingUserMessage,
   type DispatchedTurnContext,
   type FinishedTurn,
-  isCompactInvocation,
   normalizeTabModelOverride,
   type OutgoingTurn,
   persistComposerImagesOrRestore,
@@ -304,12 +305,11 @@ export class InputController {
       resetInputHeight: () => this.deps.resetInputHeight(),
     }))) return;
 
-    // Persist any pasted/dropped images to the vault BEFORE the queue branch — both the streaming-queue
-    // (state.queuedMessage) and steer-then-commit paths reuse this image snapshot (else queued/steered
-    // images land in ConversationStore.save with `data` cleared and no `path`). On a vault-write
-    // rejection, restore the reserved composer draft and abort with a Notice — the up-front consume
-    // must not silently drop the user's text (mirrors the removed-agent guard above).
-    if (send.hasImages && !(await persistComposerImagesOrRestore(send, {
+    // Persist pasted/dropped images BEFORE the queue branch — the streaming-queue and
+    // steer-then-commit paths reuse this snapshot, else they save with `data` cleared and no
+    // `path`. A write rejection restores the reserved composer draft and aborts with a Notice.
+    // `shouldPersistComposerImages` also excludes `/compact`, which carries no images.
+    if (shouldPersistComposerImages(send) && !(await persistComposerImagesOrRestore(send, {
       app: this.deps.plugin.app,
       logger: this.deps.plugin.logger,
       resetInputHeight: () => this.deps.resetInputHeight(),
@@ -373,9 +373,8 @@ export class InputController {
     // which buildTurnSubmission ships bare (no suffix, no images), so it consumed neither.
     if (!isCompact) send.fileContextManager?.clearAttachedPills();
 
-    // The composer text is consumed once in sendMessage (before this branch); images are consumed
-    // here since they're read live off the manager for the queued turn above — except for
-    // `/compact`, which was queued without them.
+    // Composer text is consumed in sendMessage (before this branch); images are consumed here
+    // since they're read live off the manager above — again, not for `/compact`.
     if (!isCompact && (send.shouldUseInput || send.consumesComposerDraft)) {
       send.imageContextManager?.clearImages();
     }
@@ -415,9 +414,7 @@ export class InputController {
     if (!acquired) return;
     const { agentService, queryOptions } = acquired;
 
-    // Deferred from buildOutgoingTurn: mark only after the runtime is acquired.
-    send.fileContextManager?.markCurrentNoteSent();
-
+    // markCurrentNoteSent() lives in applyPreparedTurnToUserMessage — only the prepared turn knows.
     await restoreResumeCheckpointIfNeeded(agentService, this.deps.state, this.deps.plugin);
 
     const ctx: DispatchedTurnContext = {
@@ -467,8 +464,7 @@ export class InputController {
 
     // Only clear images if we consumed user input — a plain user send, or a content-override
     // send that folded the composer draft in (quick actions). Never for `/compact`: like the
-    // pills below, a pending image is neither transmitted with the bare invocation nor taken
-    // from the user.
+    // pills below, a pending image is neither transmitted nor taken from the user.
     if (!isCompact && (send.shouldUseInput || send.consumesComposerDraft)) {
       send.imageContextManager?.clearImages();
     }
@@ -484,10 +480,9 @@ export class InputController {
       images: imagesForMessage ? [...imagesForMessage] : undefined,
     };
 
-    // markCurrentNoteSent() is deferred to dispatchComposerTurn (post-runtime) so an init-failure rollback keeps the current-note state for retry.
-    // Added pills are consumed by this turn; clear them (keeps the current note). Not for
-    // `/compact`, which resolveTurnSubmission ships without the mention suffix so the pills
-    // were never folded in — clearing them would drop context the user still expects.
+    // Added pills are consumed by this turn; clear them (keeps the current note, whose
+    // consumption applyPreparedTurnToUserMessage owns). Not for `/compact`, which
+    // resolveTurnSubmission ships without the mention suffix so they were never folded in.
     if (!isCompact) send.fileContextManager?.clearAttachedPills();
 
     return { displayContent, turnRequest, imagesForMessage, isCompact };
@@ -595,6 +590,27 @@ export class InputController {
     }
   }
 
+  /**
+   * Reconciles the optimistic user message with what the provider prepared, and
+   * consumes the current note only if the provider took it. Unlike pills/images
+   * (stripped upstream), `currentNotePath` rides along and each runtime decides —
+   * Claude/Codex drop it on compact, Opencode renders it — so only
+   * `preparedTurn.isCompact` can answer this.
+   */
+  private applyPreparedTurnToUserMessage(
+    ctx: DispatchedTurnContext,
+    preparedTurn: PreparedChatTurn,
+  ): void {
+    // Fall back to request.text when persistedContent is empty (OpenCode keeps
+    // content in the prompt), then refresh so the card's @mentions render.
+    ctx.userMsg.content = preparedTurn.persistedContent || preparedTurn.request.text;
+    ctx.userMsg.currentNote = preparedTurn.isCompact
+      ? undefined
+      : preparedTurn.request.currentNotePath;
+    if (!preparedTurn.isCompact) ctx.send.fileContextManager?.markCurrentNoteSent();
+    this.deps.refreshTranscriptMessage?.(ctx.userMsg.id);
+  }
+
   private async streamPreparedTurn(
     ctx: DispatchedTurnContext,
   ): Promise<{ wasInterrupted: boolean; wasInvalidated: boolean }> {
@@ -603,13 +619,7 @@ export class InputController {
     let wasInvalidated = false;
 
     const preparedTurn = ctx.agentService.prepareTurn(ctx.turnRequest);
-    // Fall back to request.text when persistedContent is empty (OpenCode keeps
-    // content in the prompt), then refresh so the card's @mentions render.
-    ctx.userMsg.content = preparedTurn.persistedContent || preparedTurn.request.text;
-    ctx.userMsg.currentNote = preparedTurn.isCompact
-      ? undefined
-      : preparedTurn.request.currentNotePath;
-    this.deps.refreshTranscriptMessage?.(ctx.userMsg.id);
+    this.applyPreparedTurnToUserMessage(ctx, preparedTurn);
 
     // Pass history WITHOUT current turn (userMsg + assistantMsg we just added)
     // This prevents duplication when rebuilding context for new sessions
