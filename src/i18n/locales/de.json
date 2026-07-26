@@ -677,7 +677,8 @@
       "searchPlaceholder": "Befehle nach Name oder Beschreibung suchen…",
       "refreshTooltip": "Befehle aktualisieren",
       "noResults": "Keine Befehle entsprechen deiner Suche.",
-      "argumentHint": "Erwartet Argumente {hint} – wird im Eingabefeld geöffnet statt gesendet."
+      "argumentHint": "Erwartet Argumente {hint} – wird im Eingabefeld geöffnet statt gesendet.",
+      "queueBusy": "Eine Nachricht steht in der Warteschlange – sende oder verwirf sie, bevor du einen Befehl ausführst."
     },
     "editor": {
       "titleEdit": "Edit quick action",

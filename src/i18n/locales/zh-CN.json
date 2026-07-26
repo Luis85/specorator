@@ -677,7 +677,8 @@
       "searchPlaceholder": "按名称或描述搜索命令…",
       "refreshTooltip": "刷新命令",
       "noResults": "没有匹配的命令。",
-      "argumentHint": "需要参数 {hint}——将填入输入框而不是直接发送。"
+      "argumentHint": "需要参数 {hint}——将填入输入框而不是直接发送。",
+      "queueBusy": "队列中有待发送的消息——请先发送或清除后再运行命令。"
     },
     "editor": {
       "titleEdit": "Edit quick action",

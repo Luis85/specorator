@@ -20,7 +20,9 @@ import type { CommandTabEntry } from './types';
  * Skills tab's one-click behavior. Seeding overwrites the textarea, so it never
  * targets a tab holding an unsent draft (see the routing note below); sending
  * is non-destructive (`sendMessage({ content })` neither folds in nor clears
- * the composer), so it always stays on the active conversation.
+ * the composer), so it always stays on the active conversation. A send is
+ * declined outright when the tab already holds a queued turn it would be
+ * merged into.
  *
  * Provider-enable state is re-checked here via `ProviderRegistry.isEnabled` —
  * `CommandTabEntry.providerEnabled` is a listing-time cache used only for
@@ -53,14 +55,24 @@ export async function runProviderCommand(
   // WRITES the composer via seedComposerDraft, which would overwrite an unsent
   // draft, so it steps aside to a fresh tab rather than destroy the text. A
   // send-only dispatch touches nothing in the composer and always stays put.
-  const input = await landOnProviderChatTab(plugin, entry.providerId, file, {
+  const target = await landOnProviderChatTab(plugin, entry.providerId, file, {
     preferActiveTab: entry.argumentHint ? 'when-composer-empty' : 'always',
   });
-  if (!input) return;
+  const input = target?.controllers.inputController;
+  if (!target || !input) return;
 
   const invocation = `${entry.insertPrefix}${entry.name}`;
   if (entry.argumentHint) {
     input.seedComposerDraft(`${invocation} `);
+    return;
+  }
+  // While streaming, a send is enqueued — and `mergeQueuedChatTurns` joins an
+  // occupied slot as `queued text\n\n/command`, which stops reading as a command,
+  // so the row would silently post prose instead of running anything. The queue
+  // is a single slot, so there is no "keep it separate" option: decline rather
+  // than corrupt either half, leaving the user's queued turn untouched.
+  if (target.state.isStreaming && target.state.queuedMessage !== null) {
+    new Notice(t('quickActions.commands.queueBusy'));
     return;
   }
   await input.sendMessage({ content: invocation });

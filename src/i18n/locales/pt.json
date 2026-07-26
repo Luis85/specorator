@@ -677,7 +677,8 @@
       "searchPlaceholder": "Pesquisar comandos por nome ou descrição…",
       "refreshTooltip": "Atualizar comandos",
       "noResults": "Nenhum comando corresponde à sua pesquisa.",
-      "argumentHint": "Aceita argumentos {hint} — abre no editor em vez de enviar."
+      "argumentHint": "Aceita argumentos {hint} — abre no editor em vez de enviar.",
+      "queueBusy": "Há uma mensagem na fila — envie-a ou descarte-a antes de executar um comando."
     },
     "editor": {
       "titleEdit": "Edit quick action",

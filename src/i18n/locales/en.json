@@ -332,7 +332,8 @@
       "searchPlaceholder": "Search commands by name or description…",
       "refreshTooltip": "Refresh commands",
       "noResults": "No commands match your search.",
-      "argumentHint": "Takes arguments {hint} — opens in the composer instead of sending."
+      "argumentHint": "Takes arguments {hint} — opens in the composer instead of sending.",
+      "queueBusy": "A queued message is waiting — send or clear it before running a command."
     },
     "editor": {
       "titleEdit": "Edit quick action",

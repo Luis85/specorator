@@ -368,8 +368,12 @@ export class QueuedMessageController {
 
       this.deps.getFileContextManager()?.markCurrentNoteSent();
       // Pill mentions were folded into the prepared turn above; clear them so they
-      // don't linger in the composer after the steered message is committed.
-      this.deps.getFileContextManager()?.clearAttachedPills();
+      // don't linger in the composer after the steered message is committed. A
+      // compact turn carries neither the suffix nor the current note (see the
+      // `isCompact` branch below), so its pills were never consumed.
+      if (!preparedTurn.isCompact) {
+        this.deps.getFileContextManager()?.clearAttachedPills();
+      }
 
       this.deps.onSteerCommitted({
         displayContent,

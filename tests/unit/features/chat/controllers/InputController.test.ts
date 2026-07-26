@@ -3881,6 +3881,45 @@ describe('InputController - Message Queue', () => {
       expect(capturedRequests[0].text).toBe('/compact');
     });
 
+    it('keeps attached pills when a /compact turn is QUEUED during streaming', async () => {
+      // Parallel to the non-queued case: buildTurnSubmission also skips the
+      // suffix for compact, so the queue path must not consume the pills either.
+      const fileContextManager = createMockFileContextManager();
+      (fileContextManager.getAttachedMentionSuffix as jest.Mock).mockReturnValue(' @a.ts');
+
+      const localDeps = createSendableDeps({
+        getFileContextManager: () => fileContextManager as any,
+      });
+      localDeps.state.isStreaming = true;
+
+      const localInput = localDeps.getInputEl() as ReturnType<typeof createMockInputEl>;
+      localInput.value = '/compact';
+      const localController = new InputController(localDeps);
+
+      await localController.sendMessage();
+
+      expect(localDeps.state.queuedMessage).not.toBeNull();
+      expect(fileContextManager.clearAttachedPills).not.toHaveBeenCalled();
+    });
+
+    it('still clears attached pills when a NON-compact turn is queued during streaming', async () => {
+      const fileContextManager = createMockFileContextManager();
+      (fileContextManager.getAttachedMentionSuffix as jest.Mock).mockReturnValue(' @a.ts');
+
+      const localDeps = createSendableDeps({
+        getFileContextManager: () => fileContextManager as any,
+      });
+      localDeps.state.isStreaming = true;
+
+      const localInput = localDeps.getInputEl() as ReturnType<typeof createMockInputEl>;
+      localInput.value = 'ordinary follow-up';
+      const localController = new InputController(localDeps);
+
+      await localController.sendMessage();
+
+      expect(fileContextManager.clearAttachedPills).toHaveBeenCalled();
+    });
+
     it('keeps attached pills after a /compact turn, which never folded them in', async () => {
       // `/compact` passes through without the mention suffix so the provider
       // recognises its built-in, so the pills were never consumed — clearing

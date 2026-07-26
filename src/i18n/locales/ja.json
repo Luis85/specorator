@@ -677,7 +677,8 @@
       "searchPlaceholder": "名前または説明でコマンドを検索…",
       "refreshTooltip": "コマンドを更新",
       "noResults": "検索条件に一致するコマンドはありません。",
-      "argumentHint": "引数 {hint} が必要です。送信せず入力欄に挿入されます。"
+      "argumentHint": "引数 {hint} が必要です。送信せず入力欄に挿入されます。",
+      "queueBusy": "キューにメッセージがあります。コマンドを実行する前に送信するか取り消してください。"
     },
     "editor": {
       "titleEdit": "Edit quick action",

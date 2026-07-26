@@ -79,6 +79,7 @@ export type QuickActionsTranslationKey =
   | 'quickActions.commands.refreshTooltip'
   | 'quickActions.commands.noResults'
   | 'quickActions.commands.argumentHint'
+  | 'quickActions.commands.queueBusy'
   | 'quickActions.usage.tabLabel'
   | 'quickActions.usage.topUsed'
   | 'quickActions.usage.dropCandidates'

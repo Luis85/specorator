@@ -55,6 +55,7 @@ import {
   createOutgoingUserMessage,
   type DispatchedTurnContext,
   type FinishedTurn,
+  isCompactInvocation,
   normalizeTabModelOverride,
   type OutgoingTurn,
   type PlanApprovalOutcome,
@@ -336,9 +337,8 @@ export class InputController {
       this.queuedMessages.createQueuedMessage(displayContent, turnRequest),
     );
 
-    // Pill mentions were folded into the queued turnRequest above; clear them now
-    // so they don't linger in the composer after the user hits send while streaming.
-    send.fileContextManager?.clearAttachedPills();
+    // Pill mentions were folded into the queued turnRequest above; clear them now so they don't linger in the composer. Not for `/compact` — same guard as buildOutgoingTurn, since buildTurnSubmission ships it without the suffix.
+    if (!isCompactInvocation(send.content)) send.fileContextManager?.clearAttachedPills();
 
     clearConsumedComposerInput(send, () => this.deps.resetInputHeight());
     if (send.shouldUseInput || send.consumesComposerDraft) {
@@ -424,7 +424,7 @@ export class InputController {
     // Image persistence already ran above (covers queue + steer paths too).
     const images = resolveComposerSourceImages(send);
     const imagesForMessage = images.length > 0 ? [...images] : undefined;
-    const isCompact = /^\/compact(\s|$)/i.test(send.content);
+    const isCompact = isCompactInvocation(send.content);
 
     // Only clear images if we consumed user input — either a plain user send or a
     // content-override send that folded the composer draft in (quick actions).
@@ -892,7 +892,7 @@ export class InputController {
       dedupeExternalContextPaths(externalContextPaths),
       attachedFiles,
     );
-    const isCompact = /^\/compact(\s|$)/i.test(options.content);
+    const isCompact = isCompactInvocation(options.content);
     // Fold pill mentions (attached files/folders) into the content sent to the provider.
     // getAttachedMentionSuffix() already excludes the current note; /compact must pass
     // through unchanged so the provider recognises its built-in command.

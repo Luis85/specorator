@@ -51,7 +51,8 @@ export async function runVaultSkill(
     return;
   }
 
-  const input = await landOnProviderChatTab(plugin, entry.providerId, file);
+  const target = await landOnProviderChatTab(plugin, entry.providerId, file);
+  const input = target?.controllers.inputController;
   if (!input) return;
   await input.sendMessage({ content: `${entry.insertPrefix}${entry.name}` });
   plugin.events.emit('usage.recorded', {

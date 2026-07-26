@@ -85,10 +85,9 @@ export interface LandOnProviderChatTabOptions {
 
 /**
  * Shared prologue for every library dispatch (vault skill, provider command):
- * resolve the chat surface, land on a provider-matched tab, and hand back that
- * tab's input controller, ready to receive the invocation. Returns null when
- * there is no chat surface, the tab cap blocks a target, or the tab has no
- * input controller — a `Notice` has already been shown for the tab cap, so
+ * resolve the chat surface and land on a provider-matched tab, ready to receive
+ * the invocation. Returns null when there is no chat surface or the tab cap
+ * blocks a target — a `Notice` has already been shown for the latter, so
  * callers just bail.
  *
  * The active tab's attached files/folders/images are snapshotted BEFORE the
@@ -102,7 +101,7 @@ export async function landOnProviderChatTab(
   providerId: ProviderId,
   file: TAbstractFile | null,
   options: LandOnProviderChatTabOptions = {},
-): Promise<TabData['controllers']['inputController']> {
+): Promise<TabData | null> {
   const tabManager = await ensureChatTabManager(plugin);
   if (!tabManager) return null;
 
@@ -111,7 +110,7 @@ export async function landOnProviderChatTab(
     // Already on the right conversation: no switch (so nothing resets), and no
     // context carry (the tab keeps its own attachments). Just the picked pill.
     attachPickedContext(activeTab, file);
-    return activeTab.controllers.inputController;
+    return activeTab;
   }
 
   const carriedContext = snapshotUserAttachedContext(activeTab);
@@ -125,7 +124,7 @@ export async function landOnProviderChatTab(
   await tabManager.switchToTab(target.id);
   applyUserAttachedContext(target, carriedContext);
   attachPickedContext(target, file);
-  return target.controllers.inputController;
+  return target;
 }
 
 /**
