@@ -4215,6 +4215,71 @@ describe('InputController - Message Queue', () => {
       expect(capturedRequests[0].text).toBe('/compact');
     });
 
+    it('strips images from a replayed override when the merged turn leads with /compact', async () => {
+      // Reverse of the ordinary→compact merge: queue `/compact` first, then merge an
+      // ordinary turn carrying an image. The merged text still LEADS with `/compact`, so
+      // the turn is classified compact and the image is hidden from the transcript — but
+      // the override still carried it into the request the provider reads. An attachment
+      // in neither composer nor transcript must not reach the runtime.
+      const localDeps = createSendableDeps({});
+      const mockAgentService = (localDeps as any).mockAgentService;
+      const prepared: any[] = [];
+      mockAgentService.prepareTurn = jest.fn().mockImplementation((request: any) => {
+        prepared.push(request);
+        return {
+          request,
+          persistedContent: request.text,
+          prompt: request.text,
+          isCompact: true,
+          mcpMentions: new Set(),
+        };
+      });
+      mockAgentService.query = jest.fn().mockReturnValue(createMockStream([{ type: 'done' }]));
+
+      await new InputController(localDeps).sendMessage({
+        content: '/compact\n\nlook at this',
+        turnRequestOverride: {
+          text: '/compact\n\nlook at this',
+          images: [{ id: 'img-1', data: 'x', mimeType: 'image/png' }],
+          editorSelection: null,
+          browserSelection: null,
+          canvasSelection: null,
+        } as any,
+      });
+
+      expect(prepared[0].images).toBeUndefined();
+    });
+
+    it('keeps override images on a replayed NON-compact turn', async () => {
+      const localDeps = createSendableDeps({});
+      const mockAgentService = (localDeps as any).mockAgentService;
+      const prepared: any[] = [];
+      mockAgentService.prepareTurn = jest.fn().mockImplementation((request: any) => {
+        prepared.push(request);
+        return {
+          request,
+          persistedContent: request.text,
+          prompt: request.text,
+          isCompact: false,
+          mcpMentions: new Set(),
+        };
+      });
+      mockAgentService.query = jest.fn().mockReturnValue(createMockStream([{ type: 'done' }]));
+
+      await new InputController(localDeps).sendMessage({
+        content: 'look at this',
+        turnRequestOverride: {
+          text: 'look at this',
+          images: [{ id: 'img-1', data: 'x', mimeType: 'image/png' }],
+          editorSelection: null,
+          browserSelection: null,
+          canvasSelection: null,
+        } as any,
+      });
+
+      expect(prepared[0].images).toHaveLength(1);
+    });
+
     it('does not clear live pills when dispatching a replayed queue snapshot', async () => {
       // A dequeued turn already folded in (and cleared) the pills it captured at
       // queue time, so anything staged since belongs to the user's NEXT turn.

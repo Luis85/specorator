@@ -494,10 +494,12 @@ export class InputController {
     options?: ComposerTurnOptions,
   ): { displayContent: string; turnRequest: ChatTurnRequest } {
     if (options?.turnRequestOverride) {
-      return {
-        displayContent: send.content,
-        turnRequest: cloneChatTurnRequest(options.turnRequestOverride),
-      };
+      const turnRequest = cloneChatTurnRequest(options.turnRequestOverride);
+      // Ships bare for a REPLAYED request too: a `/compact`-led merge hides the merged-in
+      // image from the transcript, but the override still carried it to the provider. An
+      // attachment in neither composer nor transcript must not reach the runtime.
+      if (isCompactInvocation(send.content)) turnRequest.images = undefined;
+      return { displayContent: send.content, turnRequest };
     }
     return this.buildTurnSubmission({
       content: send.content,
