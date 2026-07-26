@@ -286,6 +286,30 @@ describe('TeamChatView — composer model picks', () => {
   // Round-68: the top bar renders the DM's model, but a SAME-provider pick fires no
   // onTabProviderChanged and re-projects only the composer — so the chip kept the previous
   // model until some unrelated Team Chat event landed, showing two different active models.
+  // Round-71: `beginStreamingTurnState` flips isStreaming BEFORE `presentOutgoingTurn` appends
+  // the user + assistant messages, so the streaming callback's snapshot still read the DM as
+  // EMPTY — the greeting and starter buttons stayed stacked above the live first turn for the
+  // whole response. The message-list change is its own signal.
+  it('re-projects on onTabMessagesChanged so the first turn clears the starter card', () => {
+    const view = makeView();
+    view.initTabEngine();
+    const tab: any = { id: 'tab-1', conversationId: 'conv-1', state: { messages: [], isStreaming: false } };
+    view.tabManager.getActiveTab = jest.fn(() => tab);
+    view.tabManager.getAllTabs = jest.fn(() => [tab]);
+    const observer = jest.fn();
+    view.teamChatObservers = new Set([observer]);
+
+    // The turn starts: isStreaming flips first, with the messages not yet appended.
+    callbacksFor().onTabStreamingChanged('tab-1', true);
+    expect(observer.mock.calls.at(-1)[0].activeDmIsEmpty).toBe(true);
+
+    // …then the outgoing messages land.
+    tab.state.messages = [{ id: 'u1', role: 'user', content: 'hi' }];
+    callbacksFor().onTabMessagesChanged('tab-1');
+
+    expect(observer.mock.calls.at(-1)[0].activeDmIsEmpty).toBe(false);
+  });
+
   it('re-projects the snapshot on onTabModelChanged so the top-bar chip tracks the pick', () => {
     const view = makeView();
     view.initTabEngine();

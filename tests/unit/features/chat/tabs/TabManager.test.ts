@@ -17,6 +17,7 @@ const mockActivateTab = jest.fn();
 const mockDeactivateTab = jest.fn();
 const mockInitializeTabUI = jest.fn();
 const mockInitializeTabControllers = jest.fn();
+const mockChainTabMessagesChanged = jest.fn();
 const mockInitializeTabService = jest.fn().mockResolvedValue(undefined);
 const mockWireTabInputEvents = jest.fn();
 const mockGetTabTitle = jest.fn().mockReturnValue('Test Tab');
@@ -33,6 +34,9 @@ jest.mock('@/features/chat/tabs/Tab', () => ({
   deactivateTab: (...args: any[]) => mockDeactivateTab(...args),
   initializeTabUI: (...args: any[]) => mockInitializeTabUI(...args),
   initializeTabControllers: (...args: any[]) => mockInitializeTabControllers(...args),
+  // Chains the host's onTabMessagesChanged onto the transcript re-projection; the real one
+  // rewrites tab.state.callbacks, so the double just records the notifier for assertions.
+  chainTabMessagesChanged: (...args: any[]) => mockChainTabMessagesChanged(...args),
   initializeTabService: (...args: any[]) => mockInitializeTabService(...args),
   wireTabInputEvents: (...args: any[]) => mockWireTabInputEvents(...args),
   getTabTitle: (...args: any[]) => mockGetTabTitle(...args),

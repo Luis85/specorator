@@ -12,6 +12,7 @@ import { chooseForkTarget } from '../../../shared/modals/ForkTargetModal';
 import { getTabProviderId } from './providerResolution';
 import {
   activateTab,
+  chainTabMessagesChanged,
   createTab,
   destroyTab,
   type ForkContext,
@@ -349,7 +350,7 @@ export class TabManager implements TabManagerInterface {
         () => this.commandCoordinator.getProviderCatalogConfig(tab),
       );
 
-      // Wire input event handlers
+      chainTabMessagesChanged(tab, () => this.callbacks.onTabMessagesChanged?.(tab.id));
       wireTabInputEvents(tab, this.plugin);
 
       this.tabs.set(tab.id, tab);

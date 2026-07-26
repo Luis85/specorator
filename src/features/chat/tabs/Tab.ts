@@ -3,6 +3,7 @@ import type { TabData } from './types';
 
 export { getTabProviderId } from './providerResolution';
 export {
+  chainTabMessagesChanged,
   type ForkContext,
   initializeTabControllers,
 } from './tabControllers';

@@ -57,6 +57,13 @@ would let one leaf's projection overwrite another's (`ui/vue/globalPinia.ts`).
   or torn-down selection just re-reads live state (a null manager projects an empty snapshot),
   so there is nothing stale to publish. Any future post-open state that only the engine writes
   is covered by the same emit.
+- **The first turn clears the starter card through `onTabMessagesChanged`.**
+  `beginStreamingTurnState` flips `isStreaming` BEFORE `presentOutgoingTurn` appends the user
+  and assistant messages, so the streaming-callback snapshot still read the DM as EMPTY — the
+  greeting and starter buttons stayed stacked above the live first turn for the whole response.
+  `chainTabMessagesChanged` wraps the transcript re-projection the tab controllers install and
+  adds a host notification, so any host rendering something derived from the message list gets
+  its own signal. The transcript re-projects FIRST, so the host reads a settled projection.
 - **A composer model pick re-projects through `onTabModelChanged`.** The top bar renders the
   DM's model, but a SAME-provider pick fires no `onTabProviderChanged` and re-projects only
   the composer — so the chip kept the previous model until an unrelated event landed, showing

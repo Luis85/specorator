@@ -388,6 +388,15 @@ export interface TabManagerCallbacks {
    * unrelated event happened to re-project it.
    */
   onTabModelChanged?: (tabId: TabId) => void;
+
+  /**
+   * Called when a tab's message LIST changes (add / remove / bulk set) — not on the in-place
+   * block growth of a streaming turn, which never fires it. For a host rendering anything
+   * derived from the list (Team Chat's empty-DM starter card), the streaming-state callback is
+   * not enough: `beginStreamingTurnState` flips `isStreaming` BEFORE the outgoing messages are
+   * appended, so a snapshot taken there still reads the DM as empty.
+   */
+  onTabMessagesChanged?: (tabId: TabId) => void;
 }
 
 /**

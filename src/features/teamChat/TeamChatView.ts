@@ -88,8 +88,7 @@ export class TeamChatView extends ItemView implements ChatViewHandle {
   private readonly activeAgentTracker = { previousActiveAgentId: null as string | null };
   /** Roster rail chrome, persisted per leaf alongside the DM layout (never globally, so two Team Chat leaves keep independent rail geometry). Width is clamped on every write. */
   private railGeometry: TeamChatRailGeometry = { collapsed: false, width: DEFAULT_RAIL_WIDTH };
-  // Store-reprojection observers (mirror of chat's chatShellObservers). The routing composable subscribes
-  // here and fans each snapshot into the Pinia store; the ChatViewHandle refresh methods reuse the seam.
+  // Store-reprojection observers (mirror of chat's chatShellObservers): the routing composable subscribes here and fans each snapshot into the Pinia store.
   private readonly teamChatObservers = new Set<(snapshot: TeamChatSnapshot) => void>();
 
   constructor(leaf: WorkspaceLeaf, private readonly plugin: SpecoratorPlugin) {
@@ -164,7 +163,8 @@ export class TeamChatView extends ItemView implements ChatViewHandle {
       onTabAttentionChanged: () => this.emitTeamChatChange(),
       onTabConversationChanged: () => { this.projectSelectedAgentFromActiveTab(); this.persistTabState(); },
       onTabProviderChanged: () => this.emitTeamChatChange(),
-      onTabModelChanged: () => this.emitTeamChatChange(), // the top bar renders the model, and a SAME-provider pick fires no onTabProviderChanged (Round-68)
+      onTabModelChanged: () => this.emitTeamChatChange(),    // Round-68: the top bar renders the model, and a SAME-provider pick fires no onTabProviderChanged
+      onTabMessagesChanged: () => this.emitTeamChatChange(),  // Round-71: the starter card derives from the message list, which grows AFTER isStreaming flips
     });
     // Empty state is the roster; never auto-mint a blank unbound tab on last-DM close (:Fix1).
     this.tabManager.autoCreateOnEmpty = false;
