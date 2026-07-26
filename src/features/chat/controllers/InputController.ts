@@ -43,7 +43,7 @@ import type { AddExternalContextResult, McpServerSelector } from '../ui/toolbar/
 import { resolveBoundAgentQueryOptions } from './boundAgentQueryOptions';
 import type { BrowserSelectionController } from './BrowserSelectionController';
 import type { CanvasSelectionController } from './CanvasSelectionController';
-import { isCompactInvocation, shouldPersistComposerImages } from './compactTurnRules';
+import { isCompactInvocation, isReplayedTurn, shouldPersistComposerImages } from './compactTurnRules';
 import {
   applyPlanApprovalDecision,
   bakeResponseDurationFooter,
@@ -480,10 +480,10 @@ export class InputController {
       images: imagesForMessage ? [...imagesForMessage] : undefined,
     };
 
-    // Added pills are consumed by this turn; clear them (keeps the current note, whose
-    // consumption applyPreparedTurnToUserMessage owns). Not for `/compact`, which
-    // resolveTurnSubmission ships without the mention suffix so they were never folded in.
-    if (!isCompact) send.fileContextManager?.clearAttachedPills();
+    // Added pills are consumed by this turn; clear them (the current note is
+    // applyPreparedTurnToUserMessage's). Neither for `/compact` (never folded in) nor for a
+    // replayed snapshot, which owns its own context — see `isReplayedTurn`.
+    if (!isCompact && !isReplayedTurn(options)) send.fileContextManager?.clearAttachedPills();
 
     return { displayContent, turnRequest, imagesForMessage, isCompact };
   }
