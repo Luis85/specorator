@@ -4336,6 +4336,37 @@ describe('InputController - Message Queue', () => {
       expect(fileContextManager.markCurrentNoteSent).not.toHaveBeenCalled();
     });
 
+    it('marks the current note sent when the PROVIDER does not treat /compact specially', async () => {
+      // Opencode has no compact concept — `prepareTurn` returns `isCompact:
+      // false` and `buildOpencodePromptText` renders `currentNotePath` into the
+      // envelope like any other turn. Unlike the pills and images, the note
+      // stays ON the turnRequest for a compact send, so whether it is delivered
+      // is the provider's call. Gating on the textual `/compact` would leave it
+      // unconsumed here and re-send it every subsequent turn.
+      const fileContextManager = createMockFileContextManager();
+
+      const localDeps = createSendableDeps({
+        getFileContextManager: () => fileContextManager as any,
+      });
+      const mockAgentService = (localDeps as any).mockAgentService;
+      mockAgentService.prepareTurn = jest.fn().mockImplementation((request: any) => ({
+        request,
+        persistedContent: request.text,
+        isCompact: false,
+        mcpMentions: new Set(),
+        prompt: request.text,
+      }));
+      mockAgentService.query = jest.fn().mockReturnValue(createMockStream([{ type: 'done' }]));
+
+      const localInput = localDeps.getInputEl() as ReturnType<typeof createMockInputEl>;
+      localInput.value = '/compact';
+      const localController = new InputController(localDeps);
+
+      await localController.sendMessage();
+
+      expect(fileContextManager.markCurrentNoteSent).toHaveBeenCalled();
+    });
+
     it('still marks the current note sent on a NON-compact turn', async () => {
       // The guard must not be a blanket skip: an ordinary turn does deliver the
       // note, so it has to be marked or it would be re-sent every turn.

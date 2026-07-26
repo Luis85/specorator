@@ -415,12 +415,10 @@ export class InputController {
     if (!acquired) return;
     const { agentService, queryOptions } = acquired;
 
-    // Deferred from buildOutgoingTurn: mark only after the runtime is acquired.
-    // Not for `/compact`: the provider drops the whole context envelope for it
-    // (Claude's encoder sends no context blocks; Codex routes to its own compact
-    // endpoint), so the note was never delivered — marking it sent would omit it
-    // from the next ordinary prompt. Same rule as the pills and images below.
-    if (!outgoing.isCompact) send.fileContextManager?.markCurrentNoteSent();
+    // markCurrentNoteSent() is deferred further, into streamPreparedTurn: unlike
+    // the pills and images, `currentNotePath` STAYS on the turnRequest for a
+    // compact turn, so whether it is actually delivered is the provider's call,
+    // not a textual one. Only `PreparedChatTurn.isCompact` knows.
 
     await restoreResumeCheckpointIfNeeded(agentService, this.deps.state, this.deps.plugin);
 
@@ -613,6 +611,16 @@ export class InputController {
     ctx.userMsg.currentNote = preparedTurn.isCompact
       ? undefined
       : preparedTurn.request.currentNotePath;
+    // Consume the current note only if this provider actually delivered it —
+    // the same condition the card above renders on. Claude's encoder drops the
+    // whole context envelope for a compact turn and Codex routes to its own
+    // compact endpoint, so marking it sent there would omit the note from every
+    // later prompt; Opencode has no compact concept (`isCompact: false`) and
+    // renders `currentNotePath` like any other turn, so it MUST be marked or the
+    // same note rides along again next turn. A textual `/compact` test cannot
+    // tell those apart. Deferred to here (past runtime acquisition and prepare)
+    // so an init failure still leaves the note unconsumed for the retry.
+    if (!preparedTurn.isCompact) ctx.send.fileContextManager?.markCurrentNoteSent();
     this.deps.refreshTranscriptMessage?.(ctx.userMsg.id);
 
     // Pass history WITHOUT current turn (userMsg + assistantMsg we just added)
