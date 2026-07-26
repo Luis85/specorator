@@ -209,6 +209,37 @@ describe('ProviderCommandAggregator', () => {
     expect(warm).not.toHaveBeenCalled();
   });
 
+  it('never asks a disabled provider for its listing', async () => {
+    // A cold `listDropdownEntries()` can spawn — Claude's probes the SDK in a
+    // subprocess — so merely opening the tab must not launch an opted-out
+    // provider. (The skills aggregator's disk scan has no such hazard.)
+    const record = makeRecord({ isEnabled: false, entries: [makeEntry()] });
+    const warm = jest.fn();
+    const aggregator = new ProviderCommandAggregator(() => [record], {
+      warmRuntimeCommands: warm,
+    });
+
+    const entries = await aggregator.listAll();
+
+    expect(record.commandCatalog.listDropdownEntries).not.toHaveBeenCalled();
+    expect(warm).not.toHaveBeenCalled();
+    expect(entries).toEqual([]);
+  });
+
+  it('keeps dimming rows cached before the provider was disabled', async () => {
+    // Disabling mid-session must not blank the list — `mapEntries` re-tags
+    // `providerEnabled` off the live record so the rows render dimmed.
+    const record = makeRecord({ entries: [makeEntry()] });
+    const aggregator = new ProviderCommandAggregator(() => [record]);
+
+    await aggregator.listAll();
+    record.isEnabled = false;
+
+    expect(aggregator.listCachedNow()).toEqual([
+      expect.objectContaining({ name: 'review', providerEnabled: false }),
+    ]);
+  });
+
   it('streams one callback per provider', async () => {
     const aggregator = new ProviderCommandAggregator(() => [
       makeRecord({ entries: [makeEntry()] }),

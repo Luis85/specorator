@@ -43,6 +43,13 @@ export class ProviderCommandAggregator
       nowMs: options.nowMs ?? Date.now,
       ...(options.logger ? { logger: options.logger } : {}),
       fetchEntries: async (record) => {
+        // Never ask a provider the user turned off. Unlike the skills
+        // aggregator's `listVaultEntries()` (a disk scan), a cold
+        // `listDropdownEntries()` can SPAWN: Claude's probes the SDK in a
+        // subprocess. Merely opening the tab must not launch a provider that is
+        // opted out. Rows already cached from when it was enabled still render
+        // (dimmed) — `mapEntries` re-tags `providerEnabled` from the live record.
+        if (!record.isEnabled) return [];
         const first = await listCommandEntries(record);
         if (first.length > 0 || !options.warmRuntimeCommands) return first;
         // An empty listing from a runtime-backed catalog usually means nothing

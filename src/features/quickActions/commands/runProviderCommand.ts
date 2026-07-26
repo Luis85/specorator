@@ -17,7 +17,10 @@ import type { CommandTabEntry } from './types';
  * SEEDED into the composer with a trailing space and left unsent — dispatching
  * a bare `/review` would run it argument-less, which is a different command
  * than the user picked. Argument-less commands send immediately, matching the
- * Skills tab's one-click behavior.
+ * Skills tab's one-click behavior. Seeding overwrites the textarea, so it never
+ * targets a tab holding an unsent draft (see the routing note below); sending
+ * is non-destructive (`sendMessage({ content })` neither folds in nor clears
+ * the composer), so it always stays on the active conversation.
  *
  * Provider-enable state is re-checked here via `ProviderRegistry.isEnabled` —
  * `CommandTabEntry.providerEnabled` is a listing-time cache used only for
@@ -29,8 +32,8 @@ import type { CommandTabEntry } from './types';
  * conversation — `/compact` compacts the transcript it is sent to — so it
  * stays on the active tab whenever that tab's provider matches, bound or not
  * (`preferActiveTab`). It falls back to the shared blank-tab routing only when
- * the active tab belongs to another provider, is a work-order run tab, or does
- * not exist. Everything else (the attached-context carry, the
+ * the active tab belongs to another provider, is a work-order run tab, holds a
+ * draft a seed would clobber, or does not exist. Everything else (the attached-context carry, the
  * switch-then-attach-pill ordering) is shared — see `landOnProviderChatTab`.
  */
 export async function runProviderCommand(
@@ -45,11 +48,13 @@ export async function runProviderCommand(
     return;
   }
 
-  // `preferActiveTab`: a slash command is a turn IN a conversation, so it must
-  // land on the conversation the user is looking at. Skills start new work and
-  // keep the draft-free-blank routing.
+  // A slash command is a turn IN a conversation, so it lands on the tab the
+  // user is looking at. The one exception is an argument-taking command: it
+  // WRITES the composer via seedComposerDraft, which would overwrite an unsent
+  // draft, so it steps aside to a fresh tab rather than destroy the text. A
+  // send-only dispatch touches nothing in the composer and always stays put.
   const input = await landOnProviderChatTab(plugin, entry.providerId, file, {
-    preferActiveTab: true,
+    preferActiveTab: entry.argumentHint ? 'when-composer-empty' : 'always',
   });
   if (!input) return;
 

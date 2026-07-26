@@ -41,13 +41,18 @@ function makeEntry(overrides: Partial<CommandTabEntry> = {}): CommandTabEntry {
   };
 }
 
-function makeTab(opts: { id?: string; providerId?: string; lifecycleState?: string } = {}) {
+function makeTab(opts: {
+  id?: string;
+  providerId?: string;
+  lifecycleState?: string;
+  draftText?: string;
+} = {}) {
   return {
     id: opts.id ?? 'tab-1',
     providerId: opts.providerId ?? 'claude',
     lifecycleState: opts.lifecycleState ?? 'blank',
     kind: 'chat',
-    dom: { inputEl: { value: '' } },
+    dom: { inputEl: { value: opts.draftText ?? '' } },
     ui: {
       fileContextManager: {
         attachFileAsPill: jest.fn(),
@@ -125,6 +130,42 @@ describe('runProviderCommand', () => {
     const input = activeTab.controllers.inputController;
     expect(input.seedComposerDraft).toHaveBeenCalledWith('/review ');
     expect(input.sendMessage).not.toHaveBeenCalled();
+  });
+
+  it('steps aside to a fresh tab rather than seed over an unsent draft', async () => {
+    // seedComposerDraft overwrites the textarea, so seeding an argument-taking
+    // command into a draft-bearing tab would silently destroy the user's text.
+    // `keepExisting` is not the fix — it appends BELOW, and an invocation that
+    // isn't the leading token no longer reads as a command.
+    const activeTab = makeTab({ lifecycleState: 'bound', draftText: 'half-written thought' });
+    const newTab = makeTab({ id: 'tab-2' });
+    const { plugin, tabManager } = makePlugin({ activeTab, newTab });
+
+    await runProviderCommand(
+      plugin as never,
+      makeEntry({ argumentHint: '[pr-url]' }),
+      null,
+    );
+
+    expect(activeTab.controllers.inputController.seedComposerDraft).not.toHaveBeenCalled();
+    expect(activeTab.dom.inputEl.value).toBe('half-written thought');
+    expect(tabManager.createTab).toHaveBeenCalled();
+    expect(newTab.controllers.inputController.seedComposerDraft).toHaveBeenCalledWith('/review ');
+  });
+
+  it('still sends an argument-less command into a draft-bearing active tab', async () => {
+    // Sending is non-destructive: `sendMessage({ content })` neither folds the
+    // draft in nor clears it, so there is no reason to leave the conversation.
+    const activeTab = makeTab({ lifecycleState: 'bound', draftText: 'half-written thought' });
+    const { plugin, tabManager } = makePlugin({ activeTab });
+
+    await runProviderCommand(plugin as never, makeEntry({ name: 'compact' }), null);
+
+    expect(tabManager.createTab).not.toHaveBeenCalled();
+    expect(activeTab.controllers.inputController.sendMessage).toHaveBeenCalledWith({
+      content: '/compact',
+    });
+    expect(activeTab.dom.inputEl.value).toBe('half-written thought');
   });
 
   it('honors the provider-native prefix rather than assuming a slash', async () => {

@@ -3,6 +3,7 @@ import { Notice, type TAbstractFile, TFile, TFolder } from 'obsidian';
 import type { ProviderId } from '@/core/providers/types';
 import {
   applyUserAttachedContext,
+  blankTabHasComposerText,
   blankTabHasPendingDraft,
   snapshotUserAttachedContext,
 } from '@/features/chat/tabs/blankTabDraft';
@@ -63,14 +64,23 @@ export async function resolveProviderChatTab(
 
 export interface LandOnProviderChatTabOptions {
   /**
-   * Send into the active tab whenever its provider matches, even when it is
-   * bound to a conversation. Slash commands are turns IN a conversation — a
+   * Land on the active tab whenever its provider matches, even when it is bound
+   * to a conversation. Slash commands are turns IN a conversation — a
    * conversation-scoped one like `/compact` operates on the transcript it is
    * sent to — so routing them to a blank tab the way skills are routed would
    * compact an empty conversation instead of the one the user was looking at.
-   * Skills are new work and keep the draft-free-blank routing.
+   * Skills are new work and keep the draft-free-blank routing (omit this).
+   *
+   * `'when-composer-empty'` additionally skips an active tab that holds unsent
+   * composer text. Use it for dispatches that WRITE the composer rather than
+   * send: `seedComposerDraft` overwrites the textarea, so seeding into a
+   * draft-bearing tab would silently discard the user's text. (Its
+   * `keepExisting` option is not a fix here — it appends BELOW the existing
+   * text, and an invocation that isn't the leading token no longer reads as a
+   * command.) A plain `sendMessage({ content })` neither folds in nor clears
+   * the composer, so send-only dispatches can safely use `'always'`.
    */
-  preferActiveTab?: boolean;
+  preferActiveTab?: 'always' | 'when-composer-empty';
 }
 
 /**
@@ -97,7 +107,7 @@ export async function landOnProviderChatTab(
   if (!tabManager) return null;
 
   const activeTab = tabManager.getActiveTab();
-  if (options.preferActiveTab && activeTab && isCommandTargetableTab(activeTab, plugin, providerId)) {
+  if (activeTab && canLandOnActiveTab(activeTab, plugin, providerId, options)) {
     // Already on the right conversation: no switch (so nothing resets), and no
     // context carry (the tab keeps its own attachments). Just the picked pill.
     attachPickedContext(activeTab, file);
@@ -119,16 +129,22 @@ export async function landOnProviderChatTab(
 }
 
 /**
- * A hidden work-order run tab is never a command target — it has its own
- * lifecycle and would swallow the turn — and neither is a tab on a different
- * provider, whose runtime would not resolve the invocation.
+ * A hidden work-order run tab is never a target — it has its own lifecycle and
+ * would swallow the turn — and neither is a tab on a different provider, whose
+ * runtime would not resolve the invocation. Under `'when-composer-empty'` an
+ * unsent draft also disqualifies it, so the caller falls through to fresh-tab
+ * routing instead of writing over the user's text.
  */
-function isCommandTargetableTab(
+function canLandOnActiveTab(
   tab: TabData,
   plugin: SpecoratorPlugin,
   providerId: ProviderId,
+  options: LandOnProviderChatTabOptions,
 ): boolean {
-  return tab.kind !== 'work-order' && getTabProviderId(tab, plugin) === providerId;
+  if (!options.preferActiveTab) return false;
+  if (tab.kind === 'work-order') return false;
+  if (getTabProviderId(tab, plugin) !== providerId) return false;
+  return options.preferActiveTab === 'always' || !blankTabHasComposerText(tab);
 }
 
 function attachPickedContext(tab: TabData, file: TAbstractFile | null): void {
