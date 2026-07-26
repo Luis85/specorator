@@ -416,7 +416,11 @@ export class InputController {
     const { agentService, queryOptions } = acquired;
 
     // Deferred from buildOutgoingTurn: mark only after the runtime is acquired.
-    send.fileContextManager?.markCurrentNoteSent();
+    // Not for `/compact`: the provider drops the whole context envelope for it
+    // (Claude's encoder sends no context blocks; Codex routes to its own compact
+    // endpoint), so the note was never delivered — marking it sent would omit it
+    // from the next ordinary prompt. Same rule as the pills and images below.
+    if (!outgoing.isCompact) send.fileContextManager?.markCurrentNoteSent();
 
     await restoreResumeCheckpointIfNeeded(agentService, this.deps.state, this.deps.plugin);
 

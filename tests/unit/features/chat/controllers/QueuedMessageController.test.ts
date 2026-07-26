@@ -315,6 +315,37 @@ describe('QueuedMessageController', () => {
       expect((controller as any).pendingSteerMessage).not.toBeNull();
     });
 
+    it('consumes neither the pills nor the current note when steering a /compact turn', async () => {
+      // Third consumption site for the same rule: the provider drops the whole
+      // context envelope for compact, so the steered turn carried neither the
+      // mention suffix nor the current note. Clearing the pills would drop
+      // context still staged, and marking the note sent would omit it from the
+      // next ordinary prompt.
+      const { controller, state, fileContextManager } = setupSteerable({
+        prepareTurn: jest.fn().mockImplementation((request: any) => ({
+          request,
+          persistedContent: request.text,
+          isCompact: true,
+        })),
+      });
+      state.queuedMessage = makeQueuedMessage('/compact');
+
+      await (controller as any).steerQueuedMessage();
+
+      expect(fileContextManager.clearAttachedPills).not.toHaveBeenCalled();
+      expect(fileContextManager.markCurrentNoteSent).not.toHaveBeenCalled();
+    });
+
+    it('still consumes both when steering a NON-compact turn', async () => {
+      const { controller, state, fileContextManager } = setupSteerable();
+      state.queuedMessage = makeQueuedMessage('ordinary steer');
+
+      await (controller as any).steerQueuedMessage();
+
+      expect(fileContextManager.clearAttachedPills).toHaveBeenCalled();
+      expect(fileContextManager.markCurrentNoteSent).toHaveBeenCalled();
+    });
+
     // Round-40 Fix 3: steerQueuedMessage bypasses InputController.sendMessage's removed-agent
     // guard, so it must apply the same gate — otherwise "Steer Now" commits a turn in a
     // read-only (agent-removed) DM without the agent's persona/model.

@@ -419,12 +419,12 @@ export class QueuedMessageController {
         return;
       }
 
-      this.deps.getFileContextManager()?.markCurrentNoteSent();
-      // Pill mentions were folded into the prepared turn above; clear them so they
-      // don't linger in the composer after the steered message is committed. A
-      // compact turn carries neither the suffix nor the current note (see the
-      // `isCompact` branch below), so its pills were never consumed.
+      // A compact turn carries neither the mention suffix nor the current note —
+      // the provider drops the whole context envelope for it — so it consumed
+      // neither. Marking the note sent would omit it from the next ordinary
+      // prompt, and clearing the pills would drop context still staged.
       if (!preparedTurn.isCompact) {
+        this.deps.getFileContextManager()?.markCurrentNoteSent();
         this.deps.getFileContextManager()?.clearAttachedPills();
       }
 

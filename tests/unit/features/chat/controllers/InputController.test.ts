@@ -4313,6 +4313,49 @@ describe('InputController - Message Queue', () => {
       expect(fileContextManager.clearAttachedPills).not.toHaveBeenCalled();
     });
 
+    it('does not mark the current note sent on a /compact turn', async () => {
+      // The provider drops the whole context envelope for compact (Claude's
+      // encoder emits no context blocks), so the note was never delivered.
+      // Marking it sent would omit it from the next ordinary prompt — the
+      // auto-attached current note would silently vanish for the rest of the
+      // session after a single compaction.
+      const fileContextManager = createMockFileContextManager();
+
+      const localDeps = createSendableDeps({
+        getFileContextManager: () => fileContextManager as any,
+      });
+      const mockAgentService = (localDeps as any).mockAgentService;
+      mockAgentService.query = jest.fn().mockReturnValue(createMockStream([{ type: 'done' }]));
+
+      const localInput = localDeps.getInputEl() as ReturnType<typeof createMockInputEl>;
+      localInput.value = '/compact';
+      const localController = new InputController(localDeps);
+
+      await localController.sendMessage();
+
+      expect(fileContextManager.markCurrentNoteSent).not.toHaveBeenCalled();
+    });
+
+    it('still marks the current note sent on a NON-compact turn', async () => {
+      // The guard must not be a blanket skip: an ordinary turn does deliver the
+      // note, so it has to be marked or it would be re-sent every turn.
+      const fileContextManager = createMockFileContextManager();
+
+      const localDeps = createSendableDeps({
+        getFileContextManager: () => fileContextManager as any,
+      });
+      const mockAgentService = (localDeps as any).mockAgentService;
+      mockAgentService.query = jest.fn().mockReturnValue(createMockStream([{ type: 'done' }]));
+
+      const localInput = localDeps.getInputEl() as ReturnType<typeof createMockInputEl>;
+      localInput.value = 'ordinary message';
+      const localController = new InputController(localDeps);
+
+      await localController.sendMessage();
+
+      expect(fileContextManager.markCurrentNoteSent).toHaveBeenCalled();
+    });
+
     it('clears attached pills after send, with folded mentions already captured in turnRequest', async () => {
       const fileContextManager = createMockFileContextManager();
 
