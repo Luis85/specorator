@@ -101,14 +101,43 @@ describe('projectThreadMetas', () => {
     expect(projectThreadMetas(plugin, { 'roster:a': 'conv-a' })['roster:a'].updatedAt).toBe(250);
   });
 
-  // A legacy record may predate `lastResponseAt`; a non-empty thread still needs a time.
-  it('falls back to updatedAt for a non-empty thread with no lastResponseAt', () => {
+  // A legacy record may predate BOTH `lastResponseAt` and per-message stamps; a non-empty
+  // thread still needs a time, so `updatedAt` is the last resort.
+  it('falls back to updatedAt when neither lastResponseAt nor a message stamp exists', () => {
     const plugin = pluginWith([conversation('conv-a', {
       updatedAt: 100,
-      messages: [message('assistant', 'done')],
+      messages: [{ id: 'm', role: 'assistant', content: 'done' } as ChatMessage],
     })]);
 
     expect(projectThreadMetas(plugin, { 'roster:a': 'conv-a' })['roster:a'].updatedAt).toBe(100);
+  });
+
+  // A CANCELLED turn is saved with `updateLastResponse=false` — the partial content must not
+  // be claimed as a finished response — so the messages advance while `lastResponseAt` stays
+  // put. Reading only the latter showed the cancelled turn's text under the PREVIOUS turn's
+  // timestamp, and left the row frozen where it was in the `recent` sort.
+  it('advances past a stale lastResponseAt when a newer message exists (cancelled turn)', () => {
+    const plugin = pluginWith([conversation('conv-a', {
+      updatedAt: 100,
+      lastResponseAt: 250,
+      messages: [message('assistant', 'finished reply', { timestamp: 250 }), message('user', 'cancelled ask', { timestamp: 900 })],
+    })]);
+
+    const meta = projectThreadMetas(plugin, { 'roster:a': 'conv-a' })['roster:a'];
+
+    expect(meta.updatedAt).toBe(900);
+    expect(meta.preview).toBe('cancelled ask'); // the two now agree
+  });
+
+  // The newest stamp wins, not the tail one — never regress the row's time on a trailing
+  // message that somehow carries an older (or absent) stamp.
+  it('ignores a text-less trailing message with no stamp', () => {
+    const plugin = pluginWith([conversation('conv-a', {
+      updatedAt: 10,
+      messages: [message('assistant', 'answer', { timestamp: 900 }), { id: 'x', role: 'assistant', content: '' } as ChatMessage],
+    })]);
+
+    expect(projectThreadMetas(plugin, { 'roster:a': 'conv-a' })['roster:a'].updatedAt).toBe(900);
   });
 
   // `createConversation` stamps `updatedAt` with the creation time, so a rotation's fresh
@@ -189,6 +218,56 @@ describe('updateSeenBaseline + deriveUnreadAgents', () => {
     const seen = new Map<string, number>([['roster:a', 0]]);
 
     expect(deriveUnreadAgents({ 'roster:a': meta(0) }, seen, null)).toEqual({});
+  });
+
+  // The save that records a finished turn stamps `Date.now()` AFTER the streaming-stop
+  // projection already stamped the OLD value — so `lastResponseAt` always post-dates the
+  // response you just read. Switching inside that window used to light an unread badge on
+  // the DM you had literally just finished reading.
+  it('marks a DM you switch AWAY from seen through now, closing the save window', () => {
+    const seen = new Map<string, number>([['roster:a', 100]]);
+    const tracker = { previousActiveAgentId: 'roster:a' };
+    const now = jest.spyOn(Date, 'now').mockReturnValue(5_000);
+
+    try {
+      // The switch-away projection: 'roster:a' is no longer active.
+      updateSeenBaseline({ 'roster:a': meta(100) }, seen, 'roster:b', tracker);
+      // …then the turn's save lands and re-projects with a LATER lastResponseAt.
+      const settled = { 'roster:a': meta(4_000) };
+      updateSeenBaseline(settled, seen, 'roster:b', tracker);
+
+      expect(deriveUnreadAgents(settled, seen, 'roster:b')).toEqual({});
+    } finally {
+      now.mockRestore();
+    }
+  });
+
+  // The stamp must not blunt the real signal: anything arriving after you left is unread.
+  it('still marks the departed DM unread for activity that post-dates the switch', () => {
+    const seen = new Map<string, number>([['roster:a', 100]]);
+    const tracker = { previousActiveAgentId: 'roster:a' };
+    const now = jest.spyOn(Date, 'now').mockReturnValue(5_000);
+
+    try {
+      updateSeenBaseline({ 'roster:a': meta(100) }, seen, 'roster:b', tracker);
+      const later = { 'roster:a': meta(9_000) }; // a NEW response, after the switch
+
+      updateSeenBaseline(later, seen, 'roster:b', tracker);
+
+      expect(deriveUnreadAgents(later, seen, 'roster:b')).toEqual({ 'roster:a': true });
+    } finally {
+      now.mockRestore();
+    }
+  });
+
+  // Seeding on departure would defeat the first-observation rule: an agent this leaf has
+  // never projected must stay unseeded so its first real projection establishes the baseline.
+  it('does not seed an unseeded agent on switch-away', () => {
+    const seen = new Map<string, number>();
+
+    updateSeenBaseline({}, seen, 'roster:b', { previousActiveAgentId: 'roster:a' });
+
+    expect(seen.has('roster:a')).toBe(false);
   });
 
   it('does not re-seed an already-stamped agent (which would clear a real badge)', () => {

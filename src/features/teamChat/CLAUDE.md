@@ -284,8 +284,21 @@ reaches `{ leaf, getTabManager() }`, so a second host is reuse, not a fork.
   creation time, so a provider rotation's fresh replacement would otherwise read as brand-new
   activity — showing `now` and, for an already-seeded agent, an unread badge on a DM nobody
   has typed into. (`deriveUnreadAgents`'s "empty threads are never unread" rule only holds
-  because the projection reports 0.) The `lastResponseAt ?? updatedAt` fallback stays for
-  NON-empty threads, whose legacy records may lack `lastResponseAt`.
+  because the projection reports 0.)
+- **A non-empty thread's activity is the LATER of `lastResponseAt` and its newest message
+  stamp**, not `lastResponseAt` alone. A CANCELLED turn saves with `updateLastResponse=false`
+  (the partial content must not be claimed as a finished response), so the messages advance
+  while `lastResponseAt` stays put — the row showed the cancelled turn's text under the
+  PREVIOUS turn's timestamp and stayed frozen in the `recent` sort. `updatedAt` remains the
+  last resort, for a legacy record whose messages predate per-message stamps.
+- **Switching AWAY from a DM marks it seen through NOW** (`updateSeenBaseline`'s
+  `activeAgentTracker`), not through its stored activity. A turn finishing while you watch
+  commits `lastResponseAt` asynchronously: `onTabStreamingChanged` fires and stamps the OLD
+  value, then `save()` stamps `Date.now()` — always later than the response you already read.
+  Switching inside that window made the `conversation:saved` re-projection light an unread
+  badge on the DM you had just finished reading. The stamp doesn't blunt the signal: activity
+  arriving after you leave still post-dates it. It never SEEDS an unstamped agent, which
+  would defeat the first-observation rule.
 - **The roster's preview/timestamp read the STORED conversation, so they refresh on
   `conversation:saved`.** The projection also fires from `onTabStreamingChanged`, which runs
   BEFORE `ConversationController.save()` commits the turn, so without that subscription the

@@ -198,6 +198,9 @@ export interface TeamChatProjectionContext {
   agentThreads: Record<string, string>;
   /** Per-leaf unread baseline. MUTATED here (seeded) — see `seedLastSeen`. */
   lastSeenByAgent: Map<string, number>;
+  /** Per-leaf holder for the previously-active agent, so the projection can tell a
+   *  switch-away from an ordinary re-projection. MUTATED here — see `updateSeenBaseline`. */
+  activeAgentTracker: { previousActiveAgentId: string | null };
 }
 
 /**
@@ -221,7 +224,7 @@ export function projectTeamChatSnapshot(
   // Update the baseline BEFORE deriving: an agent's first observed projection establishes
   // its baseline (never unread), and the active DM re-stamps every frame so the thread you
   // are watching stays seen. Only a bump to a NON-active, already-seen thread lights a row.
-  updateSeenBaseline(threads, context.lastSeenByAgent, selectedAgentId);
+  updateSeenBaseline(threads, context.lastSeenByAgent, selectedAgentId, context.activeAgentTracker);
   return {
     selectedAgentId,
     editedFiles: projectActiveDmEditedFiles(activeTab),

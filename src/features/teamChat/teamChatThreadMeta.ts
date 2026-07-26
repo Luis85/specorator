@@ -52,19 +52,46 @@ export function projectThreadMetas(
     metas[agentId] = {
       conversationId,
       preview: previewFromMessages(conversation.messages),
-      // An EMPTY thread has no activity, whatever its record says: `createConversation`
-      // stamps `updatedAt` with the creation time, so a provider rotation's fresh
-      // replacement would otherwise project as brand-new activity — showing `now` and,
-      // for an already-seeded agent, an unread badge on a DM nobody has typed into.
-      // (`deriveUnreadAgents`'s "empty threads are never unread" rule only holds if the
-      // projection actually reports 0 here.) The `lastResponseAt ?? updatedAt` fallback
-      // stays for NON-empty threads, where legacy records may lack `lastResponseAt`.
-      updatedAt: conversation.messages.length > 0
-        ? conversation.lastResponseAt ?? conversation.updatedAt
-        : 0,
+      updatedAt: activityTimestamp(conversation),
     };
   }
   return metas;
+}
+
+/**
+ * When this thread last saw activity — the row's relative time AND its `recent` sort key.
+ *
+ * An EMPTY thread reports ZERO whatever its record says: `createConversation` stamps
+ * `updatedAt` with the creation time, so a provider rotation's fresh replacement would
+ * otherwise project as brand-new activity — showing `now` and, for an already-seeded agent,
+ * an unread badge on a DM nobody has typed into. (`deriveUnreadAgents`'s "empty threads are
+ * never unread" rule only holds if the projection actually reports 0 here.)
+ *
+ * For a non-empty thread it is the LATER of `lastResponseAt` and the newest message stamp,
+ * not `lastResponseAt` alone: a CANCELLED turn is saved with `updateLastResponse=false` (the
+ * partial content must not be claimed as a finished response), so the messages advance while
+ * `lastResponseAt` stays put. Reading only the latter showed the cancelled turn's text under
+ * the PREVIOUS turn's timestamp and left the row frozen in the `recent` sort. `updatedAt`
+ * remains the last resort, for a legacy record whose messages predate per-message stamps.
+ */
+function activityTimestamp(conversation: {
+  messages: readonly ChatMessage[];
+  lastResponseAt?: number;
+  updatedAt: number;
+}): number {
+  if (conversation.messages.length === 0) return 0;
+  const latest = Math.max(conversation.lastResponseAt ?? 0, newestMessageTimestamp(conversation.messages));
+  return latest || conversation.updatedAt;
+}
+
+/** Scans from the tail for the first usable stamp: message timestamps are written in order,
+ *  so the newest one is at or near the end, and a legacy message may carry none at all. */
+function newestMessageTimestamp(messages: readonly ChatMessage[]): number {
+  for (let i = messages.length - 1; i >= 0; i--) {
+    const at = messages[i].timestamp;
+    if (typeof at === 'number' && Number.isFinite(at) && at > 0) return at;
+  }
+  return 0;
 }
 
 /**
@@ -135,12 +162,29 @@ export function deriveUnreadAgents(
  *    every stream frame, so the DM you are watching stays continuously seen; without
  *    this, watching an agent stream for five minutes and then switching away would mark
  *    it unread for messages that arrived while you were reading them.
+ *
+ * Plus one moment-in-time rule, `tracker`: switching AWAY from a DM marks it seen through
+ * NOW, not through its stored activity. A turn that finishes while you watch commits its
+ * `lastResponseAt` ASYNCHRONOUSLY — `onTabStreamingChanged` fires (and stamps the OLD value)
+ * before `ConversationController.save()` runs, and the save stamps `Date.now()`, which is
+ * therefore always LATER than the response you already read. Switch inside that window and
+ * the `conversation:saved` re-projection saw newer activity than the baseline and lit an
+ * unread badge on the DM you had just finished reading. Stamping the outgoing agent at
+ * departure closes it without weakening the signal: activity arriving after you leave still
+ * post-dates the stamp and still marks the row unread.
  */
 export function updateSeenBaseline(
   metas: Record<string, TeamChatThreadMeta>,
   lastSeenByAgent: Map<string, number>,
   activeAgentId: string | null,
+  tracker?: { previousActiveAgentId: string | null },
 ): void {
+  const departed = tracker?.previousActiveAgentId ?? null;
+  if (tracker) tracker.previousActiveAgentId = activeAgentId;
+  // Only for an already-seeded agent: seeding one here would defeat the first-observation rule.
+  if (departed !== null && departed !== activeAgentId && lastSeenByAgent.has(departed)) {
+    lastSeenByAgent.set(departed, Date.now());
+  }
   for (const [agentId, meta] of Object.entries(metas)) {
     if (agentId === activeAgentId || !lastSeenByAgent.has(agentId)) {
       lastSeenByAgent.set(agentId, meta.updatedAt);

@@ -80,16 +80,16 @@ export class TeamChatView extends ItemView implements ChatViewHandle {
    *  per stream frame and must never await vault I/O). Stale-but-present is the intended
    *  failure mode: a row shows the previous preview for a tick rather than blocking a render. */
   private agentThreads: Record<string, string> = {};
-  /** Per-leaf unread baseline: `agentId → the thread timestamp this leaf last showed`, so
-   *  unread means "moved since you looked" (design §1.3). In-memory by choice — it resets on
-   *  close, and losing a badge across a restart beats persisting a wrong one. */
+  /** Per-leaf unread baseline: `agentId → the thread timestamp this leaf last showed`, so unread means "moved since you
+   *  looked" (design §1.3). In-memory by choice — it resets on close, and losing a badge across a restart beats persisting a
+   *  wrong one. `activeAgentTracker` is its companion: whom the LAST projection saw as active, so a switch-away can be
+   *  stamped seen-through-now (Round-69). */
   private readonly lastSeenByAgent = new Map<string, number>();
-  /** Roster rail chrome, persisted per leaf alongside the DM layout (never globally, so two
-   *  Team Chat leaves keep independent rail geometry). Width is clamped on every write. */
+  private readonly activeAgentTracker = { previousActiveAgentId: null as string | null };
+  /** Roster rail chrome, persisted per leaf alongside the DM layout (never globally, so two Team Chat leaves keep independent rail geometry). Width is clamped on every write. */
   private railGeometry: TeamChatRailGeometry = { collapsed: false, width: DEFAULT_RAIL_WIDTH };
-  // Store-reprojection observers (mirror of chat's chatShellObservers). The
-  // routing composable subscribes here and fans each snapshot into the Pinia
-  // store; the ChatViewHandle refresh methods re-project through the same seam.
+  // Store-reprojection observers (mirror of chat's chatShellObservers). The routing composable subscribes
+  // here and fans each snapshot into the Pinia store; the ChatViewHandle refresh methods reuse the seam.
   private readonly teamChatObservers = new Set<(snapshot: TeamChatSnapshot) => void>();
 
   constructor(leaf: WorkspaceLeaf, private readonly plugin: SpecoratorPlugin) {
@@ -468,7 +468,7 @@ export class TeamChatView extends ItemView implements ChatViewHandle {
       this.plugin,
       this.tabManager?.getActiveTab() ?? null,
       this.selectedAgentId,
-      { agentThreads: this.agentThreads, lastSeenByAgent: this.lastSeenByAgent },
+      { agentThreads: this.agentThreads, lastSeenByAgent: this.lastSeenByAgent, activeAgentTracker: this.activeAgentTracker },
     );
   }
 
