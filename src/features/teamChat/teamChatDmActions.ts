@@ -11,40 +11,37 @@ import { MAX_RAIL_WIDTH, MIN_RAIL_WIDTH } from './ui/vue/stores/teamChatStore';
  * without instantiating a leaf.
  */
 
-/** Minimal manager surface these actions need — satisfied by a concrete `TabManager`. */
-interface DmTabSource {
-  getAllTabs(): TabData[];
-  closeTab(tabId: string, force?: boolean): Promise<boolean>;
-}
-
 /**
  * Closes an agent's open DM tab (row / top-bar menu), freeing an LRU slot. The thread
  * MAPPING is untouched, so reselecting the agent reopens the same transcript — this is
  * "close the window", never a delete.
  *
- * Refuses while that DM is streaming, matching `pickLruDmEviction`'s refusal to force-close
- * a live turn: the two must not disagree about whether truncating a running response is
- * acceptable. Both menus also hide the item in that state; the real backstop is the
- * NON-FORCED close, which re-checks streaming inside the serialized tab mutation.
+ * Resolves the owning tab ACROSS LEAVES, not just in the clicking leaf's own manager: the
+ * open coordinator deliberately single-mounts each DM and reveals it wherever it already
+ * lives, so the row you are clicking in leaf A may well be mounted in leaf B — a same-leaf
+ * lookup silently no-ops there. Same `findConversationAcrossViews` resolution the rotation
+ * close path uses.
  *
- * Returns whether a tab was actually closed, so a caller can distinguish "nothing open"
- * from "refused because busy" only by checking presence itself — deliberately not encoded
- * here, since neither case has a different user-facing outcome.
+ * Refuses while that DM is streaming, matching `pickLruDmEviction`'s refusal to force-close
+ * a live turn. The pre-check is only an optimization; the guarantee is the NON-FORCED close,
+ * which re-checks `isStreaming` inside the owning manager's serialized mutation.
+ *
+ * Returns whether a tab was actually closed. "Not mapped", "not open anywhere", and "refused
+ * because busy" all report false — deliberately not distinguished, since none of the three
+ * has a different user-facing outcome.
  */
 export async function closeAgentDmTab(
   plugin: SpecoratorPlugin,
-  manager: DmTabSource | null,
   agentId: string,
 ): Promise<boolean> {
-  const tab = manager?.getAllTabs().find(
-    (candidate) => candidate.conversationId
-      && plugin.getConversationSync(candidate.conversationId)?.boundAgentId === agentId,
-  );
-  // The pre-check keeps the common case cheap, but it is NOT the guarantee: `force = false`
-  // makes `closeTabImpl` re-check `isStreaming` inside the serialized tab mutation, so a turn
-  // that starts while this close is queued still refuses.
-  if (!manager || !tab || tab.state.isStreaming) return false;
-  return closeTeamChatDmTab(plugin, manager, tab.id, false);
+  const conversationId = await plugin.getTeamChatThreadStore().get(agentId);
+  if (!conversationId) return false;
+  const owner = plugin.findConversationAcrossViews(conversationId);
+  const manager = owner?.view.getTabManager();
+  if (!owner || !manager) return false;
+  const tab = manager.getAllTabs().find((candidate) => candidate.conversationId === conversationId);
+  if (tab?.state.isStreaming) return false;
+  return closeTeamChatDmTab(plugin, manager, owner.tabId, false);
 }
 
 /**

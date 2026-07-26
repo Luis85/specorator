@@ -52,7 +52,16 @@ export function projectThreadMetas(
     metas[agentId] = {
       conversationId,
       preview: previewFromMessages(conversation.messages),
-      updatedAt: conversation.lastResponseAt ?? conversation.updatedAt,
+      // An EMPTY thread has no activity, whatever its record says: `createConversation`
+      // stamps `updatedAt` with the creation time, so a provider rotation's fresh
+      // replacement would otherwise project as brand-new activity — showing `now` and,
+      // for an already-seeded agent, an unread badge on a DM nobody has typed into.
+      // (`deriveUnreadAgents`'s "empty threads are never unread" rule only holds if the
+      // projection actually reports 0 here.) The `lastResponseAt ?? updatedAt` fallback
+      // stays for NON-empty threads, where legacy records may lack `lastResponseAt`.
+      updatedAt: conversation.messages.length > 0
+        ? conversation.lastResponseAt ?? conversation.updatedAt
+        : 0,
     };
   }
   return metas;

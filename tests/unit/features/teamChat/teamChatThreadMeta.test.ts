@@ -92,9 +92,41 @@ describe('projectThreadMetas', () => {
   });
 
   it('prefers lastResponseAt over updatedAt for the activity timestamp', () => {
-    const plugin = pluginWith([conversation('conv-a', { updatedAt: 100, lastResponseAt: 250 })]);
+    const plugin = pluginWith([conversation('conv-a', {
+      updatedAt: 100,
+      lastResponseAt: 250,
+      messages: [message('assistant', 'done')],
+    })]);
 
     expect(projectThreadMetas(plugin, { 'roster:a': 'conv-a' })['roster:a'].updatedAt).toBe(250);
+  });
+
+  // A legacy record may predate `lastResponseAt`; a non-empty thread still needs a time.
+  it('falls back to updatedAt for a non-empty thread with no lastResponseAt', () => {
+    const plugin = pluginWith([conversation('conv-a', {
+      updatedAt: 100,
+      messages: [message('assistant', 'done')],
+    })]);
+
+    expect(projectThreadMetas(plugin, { 'roster:a': 'conv-a' })['roster:a'].updatedAt).toBe(100);
+  });
+
+  // `createConversation` stamps `updatedAt` with the creation time, so a rotation's fresh
+  // replacement would otherwise read as brand-new activity — showing `now` and, for an
+  // already-seeded agent, an unread badge on a DM nobody has typed into.
+  it('projects ZERO activity for an empty thread, ignoring its creation time', () => {
+    const plugin = pluginWith([conversation('conv-a', { updatedAt: Date.now(), messages: [] })]);
+
+    expect(projectThreadMetas(plugin, { 'roster:a': 'conv-a' })['roster:a'].updatedAt).toBe(0);
+  });
+
+  it('never marks an empty replacement thread unread, even for a seeded agent', () => {
+    const plugin = pluginWith([conversation('conv-a', { updatedAt: Date.now(), messages: [] })]);
+    const metas = projectThreadMetas(plugin, { 'roster:a': 'conv-a' });
+    // The agent was seen long ago — a naive creation-time projection would beat this stamp.
+    const seen = new Map<string, number>([['roster:a', 1]]);
+
+    expect(deriveUnreadAgents(metas, seen, null)).toEqual({});
   });
 
   // The rail must never block a render on a conversation that isn't loaded.

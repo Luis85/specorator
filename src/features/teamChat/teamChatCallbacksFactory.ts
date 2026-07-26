@@ -36,7 +36,7 @@ export function buildTeamChatCallbacks(host: TeamChatCallbackHost): TeamChatCall
     // than the agent's editor — one click from the edit, and it avoids inventing a second
     // navigation API for one menu item.
     onEditAgent: () => void activateLibrary(host.plugin, 'agents'),
-    onCloseDm: (agentId) => void closeAgentDmTab(host.plugin, host.getTabManager(), agentId),
+    onCloseDm: (agentId) => void closeAgentDmTab(host.plugin, agentId),
     onFillComposer: (text) => fillComposer(host.getTabManager()?.getActiveTab() ?? null, text),
     getRailGeometry: () => host.getRailGeometry(),
     onRailGeometryChange: ({ collapsed, width }) =>

@@ -2,56 +2,71 @@ import { closeAgentDmTab } from '@/features/teamChat/teamChatDmActions';
 import type SpecoratorPlugin from '@/main';
 
 /**
- * The user-initiated DM close promises to refuse a streaming DM. Its own pre-check is only
- * an optimization: by the time the close is dequeued behind another tab mutation, a turn may
- * have started. The guarantee is the NON-FORCED close, which re-checks `isStreaming` inside
- * `closeTabImpl`'s serialized mutation — a forced close would truncate the live response.
+ * The user-initiated DM close has two contracts beyond "close the tab":
+ *
+ *  - it resolves the owning tab ACROSS LEAVES, because the open coordinator single-mounts a
+ *    DM and reveals it wherever it already lives — the row you click in leaf A may be
+ *    mounted in leaf B, and a same-leaf lookup would silently no-op; and
+ *  - it closes NON-FORCED, so `closeTabImpl` re-checks `isStreaming` inside the serialized
+ *    mutation. The caller's own pre-check is stale once the close queues behind another tab
+ *    mutation — a turn can start in that window, and a forced close would truncate it.
  */
-function makeManager(tabs: Array<{ id: string; conversationId: string; isStreaming: boolean }>) {
-  const closeTab = jest.fn().mockResolvedValue(true);
+function makeManager(tabs: Array<{ conversationId: string; isStreaming: boolean }>) {
   return {
-    closeTab,
+    closeTab: jest.fn().mockResolvedValue(true),
     getAllTabs: () => tabs.map((t) => ({
-      id: t.id,
       conversationId: t.conversationId,
       state: { isStreaming: t.isStreaming },
     })),
-  } as never;
+  };
 }
 
-function makePlugin(boundAgentByConversation: Record<string, string>): SpecoratorPlugin {
+function makePlugin(options: {
+  threadConversationId?: string | null;
+  owner?: { manager: ReturnType<typeof makeManager>; tabId: string } | null;
+}): SpecoratorPlugin {
+  const owner = options.owner ?? null;
   return {
-    getConversationSync: (id: string) => ({ id, boundAgentId: boundAgentByConversation[id] }),
+    getTeamChatThreadStore: () => ({
+      get: jest.fn().mockResolvedValue(options.threadConversationId ?? null),
+    }),
+    findConversationAcrossViews: jest.fn(() =>
+      (owner ? { view: { getTabManager: () => owner.manager }, tabId: owner.tabId } : null)),
     events: { emit: jest.fn() },
   } as unknown as SpecoratorPlugin;
 }
 
 describe('closeAgentDmTab', () => {
-  it('closes the agent DM WITHOUT forcing, so streaming is re-checked in the serialized mutation', async () => {
-    const manager = makeManager([{ id: 'tab-1', conversationId: 'conv-1', isStreaming: false }]);
-    const plugin = makePlugin({ 'conv-1': 'roster:a' });
+  it('closes the DM in whichever leaf owns it, WITHOUT forcing', async () => {
+    const manager = makeManager([{ conversationId: 'conv-1', isStreaming: false }]);
+    const plugin = makePlugin({ threadConversationId: 'conv-1', owner: { manager, tabId: 'tab-9' } });
 
-    await closeAgentDmTab(plugin, manager, 'roster:a');
+    const closed = await closeAgentDmTab(plugin, 'roster:a');
 
-    // `force` must be false — the whole point: eviction/rotation force, a user close must not.
-    expect((manager as never as { closeTab: jest.Mock }).closeTab).toHaveBeenCalledWith('tab-1', false);
+    expect(closed).toBe(true);
+    // `force` false — eviction/rotation force; a user close must let the serialized
+    // mutation re-check streaming.
+    expect(manager.closeTab).toHaveBeenCalledWith('tab-9', false);
   });
 
-  it('refuses up front when the DM is already streaming', async () => {
-    const manager = makeManager([{ id: 'tab-1', conversationId: 'conv-1', isStreaming: true }]);
-    const plugin = makePlugin({ 'conv-1': 'roster:a' });
+  it('refuses up front when the owning leaf reports the DM streaming', async () => {
+    const manager = makeManager([{ conversationId: 'conv-1', isStreaming: true }]);
+    const plugin = makePlugin({ threadConversationId: 'conv-1', owner: { manager, tabId: 'tab-9' } });
 
-    const closed = await closeAgentDmTab(plugin, manager, 'roster:a');
-
-    expect(closed).toBe(false);
-    expect((manager as never as { closeTab: jest.Mock }).closeTab).not.toHaveBeenCalled();
+    expect(await closeAgentDmTab(plugin, 'roster:a')).toBe(false);
+    expect(manager.closeTab).not.toHaveBeenCalled();
   });
 
-  it('no-ops when the agent has no open DM', async () => {
-    const manager = makeManager([{ id: 'tab-1', conversationId: 'conv-1', isStreaming: false }]);
-    const plugin = makePlugin({ 'conv-1': 'roster:other' });
+  it('no-ops when the agent has no mapped thread', async () => {
+    const plugin = makePlugin({ threadConversationId: null });
 
-    expect(await closeAgentDmTab(plugin, manager, 'roster:a')).toBe(false);
-    expect((manager as never as { closeTab: jest.Mock }).closeTab).not.toHaveBeenCalled();
+    expect(await closeAgentDmTab(plugin, 'roster:a')).toBe(false);
+  });
+
+  // Mapped but evicted / never opened: nothing to close, and definitely not an error.
+  it('no-ops when the mapped DM is open in no leaf', async () => {
+    const plugin = makePlugin({ threadConversationId: 'conv-1', owner: null });
+
+    expect(await closeAgentDmTab(plugin, 'roster:a')).toBe(false);
   });
 });

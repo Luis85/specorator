@@ -251,11 +251,19 @@ reaches `{ leaf, getTabManager() }`, so a second host is reuse, not a fork.
   state too: while narrow the button reads "Expand", and inverting the stored preference
   (still false) would persist `collapsed: true` — leaving the rail collapsed once the pane
   widens, the opposite of the action taken.
-- **A user-initiated DM close is NON-FORCED.** `closeTeamChatDmTab` forces by default
-  (eviction and rotation must close regardless of state), but the menu action passes
-  `force: false` so `closeTabImpl` re-checks `isStreaming` INSIDE `runTabMutation`. The
-  caller's own pre-check is stale once the close queues behind another tab mutation — a turn
-  can start in that window, and a forced close would truncate it.
+- **A user-initiated DM close is NON-FORCED and resolved CROSS-LEAF.** `closeTeamChatDmTab`
+  forces by default (eviction and rotation must close regardless of state), but the menu
+  action passes `force: false` so `closeTabImpl` re-checks `isStreaming` INSIDE
+  `runTabMutation`: the caller's pre-check is stale once the close queues behind another tab
+  mutation. It also resolves the owning tab through `findConversationAcrossViews`, not the
+  clicking leaf's own manager — the open coordinator single-mounts each DM and reveals it
+  wherever it lives, so a same-leaf lookup silently no-ops on a DM mounted in another leaf.
+- **An EMPTY thread projects zero activity.** `createConversation` stamps `updatedAt` with the
+  creation time, so a provider rotation's fresh replacement would otherwise read as brand-new
+  activity — showing `now` and, for an already-seeded agent, an unread badge on a DM nobody
+  has typed into. (`deriveUnreadAgents`'s "empty threads are never unread" rule only holds
+  because the projection reports 0.) The `lastResponseAt ?? updatedAt` fallback stays for
+  NON-empty threads, whose legacy records may lack `lastResponseAt`.
 - **The roster's preview/timestamp read the STORED conversation, so they refresh on
   `conversation:saved`.** The projection also fires from `onTabStreamingChanged`, which runs
   BEFORE `ConversationController.save()` commits the turn, so without that subscription the
