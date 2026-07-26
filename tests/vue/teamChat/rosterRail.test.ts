@@ -648,6 +648,22 @@ describe('row menu stays out of the roving tab order', () => {
     expect(menuItems).toContain(t('teamChat.menuOpenChat'));
   });
 
+  // Round-70: a bare {x, y} is window-AMBIGUOUS — `showAtPosition` resolves it against the
+  // MAIN window's document, so in a popout the menu opened in the wrong window (or
+  // off-viewport) using coordinates measured in the popout. The pointer path needs no hint;
+  // the event carries its own realm.
+  it('passes the focused row\'s ownerDocument so a popout anchors in its own window', async () => {
+    mountRoot(makePlugin(TEAM), makeCallbacks());
+    const list = await awaitRoster();
+
+    await fireEvent.keyDown(list, { key: 'F10', shiftKey: true });
+
+    const [position, doc] = showAtPosition.mock.calls[0];
+    expect(doc).toBe((await rosterRow('Ada')).ownerDocument);
+    // …and only the coordinates reach the position argument.
+    expect(Object.keys(position).sort()).toEqual(['x', 'y']);
+  });
+
   it('does not open the DM when the menu gesture fires', async () => {
     const callbacks = makeCallbacks();
     mountRoot(makePlugin(TEAM), callbacks);

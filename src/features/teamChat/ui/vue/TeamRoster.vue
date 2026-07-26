@@ -101,7 +101,10 @@ function openMenuForFocusedRow(agentId: string): void {
   if (!agent) return;
   const row = listEl.value?.querySelectorAll<HTMLElement>('[role="option"]')[keyboard.focusedIndex.value];
   const rect = row?.getBoundingClientRect();
-  openRowMenu(agent, rect ? { x: rect.left, y: rect.bottom } : { x: 0, y: 0 });
+  // The row's own document rides along: these coordinates are read in the leaf's window, and
+  // `showAtPosition` would otherwise resolve them against the MAIN window in a popout.
+  const doc = row?.ownerDocument;
+  openRowMenu(agent, rect ? { x: rect.left, y: rect.bottom, doc } : { x: 0, y: 0, doc });
 }
 
 // Keep the roving focus on the SELECTED row whenever selection changes from

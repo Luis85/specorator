@@ -25,9 +25,16 @@ export interface AgentActionMenuOptions {
   onClose: () => void;
 }
 
-/** Where to anchor the menu: the originating pointer event, or a viewport point for the
- *  keyboard gesture (Shift+F10 / ContextMenu on the focused row). */
-export type AgentActionMenuAnchor = MouseEvent | { x: number; y: number };
+/**
+ * Where to anchor the menu: the originating pointer event, or a viewport point for the
+ * keyboard gesture (Shift+F10 / ContextMenu on the focused row).
+ *
+ * The keyboard anchor carries the row's `ownerDocument`, because a bare position is
+ * window-ambiguous: `showAtPosition` defaults to the MAIN window's document, so in an
+ * Obsidian popout the menu opened in the wrong window (or off-viewport) with the coordinates
+ * read from the popout. The pointer branch needs no such hint — the event carries its realm.
+ */
+export type AgentActionMenuAnchor = MouseEvent | { x: number; y: number; doc?: Document };
 
 export function showAgentActionMenu(anchor: AgentActionMenuAnchor, options: AgentActionMenuOptions): void {
   const menu = new Menu();
@@ -58,8 +65,12 @@ export function showAgentActionMenu(anchor: AgentActionMenuAnchor, options: Agen
  * so that discriminator silently routed every pointer click down the position path).
  */
 function showAnchored(menu: Menu, anchor: AgentActionMenuAnchor): void {
-  if (isMouseAnchor(anchor)) menu.showAtMouseEvent(anchor);
-  else menu.showAtPosition(anchor);
+  if (isMouseAnchor(anchor)) {
+    menu.showAtMouseEvent(anchor);
+    return;
+  }
+  const { x, y, doc } = anchor;
+  menu.showAtPosition({ x, y }, doc);
 }
 
 /** A type predicate, so both branches narrow without assertions. */

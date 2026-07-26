@@ -319,6 +319,15 @@ reaches `{ leaf, getTabManager() }`, so a second host is reuse, not a fork.
   menu unreachable by keyboard. The check is `nodeType`-based, NOT `instanceof Element`: a
   popout leaf's nodes come from another realm's constructors and would fail `instanceof`,
   silently reinstating the bug in exactly the window this codebase already guards elsewhere.
+- **The KEYBOARD menu anchor carries the row's `ownerDocument`.** A bare `{x, y}` is
+  window-ambiguous: `showAtPosition` resolves it against the MAIN window's document, so in an
+  Obsidian popout the menu opened in the wrong window (or off-viewport) from coordinates
+  measured in the popout. The pointer branch needs no hint — the event carries its realm.
+- **Detached menu actions log their rejections.** `onCloseDm`/`onEditAgent` are
+  fire-and-forget from Vue's side, but their engine work is async and can genuinely fail (a
+  thread-map read, a tab persist/destroy, a workspace activate). Under a bare `void` that was
+  both an unhandled promise and a menu click that silently did nothing, so both route through
+  the factory's `detach` helper — the behavior `openAgentDm` already had.
   (`showAgentActionMenu`'s anchor discriminator is duck-typed on `preventDefault` for the
   same reason — and NOT on `'x' in anchor`, since a `MouseEvent` carries `x`/`y` aliases.)
 - **The `⋯` button is never in the tab order** (`tabindex="-1"`, always). The listbox is one

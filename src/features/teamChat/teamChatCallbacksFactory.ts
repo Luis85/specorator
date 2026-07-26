@@ -27,6 +27,13 @@ export interface TeamChatCallbackHost {
 }
 
 export function buildTeamChatCallbacks(host: TeamChatCallbackHost): TeamChatCallbacks {
+  // Menu actions are fire-and-forget from Vue's perspective, but their engine work is async
+  // and can genuinely fail (a thread-map read, a tab persist/destroy, a workspace activate).
+  // Detached, a rejection became an unhandled promise AND a silently-ignored menu click, so
+  // every detached action routes through here — matching how `openAgentDm` already behaves.
+  const detach = (action: Promise<unknown>, what: string): void => {
+    void action.catch((error) => host.plugin.logger.scope('team-chat').error(`${what} failed`, error));
+  };
   return {
     subscribe: (onChange) => host.addObserver(onChange),
     onSelectAgent: (agentId) => host.openAgentDm(agentId),
@@ -35,8 +42,8 @@ export function buildTeamChatCallbacks(host: TeamChatCallbackHost): TeamChatCall
     // (`LibraryView.setActiveTab` is tab-scoped), so this lands the user on the list rather
     // than the agent's editor — one click from the edit, and it avoids inventing a second
     // navigation API for one menu item.
-    onEditAgent: () => void activateLibrary(host.plugin, 'agents'),
-    onCloseDm: (agentId) => void closeAgentDmTab(host.plugin, agentId),
+    onEditAgent: () => detach(activateLibrary(host.plugin, 'agents'), 'openLibrary'),
+    onCloseDm: (agentId) => detach(closeAgentDmTab(host.plugin, agentId), 'closeAgentDmTab'),
     onFillComposer: (text) => fillComposer(host.getTabManager()?.getActiveTab() ?? null, text),
     getRailGeometry: () => host.getRailGeometry(),
     onRailGeometryChange: ({ collapsed, width }) =>
