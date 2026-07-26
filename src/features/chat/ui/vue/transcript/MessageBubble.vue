@@ -15,7 +15,7 @@ import MessageIdentity from './cards/MessageIdentity.vue';
 import MessageImages from './cards/MessageImages.vue';
 import { useTranscriptStore } from './stores/transcriptStore';
 import { APP_KEY, CALLBACKS_KEY } from './transcriptKeys';
-import { hasVisibleBlock, hasVisibleText } from './visibleContentHelpers';
+import { hasAnyVisibleContent } from './visibleContentHelpers';
 
 /**
  * Reproduces `rendering/MessageRenderer.ts`'s message shell —
@@ -70,12 +70,9 @@ function isToolVisible(toolId: string): boolean {
   return Boolean(toolCall && shouldRenderToolCall(toolCall, providerId.value));
 }
 
-const hasVisibleContent = computed(() => {
-  const msg = props.msg;
-  if (hasVisibleText(msg)) return true;
-  if (hasVisibleBlock(msg.contentBlocks, isToolVisible)) return true;
-  return Boolean(msg.toolCalls?.some((tc) => shouldRenderToolCall(tc, providerId.value)));
-});
+// Shared with `MessageList`'s run-start attribution, which must agree with this component
+// about which records actually render (see `rendersMessageBubble`).
+const hasVisibleContent = computed(() => hasAnyVisibleContent(props.msg, isToolVisible));
 
 const isInterruptOnly = computed(
   () => !!props.msg.isInterrupt && (props.msg.role === 'user' || !hasVisibleContent.value)

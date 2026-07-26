@@ -65,6 +65,9 @@ export const useTeamChatStore = defineStore('team-chat', () => {
    *  leaf: it wrote a preference that `railNarrow` then overrode, so the button labelled
    *  "Expand" did nothing and the rail's search + row menus stayed unreachable (Round-68). */
   const railNarrowOverride = shallowRef(false);
+  /** Last width the leaf actually measured, so a rail-width change can be judged against it
+   *  without waiting for a `ResizeObserver` callback that a separator drag never triggers. */
+  const lastLeafWidth = shallowRef(0);
   /** The EFFECTIVE collapsed state — the one every consumer must render against. Derived in
    *  the store rather than per-component because the root sizes the grid track from it while
    *  the roster decides what to render; when those two disagreed, a narrow leaf rendered
@@ -109,18 +112,25 @@ export const useTeamChatStore = defineStore('team-chat', () => {
   }
 
   function setRailNarrow(next: boolean, leafWidth = 0): void {
+    if (leafWidth > 0) lastLeafWidth.value = leafWidth;
     if (railNarrow.value !== next) {
       railNarrow.value = next;
       railNarrowOverride.value = false; // a threshold crossing re-asserts the width-driven default
       return;
     }
-    // Already narrow and staying narrow, but the pane keeps SHRINKING. The boolean can't see
-    // that, so an override taken at 700px used to survive all the way down — a 420px rail in a
-    // 460px pane, with the transcript squeezed to nothing. Drop it once the chat stops fitting.
-    if (next && railNarrowOverride.value && leafWidth > 0
-      && leafWidth - railWidth.value < MIN_TRANSCRIPT_WIDTH) {
-      railNarrowOverride.value = false;
-    }
+    dropOverrideIfCramped();
+  }
+
+  /**
+   * Drops a manual expand-override once the rail stops leaving a usable transcript beside it.
+   * Reachable TWO ways, which is why it is not inlined in the resize path: the LEAF shrinking
+   * (`ResizeObserver`) and the RAIL growing (a separator drag). The second fires no
+   * `ResizeObserver` at all — the root's own width never changes — so an override taken at
+   * 700px could be dragged into a 420px rail beside a 280px transcript with nothing noticing.
+   */
+  function dropOverrideIfCramped(): void {
+    if (!railNarrow.value || !railNarrowOverride.value || lastLeafWidth.value <= 0) return;
+    if (lastLeafWidth.value - railWidth.value < MIN_TRANSCRIPT_WIDTH) railNarrowOverride.value = false;
   }
 
   function setRailCollapsed(next: boolean): void {
@@ -144,6 +154,7 @@ export const useTeamChatStore = defineStore('team-chat', () => {
    *  width that hides the rail or starves the transcript. */
   function setRailWidth(next: number): void {
     railWidth.value = Math.min(MAX_RAIL_WIDTH, Math.max(MIN_RAIL_WIDTH, Math.round(next)));
+    dropOverrideIfCramped(); // a separator drag can squeeze the transcript with no leaf resize
   }
 
   return {

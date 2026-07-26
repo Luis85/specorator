@@ -470,6 +470,25 @@ describe('narrow-leaf auto-collapse (effective vs preferred state)', () => {
     expect(names(list)).toEqual([]);
   });
 
+  // Round-70: dragging the SEPARATOR changes the rail width without changing the root's, so
+  // the ResizeObserver never fires. An override taken at 700px could be dragged out to a
+  // 420px rail beside a 280px transcript with nothing noticing.
+  it('drops the override when the rail is dragged wider than the pane can afford', async () => {
+    mountRoot(makePlugin(TEAM), makeCallbacks());
+    const list = await awaitRoster();
+    const store = useTeamChatStore();
+    store.setRailNarrow(true, 700);
+    await nextTick();
+    await fireEvent.click(screen.getByLabelText(t('teamChat.railExpand')));
+    await nextTick();
+    expect(names(list)).toEqual(['Ada', 'Bo', 'Cy']);
+
+    store.setRailWidth(420); // 700 - 420 = 280, under MIN_TRANSCRIPT_WIDTH
+    await nextTick();
+
+    expect(names(list)).toEqual([]);
+  });
+
   it('keeps the override while the narrow pane still fits rail + transcript', async () => {
     mountRoot(makePlugin(TEAM), makeCallbacks());
     const list = await awaitRoster();

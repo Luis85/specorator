@@ -64,6 +64,13 @@ would let one leaf's projection overwrite another's (`ui/vue/globalPinia.ts`).
   write settles (the write is async; notifying eagerly would hand back the old settings) and
   fires it on failure too, since a partially-applied pick with a stale chip is the worse
   outcome. It is optional on `TabManagerCallbacks`: `SpecoratorView` renders no model chip.
+- **Transcript attribution follows VISIBILITY, not `role`.** `MessageList` gives the
+  run-opening identity header to the first assistant record that actually RENDERS: restored
+  history can carry an empty assistant boundary record right before the real response, and
+  handing it the header left the whole visible reply looking like a continuation — anonymous.
+  An invisible record neither opens a run nor breaks one. The predicate
+  (`rendersMessageBubble`) is shared with `MessageBubble`, so the list and the bubble can
+  never disagree about what the reader sees.
 - **`selectedAgentId` is a PURE PROJECTION of the active tab** — derived from the
   active DM's `boundAgentId` in `projectSelectedAgentFromActiveTab`
   (`TeamChatView.ts:207`), never set optimistically. So the roster highlight and the
@@ -277,7 +284,9 @@ reaches `{ leaf, getTabManager() }`, so a second host is reuse, not a fork.
   narrow from one that kept shrinking: an override taken at ~700px otherwise survived all the
   way down, leaving a 260px rail in a 400px pane. It is dropped once
   `leafWidth - railWidth < MIN_TRANSCRIPT_WIDTH` — a bound that tracks the user's own rail
-  width rather than a second hardcoded breakpoint.
+  width rather than a second hardcoded breakpoint. The same check runs from `setRailWidth`,
+  because the other way to squeeze the transcript is dragging the SEPARATOR: the root's own
+  width never changes, so no `ResizeObserver` callback ever fires.
 - **A user-initiated DM close is NON-FORCED and resolved CROSS-LEAF.** `closeTeamChatDmTab`
   forces by default (eviction and rotation must close regardless of state), but the menu
   action passes `force: false` so `closeTabImpl` re-checks `isStreaming` INSIDE

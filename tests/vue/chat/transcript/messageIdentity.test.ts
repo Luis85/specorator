@@ -197,6 +197,43 @@ describe('transcript agent identity', () => {
     dispose();
   });
 
+  // Round-70: restored history can carry an EMPTY assistant boundary record immediately
+  // before the real response (see tests/unit/utils/session.test.ts). That record renders no
+  // bubble, so handing it the run-opening header left the visible response looking like a
+  // continuation — the whole reply went unattributed.
+  it('attributes the first VISIBLE assistant message, not an empty boundary record', async () => {
+    const { container, projection, dispose } = await mountWith([
+      message('a0', 'assistant', ''), // boundary record: renders nothing at all
+      message('a1', 'assistant', 'the real answer'),
+    ]);
+
+    projection.setMessageIdentity(PERSONA, CONVERSATION_ID);
+    await flushPromises();
+
+    expect(identityNames(container)).toEqual(['Ada']);
+    // …and it sits on the RESPONSE, not orphaned on the invisible boundary record.
+    const bubble = container.querySelector('.specorator-message-identity')?.closest('.specorator-message');
+    expect(bubble?.getAttribute('data-message-id')).toBe('a1');
+
+    dispose();
+  });
+
+  // An invisible record must not BREAK a run either — it is simply not there.
+  it('does not restart the run across an empty assistant record mid-run', async () => {
+    const { container, projection, dispose } = await mountWith([
+      message('a1', 'assistant', 'first part'),
+      message('a2', 'assistant', ''),
+      message('a3', 'assistant', 'second part'),
+    ]);
+
+    projection.setMessageIdentity(PERSONA, CONVERSATION_ID);
+    await flushPromises();
+
+    expect(identityNames(container)).toEqual(['Ada']);
+
+    dispose();
+  });
+
   it('never attributes a USER message', async () => {
     const { container, projection, dispose } = await mountWith([message('u1', 'user', 'a question')]);
 
