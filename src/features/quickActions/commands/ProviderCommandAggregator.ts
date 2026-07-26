@@ -1,5 +1,6 @@
 import { isBuiltInCommandName } from '../../../core/commands/builtInCommands';
 import type { ProviderCommandEntry } from '../../../core/providers/commands/ProviderCommandEntry';
+import type { ProviderId } from '../../../core/providers/types';
 import { ProviderEntryAggregator } from '../providerEntryAggregator';
 import type { ProviderRecord } from '../skills/types';
 import type {
@@ -36,7 +37,7 @@ export class ProviderCommandAggregator
   private eventBusUnsubscribe: (() => void) | undefined;
 
   constructor(
-    getProviderRecords: () => ProviderRecord[],
+    private readonly getProviderRecords: () => ProviderRecord[],
     options: ProviderCommandAggregatorOptions = {},
   ) {
     super({
@@ -88,6 +89,35 @@ export class ProviderCommandAggregator
         ({ providerId }) => this.invalidate(providerId),
       );
     }
+  }
+
+  /**
+   * Also refreshes the provider's OWN listing, not just our bucket.
+   *
+   * Both layers cache. A warm `ClaudeCommandCatalog` answers from `sdkCommands`,
+   * which no TTL expires, so dropping only our bucket re-reads the same stale
+   * set and re-caches it — the tab's Refresh button looked broken for anything
+   * edited outside the app (no file watcher fires for `.claude/commands/`, and
+   * `providerCommand.changed` covers in-app authoring only). Fire-and-forget:
+   * the catalog clears synchronously and only the re-probe is async, so the
+   * fetch that follows already sees the cleared listing.
+   */
+  invalidate(providerId?: ProviderId): void {
+    super.invalidate(providerId);
+    for (const record of this.getRecordsToRefresh(providerId)) {
+      // Promise.resolve wraps it: `refresh()` is provider-implemented and a sync
+      // (void-returning) one must not throw on `.catch` here.
+      void Promise.resolve(record.commandCatalog.refresh?.()).catch(() => {
+        // Best-effort: a provider that can't refresh still serves its last listing.
+      });
+    }
+  }
+
+  private getRecordsToRefresh(providerId?: ProviderId): ProviderRecord[] {
+    const records = this.getProviderRecords();
+    return providerId === undefined
+      ? records
+      : records.filter((r) => r.providerId === providerId);
   }
 
   dispose(): void {

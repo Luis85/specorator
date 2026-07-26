@@ -216,7 +216,17 @@ export class ClaudeCommandCatalog implements ProviderCommandCatalog {
     };
   }
 
+  /**
+   * Drops the cached SDK listing so the next `listDropdownEntries` re-probes.
+   *
+   * `sdkCommands` otherwise stays populated for the life of the session, so a
+   * command added, renamed, or deleted in `.claude/commands/` OUTSIDE the app
+   * (CLI, another editor) never surfaced — no file watcher fires for a
+   * dot-folder, and `providerCommand.changed` only covers in-app authoring.
+   * This is the hook a consumer's manual refresh needs; the warm runtime still
+   * overwrites it through `setRuntimeCommands` as before.
+   */
   async refresh(): Promise<void> {
-    // Claude revalidation happens externally via setRuntimeCommands
+    this.sdkCommands = [];
   }
 }

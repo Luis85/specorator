@@ -58,7 +58,7 @@ export function openQuickActionsModal(
     { logger: plugin.logger },
   );
   const commands = plugin.providerCommandAggregator
-    ?? createProviderCommandAggregator(plugin);
+    ?? createProviderCommandAggregator(plugin, { subscribe: false });
   const file = options.file ?? null;
 
   new QuickActionsModal(plugin.app, {

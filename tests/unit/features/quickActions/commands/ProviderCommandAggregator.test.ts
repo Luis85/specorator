@@ -398,3 +398,36 @@ describe('providerCommand.changed invalidation', () => {
     expect(bus.count('providerCommand.changed')).toBe(0);
   });
 });
+
+describe('invalidate refreshes the provider catalog too', () => {
+  it('refreshes every catalog on a full invalidate (the tab Refresh button)', () => {
+    // Both layers cache. A warm ClaudeCommandCatalog answers from `sdkCommands`,
+    // which no TTL expires, so dropping only our bucket re-reads the same stale
+    // set — Refresh looked broken for edits made outside the app.
+    const record = makeRecord();
+    const aggregator = new ProviderCommandAggregator(() => [record]);
+
+    aggregator.invalidate();
+
+    expect(record.commandCatalog.refresh).toHaveBeenCalled();
+  });
+
+  it('refreshes only the named provider on a targeted invalidate', () => {
+    const claude = makeRecord({ providerId: 'claude' });
+    const codex = makeRecord({ providerId: 'codex' });
+    const aggregator = new ProviderCommandAggregator(() => [claude, codex]);
+
+    aggregator.invalidate('claude');
+
+    expect(claude.commandCatalog.refresh).toHaveBeenCalled();
+    expect(codex.commandCatalog.refresh).not.toHaveBeenCalled();
+  });
+
+  it('survives a catalog whose refresh rejects', () => {
+    const record = makeRecord();
+    (record.commandCatalog.refresh as jest.Mock).mockRejectedValue(new Error('nope'));
+    const aggregator = new ProviderCommandAggregator(() => [record]);
+
+    expect(() => aggregator.invalidate()).not.toThrow();
+  });
+});
