@@ -49,7 +49,10 @@ export class RosterAgentService {
   ): Promise<BoundAgentProjection | null> {
     const log = this.deps.logger.scope('agents');
     log.debug('[bound-agent] resolveBoundAgent called', { boundAgentId, providerId });
-    const agent = await this.deps.rosterStore.get(boundAgentId);
+    // Strict read (Round-63): genuine-absent → null (build the turn unbound, the agent really is
+    // gone); a transient I/O/parse error THROWS and propagates so the send path blocks + rolls back
+    // rather than silently running with no persona/model. See AgentRosterStore.getStrict.
+    const agent = await this.deps.rosterStore.getStrict(boundAgentId);
     if (!agent) {
       log.debug('[bound-agent] resolveBoundAgent: agent not found in store', { boundAgentId });
       return null;

@@ -118,6 +118,8 @@ export interface Conversation {
   workOrderPath?: string;
   /** Roster agent this conversation is bound to (e.g. 'roster:researcher'). Applied as system prompt appendix + model override. */
   boundAgentId?: string;
+  /** Which surface owns this conversation. Absent ⇒ ordinary ad-hoc chat; 'team-chat' hides it from the chat history UI. */
+  surface?: 'chat' | 'team-chat';
 }
 
 /** Lightweight conversation metadata for the history dropdown. */
@@ -133,6 +135,8 @@ export interface ConversationMeta {
   preview: string;
   /** Status of AI title generation. */
   titleGenerationStatus?: 'pending' | 'success' | 'failed';
+  /** Which surface owns this conversation. Absent ⇒ ordinary ad-hoc chat; 'team-chat' hides it from the chat history UI. */
+  surface?: 'chat' | 'team-chat';
 }
 
 /**
@@ -161,6 +165,8 @@ export interface SessionMetadata {
   workOrderPath?: string;
   /** Roster agent bound to this conversation. Persisted so the binding survives reload. */
   boundAgentId?: string;
+  /** Which surface owns this conversation. Absent ⇒ ordinary ad-hoc chat; 'team-chat' hides it from the chat history UI. */
+  surface?: 'chat' | 'team-chat';
 }
 
 /**

@@ -34,13 +34,34 @@ export class AgentRosterStore {
 
   async get(id: string): Promise<RosterAgent | null> {
     const path = fileNameForId(id);
-    if (!(await this.adapter.exists(path))) return null;
+    // Total by design: exists + read + parse are ALL inside the try, so ANY vault-I/O or parse
+    // failure reads as "not found" (null) instead of rejecting. `exists()` used to sit outside,
+    // so a transient I/O error rejected the read and surfaced one call site at a time (send guard
+    // R58, steer guard R59, auto-dequeue). null lets every caller's existing removed-agent handling
+    // run — fail-safe: an unconfirmed agent blocks/preserves rather than crashing the caller.
     try {
+      if (!(await this.adapter.exists(path))) return null;
       return JSON.parse(await this.adapter.read(path)) as RosterAgent;
     } catch (error) {
       this.onError?.(path, error);
       return null;
     }
+  }
+
+  /**
+   * Identity-safe read (Round-63): `null` ONLY when the agent is genuinely absent (`exists()`
+   * returned false); THROWS on any vault-I/O or parse error (exists/read/JSON.parse), which `get()`
+   * deliberately swallows as null. The two IDENTITY resolvers — `resolveBoundAgent` and
+   * `resolveTeamChatAgentProvider` — read through this so a transient glitch BLOCKS + retries
+   * instead of proceeding under the WRONG identity (a turn with no persona/model, or a DM minted on
+   * the default provider with an immutable providerId). The removed-agent GUARDS keep using `get()`,
+   * whose null-on-uncertain fail-safe they depend on. No `onError` here — the throw carries the
+   * error to the caller, which logs and handles it.
+   */
+  async getStrict(id: string): Promise<RosterAgent | null> {
+    const path = fileNameForId(id);
+    if (!(await this.adapter.exists(path))) return null;
+    return JSON.parse(await this.adapter.read(path)) as RosterAgent;
   }
 
   async save(agent: RosterAgent): Promise<void> {

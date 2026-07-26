@@ -26,10 +26,14 @@ export async function resolveBoundAgentDisplayModel(
   conversation: Conversation | null | undefined,
 ): Promise<TabDisplayModel | null> {
   if (!conversation?.boundAgentId) return null;
-  const model = (await plugin.resolveBoundAgent?.(
-    conversation.boundAgentId,
-    conversation.providerId,
-  ))?.model?.trim();
+  // Best-effort display seed: resolveBoundAgent now THROWS on a strict-read I/O error (Round-63),
+  // but this is a cosmetic label (the per-turn model resolves live) — swallow to "no seed" so a
+  // transient glitch can't reject a display refresh into an unhandled rejection (e.g. the
+  // roster:changed handler's `void refreshBoundAgentDisplayModels(...)`).
+  const projection = await Promise.resolve(
+    plugin.resolveBoundAgent?.(conversation.boundAgentId, conversation.providerId),
+  ).catch(() => null);
+  const model = projection?.model?.trim();
   return model ? { conversationId: conversation.id, model } : null;
 }
 
@@ -317,4 +321,28 @@ export function updatePlanModeUI(tab: TabData, plugin: SpecoratorPlugin, mode: s
   void plugin.saveSettings();
   // Vue owns the permission/plan-mode widgets; re-project so they repaint.
   tab.composer?.emit();
+}
+
+/**
+ * View-level Shift+Tab plan-mode toggle for one tab, shared by the sidebar
+ * (`SpecoratorView.wireEventHandlers`) and Team Chat's DM host-events wiring so the two
+ * view-level handlers can't drift. No-op when the tab's provider lacks plan-mode support;
+ * otherwise flips between 'plan' and the saved pre-plan permission mode (restoring
+ * `prePlanPermissionMode`, or 'normal' when unset).
+ */
+export function toggleTabPlanMode(tab: TabData, plugin: SpecoratorPlugin): void {
+  const providerId = getTabProviderId(tab, plugin);
+  if (!ProviderRegistry.getCapabilities(providerId).supportsPlanMode) return;
+  const current = ProviderSettingsCoordinator.getProviderSettingsSnapshot(
+    plugin.settings,
+    providerId,
+  ).permissionMode as string;
+  if (current === 'plan') {
+    const restoreMode = tab.state.prePlanPermissionMode ?? 'normal';
+    tab.state.prePlanPermissionMode = null;
+    updatePlanModeUI(tab, plugin, restoreMode);
+  } else {
+    tab.state.prePlanPermissionMode = current;
+    updatePlanModeUI(tab, plugin, 'plan');
+  }
 }

@@ -1,5 +1,6 @@
 import { PluginViewActivator } from '@/app/views/PluginViewActivator';
 import { VIEW_TYPE_SPECORATOR } from '@/core/types';
+import { VIEW_TYPE_TEAM_CHAT } from '@/features/teamChat/viewType';
 import type SpecoratorPlugin from '@/main';
 
 function createPlugin(opts: {
@@ -24,6 +25,7 @@ function createPlugin(opts: {
         getTabManager: () => opts.tabManager ?? null,
         areTabsRestored: () => opts.tabsRestored ?? true,
         createNewTab: jest.fn().mockResolvedValue(undefined),
+        leaf: { view: { getViewType: () => VIEW_TYPE_SPECORATOR } },
       }
     : null;
   const newLeafTab = { setViewState: jest.fn().mockResolvedValue(undefined) };
@@ -204,10 +206,12 @@ describe('PluginViewActivator.getTabSlotUsage (work-order budget)', () => {
     const viewA = {
       getTabManager: () => ({ countTabsByKind: (k: string) => (k === 'work-order' ? 1 : 0) }),
       areTabsRestored: () => true,
+      leaf: { view: { getViewType: () => VIEW_TYPE_SPECORATOR } },
     };
     const viewB = {
       getTabManager: () => ({ countTabsByKind: (k: string) => (k === 'work-order' ? 2 : 0) }),
       areTabsRestored: () => true,
+      leaf: { view: { getViewType: () => VIEW_TYPE_SPECORATOR } },
     };
     const { plugin } = createPlugin({ agentBoardQueueCap: 5 });
     (plugin.getAllViews as jest.Mock).mockReturnValue([viewA, viewB]);
@@ -219,15 +223,118 @@ describe('PluginViewActivator.getTabSlotUsage (work-order budget)', () => {
     const restored = {
       getTabManager: () => ({ countTabsByKind: (k: string) => (k === 'work-order' ? 1 : 0) }),
       areTabsRestored: () => true,
+      leaf: { view: { getViewType: () => VIEW_TYPE_SPECORATOR } },
     };
     const midRestore = {
       getTabManager: () => ({ countTabsByKind: () => 0 }),
       areTabsRestored: () => false, // tabs not hydrated yet — WO count unknown
+      leaf: { view: { getViewType: () => VIEW_TYPE_SPECORATOR } },
     };
     const { plugin } = createPlugin({ agentBoardQueueCap: 5 });
     (plugin.getAllViews as jest.Mock).mockReturnValue([restored, midRestore]);
     const activator = new PluginViewActivator(plugin);
     // Must NOT report the restored view's count alone (used: 1) — block capacity.
+    expect(activator.getTabSlotUsage()).toEqual({ used: 5, max: 5 });
+  });
+
+  it('excludes a mid-restore Team Chat leaf from the work-order slot gate', () => {
+    // A Team Chat leaf hosts chat-kind DM tabs only — never a work-order run tab —
+    // so its slow DM hydration must not trip the mid-restore block and stall the
+    // Agent Board queue (Round-46).
+    const sidebar = {
+      getTabManager: () => ({ countTabsByKind: (k: string) => (k === 'work-order' ? 1 : 0) }),
+      areTabsRestored: () => true,
+      leaf: { view: { getViewType: () => VIEW_TYPE_SPECORATOR } },
+    };
+    const teamChatMidRestore = {
+      getTabManager: () => null,
+      areTabsRestored: () => false,
+      leaf: { view: { getViewType: () => VIEW_TYPE_TEAM_CHAT } },
+    };
+    const { plugin } = createPlugin({ agentBoardQueueCap: 5 });
+    (plugin.getAllViews as jest.Mock).mockReturnValue([sidebar, teamChatMidRestore]);
+    const activator = new PluginViewActivator(plugin);
+    expect(activator.getTabSlotUsage()).toEqual({ used: 1, max: 5 });
+  });
+
+  it('still blocks capacity while the sidebar view itself is mid-restore', () => {
+    const sidebarMidRestore = {
+      getTabManager: () => ({ countTabsByKind: () => 0 }),
+      areTabsRestored: () => false,
+      leaf: { view: { getViewType: () => VIEW_TYPE_SPECORATOR } },
+    };
+    const { plugin } = createPlugin({ agentBoardQueueCap: 5 });
+    (plugin.getAllViews as jest.Mock).mockReturnValue([sidebarMidRestore]);
+    const activator = new PluginViewActivator(plugin);
+    expect(activator.getTabSlotUsage()).toEqual({ used: 5, max: 5 });
+  });
+
+  it('a restored Team Chat leaf contributes zero work-order tabs', () => {
+    const sidebar = {
+      getTabManager: () => ({ countTabsByKind: (k: string) => (k === 'work-order' ? 2 : 0) }),
+      areTabsRestored: () => true,
+      leaf: { view: { getViewType: () => VIEW_TYPE_SPECORATOR } },
+    };
+    const teamChatRestored = {
+      getTabManager: () => ({ countTabsByKind: () => 0 }),
+      areTabsRestored: () => true,
+      leaf: { view: { getViewType: () => VIEW_TYPE_TEAM_CHAT } },
+    };
+    const { plugin } = createPlugin({ agentBoardQueueCap: 5 });
+    (plugin.getAllViews as jest.Mock).mockReturnValue([sidebar, teamChatRestored]);
+    const activator = new PluginViewActivator(plugin);
+    expect(activator.getTabSlotUsage()).toEqual({ used: 2, max: 5 });
+  });
+
+  it('counts deferred sidebar WO tabs even when a live Team Chat view exists', () => {
+    // Regression (Round-47): a live Team Chat leaf makes getAllViews() non-empty, yet it hosts
+    // only chat-kind DM tabs — never a work-order run tab. A deferred VIEW_TYPE_SPECORATOR leaf
+    // is not yet instantiated (so absent from getAllViews) but still restores its persisted WO
+    // tabs later. The Team Chat view must not mask that deferred sidebar's persisted budget, or
+    // the queue reads free capacity and over-launches before the sidebar restores.
+    const teamChatLive = {
+      getTabManager: () => ({ countTabsByKind: () => 0 }),
+      areTabsRestored: () => true,
+      leaf: { view: { getViewType: () => VIEW_TYPE_TEAM_CHAT } },
+    };
+    const { plugin } = createPlugin({
+      existingViewLeaves: [{ isDeferred: true }],
+      lastKnownOpenTabs: [
+        { tabId: 'chat-1', conversationId: null, kind: 'chat' },
+        { tabId: 'wo-1', conversationId: 'conv-1', kind: 'work-order' },
+        { tabId: 'wo-2', conversationId: 'conv-2', kind: 'work-order' },
+        { tabId: 'wo-3', conversationId: 'conv-3', kind: 'work-order' },
+      ],
+      pendingReservations: 1,
+      agentBoardQueueCap: 5,
+    });
+    (plugin.getAllViews as jest.Mock).mockReturnValue([teamChatLive]);
+    const activator = new PluginViewActivator(plugin);
+    // 3 persisted WO tabs + 1 pending reservation; pre-fix this wrongly returned { used: 1 }.
+    expect(activator.getTabSlotUsage()).toEqual({ used: 4, max: 5 });
+  });
+
+  it('blocks capacity when a deferred sidebar leaf coexists with a LIVE restored sidebar host (Round-50)', () => {
+    // Second hole in the Round-47 fix: a LIVE restored VIEW_TYPE_SPECORATOR host makes
+    // workOrderHosts non-empty, so the deferred-recovery branch (workOrderHosts.length === 0) is
+    // skipped and the loop counts only the live manager's WO tabs — missing a SEPARATE deferred
+    // sidebar leaf whose persisted WO tabs restore later. getLastKnownOpenTabCountFor reads a single
+    // plugin-level state (ambiguous across leaves), so we can't sum it; instead treat the deferred
+    // leaf like a mid-restore host and report full usage so the queue waits.
+    const liveSidebar = {
+      getTabManager: () => ({ countTabsByKind: (k: string) => (k === 'work-order' ? 1 : 0) }),
+      areTabsRestored: () => true,
+      leaf: { view: { getViewType: () => VIEW_TYPE_SPECORATOR } },
+    };
+    const { plugin } = createPlugin({
+      existingViewLeaves: [{ isDeferred: false }, { isDeferred: true }],
+      pendingReservations: 1,
+      agentBoardQueueCap: 5,
+    });
+    (plugin.getAllViews as jest.Mock).mockReturnValue([liveSidebar]);
+    const activator = new PluginViewActivator(plugin);
+    // Pre-fix this wrongly returned { used: 2 } (live WO 1 + pending 1), masking the deferred
+    // leaf's uncountable WO tabs; the queue could then over-launch before it restores.
     expect(activator.getTabSlotUsage()).toEqual({ used: 5, max: 5 });
   });
 });

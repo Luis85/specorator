@@ -70,6 +70,29 @@ describe('personaRegistry', () => {
       expect(persona.initials).toBe('TA');
       expect(persona.color).toBe('var(--color-base-70)');
     });
+
+    it('maps the agent avatarEmoji onto the persona emoji', () => {
+      const agent = { ...createRosterAgent('Researcher', 1), avatarEmoji: '🔬' };
+      expect(rosterAgentToPersona(agent).emoji).toBe('🔬');
+    });
+
+    it('leaves persona emoji undefined when the agent has none', () => {
+      expect(rosterAgentToPersona(createRosterAgent('Plain', 1)).emoji).toBeUndefined();
+    });
+
+    it('maps the agent avatarImage onto the persona image', () => {
+      const agent = { ...createRosterAgent('Researcher', 1), avatarImage: 'avatars/researcher.png' };
+      expect(rosterAgentToPersona(agent).image).toBe('avatars/researcher.png');
+    });
+
+    it('leaves persona image undefined when the agent has none', () => {
+      expect(rosterAgentToPersona(createRosterAgent('Plain', 1)).image).toBeUndefined();
+    });
+
+    it('treats a whitespace-only avatarImage as no image', () => {
+      const agent = { ...createRosterAgent('Blank', 1), avatarImage: '   ' };
+      expect(rosterAgentToPersona(agent).image).toBeUndefined();
+    });
   });
 
   describe('buildPersonaResolverFromAgents', () => {

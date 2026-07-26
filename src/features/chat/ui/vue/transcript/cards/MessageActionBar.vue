@@ -24,8 +24,9 @@ import { CALLBACKS_KEY } from '../transcriptKeys';
  *    (Task 10) — this component renders just the button group itself.
  *
  * Capability gating (`getCapabilities().supportsRewind`/`.supportsFork`) and
- * eligibility (`isRewindEligible`) come from the injected `TranscriptCallbacks`
- * seam rather than `MessageActionBarDeps`; `getMessageActions` already
+ * eligibility (`isRewindEligible` for rewind, `isForkEligible` for fork — split
+ * so a Team Chat DM can disable fork while keeping rewind) come from the injected
+ * `TranscriptCallbacks` seam rather than `MessageActionBarDeps`; `getMessageActions` already
  * returns the eligibility-filtered + run-bound action list (mirrors the
  * legacy `eligibleMessageActions` + `action.run(msg, conversationId)` wiring),
  * so this component just renders and dispatches.
@@ -39,12 +40,20 @@ const capabilities = computed<ProviderCapabilities | undefined>(() => callbacks?
 const textToShow = computed(() => props.msg.displayContent ?? props.msg.content);
 const showCopyAndActions = computed(() => !!textToShow.value);
 
-const rewindForkEligible = computed(() => !!callbacks?.isRewindEligible(props.msg.id));
+const rewindEligible = computed(() => !!callbacks?.isRewindEligible(props.msg.id));
+// Fork eligibility is split from rewind eligibility so a surface can disable
+// fork while keeping rewind (Team Chat DMs). When the seam omits isForkEligible
+// (older builders / unit fixtures) fall back to rewind eligibility — the
+// pre-split behavior, so non-Team-Chat surfaces stay byte-identical.
+const forkEligible = computed(() => {
+  const resolve = callbacks?.isForkEligible ?? callbacks?.isRewindEligible;
+  return !!resolve?.(props.msg.id);
+});
 const showRewind = computed(
-  () => props.role === 'user' && !!capabilities.value?.supportsRewind && rewindForkEligible.value,
+  () => props.role === 'user' && !!capabilities.value?.supportsRewind && rewindEligible.value,
 );
 const showFork = computed(
-  () => props.role === 'user' && !!capabilities.value?.supportsFork && rewindForkEligible.value,
+  () => props.role === 'user' && !!capabilities.value?.supportsFork && forkEligible.value,
 );
 const showUserToolbar = computed(() => showFork.value || showRewind.value || showCopyAndActions.value);
 

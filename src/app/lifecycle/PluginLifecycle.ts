@@ -1,5 +1,6 @@
 import { debounce } from 'obsidian';
 
+import { VIEW_TYPE_SPECORATOR } from '@/core/types';
 import { GitService } from '@/features/chat/services/GitService';
 import { GitStatusWatcher } from '@/features/chat/services/GitStatusWatcher';
 import { maybeOpenOnboarding } from '@/features/onboarding/maybeOpenOnboarding';
@@ -86,25 +87,24 @@ export class PluginLifecycle {
 
   shutdownActiveRuntimes(): void {
     for (const view of this.plugin.getAllViews()) {
-      const tabManager = view.getTabManager();
-      if (!tabManager) continue;
-      for (const tab of tabManager.getAllTabs()) {
-        try {
-          void tab.service?.cleanup();
-        } catch {
-          // best-effort: keep tearing down remaining runtimes
-        }
-      }
+      view.getTabManager()?.disposeAllRuntimes();
     }
   }
 
   async persistOpenTabStates(): Promise<void> {
     await Promise.all(
-      this.plugin.getAllViews().map((view) => {
-        const tabManager = view.getTabManager();
-        if (!tabManager) return Promise.resolve();
-        return this.plugin.persistTabManagerState(tabManager.getPersistedState());
-      }),
+      this.plugin
+        .getAllViews()
+        // The global data.tabManagerState slot is the SIDEBAR's cross-restore
+        // fallback; Team Chat is leaf-owned (its own getState/setState), so its
+        // DM layout must never overwrite the singleton — last-write-wins would
+        // otherwise let the two host types clobber each other's persisted tabs.
+        .filter((view) => view.leaf.view.getViewType() === VIEW_TYPE_SPECORATOR)
+        .map((view) => {
+          const tabManager = view.getTabManager();
+          if (!tabManager) return Promise.resolve();
+          return this.plugin.persistTabManagerState(tabManager.getPersistedState());
+        }),
     );
   }
 }

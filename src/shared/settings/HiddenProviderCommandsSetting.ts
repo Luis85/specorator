@@ -38,7 +38,9 @@ export function renderHiddenProviderCommandsSetting(
             [providerId]: normalizeHiddenCommandList(value.split(/\r?\n/)),
           };
           await plugin.saveSettings();
-          plugin.getView()?.updateHiddenProviderCommands?.();
+          // Fan out to EVERY chat host (sidebar + Team Chat DMs), not just the sidebar,
+          // so an open DM's live dropdown drops the newly hidden command (Round-36).
+          for (const view of plugin.getAllViews()) view.updateHiddenProviderCommands?.();
         });
       text.inputEl.rows = 4;
       text.inputEl.cols = 30;

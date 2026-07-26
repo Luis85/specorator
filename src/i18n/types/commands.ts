@@ -1,6 +1,7 @@
 export type CommandsTranslationKey =
   // Command-palette names (registerPluginCommands.ts + main.ts)
   | 'commands.openView'
+  | 'commands.openTeamChat'
   | 'commands.openAgentBoard'
   | 'commands.runNextReadyWorkOrder'
   | 'commands.createWorkOrder'

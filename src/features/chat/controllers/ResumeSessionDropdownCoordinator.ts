@@ -13,6 +13,13 @@ export interface ResumeSessionDropdownDeps {
   openConversation: (conversationId: string) => Promise<void>;
   /** Chat dropdown coordinator (the resume dropdown delegates render/keyboard to it). */
   getDropdownCoordinator?: () => ComposerDropdownDelegate | null;
+  /**
+   * Whether the `$` resume affordance is disabled for the owning tab's surface.
+   * A Team Chat DM binds one fixed thread per agent, so ad-hoc resume is
+   * suppressed there. Absent/false everywhere else — sidebar/Agent-Board
+   * behavior is unchanged.
+   */
+  isResumeDisabled?: () => boolean;
 }
 
 /**
@@ -43,6 +50,10 @@ export class ResumeSessionDropdownCoordinator {
   }
 
   show(): void {
+    // Team Chat DMs bind one fixed thread per agent, so the ad-hoc `$` resume
+    // affordance is disabled there — suppress it before touching any state.
+    if (this.deps.isResumeDisabled?.()) return;
+
     // Clean up any existing dropdown
     this.destroy();
 

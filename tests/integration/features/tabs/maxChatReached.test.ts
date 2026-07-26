@@ -1,4 +1,5 @@
 import { PluginViewActivator } from '@/app/views/PluginViewActivator';
+import { VIEW_TYPE_SPECORATOR } from '@/core/types';
 
 function plugin(opts: { chat: number; wo: number; maxChat: number; queueCap: number; reservations?: number }) {
   const tabManager = {
@@ -14,6 +15,7 @@ function plugin(opts: { chat: number; wo: number; maxChat: number; queueCap: num
     getView: () => ({
       areTabsRestored: () => true,
       getTabManager: () => tabManager,
+      leaf: { view: { getViewType: () => VIEW_TYPE_SPECORATOR } },
     }),
     app: { workspace: { getLeavesOfType: () => [] } },
     lastKnownTabManagerState: null,

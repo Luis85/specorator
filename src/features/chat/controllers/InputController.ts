@@ -26,12 +26,12 @@ import type {
 } from '../../../core/runtime/types';
 import type { ApprovalDecision, ChatMessage, ExitPlanModeDecision, StreamChunk } from '../../../core/types';
 import { t } from '../../../i18n/i18n';
+import type { TranslationKey } from '../../../i18n/types';
 import type SpecoratorPlugin from '../../../main';
 import type { BrowserSelectionContext } from '../../../utils/browser';
 import type { CanvasSelectionContext } from '../../../utils/canvas';
 import type { EditorSelectionContext } from '../../../utils/editor';
 import { dedupeExternalContextPaths, filterRedundantExternalContextPaths } from '../../../utils/externalContextTurn';
-import { persistPastedImages } from '../services/persistPastedImages';
 import type { SubagentManager } from '../services/SubagentManager';
 import { applyTitleGenerationResult } from '../services/titleGenerationResult';
 import type { ChatState } from '../state/ChatState';
@@ -51,6 +51,7 @@ import {
   completeApprovedNewSessionPlanToolCalls,
   type ComposerSendContext,
   type ComposerTurnOptions,
+  confirmDmAgentOrRestoreComposer,
   createAssistantPlaceholderMessage,
   createOutgoingUserMessage,
   type DispatchedTurnContext,
@@ -58,6 +59,7 @@ import {
   isCompactInvocation,
   normalizeTabModelOverride,
   type OutgoingTurn,
+  persistComposerImagesOrRestore,
   type PlanApprovalOutcome,
   resolveComposerImagesForMessage,
   resolveComposerSend,
@@ -74,6 +76,7 @@ import { ResumeSessionDropdownCoordinator, type ResumeSessionDropdownDeps } from
 import type { SelectionController } from './SelectionController';
 import type { StreamController } from './StreamController';
 import { activateStreamingAssistantMessage, discardStreamingAssistantMessage } from './streamingMessageLifecycle';
+import { isTeamChatSurfaceConversation, teamChatDmBoundAgentId } from './teamChatSurface';
 
 export interface InputControllerDeps {
   plugin: SpecoratorPlugin;
@@ -180,9 +183,13 @@ export class InputController {
       getCurrentConversationId: () => this.deps.state.currentConversationId,
       openConversation: (id) => this.deps.openConversation?.(id) ?? this.deps.conversationController.switchTo(id),
       getDropdownCoordinator: () => this.deps.getDropdownCoordinator?.() ?? null,
+      // Team Chat DMs bind one fixed thread per agent, so `$` resume is suppressed
+      // on that surface (surface-driven; non-team-chat and blank tabs unchanged).
+      isResumeDisabled: () => isTeamChatSurfaceConversation(this.deps.plugin, this.deps.state.currentConversationId),
     });
     this.queuedMessages = new QueuedMessageController({
       state: deps.state,
+      plugin: deps.plugin,
       getAgentService: () => this.getAgentService(),
       getActiveCapabilities: () => this.getActiveCapabilities(),
       getInputEl: deps.getInputEl,
@@ -268,10 +275,8 @@ export class InputController {
       fileContextManager: this.deps.getFileContextManager(),
       overrides: options,
     });
-    if (!send.content && !send.hasImages) {
-      if (!send.shouldUseInput) return { ok: false, finalAssistantContent: '', error: 'No content to send' };
-      return;
-    }
+    const emptyResult = this.resolveEmptyComposerSend(send);
+    if (emptyResult !== 'proceed') return emptyResult;
 
     // Check for built-in commands first (e.g., /clear, /new, /add-dir)
     const builtInCmd = detectBuiltInCommand(send.content);
@@ -281,14 +286,34 @@ export class InputController {
       return;
     }
 
-    // Persist any pasted/dropped images to the vault BEFORE the queue branch —
-    // both the streaming-queue (state.queuedMessage) and the steer-then-commit
-    // path reuse this image snapshot. Without persisting up front, queued or
-    // steered images can land in ConversationStore.save with `data` cleared
-    // and no `path` — leaving an unrenderable user bubble after reload.
-    if (send.hasImages) {
-      await this.persistComposerImages(send);
-    }
+    // Consume the composer EXACTLY once, up front. Reads send.content (captured at resolve), so
+    // clearing the textarea now can't affect the turn built later — and consuming BEFORE the DM
+    // roster read below reserves it, so a draft typed during that await isn't erased and a second
+    // submit in the window reads an empty composer (no data loss / duplicate). Non-DM sends keep
+    // their prior behavior: the consume is a no-op relative to the turn, and the `&&` short-circuit
+    // means they never await the roster read (no added microtask).
+    clearConsumedComposerInput(send, () => this.deps.resetInputHeight());
+
+    // A Team Chat DM whose agent was deleted from the roster is read-only: block the turn (it would
+    // otherwise run WITHOUT the agent's persona/model) and tell the user. The composer was reserved
+    // (consumed) above, so a removed agent restores it. Self-healing: a re-created agent resumes.
+    const dmAgentId = teamChatDmBoundAgentId(this.deps.plugin, this.deps.state.currentConversationId);
+    if (dmAgentId && !(await confirmDmAgentOrRestoreComposer(send, dmAgentId, {
+      agentRosterStore: this.deps.plugin.agentRosterStore,
+      logger: this.deps.plugin.logger,
+      resetInputHeight: () => this.deps.resetInputHeight(),
+    }))) return;
+
+    // Persist any pasted/dropped images to the vault BEFORE the queue branch — both the streaming-queue
+    // (state.queuedMessage) and steer-then-commit paths reuse this image snapshot (else queued/steered
+    // images land in ConversationStore.save with `data` cleared and no `path`). On a vault-write
+    // rejection, restore the reserved composer draft and abort with a Notice — the up-front consume
+    // must not silently drop the user's text (mirrors the removed-agent guard above).
+    if (send.hasImages && !(await persistComposerImagesOrRestore(send, {
+      app: this.deps.plugin.app,
+      logger: this.deps.plugin.logger,
+      resetInputHeight: () => this.deps.resetInputHeight(),
+    }))) return;
 
     // If agent is working, queue the message instead of dropping it
     if (state.isStreaming) {
@@ -305,13 +330,18 @@ export class InputController {
       || state.isHydrating;
   }
 
-  private async persistComposerImages(send: ComposerSendContext): Promise<void> {
-    const sourceImages = resolveComposerSourceImages(send);
-    if (sourceImages.length > 0) {
-      await persistPastedImages(this.deps.plugin.app, sourceImages, {
-        logger: this.deps.plugin.logger.scope('chat.images'),
-      });
-    }
+  /**
+   * Classifies an empty composer send: `'proceed'` when there is content or images to send,
+   * otherwise the early result to return — an error result for a programmatic no-content send
+   * (`!shouldUseInput`), or `undefined` to silently drop an empty user send. Extracted so the
+   * self-contained empty-send branches don't inflate `sendMessage`'s complexity.
+   */
+  private resolveEmptyComposerSend(
+    send: ComposerSendContext,
+  ): ProgrammaticSendResult | undefined | 'proceed' {
+    if (send.content || send.hasImages) return 'proceed';
+    if (!send.shouldUseInput) return { ok: false, finalAssistantContent: '', error: 'No content to send' };
+    return undefined;
   }
 
   private queueComposerSendWhileStreaming(send: ComposerSendContext): ProgrammaticSendResult {
@@ -342,7 +372,9 @@ export class InputController {
     // Folded into the queued turnRequest above, so clear them — except for `/compact`, which buildTurnSubmission ships bare (no suffix, no images), so it consumed neither.
     if (!isCompact) send.fileContextManager?.clearAttachedPills();
 
-    clearConsumedComposerInput(send, () => this.deps.resetInputHeight());
+    // The composer text is consumed once in sendMessage (before this branch); images are consumed
+    // here since they're read live off the manager for the queued turn above — except for
+    // `/compact`, which was queued without them.
     if (!isCompact && (send.shouldUseInput || send.consumesComposerDraft)) {
       send.imageContextManager?.clearImages();
     }
@@ -357,7 +389,8 @@ export class InputController {
     send: ComposerSendContext,
     options?: ComposerTurnOptions,
   ): Promise<ProgrammaticSendResult | void> {
-    clearConsumedComposerInput(send, () => this.deps.resetInputHeight());
+    // The composer is consumed once in sendMessage (before this branch), so a DM reserve doesn't
+    // re-clear a draft typed during the roster await; nothing to consume here.
     // Bug — selected work-order model didn't reach the runtime: capture the
     // tab-pinned model BEFORE `ensureServiceInitialized` runs, since the tab
     // lifecycle clears `draftModel` during init. Plumbed into `query()` as
@@ -370,14 +403,16 @@ export class InputController {
     const outgoing = this.buildOutgoingTurn(send, options);
     const { userMsg, assistantMsg, deferredAiTitleGeneration } = await this.presentOutgoingTurn(outgoing);
 
-    const agentService = await this.acquireTurnRuntime(
+    const acquired = await this.acquireTurnRuntime(
+      tabModelOverride,
       deferredAiTitleGeneration,
       composerRollback,
       send,
       userMsg.id,
       assistantMsg.id,
     );
-    if (!agentService) return;
+    if (!acquired) return;
+    const { agentService, queryOptions } = acquired;
 
     // Deferred from buildOutgoingTurn: mark only after the runtime is acquired.
     send.fileContextManager?.markCurrentNoteSent();
@@ -392,6 +427,7 @@ export class InputController {
       assistantMsg,
       streamGeneration,
       tabModelOverride,
+      queryOptions,
       deferredAiTitleGeneration,
     };
 
@@ -508,49 +544,48 @@ export class InputController {
     return { userMsg, assistantMsg, deferredAiTitleGeneration };
   }
 
-  /** Lazy initialization: ensure service is ready before first query. */
+  /**
+   * Lazy initialization: ensure the runtime is ready AND resolve the bound-agent turn options,
+   * BEFORE the first chunk. Resolving the options here (not mid-stream) is load-bearing: the strict
+   * roster read now THROWS on a transient I/O error (Round-63), and a throw here reuses the
+   * init-failure rollback — optimistic placeholders drop and the composer draft/pills/images are
+   * restored — so the turn BLOCKS instead of running under the wrong identity (no persona/model) or
+   * losing the draft to the mid-stream `**Error:**` path. A genuinely-gone agent does NOT throw
+   * (options fall back to base) and runs unbound as before. Returns null to abort the send.
+   */
   private async acquireTurnRuntime(
+    tabModelOverride: string | null,
     deferredAiTitleGeneration: (() => void) | null,
     composerRollback: ReturnType<typeof captureComposerRollbackSnapshot>,
     send: ComposerSendContext,
     userMsgId: string,
     assistantMsgId: string,
-  ): Promise<ChatRuntime | null> {
+  ): Promise<{ agentService: ChatRuntime; queryOptions: ChatRuntimeQueryOptions } | null> {
     const { state, streamController } = this.deps;
-    const rollback = (): void => {
-      rollbackOptimisticOutgoingTurn(
-        state,
-        composerRollback,
-        send,
-        userMsgId,
-        assistantMsgId,
-        () => this.deps.resetInputHeight(),
-      );
-      this.emit();
-    };
-    if (this.deps.ensureServiceInitialized) {
-      const ready = await this.deps.ensureServiceInitialized();
-      if (!ready) {
-        new Notice(t('chat.input.initFailed'));
-        streamController.hideThinkingIndicator();
-        this.activeStreamingAssistantMessage = null;
-        this.resetProviderMessageBoundaryState();
-        deferredAiTitleGeneration?.();
-        rollback();
-        return null;
-      }
-    }
-
-    const agentService = this.getAgentService();
-    if (!agentService) {
-      new Notice(t('chat.input.serviceUnavailable'));
+    const failAndRollback = (noticeKey: TranslationKey): null => {
+      new Notice(t(noticeKey));
+      streamController.hideThinkingIndicator();
       this.activeStreamingAssistantMessage = null;
       this.resetProviderMessageBoundaryState();
       deferredAiTitleGeneration?.();
-      rollback();
+      rollbackOptimisticOutgoingTurn(state, composerRollback, send, userMsgId, assistantMsgId, () => this.deps.resetInputHeight());
+      this.emit();
       return null;
+    };
+    if (this.deps.ensureServiceInitialized) {
+      const ready = await this.deps.ensureServiceInitialized();
+      if (!ready) return failAndRollback('chat.input.initFailed');
     }
-    return agentService;
+    const agentService = this.getAgentService();
+    if (!agentService) return failAndRollback('chat.input.serviceUnavailable');
+
+    try {
+      const queryOptions = await resolveBoundAgentQueryOptions(this.deps.plugin, state.currentConversationId, tabModelOverride);
+      return { agentService, queryOptions };
+    } catch (error) {
+      this.deps.plugin.logger.scope('input').error('bound-agent query-option resolution failed; blocking turn', error);
+      return failAndRollback('chat.input.initFailed');
+    }
   }
 
   private async streamPreparedTurn(
@@ -572,12 +607,9 @@ export class InputController {
     // Pass history WITHOUT current turn (userMsg + assistantMsg we just added)
     // This prevents duplication when rebuilding context for new sessions
     const previousMessages = state.messages.slice(0, -2);
-    const queryOptions: ChatRuntimeQueryOptions = await resolveBoundAgentQueryOptions(
-      this.deps.plugin,
-      state.currentConversationId,
-      ctx.tabModelOverride,
-    );
-    for await (const chunk of ctx.agentService.query(preparedTurn, previousMessages, queryOptions)) {
+    // queryOptions were resolved in acquireTurnRuntime (before the first chunk) so a strict-roster
+    // read throw blocks the turn with the draft-preserving rollback, not here mid-stream.
+    for await (const chunk of ctx.agentService.query(preparedTurn, previousMessages, ctx.queryOptions)) {
       if (state.streamGeneration !== ctx.streamGeneration) {
         wasInvalidated = true;
         break;
@@ -711,7 +743,7 @@ export class InputController {
     turn: FinishedTurn,
     didCancelThisTurn: boolean,
   ): Promise<void> {
-    const { state, conversationController } = this.deps;
+    const { state } = this.deps;
 
     // Provider-agnostic post-plan approval: show UI and await decision before auto-send
     const approval = await this.resolvePlanApprovalOutcome(ctx, turn, didCancelThisTurn);
@@ -740,12 +772,25 @@ export class InputController {
       const planContent = state.pendingNewSessionPlan;
       if (planContent) {
         state.pendingNewSessionPlan = null;
-        await conversationController.createNew();
-        this.autoResumeWith(planContent);
+        await this.resumeApprovedPlanFromExitMode(planContent);
       } else if (approval.shouldProcessQueuedMessage) {
         this.queuedMessages.processQueuedMessage();
       }
     }
+  }
+
+  /**
+   * Implements an "Approve (new session)" exit-plan decision. On the sidebar it does
+   * what the label says — a fresh conversation, then the plan auto-resumes there. On a
+   * Team Chat DM (one fixed thread per agent) a new session would UNBIND the DM and leak
+   * the transcript into ordinary chat history, so the approved plan is implemented in
+   * THIS thread instead (surface-scoped; the sidebar path is byte-identical to before).
+   */
+  private async resumeApprovedPlanFromExitMode(planContent: string): Promise<void> {
+    if (!isTeamChatSurfaceConversation(this.deps.plugin, this.deps.state.currentConversationId)) {
+      await this.deps.conversationController.createNew();
+    }
+    this.autoResumeWith(planContent);
   }
 
   private async resolvePlanApprovalOutcome(
@@ -1171,8 +1216,21 @@ export class InputController {
   // Built-in Commands
   // ============================================
 
+  /**
+   * `/clear` starts a fresh conversation — but on a Team Chat DM (one fixed thread per
+   * agent) that would mint an unbound conversation and leak into ordinary chat history,
+   * so it is disabled there. Extracted from the command switch to keep that gate's branch
+   * out of the already-complex `executeBuiltInCommand`.
+   */
+  private async runClearCommand(): Promise<void> {
+    if (isTeamChatSurfaceConversation(this.deps.plugin, this.deps.state.currentConversationId)) {
+      new Notice(t('teamChat.actionUnavailableInDm'));
+      return;
+    }
+    await this.deps.conversationController.createNew();
+  }
+
   private async executeBuiltInCommand(command: BuiltInCommand, args: string): Promise<void> {
-    const { conversationController } = this.deps;
     const capabilities = this.getActiveCapabilities();
 
     if (!isBuiltInCommandSupported(command, capabilities)) {
@@ -1182,7 +1240,7 @@ export class InputController {
 
     switch (command.action) {
       case 'clear':
-        await conversationController.createNew();
+        await this.runClearCommand();
         break;
       case 'add-dir': {
         const externalContextSelector = this.deps.getExternalContextSelector();

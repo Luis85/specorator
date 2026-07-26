@@ -41,3 +41,19 @@ export interface ChatEventMap {
     message: string;
   };
 }
+
+/**
+ * Builds the `chat:tabs-changed` payload from a tab manager's live counts (zeros
+ * when absent). Shared so every chat-engine host — SpecoratorView and TeamChatView
+ * both fire it after restore so the Agent Board queue re-reads capacity — emits the
+ * SAME shape from one definition rather than an inline copy per host.
+ */
+export function tabCountsPayload(
+  tabManager: { getTabCount(): number; countTabsByKind(kind: 'chat' | 'work-order'): number } | null,
+): ChatEventMap['chat:tabs-changed'] {
+  return {
+    openCount: tabManager?.getTabCount() ?? 0,
+    chatCount: tabManager?.countTabsByKind('chat') ?? 0,
+    workOrderCount: tabManager?.countTabsByKind('work-order') ?? 0,
+  };
+}

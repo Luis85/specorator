@@ -1,4 +1,4 @@
-import type { Plugin } from 'obsidian';
+import type { Plugin, WorkspaceLeaf } from 'obsidian';
 
 import type { SpecoratorEventMap } from '../../app/events/specoratorEvents';
 import type { BrowserSelectionContext } from '../../utils/browser';
@@ -32,6 +32,37 @@ export interface ChatTabManagerHandle {
     providerIds: ProviderId | ProviderId[],
     fn: (service: ChatRuntime) => Promise<void>,
   ): Promise<void>;
+
+  // --- Group C: neutral tab queries/commands consumed by getAllViews() call sites ---
+  /** Count open tabs of a kind. Literal union mirrors `AppTabManagerState.openTabs[].kind`. */
+  countTabsByKind(kind: 'chat' | 'work-order'): number;
+  /** Open work-order tabs with display title + live-stream flag (neutral shape). */
+  listWorkOrderTabs(): Array<{ id: string; title: string; isStreaming: boolean }>;
+  /** Persisted tab-manager state (core type; field-identical to `PersistedTabManagerState`). */
+  getPersistedState(): AppTabManagerState;
+  /** Force-close a tab; `force` closes even while streaming. */
+  closeTab(tabId: string, force?: boolean): Promise<boolean>;
+  /** Activate an open tab by id. */
+  switchToTab(tabId: string): Promise<void>;
+  /** First open tab bound to a conversation, or null (neutral id shape). */
+  findTabByConversation(conversationId: string): { tabId: string } | null;
+  /** Whether a tab id is currently open. */
+  hasTab(tabId: string): boolean;
+  /** All open tabs' presence-relevant fields (conversationId + live streaming state)
+   *  for cross-leaf projections; neutral shape satisfied by the concrete `TabData`. */
+  getAllTabs(): readonly { conversationId: string | null; state: { readonly isStreaming: boolean } }[];
+
+  // --- Group D: purpose-built commands that keep TabData reach inside TabManager ---
+  /** Best-effort cleanup of every tab's runtime (guards `tab.service` only). */
+  disposeAllRuntimes(): void;
+  /** Quiesce tabs bound to a conversation before its metadata is deleted. */
+  quiesceTabsForConversation(conversationId: string): Promise<void>;
+  /** Reset tabs bound to a deleted conversation back to a fresh chat. */
+  repairTabsForConversation(conversationId: string): Promise<void>;
+  /** Cancel affected in-flight streams; returns the affected tab ids as the frozen restart set. */
+  cancelStreamingTabsForProviders(providerIds: ProviderId[]): string[];
+  /** Force-restart the runtimes of the given (already-cancelled) tab ids; returns the count that threw. */
+  restartRuntimeTabs(tabIds: string[], changed: boolean): Promise<number>;
 }
 
 /**
@@ -40,11 +71,25 @@ export interface ChatTabManagerHandle {
  * refresh UI and reach the tab manager without `core/` depending on the view.
  */
 export interface ChatViewHandle {
+  /** Owning workspace leaf (inherited from `ItemView`). Lets cross-view callers reveal the host leaf. */
+  leaf: WorkspaceLeaf;
   getTabManager(): ChatTabManagerHandle | null;
   refreshModelSelector(): void;
   invalidateProviderCommandCaches(providerIds?: ProviderId | ProviderId[]): void;
   /** Re-applies `hiddenProviderCommands` to open command dropdowns. Optional: implemented by the full chat view. */
   updateHiddenProviderCommands?(): void;
+
+  // --- Group B: settings-broadcast + lifecycle surface consumed by getAllViews() call sites ---
+  /** Re-probe provider availability; promote/drop the tab engine when the enabled-provider set changed. */
+  refreshProviderAvailability(): Promise<void>;
+  /** Re-project the shell after a `tabBarPosition` change. */
+  updateLayoutForPosition(): void;
+  /** Re-project the shell after a tab-bar-visibility setting change. */
+  refreshTabControls(): void;
+  /** Apply the "show files changed by the agent" setting to open tabs immediately. */
+  applyEditedFilesSetting(): void;
+  /** Whether the tab manager has finished restoring its persisted tabs. */
+  areTabsRestored(): boolean;
 }
 
 /**
@@ -101,6 +146,7 @@ export interface PluginContext
     providerId?: ProviderId;
     sessionId?: string;
     boundAgentId?: string;
+    surface?: 'chat' | 'team-chat';
   }): Promise<Conversation>;
   switchConversation(
     id: string,
@@ -114,6 +160,8 @@ export interface PluginContext
   renameConversation(id: string, title: string): Promise<void>;
   updateConversation(id: string, updates: Partial<Conversation>): Promise<void>;
   getConversationById(id: string): Promise<Conversation | null>;
+  /** The canonical DM conversation for an agent on the Team Chat surface, optionally scoped to a provider, or null. */
+  findTeamChatConversationForAgent(agentId: string, providerId?: ProviderId): Conversation | null;
   getConversationSync(id: string): Conversation | null;
   getConversationList(): ConversationMeta[];
 

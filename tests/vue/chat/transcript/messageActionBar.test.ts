@@ -168,6 +168,41 @@ describe('MessageActionBar', () => {
     expect(container.querySelector('.specorator-message-fork-btn')).toBeNull();
   });
 
+  // Characterization (sidebar/Agent-Board unchanged): with no explicit
+  // isForkEligible the renderer falls back to isRewindEligible, so fork keeps
+  // showing for an eligible fork-capable user message — pre-split behavior.
+  it('shows fork for an eligible user message when isForkEligible is not supplied (fallback to rewind eligibility)', () => {
+    const callbacks = makeCallbacks({ isRewindEligible: vi.fn(() => true) });
+    expect(callbacks.isForkEligible).toBeUndefined();
+    const { container } = renderBar(userMsg, 'user', callbacks);
+    expect(container.querySelector('.specorator-message-fork-btn')).not.toBeNull();
+    expect(container.querySelector('.specorator-message-rewind-btn')).not.toBeNull();
+  });
+
+  // Team Chat surface: the split lets a DM hide fork while keeping rewind
+  // (rewind is same-conversation and stays safe).
+  it('hides fork but keeps rewind when isForkEligible returns false', () => {
+    const callbacks = makeCallbacks({
+      isRewindEligible: vi.fn(() => true),
+      isForkEligible: vi.fn(() => false),
+    });
+    const { container } = renderBar(userMsg, 'user', callbacks);
+    expect(container.querySelector('.specorator-message-fork-btn')).toBeNull();
+    expect(container.querySelector('.specorator-message-rewind-btn')).not.toBeNull();
+  });
+
+  // The split is independent of rewind: fork can be eligible while rewind is
+  // gated only by its own capability/eligibility (both true here → both show).
+  it('shows fork when isForkEligible returns true', () => {
+    const callbacks = makeCallbacks({
+      isRewindEligible: vi.fn(() => true),
+      isForkEligible: vi.fn(() => true),
+    });
+    const { container } = renderBar(userMsg, 'user', callbacks);
+    expect(container.querySelector('.specorator-message-fork-btn')).not.toBeNull();
+    expect(container.querySelector('.specorator-message-rewind-btn')).not.toBeNull();
+  });
+
   it('renders no user toolbar at all when there is no text, no rewind, and no fork', () => {
     const callbacks = makeCallbacks({
       isRewindEligible: vi.fn(() => false),

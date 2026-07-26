@@ -85,6 +85,7 @@ export class ConversationStore {
           resumeAtMessageId: meta.resumeAtMessageId,
           workOrderPath: meta.workOrderPath,
           boundAgentId: meta.boundAgentId,
+          surface: meta.surface,
         } satisfies Conversation;
       })
       .sort((a, b) => (b.lastResponseAt ?? b.updatedAt) - (a.lastResponseAt ?? a.updatedAt));
@@ -119,6 +120,7 @@ export class ConversationStore {
     providerId?: ProviderId;
     sessionId?: string;
     boundAgentId?: string;
+    surface?: 'chat' | 'team-chat';
   }): Promise<Conversation> {
     const providerId = options?.providerId ?? DEFAULT_CHAT_PROVIDER_ID;
     const sessionId = options?.sessionId;
@@ -132,6 +134,7 @@ export class ConversationStore {
       sessionId: sessionId ?? null,
       messages: [],
       boundAgentId: options?.boundAgentId,
+      surface: options?.surface,
     };
 
     this.conversations.unshift(conversation);
@@ -411,18 +414,35 @@ export class ConversationStore {
     return this.conversations.find((c) => c.messages.length === 0) || null;
   }
 
+  /**
+   * The canonical DM conversation for an agent on the Team Chat surface, or null.
+   * Optionally scoped to `providerId` so a provider-change rotation adopts the DM
+   * on the *new* provider, not the stale one still bound to the same agent.
+   */
+  findTeamChatConversationForAgent(agentId: string, providerId?: ProviderId): Conversation | null {
+    return this.conversations.find(
+      (c) =>
+        c.boundAgentId === agentId &&
+        (c.surface ?? 'chat') === 'team-chat' &&
+        (providerId === undefined || c.providerId === providerId),
+    ) ?? null;
+  }
+
   getConversationList(): ConversationMeta[] {
-    return this.conversations.map((c) => ({
-      id: c.id,
-      providerId: c.providerId,
-      title: c.title,
-      createdAt: c.createdAt,
-      updatedAt: c.updatedAt,
-      lastResponseAt: c.lastResponseAt,
-      messageCount: c.messages.length,
-      preview: this.getConversationPreview(c),
-      titleGenerationStatus: c.titleGenerationStatus,
-    }));
+    return this.conversations
+      .filter((c) => (c.surface ?? 'chat') !== 'team-chat') // ad-hoc history only; DMs live in the Team Chat surface
+      .map((c) => ({
+        id: c.id,
+        providerId: c.providerId,
+        title: c.title,
+        createdAt: c.createdAt,
+        updatedAt: c.updatedAt,
+        lastResponseAt: c.lastResponseAt,
+        messageCount: c.messages.length,
+        preview: this.getConversationPreview(c),
+        titleGenerationStatus: c.titleGenerationStatus,
+        surface: c.surface,
+      }));
   }
 
   private async loadSdkMessagesForConversation(

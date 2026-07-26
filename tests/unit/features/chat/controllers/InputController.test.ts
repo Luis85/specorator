@@ -2,12 +2,19 @@ import { createMockEl } from '@test/helpers/mockElement';
 import { Notice } from 'obsidian';
 
 import { InputController, type InputControllerDeps } from '@/features/chat/controllers/InputController';
+import { persistPastedImages } from '@/features/chat/services/persistPastedImages';
 import { ChatState } from '@/features/chat/state/ChatState';
+import { t } from '@/i18n/i18n';
 import { encodeClaudeTurn } from '@/providers/claude/prompt/ClaudeTurnEncoder';
 import { ResumeSessionDropdown } from '@/shared/components/ResumeSessionDropdown';
 
 jest.mock('@/shared/components/ResumeSessionDropdown', () => ({
   ResumeSessionDropdown: jest.fn(),
+}));
+
+// Mocked so a send can simulate a vault-write rejection (the real impl swallows per-image errors).
+jest.mock('@/features/chat/services/persistPastedImages', () => ({
+  persistPastedImages: jest.fn(),
 }));
 
 beforeAll(() => {
@@ -1400,6 +1407,35 @@ describe('InputController - Message Queue', () => {
       expect(queryOptions.model).toBeUndefined();
       expect(queryOptions.boundAgentModel).toBeUndefined();
     });
+
+    // Round-63: resolveBoundAgent now THROWS on a transient roster-read I/O error (vs. the old total
+    // read that silently returned no persona/model). The turn-option build runs BEFORE the first
+    // chunk, so a throw must BLOCK the turn AND hit the init-failure rollback — the optimistic
+    // user/assistant placeholders drop and the composer draft is restored — never run under the
+    // wrong identity and never lose the draft.
+    it('blocks the turn and preserves the composer draft when resolveBoundAgent throws (I/O error)', async () => {
+      const localDeps = createSendableDeps({ getTabModelOverride: () => null });
+      (localDeps.plugin.getConversationById as jest.Mock).mockResolvedValue({
+        id: 'conv-1',
+        boundAgentId: 'agent-abc',
+      });
+      (localDeps.plugin as any).resolveBoundAgent = jest.fn().mockRejectedValue(new Error('vault io'));
+      const query = jest.fn().mockImplementation(() => createMockStream([{ type: 'done' }]));
+      (localDeps as any).mockAgentService.query = query;
+      const localController = new InputController(localDeps);
+      const localInput = localDeps.getInputEl() as ReturnType<typeof createMockInputEl>;
+      localInput.value = 'help me with rust';
+
+      await localController.sendMessage();
+
+      // The turn never streams under the wrong (unbound) identity ...
+      expect(query).not.toHaveBeenCalled();
+      // ... the draft is restored for a clean retry ...
+      expect(localInput.value).toBe('help me with rust');
+      // ... and the optimistic user/assistant placeholders were rolled back.
+      expect(localDeps.state.messages).toHaveLength(0);
+      expect(localDeps.state.isStreaming).toBe(false);
+    });
   });
 
   describe('Conversation operation guards', () => {
@@ -1978,6 +2014,8 @@ describe('InputController - Message Queue', () => {
   });
 
   describe('Built-in commands - /clear', () => {
+    // Characterization (sidebar unchanged): the default mock conversation is not a
+    // team-chat DM, so /clear still mints a fresh conversation.
     it('should call conversationController.createNew on /clear', async () => {
       (deps.conversationController as any).createNew = jest.fn().mockResolvedValue(undefined);
       inputEl.value = '/clear';
@@ -1987,6 +2025,261 @@ describe('InputController - Message Queue', () => {
 
       expect((deps.conversationController as any).createNew).toHaveBeenCalled();
       expect(inputEl.value).toBe('');
+    });
+
+    // Round-39 (Concern B): /clear mints an unbound conversation via createNew, which on
+    // the Team Chat surface would unbind the DM and leak into ordinary chat history — so
+    // it is disabled there (notice, no createNew).
+    it('does NOT createNew on /clear on the Team Chat surface (disabled, notice shown)', async () => {
+      (deps.conversationController as any).createNew = jest.fn().mockResolvedValue(undefined);
+      deps.state.currentConversationId = 'dm-1';
+      (deps.plugin.getConversationSync as any) = jest.fn().mockReturnValue({ surface: 'team-chat', boundAgentId: 'roster:a' });
+      mockNotice.mockClear();
+      inputEl.value = '/clear';
+      controller = new InputController(deps);
+
+      await controller.sendMessage();
+
+      expect((deps.conversationController as any).createNew).not.toHaveBeenCalled();
+      expect(mockNotice).toHaveBeenCalledWith(t('teamChat.actionUnavailableInDm'));
+    });
+  });
+
+  // Round-39 (Concern B): the post-plan "Approve (new session)" branch consumes
+  // state.pendingNewSessionPlan and calls createNew — gated on the surface.
+  describe('post-plan "Approve (new session)" gate (surface-scoped)', () => {
+    beforeEach(() => {
+      deps = createSendableDeps();
+      inputEl = deps.getInputEl() as ReturnType<typeof createMockInputEl>;
+      (deps.conversationController as any).createNew = jest.fn().mockResolvedValue(undefined);
+    });
+
+    // Characterization (sidebar unchanged): a fresh conversation, then the plan resumes there.
+    it('sidebar: mints a fresh conversation then resumes the plan', async () => {
+      (deps.plugin.getConversationSync as any) = jest.fn().mockReturnValue({ surface: 'chat' });
+      controller = new InputController(deps);
+      const autoResume = jest.spyOn(controller as any, 'autoResumeWith').mockImplementation(() => {});
+
+      await (controller as any).resumeApprovedPlanFromExitMode('Implement this plan.');
+
+      expect((deps.conversationController as any).createNew).toHaveBeenCalledTimes(1);
+      expect(autoResume).toHaveBeenCalledWith('Implement this plan.');
+    });
+
+    it('team-chat DM: implements the plan in THIS thread — no new session minted', async () => {
+      deps.state.currentConversationId = 'dm-1';
+      (deps.plugin.getConversationSync as any) = jest.fn().mockReturnValue({ surface: 'team-chat', boundAgentId: 'roster:a' });
+      controller = new InputController(deps);
+      const autoResume = jest.spyOn(controller as any, 'autoResumeWith').mockImplementation(() => {});
+
+      await (controller as any).resumeApprovedPlanFromExitMode('Implement this plan.');
+
+      // A DM is one fixed thread: no createNew (no unbind/leak), but the approved plan still runs.
+      expect((deps.conversationController as any).createNew).not.toHaveBeenCalled();
+      expect(autoResume).toHaveBeenCalledWith('Implement this plan.');
+    });
+  });
+
+  // Round-39 (Concern A): a Team Chat DM whose bound agent was deleted from the roster
+  // is read-only — a turn would resolve no persona/model, so sending is blocked.
+  describe('Team Chat DM read-only when the bound agent is removed', () => {
+    beforeEach(() => {
+      deps = createSendableDeps();
+      inputEl = deps.getInputEl() as ReturnType<typeof createMockInputEl>;
+      mockNotice.mockClear();
+    });
+
+    it('blocks the turn + notices when the DM agent was deleted from the roster', async () => {
+      deps.state.currentConversationId = 'dm-1';
+      (deps.plugin.getConversationSync as any) = jest.fn().mockReturnValue({ surface: 'team-chat', boundAgentId: 'roster:gone' });
+      (deps.plugin as any).agentRosterStore = { get: jest.fn().mockResolvedValue(null) };
+      inputEl.value = 'hello';
+      controller = new InputController(deps);
+      const dispatch = jest.spyOn(controller as any, 'dispatchComposerTurn').mockResolvedValue(undefined);
+
+      await controller.sendMessage();
+
+      expect(mockNotice).toHaveBeenCalledWith(t('teamChat.agentRemoved'));
+      expect(dispatch).not.toHaveBeenCalled();
+    });
+
+    it('lets the turn through once the agent exists again (self-healing, same id)', async () => {
+      deps.state.currentConversationId = 'dm-1';
+      (deps.plugin.getConversationSync as any) = jest.fn().mockReturnValue({ surface: 'team-chat', boundAgentId: 'roster:a' });
+      (deps.plugin as any).agentRosterStore = { get: jest.fn().mockResolvedValue({ id: 'roster:a', name: 'Ada' }) };
+      inputEl.value = 'hello';
+      controller = new InputController(deps);
+      const dispatch = jest.spyOn(controller as any, 'dispatchComposerTurn').mockResolvedValue(undefined);
+
+      await controller.sendMessage();
+
+      expect(mockNotice).not.toHaveBeenCalledWith(t('teamChat.agentRemoved'));
+      expect(dispatch).toHaveBeenCalled();
+    });
+
+    // A non-team-chat tab (default mock conversation) never pays the roster lookup and
+    // dispatches normally — the guard is strictly surface-scoped.
+    it('sidebar: never consults the roster and dispatches normally', async () => {
+      const rosterGet = jest.fn();
+      (deps.plugin as any).agentRosterStore = { get: rosterGet };
+      inputEl.value = 'hello';
+      controller = new InputController(deps);
+      const dispatch = jest.spyOn(controller as any, 'dispatchComposerTurn').mockResolvedValue(undefined);
+
+      await controller.sendMessage();
+
+      expect(rosterGet).not.toHaveBeenCalled();
+      expect(dispatch).toHaveBeenCalled();
+    });
+  });
+
+  // Round-53 Fix 1: the removed-agent roster read awaits BETWEEN composer capture and consume.
+  // Reserve-before-await consumes the composer UP FRONT for a DM send, so a draft typed during
+  // the await isn't erased (data loss) and a second submit in the window reads an empty composer
+  // (no duplicate); a removed agent restores the composer.
+  describe('Team Chat DM reserve-before-await (Round-53)', () => {
+    function makeDmDeps() {
+      const d = createSendableDeps();
+      d.state.currentConversationId = 'dm-1';
+      (d.plugin.getConversationSync as any) = jest.fn().mockReturnValue({ surface: 'team-chat', boundAgentId: 'roster:a' });
+      return d;
+    }
+
+    it('does not erase a draft typed during the roster await (consume happens up front)', async () => {
+      deps = makeDmDeps();
+      inputEl = deps.getInputEl() as ReturnType<typeof createMockInputEl>;
+      let resolveRoster: (v: any) => void = () => {};
+      (deps.plugin as any).agentRosterStore = { get: jest.fn(() => new Promise((r) => { resolveRoster = r; })) };
+      (deps as any).mockAgentService.query = jest.fn().mockImplementation(() => createMockStream([{ type: 'done' }]));
+      inputEl.value = 'hello';
+      controller = new InputController(deps);
+
+      const sendPromise = controller.sendMessage();
+      // Reserve-before-await: the composer was consumed synchronously BEFORE the roster read.
+      expect(inputEl.value).toBe('');
+      // The user types a NEW draft while the roster read is in flight.
+      inputEl.value = 'new draft';
+      resolveRoster!({ id: 'roster:a' });
+      await sendPromise;
+
+      // The send used the captured text; the new draft survives (not erased by a late consume).
+      expect(inputEl.value).toBe('new draft');
+    });
+
+    it('does not dispatch twice when a second submit races the roster await', async () => {
+      deps = makeDmDeps();
+      inputEl = deps.getInputEl() as ReturnType<typeof createMockInputEl>;
+      let resolveRoster: (v: any) => void = () => {};
+      const rosterPromise = new Promise((r) => { resolveRoster = r; });
+      (deps.plugin as any).agentRosterStore = { get: jest.fn(() => rosterPromise) };
+      inputEl.value = 'hello';
+      controller = new InputController(deps);
+      const dispatch = jest.spyOn(controller as any, 'dispatchComposerTurn').mockResolvedValue(undefined);
+
+      const p1 = controller.sendMessage();
+      const p2 = controller.sendMessage(); // races p1's roster await
+      resolveRoster!({ id: 'roster:a' });
+      await Promise.all([p1, p2]);
+
+      // The second submit read an already-consumed (empty) composer and was dropped as empty.
+      expect(dispatch).toHaveBeenCalledTimes(1);
+      expect(deps.state.queuedMessage).toBeNull();
+    });
+
+    it('restores the composer + notices when the DM agent was removed', async () => {
+      deps = makeDmDeps();
+      inputEl = deps.getInputEl() as ReturnType<typeof createMockInputEl>;
+      (deps.plugin.getConversationSync as any) = jest.fn().mockReturnValue({ surface: 'team-chat', boundAgentId: 'roster:gone' });
+      (deps.plugin as any).agentRosterStore = { get: jest.fn().mockResolvedValue(null) };
+      mockNotice.mockClear();
+      inputEl.value = 'hello';
+      controller = new InputController(deps);
+      const dispatch = jest.spyOn(controller as any, 'dispatchComposerTurn').mockResolvedValue(undefined);
+
+      await controller.sendMessage();
+
+      expect(mockNotice).toHaveBeenCalledWith(t('teamChat.agentRemoved'));
+      expect(dispatch).not.toHaveBeenCalled();
+      // The reserve-before-await consumed the composer, then restored it once the agent read null.
+      expect(inputEl.value).toBe('hello');
+    });
+
+    // Round-55: the reserve-before-await clears the composer UP FRONT, so if the user types a
+    // NEWER draft during the removed-agent roster await, the restore must NOT clobber it — the
+    // newer draft wins (mirrors the happy path above, where a newer draft also survives).
+    it('preserves a newer draft typed during the await over the removed-agent restore', async () => {
+      deps = makeDmDeps();
+      inputEl = deps.getInputEl() as ReturnType<typeof createMockInputEl>;
+      (deps.plugin.getConversationSync as any) = jest.fn().mockReturnValue({ surface: 'team-chat', boundAgentId: 'roster:gone' });
+      let resolveRoster: (v: any) => void = () => {};
+      (deps.plugin as any).agentRosterStore = { get: jest.fn(() => new Promise((r) => { resolveRoster = r; })) };
+      mockNotice.mockClear();
+      inputEl.value = 'hello';
+      controller = new InputController(deps);
+      const dispatch = jest.spyOn(controller as any, 'dispatchComposerTurn').mockResolvedValue(undefined);
+
+      const sendPromise = controller.sendMessage();
+      // Reserve-before-await consumed the composer up front.
+      expect(inputEl.value).toBe('');
+      // The user types a NEW draft while the removed-agent roster read is in flight.
+      inputEl.value = 'new draft';
+      resolveRoster!(null); // agent was removed
+      await sendPromise;
+
+      // Still blocked + noticed (removed-agent behavior unchanged)...
+      expect(mockNotice).toHaveBeenCalledWith(t('teamChat.agentRemoved'));
+      expect(dispatch).not.toHaveBeenCalled();
+      // ...but the newer draft is PRESERVED — the old submitted text does NOT overwrite it.
+      expect(inputEl.value).toBe('new draft');
+    });
+
+    // Round-58 Fix 1: AgentRosterStore.get() awaits adapter.exists OUTSIDE its try/catch, so a
+    // vault I/O error makes the roster read REJECT. Round-53 cleared the composer UP FRONT, so an
+    // unhandled rejection would escape sendMessage AND lose the submitted text. The guard now
+    // catches it: restore the reserved composer + BLOCK the send (fail-safe — the agent is
+    // unconfirmed, so a transient glitch must not send a turn without its persona/model).
+    it('restores the composer + blocks the send (no throw) when the roster read REJECTS (Round-58)', async () => {
+      deps = makeDmDeps();
+      inputEl = deps.getInputEl() as ReturnType<typeof createMockInputEl>;
+      (deps.plugin as any).agentRosterStore = { get: jest.fn().mockRejectedValue(new Error('io')) };
+      mockNotice.mockClear();
+      inputEl.value = 'hello';
+      controller = new InputController(deps);
+      const dispatch = jest.spyOn(controller as any, 'dispatchComposerTurn').mockResolvedValue(undefined);
+
+      // sendMessage must NOT reject — the rejection is caught inside the guard.
+      await expect(controller.sendMessage()).resolves.toBeUndefined();
+
+      expect(dispatch).not.toHaveBeenCalled();     // the turn is blocked
+      expect(inputEl.value).toBe('hello');         // reserved composer restored (no text loss)
+      expect(mockNotice).toHaveBeenCalledWith(t('teamChat.agentVerifyFailed'));
+      expect(deps.plugin.logger.scope('team-chat').error).toHaveBeenCalledWith(
+        'roster read failed during DM send guard',
+        expect.any(Error),
+      );
+    });
+
+    // Round-58 + Round-55: a rejecting read must ALSO honor the newer-draft guard — the old
+    // submitted text must not clobber a draft the user typed during the (failing) await.
+    it('preserves a newer draft typed during a REJECTING roster read (Round-58)', async () => {
+      deps = makeDmDeps();
+      inputEl = deps.getInputEl() as ReturnType<typeof createMockInputEl>;
+      let rejectRoster: (e: unknown) => void = () => {};
+      (deps.plugin as any).agentRosterStore = {
+        get: jest.fn(() => new Promise((_resolve, reject) => { rejectRoster = reject; })),
+      };
+      inputEl.value = 'hello';
+      controller = new InputController(deps);
+      const dispatch = jest.spyOn(controller as any, 'dispatchComposerTurn').mockResolvedValue(undefined);
+
+      const sendPromise = controller.sendMessage();
+      expect(inputEl.value).toBe('');            // reserved up front (before the await)
+      inputEl.value = 'new draft';               // user types while the read is in flight
+      rejectRoster!(new Error('io'));
+      await sendPromise;
+
+      expect(dispatch).not.toHaveBeenCalled();
+      expect(inputEl.value).toBe('new draft');   // newer draft preserved (restore skipped, Round-55)
     });
   });
 
@@ -2063,6 +2356,21 @@ describe('InputController - Message Queue', () => {
         expect.objectContaining({ coordinator: expect.anything() }),
       );
       expect(controller.isResumeDropdownVisible()).toBe(true);
+    });
+
+    it('should suppress the resume dropdown on the Team Chat surface', async () => {
+      // Surface-driven: the owning tab's conversation is a team-chat DM, so `$`
+      // resume is disabled entirely (no dropdown, no "nothing to resume" Notice).
+      (deps.plugin as any).getConversationList = jest.fn().mockReturnValue(mockConversations);
+      deps.state.currentConversationId = 'dm-1';
+      (deps.plugin.getConversationSync as any) = jest.fn().mockReturnValue({ surface: 'team-chat' });
+      inputEl.value = '/resume';
+      controller = new InputController(deps);
+
+      await controller.sendMessage();
+
+      expect(ResumeSessionDropdown).not.toHaveBeenCalled();
+      expect(mockNotice).not.toHaveBeenCalled();
     });
 
     it('should call switchTo on select callback', async () => {
@@ -2256,6 +2564,32 @@ describe('InputController - Message Queue', () => {
       // The turn never reached the runtime, so the current-note "sent" flag must
       // NOT be consumed — a retry of the restored draft still sends currentNotePath.
       expect(deps.getFileContextManager()?.markCurrentNoteSent).not.toHaveBeenCalled();
+    });
+
+    // Round-60: the init-failure rollback (rollbackOptimisticOutgoingTurn) restores the submitted
+    // text only when the composer is still empty. If the user began a NEWER draft during the init
+    // await (a new DM whose CLI is unavailable fails init a beat after the next keystrokes), the old
+    // text must NOT clobber it — the newer draft wins (mirrors Round-55's reserve-before-await guard).
+    it('preserves a newer draft typed during the init await, still rolling back placeholders', async () => {
+      deps = createSendableDeps({
+        ensureServiceInitialized: jest.fn(async () => {
+          // The composer was cleared up front; the user types a newer draft while init awaits.
+          inputEl.value = 'new draft';
+          return false;
+        }),
+      });
+      inputEl = deps.getInputEl() as ReturnType<typeof createMockInputEl>;
+      inputEl.value = 'original message';
+      controller = new InputController(deps);
+
+      await controller.sendMessage();
+
+      // The newer draft wins — the old submitted text does NOT overwrite it...
+      expect(inputEl.value).toBe('new draft');
+      // ...and the optimistic user/assistant placeholders were still rolled back.
+      expect(deps.state.messages).toHaveLength(0);
+      expect(deps.state.isStreaming).toBe(false);
+      expect((deps as any).mockAgentService.query).not.toHaveBeenCalled();
     });
   });
 
@@ -4121,5 +4455,78 @@ describe('InputController - Message Queue', () => {
       expect(((deps.plugin as any).logger.scope as jest.Mock)).toHaveBeenCalledWith('input');
       expect(mockErrorFn).toHaveBeenCalledWith('sendMessage failed unexpectedly', testError);
     });
+  });
+});
+
+// P2 data-loss (Round-66): sendMessage consumes (clears) the composer UP FRONT, then persists any
+// pasted/dropped images. If that vault write REJECTS, the send must RESTORE the reserved draft and
+// abort with a Notice — never leave the composer empty with the turn silently dropped. Mirrors the
+// removed-agent DM guard (confirmDmAgentOrRestoreComposer): only the textarea text is reserved early
+// (images are read live, never cleared before the turn builds), so restoring the text is the full undo.
+describe('InputController - image persistence failure restores the composer', () => {
+  const pasteImage = (id: string, name: string) => ({
+    id, name, mediaType: 'image/png' as const, data: 'ZGF0YQ==', size: 4, source: 'paste' as const,
+  });
+
+  function makeImageSendDeps() {
+    const deps = createSendableDeps();
+    const inputEl = deps.getInputEl() as ReturnType<typeof createMockInputEl>;
+    const imageContextManager = deps.getImageContextManager()!;
+    (imageContextManager.hasImages as jest.Mock).mockReturnValue(true);
+    return { deps, inputEl, imageContextManager };
+  }
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+    (persistPastedImages as jest.Mock).mockReset();
+  });
+
+  it('restores the draft + images and aborts (no dispatch) when image persistence rejects', async () => {
+    const { deps, inputEl, imageContextManager } = makeImageSendDeps();
+    (imageContextManager.getAttachedImages as jest.Mock).mockReturnValue([pasteImage('img-1', 'a.png')]);
+    (persistPastedImages as jest.Mock).mockRejectedValueOnce(new Error('vault write failed'));
+    inputEl.value = 'important draft';
+    const controller = new InputController(deps);
+
+    // The send resolves (does not reject) — the failure is handled, not thrown up to the caller.
+    await expect(controller.sendMessage()).resolves.toBeUndefined();
+
+    // Draft restored into the reserved (cleared) composer; the turn never dispatched → no data loss.
+    expect(inputEl.value).toBe('important draft');
+    expect((deps as any).mockAgentService.query).not.toHaveBeenCalled();
+    expect(deps.state.messages).toHaveLength(0);
+    // Images were consumed only AFTER persist, so a failure leaves them intact for the retry.
+    expect(imageContextManager.clearImages).not.toHaveBeenCalled();
+    expect(mockNotice).toHaveBeenCalled();
+  });
+
+  it('sends normally when image persistence succeeds (success path unchanged)', async () => {
+    const { deps, inputEl, imageContextManager } = makeImageSendDeps();
+    (imageContextManager.getAttachedImages as jest.Mock).mockReturnValue([pasteImage('img-2', 'b.png')]);
+    (persistPastedImages as jest.Mock).mockResolvedValue(undefined);
+    (deps as any).mockAgentService.query = jest.fn().mockImplementation(() => createMockStream([{ type: 'done' }]));
+    inputEl.value = 'with image';
+    const controller = new InputController(deps);
+
+    await controller.sendMessage();
+
+    expect(persistPastedImages).toHaveBeenCalledTimes(1);
+    expect((deps as any).mockAgentService.query).toHaveBeenCalled();
+    expect(inputEl.value).toBe(''); // consumed on success
+    expect(imageContextManager.clearImages).toHaveBeenCalled();
+  });
+
+  it('does not persist (or restore) for a non-image send — byte-identical path', async () => {
+    const deps = createSendableDeps();
+    const inputEl = deps.getInputEl() as ReturnType<typeof createMockInputEl>;
+    (deps as any).mockAgentService.query = jest.fn().mockImplementation(() => createMockStream([{ type: 'done' }]));
+    inputEl.value = 'no images here';
+    const controller = new InputController(deps);
+
+    await controller.sendMessage();
+
+    expect(persistPastedImages).not.toHaveBeenCalled();
+    expect((deps as any).mockAgentService.query).toHaveBeenCalled();
+    expect(inputEl.value).toBe('');
   });
 });

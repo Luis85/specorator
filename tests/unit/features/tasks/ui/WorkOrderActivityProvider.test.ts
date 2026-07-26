@@ -34,7 +34,7 @@ function harness(overrides: Record<string, unknown> = {}) {
   const plugin: any = {
     settings: { agentBoardWorkOrderFolder: 'Agent Board/tasks' },
     events: { on: jest.fn(() => jest.fn()) },
-    getAllViews: jest.fn(() => [{ leaf, getTabManager: () => ({ getTab: jest.fn(() => ({})), switchToTab }) }]),
+    getAllViews: jest.fn(() => [{ leaf, getTabManager: () => ({ hasTab: jest.fn(() => true), switchToTab }) }]),
     app: { vault: {}, workspace: { revealLeaf } },
     ...overrides,
   };
@@ -227,8 +227,8 @@ describe('WorkOrderActivityProvider', () => {
         { id: 'tab-1', title: 'Active WO', isStreaming: false },
         { id: 'tab-2', title: 'Finished WO', isStreaming: false },
       ]);
-      const getTab = jest.fn((id: string) => (id === 'tab-1' || id === 'tab-2' ? {} : null));
-      const manager = { getTab, switchToTab: jest.fn(), closeTab, listWorkOrderTabs, ...overrides };
+      const hasTab = jest.fn((id: string) => id === 'tab-1' || id === 'tab-2');
+      const manager = { hasTab, switchToTab: jest.fn(), closeTab, listWorkOrderTabs, ...overrides };
       const plugin: any = {
         settings: { agentBoardWorkOrderFolder: 'Agent Board/tasks' },
         events: { on: jest.fn(() => jest.fn()) },

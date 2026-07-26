@@ -2,14 +2,13 @@ import { Notice } from 'obsidian';
 
 import { ProviderRegistry } from '../../../core/providers/ProviderRegistry';
 import { hasForkSupport } from '../../../core/providers/typeGuards';
-import type { ProviderId } from '../../../core/providers/types';
+import { DEFAULT_CHAT_PROVIDER_ID, type ProviderId } from '../../../core/providers/types';
 import type { ChatRuntime } from '../../../core/runtime/ChatRuntime';
 import type { SlashCommand } from '../../../core/types';
 import type { Conversation } from '../../../core/types/chat';
 import { t } from '../../../i18n/i18n';
 import type SpecoratorPlugin from '../../../main';
 import { chooseForkTarget } from '../../../shared/modals/ForkTargetModal';
-import { revealWorkspaceLeaf } from '../../../utils/obsidianCompat';
 import { getTabProviderId } from './providerResolution';
 import {
   activateTab,
@@ -23,6 +22,7 @@ import {
 } from './Tab';
 import { mountTabChrome } from './tabChromeMount';
 import { mountTabComposer } from './tabComposerMount';
+import { type CrossViewConversation, revealCrossViewConversation } from './tabCrossViewReveal';
 import { TabProviderCommandCoordinator } from './TabProviderCommandCoordinator';
 import { activateOpenConversationTab, applyPostActivateAction, deactivatePreviousTab } from './tabSwitchHelpers';
 import {
@@ -90,6 +90,9 @@ export class TabManager implements TabManagerInterface {
   private commandCoordinatorInstance: TabProviderCommandCoordinator | null = null;
   private isRestoringState = false;
 
+  /** False for Team Chat: closing the last chat tab won't auto-mint a blank home tab (its empty state is the roster, not an unbound composer). Also gates the future T7 LRU-eviction close. */
+  autoCreateOnEmpty = true;
+
   /** Guard to prevent concurrent tab switches. */
   private isSwitchingTab = false;
 
@@ -99,21 +102,28 @@ export class TabManager implements TabManagerInterface {
   /** In-flight tab creations reserved against the per-kind cap. */
   private pendingTabReservations = new Map<TabKind, number>();
 
-  /** Tracks nested mutation calls so internal follow-ups do not self-deadlock. */
-  private tabMutationDepth = 0;
+  /** Set once destroy() begins. Every PUBLIC mutation entry point (createTab / switchToTab /
+   *  closeTab / openConversation) rejects/no-ops on this BEFORE it enqueues, so a click or the
+   *  cross-leaf rotation-close arriving during teardown can't append work behind destroy's
+   *  drain and race destroyImpl. Public mutations ALWAYS enqueue (the depth-based inline path
+   *  was removed Round-42 :118) and nested follow-ups call the `*Impl` variants directly, so
+   *  this flag is the sole gate keeping late external mutations out. The memoized promise makes
+   *  destroy() idempotent. */
+  private isDestroying = false;
+  private destroyPromise: Promise<void> | null = null;
 
+  /**
+   * Serializes every PUBLIC tab mutation onto `tabMutationTail`: each op waits for the prior one
+   * to settle, so an external switch/close/open can never run against the half-built state of a
+   * create SUSPENDED mid-hydration. It ALWAYS enqueues — the old `if (tabMutationDepth > 0)
+   * return operation()` inline path (a reentrancy signal from when nested calls went through the
+   * public methods) was only ever reached by an unrelated external mutation arriving while
+   * another was suspended, and ran it inline racing that op (Round-42 :118). Nested follow-ups
+   * do NOT come through here — they call the `*Impl` variants directly — so joining the tail
+   * unconditionally can't self-deadlock.
+   */
   private runTabMutation<T>(operation: () => Promise<T>): Promise<T> {
-    if (this.tabMutationDepth > 0) {
-      return operation();
-    }
-    const result = this.tabMutationTail.then(async () => {
-      this.tabMutationDepth += 1;
-      try {
-        return await operation();
-      } finally {
-        this.tabMutationDepth -= 1;
-      }
-    });
+    const result = this.tabMutationTail.then(() => operation());
     this.tabMutationTail = result.then(
       () => undefined,
       () => undefined,
@@ -248,10 +258,11 @@ export class TabManager implements TabManagerInterface {
   ): Promise<{ pinnedModel?: string; displayModel?: string }> {
     if (options.pinnedModel) return { pinnedModel: options.pinnedModel };
     if (!conversation?.boundAgentId) return {};
-    const projection = await this.plugin.resolveBoundAgent?.(
-      conversation.boundAgentId,
-      conversation.providerId,
-    );
+    // Best-effort display seed — a strict-read I/O error (Round-63) must NOT reject tab creation
+    // (the per-turn model still resolves live), so swallow to no seed.
+    const projection = await Promise.resolve(
+      this.plugin.resolveBoundAgent?.(conversation.boundAgentId, conversation.providerId),
+    ).catch(() => null);
     return { displayModel: projection?.model?.trim() || undefined };
   }
 
@@ -267,6 +278,11 @@ export class TabManager implements TabManagerInterface {
     tabId?: TabId,
     options: CreateTabOptions = {},
   ): Promise<TabData | null> {
+    // Reject creates ISSUED after teardown began so one can't enqueue behind destroy's
+    // drain and mount a tab into a cleared manager. A create already enqueued BEFORE
+    // destroy still completes and is disposed by destroy (:1095). Unconditional on
+    // isDestroying — nested creates use createTabImpl directly, not this path (:120).
+    if (this.isDestroying) return null;
     return this.runTabMutation(() => this.createTabImpl(conversationId, tabId, options));
   }
 
@@ -340,7 +356,7 @@ export class TabManager implements TabManagerInterface {
       this.callbacks.onTabCreated?.(tab);
 
       if (!this.isRestoringState && (activate || !this.activeTabId)) {
-        await this.switchToTab(tab.id);
+        await this.switchToTabImpl(tab.id); // nested in this createTab mutation — not the guarded public path (:120)
       } else if (!this.isRestoringState) {
         this.commandCoordinator.maybePrimeProviderRuntime(tab);
       }
@@ -388,6 +404,7 @@ export class TabManager implements TabManagerInterface {
    * @param tabId The tab to switch to.
    */
   async switchToTab(tabId: TabId): Promise<void> {
+    if (this.isDestroying) return; // no-op an external switch issued after teardown began (:120)
     return this.runTabMutation(() => this.switchToTabImpl(tabId));
   }
 
@@ -423,6 +440,7 @@ export class TabManager implements TabManagerInterface {
    * @returns True if the tab was closed.
    */
   async closeTab(tabId: TabId, force = false): Promise<boolean> {
+    if (this.isDestroying) return false; // no-op an external close issued after teardown began (:120)
     return this.runTabMutation(() => this.closeTabImpl(tabId, force));
   }
 
@@ -473,8 +491,9 @@ export class TabManager implements TabManagerInterface {
     // drops out of the activity dropdown). Recreate a blank chat home tab
     // whenever none remain — activate it only when we just closed the active tab,
     // otherwise keep focus put and let the tab bar surface the new chat badge as
-    // the escape route.
-    if (this.countTabsByKind('chat') === 0) {
+    // the escape route. Skipped when autoCreateOnEmpty is off (Team Chat): its empty
+    // state is the roster, so a blank unbound tab would be a stray ordinary chat.
+    if (this.autoCreateOnEmpty && this.countTabsByKind('chat') === 0) {
       await this.createTabImpl(undefined, undefined, { activate: closedActiveTab });
       return true;
     }
@@ -487,7 +506,7 @@ export class TabManager implements TabManagerInterface {
         : tabIdsBefore[closingIndex - 1];  // Others: go to previous
 
       if (fallbackTabId && this.tabs.has(fallbackTabId)) {
-        await this.switchToTab(fallbackTabId);
+        await this.switchToTabImpl(fallbackTabId); // nested in this close mutation — not the guarded public path (:120)
       }
     }
 
@@ -602,41 +621,43 @@ export class TabManager implements TabManagerInterface {
     conversationId: string,
     options: boolean | OpenConversationOptions = false,
   ): Promise<void> {
-    return this.runTabMutation(() => this.openConversationImpl(conversationId, options));
+    if (this.isDestroying) return; // no-op an external open issued after teardown began (:120)
+    // Round-61: the cross-view reveal/switch is HOISTED out of the mutation tail — holding our own
+    // tail across another leaf's queued switchToTab deadlocked two leaves cross-opening each other.
+    // Round-63: the conversation can still race cross-view AFTER this check but before the tail runs;
+    // openConversationImpl returns that raced owner (never awaiting its op under our tail) so we
+    // reveal the winner here too, tail released — else the open resolves with nothing shown.
+    const crossView = this.plugin.findConversationAcrossViews(conversationId);
+    if (crossView && crossView.view.leaf !== this.view.leaf) {
+      await revealCrossViewConversation(this.plugin.app.workspace, crossView);
+      return;
+    }
+    const raced = await this.runTabMutation(() => this.openConversationImpl(conversationId, options));
+    if (raced && raced.view.leaf !== this.view.leaf) await revealCrossViewConversation(this.plugin.app.workspace, raced);
   }
 
   private async openConversationImpl(
     conversationId: string,
     options: boolean | OpenConversationOptions = false,
-  ): Promise<void> {
-    const requireNewTab = typeof options === 'boolean'
-      ? false
-      : options.requireNewTab ?? false;
-    const preferNewTab = typeof options === 'boolean'
-      ? options
-      : (options.preferNewTab ?? false) || requireNewTab;
-    const activate = typeof options === 'boolean'
-      ? true
-      : options.activate ?? true;
+  ): Promise<CrossViewConversation | void> {
+    const requireNewTab = typeof options === 'boolean' ? false : options.requireNewTab ?? false;
+    const preferNewTab = typeof options === 'boolean' ? options : (options.preferNewTab ?? false) || requireNewTab;
+    const activate = typeof options === 'boolean' ? true : options.activate ?? true;
 
     // Check if conversation is already open in this view's tabs
     for (const tab of this.tabs.values()) {
       if (tab.conversationId === conversationId) {
-        await activateOpenConversationTab((id) => this.switchToTab(id), tab, conversationId);
+        await activateOpenConversationTab((id) => this.switchToTabImpl(id), tab, conversationId); // nested in this open mutation (:120)
         return;
       }
     }
 
-    // Check if conversation is open in another view (split workspace scenario)
-    // Compare view references directly (more robust than leaf comparison)
-    const crossViewResult = this.plugin.findConversationAcrossViews(conversationId);
-    const isSameView = crossViewResult?.view === this.view;
-    if (crossViewResult && !isSameView) {
-      // Focus the other view and switch to its tab instead of opening duplicate
-      await revealWorkspaceLeaf(this.plugin.app.workspace, crossViewResult.view.leaf);
-      await crossViewResult.view.getTabManager()?.switchToTab(crossViewResult.tabId);
-      return;
-    }
+    // Defensive TOCTOU re-check (Round-61/63): a hit here means the conversation raced into ANOTHER
+    // leaf after openConversation()'s pre-tail check (the same-view loop already handled THIS view).
+    // RETURN the raced owner — never await its queued switchToTab under our tail (the deadlock);
+    // openConversation reveals it post-tail so the user's open still surfaces the winner.
+    const raced = this.plugin.findConversationAcrossViews(conversationId);
+    if (raced) return raced;
 
     // Open in current tab or new tab
     if (preferNewTab && this.canCreateTab()) {
@@ -661,14 +682,15 @@ export class TabManager implements TabManagerInterface {
     }
   }
 
-  /**
-   * Creates a new conversation in the active tab.
-   */
   async createNewConversation(): Promise<void> {
+    if (this.isDestroying) return; // no-op a new-conversation reset issued after teardown began (:120)
+    return this.runTabMutation(() => this.createNewConversationImpl());
+  }
+
+  private async createNewConversationImpl(): Promise<void> {
     const activeTab = this.getActiveTab();
     if (activeTab) {
       await activeTab.controllers.conversationController?.createNew();
-      // Sync tab.conversationId with the newly created conversation
       activeTab.conversationId = activeTab.state.currentConversationId;
       this.commandCoordinator.maybePrimeProviderRuntime(activeTab);
     }
@@ -946,11 +968,165 @@ export class TabManager implements TabManagerInterface {
   }
 
   // ============================================
+  // Host migration (Group D commands)
+  //
+  // Purpose-built commands that keep every TabData reach inside TabManager and
+  // expose only core-safe signatures on ChatTabManagerHandle, extending the
+  // broadcastToAllTabs/broadcastToProviderTabs precedent so a second chat-host
+  // view can drive the same lifecycle without core importing feature types.
+  // ============================================
+
+  /**
+   * Fire-and-forget cleanup of every tab's runtime. Guards ONLY on `tab.service`
+   * (NOT `serviceInitialized`), matching the pre-migration
+   * `PluginLifecycle.shutdownActiveRuntimes` guard — intentionally broader than
+   * `broadcastToTabs`, so a constructed-but-uninitialized runtime is still torn
+   * down. Errors are swallowed so one failing cleanup can't strand the rest.
+   */
+  disposeAllRuntimes(): void {
+    for (const tab of this.tabs.values()) {
+      try {
+        void tab.service?.cleanup();
+      } catch {
+        // best-effort: keep tearing down remaining runtimes
+      }
+    }
+  }
+
+  /**
+   * Quiesce every tab bound to `conversationId` before its conversation is
+   * deleted: dispose the conversation controller, cancel any in-flight stream,
+   * then drain hydration and save (both best-effort). Moved from the shell's
+   * `quiesceViewsBeforeConversationDelete`; the per-tab sequencing is unchanged.
+   */
+  async quiesceTabsForConversation(conversationId: string): Promise<void> {
+    for (const tab of this.tabs.values()) {
+      if (tab.conversationId !== conversationId) continue;
+      tab.controllers.conversationController?.dispose();
+      tab.controllers.inputController?.cancelStreaming();
+      await tab.controllers.conversationController?.whenHydrated?.().catch(() => {});
+      await tab.controllers.conversationController?.save().catch(() => {});
+    }
+  }
+
+  /** Reset every tab bound to `conversationId` back to a fresh conversation. */
+  async repairTabsForConversation(conversationId: string): Promise<void> {
+    for (const tab of this.tabs.values()) {
+      if (tab.conversationId !== conversationId) continue;
+      await tab.controllers.conversationController?.createNew({ force: true });
+    }
+  }
+
+  /**
+   * Cancel in-flight streams on every tab whose active provider is in `providerIds`,
+   * and return the ids of ALL affected tabs (streaming or not) as the frozen set to
+   * restart. Split from the restart pass so the env-apply flow can cancel across ALL
+   * views before restarting any — no view keeps streaming on a stale runtime during
+   * another view's restart — and so restart operates on this frozen id set rather than
+   * a live re-enumeration (a tab created afterwards has a new id and is left untouched).
+   */
+  cancelStreamingTabsForProviders(providerIds: ProviderId[]): string[] {
+    const affectedIds: string[] = [];
+    for (const [id, tab] of this.tabs) {
+      if (!providerIds.includes(tab.providerId ?? DEFAULT_CHAT_PROVIDER_ID)) continue;
+      affectedIds.push(id);
+      if (tab.state.isStreaming) tab.controllers.inputController?.cancelStreaming();
+    }
+    return affectedIds;
+  }
+
+  /**
+   * Re-sync + force-restart the runtimes of the given (already-cancelled) tab ids;
+   * when `changed`, drop the session first. Skips ids whose tab was closed between the
+   * cancel pass and here. Returns the count of restarts that threw; uninitialized tabs
+   * count as success.
+   */
+  async restartRuntimeTabs(tabIds: string[], changed: boolean): Promise<number> {
+    let failed = 0;
+    for (const id of tabIds) {
+      const tab = this.tabs.get(id);
+      if (!tab) continue;
+      if (!(await this.resyncTabRuntime(tab, changed))) failed++;
+    }
+    return failed;
+  }
+
+  private async resyncTabRuntime(tab: TabData, changed: boolean): Promise<boolean> {
+    if (!tab.service || !tab.serviceInitialized) return true;
+    try {
+      this.syncTabRuntimeState(tab);
+      // Always FORCE a respawn: a persistent runtime (Claude / Cursor / Codex /
+      // Opencode ACP) keeps a live child that still holds the OLD credentials /
+      // base URL, so a non-forced ensureReady early-returns and the env change
+      // never reaches the process. `changed` additionally drops the session.
+      if (changed) tab.service.resetSession();
+      await tab.service.ensureReady({ force: true });
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  private syncTabRuntimeState(tab: TabData): void {
+    if (!tab.service || !tab.serviceInitialized) return;
+    const conversation = tab.conversationId
+      ? this.plugin.getConversationSync(tab.conversationId)
+      : null;
+    tab.service.syncConversationState(
+      conversation,
+      this.resolveExternalContextPaths(tab, conversation),
+    );
+  }
+
+  /** Prefer the tab's live selection; else the conversation's (when it has context), else the persistent default. */
+  private resolveExternalContextPaths(tab: TabData, conversation: Conversation | null): string[] {
+    const selected = tab.ui.externalContextSelector?.getExternalContexts();
+    if (selected) return selected;
+    const hasContext = (conversation?.messages.length ?? 0) > 0;
+    return hasContext
+      ? conversation?.externalContextPaths ?? []
+      : this.plugin.settings.persistentExternalContextPaths ?? [];
+  }
+
+  /** First tab (in insertion order) bound to `conversationId`, or null. */
+  findTabByConversation(conversationId: string): { tabId: TabId } | null {
+    for (const tab of this.tabs.values()) {
+      if (tab.conversationId === conversationId) return { tabId: tab.id };
+    }
+    return null;
+  }
+
+  /** Whether a tab with this id is currently open. */
+  hasTab(tabId: string): boolean {
+    return this.tabs.has(tabId);
+  }
+
+  // ============================================
   // Cleanup
   // ============================================
 
-  /** Destroys all tabs and cleans up resources. */
-  async destroy(): Promise<void> {
+  /** Destroys all tabs and cleans up resources. Drains any in-flight/queued tab
+   *  mutation FIRST (a createTab suspended mid-hydration must insert its tab before
+   *  teardown, not into a cleared map as a leaked runtime — :197). NOT via
+   *  runTabMutation: destroy must DRAIN the existing tail then run destroyImpl exactly
+   *  once, while `isDestroying` blocks any new public mutation from enqueueing after it
+   *  (routing destroy through the tail could interleave it with a late external op —
+   *  :1095). Memoized for idempotent concurrent teardown. */
+  destroy(): Promise<void> {
+    if (this.destroyPromise) return this.destroyPromise;
+    this.isDestroying = true; // synchronously block creates issued after this point (createTab)
+    this.destroyPromise = this.drainThenDestroy();
+    return this.destroyPromise;
+  }
+
+  private async drainThenDestroy(): Promise<void> {
+    // Drain in-flight/queued mutations (swallow rejections so one can't wedge
+    // teardown), then destroy exactly once.
+    await this.tabMutationTail.catch(() => undefined);
+    await this.destroyImpl();
+  }
+
+  private async destroyImpl(): Promise<void> {
     // Save all conversations in parallel (independent per-tab)
     await Promise.all(
       Array.from(this.tabs.values()).map(

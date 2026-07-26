@@ -10,6 +10,7 @@ import { ProviderRegistry } from '../../core/providers/ProviderRegistry';
 import { ProviderSettingsCoordinator } from '../../core/providers/ProviderSettingsCoordinator';
 import { DEFAULT_CHAT_PROVIDER_ID, type ProviderId } from '../../core/providers/types';
 import { asSettingsBag, VIEW_TYPE_SPECORATOR } from '../../core/types';
+import type { ChatViewHandle } from '../../core/types/PluginContext';
 import type { TabBarPosition } from '../../core/types/settings';
 import { t } from '../../i18n/i18n';
 import type SpecoratorPlugin from '../../main';
@@ -19,17 +20,19 @@ import { rosterAgentToPersona } from '../agents/personaRegistry';
 import { openQuickActionsModal } from '../quickActions/openQuickActionsModal';
 import { dispatchQuickActionToTab } from '../quickActions/runQuickActionForFile';
 import { resolveModelContextWindow } from '../settings/customModels/resolveModelContextWindow';
+import { tabCountsPayload } from './events';
 import {
   type HydrationFailedBannerPayload,
   registerHydrationFailedSubscriber,
 } from './hydration/hydrationFailedSubscriber';
+import { isSpecoratorView } from './isSpecoratorView';
 import { SpecoratorViewWorkOrderBridge } from './SpecoratorViewWorkOrderBridge';
 import {
   getTabProviderId,
   getTabTitle,
   onProviderAvailabilityChanged,
   sendTabInputMessageFromExplicitEnterShortcut,
-  updatePlanModeUI,
+  toggleTabPlanMode,
 } from './tabs/Tab';
 import { TabManager } from './tabs/TabManager';
 import { refreshBoundAgentDisplayModels } from './tabs/tabShared';
@@ -49,7 +52,7 @@ type LoadableView = {
   load: () => Promise<void> | void;
 };
 
-export class SpecoratorView extends ItemView {
+export class SpecoratorView extends ItemView implements ChatViewHandle {
   readonly plugin: SpecoratorPlugin;
   private _workOrderBridge: SpecoratorViewWorkOrderBridge | null = null;
 
@@ -333,11 +336,7 @@ export class SpecoratorView extends ItemView {
     // capacity via the hasSpecoratorLeaf fallback. Now that tabsRestored is true
     // the correct work-order count can be read; fire once so the queue
     // re-evaluates without waiting for the next manual tab create/close.
-    this.plugin.events.emit('chat:tabs-changed', {
-      openCount: this.tabManager?.getTabCount() ?? 0,
-      chatCount: this.tabManager?.countTabsByKind('chat') ?? 0,
-      workOrderCount: this.tabManager?.countTabsByKind('work-order') ?? 0,
-    });
+    this.plugin.events.emit('chat:tabs-changed', tabCountsPayload(this.tabManager));
     this.emitChatShellChange();
     void this.refreshBoundAgentChip();
     this.tabManager?.primeProviderRuntime();
@@ -617,7 +616,9 @@ export class SpecoratorView extends ItemView {
         findConversationTab: (conversationId) => {
           const cross = this.plugin.findConversationAcrossViews(conversationId);
           if (!cross) return null;
-          const tabManager = cross.view === this ? this.tabManager : cross.view.getTabManager();
+          const tabManager = cross.view === this
+            ? this.tabManager
+            : isSpecoratorView(cross.view) ? cross.view.getTabManager() : null;
           return { tabManager, tabId: cross.tabId };
         },
         openConversationInNewTab: async (conversationId) => {
@@ -770,26 +771,14 @@ export class SpecoratorView extends ItemView {
   private wireEventHandlers(): void {
     const activeDocument = this.containerEl.ownerDocument;
 
-    // View-level Shift+Tab to toggle plan mode (works from any focused element)
+    // View-level Shift+Tab to toggle plan mode (works from any focused element). The
+    // toggle body is shared with Team Chat's DM host-events wiring (toggleTabPlanMode) so
+    // the two view-level handlers can't drift.
     this.registerDomEvent(this.containerEl, 'keydown', (e: KeyboardEvent) => {
       if (e.key === 'Tab' && e.shiftKey && !e.isComposing) {
         e.preventDefault();
         const activeTab = this.tabManager?.getActiveTab();
-        if (!activeTab) return;
-        const providerId = getTabProviderId(activeTab, this.plugin);
-        if (!ProviderRegistry.getCapabilities(providerId).supportsPlanMode) return;
-        const current = ProviderSettingsCoordinator.getProviderSettingsSnapshot(
-          this.plugin.settings,
-          providerId,
-        ).permissionMode as string;
-        if (current === 'plan') {
-          const restoreMode = activeTab.state.prePlanPermissionMode ?? 'normal';
-          activeTab.state.prePlanPermissionMode = null;
-          updatePlanModeUI(activeTab, this.plugin, restoreMode);
-        } else {
-          activeTab.state.prePlanPermissionMode = current;
-          updatePlanModeUI(activeTab, this.plugin, 'plan');
-        }
+        if (activeTab) toggleTabPlanMode(activeTab, this.plugin);
       }
     });
 

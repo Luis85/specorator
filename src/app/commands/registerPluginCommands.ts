@@ -19,6 +19,7 @@ import {
   createWorkOrderFromCurrentNoteAndOpenModal,
   createWorkOrderFromSelectionAndOpenModal,
 } from '@/features/tasks/ui/createWorkOrderInteractive';
+import { activateTeamChat } from '@/features/teamChat/activateTeamChat';
 import { t } from '@/i18n/i18n';
 import type SpecoratorPlugin from '@/main';
 import { buildCursorContext } from '@/utils/editor';
@@ -47,6 +48,12 @@ function registerViewCommands(plugin: SpecoratorPlugin, register: RegisterComman
     callback: () => {
       void plugin.activateView();
     },
+  });
+
+  register({
+    id: 'open-team-chat',
+    name: t('commands.openTeamChat'),
+    callback: () => void activateTeamChat(plugin),
   });
 
   register({
