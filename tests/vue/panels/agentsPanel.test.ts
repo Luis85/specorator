@@ -37,7 +37,11 @@ vi.mock('@/core/providers/ProviderRegistry', () => ({
     }),
   },
 }));
+vi.mock('@/features/teamChat/activateTeamChat', () => ({
+  activateTeamChat: vi.fn().mockResolvedValue(undefined),
+}));
 import { AgentDetailEditor } from '@/features/agents/roster/view/AgentDetailEditor';
+import { activateTeamChat } from '@/features/teamChat/activateTeamChat';
 import { confirm } from '@/shared/modals/ConfirmModal';
 
 const agent = {
@@ -79,6 +83,7 @@ describe('AgentsPanel', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     isDirtySpy.mockReturnValue(false);
+    vi.mocked(activateTeamChat).mockResolvedValue(undefined);
     setActivePinia(createPinia());
   });
 
@@ -193,15 +198,11 @@ describe('AgentsPanel mutation flows', () => {
     expect(within(card).getByText('Model One')).toBeTruthy();
   });
 
-  it('Start chat resolves the provider and opens the conversation in a new tab', async () => {
+  it('Start chat opens the Team Chat DM for the agent', async () => {
     const { p } = setupMutable([agent]);
     await screen.findByText('Alice');
     await fireEvent.click(screen.getByRole('button', { name: 'Start chat' }));
-    await waitFor(() => expect(p.createConversation).toHaveBeenCalledWith({
-      providerId: 'claude',
-      boundAgentId: 'roster:a',
-    }));
-    expect(p.openConversation).toHaveBeenCalledWith('conv-1', { requireNewTab: true });
+    await waitFor(() => expect(activateTeamChat).toHaveBeenCalledWith(p, 'roster:a'));
   });
 
   it('Delete confirms, removes through the store (projection cleared), and reloads', async () => {
@@ -370,17 +371,13 @@ describe('AgentsPanel mutation flows', () => {
     await waitFor(() => expect(document.querySelector('.specorator-roster-detail')).toBeNull());
   });
 
-  it('editor onStartChat opens a bound conversation in a new tab', async () => {
+  it('editor onStartChat opens the agent Team Chat DM', async () => {
     const { p } = setupMutable([agent]);
     await screen.findByText('Alice');
     await fireEvent.click(screen.getByRole('button', { name: 'Alice' }));
     await waitFor(() => expect(renderSpy).toHaveBeenCalled());
     editorCallbacks().onStartChat(agent);
-    await waitFor(() => expect(p.createConversation).toHaveBeenCalledWith({
-      providerId: 'claude',
-      boundAgentId: 'roster:a',
-    }));
-    expect(p.openConversation).toHaveBeenCalledWith('conv-1', { requireNewTab: true });
+    await waitFor(() => expect(activateTeamChat).toHaveBeenCalledWith(p, 'roster:a'));
   });
 
   it('query filters cards (incl. no-matches text)', async () => {
@@ -426,25 +423,24 @@ describe('AgentsPanel mutation flows', () => {
   });
 
   it('Start chat shares the row busy gate: single fire, other actions blocked, re-enables on resolve', async () => {
-    const { store, p } = setupMutable([agent]);
+    const { store } = setupMutable([agent]);
     await screen.findByText('Alice');
-    let resolveCreate!: (v: unknown) => void;
-    p.createConversation.mockReturnValue(new Promise((r) => { resolveCreate = r; }));
+    let resolveActivate!: () => void;
+    vi.mocked(activateTeamChat).mockReturnValue(new Promise<void>((r) => { resolveActivate = r; }));
     const cloneSpy = vi.spyOn(store, 'clone');
     const start = screen.getByRole('button', { name: 'Start chat' }) as HTMLButtonElement;
     const dup = screen.getByRole('button', { name: 'Duplicate' }) as HTMLButtonElement;
     await fireEvent.click(start);
     await waitFor(() => expect(start.disabled).toBe(true));
     expect(start.getAttribute('aria-busy')).toBe('true');
-    // Double-click on Start chat: exactly one conversation.
+    // Double-click on Start chat: the DM opens exactly once.
     await fireEvent.click(start);
-    expect(p.createConversation).toHaveBeenCalledTimes(1);
+    expect(activateTeamChat).toHaveBeenCalledTimes(1);
     // The busy row blocks its OTHER actions too (no clone-during-start race).
     await fireEvent.click(dup);
     expect(cloneSpy).not.toHaveBeenCalled();
-    resolveCreate({ id: 'conv-1' });
+    resolveActivate();
     await waitFor(() => expect(start.disabled).toBe(false));
-    expect(p.openConversation).toHaveBeenCalledWith('conv-1', { requireNewTab: true });
   });
 
   // Roster agents are NOT loose vault notes — they're managed through
