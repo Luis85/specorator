@@ -654,7 +654,8 @@
       "favoriteLimitReached": "最多可以收藏 5 個快速動作",
       "tabs": {
         "quickActions": "Quick actions",
-        "skills": "Skills"
+        "skills": "Skills",
+        "commands": "命令"
       }
     },
     "skills": {
@@ -667,6 +668,16 @@
       "searchPlaceholder": "Search skills by name or description…",
       "refreshTooltip": "刷新技能",
       "noResults": "No skills match your search."
+    },
+    "commands": {
+      "emptyAll": "找不到提供者命令。",
+      "emptyHint": "命令來自你的提供者——Claude 讀取 .claude/commands/，已連線的 CLI 也會提供各自的命令。",
+      "providerDisabled": "提供者「{provider}」已停用。請在設定中啟用。",
+      "disabledBadge": "已停用",
+      "searchPlaceholder": "依名稱或描述搜尋命令…",
+      "refreshTooltip": "重新整理命令",
+      "noResults": "沒有符合的命令。",
+      "argumentHint": "需要參數 {hint}——會填入輸入框而不是直接送出。"
     },
     "editor": {
       "titleEdit": "Edit quick action",

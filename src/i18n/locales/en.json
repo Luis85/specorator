@@ -309,7 +309,8 @@
       "favoriteLimitReached": "You can favorite up to 5 quick actions",
       "tabs": {
         "quickActions": "Quick actions",
-        "skills": "Skills"
+        "skills": "Skills",
+        "commands": "Commands"
       }
     },
     "skills": {
@@ -322,6 +323,16 @@
       "searchPlaceholder": "Search skills by name or description…",
       "refreshTooltip": "Refresh skills",
       "noResults": "No skills match your search."
+    },
+    "commands": {
+      "emptyAll": "No provider commands found.",
+      "emptyHint": "Commands come from your providers — Claude reads .claude/commands/, and connected CLIs contribute their own.",
+      "providerDisabled": "Provider '{provider}' is disabled. Enable it in settings.",
+      "disabledBadge": "disabled",
+      "searchPlaceholder": "Search commands by name or description…",
+      "refreshTooltip": "Refresh commands",
+      "noResults": "No commands match your search.",
+      "argumentHint": "Takes arguments {hint} — opens in the composer instead of sending."
     },
     "editor": {
       "titleEdit": "Edit quick action",

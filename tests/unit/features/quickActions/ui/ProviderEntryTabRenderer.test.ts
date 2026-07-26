@@ -3,8 +3,13 @@
  */
 import '../../../../setup/obsidianDom';
 
+import type { CommandTabEntry, ProviderCommandSource } from '@/features/quickActions/commands/types';
 import type { SkillTabEntry, VaultSkillSource } from '@/features/quickActions/skills/types';
-import { SkillsTabRenderer } from '@/features/quickActions/ui/SkillsTabRenderer';
+import {
+  buildCommandsTabConfig,
+  buildSkillsTabConfig,
+} from '@/features/quickActions/ui/entryTabConfigs';
+import { ProviderEntryTabRenderer } from '@/features/quickActions/ui/ProviderEntryTabRenderer';
 
 jest.mock('obsidian', () => ({
   setIcon: jest.fn(),
@@ -50,10 +55,12 @@ function makeSource(opts: {
     }),
     listAllStreaming: jest
       .fn()
-      .mockImplementation(async (cb: StreamingCallback) => {
+      .mockImplementation((cb: StreamingCallback) => {
         calls.listAllStreaming++;
         streamingCallbacks.push(cb);
-        if (opts.defer) return;
+        // Hold the promise open so the renderer's "stream settled" flag stays
+        // false and an empty list keeps painting the skeleton.
+        if (opts.defer) return new Promise<void>(() => undefined);
         const byProv = new Map<string, SkillTabEntry[]>();
         for (const e of opts.streaming ?? []) {
           const bucket = byProv.get(e.providerId) ?? [];
@@ -63,6 +70,7 @@ function makeSource(opts: {
         for (const [pid, entries] of byProv) {
           cb(pid as SkillTabEntry['providerId'], entries);
         }
+        return Promise.resolve();
       }),
     invalidate: jest.fn().mockImplementation(() => {
       calls.invalidate++;
@@ -86,6 +94,21 @@ function makeEntry(overrides: Partial<SkillTabEntry> = {}): SkillTabEntry {
   };
 }
 
+function makeSkillsRenderer(
+  source: VaultSkillSource,
+  onRun: (entry: SkillTabEntry) => void = jest.fn(),
+  onEdit: (entry: SkillTabEntry) => void = jest.fn(),
+  close: () => void = jest.fn(),
+): ProviderEntryTabRenderer<SkillTabEntry> {
+  return new ProviderEntryTabRenderer(
+    buildSkillsTabConfig(source, onRun, onEdit, {
+      close,
+      usageTracker: null,
+      now: () => 0,
+    }),
+  );
+}
+
 function makeHost(): HTMLElement {
   return document.createElement('div');
 }
@@ -95,13 +118,13 @@ async function flush(): Promise<void> {
   await Promise.resolve();
 }
 
-describe('SkillsTabRenderer', () => {
+describe('ProviderEntryTabRenderer — Skills tab config', () => {
   beforeEach(() => jest.clearAllMocks());
 
   describe('render entry point', () => {
     it('returns the search input element for focus management', async () => {
       const source = makeSource();
-      const renderer = new SkillsTabRenderer(source, jest.fn(), jest.fn(), jest.fn());
+      const renderer = makeSkillsRenderer(source);
 
       const input = await renderer.render(makeHost());
 
@@ -123,7 +146,7 @@ describe('SkillsTabRenderer', () => {
       // Phase A but before Phase B fires.
       const cached = [makeEntry({ id: 'claude:cached', name: 'cached-skill' })];
       const source = makeSource({ cached, defer: true });
-      const renderer = new SkillsTabRenderer(source, jest.fn(), jest.fn(), jest.fn());
+      const renderer = makeSkillsRenderer(source);
 
       const host = makeHost();
       await renderer.render(host);
@@ -145,7 +168,7 @@ describe('SkillsTabRenderer', () => {
         makeEntry({ id: 'claude:b', name: 'beta' }),
       ];
       const source = makeSource({ cached, defer: true });
-      const renderer = new SkillsTabRenderer(source, jest.fn(), jest.fn(), jest.fn());
+      const renderer = makeSkillsRenderer(source);
 
       const host = makeHost();
       await renderer.render(host);
@@ -162,7 +185,7 @@ describe('SkillsTabRenderer', () => {
 
     it('paints SKELETON_ROWS=4 skeleton rows when listCachedNow returns empty', async () => {
       const source = makeSource({ defer: true });
-      const renderer = new SkillsTabRenderer(source, jest.fn(), jest.fn(), jest.fn());
+      const renderer = makeSkillsRenderer(source);
 
       const host = makeHost();
       await renderer.render(host);
@@ -190,7 +213,7 @@ describe('SkillsTabRenderer', () => {
         insertPrefix: '$',
       });
       const source = makeSource({ cached: [cachedClaude, cachedCodex], defer: true });
-      const renderer = new SkillsTabRenderer(source, jest.fn(), jest.fn(), jest.fn());
+      const renderer = makeSkillsRenderer(source);
 
       const host = makeHost();
       await renderer.render(host);
@@ -215,7 +238,7 @@ describe('SkillsTabRenderer', () => {
 
     it('accumulates multiple provider callbacks cleanly without duplicates or cross-pollution', async () => {
       const source = makeSource({ defer: true });
-      const renderer = new SkillsTabRenderer(source, jest.fn(), jest.fn(), jest.fn());
+      const renderer = makeSkillsRenderer(source);
 
       const host = makeHost();
       await renderer.render(host);
@@ -249,7 +272,7 @@ describe('SkillsTabRenderer', () => {
     it('exists in the search container with the refresh-cw icon and tooltip', async () => {
       const { setIcon } = jest.requireMock('obsidian') as { setIcon: jest.Mock };
       const source = makeSource();
-      const renderer = new SkillsTabRenderer(source, jest.fn(), jest.fn(), jest.fn());
+      const renderer = makeSkillsRenderer(source);
 
       const host = makeHost();
       await renderer.render(host);
@@ -271,7 +294,7 @@ describe('SkillsTabRenderer', () => {
 
     it('clicking the refresh button calls source.invalidate() then source.listAllStreaming()', async () => {
       const source = makeSource();
-      const renderer = new SkillsTabRenderer(source, jest.fn(), jest.fn(), jest.fn());
+      const renderer = makeSkillsRenderer(source);
 
       const host = makeHost();
       await renderer.render(host);
@@ -305,7 +328,7 @@ describe('SkillsTabRenderer', () => {
         makeEntry({ id: 'claude:b', name: 'tdd', description: 'red green refactor' }),
       ];
       const source = makeSource({ cached, defer: true });
-      const renderer = new SkillsTabRenderer(source, jest.fn(), jest.fn(), jest.fn());
+      const renderer = makeSkillsRenderer(source);
 
       const host = makeHost();
       const input = (await renderer.render(host)) as HTMLInputElement;
@@ -330,7 +353,7 @@ describe('SkillsTabRenderer', () => {
         makeEntry({ id: 'claude:b', name: 'tdd', description: 'red green refactor' }),
       ];
       const source = makeSource({ cached, defer: true });
-      const renderer = new SkillsTabRenderer(source, jest.fn(), jest.fn(), jest.fn());
+      const renderer = makeSkillsRenderer(source);
 
       const host = makeHost();
       const input = (await renderer.render(host)) as HTMLInputElement;
@@ -363,7 +386,7 @@ describe('SkillsTabRenderer', () => {
       const source = makeSource({ cached, defer: true });
       const onRunSkill = jest.fn();
       const close = jest.fn();
-      const renderer = new SkillsTabRenderer(source, onRunSkill, jest.fn(), close);
+      const renderer = makeSkillsRenderer(source, onRunSkill, jest.fn(), close);
 
       const host = makeHost();
       const input = (await renderer.render(host)) as HTMLInputElement;
@@ -386,7 +409,7 @@ describe('SkillsTabRenderer', () => {
       const source = makeSource({ cached, defer: true });
       const onRunSkill = jest.fn();
       const close = jest.fn();
-      const renderer = new SkillsTabRenderer(source, onRunSkill, jest.fn(), close);
+      const renderer = makeSkillsRenderer(source, onRunSkill, jest.fn(), close);
 
       const host = makeHost();
       const input = (await renderer.render(host)) as HTMLInputElement;
@@ -406,7 +429,7 @@ describe('SkillsTabRenderer', () => {
       const source = makeSource({ cached: [entry], defer: true });
       const onRunSkill = jest.fn();
       const close = jest.fn();
-      const renderer = new SkillsTabRenderer(source, onRunSkill, jest.fn(), close);
+      const renderer = makeSkillsRenderer(source, onRunSkill, jest.fn(), close);
 
       const host = makeHost();
       await renderer.render(host);
@@ -435,7 +458,7 @@ describe('SkillsTabRenderer', () => {
       const onRunSkill = jest.fn();
       const onEditSkill = jest.fn();
       const close = jest.fn();
-      const renderer = new SkillsTabRenderer(source, onRunSkill, onEditSkill, close);
+      const renderer = makeSkillsRenderer(source, onRunSkill, onEditSkill, close);
 
       const host = makeHost();
       await renderer.render(host);
@@ -469,12 +492,111 @@ describe('SkillsTabRenderer', () => {
         sourceFilePath: '/home/user/.claude/skills/global/SKILL.md',
       });
       const source = makeSource({ cached: [entry], defer: true });
-      const renderer = new SkillsTabRenderer(source, jest.fn(), jest.fn(), jest.fn());
+      const renderer = makeSkillsRenderer(source);
 
       const host = makeHost();
       await renderer.render(host);
 
       expect(host.querySelector('.specorator-quick-actions-skill-edit')).toBeNull();
     });
+  });
+});
+
+describe('ProviderEntryTabRenderer — Commands tab config', () => {
+  beforeEach(() => jest.clearAllMocks());
+
+  function makeCommand(overrides: Partial<CommandTabEntry> = {}): CommandTabEntry {
+    return {
+      id: 'claude:cmd-review',
+      providerId: 'claude',
+      providerDisplayName: 'Claude',
+      name: 'review',
+      description: 'Review a pull request',
+      insertPrefix: '/',
+      scope: 'vault',
+      providerEnabled: true,
+      ...overrides,
+    };
+  }
+
+  function makeCommandSource(entries: CommandTabEntry[] = []): ProviderCommandSource {
+    return {
+      listAll: jest.fn().mockResolvedValue(entries),
+      listCachedNow: jest.fn().mockReturnValue(entries),
+      listAllStreaming: jest.fn().mockResolvedValue(undefined),
+      invalidate: jest.fn(),
+      dispose: jest.fn(),
+    };
+  }
+
+  function makeCommandsRenderer(
+    source: ProviderCommandSource,
+    onRun: (entry: CommandTabEntry) => void = jest.fn(),
+    close: () => void = jest.fn(),
+  ): ProviderEntryTabRenderer<CommandTabEntry> {
+    return new ProviderEntryTabRenderer(buildCommandsTabConfig(source, onRun, { close }));
+  }
+
+  it('renders command rows under their own DOM classes and command-scoped copy', async () => {
+    const source = makeCommandSource([makeCommand()]);
+    const renderer = makeCommandsRenderer(source);
+
+    const host = makeHost();
+    const input = await renderer.render(host);
+
+    expect(input?.getAttribute('placeholder')).toBe(
+      'quickActions.commands.searchPlaceholder',
+    );
+    const rows = host.querySelectorAll(
+      '.specorator-quick-actions-command-row:not(.is-skeleton)',
+    );
+    expect(rows).toHaveLength(1);
+    expect(rows[0].querySelector('strong')?.textContent).toBe('review');
+    // Commands are provider-owned — no edit affordance is wired for them.
+    expect(host.querySelector('.specorator-quick-actions-skill-edit')).toBeNull();
+  });
+
+  it('renders the argument hint only for commands that declare one', async () => {
+    const source = makeCommandSource([
+      makeCommand({ id: 'claude:cmd-a', name: 'aaa', argumentHint: '[pr-url]' }),
+      makeCommand({ id: 'claude:cmd-b', name: 'bbb' }),
+    ]);
+    const renderer = makeCommandsRenderer(source);
+
+    const host = makeHost();
+    await renderer.render(host);
+
+    const hints = host.querySelectorAll('.specorator-quick-action-hint');
+    expect(hints).toHaveLength(1);
+    expect(hints[0].textContent).toContain('[pr-url]');
+  });
+
+  it('clicking a command row runs it then closes', async () => {
+    const entry = makeCommand({ name: 'review' });
+    const onRun = jest.fn();
+    const close = jest.fn();
+    const renderer = makeCommandsRenderer(makeCommandSource([entry]), onRun, close);
+
+    const host = makeHost();
+    await renderer.render(host);
+
+    (host.querySelector('.specorator-quick-actions-command-row-main') as HTMLElement).click();
+
+    expect(onRun).toHaveBeenCalledWith(expect.objectContaining({ name: 'review' }));
+    expect(close).toHaveBeenCalledTimes(1);
+    expect(onRun.mock.invocationCallOrder[0]).toBeLessThan(close.mock.invocationCallOrder[0]);
+  });
+
+  it('shows the command empty state once the stream settles with nothing', async () => {
+    const renderer = makeCommandsRenderer(makeCommandSource());
+
+    const host = makeHost();
+    await renderer.render(host);
+    await flush();
+
+    expect(host.querySelectorAll('.is-skeleton')).toHaveLength(0);
+    expect(
+      host.querySelector('.specorator-quick-actions-skills-empty-lead')?.textContent,
+    ).toBe('quickActions.commands.emptyAll');
   });
 });

@@ -654,7 +654,8 @@
       "favoriteLimitReached": "Vous pouvez marquer jusqu'à 5 actions rapides en favoris",
       "tabs": {
         "quickActions": "Quick actions",
-        "skills": "Skills"
+        "skills": "Skills",
+        "commands": "Commandes"
       }
     },
     "skills": {
@@ -667,6 +668,16 @@
       "searchPlaceholder": "Search skills by name or description…",
       "refreshTooltip": "Actualiser les skills",
       "noResults": "No skills match your search."
+    },
+    "commands": {
+      "emptyAll": "Aucune commande de fournisseur trouvée.",
+      "emptyHint": "Les commandes viennent de vos fournisseurs : Claude lit .claude/commands/, et les CLI connectées ajoutent les leurs.",
+      "providerDisabled": "Le fournisseur '{provider}' est désactivé. Activez-le dans les paramètres.",
+      "disabledBadge": "désactivé",
+      "searchPlaceholder": "Rechercher des commandes par nom ou description…",
+      "refreshTooltip": "Actualiser les commandes",
+      "noResults": "Aucune commande ne correspond à votre recherche.",
+      "argumentHint": "Attend des arguments {hint} — s’ouvre dans le champ de saisie au lieu d’être envoyée."
     },
     "editor": {
       "titleEdit": "Edit quick action",

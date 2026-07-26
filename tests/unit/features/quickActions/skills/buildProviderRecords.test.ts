@@ -21,7 +21,9 @@ jest.mock('@/core/types/settings', () => ({
 }));
 
 function makePlugin() {
-  return { settings: { dummy: true } } as never;
+  return {
+    settings: { hiddenProviderCommands: { claude: ['Legacy'] } },
+  } as never;
 }
 
 beforeEach(() => {
@@ -51,12 +53,14 @@ describe('buildProviderRecords', () => {
         displayName: 'Claude',
         isEnabled: true,
         commandCatalog: { tag: 'claude' },
+        hiddenNames: new Set(['legacy']),
       },
       {
         providerId: 'codex',
         displayName: 'Codex',
         isEnabled: false,
         commandCatalog: { tag: 'codex' },
+        hiddenNames: new Set<string>(),
       },
     ]);
   });

@@ -8,6 +8,7 @@ import { Notice } from 'obsidian';
 
 import { EventBus } from '@/core/events/EventBus';
 import type { UsageEventMap } from '@/core/usage/events';
+import type { ProviderCommandSource } from '@/features/quickActions/commands/types';
 import type { QuickActionStorage } from '@/features/quickActions/QuickActionStorage';
 import type { VaultSkillSource } from '@/features/quickActions/skills/types';
 import type { QuickAction } from '@/features/quickActions/types';
@@ -85,7 +86,15 @@ const NOOP_AGGREGATOR: VaultSkillSource = {
   invalidate: jest.fn(),
   dispose: jest.fn(),
 };
+const NOOP_COMMANDS: ProviderCommandSource = {
+  listAll: jest.fn().mockResolvedValue([]),
+  listCachedNow: jest.fn().mockReturnValue([]),
+  listAllStreaming: jest.fn().mockResolvedValue(undefined),
+  invalidate: jest.fn(),
+  dispose: jest.fn(),
+};
 const NOOP_ON_RUN_SKILL = jest.fn();
+const NOOP_ON_RUN_COMMAND = jest.fn();
 const NOOP_ON_EDIT_SKILL = jest.fn();
 const NOOP_USAGE_TRACKER = null;
 const NOOP_EVENTS: EventBus<UsageEventMap> = new EventBus<UsageEventMap>();
@@ -108,7 +117,9 @@ describe('QuickActionsModal favorites', () => {
       storage,
       onRun: jest.fn(),
       onRunSkill: NOOP_ON_RUN_SKILL, onEditSkill: NOOP_ON_EDIT_SKILL,
+      onRunCommand: NOOP_ON_RUN_COMMAND,
       aggregator: NOOP_AGGREGATOR,
+      commands: NOOP_COMMANDS,
       usageTracker: NOOP_USAGE_TRACKER,
       events: NOOP_EVENTS,
     });
@@ -129,7 +140,9 @@ describe('QuickActionsModal favorites', () => {
       storage,
       onRun: jest.fn(),
       onRunSkill: NOOP_ON_RUN_SKILL, onEditSkill: NOOP_ON_EDIT_SKILL,
+      onRunCommand: NOOP_ON_RUN_COMMAND,
       aggregator: NOOP_AGGREGATOR,
+      commands: NOOP_COMMANDS,
       usageTracker: NOOP_USAGE_TRACKER,
       events: NOOP_EVENTS,
     });
@@ -155,7 +168,9 @@ describe('QuickActionsModal favorites', () => {
       storage,
       onRun: jest.fn(),
       onRunSkill: NOOP_ON_RUN_SKILL, onEditSkill: NOOP_ON_EDIT_SKILL,
+      onRunCommand: NOOP_ON_RUN_COMMAND,
       aggregator: NOOP_AGGREGATOR,
+      commands: NOOP_COMMANDS,
       usageTracker: NOOP_USAGE_TRACKER,
       events: NOOP_EVENTS,
     });
@@ -182,7 +197,9 @@ describe('QuickActionsModal favorites', () => {
       storage,
       onRun: jest.fn(),
       onRunSkill: NOOP_ON_RUN_SKILL, onEditSkill: NOOP_ON_EDIT_SKILL,
+      onRunCommand: NOOP_ON_RUN_COMMAND,
       aggregator: NOOP_AGGREGATOR,
+      commands: NOOP_COMMANDS,
       usageTracker: NOOP_USAGE_TRACKER,
       events: NOOP_EVENTS,
     });
@@ -209,7 +226,9 @@ describe('QuickActionsModal favorites', () => {
       storage,
       onRun,
       onRunSkill: NOOP_ON_RUN_SKILL, onEditSkill: NOOP_ON_EDIT_SKILL,
+      onRunCommand: NOOP_ON_RUN_COMMAND,
       aggregator: NOOP_AGGREGATOR,
+      commands: NOOP_COMMANDS,
       usageTracker: NOOP_USAGE_TRACKER,
       events: NOOP_EVENTS,
     });
@@ -231,7 +250,9 @@ describe('QuickActionsModal favorites', () => {
       storage,
       onRun: jest.fn(),
       onRunSkill: NOOP_ON_RUN_SKILL, onEditSkill: NOOP_ON_EDIT_SKILL,
+      onRunCommand: NOOP_ON_RUN_COMMAND,
       aggregator: NOOP_AGGREGATOR,
+      commands: NOOP_COMMANDS,
       usageTracker: NOOP_USAGE_TRACKER,
       events: NOOP_EVENTS,
     });
@@ -254,7 +275,9 @@ describe('QuickActionsModal favorites', () => {
       storage,
       onRun: jest.fn(),
       onRunSkill: NOOP_ON_RUN_SKILL, onEditSkill: NOOP_ON_EDIT_SKILL,
+      onRunCommand: NOOP_ON_RUN_COMMAND,
       aggregator: NOOP_AGGREGATOR,
+      commands: NOOP_COMMANDS,
       onFavoritesChanged,
       usageTracker: NOOP_USAGE_TRACKER,
       events: NOOP_EVENTS,
@@ -278,7 +301,9 @@ describe('QuickActionsModal favorites', () => {
       storage,
       onRun: jest.fn(),
       onRunSkill: NOOP_ON_RUN_SKILL, onEditSkill: NOOP_ON_EDIT_SKILL,
+      onRunCommand: NOOP_ON_RUN_COMMAND,
       aggregator: NOOP_AGGREGATOR,
+      commands: NOOP_COMMANDS,
       onFavoritesChanged,
       usageTracker: NOOP_USAGE_TRACKER,
       events: NOOP_EVENTS,
@@ -303,7 +328,9 @@ describe('QuickActionsModal favorites', () => {
       storage,
       onRun: jest.fn(),
       onRunSkill: NOOP_ON_RUN_SKILL, onEditSkill: NOOP_ON_EDIT_SKILL,
+      onRunCommand: NOOP_ON_RUN_COMMAND,
       aggregator: NOOP_AGGREGATOR,
+      commands: NOOP_COMMANDS,
       onFavoritesChanged,
       usageTracker: NOOP_USAGE_TRACKER,
       events: NOOP_EVENTS,
@@ -330,7 +357,9 @@ describe('QuickActionsModal favorites', () => {
       storage,
       onRun: jest.fn(),
       onRunSkill: NOOP_ON_RUN_SKILL, onEditSkill: NOOP_ON_EDIT_SKILL,
+      onRunCommand: NOOP_ON_RUN_COMMAND,
       aggregator: NOOP_AGGREGATOR,
+      commands: NOOP_COMMANDS,
       onFavoritesChanged,
       usageTracker: NOOP_USAGE_TRACKER,
       events: NOOP_EVENTS,
@@ -355,7 +384,9 @@ describe('QuickActionsModal favorites', () => {
       storage,
       onRun: jest.fn(),
       onRunSkill: NOOP_ON_RUN_SKILL, onEditSkill: NOOP_ON_EDIT_SKILL,
+      onRunCommand: NOOP_ON_RUN_COMMAND,
       aggregator: NOOP_AGGREGATOR,
+      commands: NOOP_COMMANDS,
       onFavoritesChanged,
       usageTracker: NOOP_USAGE_TRACKER,
       events: NOOP_EVENTS,
@@ -382,7 +413,9 @@ describe('QuickActionsModal favorites', () => {
       storage,
       onRun: jest.fn(),
       onRunSkill: NOOP_ON_RUN_SKILL, onEditSkill: NOOP_ON_EDIT_SKILL,
+      onRunCommand: NOOP_ON_RUN_COMMAND,
       aggregator: NOOP_AGGREGATOR,
+      commands: NOOP_COMMANDS,
       onFavoritesChanged,
       usageTracker: NOOP_USAGE_TRACKER,
       events: NOOP_EVENTS,
@@ -430,7 +463,9 @@ describe('QuickActionsModal favorites', () => {
       storage,
       onRun: jest.fn(),
       onRunSkill: NOOP_ON_RUN_SKILL, onEditSkill: NOOP_ON_EDIT_SKILL,
+      onRunCommand: NOOP_ON_RUN_COMMAND,
       aggregator: NOOP_AGGREGATOR,
+      commands: NOOP_COMMANDS,
       usageTracker: NOOP_USAGE_TRACKER,
       events: NOOP_EVENTS,
     });
@@ -487,7 +522,9 @@ describe('QuickActionsModal favorites', () => {
       storage,
       onRun: jest.fn(),
       onRunSkill: NOOP_ON_RUN_SKILL, onEditSkill: NOOP_ON_EDIT_SKILL,
+      onRunCommand: NOOP_ON_RUN_COMMAND,
       aggregator: NOOP_AGGREGATOR,
+      commands: NOOP_COMMANDS,
       onFavoritesChanged,
       usageTracker: NOOP_USAGE_TRACKER,
       events: NOOP_EVENTS,

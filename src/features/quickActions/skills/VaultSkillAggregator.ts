@@ -1,7 +1,6 @@
-import type { Logger } from '../../../core/logging/Logger';
 import type { ProviderCommandEntry } from '../../../core/providers/commands/ProviderCommandEntry';
-import type { ProviderId } from '../../../core/providers/types';
 import type { VaultFileAdapter } from '../../../core/storage/VaultFileAdapter';
+import { ProviderEntryAggregator } from '../providerEntryAggregator';
 import {
   parsePersistedSkillIndex,
   serializePersistedSkillIndex,
@@ -13,18 +12,6 @@ import type {
   VaultSkillSource,
 } from './types';
 
-interface CachedBucket {
-  entries: ProviderCommandEntry[];
-  expiresAt: number;
-  /**
-   * Hydrated-from-disk buckets carry this. They serve the instant cold paint
-   * (`listCachedNow` ignores TTL/stale) but must be revalidated on the first
-   * real fetch instead of trusted for the full TTL — see `hydrate()`. A live
-   * fetch always writes a non-stale bucket, so it is one-shot.
-   */
-  stale?: boolean;
-}
-
 const DEFAULT_TTL_MS = 60_000;
 const PERSIST_DEBOUNCE_MS = 1_000;
 const DEFAULT_CACHE_PATH = '.specorator/cache/skill-index.json';
@@ -34,48 +21,41 @@ const DEFAULT_CACHE_PATH = '.specorator/cache/skill-index.json';
  * provider's `ProviderCommandCatalog.listVaultEntries()` for skill-kind
  * entries, and tags them with provider metadata for the Skills tab.
  *
- * Per-provider failures are swallowed so a single broken provider cannot
- * blank out the entire Skills tab. When a `logger` is supplied, the failure
- * is logged at warn level under the `quickActions` scope.
- *
- * Raw `ProviderCommandEntry[]` buckets are cached per provider for `ttlMs`
- * so the modal can re-open without rehitting disk. Provider metadata
- * (`providerEnabled`, `providerDisplayName`) is re-evaluated from the live
- * `ProviderRecord` on every `listAll()` call so a provider toggled while
- * the cache is warm is reflected without invalidation.
+ * TTL caching, in-flight deduplication, the generation guard, streaming
+ * fan-out, and swallow-and-log failure handling live in
+ * `ProviderEntryAggregator` (shared with `ProviderCommandAggregator`); this
+ * subclass adds the persisted disk index and the `vaultSkill.changed`
+ * invalidation seam.
  *
  * When an `eventBus` is supplied, the aggregator subscribes to
  * `vaultSkill.changed` and invalidates the matching provider's bucket so
  * vault edits propagate without a manual refresh. `dispose()` unsubscribes.
  */
-export class VaultSkillAggregator implements VaultSkillSource {
-  private readonly logger?: Logger;
-  private readonly ttlMs: number;
-  private readonly nowMs: () => number;
-  private readonly cache = new Map<ProviderId, CachedBucket>();
-  private readonly inFlight = new Map<ProviderId, Promise<ProviderCommandEntry[]>>();
-  /**
-   * Per-provider generation guard. Each live fetch claims the provider's slot
-   * with a monotonic token; `invalidate()` drops it and a newer fetch replaces
-   * it. A fetch commits its result (and releases its in-flight slot) only while
-   * it still holds the current token, so a stale in-flight listing that resolves
-   * after an invalidate — the onload prewarm landing after a skill mutation —
-   * can't repopulate the bucket with pre-write data.
-   */
-  private fetchGeneration = 0;
-  private readonly bucketGeneration = new Map<ProviderId, number>();
+export class VaultSkillAggregator
+  extends ProviderEntryAggregator<ProviderCommandEntry, SkillTabEntry>
+  implements VaultSkillSource {
   private eventBusUnsubscribe: (() => void) | undefined;
   private readonly cacheAdapter?: VaultFileAdapter;
   private readonly cachePath: string;
   private persistTimer: number | null = null;
 
   constructor(
-    private getProviderRecords: () => ProviderRecord[],
+    getProviderRecords: () => ProviderRecord[],
     options: VaultSkillAggregatorOptions = {},
   ) {
-    this.logger = options.logger?.scope('quickActions');
-    this.ttlMs = options.ttlMs ?? DEFAULT_TTL_MS;
-    this.nowMs = options.nowMs ?? Date.now;
+    super({
+      getProviderRecords,
+      label: 'vault skill',
+      ttlMs: options.ttlMs ?? DEFAULT_TTL_MS,
+      nowMs: options.nowMs ?? Date.now,
+      ...(options.logger ? { logger: options.logger } : {}),
+      fetchEntries: async (record) => {
+        const all = await record.commandCatalog.listVaultEntries();
+        return all.filter((e) => e.kind === 'skill');
+      },
+      mapEntries: (raw, record) => mapSkillBucket(raw, record),
+      onBucketCommitted: () => this.schedulePersist(),
+    });
     if (options.eventBus) {
       this.eventBusUnsubscribe = options.eventBus.on(
         'vaultSkill.changed',
@@ -94,7 +74,7 @@ export class VaultSkillAggregator implements VaultSkillSource {
    * the schema version does not match, the failure is swallowed and a
    * `warn` breadcrumb is emitted; callers continue with a cold cache.
    *
-   * Hydrated buckets are flagged `stale`: they back the synchronous first
+   * Hydrated buckets are seeded `stale`: they back the synchronous first
    * paint (`listCachedNow`) but are NOT trusted for the TTL. On-disk and
    * enablement state can drift while Obsidian is closed — a plugin disabled
    * via the CLI, a skill added or deleted — so the onload prewarm (or the
@@ -112,62 +92,11 @@ export class VaultSkillAggregator implements VaultSkillSource {
         this.logger?.warn('skill index hydrate skipped: malformed or schema mismatch');
         return;
       }
-      const expiresAt = this.nowMs() + this.ttlMs;
       for (const [providerId, entries] of buckets) {
-        this.cache.set(providerId, { entries, expiresAt, stale: true });
+        this.seedStaleBucket(providerId, entries);
       }
     } catch (err: unknown) {
       this.logger?.warn('skill index hydrate failed', { err });
-    }
-  }
-
-  async listAll(): Promise<SkillTabEntry[]> {
-    const records = this.getProviderRecords();
-    const buckets = await Promise.all(
-      records.map((r) => this.fetchBucket(r).then((raw) => this.mapBucket(raw, r))),
-    );
-    return buckets.flat();
-  }
-
-  listCachedNow(): SkillTabEntry[] {
-    const records = this.getProviderRecords();
-    const out: SkillTabEntry[] = [];
-    for (const record of records) {
-      const cached = this.cache.get(record.providerId);
-      if (!cached) continue;
-      out.push(...this.mapBucket(cached.entries, record));
-    }
-    return out;
-  }
-
-  async listAllStreaming(
-    onProviderResolved: (providerId: ProviderId, entries: SkillTabEntry[]) => void,
-  ): Promise<void> {
-    const records = this.getProviderRecords();
-    await Promise.all(
-      records.map(async (r) => {
-        const raw = await this.fetchBucket(r);
-        try {
-          onProviderResolved(r.providerId, this.mapBucket(raw, r));
-        } catch (err: unknown) {
-          this.logger?.warn('skill stream callback threw', {
-            providerId: r.providerId,
-            err,
-          });
-        }
-      }),
-    );
-  }
-
-  invalidate(providerId?: ProviderId): void {
-    if (providerId === undefined) {
-      this.cache.clear();
-      this.inFlight.clear();
-      this.bucketGeneration.clear();
-    } else {
-      this.cache.delete(providerId);
-      this.inFlight.delete(providerId);
-      this.bucketGeneration.delete(providerId);
     }
   }
 
@@ -180,9 +109,7 @@ export class VaultSkillAggregator implements VaultSkillSource {
     }
     this.eventBusUnsubscribe?.();
     this.eventBusUnsubscribe = undefined;
-    this.cache.clear();
-    this.inFlight.clear();
-    this.bucketGeneration.clear();
+    this.clearBuckets();
   }
 
   /** Trailing-edge debounce: collapse near-simultaneous fetches into a single write. */
@@ -198,104 +125,38 @@ export class VaultSkillAggregator implements VaultSkillSource {
   /** Snapshot the in-memory cache and write the index. Failures logged at warn; never throws. */
   private async flushPersist(): Promise<void> {
     if (!this.cacheAdapter) return;
-    const buckets = new Map<ProviderId, ProviderCommandEntry[]>();
-    for (const [providerId, bucket] of this.cache) {
-      buckets.set(providerId, bucket.entries);
-    }
-    const body = serializePersistedSkillIndex(buckets, this.nowMs());
+    const body = serializePersistedSkillIndex(this.snapshotBuckets(), this.nowMs());
     try {
       await this.cacheAdapter.write(this.cachePath, body);
     } catch (err: unknown) {
       this.logger?.warn('skill index persist failed', { err });
     }
   }
+}
 
-  /** Returns the raw cached or freshly-fetched provider entries (skill kind). */
-  private fetchBucket(record: ProviderRecord): Promise<ProviderCommandEntry[]> {
-    const now = this.nowMs();
-    const cached = this.cache.get(record.providerId);
-    // A `stale` bucket (hydrated from disk) serves the cold paint but forces one
-    // revalidation here, so an offline change can't ride the persisted TTL.
-    if (cached && !cached.stale && cached.expiresAt > now) {
-      return Promise.resolve(cached.entries);
-    }
-    const existing = this.inFlight.get(record.providerId);
-    if (existing) return existing;
+function mapSkillBucket(
+  raw: ProviderCommandEntry[],
+  record: ProviderRecord,
+): SkillTabEntry[] {
+  return raw
+    .map((entry) => mapSkillEntry(entry, record))
+    .sort((a, b) => a.name.localeCompare(b.name));
+}
 
-    // Claim the provider slot; only commit while we still hold it (see
-    // `bucketGeneration`). An invalidate() or newer fetch since we started
-    // retires this one so a late resolution can't overwrite the fresh bucket.
-    const generation = ++this.fetchGeneration;
-    this.bucketGeneration.set(record.providerId, generation);
-    const isCurrent = (): boolean =>
-      this.bucketGeneration.get(record.providerId) === generation;
-
-    const promise = (async () => {
-      try {
-        const all = await record.commandCatalog.listVaultEntries();
-        const raw = all.filter((e) => e.kind === 'skill');
-        if (isCurrent()) {
-          this.cache.set(record.providerId, {
-            entries: raw,
-            expiresAt: this.nowMs() + this.ttlMs,
-          });
-          this.schedulePersist();
-        }
-        return raw;
-      } catch (err: unknown) {
-        this.logger?.warn('vault skill aggregation failed', {
-          providerId: record.providerId,
-          err,
-        });
-        // Preserve the last-known-good entries — the hydrated bucket being
-        // revalidated, or a prior fetch — rather than erasing usable skills (and
-        // persisting the empty set) after a transient provider failure. Read the
-        // bucket fresh so a concurrent `invalidate()` still wins. A normal
-        // (non-`stale`) TTL serves the preserved entries without thrashing
-        // retries; it re-fetches on the next cycle.
-        const preserved = this.cache.get(record.providerId)?.entries ?? [];
-        if (isCurrent()) {
-          this.cache.set(record.providerId, {
-            entries: preserved,
-            expiresAt: this.nowMs() + this.ttlMs,
-          });
-          this.schedulePersist();
-        }
-        return preserved;
-      } finally {
-        // Only release the slot if it's still ours: a superseding fetch may have
-        // claimed `inFlight` already, and deleting it would break its dedup.
-        if (isCurrent()) this.inFlight.delete(record.providerId);
-      }
-    })();
-    this.inFlight.set(record.providerId, promise);
-    return promise;
-  }
-
-  private mapBucket(
-    raw: ProviderCommandEntry[],
-    record: ProviderRecord,
-  ): SkillTabEntry[] {
-    return raw
-      .map((e) => this.mapEntry(e, record))
-      .sort((a, b) => a.name.localeCompare(b.name));
-  }
-
-  private mapEntry(
-    entry: ProviderCommandEntry,
-    record: ProviderRecord,
-  ): SkillTabEntry {
-    const prefix = entry.insertPrefix === '$' ? '$' : '/';
-    return {
-      id: `${record.providerId}:${entry.id}`,
-      providerId: record.providerId,
-      providerDisplayName: record.displayName,
-      name: entry.name,
-      description: entry.description ?? '',
-      insertPrefix: prefix,
-      sourceFilePath: entry.sourceFilePath ?? null,
-      scope: entry.scope,
-      providerEnabled: record.isEnabled,
-    };
-  }
+function mapSkillEntry(
+  entry: ProviderCommandEntry,
+  record: ProviderRecord,
+): SkillTabEntry {
+  const prefix: '/' | '$' = entry.insertPrefix === '$' ? '$' : '/';
+  return {
+    id: `${record.providerId}:${entry.id}`,
+    providerId: record.providerId,
+    providerDisplayName: record.displayName,
+    name: entry.name,
+    description: entry.description ?? '',
+    insertPrefix: prefix,
+    sourceFilePath: entry.sourceFilePath ?? null,
+    scope: entry.scope,
+    providerEnabled: record.isEnabled,
+  };
 }

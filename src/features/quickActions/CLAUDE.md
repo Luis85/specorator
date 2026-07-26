@@ -1,6 +1,6 @@
 # Quick Actions Feature
 
-Vault-defined one-tap prompts surfaced through the chat composer modal. The modal hosts two tabs: Quick Actions (vault-authored prompt notes) and Skills (read-only listing of provider-discovered skills routed to a provider-matched chat tab).
+Vault-defined one-tap prompts surfaced through the chat composer modal. The modal hosts three pickers plus a stats tab: Quick Actions (vault-authored prompt notes), Skills (read-only listing of provider-discovered skills routed to a provider-matched chat tab), and Commands (the provider slash commands the composer's `/` dropdown would offer).
 
 ## Modal Construction
 
@@ -12,7 +12,7 @@ All modal sites go through `openQuickActionsModal(plugin, { onRun, file? })`:
 | Chat header toolbar | `SpecoratorView.ts` `quickActionsBtn` | Sends prompt into the currently active tab; any unsent composer draft is folded in below the prompt as context (`includeComposerDraft` on `sendMessage`) and the composer is cleared | `null` |
 | WO card right-click | `src/features/tasks/ui/workOrderContextMenu.ts` | `runQuickActionForFile` (favorites) / `openContextMenuQuickAction` (picker) | the WO note `TFile` |
 
-`openQuickActionsModal` owns the shared wiring: `QuickActionStorage` (`plugin.storage.getAdapter()`) and the Skills-tab `onRunSkill` callback that routes to `runVaultSkill`. The Skills-tab `aggregator` parameter is read from `plugin.vaultSkillAggregator` (the plugin-lifetime singleton — see [Skills Tab Caching](#skills-tab-caching)); a transient fallback aggregator is built only when the modal is opened before `completeDeferredOnload()` has run. Adding a third modal entry point means calling the helper — never reassembling the wiring inline.
+`openQuickActionsModal` owns the shared wiring: `QuickActionStorage` (`plugin.storage.getAdapter()`), the Skills-tab `onRunSkill` callback that routes to `runVaultSkill`, and the Commands-tab `onRunCommand` callback that routes to `runProviderCommand`. The Skills-tab `aggregator` parameter is read from `plugin.vaultSkillAggregator` and the Commands-tab `commands` parameter from `plugin.providerCommandAggregator` (both plugin-lifetime singletons — see [Skills Tab Caching](#skills-tab-caching) and [Commands Tab](#commands-tab)); transient fallbacks are built only when the modal is opened before `completeDeferredOnload()` has run. Adding a third modal entry point means calling the helper — never reassembling the wiring inline.
 
 ## Capture Seam (`openCaptureFromMessage`)
 
@@ -35,6 +35,20 @@ A "blank" tab counts as reusable only when draft-free — no unsent composer tex
 **Attached-context carry**: because a quick action / library skill usually lands in a FRESH tab (the active tab holds a draft, or the picker's provider/model forces a new one), and a fresh tab does not inherit the files/folders/images the user attached, both `runQuickActionForFile` and `runVaultSkill` snapshot the active tab's user-attached context via `snapshotUserAttachedContext(getActiveTab())` BEFORE resolving the target, then re-apply it with `applyUserAttachedContext(targetTab, …)` AFTER the switch (so the welcome reset can't wipe it) and BEFORE the right-clicked pill + dispatch. The snapshot carries **files + folders + images** (`imageContextManager.getAttachedImages()` → `setImages`, appended to the target's own) — everything the user attached. Without this the run went out with the prompt but none of the context. The snapshot excludes the current note (the destination auto-attaches its own).
 
 The chat-header quick-action button (`dispatchQuickActionToTab` → the active tab, no switch) needs no carry: `sendMessage({ includeComposerDraft: true })` already folds the active tab's files/folders (mention suffix) + images (`imageContextManager`) + composer text straight into the send.
+
+## Commands Tab
+
+`ProviderCommandAggregator` walks the same `buildProviderRecords` list as the Skills tab but asks each provider's `ProviderCommandCatalog.listDropdownEntries({ includeBuiltIns: true })` for **command**-kind entries.
+
+**Why the dropdown listing, not `listVaultEntries()`.** The composer's `/` dropdown is the authority on what a provider actually resolves. Claude's runtime listing folds in SDK built-ins, plugin commands, and `.claude/commands/`; Opencode's commands exist ONLY at runtime (its `listVaultEntries()` returns `[]`). Sourcing the tab from the vault listing — the way the Skills tab does — would have shown a subset for Claude and nothing at all for Opencode. This is also why the Skills-tab aggregator's `kind === 'skill'` filter is the reason commands were invisible before this tab existed.
+
+**Why no disk index.** A provider's command set is session state: Claude's is empty until a runtime warms up or the cold SDK probe lands. A persisted index would hydrate a set that no longer matches the running providers, and re-deriving it costs one catalog call. The in-memory per-provider TTL (60 s), the in-flight dedup, the generation guard, and the tab's Refresh button are the whole freshness model — there is no `vaultSkill.changed`-style invalidation seam because nothing in-app authors provider commands.
+
+**Not pre-warmed at onload.** A cold Claude catalog answers `listDropdownEntries` by probing the SDK, which spawns a subprocess; that is not a cost to pay on every vault open. The cache fills on the quick-actions toolbar `mouseenter` pre-warm (alongside the skills pre-warm) and on first open.
+
+**Hidden commands are honored.** `ProviderRecord.hiddenNames` carries the user's `hiddenProviderCommands` set for that provider, and the aggregator drops matching rows — a command suppressed from the composer dropdown must not reappear in the picker. Entries are also de-duplicated by lower-cased name, because a cold Claude catalog falls back to the vault listing while a warm one returns the SDK superset.
+
+`runProviderCommand(plugin, entry, file)` mirrors `runVaultSkill` — same live `ProviderRegistry.isEnabled` re-check, same `resolveProviderChatTab` routing, same attached-context carry, same switch-then-attach-pill ordering — with one deliberate difference: a command that declares an `argumentHint` is **seeded** into the composer (`seedComposerDraft('/name ')`) rather than sent, because dispatching a bare `/name` would run a different command than the one the user picked. Argument-less commands send immediately.
 
 ## Skills Tab Caching
 
@@ -77,5 +91,6 @@ The Vue **Library** Skills panel (`features/library/vue/panels/SkillsPanel.vue`)
 ## Gotchas
 
 - `QuickActionsModalCallbacks.aggregator` is typed as the `VaultSkillSource` interface (`listAll`, `listCachedNow`, `listAllStreaming`, `invalidate`, `dispose`) — not the concrete `VaultSkillAggregator` class — so the modal doesn't couple to a single source implementation and tests don't need `as unknown` casts.
-- `SkillsTabRenderer` owns all skills-side state and DOM. The modal shell only handles the tab strip + delegates body rendering. Don't move skills state back onto the modal — it shares its instance with the Quick Actions tab and TS can't track which tab assigned which input element.
+- `ProviderEntryTabRenderer` owns all Skills/Commands state and DOM; the per-tab specifics (DOM classes, icon, i18n copy, usage badge, row actions) come from `entryTabConfigs.ts`. The modal shell only handles the tab strip + delegates body rendering. Don't move that state back onto the modal — it shares its instance with the Quick Actions tab and TS can't track which tab assigned which input element.
+- The renderer's skeleton is shown only until a full streaming pass **settles**; once it does, an empty list paints the empty-state copy. Before that, a provider with genuinely zero entries showed a pulsing skeleton forever.
 - `ProviderCommandEntry.sourceFilePath` is set for entries backed by a file on disk. For vault-relative paths (`.claude/skills/<name>/SKILL.md`) the file is editable; for host-absolute paths (read-only user skills under `~/.claude/skills/`) it is not. It is undefined for runtime-discovered entries (Opencode skills) and SDK built-ins. The Skills tab gates its "Edit in Claude settings" button on `isCloneableSkillPath(sourceFilePath)` (vault-relative only) — not bare presence — so read-only user skills, whose host-absolute path is truthy but which the settings manager filters out, don't get a dead Edit button. `.cursor/skills` is now a vault root too, so Cursor project skills pass that gate; because Cursor has no in-settings skill manager, `openQuickActionsModal.onEditSkill` routes Cursor entries to the Library's in-place `SkillEditorModal` instead of `openSpecoratorProviderSettings`, so the button isn't half-wired.

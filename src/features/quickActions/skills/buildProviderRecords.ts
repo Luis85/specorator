@@ -1,3 +1,4 @@
+import { getHiddenProviderCommandSet } from '../../../core/providers/commands/hiddenCommands';
 import { ProviderRegistry } from '../../../core/providers/ProviderRegistry';
 import { ProviderWorkspaceRegistry } from '../../../core/providers/ProviderWorkspaceRegistry';
 import { asSettingsBag } from '../../../core/types/settings';
@@ -6,8 +7,8 @@ import type { ProviderRecord } from './types';
 
 /**
  * Builds a `ProviderRecord` for every registered provider that exposes a
- * command catalog. Used by the Skills tab aggregator across all modal
- * entry points (context menu, header toolbar, per-tab toolbar).
+ * command catalog. Used by the Skills and Commands tab aggregators across all
+ * modal entry points (context menu, header toolbar, per-tab toolbar).
  */
 export function buildProviderRecords(plugin: SpecoratorPlugin): ProviderRecord[] {
   const settings = asSettingsBag(plugin.settings);
@@ -19,6 +20,7 @@ export function buildProviderRecords(plugin: SpecoratorPlugin): ProviderRecord[]
       displayName: ProviderRegistry.getProviderDisplayName(providerId),
       isEnabled: ProviderRegistry.isEnabled(providerId, settings),
       commandCatalog: catalog,
+      hiddenNames: getHiddenProviderCommandSet(plugin.settings, providerId),
     }];
   });
 }

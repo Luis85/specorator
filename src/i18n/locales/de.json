@@ -654,7 +654,8 @@
       "favoriteLimitReached": "Du kannst bis zu 5 Schnellaktionen als Favoriten markieren",
       "tabs": {
         "quickActions": "Quick actions",
-        "skills": "Skills"
+        "skills": "Skills",
+        "commands": "Befehle"
       }
     },
     "skills": {
@@ -667,6 +668,16 @@
       "searchPlaceholder": "Search skills by name or description…",
       "refreshTooltip": "Skills aktualisieren",
       "noResults": "No skills match your search."
+    },
+    "commands": {
+      "emptyAll": "Keine Anbieterbefehle gefunden.",
+      "emptyHint": "Befehle stammen von deinen Anbietern – Claude liest .claude/commands/, und verbundene CLIs steuern eigene bei.",
+      "providerDisabled": "Anbieter '{provider}' ist deaktiviert. Aktiviere ihn in den Einstellungen.",
+      "disabledBadge": "deaktiviert",
+      "searchPlaceholder": "Befehle nach Name oder Beschreibung suchen…",
+      "refreshTooltip": "Befehle aktualisieren",
+      "noResults": "Keine Befehle entsprechen deiner Suche.",
+      "argumentHint": "Erwartet Argumente {hint} – wird im Eingabefeld geöffnet statt gesendet."
     },
     "editor": {
       "titleEdit": "Edit quick action",
