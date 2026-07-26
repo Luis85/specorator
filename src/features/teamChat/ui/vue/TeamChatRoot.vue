@@ -51,7 +51,9 @@ const railTrack = computed(() => (collapsed.value ? `${COLLAPSED_RAIL_WIDTH}px` 
 
 function onResize(width: number): void {
   store.setRailWidth(width);
-  callbacks?.onRailGeometryChange({ collapsed: store.railCollapsed, width: store.railWidth });
+  // Persist the PREFERENCE, not the fitted render width: a drag inside a cramped leaf would
+  // otherwise write the clamped value back and lose what the user actually chose.
+  callbacks?.onRailGeometryChange({ collapsed: store.railCollapsed, width: store.preferredRailWidth });
 }
 
 /**

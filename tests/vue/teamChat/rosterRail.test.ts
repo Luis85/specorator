@@ -521,6 +521,41 @@ describe('narrow-leaf auto-collapse (effective vs preferred state)', () => {
     expect(store.railWidth).toBe(401); // 721 - 320, not the 420 hard ceiling
   });
 
+  // Round-73: the fit must be REVERSIBLE. Writing it back over the only width made the clamp
+  // lossy — a 420px rail squeezed by a 721px leaf became 401px permanently, so widening the
+  // leaf again could never restore the width the user chose.
+  it('restores the preferred width when the leaf grows back', async () => {
+    mountRoot(makePlugin(TEAM), makeCallbacks());
+    await awaitRoster();
+    const store = useTeamChatStore();
+    store.setRailNarrow(false, 1200);
+    store.setRailWidth(420);
+    expect(store.railWidth).toBe(420);
+
+    store.setRailNarrow(false, 721);  // the leaf shrinks…
+    expect(store.railWidth).toBe(401); // …and the rail fits itself to it
+    store.setRailNarrow(false, 1200); // …then grows back
+
+    expect(store.railWidth).toBe(420);          // the user's width returns
+    expect(store.preferredRailWidth).toBe(420); // because the preference was never overwritten
+  });
+
+  // …and what gets PERSISTED is the preference too, so the restore survives a reload.
+  it('persists the preferred width, not the width a cramped leaf fitted it to', async () => {
+    const callbacks = makeCallbacks();
+    mountRoot(makePlugin(TEAM), callbacks);
+    await awaitRoster();
+    const store = useTeamChatStore();
+    store.setRailNarrow(false, 721);
+    store.setRailWidth(420);
+    expect(store.railWidth).toBe(401); // rendered narrower than asked
+    vi.mocked(callbacks.onRailGeometryChange).mockClear();
+
+    await fireEvent.click(screen.getByLabelText(t('teamChat.railCollapse')));
+
+    expect(vi.mocked(callbacks.onRailGeometryChange)).toHaveBeenCalledWith({ collapsed: true, width: 420 });
+  });
+
   it('keeps the override while the narrow pane still fits rail + transcript', async () => {
     mountRoot(makePlugin(TEAM), makeCallbacks());
     const list = await awaitRoster();

@@ -53,7 +53,10 @@ export const useTeamChatStore = defineStore('team-chat', () => {
    *  writes them and the root reads them for its grid template, so they need a
    *  shared reactive home. The view persists them (per leaf) off the same values. */
   const railCollapsed = shallowRef(false);
-  const railWidth = shallowRef(DEFAULT_RAIL_WIDTH);
+  /** The width the USER chose, kept separately from the width actually rendered. Overwriting
+   *  one with the other made the fit LOSSY: a 420px rail squeezed by a 721px leaf became 401px
+   *  permanently, so widening the leaf again could never restore the preference. */
+  const preferredRailWidth = shallowRef(DEFAULT_RAIL_WIDTH);
   /** Layout state, NOT a preference: true while the leaf is too narrow for the full rail.
    *  Kept separate from `railCollapsed` so widening restores exactly what the user chose,
    *  and deliberately NOT exposed — consumers read the derived `railIsCollapsed`, so no
@@ -75,6 +78,10 @@ export const useTeamChatStore = defineStore('team-chat', () => {
    *  expanded rows clipped inside a 56px track. */
   const railIsCollapsed = computed(() =>
     railCollapsed.value || (railNarrow.value && !railNarrowOverride.value));
+  /** The width to RENDER: the preference, re-fitted to whatever the leaf can currently afford.
+   *  Derived rather than assigned, so every fit is reversible — shrink the leaf and the rail
+   *  narrows, widen it and the user's own width comes back. */
+  const railWidth = computed(() => fitRailWidth(preferredRailWidth.value));
 
   function setAgents(next: RosterAgent[]): void {
     agents.value = next;
@@ -113,12 +120,7 @@ export const useTeamChatStore = defineStore('team-chat', () => {
   }
 
   function setRailNarrow(next: boolean, leafWidth = 0): void {
-    if (leafWidth > 0 && leafWidth !== lastLeafWidth.value) {
-      lastLeafWidth.value = leafWidth;
-      // Re-fit an over-wide rail to the new leaf. Display-only: the stored PREFERENCE is
-      // written from the drag handler, so a wider leaf later restores the width they chose.
-      railWidth.value = fitRailWidth(railWidth.value);
-    }
+    if (leafWidth > 0) lastLeafWidth.value = leafWidth; // `railWidth` re-derives off this
     if (railNarrow.value !== next) {
       railNarrow.value = next;
       railNarrowOverride.value = false; // a threshold crossing re-asserts the width-driven default
@@ -156,10 +158,10 @@ export const useTeamChatStore = defineStore('team-chat', () => {
     return railCollapsed.value;
   }
 
-  /** Clamped on the way in so neither a restored view state nor a drag can hide the rail or
-   *  starve the transcript. */
+  /** Records the user's PREFERENCE, bounded only by the hard rail limits. The leaf-relative
+   *  fit happens in `railWidth`, so a squeeze never destroys what they picked. */
   function setRailWidth(next: number): void {
-    railWidth.value = fitRailWidth(Math.round(next));
+    preferredRailWidth.value = Math.min(MAX_RAIL_WIDTH, Math.max(MIN_RAIL_WIDTH, Math.round(next)));
     dropOverrideIfCramped(); // below the floor even a MINIMUM rail starves the chat: collapse instead
   }
 
@@ -192,6 +194,7 @@ export const useTeamChatStore = defineStore('team-chat', () => {
     railCollapsed,
     railIsCollapsed,
     railWidth,
+    preferredRailWidth,
     setAgents,
     setSelected,
     setEditedFiles,

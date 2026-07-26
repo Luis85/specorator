@@ -305,8 +305,11 @@ reaches `{ leaf, getTabManager() }`, so a second host is reuse, not a fork.
   Every width now clamps to `leafWidth - MIN_TRANSCRIPT_WIDTH`, on drag AND on measurement, so
   a shrinking leaf re-fits an over-wide rail. `MIN_RAIL_WIDTH` still wins at the bottom: below
   `MIN_RAIL_WIDTH + MIN_TRANSCRIPT_WIDTH` no width works and `dropOverrideIfCramped` collapses
-  to the icon rail instead. The re-fit is display-only — the stored preference is written from
-  the drag handler, so a wider leaf later restores the width the user actually chose.
+  to the icon rail instead. The fit is REVERSIBLE because it is DERIVED, not assigned:
+  `preferredRailWidth` holds what the user chose and `railWidth` is
+  `computed(() => fitRailWidth(preferred))`. Writing the fit back over the single width made it
+  lossy — a 420px rail squeezed by a 721px leaf became 401px permanently, so widening again
+  could never restore it. Both persistence call sites write the PREFERENCE, never the fit.
 - **A user-initiated DM close is NON-FORCED and resolved CROSS-LEAF.** `closeTeamChatDmTab`
   forces by default (eviction and rotation must close regardless of state), but the menu
   action passes `force: false` so `closeTabImpl` re-checks `isStreaming` INSIDE

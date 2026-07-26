@@ -125,7 +125,7 @@ function toggleCollapse(): void {
   // The store owns the flip: it derives from the EFFECTIVE state (so a narrow-forced rail
   // reads "Expand" and actually expands) and returns the preference to persist.
   const collapsed = teamChatStore.toggleRail();
-  callbacks?.onRailGeometryChange({ collapsed, width: teamChatStore.railWidth });
+  callbacks?.onRailGeometryChange({ collapsed, width: teamChatStore.preferredRailWidth });
 }
 
 // --- Per-row context menu (design §1.5) --------------------------------------------
