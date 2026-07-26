@@ -45,13 +45,14 @@ jest.mock('@/features/teamChat/teamChatDmTabs', () => ({
   evictLruDmIfNeeded: jest.fn().mockResolvedValue(undefined),
 }));
 
-// Round-62 helpers: the view keeps thin call sites; the wiring logic + tests live in
-// teamChatFileEvents.test.ts / teamChatHydrationBanner.test.ts. Here we mock them to
+// Round-62/64/65 helpers: the view keeps thin call sites; the wiring logic + tests live in
+// teamChatHostEvents.test.ts / teamChatHydrationBanner.test.ts. Here we mock them to
 // assert the onOpen/onClose lifecycle + delegation without the real vault/event plumbing.
-jest.mock('@/features/teamChat/teamChatFileEvents', () => ({
-  // Round-64: the wiring now returns a disposer (offrefs the refs on a re-entrant onOpen); the mock
-  // hands back a fresh jest.fn() per call so the lifecycle tests can assert dispose-and-recreate.
-  registerTeamChatDmFileEvents: jest.fn(() => jest.fn()),
+jest.mock('@/features/teamChat/teamChatHostEvents', () => ({
+  // Round-64/65: the wiring returns a single disposer (offrefs refs + removes DOM listeners on a
+  // re-entrant onOpen); the mock hands back a fresh jest.fn() per call so the lifecycle tests can
+  // assert dispose-and-recreate.
+  registerTeamChatDmHostEvents: jest.fn(() => jest.fn()),
 }));
 jest.mock('@/features/teamChat/teamChatHydrationBanner', () => ({
   createDmHydrationBanner: jest.fn(() => ({
@@ -62,7 +63,7 @@ jest.mock('@/features/teamChat/teamChatHydrationBanner', () => ({
 
 import { TabManager } from '@/features/chat/tabs/TabManager';
 import { restoreTeamChatDmTabs } from '@/features/teamChat/teamChatDmTabs';
-import { registerTeamChatDmFileEvents } from '@/features/teamChat/teamChatFileEvents';
+import { registerTeamChatDmHostEvents } from '@/features/teamChat/teamChatHostEvents';
 import { createDmHydrationBanner } from '@/features/teamChat/teamChatHydrationBanner';
 import { TeamChatView } from '@/features/teamChat/TeamChatView';
 
@@ -93,9 +94,10 @@ function makeView(): any {
   view.leaf = { setViewState: jest.fn().mockResolvedValue(undefined) };
   view.contentEl = createMockEl();
   view.tabContentEl = createMockEl();
-  view.registerEvent = jest.fn();     // ItemView method; Object.create skips it (used by the file-events wiring)
+  view.registerEvent = jest.fn();     // ItemView method; Object.create skips it (used by the host-events wiring)
+  view.containerEl = createMockEl();  // onOpen threads this into the host-events wiring (keydown target / click-away doc)
   view.hydrationBanner = null;        // class-field initializer is skipped by Object.create (Round-62)
-  view.dmFileEventsDispose = null;    // ditto — the DM file-events disposer handle (Round-64 Fix A)
+  view.dmHostEventsDispose = null;    // ditto — the DM host-events disposer handle (Round-64/65)
   view.tabManager = null;
   view.tabsRestored = false;
   view.selectedAgentId = null;
@@ -900,24 +902,26 @@ describe('TeamChatView — onClose teardown', () => {
   });
 });
 
-// Round-62: the two SpecoratorView-parity wirings the Team Chat host was missing —
-// the DM file-context cache vault events (Fix 2) and the DM hydration-failure banner
-// (Fix 3). The wiring logic + ownership gate live in the helper modules (mocked here);
-// these assert the view's thin call sites + the presence-mirroring subscribe lifecycle.
-describe('TeamChatView — DM file events + hydration banner (Round-62)', () => {
+// Round-62/65: the SpecoratorView-parity wirings the Team Chat host was missing — the DM
+// host events (file-context cache vault events + mention click-away + Shift+Tab plan toggle,
+// folded into one disposer) and the DM hydration-failure banner. The wiring logic + ownership
+// gate live in the helper modules (mocked here); these assert the view's thin call sites + the
+// presence-mirroring subscribe lifecycle.
+describe('TeamChatView — DM host events + hydration banner (Round-62/65)', () => {
   beforeEach(() => jest.clearAllMocks());
 
-  it('registers the DM file-context vault events on open, reading the live active tab + this.registerEvent', async () => {
+  it('registers the DM host events on open, reading the live active tab + containerEl + this.registerEvent', async () => {
     const view = makeView();
 
     await view.onOpen();
 
-    expect(registerTeamChatDmFileEvents).toHaveBeenCalledWith(
+    expect(registerTeamChatDmHostEvents).toHaveBeenCalledWith(
       view.plugin,
       expect.any(Function),
+      view.containerEl,
       expect.any(Function),
     );
-    const [, getActiveTab, registerEvent] = (registerTeamChatDmFileEvents as jest.Mock).mock.calls[0];
+    const [, getActiveTab, , registerEvent] = (registerTeamChatDmHostEvents as jest.Mock).mock.calls[0];
     // The accessor reads the LIVE manager off `this` (survives a manager rebuild).
     view.tabManager = { getActiveTab: jest.fn(() => 'ACTIVE-DM') };
     expect(getActiveTab()).toBe('ACTIVE-DM');
@@ -963,14 +967,14 @@ describe('TeamChatView — DM file events + hydration banner (Round-62)', () => 
     expect(view.hydrationBanner).toBe((createDmHydrationBanner as jest.Mock).mock.results[1].value);
   });
 
-  // Round-64 Fix A: the file-events registration was UNCONDITIONAL, unlike the presence/roster/banner
-  // subscriptions above it — so a re-entrant onOpen (popout / leaf-move, no interleaved onClose)
-  // registered ANOTHER 5 vault/workspace listeners while the prior 5 stayed live until unload, growing
-  // the listener count on every rebuild. It must now dispose-and-recreate like its neighbors.
-  it('re-entrant onOpen disposes the prior DM file-event registration before re-registering (no leak, Round-64)', async () => {
+  // Round-64/65: the host-events registration must dispose-and-recreate like the presence/roster/banner
+  // subscriptions — a re-entrant onOpen (popout / leaf-move, no interleaved onClose) would otherwise
+  // leave the prior vault/workspace + DOM listeners live until unload, growing the listener count on
+  // every rebuild. The single disposer (offrefs refs + removes DOM listeners) is called before re-registering.
+  it('re-entrant onOpen disposes the prior DM host-event registration before re-registering (no leak, Round-64/65)', async () => {
     const view = makeView();
     await view.onOpen();
-    const firstDispose = (registerTeamChatDmFileEvents as jest.Mock).mock.results[0].value;
+    const firstDispose = (registerTeamChatDmHostEvents as jest.Mock).mock.results[0].value;
 
     // A re-entrant onOpen (tabManager set → the teardown branch runs), no interleaved onClose.
     view.tabManager = {
@@ -979,20 +983,20 @@ describe('TeamChatView — DM file events + hydration banner (Round-62)', () => 
     };
     await view.onOpen();
 
-    // The prior batch was offref'd, and exactly one fresh registration replaced it (net +0 listeners).
+    // The prior batch was disposed, and exactly one fresh registration replaced it (net +0 listeners).
     expect(firstDispose).toHaveBeenCalledTimes(1);
-    expect(registerTeamChatDmFileEvents).toHaveBeenCalledTimes(2);
+    expect(registerTeamChatDmHostEvents).toHaveBeenCalledTimes(2);
   });
 
-  it('onClose disposes the DM file-event registration (Round-64)', async () => {
+  it('onClose disposes the DM host-event registration (Round-64/65)', async () => {
     const view = makeView();
     await view.onOpen();
-    const dispose = (registerTeamChatDmFileEvents as jest.Mock).mock.results[0].value;
+    const dispose = (registerTeamChatDmHostEvents as jest.Mock).mock.results[0].value;
 
     await view.onClose();
 
     expect(dispose).toHaveBeenCalledTimes(1);
-    expect(view.dmFileEventsDispose).toBeNull();
+    expect(view.dmHostEventsDispose).toBeNull();
   });
 
   it('consumePendingHydrationError delegates to the banner controller (the restoreConversation seam)', async () => {

@@ -32,7 +32,7 @@ import {
   getTabTitle,
   onProviderAvailabilityChanged,
   sendTabInputMessageFromExplicitEnterShortcut,
-  updatePlanModeUI,
+  toggleTabPlanMode,
 } from './tabs/Tab';
 import { TabManager } from './tabs/TabManager';
 import { refreshBoundAgentDisplayModels } from './tabs/tabShared';
@@ -771,26 +771,14 @@ export class SpecoratorView extends ItemView implements ChatViewHandle {
   private wireEventHandlers(): void {
     const activeDocument = this.containerEl.ownerDocument;
 
-    // View-level Shift+Tab to toggle plan mode (works from any focused element)
+    // View-level Shift+Tab to toggle plan mode (works from any focused element). The
+    // toggle body is shared with Team Chat's DM host-events wiring (toggleTabPlanMode) so
+    // the two view-level handlers can't drift.
     this.registerDomEvent(this.containerEl, 'keydown', (e: KeyboardEvent) => {
       if (e.key === 'Tab' && e.shiftKey && !e.isComposing) {
         e.preventDefault();
         const activeTab = this.tabManager?.getActiveTab();
-        if (!activeTab) return;
-        const providerId = getTabProviderId(activeTab, this.plugin);
-        if (!ProviderRegistry.getCapabilities(providerId).supportsPlanMode) return;
-        const current = ProviderSettingsCoordinator.getProviderSettingsSnapshot(
-          this.plugin.settings,
-          providerId,
-        ).permissionMode as string;
-        if (current === 'plan') {
-          const restoreMode = activeTab.state.prePlanPermissionMode ?? 'normal';
-          activeTab.state.prePlanPermissionMode = null;
-          updatePlanModeUI(activeTab, this.plugin, restoreMode);
-        } else {
-          activeTab.state.prePlanPermissionMode = current;
-          updatePlanModeUI(activeTab, this.plugin, 'plan');
-        }
+        if (activeTab) toggleTabPlanMode(activeTab, this.plugin);
       }
     });
 

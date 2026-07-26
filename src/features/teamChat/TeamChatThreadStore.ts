@@ -189,23 +189,38 @@ export class TeamChatThreadStore {
     // Dedupe the initial disk read so a read-only `get` racing the first resolve
     // can't trigger a second read; disk is consulted on this load only, cached after.
     if (!this.loading) {
-      this.loading = this.readRoomsFromDisk().then((rooms) => {
-        this.rooms = rooms;
-        this.loading = null;
-        return rooms;
-      });
+      this.loading = this.readRoomsFromDisk().then(
+        (rooms) => {
+          this.rooms = rooms;
+          this.loading = null;
+          return rooms;
+        },
+        (error) => {
+          // A REJECTED read (real adapter I/O failure) must not wedge the store: clear
+          // the memoized in-flight promise (leaving `this.rooms` null) so a later call
+          // RE-READS instead of returning this same rejected promise forever. Nothing was
+          // cached, and readRoomsFromDisk propagated BEFORE any write, so no empty-map
+          // clobbering write can follow — the caller retries onto an intact threads.json.
+          this.loading = null;
+          throw error;
+        },
+      );
     }
     return this.loading;
   }
 
   private async readRoomsFromDisk(): Promise<Record<string, string>> {
+    // Genuine absence → empty map; the next resolveOrCreate writes a clean file.
+    if (!(await this.deps.adapter.exists(THREADS_PATH))) return {};
+    // Real I/O: a throw from exists()/read() PROPAGATES. Collapsing it to {} would
+    // cache the empty map, and the next resolveOrCreate would rewrite threads.json from
+    // `{ …{}, [key]: id }`, DELETING every OTHER agent's DM mapping (Round-65 data-loss;
+    // the roster-store getStrict class from Round-63). Only a CORRUPT/unparseable file
+    // (JSON.parse throws) collapses to {} — mirrors AgentRosterStore's malformed-json tolerance.
+    const raw = await this.deps.adapter.read(THREADS_PATH);
     try {
-      if (!(await this.deps.adapter.exists(THREADS_PATH))) return {};
-      return this.extractRooms(JSON.parse(await this.deps.adapter.read(THREADS_PATH)));
+      return this.extractRooms(JSON.parse(raw));
     } catch {
-      // Absent, unreadable, or corrupt threads.json → treat as empty; the next
-      // resolveOrCreate rewrites a clean file (mirrors AgentRosterStore's tolerance
-      // of malformed json).
       return {};
     }
   }

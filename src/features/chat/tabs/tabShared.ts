@@ -322,3 +322,27 @@ export function updatePlanModeUI(tab: TabData, plugin: SpecoratorPlugin, mode: s
   // Vue owns the permission/plan-mode widgets; re-project so they repaint.
   tab.composer?.emit();
 }
+
+/**
+ * View-level Shift+Tab plan-mode toggle for one tab, shared by the sidebar
+ * (`SpecoratorView.wireEventHandlers`) and Team Chat's DM host-events wiring so the two
+ * view-level handlers can't drift. No-op when the tab's provider lacks plan-mode support;
+ * otherwise flips between 'plan' and the saved pre-plan permission mode (restoring
+ * `prePlanPermissionMode`, or 'normal' when unset).
+ */
+export function toggleTabPlanMode(tab: TabData, plugin: SpecoratorPlugin): void {
+  const providerId = getTabProviderId(tab, plugin);
+  if (!ProviderRegistry.getCapabilities(providerId).supportsPlanMode) return;
+  const current = ProviderSettingsCoordinator.getProviderSettingsSnapshot(
+    plugin.settings,
+    providerId,
+  ).permissionMode as string;
+  if (current === 'plan') {
+    const restoreMode = tab.state.prePlanPermissionMode ?? 'normal';
+    tab.state.prePlanPermissionMode = null;
+    updatePlanModeUI(tab, plugin, restoreMode);
+  } else {
+    tab.state.prePlanPermissionMode = current;
+    updatePlanModeUI(tab, plugin, 'plan');
+  }
+}

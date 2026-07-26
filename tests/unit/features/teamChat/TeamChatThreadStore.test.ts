@@ -57,14 +57,16 @@ function makeHarness(options: HarnessOptions = {}) {
     await Promise.resolve();
     files.set(path, content);
   });
+  const exists = jest.fn(async (path: string) => files.has(path));
+  const read = jest.fn(async (path: string) => {
+    await Promise.resolve();
+    const value = files.get(path);
+    if (value === undefined) throw new Error(`missing file: ${path}`);
+    return value;
+  });
   const adapter = {
-    exists: jest.fn(async (path: string) => files.has(path)),
-    read: jest.fn(async (path: string) => {
-      await Promise.resolve();
-      const value = files.get(path);
-      if (value === undefined) throw new Error(`missing file: ${path}`);
-      return value;
-    }),
+    exists,
+    read,
     writeAtomic,
   } as unknown as VaultFileAdapter;
 
@@ -114,6 +116,8 @@ function makeHarness(options: HarnessOptions = {}) {
     store,
     files,
     writeAtomic,
+    exists,
+    read,
     createConversation,
     changed,
     events,
@@ -215,6 +219,77 @@ describe('TeamChatThreadStore', () => {
     // Absent file: a read-only `get` returns null rather than throwing.
     const absent = makeHarness();
     await expect(absent.store.get('roster:zzz')).resolves.toBeNull();
+  });
+
+  // Round-65 Fix 2 (DATA-LOSS): only GENUINE absence (exists=false) and a CORRUPT
+  // file (JSON.parse throws) may collapse to {}. A real adapter failure (exists()
+  // or read() throws) must PROPAGATE — swallowing it caches an empty map, and the
+  // next resolveOrCreate rewrites threads.json from `{ …{}, [key]: id }`, DELETING
+  // every other agent's DM mapping (same class as Round-63's roster getStrict fix).
+  describe('read I/O failure isolation (Round-65 Fix 2)', () => {
+    it('returns {} on genuine absence (exists=false) without ever reading', async () => {
+      const h = makeHarness(); // no seedFile → exists resolves false
+      const id = await h.store.resolveOrCreate('roster:a');
+      expect(id).toBeTruthy();
+      expect(h.exists).toHaveBeenCalled();
+      expect(h.read).not.toHaveBeenCalled(); // absence short-circuits before the read
+    });
+
+    it('returns {} on a corrupt/unparseable file (JSON.parse throws), not a propagated error', async () => {
+      const h = makeHarness({ seedFile: '{ not valid json' });
+      // read SUCCEEDS (file present) but parse throws → treated as empty, no throw.
+      const id = await h.store.resolveOrCreate('roster:a');
+      expect(id).toBeTruthy();
+      expect(h.read).toHaveBeenCalled();
+      expect(h.readThreads()).toEqual({ version: 1, rooms: { 'roster:a': id } });
+    });
+
+    it('PROPAGATES when adapter.exists() throws (real I/O failure), never swallowing to {}', async () => {
+      const h = makeHarness();
+      h.exists.mockRejectedValueOnce(new Error('exists io'));
+      await expect(h.store.resolveOrCreate('roster:a')).rejects.toThrow('exists io');
+      expect(h.writeAtomic).not.toHaveBeenCalled(); // no empty-map clobbering write
+    });
+
+    it('PROPAGATES when adapter.read() throws (real I/O failure), never swallowing to {}', async () => {
+      const h = makeHarness({ seedFile: JSON.stringify({ version: 1, rooms: { 'roster:a': 'dm-a' } }) });
+      h.read.mockRejectedValueOnce(new Error('read io'));
+      await expect(h.store.get('roster:a')).rejects.toThrow('read io');
+    });
+
+    it('a failed first read does NOT cache {} and does NOT clobber an existing threads.json', async () => {
+      // Other agents' DM mappings are already durable on disk.
+      const h = makeHarness({
+        seedFile: JSON.stringify({ version: 1, rooms: { 'roster:a': 'dm-a', 'roster:b': 'dm-b' } }),
+        existingConversations: [
+          conversationOn('dm-a', 'roster:a', 'claude'),
+          conversationOn('dm-b', 'roster:b', 'claude'),
+        ],
+      });
+      h.read.mockRejectedValueOnce(new Error('transient vault io'));
+
+      // Resolving a THIRD agent while the first read fails must reject AND write nothing —
+      // the pre-fix bug cached {} and rewrote threads.json to just { roster:c }, deleting a+b.
+      await expect(h.store.resolveOrCreate('roster:c')).rejects.toThrow('transient vault io');
+      expect(h.writeAtomic).not.toHaveBeenCalled();
+      expect(h.readThreads()).toEqual({ version: 1, rooms: { 'roster:a': 'dm-a', 'roster:b': 'dm-b' } });
+
+      // Retry: loadRooms re-reads (not wedged), sees the real map, adds roster:c, keeps a+b.
+      const id = await h.store.resolveOrCreate('roster:c');
+      expect(h.readThreads()).toEqual({
+        version: 1,
+        rooms: { 'roster:a': 'dm-a', 'roster:b': 'dm-b', 'roster:c': id },
+      });
+    });
+
+    it('re-reads on a later call after a rejected first read (loadRooms is not wedged)', async () => {
+      const h = makeHarness({ seedFile: JSON.stringify({ version: 1, rooms: { 'roster:a': 'dm-a' } }) });
+      h.read.mockRejectedValueOnce(new Error('io'));
+
+      await expect(h.store.get('roster:a')).rejects.toThrow('io'); // first read rejected
+      await expect(h.store.get('roster:a')).resolves.toBe('dm-a'); // re-read, not a cached rejection
+      expect(h.read).toHaveBeenCalledTimes(2);
+    });
   });
 
   it('re-persists and re-emits on retry after writeAtomic fails (no stale disk state)', async () => {

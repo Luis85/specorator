@@ -22,7 +22,7 @@ export {
   resolveBlankTabDefaultProviderId,
 } from './tabModelPolicy';
 export { onProviderAvailabilityChanged } from './tabProviderSync';
-export { updatePlanModeUI } from './tabShared';
+export { toggleTabPlanMode, updatePlanModeUI } from './tabShared';
 export {
   buildToolbarActionCallbacks,
   initializeTabUI,

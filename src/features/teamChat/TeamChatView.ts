@@ -14,7 +14,7 @@ import { openEditedFile } from '../chat/tabs/tabUi';
 import type { PersistedTabManagerState } from '../chat/tabs/types';
 import { applyDmEditedFilesSetting, applyDmHiddenCommands, noticeRemovedAgentDms, projectTeamChatSnapshot, reconcileRestoredDmProviders, refreshDmModelState, rotateChangedDmProviders } from './teamChatDmRefresh';
 import { openTeamChatDmForSelection, ownedDisplacedDmId, restoreTeamChatDmTabs, serializeOnTail, touchDmRecency } from './teamChatDmTabs';
-import { registerTeamChatDmFileEvents } from './teamChatFileEvents';
+import { registerTeamChatDmHostEvents } from './teamChatHostEvents';
 import { createDmHydrationBanner, type DmHydrationBannerController } from './teamChatHydrationBanner';
 import type { TeamChatThreadStore } from './TeamChatThreadStore';
 import { createTeamChatPinia } from './ui/vue/globalPinia';
@@ -74,8 +74,8 @@ export class TeamChatView extends ItemView implements ChatViewHandle {
   /** DM hydration-failure → inline banner controller (Round-62 Fix 3): owns the pending map +
    *  `conversation:hydration-failed` subscription; disposed/re-created like presence/roster. */
   private hydrationBanner: DmHydrationBannerController | null = null;
-  /** Disposer for the DM file-context vault/workspace events (Round-64 Fix A): dispose+recreate per onOpen so a re-entrant rebuild can't leak the prior 5 listeners (mirrors presence/roster/banner). */
-  private dmFileEventsDispose: (() => void) | null = null;
+  /** Disposer for the DM host events — file-context vault/workspace events (Round-62/64) PLUS the mention click-away + Shift+Tab plan toggle (Round-65 Fix #1/#3). Dispose+recreate per onOpen so a re-entrant rebuild can't leak the prior listeners (mirrors presence/roster/banner). */
+  private dmHostEventsDispose: (() => void) | null = null;
   /** The DM this leaf is mid-open; the banner ownership gate reads it via `isOpeningConversation` so a pre-bind hydration error stashes on the OPENING leaf only, not every leaf (Round-64 Fix B). */
   private openingConversationId: string | null = null;
   readonly isOpeningConversation = (conversationId: string): boolean => this.openingConversationId === conversationId;
@@ -171,8 +171,8 @@ export class TeamChatView extends ItemView implements ChatViewHandle {
     // cache fresh (Round-62 Fix 2). Both dispose+recreate per onOpen — no leak on re-entry (Round-64 Fix A).
     this.hydrationBanner?.dispose();
     this.hydrationBanner = createDmHydrationBanner(this.plugin, this);
-    this.dmFileEventsDispose?.();
-    this.dmFileEventsDispose = registerTeamChatDmFileEvents(this.plugin, () => this.tabManager?.getActiveTab() ?? null, (ref) => this.registerEvent(ref));
+    this.dmHostEventsDispose?.();
+    this.dmHostEventsDispose = registerTeamChatDmHostEvents(this.plugin, () => this.tabManager?.getActiveTab() ?? null, this.containerEl, (ref) => this.registerEvent(ref));
   }
 
   /** Builds the tab engine into the Vue-provided content host, then restores the
@@ -296,8 +296,8 @@ export class TeamChatView extends ItemView implements ChatViewHandle {
     this.rosterChangedUnsubscribe = null;
     this.hydrationBanner?.dispose();
     this.hydrationBanner = null;
-    this.dmFileEventsDispose?.();
-    this.dmFileEventsDispose = null;
+    this.dmHostEventsDispose?.();
+    this.dmHostEventsDispose = null;
     await this.destroyTabRuntime();
     // Streaming DMs gone; surviving leaves recompute presence (destroyTab skips the callbacks) (:261).
     this.plugin.events.emit('teamChat:presence');
