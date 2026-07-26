@@ -56,10 +56,12 @@ import {
   createOutgoingUserMessage,
   type DispatchedTurnContext,
   type FinishedTurn,
+  isCompactInvocation,
   normalizeTabModelOverride,
   type OutgoingTurn,
   persistComposerImagesOrRestore,
   type PlanApprovalOutcome,
+  resolveComposerImagesForMessage,
   resolveComposerSend,
   resolveComposerSourceImages,
   restoreResumeCheckpointIfNeeded,
@@ -350,7 +352,8 @@ export class InputController {
       canvasSelectionController,
     } = this.deps;
 
-    const images = send.hasImages ? [...resolveComposerSourceImages(send)] : undefined;
+    const isCompact = isCompactInvocation(send.content);
+    const images = send.hasImages && !isCompact ? [...resolveComposerSourceImages(send)] : undefined;
     const editorContext = selectionController.getContext();
     const browserContext = browserSelectionController?.getContext() ?? null;
     const canvasContext = canvasSelectionController.getContext();
@@ -366,13 +369,14 @@ export class InputController {
       this.queuedMessages.createQueuedMessage(displayContent, turnRequest),
     );
 
-    // Pill mentions were folded into the queued turnRequest above; clear them now
-    // so they don't linger in the composer after the user hits send while streaming.
-    send.fileContextManager?.clearAttachedPills();
+    // Folded into the queued turnRequest above, so clear them — except for `/compact`,
+    // which buildTurnSubmission ships bare (no suffix, no images), so it consumed neither.
+    if (!isCompact) send.fileContextManager?.clearAttachedPills();
 
     // The composer text is consumed once in sendMessage (before this branch); images are consumed
-    // here since they're read live off the manager for the queued turn above.
-    if (send.shouldUseInput || send.consumesComposerDraft) {
+    // here since they're read live off the manager for the queued turn above — except for
+    // `/compact`, which was queued without them.
+    if (!isCompact && (send.shouldUseInput || send.consumesComposerDraft)) {
       send.imageContextManager?.clearImages();
     }
     this.queuedMessages.updateQueueIndicator();
@@ -456,14 +460,16 @@ export class InputController {
   ): OutgoingTurn {
     // Slash commands are passed directly to SDK for handling
     // SDK handles expansion, $ARGUMENTS, @file references, and frontmatter options.
-    // Image persistence already ran above (covers queue + steer paths too).
-    const images = resolveComposerSourceImages(send);
-    const imagesForMessage = images.length > 0 ? [...images] : undefined;
-    const isCompact = /^\/compact(\s|$)/i.test(send.content);
+    // Image persistence already ran above (covers queue + steer paths too). `/compact`
+    // ships bare — no images, no mention suffix — so it transmits and consumes neither.
+    const isCompact = isCompactInvocation(send.content);
+    const imagesForMessage = isCompact ? undefined : resolveComposerImagesForMessage(send);
 
-    // Only clear images if we consumed user input — either a plain user send or a
-    // content-override send that folded the composer draft in (quick actions).
-    if (send.shouldUseInput || send.consumesComposerDraft) {
+    // Only clear images if we consumed user input — a plain user send, or a content-override
+    // send that folded the composer draft in (quick actions). Never for `/compact`: like the
+    // pills below, a pending image is neither transmitted with the bare invocation nor taken
+    // from the user.
+    if (!isCompact && (send.shouldUseInput || send.consumesComposerDraft)) {
       send.imageContextManager?.clearImages();
     }
 
@@ -479,8 +485,10 @@ export class InputController {
     };
 
     // markCurrentNoteSent() is deferred to dispatchComposerTurn (post-runtime) so an init-failure rollback keeps the current-note state for retry.
-    // Added file/folder pills are consumed by this turn; clear them (keeps the current note).
-    send.fileContextManager?.clearAttachedPills();
+    // Added pills are consumed by this turn; clear them (keeps the current note). Not for
+    // `/compact`, which resolveTurnSubmission ships without the mention suffix so the pills
+    // were never folded in — clearing them would drop context the user still expects.
+    if (!isCompact) send.fileContextManager?.clearAttachedPills();
 
     return { displayContent, turnRequest, imagesForMessage, isCompact };
   }
@@ -936,7 +944,7 @@ export class InputController {
       dedupeExternalContextPaths(externalContextPaths),
       attachedFiles,
     );
-    const isCompact = /^\/compact(\s|$)/i.test(options.content);
+    const isCompact = isCompactInvocation(options.content);
     // Fold pill mentions (attached files/folders) into the content sent to the provider.
     // getAttachedMentionSuffix() already excludes the current note; /compact must pass
     // through unchanged so the provider recognises its built-in command.

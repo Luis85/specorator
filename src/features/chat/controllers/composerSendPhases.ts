@@ -134,6 +134,14 @@ export function resolveComposerSourceImages(
   return send.imageOverride ?? send.imageContextManager?.getAttachedImages() ?? [];
 }
 
+/** The turn's image payload: a fresh copy, or undefined when there is none. */
+export function resolveComposerImagesForMessage(
+  send: ComposerSendContext,
+): ChatMessage['images'] {
+  const images = resolveComposerSourceImages(send);
+  return images.length > 0 ? [...images] : undefined;
+}
+
 export function normalizeTabModelOverride(raw: string | null | undefined): string | null {
   return typeof raw === 'string' && raw.trim() ? raw.trim() : null;
 }
@@ -428,6 +436,19 @@ export function isResumeSessionAtStillNeeded(
     }
   }
   return false;
+}
+
+/**
+ * Whether a turn's content is the `/compact` invocation.
+ *
+ * The single source of truth for that test: every site that folds pill mentions
+ * into a turn skips them for `/compact` (the provider must receive the built-in
+ * unchanged), so every site that CONSUMES the pills afterwards has to make the
+ * same call. They previously each inlined this regex, and one of them drifted —
+ * the streaming-queue path kept clearing pills a compact turn never carried.
+ */
+export function isCompactInvocation(content: string): boolean {
+  return /^\/compact(\s|$)/i.test(content);
 }
 
 /** Bakes the response-duration footer into the message and live DOM (skips interrupted responses and compaction). */
