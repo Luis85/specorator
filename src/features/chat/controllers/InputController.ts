@@ -23,6 +23,7 @@ import type {
   ApprovalCallbackOptions,
   ChatRuntimeQueryOptions,
   ChatTurnRequest,
+  PreparedChatTurn,
 } from '../../../core/runtime/types';
 import type { ApprovalDecision, ChatMessage, ExitPlanModeDecision, StreamChunk } from '../../../core/types';
 import { t } from '../../../i18n/i18n';
@@ -373,9 +374,8 @@ export class InputController {
     // which buildTurnSubmission ships bare (no suffix, no images), so it consumed neither.
     if (!isCompact) send.fileContextManager?.clearAttachedPills();
 
-    // The composer text is consumed once in sendMessage (before this branch); images are consumed
-    // here since they're read live off the manager for the queued turn above — except for
-    // `/compact`, which was queued without them.
+    // Composer text is consumed in sendMessage (before this branch); images are consumed here
+    // since they're read live off the manager above — again, not for `/compact`.
     if (!isCompact && (send.shouldUseInput || send.consumesComposerDraft)) {
       send.imageContextManager?.clearImages();
     }
@@ -415,11 +415,8 @@ export class InputController {
     if (!acquired) return;
     const { agentService, queryOptions } = acquired;
 
-    // markCurrentNoteSent() is deferred further, into streamPreparedTurn: unlike
-    // the pills and images, `currentNotePath` STAYS on the turnRequest for a
-    // compact turn, so whether it is actually delivered is the provider's call,
-    // not a textual one. Only `PreparedChatTurn.isCompact` knows.
-
+    // markCurrentNoteSent() moved into applyPreparedTurnToUserMessage — only the
+    // prepared turn knows whether this provider actually took the note.
     await restoreResumeCheckpointIfNeeded(agentService, this.deps.state, this.deps.plugin);
 
     const ctx: DispatchedTurnContext = {
@@ -469,8 +466,7 @@ export class InputController {
 
     // Only clear images if we consumed user input — a plain user send, or a content-override
     // send that folded the composer draft in (quick actions). Never for `/compact`: like the
-    // pills below, a pending image is neither transmitted with the bare invocation nor taken
-    // from the user.
+    // pills below, a pending image is neither transmitted nor taken from the user.
     if (!isCompact && (send.shouldUseInput || send.consumesComposerDraft)) {
       send.imageContextManager?.clearImages();
     }
@@ -486,10 +482,9 @@ export class InputController {
       images: imagesForMessage ? [...imagesForMessage] : undefined,
     };
 
-    // markCurrentNoteSent() is deferred to dispatchComposerTurn (post-runtime) so an init-failure rollback keeps the current-note state for retry.
-    // Added pills are consumed by this turn; clear them (keeps the current note). Not for
-    // `/compact`, which resolveTurnSubmission ships without the mention suffix so the pills
-    // were never folded in — clearing them would drop context the user still expects.
+    // Added pills are consumed by this turn; clear them (keeps the current note, whose
+    // consumption applyPreparedTurnToUserMessage owns). Not for `/compact`, which
+    // resolveTurnSubmission ships without the mention suffix so they were never folded in.
     if (!isCompact) send.fileContextManager?.clearAttachedPills();
 
     return { displayContent, turnRequest, imagesForMessage, isCompact };
@@ -597,6 +592,27 @@ export class InputController {
     }
   }
 
+  /**
+   * Reconciles the optimistic user message with what the provider prepared, and
+   * consumes the current note only if the provider took it. Unlike pills and
+   * images (stripped from the request upstream), `currentNotePath` rides along
+   * and each runtime decides — Claude/Codex drop it on compact, Opencode has no
+   * compact and renders it — so only `preparedTurn.isCompact` can answer this.
+   */
+  private applyPreparedTurnToUserMessage(
+    ctx: DispatchedTurnContext,
+    preparedTurn: PreparedChatTurn,
+  ): void {
+    // Fall back to request.text when persistedContent is empty (OpenCode keeps
+    // content in the prompt), then refresh so the card's @mentions render.
+    ctx.userMsg.content = preparedTurn.persistedContent || preparedTurn.request.text;
+    ctx.userMsg.currentNote = preparedTurn.isCompact
+      ? undefined
+      : preparedTurn.request.currentNotePath;
+    if (!preparedTurn.isCompact) ctx.send.fileContextManager?.markCurrentNoteSent();
+    this.deps.refreshTranscriptMessage?.(ctx.userMsg.id);
+  }
+
   private async streamPreparedTurn(
     ctx: DispatchedTurnContext,
   ): Promise<{ wasInterrupted: boolean; wasInvalidated: boolean }> {
@@ -605,23 +621,7 @@ export class InputController {
     let wasInvalidated = false;
 
     const preparedTurn = ctx.agentService.prepareTurn(ctx.turnRequest);
-    // Fall back to request.text when persistedContent is empty (OpenCode keeps
-    // content in the prompt), then refresh so the card's @mentions render.
-    ctx.userMsg.content = preparedTurn.persistedContent || preparedTurn.request.text;
-    ctx.userMsg.currentNote = preparedTurn.isCompact
-      ? undefined
-      : preparedTurn.request.currentNotePath;
-    // Consume the current note only if this provider actually delivered it —
-    // the same condition the card above renders on. Claude's encoder drops the
-    // whole context envelope for a compact turn and Codex routes to its own
-    // compact endpoint, so marking it sent there would omit the note from every
-    // later prompt; Opencode has no compact concept (`isCompact: false`) and
-    // renders `currentNotePath` like any other turn, so it MUST be marked or the
-    // same note rides along again next turn. A textual `/compact` test cannot
-    // tell those apart. Deferred to here (past runtime acquisition and prepare)
-    // so an init failure still leaves the note unconsumed for the retry.
-    if (!preparedTurn.isCompact) ctx.send.fileContextManager?.markCurrentNoteSent();
-    this.deps.refreshTranscriptMessage?.(ctx.userMsg.id);
+    this.applyPreparedTurnToUserMessage(ctx, preparedTurn);
 
     // Pass history WITHOUT current turn (userMsg + assistantMsg we just added)
     // This prevents duplication when rebuilding context for new sessions
