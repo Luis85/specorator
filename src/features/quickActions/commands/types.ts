@@ -1,6 +1,7 @@
 import type { Logger } from '../../../core/logging/Logger';
 import type { ProviderCommandScope } from '../../../core/providers/commands/ProviderCommandEntry';
 import type { ProviderId } from '../../../core/providers/types';
+import type { ProviderRecord } from '../skills/types';
 
 /**
  * A provider slash command surfaced in the Quick Actions modal Commands tab.
@@ -52,4 +53,11 @@ export interface ProviderCommandAggregatorOptions {
   ttlMs?: number;
   /** Clock injection for deterministic tests. Defaults to `Date.now`. */
   nowMs?: () => number;
+  /**
+   * Primes a runtime-backed catalog whose listing came back empty (Opencode
+   * holds its commands only at runtime). Injected rather than imported so the
+   * aggregator stays plugin-free, mirroring `getProviderRecords`. Omit to skip
+   * runtime warmup entirely.
+   */
+  warmRuntimeCommands?: (record: ProviderRecord) => Promise<void>;
 }

@@ -43,10 +43,16 @@ export class ProviderCommandAggregator
       nowMs: options.nowMs ?? Date.now,
       ...(options.logger ? { logger: options.logger } : {}),
       fetchEntries: async (record) => {
-        const all = await record.commandCatalog.listDropdownEntries({
-          includeBuiltIns: true,
-        });
-        return all.filter((e) => e.kind === 'command');
+        const first = await listCommandEntries(record);
+        if (first.length > 0 || !options.warmRuntimeCommands) return first;
+        // An empty listing from a runtime-backed catalog usually means nothing
+        // has primed it yet — Opencode's lives entirely in `runtimeCommands`,
+        // which only `setRuntimeCommands` fills, and the modal has no tab
+        // runtime to warm it. Prime it once, then re-read; otherwise the empty
+        // bucket would be cached for the full TTL and the tab would report the
+        // provider as having no commands at all.
+        await options.warmRuntimeCommands(record);
+        return listCommandEntries(record);
       },
       mapEntries: (raw, record) => mapCommandBucket(raw, record),
     });
@@ -55,6 +61,13 @@ export class ProviderCommandAggregator
   dispose(): void {
     this.clearBuckets();
   }
+}
+
+async function listCommandEntries(
+  record: ProviderRecord,
+): Promise<ProviderCommandEntry[]> {
+  const all = await record.commandCatalog.listDropdownEntries({ includeBuiltIns: true });
+  return all.filter((e) => e.kind === 'command');
 }
 
 function mapCommandBucket(

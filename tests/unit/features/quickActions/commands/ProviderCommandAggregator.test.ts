@@ -171,6 +171,44 @@ describe('ProviderCommandAggregator', () => {
     expect(warn).toHaveBeenCalled();
   });
 
+  it('primes a runtime-backed catalog whose listing came back empty, then re-reads it', async () => {
+    // Opencode holds its commands only in `runtimeCommands`, which nothing in
+    // the modal path fills — without the warmup the tab would report Opencode
+    // as having no commands and cache that emptiness for the full TTL.
+    let primed = false;
+    const record = makeRecord({
+      providerId: 'opencode',
+      displayName: 'Opencode',
+      entries: () => Promise.resolve(
+        primed ? [makeEntry({ id: 'cmd-test', providerId: 'opencode', name: 'test' })] : [],
+      ),
+    });
+    const warm = jest.fn().mockImplementation(() => {
+      primed = true;
+      return Promise.resolve();
+    });
+    const aggregator = new ProviderCommandAggregator(() => [record], {
+      warmRuntimeCommands: warm,
+    });
+
+    const entries = await aggregator.listAll();
+
+    expect(warm).toHaveBeenCalledWith(record);
+    expect(entries.map((e) => e.name)).toEqual(['test']);
+  });
+
+  it('does not pay for the runtime warmup when the catalog already answered', async () => {
+    const warm = jest.fn();
+    const aggregator = new ProviderCommandAggregator(
+      () => [makeRecord({ entries: [makeEntry()] })],
+      { warmRuntimeCommands: warm },
+    );
+
+    await aggregator.listAll();
+
+    expect(warm).not.toHaveBeenCalled();
+  });
+
   it('streams one callback per provider', async () => {
     const aggregator = new ProviderCommandAggregator(() => [
       makeRecord({ entries: [makeEntry()] }),

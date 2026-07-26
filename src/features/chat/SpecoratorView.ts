@@ -424,11 +424,11 @@ export class SpecoratorView extends ItemView {
       },
       onOpenHistory: () => this.emitChatShellChange(),
       onQuickActions: () => this.openQuickActionsForActiveTab(),
-      // Pre-warm the Skills + Commands caches on hover so the Quick Actions
-      // modal opens hot. Idempotent: both aggregators dedupe in-flight fetches.
+      // Pre-warm the Skills-tab cache on hover; the aggregator dedupes concurrent
+      // fetches. Commands are deliberately NOT warmed here — an unprimed
+      // runtime-backed catalog spins up a provider process to answer.
       onQuickActionsHover: () => {
         void this.plugin.vaultSkillAggregator?.listAllStreaming(() => {});
-        void this.plugin.providerCommandAggregator?.listAllStreaming(() => {});
       },
       onRename: (title) => this.renameActiveConversation(title),
       onOpenSettings: () => this.openPluginSettings(),

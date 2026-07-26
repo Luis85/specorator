@@ -97,14 +97,16 @@ beforeEach(() => {
 });
 
 describe('runProviderCommand', () => {
-  it('sends an argument-less command into a reusable blank tab of the same provider', async () => {
+  it('sends an argument-less command into the active tab of the same provider', async () => {
     const activeTab = makeTab();
     const { plugin, tabManager } = makePlugin({ activeTab });
 
     await runProviderCommand(plugin as never, makeEntry(), null);
 
+    // Already the right conversation — no create, and no switch to re-run the
+    // welcome reset on the tab we are about to send into.
     expect(tabManager.createTab).not.toHaveBeenCalled();
-    expect(tabManager.switchToTab).toHaveBeenCalledWith('tab-1');
+    expect(tabManager.switchToTab).not.toHaveBeenCalled();
     expect(activeTab.controllers.inputController.sendMessage).toHaveBeenCalledWith({
       content: '/review',
     });
@@ -155,8 +157,49 @@ describe('runProviderCommand', () => {
     expect(activeTab.controllers.inputController.sendMessage).not.toHaveBeenCalled();
   });
 
-  it('creates a provider-matched tab when the active tab is bound, and attaches the pill after the switch', async () => {
+  it('stays on a BOUND active tab of the same provider instead of routing to a blank one', async () => {
+    // A command is a turn IN a conversation: `/compact` compacts the transcript
+    // it lands on, so hijacking a blank tab would compact an empty conversation.
     const activeTab = makeTab({ lifecycleState: 'bound' });
+    const newTab = makeTab({ id: 'tab-2' });
+    const { plugin, tabManager } = makePlugin({ activeTab, newTab });
+
+    await runProviderCommand(plugin as never, makeEntry({ name: 'compact' }), null);
+
+    expect(tabManager.createTab).not.toHaveBeenCalled();
+    expect(tabManager.switchToTab).not.toHaveBeenCalled();
+    expect(activeTab.controllers.inputController.sendMessage).toHaveBeenCalledWith({
+      content: '/compact',
+    });
+    expect(newTab.controllers.inputController.sendMessage).not.toHaveBeenCalled();
+  });
+
+  it('attaches the picked file to the bound active tab without switching', async () => {
+    const activeTab = makeTab({ lifecycleState: 'bound' });
+    const { plugin, tabManager } = makePlugin({ activeTab });
+    const file = new TFile();
+    file.path = 'notes/spec.md';
+
+    await runProviderCommand(plugin as never, makeEntry(), file);
+
+    expect(activeTab.ui.fileContextManager.attachFileAsPill).toHaveBeenCalledWith('notes/spec.md');
+    expect(tabManager.switchToTab).not.toHaveBeenCalled();
+  });
+
+  it('never hijacks a work-order run tab, routing to a fresh chat tab instead', async () => {
+    const activeTab = { ...makeTab({ lifecycleState: 'bound' }), kind: 'work-order' };
+    const newTab = makeTab({ id: 'tab-2' });
+    const { plugin, tabManager } = makePlugin({ activeTab, newTab });
+
+    await runProviderCommand(plugin as never, makeEntry(), null);
+
+    expect(tabManager.createTab).toHaveBeenCalled();
+    expect(activeTab.controllers.inputController.sendMessage).not.toHaveBeenCalled();
+    expect(newTab.controllers.inputController.sendMessage).toHaveBeenCalled();
+  });
+
+  it('creates a provider-matched tab when the active tab is another provider, attaching the pill after the switch', async () => {
+    const activeTab = makeTab({ providerId: 'codex', lifecycleState: 'bound' });
     const newTab = makeTab({ id: 'tab-2' });
     const { plugin, tabManager } = makePlugin({ activeTab, newTab });
     const file = new TFile();
@@ -175,7 +218,7 @@ describe('runProviderCommand', () => {
   });
 
   it('notices the tab limit instead of dispatching when no tab can be resolved', async () => {
-    const activeTab = makeTab({ lifecycleState: 'bound' });
+    const activeTab = makeTab({ providerId: 'codex', lifecycleState: 'bound' });
     const { plugin, tabManager } = makePlugin({ activeTab, canCreate: false });
 
     await runProviderCommand(plugin as never, makeEntry(), null);

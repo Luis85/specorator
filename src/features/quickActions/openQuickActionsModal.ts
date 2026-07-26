@@ -7,7 +7,7 @@ import type { SkillLibraryRow } from '@/features/skills/skillLibraryRows';
 import type SpecoratorPlugin from '@/main';
 import { openSpecoratorProviderSettings } from '@/utils/obsidianPrivateApi';
 
-import { ProviderCommandAggregator } from './commands/ProviderCommandAggregator';
+import { createProviderCommandAggregator } from './commands/createProviderCommandAggregator';
 import { runProviderCommand } from './commands/runProviderCommand';
 import { QuickActionStorage } from './QuickActionStorage';
 import { buildProviderRecords } from './skills/buildProviderRecords';
@@ -57,10 +57,8 @@ export function openQuickActionsModal(
     () => buildProviderRecords(plugin),
     { logger: plugin.logger },
   );
-  const commands = plugin.providerCommandAggregator ?? new ProviderCommandAggregator(
-    () => buildProviderRecords(plugin),
-    { logger: plugin.logger },
-  );
+  const commands = plugin.providerCommandAggregator
+    ?? createProviderCommandAggregator(plugin);
   const file = options.file ?? null;
 
   new QuickActionsModal(plugin.app, {

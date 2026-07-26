@@ -24,8 +24,14 @@ import type { CommandTabEntry } from './types';
  * picker dimming, so a provider toggled while the modal was open must not
  * silently dispatch into a disabled provider.
  *
- * Tab routing, the attached-context carry, and the switch-then-attach-pill
- * ordering are shared with the Skills tab — see `landOnProviderChatTab`.
+ * **Tab routing differs from the Skills tab on purpose.** A skill starts new
+ * work, so it targets a draft-free blank tab. A command is a turn IN a
+ * conversation — `/compact` compacts the transcript it is sent to — so it
+ * stays on the active tab whenever that tab's provider matches, bound or not
+ * (`preferActiveTab`). It falls back to the shared blank-tab routing only when
+ * the active tab belongs to another provider, is a work-order run tab, or does
+ * not exist. Everything else (the attached-context carry, the
+ * switch-then-attach-pill ordering) is shared — see `landOnProviderChatTab`.
  */
 export async function runProviderCommand(
   plugin: SpecoratorPlugin,
@@ -39,7 +45,12 @@ export async function runProviderCommand(
     return;
   }
 
-  const input = await landOnProviderChatTab(plugin, entry.providerId, file);
+  // `preferActiveTab`: a slash command is a turn IN a conversation, so it must
+  // land on the conversation the user is looking at. Skills start new work and
+  // keep the draft-free-blank routing.
+  const input = await landOnProviderChatTab(plugin, entry.providerId, file, {
+    preferActiveTab: true,
+  });
   if (!input) return;
 
   const invocation = `${entry.insertPrefix}${entry.name}`;

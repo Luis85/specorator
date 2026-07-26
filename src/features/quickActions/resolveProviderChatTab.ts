@@ -61,6 +61,18 @@ export async function resolveProviderChatTab(
   return created ?? null;
 }
 
+export interface LandOnProviderChatTabOptions {
+  /**
+   * Send into the active tab whenever its provider matches, even when it is
+   * bound to a conversation. Slash commands are turns IN a conversation — a
+   * conversation-scoped one like `/compact` operates on the transcript it is
+   * sent to — so routing them to a blank tab the way skills are routed would
+   * compact an empty conversation instead of the one the user was looking at.
+   * Skills are new work and keep the draft-free-blank routing.
+   */
+  preferActiveTab?: boolean;
+}
+
 /**
  * Shared prologue for every library dispatch (vault skill, provider command):
  * resolve the chat surface, land on a provider-matched tab, and hand back that
@@ -79,11 +91,20 @@ export async function landOnProviderChatTab(
   plugin: SpecoratorPlugin,
   providerId: ProviderId,
   file: TAbstractFile | null,
+  options: LandOnProviderChatTabOptions = {},
 ): Promise<TabData['controllers']['inputController']> {
   const tabManager = await ensureChatTabManager(plugin);
   if (!tabManager) return null;
 
-  const carriedContext = snapshotUserAttachedContext(tabManager.getActiveTab());
+  const activeTab = tabManager.getActiveTab();
+  if (options.preferActiveTab && activeTab && isCommandTargetableTab(activeTab, plugin, providerId)) {
+    // Already on the right conversation: no switch (so nothing resets), and no
+    // context carry (the tab keeps its own attachments). Just the picked pill.
+    attachPickedContext(activeTab, file);
+    return activeTab.controllers.inputController;
+  }
+
+  const carriedContext = snapshotUserAttachedContext(activeTab);
 
   const target = await resolveProviderChatTab(tabManager, plugin, providerId);
   if (!target) {
@@ -93,11 +114,27 @@ export async function landOnProviderChatTab(
 
   await tabManager.switchToTab(target.id);
   applyUserAttachedContext(target, carriedContext);
-
-  if (file instanceof TFile) {
-    target.ui.fileContextManager?.attachFileAsPill(file.path);
-  } else if (file instanceof TFolder) {
-    target.ui.fileContextManager?.attachFolderAsPill(file.path);
-  }
+  attachPickedContext(target, file);
   return target.controllers.inputController;
+}
+
+/**
+ * A hidden work-order run tab is never a command target — it has its own
+ * lifecycle and would swallow the turn — and neither is a tab on a different
+ * provider, whose runtime would not resolve the invocation.
+ */
+function isCommandTargetableTab(
+  tab: TabData,
+  plugin: SpecoratorPlugin,
+  providerId: ProviderId,
+): boolean {
+  return tab.kind !== 'work-order' && getTabProviderId(tab, plugin) === providerId;
+}
+
+function attachPickedContext(tab: TabData, file: TAbstractFile | null): void {
+  if (file instanceof TFile) {
+    tab.ui.fileContextManager?.attachFileAsPill(file.path);
+  } else if (file instanceof TFolder) {
+    tab.ui.fileContextManager?.attachFolderAsPill(file.path);
+  }
 }
