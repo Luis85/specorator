@@ -6,6 +6,7 @@ import type { DiagnosticsTranslationKey } from './types/diagnostics';
 import type { EnvTranslationKey } from './types/env';
 import type { InlineEditTranslationKey } from './types/inlineEdit';
 import type { MarketplaceTranslationKey } from './types/marketplace';
+import type { OnboardingTranslationKey } from './types/onboarding';
 import type { ProviderTranslationKey } from './types/provider';
 import type { QuickActionsTranslationKey } from './types/quickActions';
 import type { RibbonTranslationKey } from './types/ribbon';
@@ -50,4 +51,5 @@ export type TranslationKey =
   | RibbonTranslationKey
   | MarketplaceTranslationKey
   | TeamChatTranslationKey
+  | OnboardingTranslationKey
   | CommandsTranslationKey;

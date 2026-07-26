@@ -59,6 +59,18 @@ function stripDeprecatedFields(settings: Record<string, unknown>): Record<string
 }
 
 export class SpecoratorSettingsStorage {
+  /**
+   * Tail of the settings-write chain. Two saves can overlap — every settings
+   * control persists on touch, so toggling two provider cards (or a toggle plus
+   * a background write) starts a second `save()` while the first is still in
+   * `adapter.write`. The snapshot each call serializes is correct, but the
+   * writes themselves are independent async operations: if the FIRST one lands
+   * last, the file ends up holding the older snapshot and the second change is
+   * lost on disk while memory still shows it. Chaining them keeps last-call-wins
+   * on the file. Never rejects (a failed write must not wedge later saves).
+   */
+  private writeChain: Promise<void> = Promise.resolve();
+
   constructor(private adapter: VaultFileAdapter) {}
 
   async load(): Promise<StoredSpecoratorSettings> {
@@ -95,12 +107,19 @@ export class SpecoratorSettingsStorage {
   }
 
   async save(settings: StoredSpecoratorSettings): Promise<void> {
+    // Serialized here, synchronously, so the queued write persists the state as
+    // of THIS call rather than whatever the shared settings object holds by the
+    // time its turn comes.
     const content = JSON.stringify(
       stripDeprecatedFields(settings),
       null,
       2,
     );
-    await this.adapter.write(SPECORATOR_SETTINGS_PATH, content);
+    const write = this.writeChain.then(
+      () => this.adapter.write(SPECORATOR_SETTINGS_PATH, content),
+    );
+    this.writeChain = write.catch(() => {});
+    await write;
   }
 
   async exists(): Promise<boolean> {

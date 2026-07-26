@@ -312,6 +312,43 @@ describe('runColdStartQuery', () => {
     });
   });
 
+  describe('subprocess environment', () => {
+    it('reads a Windows-cased Path override, as the other three providers do', async () => {
+      // Windows env names are case-insensitive, so a provider Environment entered
+      // as `Path=` is the user's PATH. Reading `customEnv.PATH` exactly would skip
+      // it — and the setup view's probe, which reads it case-insensitively, would
+      // then report a CLI as ready that this spawn rejects with missing-node.
+      const { getEnhancedPath } = jest.requireMock('@/utils/env');
+      const config = createConfig({
+        plugin: createMockPlugin({
+          getResolvedEnvironmentVariables: jest.fn().mockReturnValue({ Path: '/opt/node/bin' }),
+        }),
+      });
+
+      await runColdStartQuery(config, 'hi');
+
+      expect(getEnhancedPath).toHaveBeenCalledWith('/opt/node/bin', '/mock/claude');
+    });
+
+    it('ships ONE PATH key, so the un-enhanced variant cannot win', async () => {
+      // Spreading customEnv verbatim would leave `Path` beside the enhanced
+      // `PATH`; on Windows the child could resolve either, silently undoing the
+      // enhancement this whole path exists to apply.
+      const config = createConfig({
+        plugin: createMockPlugin({
+          getResolvedEnvironmentVariables: jest.fn().mockReturnValue({ Path: '/opt/node/bin' }),
+        }),
+      });
+
+      await runColdStartQuery(config, 'hi');
+
+      const env = sdkMock.getLastOptions()?.env ?? {};
+      const pathKeys = Object.keys(env).filter((k) => k.toUpperCase() === 'PATH');
+      expect(pathKeys).toHaveLength(1);
+      expect(env[pathKeys[0]]).toBe('/usr/bin:/mock/bin');
+    });
+  });
+
   describe('onTextChunk callback', () => {
     it('calls onTextChunk with accumulated text', async () => {
       const chunks: string[] = [];

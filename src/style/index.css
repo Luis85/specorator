@@ -14,7 +14,9 @@
 @import "./vue/library-host.css";
 @import "./vue/marketplace-host.css";
 @import "./vue/team-chat-host.css";
+@import "./vue/onboarding-host.css";
 @import "./vue/atoms.css";
+@import "./vue/onboarding.css";
 
 /* Components */
 @import "./components/header.css";

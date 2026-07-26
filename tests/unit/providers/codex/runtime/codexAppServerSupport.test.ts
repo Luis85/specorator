@@ -1,9 +1,14 @@
+import * as fs from 'fs';
+import * as os from 'os';
+import * as path from 'path';
+
 import type { PluginContext } from '@/core/types/PluginContext';
 import { buildCodexAppServerEnvironment } from '@/providers/codex/runtime/codexAppServerSupport';
 
-function makePlugin(customEnv: Record<string, string>): PluginContext {
+function makePlugin(customEnv: Record<string, string>, cliPath: string | null = null): PluginContext {
   return {
     getResolvedEnvironmentVariables: () => customEnv,
+    getResolvedProviderCliPath: () => cliPath,
   } as unknown as PluginContext;
 }
 
@@ -54,5 +59,27 @@ describe('buildCodexAppServerEnvironment', () => {
     const env = buildCodexAppServerEnvironment(makePlugin({ MY_CUSTOM: 'yes' }));
 
     expect(env.MY_CUSTOM).toBe('yes');
+  });
+
+  it('searches the CLI\'s own directory when Node ships beside it', () => {
+    // A distribution that ships its interpreter next to the entry point (or an
+    // `env node` shebang answered by a sibling `node`) resolves at spawn only if
+    // that directory is on the child's PATH. Omitting the CLI path also put this
+    // spawn out of step with the setup view's probe, which searches
+    // `getEnhancedPath(runtimePath, cliPath)` — Setup reported `found` for an
+    // interpreter this env could not then find.
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'specorator-codex-'));
+    try {
+      fs.writeFileSync(path.join(dir, process.platform === 'win32' ? 'node.exe' : 'node'), '');
+      const cliPath = path.join(dir, 'codex');
+
+      expect(buildCodexAppServerEnvironment(makePlugin({}, cliPath)).PATH).toContain(dir);
+    } finally {
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it('builds a PATH without it when no CLI path is resolved', () => {
+    expect(buildCodexAppServerEnvironment(makePlugin({})).PATH).toBeTruthy();
   });
 });

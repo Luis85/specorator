@@ -1,6 +1,8 @@
 import type { Options } from '@anthropic-ai/claude-agent-sdk';
 import { query as agentQuery } from '@anthropic-ai/claude-agent-sdk';
 
+import { buildFullSubprocessEnvironment, pickEnvValueCaseInsensitive } from '@/core/providers/subprocessEnvironmentAllowlist';
+
 import { ProviderSettingsCoordinator } from '../../../core/providers/ProviderSettingsCoordinator';
 import type { PluginContext } from '../../../core/types/PluginContext';
 import { getEnhancedPath, getMissingNodeError } from '../../../utils/env';
@@ -60,7 +62,10 @@ export async function runColdStartQuery(
   }
 
   const customEnv = config.plugin.getResolvedEnvironmentVariables('claude');
-  const enhancedPath = getEnhancedPath(customEnv.PATH, resolvedClaudePath);
+  const enhancedPath = getEnhancedPath(
+    pickEnvValueCaseInsensitive(customEnv, 'PATH'),
+    resolvedClaudePath,
+  );
 
   const missingNodeError = getMissingNodeError(resolvedClaudePath, enhancedPath);
   if (missingNodeError) {
@@ -82,11 +87,11 @@ export async function runColdStartQuery(
     model: selectedModel,
     abortController: config.abortController,
     pathToClaudeCodeExecutable: resolvedClaudePath,
-    env: {
-      ...process.env,
-      ...customEnv,
-      PATH: enhancedPath,
-    },
+    env: buildFullSubprocessEnvironment({
+      processEnv: process.env,
+      customEnv,
+      pathOverride: enhancedPath,
+    }),
     // SECURITY (SEC-1): bypassPermissions is intentional here, NOT a leak of the
     // user's interactive permission setting. Cold-start queries are non-interactive
     // background tasks (title generation, instruction refine, inline edit) with no

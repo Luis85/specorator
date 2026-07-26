@@ -15,7 +15,7 @@
       "subheading": "Browse curated Quick Actions, Agents, Loops, Templates, and Skills and install them into your vault."
     },
     "seeAll": "See all",
-    "sectionCount": "{count} items",
+    "sectionCount": "{count} available",
     "detail": {
       "back": "Back"
     },
@@ -61,6 +61,14 @@
       "scopeUser": "User (all vaults)",
       "installedHere": "Installed here",
       "userScopeHint": "User scope installs to your home directory (outside this vault), shared across all your vaults."
+    },
+    "failedNoticeReason": "Couldn't install \"{name}\": {reason}",
+    "installedPackageNotice": "Installed \"{name}\" and {count} of its required items.",
+    "completedPackageNotice": "\"{name}\" was already installed — added {count} of its required items.",
+    "package": {
+      "heading": "Included with this install",
+      "install": "Install all ({count})",
+      "skillTargetHint": "The skills in this package install into:"
     }
   },
   "common": {
@@ -1341,5 +1349,124 @@
     "agentRemoved": "This agent was removed from your team — the chat is read-only. Pick another agent to continue.",
     "agentVerifyFailed": "Couldn't verify the agent — please try again.",
     "actionUnavailableInDm": "Not available in Team Chat — each agent has one fixed thread."
+  },
+  "onboarding": {
+    "viewTitle": "Настройка",
+    "command": {
+      "open": "Открыть руководство по настройке"
+    },
+    "heading": "Настройка Specorator",
+    "subheading": "Выберите агентов для программирования, которых хотите использовать, и подтвердите несколько параметров хранилища. Всё это есть и в настройках, а каждое изменение сохраняется сразу.",
+    "stepLabel": "Шаги настройки",
+    "next": "Далее",
+    "back": "Назад",
+    "finishButton": "Готово",
+    "close": "Закрыть",
+    "openSetup": "Открыть руководство по настройке",
+    "step": {
+      "providers": "Провайдеры",
+      "defaults": "По умолчанию",
+      "folders": "Папки",
+      "workspace": "Рабочая область",
+      "marketplace": "Маркетплейс",
+      "finish": "Готово"
+    },
+    "providers": {
+      "heading": "Выберите провайдеров",
+      "intro": "Specorator управляет CLI агентов, которые вы устанавливаете сами. Провайдеры, уже имеющиеся на этом компьютере, показаны первыми — включите те, которые хотите использовать.",
+      "detected": "Установлен",
+      "notDetected": "Не найден",
+      "unknown": "Пока не проверено",
+      "unknownNoResolver": "Пока не удалось проверить — перезагрузите плагин, затем нажмите «Проверить снова».",
+      "unknownExternal": "Запускает {command} на другой цели (например, в WSL), которую отсюда не проверить.",
+      "rescan": "Проверить снова",
+      "rescanning": "Проверка…",
+      "use": "Использовать {name}",
+      "enabled": "Включён",
+      "foundAt": "Найден по пути",
+      "needsCli": "Требуется команда {command} в переменной PATH.",
+      "notExecutable": "Файл по пути {path} существует, но не является исполняемым — исправьте права или переустановите.",
+      "batchShim": "{path} — это .cmd-обёртка, из которой {command} запустить нельзя. Укажите вместо неё нативный исполняемый файл (.exe).",
+      "missingNode": "{path} требует Node.js, но Node нет в PATH. Установите Node.js — или используйте нативный установщик, которому он не нужен — и проверьте снова.",
+      "unsupportedForm": "Windows не может запустить {path} тем способом, которым его вызывает этот провайдер — укажите нативный исполняемый файл (.exe).",
+      "authHint": "Ещё не вошли? Выполните {command} один раз в терминале.",
+      "docs": "Документация по установке",
+      "noneEnabled": "Ни один провайдер не включён",
+      "enabledCount": "Включено: {count}"
+    },
+    "install": {
+      "heading": "Установить CLI",
+      "method": "Способ",
+      "run": "Установить сейчас",
+      "running": "Установка…",
+      "otherRunning": "Ожидание завершения установки {name} — по одной за раз.",
+      "cancel": "Отмена",
+      "manualOnly": "Этот способ запускает установочный скрипт, поэтому его нужно выполнить в своём терминале. Скопируйте команду ниже.",
+      "copy": "Копировать",
+      "copied": "Скопировано",
+      "confirm": "Specorator выполнит «{command}» на этом компьютере. Продолжить?",
+      "confirmRun": "Запустить установку",
+      "succeeded": "{name} установлен. Обнаружение обновлено.",
+      "failed": "Установка не удалась: {error}",
+      "cancelled": "Установка отменена.",
+      "consoleLabel": "Вывод установщика",
+      "manualPath": "Указать путь вручную",
+      "manualPathEdit": "Изменить путь",
+      "manualPathClearHint": "Оставьте пустым, чтобы удалить путь и вернуться к автоопределению.",
+      "manualPathPlaceholder": "Полный путь к исполняемому файлу",
+      "manualPathSave": "Сохранить путь"
+    },
+    "defaults": {
+      "heading": "Настройки чата по умолчанию",
+      "intro": "Разумные начальные значения для каждого нового диалога. Любое из них можно изменить позже на панели инструментов чата.",
+      "model": "Модель по умолчанию",
+      "modelDesc": "Используется для новых диалогов.",
+      "permission": "Подтверждение инструментов",
+      "permissionDesc": "Новые диалоги спрашивают, прежде чем агент запишет файлы или выполнит команды. Режим «План» и отказ от подтверждений выбираются для каждого диалога на панели инструментов — «План» намеренно не сохраняется как значение по умолчанию, так как приложение сбрасывает его при перезапуске.",
+      "titles": "Автоматически называть диалоги",
+      "titlesDesc": "Создаёт короткий заголовок по вашему первому сообщению.",
+      "needsProvider": "Включите провайдера на предыдущем шаге, чтобы выбрать модель по умолчанию."
+    },
+    "folders": {
+      "heading": "Папки хранилища",
+      "intro": "Рабочие задания, шаблоны, циклы и быстрые действия — это обычные Markdown-заметки в вашем хранилище. Подтвердите, где они должны находиться.",
+      "exists": "Папка существует",
+      "willCreate": "Будет создана",
+      "blank": "Не настроено — эта возможность останется отключённой",
+      "create": "Создать отсутствующие папки",
+      "creating": "Создание…",
+      "created": "Все папки существуют",
+      "createFailed": "Не удалось создать папки: {error}",
+      "workOrders": "Рабочие задания",
+      "templates": "Шаблоны рабочих заданий",
+      "loops": "Циклы",
+      "archive": "Архив",
+      "quickActions": "Быстрые действия"
+    },
+    "workspace": {
+      "heading": "Где живёт чат",
+      "intro": "Чат Specorator может находиться на боковой панели или занимать целую вкладку редактора.",
+      "placement": "Открывать чат в",
+      "placementRight": "Правая боковая панель",
+      "placementLeft": "Левая боковая панель",
+      "placementMain": "Основная вкладка редактора",
+      "maxTabs": "Максимум вкладок чата",
+      "maxTabsDesc": "Каждая открытая вкладка держит свой активный сеанс агента."
+    },
+    "marketplace": {
+      "heading": "Маркетплейс (необязательно)",
+      "intro": "Маркетплейс устанавливает готовых агентов, навыки, циклы, шаблоны и быстрые действия. Он загружает удалённый каталог, поэтому остаётся отключённым, пока вы его не включите.",
+      "enable": "Разрешить маркетплейсу загружать каталог",
+      "enabled": "Загрузка каталога включена",
+      "browse": "Открыть маркетплейс"
+    },
+    "finish": {
+      "heading": "Всё готово",
+      "intro": "Откройте вкладку чата и отправьте первое сообщение. Библиотека, Agent Board и маркетплейс находятся на левой панели.",
+      "providersReady": "Включено: {names}",
+      "noProviders": "Ни один провайдер не включён — чат останется пустым, пока вы не включите хотя бы один.",
+      "openChat": "Открыть чат",
+      "reopenHint": "Это руководство можно снова открыть в любой момент через палитру команд: «Открыть руководство по настройке»."
+    }
   }
 }

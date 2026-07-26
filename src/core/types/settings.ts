@@ -207,6 +207,13 @@ export interface SpecoratorSettings {
   expandFileEditsByDefault: boolean;
   chatViewPlacement: ChatViewPlacement;
   firstRunDismissed: boolean;
+  /**
+   * Set the first time the Setup view AUTO-opens, so it does so at most once per
+   * vault however the user closes it (the tab's own X never reaches our code).
+   * Distinct from `firstRunDismissed`, which still gates the settings banner so
+   * someone who closed the wizard without configuring keeps a quiet nudge.
+   */
+  onboardingAutoOpened?: boolean;
   /** When true, prompt the user to commit & push after Accepting a Work-Order in a dirty git-backed vault. */
   promptCommitOnAccept?: boolean;
 

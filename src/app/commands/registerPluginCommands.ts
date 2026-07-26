@@ -7,6 +7,7 @@ import { type InlineEditContext, InlineEditModal } from '@/features/inline-edit/
 import { activateLibrary } from '@/features/library/activateLibrary';
 import type { LibraryTab } from '@/features/library/viewType';
 import { activateMarketplace } from '@/features/marketplace/activateMarketplace';
+import { activateOnboarding } from '@/features/onboarding/activateOnboarding';
 import {
   createWorkOrderFromBrowserSelection,
   createWorkOrderTemplate,
@@ -75,6 +76,12 @@ function registerViewCommands(plugin: SpecoratorPlugin, register: RegisterComman
     id: 'open-marketplace',
     name: t('marketplace.command.open'),
     callback: () => void activateMarketplace(plugin),
+  });
+
+  register({
+    id: 'open-setup-guide',
+    name: t('onboarding.command.open'),
+    callback: () => void activateOnboarding(plugin),
   });
 }
 

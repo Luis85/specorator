@@ -1,0 +1,68 @@
+/* Shared layout vocabulary for the Setup (onboarding) island. Only classes
+   rendered by MORE THAN ONE component live here — a scoped SFC block adds a
+   per-component data-v attribute, so a step's own scoped rule could never
+   style a sibling step's identical wrapper. Single-component classes stay in
+   that component's <style scoped> block. Consumes `--sp-*` tokens only. */
+
+.specorator-onboarding-step > h2 {
+  font-size: var(--sp-font-small);
+  font-weight: var(--sp-weight-semibold);
+  margin: 0 0 var(--sp-space-2xs);
+  text-transform: uppercase;
+}
+
+.specorator-onboarding-intro {
+  color: var(--sp-text-muted);
+  font-size: var(--sp-font-small);
+  margin: 0 0 var(--sp-space-l);
+  max-width: 60ch;
+}
+
+.specorator-onboarding-step-actions {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-space-s);
+  margin-bottom: var(--sp-space-m);
+}
+
+.specorator-onboarding-count {
+  color: var(--sp-text-muted);
+  font-size: var(--sp-font-small);
+}
+
+/* ── Field rows (defaults / workspace / folders steps) ── */
+.specorator-onboarding-field {
+  border-bottom: 1px solid var(--sp-border);
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--sp-space-s);
+  justify-content: space-between;
+  padding: var(--sp-space-s) 0;
+}
+
+.specorator-onboarding-field:last-child {
+  border-bottom: none;
+}
+
+.specorator-onboarding-field-text {
+  flex: 1 1 20em;
+}
+
+.specorator-onboarding-field-label {
+  font-size: var(--sp-font-small);
+  font-weight: var(--sp-weight-medium);
+}
+
+.specorator-onboarding-field-desc {
+  color: var(--sp-text-muted);
+  font-size: var(--sp-font-smaller);
+  margin: var(--sp-space-3xs) 0 0;
+}
+
+.specorator-onboarding-field-control {
+  align-items: center;
+  display: flex;
+  gap: var(--sp-space-s);
+}

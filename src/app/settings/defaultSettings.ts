@@ -68,6 +68,7 @@ export const DEFAULT_SPECORATOR_SETTINGS: SpecoratorSettings = {
   expandFileEditsByDefault: false,
   chatViewPlacement: 'right-sidebar',
   firstRunDismissed: false,
+  onboardingAutoOpened: false,
   promptCommitOnAccept: true,
 
   agentBoardWorkOrderFolder: 'Agent Board/tasks',

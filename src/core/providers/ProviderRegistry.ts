@@ -9,6 +9,7 @@ import {
   type InstructionRefineService,
   type ProviderCapabilities,
   type ProviderChatUIConfig,
+  type ProviderCliInstall,
   type ProviderConversationHistoryService,
   type ProviderId,
   type ProviderRegistration,
@@ -163,6 +164,20 @@ export class ProviderRegistry {
 
   static getCliCommand(providerId: ProviderId): string {
     return this.getProviderRegistration(providerId).cliCommand;
+  }
+
+  /** Provider-contributed CLI install methods, auth command, and docs link (onboarding). */
+  static getCliInstall(providerId: ProviderId): ProviderCliInstall {
+    return this.getProviderRegistration(providerId).cliInstall;
+  }
+
+  /**
+   * Lets a provider invalidate state a CLI-path change makes stale (OpenCode's
+   * discovered model/mode catalog). Call BEFORE persisting so one save covers
+   * the path and the invalidation. Returns whether anything changed.
+   */
+  static notifyCliPathChanged(providerId: ProviderId, settings: Record<string, unknown>): boolean {
+    return this.getProviderRegistration(providerId).onCliPathChanged?.(settings) ?? false;
   }
 
   /**

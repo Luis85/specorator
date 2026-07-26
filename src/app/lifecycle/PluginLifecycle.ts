@@ -3,6 +3,7 @@ import { debounce } from 'obsidian';
 import { VIEW_TYPE_SPECORATOR } from '@/core/types';
 import { GitService } from '@/features/chat/services/GitService';
 import { GitStatusWatcher } from '@/features/chat/services/GitStatusWatcher';
+import { maybeOpenOnboarding } from '@/features/onboarding/maybeOpenOnboarding';
 import type SpecoratorPlugin from '@/main';
 import { getEnhancedPath } from '@/utils/env';
 import { getVaultPath } from '@/utils/path';
@@ -26,6 +27,62 @@ export class PluginLifecycle {
     this.plugin.registerEvent(this.plugin.app.vault.on('create', () => refreshGit()));
     this.plugin.registerEvent(this.plugin.app.vault.on('delete', () => refreshGit()));
     this.plugin.registerEvent(this.plugin.app.vault.on('rename', () => refreshGit()));
+  }
+
+  /**
+   * Restored views constructed before provider workspace services were ready may
+   * have mounted the empty-state placeholder; reprobe so they promote to the full
+   * tab UI now that providers exist. One failing view never blocks the rest.
+   */
+  async refreshRestoredViews(): Promise<void> {
+    for (const view of this.plugin.getAllViews()) {
+      try {
+        await view.refreshProviderAvailability();
+      } catch (error) {
+        this.plugin.logger.scope('onload').error('view refresh after deferred init failed', error);
+      }
+    }
+  }
+
+  /**
+   * Runs the post-`onLayoutReady` startup work, then the first-run Setup open.
+   *
+   * The open is sequenced with an unconditional continuation, not chained onto
+   * success: `completeDeferredOnload` bails out when provider workspace
+   * initialization fails and can reject outright when a cache hydration throws,
+   * and a vault where that happens is precisely where the user most needs the
+   * Setup view (CLI detection already degrades to `unknown` without workspace
+   * services). Gating onboarding on unrelated startup success would leave a
+   * fresh vault with no first-run surface at all.
+   */
+  async runDeferredStartup(
+    completeDeferredOnload: () => Promise<void>,
+    isUnloaded: () => boolean,
+  ): Promise<void> {
+    try {
+      await completeDeferredOnload();
+    } catch (error) {
+      this.plugin.logger.scope('onload').error('deferred onload failed', error);
+    }
+    // Unload is the one case that must NOT continue: the flow persists its
+    // auto-open flag before activating, so opening a leaf on a torn-down plugin
+    // would burn the one auto-open the vault gets. An ordinary init failure
+    // still continues — that is the whole point of the unconditional path.
+    if (isUnloaded()) return;
+    await this.openOnboardingIfFirstRun();
+  }
+
+  /**
+   * Opens the guided Setup view on a genuine first run. Failure is logged, never
+   * propagated: a plugin load must not break because an onboarding leaf would not
+   * open.
+   */
+  async openOnboardingIfFirstRun(): Promise<void> {
+    try {
+      await maybeOpenOnboarding(this.plugin);
+    } catch (error) {
+      this.plugin.logger.scope('onload').error('onboarding view open failed', error);
+    }
   }
 
   shutdownActiveRuntimes(): void {

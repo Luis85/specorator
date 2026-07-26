@@ -17,6 +17,44 @@ export const claudeProviderRegistration: ProviderRegistration = {
   displayName: 'Claude',
   firstRunBlurb: 'Anthropic Claude Code',
   cliCommand: 'claude',
+  cliInstall: {
+    docsUrl: 'https://code.claude.com/docs/en/quickstart',
+    authCommand: 'claude',
+    // `createCustomSpawnFunction` prefixes a Node entry point with the Node
+    // executable, so those launch; a `.cmd` does NOT, because the SDK owns the
+    // stdio stream and cmd.exe cannot sit in front of it — the same reason
+    // `findClaudeCLIPath` skips `.cmd` while probing and prefers `claude.exe`.
+    launchForms: ['node'],
+    methods: [
+      {
+        id: 'npm',
+        label: 'npm (global)',
+        displayCommand: 'npm install -g @anthropic-ai/claude-code',
+        argv: { command: 'npm', args: ['install', '-g', '@anthropic-ai/claude-code'] },
+        // NOT offered on Windows: npm's global bin holds `claude.cmd` plus an
+        // extensionless POSIX sh shim, and this provider can launch neither —
+        // so a "successful" install would be followed by a card that still says
+        // unusable. The native installer below is the Windows route; it lands a
+        // real `claude.exe`, which is what `findClaudeCLIPath` probes for first.
+        platforms: ['darwin', 'linux'],
+      },
+      // Piped installer scripts need a shell, so they stay copy-only (argv: null).
+      {
+        id: 'native',
+        label: 'Native installer',
+        displayCommand: 'irm https://claude.ai/install.ps1 | iex',
+        argv: null,
+        platforms: ['win32'],
+      },
+      {
+        id: 'native',
+        label: 'Native installer',
+        displayCommand: 'curl -fsSL https://claude.ai/install.sh | bash',
+        argv: null,
+        platforms: ['darwin', 'linux'],
+      },
+    ],
+  },
   blankTabOrder: 20,
   isEnabled: (settings) => getClaudeProviderSettings(settings).enabled,
   // The SDK loads `~/.claude/skills` only when the `user` setting source is on,

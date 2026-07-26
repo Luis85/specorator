@@ -234,7 +234,10 @@ export default class SpecoratorPlugin extends Plugin implements PluginContext {
     // finished" signal; provider services don't have to exist for view
     // restoration since runtime services are lazy-initialized per tab.
     this.app.workspace.onLayoutReady(() => {
-      void this.completeDeferredOnload();
+      void this.lifecycle.runDeferredStartup(
+        () => this.completeDeferredOnload(),
+        () => this.unloaded,
+      );
     });
   }
 
@@ -270,16 +273,7 @@ export default class SpecoratorPlugin extends Plugin implements PluginContext {
     await lastUsedStore.hydrate();
     if (this.unloaded) return;
     this.quickActionLastUsedStore = lastUsedStore;
-    // Restored views constructed before provider services were ready may have
-    // mounted the empty-state placeholder; reprobe so they can promote to the
-    // full tab UI now that providers are available.
-    for (const view of this.getAllViews()) {
-      try {
-        await view.refreshProviderAvailability();
-      } catch (error) {
-        this.logger.scope('onload').error('view refresh after deferred init failed', error);
-      }
-    }
+    await this.lifecycle.refreshRestoredViews();
   }
 
   onunload(): void {

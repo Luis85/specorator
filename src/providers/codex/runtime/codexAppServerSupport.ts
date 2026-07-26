@@ -30,7 +30,17 @@ export function buildCodexAppServerEnvironment(
   return buildFullSubprocessEnvironment({
     processEnv: process.env,
     customEnv,
-    pathOverride: getEnhancedPath(pickEnvValueCaseInsensitive(customEnv, 'PATH')),
+    // The CLI's own directory is part of the enhanced path, as it is for the
+    // other three providers: a distribution that ships its interpreter beside
+    // the entry point (or an `env node` shebang answered by a sibling `node`)
+    // resolves at spawn only if that directory is searched. Omitting it also put
+    // this spawn out of step with the setup view's probe, which searches
+    // `getEnhancedPath(runtimePath, cliPath)` — Setup would report `found` for a
+    // sibling interpreter this env could not then find.
+    pathOverride: getEnhancedPath(
+      pickEnvValueCaseInsensitive(customEnv, 'PATH'),
+      plugin.getResolvedProviderCliPath(providerId) ?? undefined,
+    ),
   });
 }
 

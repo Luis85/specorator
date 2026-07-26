@@ -15,7 +15,7 @@
       "subheading": "Browse curated Quick Actions, Agents, Loops, Templates, and Skills and install them into your vault."
     },
     "seeAll": "See all",
-    "sectionCount": "{count} items",
+    "sectionCount": "{count} available",
     "detail": {
       "back": "Back"
     },
@@ -61,6 +61,14 @@
       "scopeUser": "User (all vaults)",
       "installedHere": "Installed here",
       "userScopeHint": "User scope installs to your home directory (outside this vault), shared across all your vaults."
+    },
+    "failedNoticeReason": "Couldn't install \"{name}\": {reason}",
+    "installedPackageNotice": "Installed \"{name}\" and {count} of its required items.",
+    "completedPackageNotice": "\"{name}\" was already installed — added {count} of its required items.",
+    "package": {
+      "heading": "Included with this install",
+      "install": "Install all ({count})",
+      "skillTargetHint": "The skills in this package install into:"
     }
   },
   "common": {
@@ -1341,5 +1349,124 @@
     "agentRemoved": "This agent was removed from your team — the chat is read-only. Pick another agent to continue.",
     "agentVerifyFailed": "Couldn't verify the agent — please try again.",
     "actionUnavailableInDm": "Not available in Team Chat — each agent has one fixed thread."
+  },
+  "onboarding": {
+    "viewTitle": "설정",
+    "command": {
+      "open": "설정 가이드 열기"
+    },
+    "heading": "Specorator 설정",
+    "subheading": "사용할 코딩 에이전트를 고르고 보관함 기본값을 확인하세요. 여기 있는 항목은 모두 설정에도 있으며, 변경 사항은 즉시 저장됩니다.",
+    "stepLabel": "설정 단계",
+    "next": "다음",
+    "back": "뒤로",
+    "finishButton": "완료",
+    "close": "닫기",
+    "openSetup": "설정 가이드 열기",
+    "step": {
+      "providers": "제공자",
+      "defaults": "기본값",
+      "folders": "폴더",
+      "workspace": "작업 공간",
+      "marketplace": "마켓플레이스",
+      "finish": "완료"
+    },
+    "providers": {
+      "heading": "제공자 선택",
+      "intro": "Specorator는 직접 설치한 에이전트 CLI를 구동합니다. 이 컴퓨터에 이미 있는 제공자가 먼저 표시됩니다. 사용할 항목을 켜세요.",
+      "detected": "설치됨",
+      "notDetected": "찾을 수 없음",
+      "unknown": "아직 확인하지 않음",
+      "unknownNoResolver": "아직 확인할 수 없습니다. 플러그인을 다시 불러온 다음 \"다시 확인\"을 사용하세요.",
+      "unknownExternal": "{command} 을(를) 다른 대상(예: WSL)에서 실행하므로 여기서는 확인할 수 없습니다.",
+      "rescan": "다시 확인",
+      "rescanning": "확인 중…",
+      "use": "{name} 사용",
+      "enabled": "활성화됨",
+      "foundAt": "경로",
+      "needsCli": "PATH에 {command} 명령이 필요합니다.",
+      "notExecutable": "{path} 에 파일은 있지만 실행할 수 없습니다. 권한을 수정하거나 다시 설치하세요.",
+      "batchShim": "{path} 은(는) .cmd 심으로, 여기서는 {command} 을(를) 실행할 수 없습니다. 네이티브 실행 파일(.exe)을 지정하세요.",
+      "missingNode": "{path} 을(를) 실행하려면 Node.js가 필요하지만 PATH에 Node가 없습니다. Node.js를 설치하거나 Node가 필요 없는 네이티브 설치 프로그램을 사용한 뒤 다시 확인하세요.",
+      "unsupportedForm": "이 제공자가 실행하는 방식으로는 Windows가 {path} 을(를) 시작할 수 없습니다. 네이티브 실행 파일(.exe)을 지정하세요.",
+      "authHint": "아직 로그인하지 않았다면 터미널에서 {command}를 한 번 실행하세요.",
+      "docs": "설치 문서",
+      "noneEnabled": "활성화된 제공자가 없습니다",
+      "enabledCount": "{count}개 활성화"
+    },
+    "install": {
+      "heading": "CLI 설치",
+      "method": "방법",
+      "run": "지금 설치",
+      "running": "설치 중…",
+      "otherRunning": "{name} 설치가 끝나기를 기다리는 중입니다 — 한 번에 하나씩만 진행됩니다.",
+      "cancel": "취소",
+      "manualOnly": "이 방법은 설치 스크립트를 실행하므로 직접 터미널에서 실행해야 합니다. 아래 명령을 복사하세요.",
+      "copy": "복사",
+      "copied": "복사됨",
+      "confirm": "Specorator가 이 컴퓨터에서 \"{command}\"를 실행합니다. 계속할까요?",
+      "confirmRun": "설치 실행",
+      "succeeded": "{name}을(를) 설치했습니다. 감지 결과를 갱신했습니다.",
+      "failed": "설치 실패: {error}",
+      "cancelled": "설치를 취소했습니다.",
+      "consoleLabel": "설치 프로그램 출력",
+      "manualPath": "경로 직접 지정",
+      "manualPathEdit": "경로 변경",
+      "manualPathClearHint": "비워 두면 경로가 지워지고 자동 감지로 돌아갑니다.",
+      "manualPathPlaceholder": "실행 파일의 전체 경로",
+      "manualPathSave": "경로 저장"
+    },
+    "defaults": {
+      "heading": "채팅 기본값",
+      "intro": "새 대화를 위한 합리적인 시작값입니다. 나중에 채팅 도구 모음에서 모두 바꿀 수 있습니다.",
+      "model": "기본 모델",
+      "modelDesc": "새 대화에 사용됩니다.",
+      "permission": "도구 승인",
+      "permissionDesc": "새 대화는 에이전트가 파일을 쓰거나 명령을 실행하기 전에 확인합니다. 계획 모드와 승인 생략은 대화별로 도구 모음에서 고르는 항목입니다. 계획은 앱이 재시작 시 초기화하므로 의도적으로 저장되는 기본값이 아닙니다.",
+      "titles": "대화 이름 자동 생성",
+      "titlesDesc": "첫 메시지로 짧은 제목을 만듭니다.",
+      "needsProvider": "기본 모델을 고르려면 이전 단계에서 제공자를 활성화하세요."
+    },
+    "folders": {
+      "heading": "보관함 폴더",
+      "intro": "작업 지시서, 템플릿, 루프, 빠른 작업은 보관함 안의 일반 Markdown 노트입니다. 저장 위치를 확인하세요.",
+      "exists": "폴더가 있습니다",
+      "willCreate": "생성될 예정",
+      "blank": "설정되지 않음 — 이 기능은 비활성 상태로 유지됩니다",
+      "create": "없는 폴더 만들기",
+      "creating": "생성 중…",
+      "created": "모든 폴더가 있습니다",
+      "createFailed": "폴더를 만들 수 없습니다: {error}",
+      "workOrders": "작업 지시서",
+      "templates": "작업 지시서 템플릿",
+      "loops": "루프",
+      "archive": "보관",
+      "quickActions": "빠른 작업"
+    },
+    "workspace": {
+      "heading": "채팅 위치",
+      "intro": "Specorator 채팅은 사이드바에 두거나 편집기 탭 전체를 사용할 수 있습니다.",
+      "placement": "채팅을 열 위치",
+      "placementRight": "오른쪽 사이드바",
+      "placementLeft": "왼쪽 사이드바",
+      "placementMain": "기본 편집기 탭",
+      "maxTabs": "최대 채팅 탭 수",
+      "maxTabsDesc": "열린 각 탭은 자체 에이전트 세션을 유지합니다."
+    },
+    "marketplace": {
+      "heading": "마켓플레이스(선택)",
+      "intro": "마켓플레이스에서는 바로 쓸 수 있는 에이전트, 스킬, 루프, 템플릿, 빠른 작업을 설치할 수 있습니다. 원격 카탈로그를 받아오므로 직접 켜기 전까지는 꺼져 있습니다.",
+      "enable": "마켓플레이스가 카탈로그를 받아오도록 허용",
+      "enabled": "카탈로그 가져오기가 켜져 있습니다",
+      "browse": "마켓플레이스 살펴보기"
+    },
+    "finish": {
+      "heading": "준비 완료",
+      "intro": "채팅 탭을 열고 첫 메시지를 보내보세요. 라이브러리, Agent Board, 마켓플레이스는 왼쪽 리본에 있습니다.",
+      "providersReady": "활성화됨: {names}",
+      "noProviders": "활성화된 제공자가 없습니다. 하나를 켜기 전까지 채팅은 비어 있습니다.",
+      "openChat": "채팅 열기",
+      "reopenHint": "이 가이드는 명령 팔레트의 \"설정 가이드 열기\"로 언제든 다시 열 수 있습니다."
+    }
   }
 }

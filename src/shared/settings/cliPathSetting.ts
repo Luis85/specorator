@@ -91,10 +91,17 @@ export function addCliPathTextControl(options: CliPathTextControlOptions): void 
   });
 }
 
-/** Restart every open tab's runtime so the next turn picks up the new CLI path. */
+/**
+ * Restart every open tab's runtime so the next turn picks up the new CLI path.
+ *
+ * Iterates `getAllViews()`, not `getView()`: Obsidian can host several
+ * Specorator leaves, and cleaning only the first left the others' persistent
+ * runtimes spawning the previous executable — a silent half-broadcast.
+ */
 export async function broadcastCliPathRuntimeCleanup(plugin: PluginContext): Promise<void> {
-  const view = plugin.getView();
-  await view?.getTabManager()?.broadcastToAllTabs(
-    (service) => Promise.resolve(service.cleanup()),
-  );
+  await Promise.all(plugin.getAllViews().map((view) => (
+    view.getTabManager()?.broadcastToAllTabs(
+      (service) => Promise.resolve(service.cleanup()),
+    ) ?? Promise.resolve()
+  )));
 }

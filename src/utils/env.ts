@@ -11,6 +11,28 @@ const NODE_EXECUTABLE = isWindows ? 'node.exe' : 'node';
 const DEVICE_SETTINGS_STORAGE_KEY = 'specorator.deviceSettingsKey';
 let cachedDeviceSettingsKey: string | null = null;
 
+/**
+ * True when the candidate is a real file this host can actually EXECUTE.
+ *
+ * A regular file is not enough: a `node` without `+x` fails at spawn with
+ * `EACCES`, so returning its directory would hand the caller an interpreter that
+ * cannot run while a working one further along PATH went unfound — and the
+ * onboarding probe would report a Node-backed CLI as ready on the strength of
+ * it. `X_OK` is a no-op on Windows (Node treats it as an existence check), where
+ * executability comes from the extension.
+ */
+function isExecutableNode(nodePath: string): boolean {
+  try {
+    if (!fs.existsSync(nodePath) || !fs.statSync(nodePath).isFile()) {
+      return false;
+    }
+    fs.accessSync(nodePath, fs.constants.X_OK);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 export function findNodeDirectory(additionalPaths?: string): string | null {
   const searchPaths = getExtraBinaryPaths();
 
@@ -22,12 +44,8 @@ export function findNodeDirectory(additionalPaths?: string): string | null {
   for (const dir of allPaths) {
     if (!dir) continue;
     try {
-      const nodePath = path.join(dir, NODE_EXECUTABLE);
-      if (fs.existsSync(nodePath)) {
-        const stat = fs.statSync(nodePath);
-        if (stat.isFile()) {
-          return dir;
-        }
+      if (isExecutableNode(path.join(dir, NODE_EXECUTABLE))) {
+        return dir;
       }
     } catch {
       // Inaccessible directory

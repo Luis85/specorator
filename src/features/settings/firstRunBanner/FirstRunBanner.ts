@@ -1,5 +1,7 @@
 import { ProviderRegistry } from '../../../core/providers/ProviderRegistry';
 import type { ProviderId } from '../../../core/providers/types';
+import { t } from '../../../i18n/i18n';
+import { activateOnboarding } from '../../onboarding/activateOnboarding';
 import type { SettingsCtx } from '../registry/SettingsField';
 
 export class FirstRunBanner {
@@ -29,6 +31,14 @@ export class FirstRunBanner {
       text.createEl('code', { text: ProviderRegistry.getCliCommand(id) });
     }
     const actions = card.createDiv({ cls: 'specorator-first-run-actions' });
+    // The guided view is the real setup surface (CLI detection, install, folders);
+    // this banner is its discoverable re-entry point from Settings.
+    const setupBtn = actions.createEl('button', {
+      text: t('onboarding.openSetup'),
+      cls: 'mod-cta',
+    });
+    setupBtn.dataset.action = 'open-setup';
+    setupBtn.onclick = () => { void activateOnboarding(this.ctx.plugin); };
     const enableBtn = actions.createEl('button', { text: 'Enable selected' });
     enableBtn.dataset.action = 'enable';
     enableBtn.onclick = () => { void this.handleEnable(); };

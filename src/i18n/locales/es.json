@@ -15,7 +15,7 @@
       "subheading": "Browse curated Quick Actions, Agents, Loops, Templates, and Skills and install them into your vault."
     },
     "seeAll": "See all",
-    "sectionCount": "{count} items",
+    "sectionCount": "{count} available",
     "detail": {
       "back": "Back"
     },
@@ -61,6 +61,14 @@
       "scopeUser": "User (all vaults)",
       "installedHere": "Installed here",
       "userScopeHint": "User scope installs to your home directory (outside this vault), shared across all your vaults."
+    },
+    "failedNoticeReason": "Couldn't install \"{name}\": {reason}",
+    "installedPackageNotice": "Installed \"{name}\" and {count} of its required items.",
+    "completedPackageNotice": "\"{name}\" was already installed — added {count} of its required items.",
+    "package": {
+      "heading": "Included with this install",
+      "install": "Install all ({count})",
+      "skillTargetHint": "The skills in this package install into:"
     }
   },
   "common": {
@@ -1341,5 +1349,124 @@
     "agentRemoved": "This agent was removed from your team — the chat is read-only. Pick another agent to continue.",
     "agentVerifyFailed": "Couldn't verify the agent — please try again.",
     "actionUnavailableInDm": "Not available in Team Chat — each agent has one fixed thread."
+  },
+  "onboarding": {
+    "viewTitle": "Configuración",
+    "command": {
+      "open": "Abrir la guía de configuración"
+    },
+    "heading": "Configurar Specorator",
+    "subheading": "Elige los agentes de código que quieras usar y confirma algunos valores del vault. Todo esto está también en Ajustes, y cada cambio se guarda al instante.",
+    "stepLabel": "Pasos de configuración",
+    "next": "Siguiente",
+    "back": "Atrás",
+    "finishButton": "Finalizar",
+    "close": "Cerrar",
+    "openSetup": "Abrir la guía de configuración",
+    "step": {
+      "providers": "Proveedores",
+      "defaults": "Valores por defecto",
+      "folders": "Carpetas",
+      "workspace": "Espacio de trabajo",
+      "marketplace": "Mercado",
+      "finish": "Finalizar"
+    },
+    "providers": {
+      "heading": "Elige tus proveedores",
+      "intro": "Specorator controla CLIs de agentes que instalas tú. Los proveedores que ya están en este equipo aparecen primero: activa los que quieras usar.",
+      "detected": "Instalado",
+      "notDetected": "No encontrado",
+      "unknown": "Sin comprobar",
+      "unknownNoResolver": "Todavía no se pudo comprobar: recarga el plugin y luego usa «Comprobar de nuevo».",
+      "unknownExternal": "Ejecuta {command} en otro destino (como WSL), que no se puede comprobar desde aquí.",
+      "rescan": "Comprobar de nuevo",
+      "rescanning": "Comprobando…",
+      "use": "Usar {name}",
+      "enabled": "Activado",
+      "foundAt": "Encontrado en",
+      "needsCli": "Necesita el comando {command} en tu PATH.",
+      "notExecutable": "Hay un archivo en {path}, pero no es ejecutable: corrige sus permisos o reinstala.",
+      "batchShim": "{path} es un shim .cmd desde el que no se puede iniciar {command}: apunta a la ejecutable nativa (.exe) en su lugar.",
+      "missingNode": "{path} necesita Node.js para ejecutarse y Node no está en tu PATH. Instala Node.js —o usa el instalador nativo, que no lo necesita— y vuelve a comprobar.",
+      "unsupportedForm": "Windows no puede iniciar {path} de la forma en que este proveedor lo ejecuta: apunta a la ejecutable nativa (.exe).",
+      "authHint": "¿Aún sin iniciar sesión? Ejecuta {command} una vez en una terminal.",
+      "docs": "Documentación de instalación",
+      "noneEnabled": "Ningún proveedor activado",
+      "enabledCount": "{count} activados"
+    },
+    "install": {
+      "heading": "Instalar la CLI",
+      "method": "Método",
+      "run": "Instalar ahora",
+      "running": "Instalando…",
+      "otherRunning": "Esperando a que termine la instalación de {name}: solo una a la vez.",
+      "cancel": "Cancelar",
+      "manualOnly": "Este método ejecuta un script de instalación, así que hay que lanzarlo en tu propia terminal. Copia el comando de abajo.",
+      "copy": "Copiar",
+      "copied": "Copiado",
+      "confirm": "Specorator ejecutará «{command}» en este equipo. ¿Continuar?",
+      "confirmRun": "Ejecutar instalación",
+      "succeeded": "{name} instalado. Detección actualizada.",
+      "failed": "La instalación falló: {error}",
+      "cancelled": "Instalación cancelada.",
+      "consoleLabel": "Salida del instalador",
+      "manualPath": "Establecer la ruta manualmente",
+      "manualPathEdit": "Cambiar la ruta",
+      "manualPathClearHint": "Déjalo en blanco para borrar la ruta y volver a la detección automática.",
+      "manualPathPlaceholder": "Ruta completa al ejecutable",
+      "manualPathSave": "Guardar ruta"
+    },
+    "defaults": {
+      "heading": "Valores por defecto del chat",
+      "intro": "Puntos de partida razonables para cada conversación nueva. Puedes cambiar cualquiera desde la barra de herramientas del chat.",
+      "model": "Modelo por defecto",
+      "modelDesc": "Se usa en las conversaciones nuevas.",
+      "permission": "Aprobación de herramientas",
+      "permissionDesc": "Las conversaciones nuevas preguntan antes de que un agente escriba archivos o ejecute comandos. El modo Plan y saltarse las aprobaciones se eligen por conversación en la barra de herramientas: Plan no es un valor por defecto guardado a propósito, porque la app lo restablece al reiniciar.",
+      "titles": "Nombrar conversaciones automáticamente",
+      "titlesDesc": "Genera un título corto a partir de tu primer mensaje.",
+      "needsProvider": "Activa un proveedor en el paso anterior para elegir un modelo por defecto."
+    },
+    "folders": {
+      "heading": "Carpetas del vault",
+      "intro": "Las órdenes de trabajo, plantillas, bucles y acciones rápidas son notas Markdown en tu vault. Confirma dónde deben vivir.",
+      "exists": "La carpeta existe",
+      "willCreate": "Se creará",
+      "blank": "Sin configurar — esta función queda desactivada",
+      "create": "Crear las carpetas que falten",
+      "creating": "Creando…",
+      "created": "Todas las carpetas existen",
+      "createFailed": "No se pudieron crear las carpetas: {error}",
+      "workOrders": "Órdenes de trabajo",
+      "templates": "Plantillas de orden de trabajo",
+      "loops": "Bucles",
+      "archive": "Archivo",
+      "quickActions": "Acciones rápidas"
+    },
+    "workspace": {
+      "heading": "Dónde vive el chat",
+      "intro": "El chat de Specorator puede estar en una barra lateral o ocupar una pestaña completa del editor.",
+      "placement": "Abrir el chat en",
+      "placementRight": "Barra lateral derecha",
+      "placementLeft": "Barra lateral izquierda",
+      "placementMain": "Pestaña principal del editor",
+      "maxTabs": "Máximo de pestañas de chat",
+      "maxTabsDesc": "Cada pestaña abierta mantiene su propia sesión de agente activa."
+    },
+    "marketplace": {
+      "heading": "Mercado (opcional)",
+      "intro": "El Mercado instala agentes, habilidades, bucles, plantillas y acciones rápidas ya preparados. Descarga un catálogo remoto, así que permanece desactivado hasta que lo habilites.",
+      "enable": "Permitir que el Mercado descargue su catálogo",
+      "enabled": "La descarga del catálogo está activada",
+      "browse": "Explorar el Mercado"
+    },
+    "finish": {
+      "heading": "Todo listo",
+      "intro": "Abre una pestaña de chat y envía tu primer mensaje. La Biblioteca, el Agent Board y el Mercado están en la cinta izquierda.",
+      "providersReady": "Activados: {names}",
+      "noProviders": "Aún no hay ningún proveedor activado: el chat seguirá vacío hasta que actives uno.",
+      "openChat": "Abrir el chat",
+      "reopenHint": "Puedes volver a abrir esta guía cuando quieras desde la paleta de comandos: «Abrir la guía de configuración»."
+    }
   }
 }

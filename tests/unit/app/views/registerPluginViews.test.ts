@@ -3,6 +3,7 @@ import { VIEW_TYPE_SPECORATOR, VIEW_TYPE_SPECORATOR_AGENT_BOARD } from '@/core/t
 import { activateLibrary } from '@/features/library/activateLibrary';
 import { VIEW_TYPE_LIBRARY } from '@/features/library/viewType';
 import { VIEW_TYPE_MARKETPLACE } from '@/features/marketplace/viewType';
+import { VIEW_TYPE_ONBOARDING } from '@/features/onboarding/viewType';
 import type { ChatTabExecutionSurface } from '@/features/tasks/execution/ChatTabExecutionSurface';
 import { VIEW_TYPE_TEAM_CHAT } from '@/features/teamChat/viewType';
 import type SpecoratorPlugin from '@/main';
@@ -40,7 +41,7 @@ function register(plugin: SpecoratorPlugin): void {
 describe('registerPluginViews', () => {
   beforeEach(() => jest.clearAllMocks());
 
-  it('registers the five workspace views', () => {
+  it('registers every workspace view', () => {
     const { plugin } = createPlugin();
     register(plugin);
     const types = (plugin.registerView as jest.Mock).mock.calls.map(([type]) => type);
@@ -50,7 +51,16 @@ describe('registerPluginViews', () => {
       VIEW_TYPE_SPECORATOR_AGENT_BOARD,
       VIEW_TYPE_LIBRARY,
       VIEW_TYPE_MARKETPLACE,
+      VIEW_TYPE_ONBOARDING,
     ]);
+  });
+
+  it('gives the Setup view no ribbon icon — it opens itself once, then lives on a command', () => {
+    const { plugin, ribbons } = createPlugin();
+    register(plugin);
+    expect(ribbons).toHaveLength(5);
+    expect((plugin.registerView as jest.Mock).mock.calls.map(([type]) => type))
+      .toContain(VIEW_TYPE_ONBOARDING);
   });
 
   it('registers the ribbons in chat → team chat → board → library → marketplace order', () => {

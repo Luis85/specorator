@@ -1,10 +1,11 @@
 import type { ViewStateResult, WorkspaceLeaf } from 'obsidian';
 import { ItemView } from 'obsidian';
 import type { App as VueApp } from 'vue';
-import { createApp, markRaw, ref } from 'vue';
+import { markRaw, ref } from 'vue';
 
 import { t } from '../../i18n/i18n';
 import type SpecoratorPlugin from '../../main';
+import { mountLeafIsland, unmountLeafIsland } from '../../shared/vue/leafIsland';
 import type { LibraryTab } from './viewType';
 import { VIEW_TYPE_LIBRARY } from './viewType';
 import { getLibraryPinia } from './vue/globalPinia';
@@ -12,6 +13,7 @@ import { ACTIVE_TAB_KEY, PLUGIN_KEY, TAB_GUARD_KEY, VIEW_KEY } from './vue/libra
 import LibraryRoot from './vue/LibraryRoot.vue';
 
 const DEFAULT_TAB: LibraryTab = 'agents';
+const HOST_CLASS = 'specorator-library-vue-root';
 
 function isLibraryTab(value: unknown): value is LibraryTab {
   return value === 'agents' || value === 'skills' || value === 'loops' || value === 'quick-actions';
@@ -72,34 +74,22 @@ export class LibraryView extends ItemView {
   }
 
   async onOpen(): Promise<void> {
-    // Popout/move flows can run onOpen twice on one view instance
-    // (Hover Editor-style; see SpecoratorView) — drop any previous island
-    // before mounting a fresh one.
-    this.vueApp?.unmount();
-    this.vueApp = null;
-    this.contentEl.empty();
-    // Two calls, not one: Obsidian's real addClass is variadic but the shared
-    // test-lane polyfill (tests/setup/obsidianDom.ts) is single-arg.
-    this.contentEl.addClass('specorator-vue');
-    this.contentEl.addClass('specorator-library-vue-root');
-    const app = createApp(LibraryRoot);
-    app.use(getLibraryPinia());
-    // markRaw: Obsidian objects are large and cyclic; never deep-proxy them.
-    app.provide(PLUGIN_KEY, markRaw(this.plugin));
-    app.provide(VIEW_KEY, markRaw(this));
-    app.provide(ACTIVE_TAB_KEY, this.activeTab);
-    app.provide(TAB_GUARD_KEY, this.tabGuard);
-    app.mount(this.contentEl);
-    this.vueApp = app;
+    this.vueApp = mountLeafIsland(this.contentEl, this.vueApp, {
+      component: LibraryRoot,
+      pinia: getLibraryPinia(),
+      hostClass: HOST_CLASS,
+      provide: (app) => {
+        // markRaw: Obsidian objects are large and cyclic; never deep-proxy them.
+        app.provide(PLUGIN_KEY, markRaw(this.plugin));
+        app.provide(VIEW_KEY, markRaw(this));
+        app.provide(ACTIVE_TAB_KEY, this.activeTab);
+        app.provide(TAB_GUARD_KEY, this.tabGuard);
+      },
+    });
   }
 
   async onClose(): Promise<void> {
-    // unmount() runs onUnmounted hooks; empty() drops any detached DOM +
-    // listeners (Vue's documented leak class when the container is kept).
-    this.vueApp?.unmount();
+    unmountLeafIsland(this.contentEl, this.vueApp, HOST_CLASS);
     this.vueApp = null;
-    this.contentEl.removeClass('specorator-vue');
-    this.contentEl.removeClass('specorator-library-vue-root');
-    this.contentEl.empty();
   }
 }
