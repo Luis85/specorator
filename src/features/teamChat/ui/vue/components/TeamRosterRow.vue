@@ -113,15 +113,16 @@ const accessibleLabel = computed(() =>
           <PresenceDot :state="dotState" />
         </div>
       </div>
-      <!-- Keyboard-reachable twin of the right-click menu. Revealed on row hover/focus
-           so it doesn't clutter a 20-row rail, but it stays in the tab order under the
-           row's own roving tabindex rather than being mouse-only. -->
+      <!-- Pointer twin of the context menu, revealed on row hover/focus. ALWAYS
+           `tabindex="-1"`: the listbox is meant to be ONE tab stop, and a focusable
+           descendant would make the focused row two — the composite-widget rule. Keyboard
+           users reach the same menu with Shift+F10 / the ContextMenu key on the row. -->
       <button
         type="button"
         class="specorator-team-roster-row-menu"
         :aria-label="t('teamChat.rowActions')"
         :title="t('teamChat.rowActions')"
-        :tabindex="props.tabbable ? 0 : -1"
+        tabindex="-1"
         @click.stop="emit('menu', $event)"
       >
         ⋯

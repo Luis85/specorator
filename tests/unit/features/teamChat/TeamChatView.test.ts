@@ -249,7 +249,7 @@ describe('TeamChatView — selectedAgentId projects from the active tab', () => 
       activeProviderId: 'claude',
       presence: {},
       // The roster-projection trio: no thread map on this fake, so all three are empty.
-      activeModelId: null,
+      activeModelLabel: null,
       threads: {},
       unread: {},
       activeDmIsEmpty: true,

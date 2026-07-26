@@ -25,7 +25,7 @@ export interface TeamChatSnapshot {
   /** The active DM's model id, or null when unknown — rendered beside the provider
    *  chip. Null (not a placeholder) when the provider can't name a model, so the
    *  chip hides rather than showing a hollow slot. */
-  activeModelId: string | null;
+  activeModelLabel: string | null;
   /** Per-agent DM projection (preview + last activity) for the roster rows. Agents
    *  with no resolved/loaded thread are absent, which the rail renders as the
    *  agent's description. */

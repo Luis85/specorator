@@ -14,9 +14,10 @@ vi.mock('@/features/agents/agentAvatar', () => ({ renderAgentAvatar: vi.fn() }))
 
 // The row/top-bar menus are Obsidian Menus; capture the built items so the tests can
 // assert WHAT is offered without rendering a real menu.
-const { menuItems, showAtMouseEvent } = vi.hoisted(() => ({
+const { menuItems, showAtMouseEvent, showAtPosition } = vi.hoisted(() => ({
   menuItems: [] as string[],
   showAtMouseEvent: vi.fn(),
+  showAtPosition: vi.fn(),
 }));
 vi.mock('obsidian', async () => {
   const actual = await vi.importActual<Record<string, unknown>>('obsidian');
@@ -34,6 +35,8 @@ vi.mock('obsidian', async () => {
       }
 
       showAtMouseEvent = showAtMouseEvent;
+
+      showAtPosition = showAtPosition;
     },
   };
 });
@@ -500,5 +503,42 @@ describe('row-menu key guard is realm-neutral', () => {
 
     expect(callbacks.onSelectAgent).not.toHaveBeenCalled();
     expect(event.defaultPrevented).toBe(false);
+  });
+});
+
+describe('row menu stays out of the roving tab order', () => {
+  // The listbox is meant to be ONE tab stop. A focusable descendant made the focused row
+  // two sequential stops, which is exactly what the composite-widget pattern forbids.
+  it('keeps the menu button un-tabbable even on the focused row', async () => {
+    mountRoot(makePlugin(TEAM), makeCallbacks());
+    await awaitRoster();
+    const row = await rosterRow('Ada');
+
+    expect(row.getAttribute('tabindex')).toBe('0');
+    expect(row.querySelector('.specorator-team-roster-row-menu')?.getAttribute('tabindex')).toBe('-1');
+  });
+
+  // ...so the keyboard route to the menu is a row-level gesture instead.
+  it('opens the row menu on Shift+F10 and on the ContextMenu key', async () => {
+    mountRoot(makePlugin(TEAM), makeCallbacks());
+    const list = await awaitRoster();
+
+    await fireEvent.keyDown(list, { key: 'F10', shiftKey: true });
+    expect(menuItems).toContain(t('teamChat.menuOpenChat'));
+    expect(showAtPosition).toHaveBeenCalled();
+
+    menuItems.length = 0;
+    await fireEvent.keyDown(list, { key: 'ContextMenu' });
+    expect(menuItems).toContain(t('teamChat.menuOpenChat'));
+  });
+
+  it('does not open the DM when the menu gesture fires', async () => {
+    const callbacks = makeCallbacks();
+    mountRoot(makePlugin(TEAM), callbacks);
+    const list = await awaitRoster();
+
+    await fireEvent.keyDown(list, { key: 'F10', shiftKey: true });
+
+    expect(callbacks.onSelectAgent).not.toHaveBeenCalled();
   });
 });

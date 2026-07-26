@@ -8,7 +8,7 @@ import type { RosterAgent } from '../../../agents/roster/rosterTypes';
 import { useRosterStore } from '../../../library/vue/stores/rosterStore';
 import { useLibraryList } from '../../../library/vue/useLibraryList';
 import { activateMarketplace } from '../../../marketplace/activateMarketplace';
-import { showAgentActionMenu } from './agentActionMenu';
+import { type AgentActionMenuAnchor, showAgentActionMenu } from './agentActionMenu';
 import TeamRosterEmpty from './components/TeamRosterEmpty.vue';
 import TeamRosterRow from './components/TeamRosterRow.vue';
 import TeamRosterToolbar from './components/TeamRosterToolbar.vue';
@@ -82,7 +82,21 @@ const keyboard = useRosterKeyboard(
   () => rows.value.map((agent) => agent.id),
   (agentId) => selectAgent(agentId),
   focusRowElement,
+  (agentId) => openMenuForFocusedRow(agentId),
 );
+
+/**
+ * The keyboard route to the row menu (Shift+F10 / ContextMenu). The `⋯` button is out of
+ * the tab order so the listbox stays ONE tab stop, so this is how a keyboard user reaches
+ * it. Anchored to the focused row's own box rather than a pointer position.
+ */
+function openMenuForFocusedRow(agentId: string): void {
+  const agent = rows.value.find((candidate) => candidate.id === agentId);
+  if (!agent) return;
+  const row = listEl.value?.querySelectorAll<HTMLElement>('[role="option"]')[keyboard.focusedIndex.value];
+  const rect = row?.getBoundingClientRect();
+  openRowMenu(agent, rect ? { x: rect.left, y: rect.bottom } : { x: 0, y: 0 });
+}
 
 // Keep the roving focus on the SELECTED row whenever selection changes from
 // elsewhere (a cross-leaf reveal, a restore, a rotation) so tabbing into the rail
@@ -111,8 +125,8 @@ function toggleCollapse(): void {
 // --- Per-row context menu (design §1.5) --------------------------------------------
 // Shares its item set with the top bar's overflow menu, so the two can't drift about what
 // a DM offers — see `showAgentActionMenu` for what is deliberately absent.
-function openRowMenu(agent: RosterAgent, event: MouseEvent): void {
-  showAgentActionMenu(event, {
+function openRowMenu(agent: RosterAgent, anchor: AgentActionMenuAnchor): void {
+  showAgentActionMenu(anchor, {
     includeOpen: true,
     isBusy: teamChatStore.presence[agent.id] === 'busy',
     onOpen: () => selectAgent(agent.id),

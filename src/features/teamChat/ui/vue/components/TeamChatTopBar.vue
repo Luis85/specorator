@@ -53,7 +53,7 @@ const providerLabel = computed(() => {
 // Projected through the same resolution the composer's model selector reads, so the two
 // can't name different models for one DM. Empty (chip hidden) rather than a placeholder
 // when the provider hasn't resolved a model yet.
-const modelLabel = computed(() => store.activeModelId ?? '');
+const modelLabel = computed(() => store.activeModelLabel ?? '');
 
 function openEditedFile(path: string): void {
   callbacks?.onOpenEditedFile(path);

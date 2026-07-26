@@ -9,6 +9,7 @@ import { rosterAgentToPersona } from '../agents/personaRegistry';
 import { teamChatDmBoundAgentId } from '../chat/controllers/teamChatSurface';
 import { getTabProviderId } from '../chat/tabs/providerResolution';
 import { onProviderAvailabilityChanged } from '../chat/tabs/tabProviderSync';
+import { getTabChatUIConfig } from '../chat/tabs/tabShared';
 import { getComposerToolbarSettings } from '../chat/tabs/tabUi';
 import type { TabData } from '../chat/tabs/types';
 import type { ComposerEditedFile } from '../chat/ui/vue/composer/stores/composerStore';
@@ -153,21 +154,28 @@ export async function refreshDmAgentPersonas(
 }
 
 /**
- * Projects the ACTIVE DM tab's model id for the top bar's chip, through the SAME
- * `getComposerToolbarSettings` resolution the composer's model selector reads (pinned >
- * blank draft > bound-agent display seed > provider snapshot). Going through the shared
- * resolver rather than reading provider settings directly is what keeps the chip and the
- * selector from ever naming different models for one DM — including right after a
- * `roster:changed` same-provider model change, which re-seeds `displayModel` without
- * rotating the conversation.
+ * Projects the ACTIVE DM tab's model LABEL for the top bar's chip, through the same two
+ * steps the composer's model selector uses: `getComposerToolbarSettings` for the value
+ * (pinned > blank draft > bound-agent display seed > provider snapshot), then the provider's
+ * `getModelOptions()` for its display label. Both halves matter — resolving only the value
+ * would still render a raw id beside a composer showing the friendly name, i.e. two names
+ * for one model in a single pane (`tabComposer.ts:105` is the counterpart).
  *
- * Null (never a placeholder) when there is no active DM or the resolver has no model
- * yet, so the chip hides instead of rendering an empty slot.
+ * Falls back to the raw id when the provider lists no matching option, exactly as the
+ * composer does. Null (never a placeholder) when there is no active DM or no model yet, so
+ * the chip hides rather than rendering an empty slot.
  */
-export function projectActiveDmModelId(plugin: SpecoratorPlugin, activeTab: TabData | null): string | null {
+export function projectActiveDmModelLabel(plugin: SpecoratorPlugin, activeTab: TabData | null): string | null {
   if (!activeTab) return null;
   try {
-    return getComposerToolbarSettings(activeTab, plugin).model?.trim() || null;
+    const settings = getComposerToolbarSettings(activeTab, plugin);
+    const model = settings.model?.trim();
+    if (!model) return null;
+    const options = getTabChatUIConfig(activeTab, plugin).getModelOptions({
+      ...settings,
+      environmentVariables: plugin.getActiveEnvironmentVariables(),
+    });
+    return options.find((option) => option.value === model)?.label ?? model;
   } catch (error) {
     // `getComposerToolbarSettings` reaches through the provider-settings coordinator — a
     // deeper call chain than anything else in this snapshot. This projection runs on EVERY
@@ -219,7 +227,7 @@ export function projectTeamChatSnapshot(
     editedFiles: projectActiveDmEditedFiles(activeTab),
     presence: projectCrossLeafPresence(plugin),
     activeProviderId: projectActiveDmProviderId(plugin, activeTab),
-    activeModelId: projectActiveDmModelId(plugin, activeTab),
+    activeModelLabel: projectActiveDmModelLabel(plugin, activeTab),
     threads,
     unread: deriveUnreadAgents(threads, context.lastSeenByAgent, selectedAgentId),
     // Read off the tab's live ChatState rather than the conversation record: during

@@ -26,12 +26,33 @@ export interface RosterKeyboard {
   focusRow: (id: string) => void;
 }
 
+/** The index a navigation key moves focus to, or null when the key isn't one of them.
+ *  Split out so `onKeydown` stays a flat dispatcher rather than a five-arm switch. */
+function navigationTarget(key: string, current: number, length: number): number | null {
+  switch (key) {
+    case 'ArrowDown': return current + 1;
+    case 'ArrowUp': return current - 1;
+    case 'Home': return 0;
+    case 'End': return length - 1;
+    default: return null;
+  }
+}
+
+/** Shift+F10 and the dedicated ContextMenu key are the standard "open this item's menu"
+ *  gestures for a composite widget — the row's `⋯` button is deliberately out of the tab
+ *  order, so these are how a keyboard user reaches it. */
+function isContextMenuKey(event: KeyboardEvent): boolean {
+  return event.key === 'ContextMenu' || (event.key === 'F10' && event.shiftKey);
+}
+
 export function useRosterKeyboard(
   /** Row ids in render order. Re-read on every access, so a re-sort is picked up live. */
   ids: () => readonly string[],
   onActivate: (id: string) => void,
   /** DOM focus mover, so the composable stays testable without a real listbox. */
   focusRowElement: (index: number) => void,
+  /** Row-level menu gesture (Shift+F10 / ContextMenu key). */
+  onContextMenu: (id: string) => void = () => {},
 ): RosterKeyboard {
   const focusedId = ref<string | null>(null);
 
@@ -61,35 +82,26 @@ export function useRosterKeyboard(
     // button bubbles here, gets preventDefault'd, and opens the DM instead of the menu —
     // which would make the "keyboard-reachable" action menu unreachable by keyboard.
     if (isInteractiveDescendant(event.target)) return;
-    switch (event.key) {
-      case 'ArrowDown':
-        // preventDefault on every handled key: otherwise the arrow scrolls the pane
-        // underneath while the focus ring moves, which reads as two things happening.
-        event.preventDefault();
-        move(focusedIndex.value + 1);
-        break;
-      case 'ArrowUp':
-        event.preventDefault();
-        move(focusedIndex.value - 1);
-        break;
-      case 'Home':
-        event.preventDefault();
-        move(0);
-        break;
-      case 'End':
-        event.preventDefault();
-        move(list.length - 1);
-        break;
-      case 'Enter':
-      case ' ':
-        event.preventDefault();
-        // Always in range: the empty list returned above, and `focusedIndex` falls back
-        // to 0 whenever the focused id is absent.
-        onActivate(list[focusedIndex.value]);
-        break;
-      default:
-        break; // every other key (including typing into the search box) passes through
+    // `focusedIndex` is always in range here: the empty list returned above, and it falls
+    // back to 0 whenever the focused id is absent.
+    const focusedId = list[focusedIndex.value];
+
+    if (isContextMenuKey(event)) {
+      event.preventDefault();
+      onContextMenu(focusedId);
+      return;
     }
+    if (event.key === 'Enter' || event.key === ' ') {
+      event.preventDefault();
+      onActivate(focusedId);
+      return;
+    }
+    const target = navigationTarget(event.key, focusedIndex.value, list.length);
+    if (target === null) return; // every other key (including typing into search) passes through
+    // preventDefault only on keys we handle: otherwise the arrow scrolls the pane underneath
+    // while the focus ring moves, which reads as two things happening at once.
+    event.preventDefault();
+    move(target);
   }
 
   function focusRow(id: string): void {

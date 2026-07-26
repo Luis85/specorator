@@ -82,7 +82,7 @@ describe('top bar model chip', () => {
   it('shows the active DM model beside the provider', async () => {
     const { store } = await mountWithActiveDm();
 
-    store.setActiveModelId('claude-opus-5');
+    store.setActiveModelLabel('claude-opus-5');
     await nextTick();
 
     expect(within(topBar()).getByText('claude-opus-5')).toBeTruthy();

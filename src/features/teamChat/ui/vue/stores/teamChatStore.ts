@@ -40,7 +40,7 @@ export const useTeamChatStore = defineStore('team-chat', () => {
   const editedFiles = shallowRef<ComposerEditedFile[]>([]);
   const activeProviderId = shallowRef<string | null>(null);
   const presence = shallowRef<Record<string, TeamChatPresence>>({});
-  const activeModelId = shallowRef<string | null>(null);
+  const activeModelLabel = shallowRef<string | null>(null);
   const threads = shallowRef<Record<string, TeamChatThreadMeta>>({});
   const unread = shallowRef<Record<string, true>>({});
   const activeDmIsEmpty = shallowRef(false);
@@ -81,8 +81,8 @@ export const useTeamChatStore = defineStore('team-chat', () => {
     presence.value = next;
   }
 
-  function setActiveModelId(next: string | null): void {
-    activeModelId.value = next;
+  function setActiveModelLabel(next: string | null): void {
+    activeModelLabel.value = next;
   }
 
   function setThreads(next: Record<string, TeamChatThreadMeta>): void {
@@ -117,7 +117,7 @@ export const useTeamChatStore = defineStore('team-chat', () => {
     editedFiles,
     activeProviderId,
     presence,
-    activeModelId,
+    activeModelLabel,
     threads,
     unread,
     activeDmIsEmpty,
@@ -129,7 +129,7 @@ export const useTeamChatStore = defineStore('team-chat', () => {
     setEditedFiles,
     setActiveProviderId,
     setPresence,
-    setActiveModelId,
+    setActiveModelLabel,
     setThreads,
     setUnread,
     setActiveDmIsEmpty,

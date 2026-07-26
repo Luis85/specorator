@@ -25,7 +25,11 @@ export interface AgentActionMenuOptions {
   onClose: () => void;
 }
 
-export function showAgentActionMenu(event: MouseEvent, options: AgentActionMenuOptions): void {
+/** Where to anchor the menu: the originating pointer event, or a viewport point for the
+ *  keyboard gesture (Shift+F10 / ContextMenu on the focused row). */
+export type AgentActionMenuAnchor = MouseEvent | { x: number; y: number };
+
+export function showAgentActionMenu(anchor: AgentActionMenuAnchor, options: AgentActionMenuOptions): void {
   const menu = new Menu();
   if (options.includeOpen && options.onOpen) {
     const onOpen = options.onOpen;
@@ -44,5 +48,21 @@ export function showAgentActionMenu(event: MouseEvent, options: AgentActionMenuO
       .setIcon('x')
       .onClick(options.onClose));
   }
-  menu.showAtMouseEvent(event);
+  showAnchored(menu, anchor);
+}
+
+/**
+ * Duck-typed on `preventDefault`, NOT `instanceof MouseEvent` (a popout leaf's events come
+ * from another realm and would fail that check — the same trap the row-menu key guard
+ * avoids) and NOT on `'x' in anchor` (a MouseEvent HAS `x`/`y` aliases of clientX/clientY,
+ * so that discriminator silently routed every pointer click down the position path).
+ */
+function showAnchored(menu: Menu, anchor: AgentActionMenuAnchor): void {
+  if (isMouseAnchor(anchor)) menu.showAtMouseEvent(anchor);
+  else menu.showAtPosition(anchor);
+}
+
+/** A type predicate, so both branches narrow without assertions. */
+function isMouseAnchor(anchor: AgentActionMenuAnchor): anchor is MouseEvent {
+  return typeof (anchor as MouseEvent).preventDefault === 'function';
 }

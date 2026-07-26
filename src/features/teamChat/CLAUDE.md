@@ -42,7 +42,7 @@ would let one leaf's projection overwrite another's (`ui/vue/globalPinia.ts`).
   replayed by re-adding a class (`replayDmTransition`), never by keying the host: a
   `:key` bump would strand the tab engine on a detached node.
 - **Read-model**: `teamChatStore` is a `shallowRef` store (`agents`, `selectedAgentId`,
-  `editedFiles`, `presence`, `activeModelId`, `threads`, `unread`, `activeDmIsEmpty`, plus
+  `editedFiles`, `presence`, `activeModelLabel`, `threads`, `unread`, `activeDmIsEmpty`, plus
   the per-leaf `railCollapsed`/`railWidth`); truth stays in
   `plugin.agentRosterStore` + the tab engine. `useTeamChatEventRouting` subscribes
   SYNCHRONOUSLY during setup (a restore-time emit fired inside the root's
@@ -268,6 +268,16 @@ reaches `{ leaf, getTabManager() }`, so a second host is reuse, not a fork.
   menu unreachable by keyboard. The check is `nodeType`-based, NOT `instanceof Element`: a
   popout leaf's nodes come from another realm's constructors and would fail `instanceof`,
   silently reinstating the bug in exactly the window this codebase already guards elsewhere.
+  (`showAgentActionMenu`'s anchor discriminator is duck-typed on `preventDefault` for the
+  same reason — and NOT on `'x' in anchor`, since a `MouseEvent` carries `x`/`y` aliases.)
+- **The `⋯` button is never in the tab order** (`tabindex="-1"`, always). The listbox is one
+  tab stop, and a focusable descendant would make the focused row two — the composite-widget
+  rule. The keyboard route to the same menu is a row-level Shift+F10 / ContextMenu gesture,
+  anchored to the focused row's box.
+- **The top bar's model chip resolves its LABEL, not just the value.** It goes through
+  `getComposerToolbarSettings` AND the provider's `getModelOptions()`, mirroring
+  `tabComposer.ts:105`; resolving only the value still rendered a raw id beside a composer
+  showing the friendly name — two names for one model in a single pane.
 - **Relative timestamps ride a shared, ref-counted clock** (`useRelativeClock`). `Date.now()`
   inside a computed is not reactive, so a row labelled `now` would stay `now` indefinitely;
   one module-level interval serves every mounted row and stops with the last subscriber.
