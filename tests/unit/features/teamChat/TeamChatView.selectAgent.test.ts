@@ -169,6 +169,44 @@ describe('TeamChatView.selectAgent — resolve → cross-view reuse / create', (
     expect(createTab).toHaveBeenCalledWith('conv-3', undefined, { activate: true, kind: 'chat', bypassTabLimit: true });
   });
 
+  // Round-64 Fix B: the open brackets the createTab (pre-bind hydration) window with the opening-DM
+  // marker so a `conversation:hydration-failed` fired before the tab binds is stashed by THIS leaf
+  // only — then clears it so a later cross-leaf open of the same DM can't match a stale marker.
+  it('marks openingConversationId during the open and clears it after (Round-64 Fix B)', async () => {
+    let openingAtCreate: unknown = 'unset';
+    const createTab = jest.fn(async () => {
+      openingAtCreate = view.openingConversationId; // captured inside the pre-bind hydration window
+      return { id: 'tab-1' };
+    });
+    const view = makeView({
+      plugin: {
+        getTeamChatThreadStore: () => ({ get: jest.fn().mockResolvedValue(null), resolveOrCreate: jest.fn().mockResolvedValue('conv-open') }),
+        findConversationAcrossViews: jest.fn(() => null),
+      },
+    });
+    view.tabManager = { createTab, switchToTab: jest.fn() };
+
+    await view.selectAgent('roster:a');
+
+    expect(openingAtCreate).toBe('conv-open');
+    expect(view.openingConversationId).toBeNull();
+  });
+
+  it('clears openingConversationId even when the open throws (Round-64 Fix B)', async () => {
+    const view = makeView({
+      plugin: {
+        getTeamChatThreadStore: () => ({ get: jest.fn().mockResolvedValue(null), resolveOrCreate: jest.fn().mockResolvedValue('conv-x') }),
+        findConversationAcrossViews: jest.fn(() => null),
+      },
+    });
+    view.tabManager = { createTab: jest.fn().mockRejectedValue(new Error('create boom')), switchToTab: jest.fn() };
+
+    await expect(view.selectAgent('roster:a')).rejects.toThrow('create boom');
+
+    // The finally in openTeamChatDmForSelection cleared the marker despite the throw.
+    expect(view.openingConversationId).toBeNull();
+  });
+
   // T7: with the hot-DM budget full, opening a NEW agent's DM evicts the least-recently-used
   // one (never the active or the one being opened) so a big roster browses gracefully instead
   // of dead-ending at the cap. The evicted DM's mapping persists, so re-selecting reopens it.

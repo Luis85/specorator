@@ -79,6 +79,34 @@ export async function openResolvedTeamChatDm(
 }
 
 /**
+ * The serialized DM open + rotation reconcile `selectAgent` runs on its per-leaf tail, extracted
+ * from the view (Round-64): `setOpening` brackets the open in a `finally` so a pre-bind hydration
+ * error (and a throw) scopes to the OPENING leaf; the per-conversationId coordinator stays INSIDE
+ * so two leaves opening the SAME DM collapse to one controller. `notify` fires only on a rotation.
+ */
+export async function openTeamChatDmForSelection(
+  plugin: SpecoratorPlugin,
+  manager: TabManager,
+  leaf: WorkspaceLeaf,
+  dmRecency: readonly string[],
+  { conversationId, agentId, displaced, previousConversationId, isStale, preserveFocus, setOpening }: {
+    conversationId: string; agentId: string; displaced: string | null; previousConversationId: string | null;
+    isStale: () => boolean; preserveFocus?: boolean; setOpening: (id: string | null) => void;
+  },
+): Promise<void> {
+  setOpening(conversationId);
+  try {
+    await getTeamChatDmOpenCoordinator(plugin).serialize(conversationId, () =>
+      openResolvedTeamChatDm(plugin, manager, leaf, dmRecency, conversationId, { isStale, displacedConversationId: displaced, preserveFocus }));
+    if (!isStale()) {
+      await reconcileRotation(plugin, agentId, displaced, conversationId, { notify: previousConversationId !== conversationId });
+    }
+  } finally {
+    setOpening(null);
+  }
+}
+
+/**
  * Restores persisted Team Chat DM tabs with the SAME guards the `selectAgent` open
  * path has and `TabManager.restoreState` bypasses:
  *  - Validate (Fix 2, :225): only conversations that still exist AND are team-chat

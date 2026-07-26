@@ -9,9 +9,13 @@ export interface DmHydrationBannerController {
 }
 
 /** Minimal view surface the banner reads — its own tab engine (for ownership + the
- *  live tab's transcript). Declared locally so the helper never imports `TeamChatView`. */
+ *  live tab's transcript), plus the DM this leaf is mid-open. Declared locally so the
+ *  helper never imports `TeamChatView`. */
 export interface DmHydrationBannerHost {
   getTabManager(): TabManager | null;
+  /** True while THIS leaf is opening `conversationId` (Round-64): scopes a pre-bind failure
+   *  stash to the opening leaf, so a non-opening leaf can't consume a stale entry later. */
+  isOpeningConversation(conversationId: string): boolean;
 }
 
 /**
@@ -24,9 +28,12 @@ export interface DmHydrationBannerHost {
  * Ownership (`ownsDmConversation`) is timing-robust because the fire lands BEFORE the tab is
  * bound: `TabManager.createTab` hydrates via `getConversationById` before the tab enters the
  * manager, so a pure live-tab match would miss the fresh open. Owned iff a live DM tab in this
- * view's manager hosts it, OR it is a team-chat DM not yet hosted by any view (the pre-bind
- * open into this leaf). A sidebar conversation (surface `chat`) or a DM already hosted by
- * another leaf is ignored.
+ * view's manager hosts it, OR it is a team-chat DM not yet hosted by any view AND THIS leaf is
+ * the one opening it (`host.isOpeningConversation`). The opening-leaf scope (Round-64) is
+ * load-bearing with multiple Team Chat leaves: a pre-bind failure is null for every leaf's
+ * `findConversationAcrossViews`, so without it EVERY leaf stashed the same error and a
+ * non-opening leaf later consumed the stale entry as a false banner. A sidebar conversation
+ * (surface `chat`) or a DM already hosted by another leaf is ignored.
  *
  * Owned failures are stashed so the owning tab's `ConversationController.restoreConversation`
  * consume (wired through `component.consumePendingHydrationError`, where `component` is this
@@ -69,5 +76,6 @@ function ownsDmConversation(
   const tabs = host.getTabManager()?.getAllTabs() ?? [];
   if (tabs.some((tab) => tab.conversationId === conversationId)) return true; // this view hosts it
   if (plugin.findConversationAcrossViews(conversationId)) return false; // hosted by another leaf
-  return plugin.getConversationSync(conversationId)?.surface === 'team-chat'; // pre-bind open into this leaf
+  // Pre-bind open into THIS leaf: a team-chat DM this leaf is actually opening (Round-64).
+  return plugin.getConversationSync(conversationId)?.surface === 'team-chat' && host.isOpeningConversation(conversationId);
 }

@@ -12,9 +12,8 @@ import { TabManager } from '../chat/tabs/TabManager';
 import { refreshBoundAgentDisplayModels } from '../chat/tabs/tabShared';
 import { openEditedFile } from '../chat/tabs/tabUi';
 import type { PersistedTabManagerState } from '../chat/tabs/types';
-import { getTeamChatDmOpenCoordinator } from './TeamChatDmOpenCoordinator';
 import { applyDmEditedFilesSetting, applyDmHiddenCommands, noticeRemovedAgentDms, projectTeamChatSnapshot, reconcileRestoredDmProviders, refreshDmModelState, rotateChangedDmProviders } from './teamChatDmRefresh';
-import { openResolvedTeamChatDm, ownedDisplacedDmId, reconcileRotation, restoreTeamChatDmTabs, serializeOnTail, touchDmRecency } from './teamChatDmTabs';
+import { openTeamChatDmForSelection, ownedDisplacedDmId, restoreTeamChatDmTabs, serializeOnTail, touchDmRecency } from './teamChatDmTabs';
 import { registerTeamChatDmFileEvents } from './teamChatFileEvents';
 import { createDmHydrationBanner, type DmHydrationBannerController } from './teamChatHydrationBanner';
 import type { TeamChatThreadStore } from './TeamChatThreadStore';
@@ -75,6 +74,11 @@ export class TeamChatView extends ItemView implements ChatViewHandle {
   /** DM hydration-failure → inline banner controller (Round-62 Fix 3): owns the pending map +
    *  `conversation:hydration-failed` subscription; disposed/re-created like presence/roster. */
   private hydrationBanner: DmHydrationBannerController | null = null;
+  /** Disposer for the DM file-context vault/workspace events (Round-64 Fix A): dispose+recreate per onOpen so a re-entrant rebuild can't leak the prior 5 listeners (mirrors presence/roster/banner). */
+  private dmFileEventsDispose: (() => void) | null = null;
+  /** The DM this leaf is mid-open; the banner ownership gate reads it via `isOpeningConversation` so a pre-bind hydration error stashes on the OPENING leaf only, not every leaf (Round-64 Fix B). */
+  private openingConversationId: string | null = null;
+  readonly isOpeningConversation = (conversationId: string): boolean => this.openingConversationId === conversationId;
   /** Open DMs already flagged agent-removed (Round-39), so a later unrelated `roster:changed`
    *  doesn't re-notice; a re-created agent clears its entry. Owned here, mutated by the helper. */
   private readonly removedAgentDmsNotified = new Set<string>();
@@ -163,11 +167,12 @@ export class TeamChatView extends ItemView implements ChatViewHandle {
     // fires on an actual provider mismatch, so an unrelated edit is cheap).
     this.rosterChangedUnsubscribe?.();
     this.rosterChangedUnsubscribe = this.plugin.events.on('roster:changed', () => void this.reconcileDmsOnRosterChange());
-    // Round-62: surface a DM hydration failure as an inline banner (Fix 3, dispose+re-create like
-    // presence) + keep the active DM tab's file cache fresh on vault changes (Fix 2). Mirror SpecoratorView.
+    // Surface a DM hydration failure as an inline banner (Round-62 Fix 3) + keep the active DM tab's file
+    // cache fresh (Round-62 Fix 2). Both dispose+recreate per onOpen — no leak on re-entry (Round-64 Fix A).
     this.hydrationBanner?.dispose();
     this.hydrationBanner = createDmHydrationBanner(this.plugin, this);
-    registerTeamChatDmFileEvents(this.plugin, () => this.tabManager?.getActiveTab() ?? null, (ref) => this.registerEvent(ref));
+    this.dmFileEventsDispose?.();
+    this.dmFileEventsDispose = registerTeamChatDmFileEvents(this.plugin, () => this.tabManager?.getActiveTab() ?? null, (ref) => this.registerEvent(ref));
   }
 
   /** Builds the tab engine into the Vue-provided content host, then restores the
@@ -291,6 +296,8 @@ export class TeamChatView extends ItemView implements ChatViewHandle {
     this.rosterChangedUnsubscribe = null;
     this.hydrationBanner?.dispose();
     this.hydrationBanner = null;
+    this.dmFileEventsDispose?.();
+    this.dmFileEventsDispose = null;
     await this.destroyTabRuntime();
     // Streaming DMs gone; surviving leaves recompute presence (destroyTab skips the callbacks) (:261).
     this.plugin.events.emit('teamChat:presence');
@@ -419,25 +426,17 @@ export class TeamChatView extends ItemView implements ChatViewHandle {
     // pre-resolve mapping — but ONLY when it is genuinely THIS agent's own DM, never a corrupt map
     // pointing at an unrelated chat/DM that reconcileRotation would then force-close (Round-48 A; Round-57).
     const displaced = options.displacedConversationId ?? ownedDisplacedDmId(this.plugin, previousConversationId, agentId);
-    // Serialize this leaf's open+reconcile on a per-leaf tail (Round-49): two fast clicks on
-    // DIFFERENT agents (distinct conversationIds → NOT collapsed by the per-id coordinator) must
-    // run one-at-a-time, else at full budget both evict the same LRU victim (double-close → cap
-    // Notice + neither opens). The per-conversationId coordinator stays INSIDE to still collapse
-    // two leaves opening the SAME DM (independent generations): without it both see
-    // findConversationAcrossViews == null and each createTab, double-mounting one conversation; the
-    // queued second re-runs, finds the tab, switches. Open body + stale guard: openResolvedTeamChatDm.
-    await serializeOnTail(this.selectionOpenTail, async () => {
-      await getTeamChatDmOpenCoordinator(this.plugin).serialize(conversationId, () =>
-        openResolvedTeamChatDm(this.plugin, manager, this.leaf, this.dmRecency, conversationId,
-          { isStale, displacedConversationId: displaced, preserveFocus: options.preserveFocus }));
-      // Reconcile a provider-change rotation: record + notify a fresh rotation, close any displaced
-      // old-provider tab once its replacement is open — deferred so a cap-blocked rotation closes on
-      // the retry (:361). notify only when the mapping rotated THIS pass (post-reload cleanup: displaced
-      // set, mapping unchanged — Round-48). Skip if a newer selection superseded this.
-      if (!isStale()) {
-        await reconcileRotation(this.plugin, agentId, displaced, conversationId, { notify: previousConversationId !== conversationId });
-      }
-    });
+    // Serialize this leaf's open+reconcile on a per-leaf tail (Round-49): two fast clicks on DIFFERENT
+    // agents (distinct conversationIds → NOT collapsed by the per-id coordinator) must run one-at-a-time,
+    // else at full budget both evict the same LRU victim (double-close → cap Notice + neither opens).
+    // `openTeamChatDmForSelection` keeps the per-conversationId coordinator INSIDE the tail and brackets
+    // the open with `setOpening` so a pre-bind hydration error stashes on THIS leaf only (Round-64).
+    await serializeOnTail(this.selectionOpenTail, () =>
+      openTeamChatDmForSelection(this.plugin, manager, this.leaf, this.dmRecency, {
+        conversationId, agentId, displaced, previousConversationId,
+        isStale, preserveFocus: options.preserveFocus,
+        setOpening: (id) => { this.openingConversationId = id; },
+      }));
   }
 
   /**

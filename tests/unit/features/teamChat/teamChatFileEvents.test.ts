@@ -20,24 +20,28 @@ describe('registerTeamChatDmFileEvents', () => {
     const vaultHandlers: Record<string, (file?: unknown) => void> = {};
     const wsHandlers: Record<string, (file?: unknown) => void> = {};
     const registered: unknown[] = [];
+    const vaultOffref = jest.fn();
+    const wsOffref = jest.fn();
     const plugin = {
       app: {
         vault: {
           on: jest.fn((event: string, handler: (file?: unknown) => void) => {
             vaultHandlers[event] = handler;
-            return { event };
+            return { event, scope: 'vault' };
           }),
+          offref: vaultOffref,
         },
         workspace: {
           on: jest.fn((event: string, handler: (file?: unknown) => void) => {
             wsHandlers[event] = handler;
-            return { event };
+            return { event, scope: 'workspace' };
           }),
+          offref: wsOffref,
         },
       },
     } as never;
-    registerTeamChatDmFileEvents(plugin, () => activeTab as never, (ref) => registered.push(ref));
-    return { vaultHandlers, wsHandlers, registered };
+    const dispose = registerTeamChatDmFileEvents(plugin, () => activeTab as never, (ref) => registered.push(ref));
+    return { vaultHandlers, wsHandlers, registered, dispose, vaultOffref, wsOffref };
   }
 
   it('marks file AND folder cache dirty on create/delete/rename of the active DM tab', () => {
@@ -102,5 +106,24 @@ describe('registerTeamChatDmFileEvents', () => {
     const { registered } = harness({ ui: { fileContextManager: makeFcm() } });
     // create, delete, rename, modify, file-open
     expect(registered).toHaveLength(5);
+  });
+
+  // Round-64 Fix A: registerEvent only frees the refs on ItemView UNLOAD, so a re-entrant onOpen
+  // (popout / leaf-move with no interleaved onClose) would leak the prior 5 listeners. The helper
+  // returns a disposer that offrefs exactly the refs it registered, so the view can drop the prior
+  // batch before re-registering (mirror of the presence/roster/hydration dispose-and-recreate).
+  it('returns a disposer that offrefs every registered vault + workspace ref (Round-64)', () => {
+    const { dispose, registered, vaultOffref, wsOffref } = harness({ ui: { fileContextManager: makeFcm() } });
+
+    expect(typeof dispose).toBe('function');
+    dispose();
+
+    // 4 vault events (create/delete/rename/modify) + 1 workspace event (file-open), each released
+    // on its OWN emitter (vault refs → vault.offref, the file-open ref → workspace.offref).
+    expect(vaultOffref).toHaveBeenCalledTimes(4);
+    expect(wsOffref).toHaveBeenCalledTimes(1);
+    const offrefdRefs = [...vaultOffref.mock.calls, ...wsOffref.mock.calls].map((call) => call[0]);
+    expect(offrefdRefs).toEqual(expect.arrayContaining(registered));
+    expect(offrefdRefs).toHaveLength(registered.length);
   });
 });

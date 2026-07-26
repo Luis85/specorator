@@ -13,8 +13,10 @@ import { createDmHydrationBanner } from '@/features/teamChat/teamChatHydrationBa
 describe('createDmHydrationBanner', () => {
   type Cross = { view: unknown; tabId: string } | null;
 
-  function harness(opts: { tabs?: unknown[]; cross?: Cross; surface?: string | null } = {}) {
-    const { tabs = [], cross = null, surface = null } = opts;
+  function harness(opts: { tabs?: unknown[]; cross?: Cross; surface?: string | null; opening?: boolean } = {}) {
+    // `opening` defaults true: a pre-bind team-chat DM is owned only by the leaf ACTUALLY opening it
+    // (Round-64), and most cases model that opening leaf. The Round-64 test drives a NON-opening leaf.
+    const { tabs = [], cross = null, surface = null, opening = true } = opts;
     const handlers: Record<string, (payload: unknown) => void> = {};
     const off = jest.fn();
     const plugin = {
@@ -28,7 +30,7 @@ describe('createDmHydrationBanner', () => {
       getConversationSync: jest.fn((id: string) => (surface ? { id, surface } : null)),
     } as never;
     const tabManager = { getAllTabs: jest.fn(() => tabs) };
-    const host = { getTabManager: jest.fn(() => tabManager) };
+    const host = { getTabManager: jest.fn(() => tabManager), isOpeningConversation: jest.fn(() => opening) };
     const controller = createDmHydrationBanner(plugin, host as never);
     return { plugin, handlers, off, controller, tabManager, host };
   }
@@ -67,6 +69,27 @@ describe('createDmHydrationBanner', () => {
       code: 'sqlite-unavailable',
       message: 'no sqlite',
     });
+  });
+
+  // Round-64 Fix B: `TabManager.createTab` hydrates BEFORE the tab binds, so with MULTIPLE Team Chat
+  // leaves open a pre-bind failure was owned (surface === 'team-chat', not yet hosted anywhere) by
+  // EVERY leaf — so a non-opening leaf later consumed a stale entry and showed a false banner. The
+  // pre-bind branch now also requires host.isOpeningConversation(id): only the opening leaf stashes.
+  it('stashes a pre-bind failure ONLY on the leaf actually opening it (Round-64)', () => {
+    const banner = { code: 'store-unreadable', message: 'boom' };
+    // Leaf A is mid-open of c1; leaf B is not. Both are team-chat DMs not yet hosted by any view.
+    const opening = harness({ tabs: [], cross: null, surface: 'team-chat', opening: true });
+    const idle = harness({ tabs: [], cross: null, surface: 'team-chat', opening: false });
+
+    fire(opening.handlers, 'c1', banner);
+    fire(idle.handlers, 'c1', banner);
+
+    // The opening leaf stashed it (the real owner), the idle leaf did not — so its later consume is
+    // null and it cannot surface a failure banner for a DM another leaf successfully opened.
+    expect(opening.controller.consumePendingHydrationError('c1')).toEqual(banner);
+    expect(idle.controller.consumePendingHydrationError('c1')).toBeNull();
+    // The ownership gate consulted the opening state (not just the surface) on the pre-bind path.
+    expect(idle.host.isOpeningConversation).toHaveBeenCalledWith('c1');
   });
 
   it('ignores a sidebar conversation (surface chat) this view does not own', () => {
