@@ -61,11 +61,18 @@ export function projectThreadMetas(
 /**
  * When this thread last saw activity — the row's relative time AND its `recent` sort key.
  *
- * An EMPTY thread reports ZERO whatever its record says: `createConversation` stamps
- * `updatedAt` with the creation time, so a provider rotation's fresh replacement would
- * otherwise project as brand-new activity — showing `now` and, for an already-seeded agent,
- * an unread badge on a DM nobody has typed into. (`deriveUnreadAgents`'s "empty threads are
- * never unread" rule only holds if the projection actually reports 0 here.)
+ * An EMPTY thread falls back to `lastResponseAt`, and only to ZERO without one. Never to
+ * `updatedAt`: `createConversation` stamps that with the creation time, so a provider
+ * rotation's fresh replacement would project as brand-new activity — showing `now` and, for
+ * an already-seeded agent, an unread badge on a DM nobody has typed into
+ * (`deriveUnreadAgents`'s "empty threads are never unread" rule needs the 0 to hold).
+ *
+ * But EMPTY is not the same as NEW. `ConversationStore.loadConversations` rebuilds every
+ * record with `messages: []` while retaining `lastResponseAt` from session metadata, so after
+ * a restart EVERY mapped-but-unopened DM looks empty. Reporting 0 for those erased their
+ * timestamps and dropped the whole rail into name order until each transcript hydrated.
+ * `lastResponseAt` is the discriminator: a genuinely fresh replacement has none until its
+ * first turn saves.
  *
  * For a non-empty thread it is the LATER of `lastResponseAt` and the newest message stamp,
  * not `lastResponseAt` alone: a CANCELLED turn is saved with `updateLastResponse=false` (the
@@ -79,7 +86,7 @@ function activityTimestamp(conversation: {
   lastResponseAt?: number;
   updatedAt: number;
 }): number {
-  if (conversation.messages.length === 0) return 0;
+  if (conversation.messages.length === 0) return conversation.lastResponseAt ?? 0;
   const latest = Math.max(conversation.lastResponseAt ?? 0, newestMessageTimestamp(conversation.messages));
   return latest || conversation.updatedAt;
 }

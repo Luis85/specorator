@@ -372,8 +372,13 @@ attribution lives in `tests/vue/chat/transcript/messageIdentity.test.ts`.
   first opened.** `ConversationStore.loadConversations()` restores every conversation with
   `messages: []` and Team Chat pre-warms only the tabs it restores, so a closed or
   LRU-trimmed DM reaches `projectThreadMetas` with a valid conversation and no messages. The
-  row still carries the correct relative timestamp (that comes from metadata), and the
-  description is the same fallback a never-messaged agent shows, so it degrades gracefully.
+  row still carries the correct relative timestamp — but only because `activityTimestamp`
+  falls back to the record's persisted `lastResponseAt` for an EMPTY thread rather than
+  reporting 0. Empty is not the same as new: without that fallback every mapped-but-unopened
+  DM read as never-active after a restart and the whole rail dropped into name order. A
+  genuinely fresh replacement is still 0, since it has no `lastResponseAt` until its first
+  turn saves. The description is the same fallback a never-messaged agent shows, so the
+  missing PREVIEW degrades gracefully.
   Closing it needs either a persisted last-message preview in the session metadata schema or
   an async hydration pass over mapped-but-closed threads — both beyond a UX pass; deferred
   pending a decision.

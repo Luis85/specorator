@@ -142,11 +142,26 @@ describe('projectThreadMetas', () => {
 
   // `createConversation` stamps `updatedAt` with the creation time, so a rotation's fresh
   // replacement would otherwise read as brand-new activity — showing `now` and, for an
-  // already-seeded agent, an unread badge on a DM nobody has typed into.
+  // already-seeded agent, an unread badge on a DM nobody has typed into. The absent
+  // `lastResponseAt` is what separates this from the unhydrated case in the next test.
   it('projects ZERO activity for an empty thread, ignoring its creation time', () => {
     const plugin = pluginWith([conversation('conv-a', { updatedAt: Date.now(), messages: [] })]);
 
     expect(projectThreadMetas(plugin, { 'roster:a': 'conv-a' })['roster:a'].updatedAt).toBe(0);
+  });
+
+  // EMPTY is not the same as NEW. `ConversationStore.loadConversations` rebuilds every record
+  // with `messages: []` while retaining `lastResponseAt`, so after a restart EVERY
+  // mapped-but-unopened DM looks empty. Reporting 0 for those erased their timestamps and
+  // dropped the whole rail into name order until each transcript hydrated.
+  it('keeps a persisted lastResponseAt for an UNHYDRATED thread (post-restart)', () => {
+    const plugin = pluginWith([conversation('conv-a', {
+      updatedAt: 100,
+      lastResponseAt: 777,
+      messages: [], // not hydrated yet — the record is real, the transcript just is not loaded
+    })]);
+
+    expect(projectThreadMetas(plugin, { 'roster:a': 'conv-a' })['roster:a'].updatedAt).toBe(777);
   });
 
   it('never marks an empty replacement thread unread, even for a seeded agent', () => {
