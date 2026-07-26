@@ -49,6 +49,8 @@ function makeTab(opts: {
   streaming?: boolean;
   queued?: boolean;
   busy?: 'creating' | 'switching' | 'hydrating';
+  attachedFiles?: string[];
+  attachedImages?: string[];
 } = {}) {
   return {
     id: opts.id ?? 'tab-1',
@@ -67,10 +69,15 @@ function makeTab(opts: {
       fileContextManager: {
         attachFileAsPill: jest.fn(),
         attachFolderAsPill: jest.fn(),
-        getAttachedFiles: jest.fn(() => new Set<string>()),
+        getAttachedFiles: jest.fn(() => new Set<string>(opts.attachedFiles ?? [])),
         getAttachedFolders: jest.fn(() => new Set<string>()),
+        getCurrentNotePath: jest.fn(() => null),
       },
-      imageContextManager: { hasImages: jest.fn(() => false) },
+      imageContextManager: {
+        hasImages: jest.fn(() => (opts.attachedImages ?? []).length > 0),
+        getAttachedImages: jest.fn(() => [...(opts.attachedImages ?? [])]),
+        setImages: jest.fn(),
+      },
     },
     controllers: {
       inputController: {
@@ -250,6 +257,66 @@ describe('runProviderCommand', () => {
       expect(Notice).toHaveBeenCalledWith('quickActions.commands.queueBusy');
     },
   );
+
+  it.each(['creating', 'switching', 'hydrating'] as const)(
+    'declines to SEED while the conversation is %s, rather than write into a reset',
+    async (busy) => {
+      // The seed path used to return before the busy guard. Seeding mid-reset is
+      // silently undone: createNew clears the composer and the file context,
+      // successful hydration resets the file context, and a failed one restores
+      // the pre-switch draft over the invocation — with the modal already closed.
+      const activeTab = makeTab({ lifecycleState: 'bound', busy });
+      const { plugin } = makePlugin({ activeTab });
+      const file = new TFile();
+      file.path = 'notes/spec.md';
+
+      await runProviderCommand(plugin as never, makeEntry({ argumentHint: '[pr-url]' }), file);
+
+      expect(activeTab.controllers.inputController.seedComposerDraft).not.toHaveBeenCalled();
+      expect(activeTab.ui.fileContextManager.attachFileAsPill).not.toHaveBeenCalled();
+      expect(Notice).toHaveBeenCalledWith('quickActions.commands.queueBusy');
+    },
+  );
+
+  it('does not carry the active tab\'s attachments onto a fallback tab for /compact', async () => {
+    // Cross-provider routing lands compact on a fresh tab, and the shared
+    // prologue would copy the user's files/images there. Compact neither
+    // transmits nor consumes attachments, so the copy would sit on a tab the
+    // user never attached it to and ride along with an unrelated later send.
+    const activeTab = makeTab({
+      providerId: 'codex',
+      lifecycleState: 'bound',
+      attachedFiles: ['notes/carried.md'],
+      attachedImages: ['img-1'],
+    });
+    const newTab = makeTab({ id: 'tab-2' });
+    const { plugin, tabManager } = makePlugin({ activeTab, newTab });
+
+    await runProviderCommand(plugin as never, makeEntry({ name: 'compact' }), null);
+
+    expect(tabManager.createTab).toHaveBeenCalled();
+    expect(newTab.ui.fileContextManager.attachFileAsPill).not.toHaveBeenCalled();
+    expect(newTab.ui.imageContextManager.setImages).not.toHaveBeenCalled();
+    expect(newTab.controllers.inputController.sendMessage).toHaveBeenCalledWith({
+      content: '/compact',
+    });
+  });
+
+  it('still carries the active tab\'s attachments for a non-compact command', async () => {
+    const activeTab = makeTab({
+      providerId: 'codex',
+      lifecycleState: 'bound',
+      attachedFiles: ['notes/carried.md'],
+      attachedImages: ['img-1'],
+    });
+    const newTab = makeTab({ id: 'tab-2' });
+    const { plugin } = makePlugin({ activeTab, newTab });
+
+    await runProviderCommand(plugin as never, makeEntry({ name: 'review' }), null);
+
+    expect(newTab.ui.fileContextManager.attachFileAsPill).toHaveBeenCalledWith('notes/carried.md');
+    expect(newTab.ui.imageContextManager.setImages).toHaveBeenCalledWith(['img-1']);
+  });
 
   it('does not attach a picked file to a /compact invocation', async () => {
     // Compact ships without the mention suffix and no longer consumes pills, so

@@ -369,7 +369,8 @@ export class InputController {
       this.queuedMessages.createQueuedMessage(displayContent, turnRequest),
     );
 
-    // Folded into the queued turnRequest above, so clear them — except for `/compact`, which buildTurnSubmission ships bare (no suffix, no images), so it consumed neither.
+    // Folded into the queued turnRequest above, so clear them — except for `/compact`,
+    // which buildTurnSubmission ships bare (no suffix, no images), so it consumed neither.
     if (!isCompact) send.fileContextManager?.clearAttachedPills();
 
     // The composer text is consumed once in sendMessage (before this branch); images are consumed
@@ -459,11 +460,15 @@ export class InputController {
   ): OutgoingTurn {
     // Slash commands are passed directly to SDK for handling
     // SDK handles expansion, $ARGUMENTS, @file references, and frontmatter options.
-    // Image persistence already ran above (covers queue + steer paths too). `/compact` ships bare — no images, no mention suffix — so it transmits and consumes neither.
+    // Image persistence already ran above (covers queue + steer paths too). `/compact`
+    // ships bare — no images, no mention suffix — so it transmits and consumes neither.
     const isCompact = isCompactInvocation(send.content);
     const imagesForMessage = isCompact ? undefined : resolveComposerImagesForMessage(send);
 
-    // Only clear images if we consumed user input — a plain user send, or a content-override send that folded the composer draft in (quick actions). Never for `/compact`: like the pills below, a pending image is neither transmitted with the bare invocation nor taken from the user.
+    // Only clear images if we consumed user input — a plain user send, or a content-override
+    // send that folded the composer draft in (quick actions). Never for `/compact`: like the
+    // pills below, a pending image is neither transmitted with the bare invocation nor taken
+    // from the user.
     if (!isCompact && (send.shouldUseInput || send.consumesComposerDraft)) {
       send.imageContextManager?.clearImages();
     }
@@ -480,7 +485,9 @@ export class InputController {
     };
 
     // markCurrentNoteSent() is deferred to dispatchComposerTurn (post-runtime) so an init-failure rollback keeps the current-note state for retry.
-    // Added pills are consumed by this turn; clear them (keeps the current note). Not for `/compact`, which resolveTurnSubmission ships without the mention suffix so the pills were never folded in — clearing them would drop context the user still expects next turn.
+    // Added pills are consumed by this turn; clear them (keeps the current note). Not for
+    // `/compact`, which resolveTurnSubmission ships without the mention suffix so the pills
+    // were never folded in — clearing them would drop context the user still expects.
     if (!isCompact) send.fileContextManager?.clearAttachedPills();
 
     return { displayContent, turnRequest, imagesForMessage, isCompact };

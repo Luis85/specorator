@@ -81,6 +81,15 @@ export interface LandOnProviderChatTabOptions {
    * the composer, so send-only dispatches can safely use `'always'`.
    */
   preferActiveTab?: 'always' | 'when-composer-empty';
+  /**
+   * Carry the active tab's user-attached files/folders/images onto a fallback
+   * tab (default true). Set false for a dispatch that will neither transmit
+   * nor consume attachments — `/compact` ships bare — since the copy would
+   * land on a tab the user never attached it to and linger there for the next
+   * send to pick up. Irrelevant when the dispatch stays on the active tab:
+   * nothing is reset there, so there is nothing to carry.
+   */
+  carryAttachedContext?: boolean;
 }
 
 /**
@@ -93,7 +102,8 @@ export interface LandOnProviderChatTabOptions {
  * The active tab's attached files/folders/images are snapshotted BEFORE the
  * target is resolved and re-applied AFTER the switch: a dispatch usually lands
  * in a FRESH tab, which does not inherit that context, and `switchToTab`'s
- * welcome reset wipes anything attached beforehand.
+ * welcome reset wipes anything attached beforehand. `carryAttachedContext:
+ * false` opts out for a dispatch that would neither use nor consume the copy.
  *
  * The user's PICKED file/folder is deliberately NOT attached here — callers
  * call `attachPickedContext` once they know the dispatch will actually go
@@ -116,7 +126,9 @@ export async function landOnProviderChatTab(
     return activeTab;
   }
 
-  const carriedContext = snapshotUserAttachedContext(activeTab);
+  const carriedContext = options.carryAttachedContext === false
+    ? null
+    : snapshotUserAttachedContext(activeTab);
 
   const target = await resolveProviderChatTab(tabManager, plugin, providerId);
   if (!target) {
@@ -125,7 +137,7 @@ export async function landOnProviderChatTab(
   }
 
   await tabManager.switchToTab(target.id);
-  applyUserAttachedContext(target, carriedContext);
+  if (carriedContext) applyUserAttachedContext(target, carriedContext);
   return target;
 }
 

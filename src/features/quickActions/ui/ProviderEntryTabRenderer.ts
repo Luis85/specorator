@@ -209,7 +209,6 @@ export class ProviderEntryTabRenderer<T extends ProviderEntryRow> {
 
   private renderEmptyState(): void {
     if (!this.listEl) return;
-    this.listEl.removeClass('specorator-quick-actions-skills-skeleton');
     this.listEl.addClass('specorator-quick-actions-skills-empty');
     this.listEl.createDiv({
       cls: 'specorator-quick-actions-skills-empty-lead',
@@ -223,7 +222,7 @@ export class ProviderEntryTabRenderer<T extends ProviderEntryRow> {
 
   private renderSkeleton(): void {
     if (!this.listEl) return;
-    this.listEl.addClass('specorator-quick-actions-skills-skeleton');
+    // The rows carry `is-skeleton`; the container needs no class of its own.
     for (let i = 0; i < SKELETON_ROWS; i++) {
       const row = this.listEl.createDiv({
         cls: `specorator-quick-action-row ${this.config.rowCls} is-skeleton`,

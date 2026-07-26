@@ -251,6 +251,7 @@ export default class SpecoratorPlugin extends Plugin implements PluginContext {
       return;
     }
     if (this.unloaded) return;
+    this.providerCommandAggregator = createProviderCommandAggregator(this);
     // Skills tab cache: hydrate persisted index, then pre-warm in background.
     const aggregator = new VaultSkillAggregator(
       () => buildProviderRecords(this),
@@ -268,7 +269,6 @@ export default class SpecoratorPlugin extends Plugin implements PluginContext {
       return;
     }
     void aggregator.listAllStreaming(() => {});
-    this.providerCommandAggregator = createProviderCommandAggregator(this);
     const lastUsedStore = new QuickActionLastUsedStore({
       adapter: new VaultFileAdapter(this.app),
       logger: this.logger.scope('quickActions'),
