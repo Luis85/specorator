@@ -31,15 +31,19 @@ AND a **fresh per-leaf `TabManager`** — deliberately NOT the sidebar's singlet
 because the plugin enumerates multiple Team Chat leaves and a shared store/manager
 would let one leaf's projection overwrite another's (`ui/vue/globalPinia.ts`).
 
-- **Tree**: `TeamChatRoot` → `TeamRoster` (rows: `TeamRosterAvatar` + name/desc +
-  `PresenceDot`) + a main pane holding `TeamChatTopBar` (`TeamRosterAvatar` + voice
-  line + `EditedFilesStrip`) over an opaque tab-content host. `TeamChatRoot`
-  captures that host synchronously on mount (`CONTENT_HOST_KEY`) and calls back into
-  `initTabEngine` — same leave-me-alone content-host contract as chat's
-  `TabContentHost` (Vue owns the element, the engine `createDiv`s each DM's DOM into
-  it, no `v-for`).
-- **Read-model**: `teamChatStore` is a `shallowRef` store (`agents`,
-  `selectedAgentId`, `editedFiles`, `presence`); truth stays in
+- **Tree**: `TeamChatRoot` → `TeamRoster` (header + collapse toggle, `TeamRosterToolbar`
+  search/sort, `TeamRosterRow`s, `TeamRosterEmpty`) + `TeamRailSeparator` + a main pane
+  holding `TeamChatTopBar` (avatar+`PresenceDot` + voice line + model/provider chips +
+  `EditedFilesStrip` + overflow menu), `TeamChatStarters`, `TeamChatEmptyPane`, and an
+  opaque tab-content host. `TeamChatRoot` captures that host synchronously on mount
+  (`CONTENT_HOST_KEY`) and calls back into `initTabEngine` — same leave-me-alone
+  content-host contract as chat's `TabContentHost` (Vue owns the element, the engine
+  `createDiv`s each DM's DOM into it, no `v-for`). The DM-switch fade is therefore
+  replayed by re-adding a class (`replayDmTransition`), never by keying the host: a
+  `:key` bump would strand the tab engine on a detached node.
+- **Read-model**: `teamChatStore` is a `shallowRef` store (`agents`, `selectedAgentId`,
+  `editedFiles`, `presence`, `activeModelId`, `threads`, `unread`, `activeDmIsEmpty`, plus
+  the per-leaf `railCollapsed`/`railWidth`); truth stays in
   `plugin.agentRosterStore` + the tab engine. `useTeamChatEventRouting` subscribes
   SYNCHRONOUSLY during setup (a restore-time emit fired inside the root's
   `onMounted` must not be dropped) and fans the view's `TeamChatSnapshot` into the
@@ -115,6 +119,20 @@ reaches `{ leaf, getTabManager() }`, so a second host is reuse, not a fork.
   reuse gate disagree with what creation built).
 - **`createTeamChatDmConversation`** — provider-first DM creation (above).
 - **`teamChatPresence`** — the idle/busy projection.
+- **`teamChatThreadMeta`** — the roster's per-agent DM projection: last-message preview
+  (the TAIL message, not `ConversationStore`'s first-user-message `preview`, which is the
+  right answer for a history dropdown and the wrong one for a DM list), activity timestamp,
+  and the unread derivation. Pure + synchronous — it runs inside the snapshot projection on
+  every stream frame, so an unmapped/unloaded conversation is omitted, never awaited.
+- **`teamChatDmActions`** — the island's engine ACTIONS (close a DM, fill the composer from a
+  starter, read the thread map, clamp the rail width), kept out of the view.
+- **`teamChatCallbacksFactory`** — builds `TeamChatCallbacks` from a narrow host interface
+  (never imports the view, so no cycle), plus the untrusted-view-state rail-geometry reader.
+- **`teamChatLeafSubscriptions`** — every leaf subscription (presence, roster, thread remaps,
+  hydration banner, DM host events) behind ONE dispose+recreate handle, so a re-entrant
+  `onOpen` can't leak a listener pointing at the previous mount.
+- **`teamChatLeafLifecycle`** — the re-entrant-remount teardown and the Vue island mount.
+- **`teamChatRestoreCompletion`** — the ordered post-restore publish step.
 - **`activateTeamChat`** — reveal-or-open the main-area leaf (mirrors
   `activateLibrary`); `loadIfDeferred` before an optional `selectAgent(agentId)`.
 
@@ -192,6 +210,34 @@ reaches `{ leaf, getTabManager() }`, so a second host is reuse, not a fork.
   `getState()` / `setState()`, round-tripped through Obsidian view state. It NEVER
   writes the global `persistTabManagerState()` slot (the sidebar's fallback), so two
   Team Chat leaves can't clobber each other or the sidebar's restore.
+- **Unread is a per-leaf, in-memory ACTIVITY signal, not a read model.** An agent is unread
+  when its thread advanced past this leaf's last-seen stamp (`updateSeenBaseline` seeds every
+  newly observed agent — so leaf-open means "everything so far is seen" — and re-stamps the
+  ACTIVE agent every frame, so watching a DM stream and then switching away never marks it
+  unread). It resets on close: losing a badge across a restart beats persisting a wrong one,
+  and it needs no new file. A dot, never a count — a count would imply per-message tracking.
+- **Transcript attribution is surface-gated and seeded off-render.** `TranscriptCallbacks`
+  gained an OPTIONAL `getMessageIdentity`; `buildTranscriptCallbacks` supplies a self-gating
+  implementation (checked live, because a tab's conversation changes over its life) that
+  returns null unless the tab is currently a team-chat DM. The roster store is async while
+  the transcript reads identity from a render computed, so the persona is resolved into a
+  CONVERSATION-KEYED seed (`TabData.boundAgentPersona`, same auto-invalidation contract as
+  `displayModel`) by `refreshDmAgentPersonas`, driven off `projectSelectedAgentFromActiveTab`
+  — the one event that means "a tab's conversation binding changed". A rotation invalidates
+  the seed rather than mis-attributing the new thread; a deleted agent clears it (the DM
+  renders anonymously rather than over a name that no longer exists). Consecutive assistant
+  messages group under one header, computed against the FULL message list so a "load earlier"
+  can't grow a spurious header at the window edge. Non-team-chat surfaces are byte-identical
+  — locked by `tests/vue/chat/transcript/messageIdentity.test.ts`'s absent-callback case.
+- **The rail is a listbox, not a row of buttons.** One tab stop with a roving tabindex;
+  arrows move FOCUS and Enter/Space commits, because each open resolves a thread, spawns a
+  runtime, and consumes an LRU slot — select-follows-focus would be destructive here.
+- **A leaf reporting width 0 must not auto-collapse the rail.** The responsive collapse
+  treats `0` as "not measured yet" (a deferred/hidden leaf, or jsdom), so a restore or
+  un-hide can't silently collapse the rail against the user's stored preference.
+- **Both action menus share `showAgentActionMenu`**, so the roster row and the top bar can't
+  drift about what a DM offers — or, more importantly, what it must NOT: fork, new session,
+  and `/clear` are surface-gated off and must never reappear as a menu "convenience".
 - **Avatars are image-first.** `TeamRosterAvatar` renders through the shared
   `renderAgentAvatar` (`avatarImage` → emoji → icon → initials → default,
   `agentAvatar.ts:37`); a missing/renamed image falls through so it never blanks the
@@ -207,9 +253,12 @@ reaches `{ leaf, getTabManager() }`, so a second host is reuse, not a fork.
 ## Tests
 
 `tests/unit/features/teamChat/` (thread store + factory, open coordinator, DM
-tabs/LRU/rotation, presence, and the view's `selectAgent`/refresh/lifecycle paths)
-and `tests/vue/teamChat/` (roster select, top bar — identity + provider chip +
-edited-files strip, presence, view mount).
+tabs/LRU/rotation, presence, thread-meta preview/unread derivation, roster sort +
+relative time, and the view's `selectAgent`/refresh/lifecycle paths) and
+`tests/vue/teamChat/` (roster select, rail search/sort/preview/unread/keyboard/menu/
+collapse/resize, top bar identity + presence + model chip + overflow menu, empty states
+and starters, presence, view mount — shared fixtures in `fixtures.ts`). Transcript
+attribution lives in `tests/vue/chat/transcript/messageIdentity.test.ts`.
 
 ## Known limitations
 

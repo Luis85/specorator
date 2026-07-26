@@ -4,6 +4,16 @@ import { shallowRef } from 'vue';
 import type { RosterAgent } from '../../../../agents/roster/rosterTypes';
 import type { ComposerEditedFile } from '../../../../chat/ui/vue/composer/stores/composerStore';
 import type { TeamChatPresence } from '../../../teamChatPresence';
+import type { TeamChatThreadMeta } from '../../../teamChatThreadMeta';
+
+/** Rail sizing bounds (design §1.6). The floor keeps a name legible beside the
+ *  32px avatar; the ceiling keeps the transcript's reading measure intact on a
+ *  half-screen leaf. Collapsed is a separate mode, not `width = 0`. */
+export const MIN_RAIL_WIDTH = 200;
+export const MAX_RAIL_WIDTH = 420;
+export const DEFAULT_RAIL_WIDTH = 260;
+/** Icon-rail track: a 32px avatar plus the row's padding, and nothing else. */
+export const COLLAPSED_RAIL_WIDTH = 56;
 
 /**
  * Reactive read-model for one Team Chat leaf: the roster projection, the
@@ -30,6 +40,15 @@ export const useTeamChatStore = defineStore('team-chat', () => {
   const editedFiles = shallowRef<ComposerEditedFile[]>([]);
   const activeProviderId = shallowRef<string | null>(null);
   const presence = shallowRef<Record<string, TeamChatPresence>>({});
+  const activeModelId = shallowRef<string | null>(null);
+  const threads = shallowRef<Record<string, TeamChatThreadMeta>>({});
+  const unread = shallowRef<Record<string, true>>({});
+  const activeDmIsEmpty = shallowRef(false);
+  /** Rail collapse/width live here rather than in view state directly: the rail
+   *  writes them and the root reads them for its grid template, so they need a
+   *  shared reactive home. The view persists them (per leaf) off the same values. */
+  const railCollapsed = shallowRef(false);
+  const railWidth = shallowRef(DEFAULT_RAIL_WIDTH);
 
   function setAgents(next: RosterAgent[]): void {
     agents.value = next;
@@ -51,16 +70,54 @@ export const useTeamChatStore = defineStore('team-chat', () => {
     presence.value = next;
   }
 
+  function setActiveModelId(next: string | null): void {
+    activeModelId.value = next;
+  }
+
+  function setThreads(next: Record<string, TeamChatThreadMeta>): void {
+    threads.value = next;
+  }
+
+  function setUnread(next: Record<string, true>): void {
+    unread.value = next;
+  }
+
+  function setActiveDmIsEmpty(next: boolean): void {
+    activeDmIsEmpty.value = next;
+  }
+
+  function setRailCollapsed(next: boolean): void {
+    railCollapsed.value = next;
+  }
+
+  /** Clamped on the way in so neither a restored view state nor a drag can persist a
+   *  width that hides the rail or starves the transcript. */
+  function setRailWidth(next: number): void {
+    railWidth.value = Math.min(MAX_RAIL_WIDTH, Math.max(MIN_RAIL_WIDTH, Math.round(next)));
+  }
+
   return {
     agents,
     selectedAgentId,
     editedFiles,
     activeProviderId,
     presence,
+    activeModelId,
+    threads,
+    unread,
+    activeDmIsEmpty,
+    railCollapsed,
+    railWidth,
     setAgents,
     setSelected,
     setEditedFiles,
     setActiveProviderId,
     setPresence,
+    setActiveModelId,
+    setThreads,
+    setUnread,
+    setActiveDmIsEmpty,
+    setRailCollapsed,
+    setRailWidth,
   };
 });

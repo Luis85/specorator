@@ -14,6 +14,26 @@ import MessageBubble from './MessageBubble.vue';
 const props = defineProps<{ messages: ChatMessage[]; renderWindowStart: number }>();
 
 const windowed = computed(() => props.messages.slice(props.renderWindowStart));
+
+/**
+ * Which windowed messages OPEN an assistant run, and so carry the identity header on a
+ * surface that supplies one (Team Chat DMs — see `TranscriptCallbacks.getMessageIdentity`).
+ * Consecutive assistant messages group under a single header, matching every DM client
+ * and avoiding an avatar wall on a tool-heavy turn.
+ *
+ * Computed against the FULL message list rather than the window: keyed off the window,
+ * whichever message happened to sit at the window edge would look like the start of a run
+ * and grow a spurious header after every "load earlier".
+ */
+const runStarts = computed(() => {
+  const starts = new Set<string>();
+  for (let i = props.renderWindowStart; i < props.messages.length; i++) {
+    const msg = props.messages[i];
+    if (msg.role !== 'assistant') continue;
+    if (i === 0 || props.messages[i - 1].role !== 'assistant') starts.add(msg.id);
+  }
+  return starts;
+});
 </script>
 
 <template>
@@ -21,5 +41,6 @@ const windowed = computed(() => props.messages.slice(props.renderWindowStart));
     v-for="msg in windowed"
     :key="msg.id"
     :msg="msg"
+    :starts-run="runStarts.has(msg.id)"
   />
 </template>

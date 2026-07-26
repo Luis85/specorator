@@ -5,8 +5,11 @@ import { ProviderRegistry } from '../../core/providers/ProviderRegistry';
 import { ProviderSettingsCoordinator } from '../../core/providers/ProviderSettingsCoordinator';
 import { t } from '../../i18n/i18n';
 import type SpecoratorPlugin from '../../main';
+import { rosterAgentToPersona } from '../agents/personaRegistry';
+import { teamChatDmBoundAgentId } from '../chat/controllers/teamChatSurface';
 import { getTabProviderId } from '../chat/tabs/providerResolution';
 import { onProviderAvailabilityChanged } from '../chat/tabs/tabProviderSync';
+import { getComposerToolbarSettings } from '../chat/tabs/tabUi';
 import type { TabData } from '../chat/tabs/types';
 import type { ComposerEditedFile } from '../chat/ui/vue/composer/stores/composerStore';
 import { deriveEditedFilesFromMessages } from '../chat/utils/editedFiles';
@@ -15,6 +18,7 @@ import { recalculateUsageForModel } from '../chat/utils/usageInfo';
 import { resolveModelContextWindow } from '../settings/customModels/resolveModelContextWindow';
 import { resolveTeamChatAgentProvider } from './resolveTeamChatAgentProvider';
 import { projectCrossLeafPresence } from './teamChatPresence';
+import { deriveUnreadAgents, projectThreadMetas, updateSeenBaseline } from './teamChatThreadMeta';
 import type { TeamChatSnapshot } from './ui/vue/teamChatCallbacks';
 
 /**
@@ -114,22 +118,120 @@ export function projectActiveDmProviderId(plugin: SpecoratorPlugin, activeTab: T
 }
 
 /**
+ * Resolves each DM tab's bound-agent persona into `tab.boundAgentPersona`, then re-projects
+ * that tab's transcript so the attribution header repaints.
+ *
+ * The indirection exists because the roster store is ASYNC while the transcript reads the
+ * identity from a render computed — so it is resolved here, off-render, into a
+ * conversation-keyed seed (mirroring `SpecoratorView.refreshBoundAgentChip`). Seeding by
+ * conversation id is what makes a provider rotation safe: the new conversation doesn't match
+ * the old seed, so the header disappears until this re-runs rather than attributing the fresh
+ * thread to a stale persona.
+ *
+ * A deleted agent clears the seed (null), which is deliberate — a read-only DM whose agent
+ * left the roster renders anonymously rather than over a name that no longer exists.
+ */
+export async function refreshDmAgentPersonas(
+  plugin: SpecoratorPlugin,
+  tabs: readonly TabData[],
+): Promise<void> {
+  for (const tab of tabs) {
+    const conversationId = tab.conversationId;
+    const agentId = conversationId ? teamChatDmBoundAgentId(plugin, conversationId) : null;
+    if (!agentId) {
+      tab.boundAgentPersona = null;
+      continue;
+    }
+    // Sequential, not Promise.all: the hot-DM budget caps this at a handful of tabs, and
+    // the roster store's own read cache makes the repeated lookups cheap.
+    const agent = await plugin.agentRosterStore?.get(agentId);
+    // Re-check identity after the await — a rotation or close during the lookup must not
+    // write a seed for a conversation this tab no longer holds.
+    if (tab.conversationId !== conversationId) continue;
+    tab.boundAgentPersona = agent
+      ? { conversationId, persona: rosterAgentToPersona(agent) }
+      : null;
+    tab.transcript?.emit();
+  }
+}
+
+/**
+ * Projects the ACTIVE DM tab's model id for the top bar's chip, through the SAME
+ * `getComposerToolbarSettings` resolution the composer's model selector reads (pinned >
+ * blank draft > bound-agent display seed > provider snapshot). Going through the shared
+ * resolver rather than reading provider settings directly is what keeps the chip and the
+ * selector from ever naming different models for one DM — including right after a
+ * `roster:changed` same-provider model change, which re-seeds `displayModel` without
+ * rotating the conversation.
+ *
+ * Null (never a placeholder) when there is no active DM or the resolver has no model
+ * yet, so the chip hides instead of rendering an empty slot.
+ */
+export function projectActiveDmModelId(plugin: SpecoratorPlugin, activeTab: TabData | null): string | null {
+  if (!activeTab) return null;
+  try {
+    return getComposerToolbarSettings(activeTab, plugin).model?.trim() || null;
+  } catch (error) {
+    // `getComposerToolbarSettings` reaches through the provider-settings coordinator — a
+    // deeper call chain than anything else in this snapshot. This projection runs on EVERY
+    // stream frame and assembles the whole Team Chat read-model, so letting a model-resolution
+    // failure propagate would take down presence, selection, and the roster previews along
+    // with the chip. Degrade to "no chip" and log; never fail the emit.
+    plugin.logger.scope('team-chat').error('model projection failed', error);
+    return null;
+  }
+}
+
+/**
+ * Per-leaf context the snapshot projection needs but cannot derive itself, because both
+ * halves are owned by the view: the thread map (refreshed off `TeamChatThreadStore` on
+ * open + `teamChat:threads-changed`, never awaited from a render path) and the leaf's
+ * last-seen stamps.
+ */
+export interface TeamChatProjectionContext {
+  /** `agentId → conversationId` for every mapped DM, open or not. */
+  agentThreads: Record<string, string>;
+  /** Per-leaf unread baseline. MUTATED here (seeded) — see `seedLastSeen`. */
+  lastSeenByAgent: Map<string, number>;
+}
+
+/**
  * The full `TeamChatSnapshot` the view fans to its store observers, assembled from the
- * active DM tab: the edited-files strip + provider chip both project off it, presence is
- * the cross-leaf idle/busy aggregate. A pure projection kept here beside the other DM-scoped
+ * active DM tab: the edited-files strip + provider/model chips all project off it, presence
+ * is the cross-leaf idle/busy aggregate, and the roster's preview/timestamp/unread trio
+ * projects off the leaf's thread map. A projection kept here beside the other DM-scoped
  * projections (rather than inline in `TeamChatView`) so the view stays a thin host — the same
  * reason the refresh loops live in this module.
+ *
+ * Runs on every stream frame, so every branch is synchronous: no vault I/O, and an unmapped
+ * or unloaded conversation is omitted rather than awaited (`projectThreadMetas`).
  */
 export function projectTeamChatSnapshot(
   plugin: SpecoratorPlugin,
   activeTab: TabData | null,
   selectedAgentId: string | null,
+  context: TeamChatProjectionContext,
 ): TeamChatSnapshot {
+  const threads = projectThreadMetas(plugin, context.agentThreads);
+  // Update the baseline BEFORE deriving: an agent's first observed projection establishes
+  // its baseline (never unread), and the active DM re-stamps every frame so the thread you
+  // are watching stays seen. Only a bump to a NON-active, already-seen thread lights a row.
+  updateSeenBaseline(threads, context.lastSeenByAgent, selectedAgentId);
   return {
     selectedAgentId,
     editedFiles: projectActiveDmEditedFiles(activeTab),
     presence: projectCrossLeafPresence(plugin),
     activeProviderId: projectActiveDmProviderId(plugin, activeTab),
+    activeModelId: projectActiveDmModelId(plugin, activeTab),
+    threads,
+    unread: deriveUnreadAgents(threads, context.lastSeenByAgent, selectedAgentId),
+    // Read off the tab's live ChatState rather than the conversation record: during
+    // hydration the conversation can still be empty while the tab already has messages,
+    // and the starter row must disappear the moment the first turn renders.
+    // Chained all the way down, not just past `activeTab`: this projection also runs while
+    // a tab is mid-construction (created, ChatState not yet populated), where `messages` is
+    // legitimately absent. Treating that as "empty" is right — there is nothing to show yet.
+    activeDmIsEmpty: Boolean(activeTab) && (activeTab?.state?.messages?.length ?? 0) === 0,
   };
 }
 

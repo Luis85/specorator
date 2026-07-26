@@ -58,6 +58,9 @@ const mockNotice = Notice as jest.Mock;
 /** Prototype-only view wired just enough to drive the refresh surface. */
 function makeView(): any {
   const view = Object.create(TeamChatView.prototype) as any;
+  view.agentThreads = {};           // class-field initializer skipped by Object.create — the roster preview/timestamp source
+  view.lastSeenByAgent = new Map(); // ditto — the per-leaf unread baseline
+  view.railGeometry = { collapsed: false, width: 260 }; // ditto — the per-leaf rail chrome
   view.plugin = {
     logger: { scope: () => ({ error: jest.fn() }) },
     getConversationSync: jest.fn(() => null),
@@ -373,7 +376,7 @@ describe('TeamChatView — restored DM provider reconcile (Round-42, :329)', () 
     // during the (immediate) restore, so the manager-identity guard must skip BOTH the readiness
     // publish AND the reconcile.
     const original = view.tabManager;
-    view.restoreTabs = jest.fn(async () => { view.tabManager = { ...original }; });
+    view.restoreTabs = jest.fn(async () => { view.tabManager = { getAllTabs: jest.fn(() => []), ...original }; });
 
     await view.restoreTabsThenMarkReady();
 

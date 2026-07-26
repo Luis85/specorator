@@ -1,26 +1,25 @@
 import type { ViewStateResult, WorkspaceLeaf } from 'obsidian';
 import { ItemView } from 'obsidian';
-import { type App as VueApp, createApp, markRaw } from 'vue';
+import type { App as VueApp } from 'vue';
 
 import { validateTabManagerState } from '../../core/bootstrap/tabManagerState';
 import type { ProviderId } from '../../core/providers/types';
 import type { ChatViewHandle } from '../../core/types/PluginContext';
 import { t } from '../../i18n/i18n';
 import type SpecoratorPlugin from '../../main';
-import { tabCountsPayload } from '../chat/events';
 import { TabManager } from '../chat/tabs/TabManager';
 import { refreshBoundAgentDisplayModels } from '../chat/tabs/tabShared';
-import { openEditedFile } from '../chat/tabs/tabUi';
 import type { PersistedTabManagerState } from '../chat/tabs/types';
-import { applyDmEditedFilesSetting, applyDmHiddenCommands, noticeRemovedAgentDms, projectTeamChatSnapshot, reconcileRestoredDmProviders, refreshDmModelState, rotateChangedDmProviders } from './teamChatDmRefresh';
+import { buildTeamChatCallbacks, readRailGeometryFromState } from './teamChatCallbacksFactory';
+import { readAgentThreads } from './teamChatDmActions';
+import { applyDmEditedFilesSetting, applyDmHiddenCommands, noticeRemovedAgentDms, projectTeamChatSnapshot, reconcileRestoredDmProviders, refreshDmAgentPersonas, refreshDmModelState, rotateChangedDmProviders } from './teamChatDmRefresh';
 import { openTeamChatDmForSelection, ownedDisplacedDmId, restoreTeamChatDmTabs, serializeOnTail, touchDmRecency } from './teamChatDmTabs';
-import { registerTeamChatDmHostEvents } from './teamChatHostEvents';
-import { createDmHydrationBanner, type DmHydrationBannerController } from './teamChatHydrationBanner';
+import { mountTeamChatIsland, prepareReentrantRemount } from './teamChatLeafLifecycle';
+import { registerTeamChatLeafSubscriptions, type TeamChatLeafSubscriptions } from './teamChatLeafSubscriptions';
+import { completeTeamChatRestore } from './teamChatRestoreCompletion';
 import type { TeamChatThreadStore } from './TeamChatThreadStore';
-import { createTeamChatPinia } from './ui/vue/globalPinia';
-import { CALLBACKS_KEY, CONTENT_HOST_KEY, PLUGIN_KEY, VIEW_KEY } from './ui/vue/keys';
-import type { TeamChatCallbacks, TeamChatSnapshot } from './ui/vue/teamChatCallbacks';
-import TeamChatRoot from './ui/vue/TeamChatRoot.vue';
+import { DEFAULT_RAIL_WIDTH } from './ui/vue/stores/teamChatStore';
+import type { TeamChatCallbacks, TeamChatRailGeometry, TeamChatSnapshot } from './ui/vue/teamChatCallbacks';
 import { VIEW_TYPE_TEAM_CHAT } from './viewType';
 
 const TAB_STATE_PERSIST_DEBOUNCE_MS = 300;
@@ -64,18 +63,9 @@ export class TeamChatView extends ItemView implements ChatViewHandle {
   /** Per-leaf tail serializing selectAgent's open+reconcile so two fast different-agent clicks run one-at-a-time — no concurrent double-evict at full budget (Round-49). Holder so serializeOnTail advances it byref. */
   private readonly selectionOpenTail: { tail: Promise<unknown> } = { tail: Promise.resolve() };
   private pendingPersist: number | null = null;
-  /** Unsubscribe for the cross-leaf `teamChat:presence` broadcast (Fix 3): another
-   *  leaf's DM streaming re-projects this leaf's presence so busy shows everywhere. */
-  private presenceUnsubscribe: (() => void) | null = null;
-  /** Unsubscribe for `roster:changed` (Round-39): reconciles OPEN DM tabs on a roster edit
-   *  — provider-change rotation + un-grey (reused T5 reconcile), plus read-only for deleted
-   *  agents. Mirrors `presenceUnsubscribe`'s onOpen/onClose + re-entrant lifecycle. */
-  private rosterChangedUnsubscribe: (() => void) | null = null;
-  /** DM hydration-failure → inline banner controller (Round-62 Fix 3): owns the pending map +
-   *  `conversation:hydration-failed` subscription; disposed/re-created like presence/roster. */
-  private hydrationBanner: DmHydrationBannerController | null = null;
-  /** Disposer for the DM host events — file-context vault/workspace events (Round-62/64) PLUS the mention click-away + Shift+Tab plan toggle (Round-65 Fix #1/#3). Dispose+recreate per onOpen so a re-entrant rebuild can't leak the prior listeners (mirrors presence/roster/banner). */
-  private dmHostEventsDispose: (() => void) | null = null;
+  /** Every leaf subscription behind one dispose+recreate handle (presence, roster, thread
+   *  remaps, hydration banner, DM host events). See `registerTeamChatLeafSubscriptions`. */
+  private subscriptions: TeamChatLeafSubscriptions | null = null;
   /** ConversationIds this leaf is mid-open (select) OR mid-restore (parallel pre-warm of many DMs); the banner ownership gate reads them via `isOpeningConversation` so a pre-bind hydration error stashes on the owning leaf only, not every leaf (Round-64 Fix B; restore set Round-66). */
   private readonly openingConversationIds = new Set<string>();
   readonly isOpeningConversation = (conversationId: string): boolean => this.openingConversationIds.has(conversationId);
@@ -85,6 +75,18 @@ export class TeamChatView extends ItemView implements ChatViewHandle {
   /** DM conversationIds in activation order (most-recent last) — the LRU order the T7
    *  hot-DM budget evicts from. Touched whenever a DM tab becomes active. */
   private readonly dmRecency: string[] = [];
+  /** `agentId → conversationId` for every mapped DM — the roster's preview/timestamp source.
+   *  Refreshed ASYNCHRONOUSLY, then read synchronously by the snapshot projection (which runs
+   *  per stream frame and must never await vault I/O). Stale-but-present is the intended
+   *  failure mode: a row shows the previous preview for a tick rather than blocking a render. */
+  private agentThreads: Record<string, string> = {};
+  /** Per-leaf unread baseline: `agentId → the thread timestamp this leaf last showed`, so
+   *  unread means "moved since you looked" (design §1.3). In-memory by choice — it resets on
+   *  close, and losing a badge across a restart beats persisting a wrong one. */
+  private readonly lastSeenByAgent = new Map<string, number>();
+  /** Roster rail chrome, persisted per leaf alongside the DM layout (never globally, so two
+   *  Team Chat leaves keep independent rail geometry). Width is clamped on every write. */
+  private railGeometry: TeamChatRailGeometry = { collapsed: false, width: DEFAULT_RAIL_WIDTH };
   // Store-reprojection observers (mirror of chat's chatShellObservers). The
   // routing composable subscribes here and fans each snapshot into the Pinia
   // store; the ChatViewHandle refresh methods re-project through the same seam.
@@ -107,72 +109,42 @@ export class TeamChatView extends ItemView implements ChatViewHandle {
   }
 
   async onOpen(): Promise<void> {
-    // Re-entrant onOpen (popout/move without an interleaved onClose): drop the
-    // prior engine so it can't leak pointing at the about-to-be-emptied host. No
-    // leaf persist here — setViewState during onOpen would re-enter.
+    // Re-entrant onOpen (popout/move without an interleaved onClose): drop the prior engine
+    // so it can't leak pointing at the about-to-be-emptied host. See the helper for what
+    // each reset guards against.
     if (this.tabManager) {
-      // Invalidate any in-flight selectAgent open before tearing down (mirror of destroyTabRuntime's
-      // Round-28 bump): this re-entrant path destroys the manager directly, so without the bump an open
-      // awaiting resolveOrCreate would pass isSelectionStale and createTab into the doomed manager (:90).
-      this.selectionGeneration++;
-      // Re-close the restore gate: the OLD engine left tabsRestored true, but the NEW manager's
-      // restoreState (initTabEngine) runs async — without this, a roster click in the rebuild window
-      // passes the !tabsRestored gate and createTabs concurrently with the new restore (Round-29/31; :90).
-      this.tabsRestored = false;
-      this.pendingAgentSelection = null; // drop the prior mount's queued click so it can't drain post-remount (Fix C)
-      // Cancel the armed pending-persist debounce: its callback calls leaf.setViewState (the very
-      // re-entry onOpen avoids) and would race the newly mounting manager; this path never reaches
-      // destroyTabRuntime's persistTabStateImmediate that would otherwise clear it (:109).
-      if (this.pendingPersist !== null) {
-        window.clearTimeout(this.pendingPersist);
-        this.pendingPersist = null;
-      }
-      // Capture the LIVE DM layout before destroying: the initial setState layout was already consumed
-      // by the first initTabEngine, so without this the rebuilt engine restores nothing and the pane
-      // goes blank. This live capture supersedes it; the rebuilt initTabEngine reopens these tabs (:90).
-      this.pendingTabManagerState = this.tabManager.getPersistedState();
-      await this.tabManager.destroy();
+      await prepareReentrantRemount(this.tabManager, {
+        invalidateSelections: () => { this.selectionGeneration++; },
+        closeRestoreGate: () => { this.tabsRestored = false; },
+        clearPendingSelection: () => { this.pendingAgentSelection = null; },
+        cancelPendingPersist: () => this.cancelPendingPersist(),
+        stashLayout: (state) => { this.pendingTabManagerState = state; },
+      });
       this.tabManager = null;
     }
     this.vueApp?.unmount();
     this.vueApp = null;
     this.tabContentEl = null;
-    this.contentEl.empty();
-    // Two calls, not one: Obsidian's addClass is variadic but the shared
-    // test-lane polyfill is single-arg.
-    this.contentEl.addClass('specorator-vue');
-    this.contentEl.addClass('specorator-team-chat-vue-root');
-
-    const app = createApp(TeamChatRoot);
-    app.use(createTeamChatPinia()); // fresh per-leaf Pinia — see createTeamChatPinia
-    // markRaw: Obsidian objects are large and cyclic; never deep-proxy them.
-    app.provide(PLUGIN_KEY, markRaw(this.plugin));
-    app.provide(VIEW_KEY, markRaw(this));
-    app.provide(CALLBACKS_KEY, markRaw(this.buildCallbacks()));
-    // Engine construction happens AFTER the host element exists: the root
-    // captures it synchronously during mount and calls back here.
-    app.provide(CONTENT_HOST_KEY, (hostEl: HTMLElement) => {
+    // Engine construction happens AFTER the host element exists: the root captures it
+    // synchronously during mount and calls back here.
+    this.vueApp = mountTeamChatIsland(this.contentEl, this.plugin, this, this.buildCallbacks(), (hostEl) => {
       this.tabContentEl = hostEl;
       this.initTabEngine();
     });
-    app.mount(this.contentEl);
-    this.vueApp = app;
     // Re-project presence whenever ANY leaf's DM streaming changes (re-entrant onOpen
     // drops the prior subscription first so it never double-subscribes).
-    this.presenceUnsubscribe?.();
-    this.presenceUnsubscribe = this.plugin.events.on('teamChat:presence', () => this.emitTeamChatChange());
-    // Reconcile OPEN DM tabs on a roster edit: provider-change rotation + un-grey (the reused
-    // T5 reconcile) and read-only for deleted agents. Same re-entrant-safe `?.()` shape as
-    // presence (SpecoratorView's roster:changed is likewise undebounced — the rotation only
-    // fires on an actual provider mismatch, so an unrelated edit is cheap).
-    this.rosterChangedUnsubscribe?.();
-    this.rosterChangedUnsubscribe = this.plugin.events.on('roster:changed', () => void this.reconcileDmsOnRosterChange());
-    // Surface a DM hydration failure as an inline banner (Round-62 Fix 3) + keep the active DM tab's file
-    // cache fresh (Round-62 Fix 2). Both dispose+recreate per onOpen — no leak on re-entry (Round-64 Fix A).
-    this.hydrationBanner?.dispose();
-    this.hydrationBanner = createDmHydrationBanner(this.plugin, this);
-    this.dmHostEventsDispose?.();
-    this.dmHostEventsDispose = registerTeamChatDmHostEvents(this.plugin, () => this.tabManager?.getActiveTab() ?? null, this.containerEl, (ref) => this.registerEvent(ref));
+    // One dispose+recreate for every leaf subscription, so a re-entrant onOpen can't leak a
+    // listener pointing at the previous mount.
+    this.subscriptions?.dispose();
+    this.subscriptions = registerTeamChatLeafSubscriptions(this.plugin, {
+      onPresenceChanged: () => this.emitTeamChatChange(),
+      onRosterChanged: () => void this.reconcileDmsOnRosterChange(),
+      onThreadsChanged: () => void this.refreshAgentThreads(),
+      getActiveTab: () => this.tabManager?.getActiveTab() ?? null,
+      containerEl: this.containerEl,
+      registerEvent: (ref) => this.registerEvent(ref),
+    }, this);
+    void this.refreshAgentThreads(); // prime so rows carry previews on FIRST paint, not only after a remap
   }
 
   /** Builds the tab engine into the Vue-provided content host, then restores the
@@ -215,6 +187,11 @@ export class TeamChatView extends ItemView implements ChatViewHandle {
       ? this.plugin.getConversationSync(conversationId)?.boundAgentId ?? null
       : null;
     this.selectedAgentId = boundAgentId;
+    // Re-seed transcript attribution off the SAME event that changed a tab's conversation
+    // binding — which is exactly when a DM's persona could be stale (open, switch, rotation,
+    // rebind). Fire-and-forget: the seed re-emits that tab's transcript when it lands, so the
+    // header appears a tick later rather than blocking this synchronous projection.
+    void refreshDmAgentPersonas(this.plugin, this.tabManager?.getAllTabs() ?? []);
     this.emitTeamChatChange();
   }
 
@@ -232,25 +209,23 @@ export class TeamChatView extends ItemView implements ChatViewHandle {
     } catch (error) {
       this.plugin.logger.scope('team-chat').error('team chat tab restore failed', error);
     } finally {
+      // Only the CURRENT manager's restore may publish — a superseded one would re-open the
+      // capacity gate while a newer restore is still mid-flight (:185).
       if (this.tabManager === manager) {
-        // Project the active DM's agent — or null when nothing restored, clearing the stale hint (:30).
-        this.projectSelectedAgentFromActiveTab();
-        this.tabsRestored = true;
-        // Capacity is readable again now that tabsRestored is true (getTabSlotUsage
-        // reported FULL while it was false). Mirror SpecoratorView: fire chat:tabs-changed
-        // once (shared tabCountsPayload) so the Agent Board work-order queue re-ticks and
-        // drains any runnable card, instead of stalling until an unrelated tab change
-        // nudges it (:171).
-        this.plugin.events.emit('chat:tabs-changed', tabCountsPayload(this.tabManager));
-        // Round-42: reconcile restored DMs against their agent's CURRENT provider — no startup
-        // event does after a deferred/closed-leaf restore. AFTER tabsRestored so selectAgent's
-        // restore gate is open; its generation + manager-identity guards drop a superseded rebuild.
-        await reconcileRestoredDmProviders(this.plugin, () => this.refreshProviderAvailability());
-        // Drain a roster click queued while restoring (Round-48 Fix C) through openAgentDm so a
-        // rejecting drained open is caught+logged, not unhandled (Round-63); guards supersede if stale.
-        const pending = this.pendingAgentSelection;
-        this.pendingAgentSelection = null;
-        if (pending) void this.openAgentDm(pending);
+        await completeTeamChatRestore(this.plugin, {
+          projectSelectedAgent: () => this.projectSelectedAgentFromActiveTab(),
+          markRestored: () => { this.tabsRestored = true; },
+          getAllTabs: () => this.tabManager?.getAllTabs() ?? [],
+          tabCounts: () => this.tabManager,
+          reconcileRestoredProviders: () =>
+            reconcileRestoredDmProviders(this.plugin, () => this.refreshProviderAvailability()),
+          takePendingSelection: () => {
+            const pending = this.pendingAgentSelection;
+            this.pendingAgentSelection = null;
+            return pending;
+          },
+          openAgentDm: (agentId) => void this.openAgentDm(agentId),
+        });
       }
     }
   }
@@ -290,14 +265,8 @@ export class TeamChatView extends ItemView implements ChatViewHandle {
   }
 
   async onClose(): Promise<void> {
-    this.presenceUnsubscribe?.();
-    this.presenceUnsubscribe = null;
-    this.rosterChangedUnsubscribe?.();
-    this.rosterChangedUnsubscribe = null;
-    this.hydrationBanner?.dispose();
-    this.hydrationBanner = null;
-    this.dmHostEventsDispose?.();
-    this.dmHostEventsDispose = null;
+    this.subscriptions?.dispose();
+    this.subscriptions = null;
     await this.destroyTabRuntime();
     // Streaming DMs gone; surviving leaves recompute presence (destroyTab skips the callbacks) (:261).
     this.plugin.events.emit('teamChat:presence');
@@ -347,6 +316,7 @@ export class TeamChatView extends ItemView implements ChatViewHandle {
   async refreshProviderAvailability(): Promise<void> {
     const tabs = this.tabManager?.getAllTabs() ?? [];
     await refreshBoundAgentDisplayModels(this.plugin, tabs); // recompute bound-agent display models before the un-grey/rotate below: a same-provider model change doesn't rotate, so the selector would keep the old model (mirror of SpecoratorView roster:changed)
+    await refreshDmAgentPersonas(this.plugin, tabs); // re-seed transcript attribution: a renamed/re-avatared (or deleted) agent must repaint its DM's message headers
     refreshDmModelState(this.plugin, tabs);
     await rotateChangedDmProviders(this.plugin, tabs, (agentId, staleId) => this.selectAgent(agentId, { preserveFocus: true, displacedConversationId: staleId })); // background provider-sync: preserveFocus so an inactive DM's rotation doesn't yank the pane off the DM the user is reading (Round-45); displacedConversationId threads the mismatched tab's own id so a post-reload cleanup can still close it (Round-48)
     this.emitTeamChatChange();
@@ -465,21 +435,40 @@ export class TeamChatView extends ItemView implements ChatViewHandle {
   // ============================================
 
   private buildCallbacks(): TeamChatCallbacks {
-    return {
-      subscribe: (onChange) => {
+    return buildTeamChatCallbacks({
+      plugin: this.plugin,
+      getTabManager: () => this.tabManager,
+      addObserver: (onChange) => {
         this.teamChatObservers.add(onChange);
-        return () => {
-          this.teamChatObservers.delete(onChange);
-        };
+        return () => { this.teamChatObservers.delete(onChange); };
       },
-      onSelectAgent: (agentId) => void this.openAgentDm(agentId),
-      onOpenEditedFile: (path) => openEditedFile(this.plugin.app, path),
-    };
+      openAgentDm: (agentId) => void this.openAgentDm(agentId),
+      getRailGeometry: () => this.railGeometry,
+      setRailGeometry: (geometry) => {
+        this.railGeometry = geometry;
+        this.persistTabState(); // shares the DM layout's debounce — a drag persists once, on settle
+      },
+    });
+  }
+
+  /** Re-reads the roster's preview/timestamp source, then re-emits. A failed read returns null
+   *  and the previous map is RETAINED — clearing it would blank every row's subtitle on one
+   *  transient vault glitch. */
+  private async refreshAgentThreads(): Promise<void> {
+    const threads = await readAgentThreads(this.plugin);
+    if (!threads) return;
+    this.agentThreads = threads;
+    this.emitTeamChatChange();
   }
 
   /** Delegates to the shared projection (the active DM tab drives it) so the view stays a thin host. */
   private buildSnapshot(): TeamChatSnapshot {
-    return projectTeamChatSnapshot(this.plugin, this.tabManager?.getActiveTab() ?? null, this.selectedAgentId);
+    return projectTeamChatSnapshot(
+      this.plugin,
+      this.tabManager?.getActiveTab() ?? null,
+      this.selectedAgentId,
+      { agentThreads: this.agentThreads, lastSeenByAgent: this.lastSeenByAgent },
+    );
   }
 
   /** Notifies every registered store observer (mirror of emitChatShellChange). */
@@ -494,7 +483,7 @@ export class TeamChatView extends ItemView implements ChatViewHandle {
    * owning `component` (this view) once bound, surfacing a banner recorded while the tab was still opening.
    */
   consumePendingHydrationError(conversationId: string): { code: string; message: string } | null {
-    return this.hydrationBanner?.consumePendingHydrationError(conversationId) ?? null;
+    return this.subscriptions?.hydrationBanner.consumePendingHydrationError(conversationId) ?? null;
   }
 
   // ============================================
@@ -508,22 +497,37 @@ export class TeamChatView extends ItemView implements ChatViewHandle {
     return {
       ...super.getState(),
       selectedAgentId: this.selectedAgentId ?? undefined,
+      railCollapsed: this.railGeometry.collapsed || undefined, // defaults omitted so they don't bloat every leaf's state
+      railWidth: this.railGeometry.width === DEFAULT_RAIL_WIDTH ? undefined : this.railGeometry.width,
       // Mid-restore the live manager is only PARTIALLY restored, so persist the FULL saved layout still held in pendingTabManagerState — else a teardown-during-restore overwrites the leaf with a partial layout, dropping un-restored DMs (Round-54 data-loss). :255 nulls it once restore completes → the live manager thereafter.
       tabManagerState: (this.tabsRestored ? undefined : this.pendingTabManagerState) ?? this.tabManager?.getPersistedState(),
     };
   }
 
   async setState(state: unknown, result: ViewStateResult): Promise<void> {
-    const raw = state as { selectedAgentId?: unknown; tabManagerState?: unknown } | null;
+    const raw = state as {
+      selectedAgentId?: unknown;
+      tabManagerState?: unknown;
+      railCollapsed?: unknown;
+      railWidth?: unknown;
+    } | null;
     // selectedAgentId is a restore hint for the roster highlight until the tabs
     // restore and the projection reconfirms it off the active tab.
     if (typeof raw?.selectedAgentId === 'string') this.selectedAgentId = raw.selectedAgentId;
+    this.railGeometry = readRailGeometryFromState(raw, this.railGeometry); // untrusted input — validated + clamped there
     // Stash the validated DM layout for initTabEngine's restore (mirror of
     // SpecoratorView) so every saved DM tab round-trips on reload, not just the
     // selected one. setState runs before onOpen, so it's ready when the engine builds.
     const validated = validateTabManagerState(raw?.tabManagerState);
     if (validated) this.pendingTabManagerState = validated;
     await super.setState(state, result);
+  }
+
+  /** Disarms the persist debounce; both the re-entrant remount and the immediate persist
+   *  must do so before their own write. */
+  private cancelPendingPersist(): void {
+    if (this.pendingPersist !== null) window.clearTimeout(this.pendingPersist);
+    this.pendingPersist = null;
   }
 
   private persistTabState(): void {
@@ -535,10 +539,7 @@ export class TeamChatView extends ItemView implements ChatViewHandle {
   }
 
   private async persistTabStateImmediate(): Promise<void> {
-    if (this.pendingPersist !== null) {
-      window.clearTimeout(this.pendingPersist);
-      this.pendingPersist = null;
-    }
+    this.cancelPendingPersist();
     await this.leaf.setViewState({ type: VIEW_TYPE_TEAM_CHAT, state: this.getState() });
   }
 }

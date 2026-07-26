@@ -91,6 +91,21 @@ export class TeamChatThreadStore {
     return rooms[this.roomKeyForAgent(agentId)] ?? null;
   }
 
+  /**
+   * Whole map as `agentId → conversationId`, for read-only bulk callers (the roster's
+   * preview/timestamp projection, which needs every agent's thread at once and must not
+   * issue N awaited `get`s from a render path). Creates nothing and returns a COPY, so a
+   * caller holding the result across an await can't observe — or mutate — the live cache.
+   *
+   * Returns agent ids, not room keys: `roomKeyForAgent` stays private so increment 2 can
+   * key on a participant set without a public API change (:175). When that lands, this is
+   * where non-1:1 rooms get filtered out, and every caller keeps compiling.
+   */
+  async listAgentThreads(): Promise<Record<string, string>> {
+    const rooms = await this.loadRooms();
+    return { ...rooms };
+  }
+
   private async resolveOrCreateInner(agentId: string): Promise<string> {
     const rooms = await this.loadRooms();
     const key = this.roomKeyForAgent(agentId);

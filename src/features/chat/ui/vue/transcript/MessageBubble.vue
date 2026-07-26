@@ -11,6 +11,7 @@ import { resolveBlockListItems, shouldRenderToolCall } from './blocks/blockListV
 import TextBlock from './blocks/TextBlock.vue';
 import MessageActionBar from './cards/MessageActionBar.vue';
 import MessageContextCard from './cards/MessageContextCard.vue';
+import MessageIdentity from './cards/MessageIdentity.vue';
 import MessageImages from './cards/MessageImages.vue';
 import { APP_KEY, CALLBACKS_KEY } from './transcriptKeys';
 import { hasVisibleBlock, hasVisibleText } from './visibleContentHelpers';
@@ -34,12 +35,31 @@ import { hasVisibleBlock, hasVisibleText } from './visibleContentHelpers';
  * directly below the response (not an overlay on the last line). The user
  * toolbar (fork/rewind/copy/actions) stays a message-level sibling below.
  */
-const props = defineProps<{ msg: ChatMessage }>();
+const props = defineProps<{
+  msg: ChatMessage;
+  /**
+   * True when this assistant message OPENS a run (the parent computes it against the full
+   * message list). Only a run-opener carries the identity header, so consecutive assistant
+   * messages group under one attribution. Optional so the many fixtures that mount
+   * `MessageBubble` directly keep working — an absent value simply never shows a header,
+   * which is also the correct default for every non-Team-Chat surface.
+   */
+  startsRun?: boolean;
+}>();
 
 const app = inject(APP_KEY, undefined);
 const callbacks = inject(CALLBACKS_KEY, undefined);
 
 const providerId = computed(() => callbacks?.getProviderId() ?? DEFAULT_CHAT_PROVIDER_ID);
+
+/**
+ * The persona to attribute this message to, or null. Non-null only when ALL of: the
+ * surface supplies an identity (`getMessageIdentity` is absent everywhere but Team Chat
+ * DMs), this message opens an assistant run, and the bound agent still exists (the
+ * callback returns null once it leaves the roster).
+ */
+const identity = computed(() =>
+  (props.startsRun ? callbacks?.getMessageIdentity?.() ?? null : null));
 
 function isToolVisible(toolId: string): boolean {
   const toolCall = props.msg.toolCalls?.find((tc) => tc.id === toolId);
@@ -150,6 +170,13 @@ const mentions = computed(() => {
         class="specorator-message-content"
         dir="auto"
       >
+        <!-- Surface-gated agent attribution (Team Chat DMs only; `persona` is null on
+             every other surface, and the component then renders nothing). The null check
+             lives INSIDE MessageIdentity rather than as a v-if here, so this already-dense
+             template gains no branch. Inside -message-content so the -message shell's
+             structure — what the imperative NavigationController and selection controllers
+             query — is untouched. -->
+        <MessageIdentity :persona="identity" />
         <BlockList :msg="msg" />
         <div
           v-if="msg.isInterrupt"

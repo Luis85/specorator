@@ -1,16 +1,22 @@
 <script setup lang="ts">
-import { inject, onMounted, ref } from 'vue';
+import { computed, inject, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 
-import { t } from '../../../../i18n/i18n';
-import { mountIcon } from '../../../chat/ui/vue/mountIcon';
+import TeamChatEmptyPane from './components/TeamChatEmptyPane.vue';
+import TeamChatStarters from './components/TeamChatStarters.vue';
 import TeamChatTopBar from './components/TeamChatTopBar.vue';
+import TeamRailSeparator from './components/TeamRailSeparator.vue';
 import { CALLBACKS_KEY, CONTENT_HOST_KEY } from './keys';
-import { useTeamChatStore } from './stores/teamChatStore';
+import { COLLAPSED_RAIL_WIDTH, useTeamChatStore } from './stores/teamChatStore';
 import TeamRoster from './TeamRoster.vue';
 import { useTeamChatEventRouting } from './useTeamChatEventRouting';
 
+/** Below this leaf width the rail auto-collapses regardless of the stored preference,
+ *  which is left untouched so widening restores it (design §4.3). */
+const NARROW_LEAF_PX = 720;
+
 const store = useTeamChatStore();
 const hostEl = ref<HTMLElement | null>(null);
+const rootEl = ref<HTMLElement | null>(null);
 const mountHost = inject(CONTENT_HOST_KEY);
 
 const callbacks = inject(CALLBACKS_KEY);
@@ -19,49 +25,112 @@ if (!callbacks) throw new Error('TeamChatRoot mounted without CALLBACKS_KEY');
 // restore-time selection emit projects into the store.
 useTeamChatEventRouting(callbacks.subscribe);
 
-// Capture the opaque tab-content host synchronously on mount, before the engine
-// needs it. Same "leave-me-alone host" contract as chat's TabContentHost: Vue
-// owns this element but never its children — the tab engine createDiv's each
-// DM's DOM into it. No v-for / reactive children here.
-onMounted(() => {
-  if (hostEl.value && mountHost) mountHost(hostEl.value);
+// Seed the rail geometry from the leaf's persisted state ONCE. Read through a plain
+// getter rather than the snapshot: geometry is written by the island and read by the
+// host, so routing it through the per-frame snapshot would churn it and fight the
+// separator's own drag state.
+const geometry = callbacks.getRailGeometry();
+store.setRailCollapsed(geometry.collapsed);
+store.setRailWidth(geometry.width);
+
+/**
+ * Auto-collapse on a narrow leaf WITHOUT writing the preference: `isNarrow` is layout
+ * state, `store.railCollapsed` is the user's choice, and the rail renders collapsed when
+ * either is true. Widening therefore restores exactly what the user last chose, and a
+ * toggle made while narrow still persists for when the pane grows again.
+ */
+const isNarrow = ref(false);
+const collapsed = computed(() => store.railCollapsed || isNarrow.value);
+
+// Grid track for the rail. Collapsed is a fixed icon rail; expanded uses the stored
+// width, so the transcript keeps every pixel the rail isn't using.
+const railTrack = computed(() => (collapsed.value ? `${COLLAPSED_RAIL_WIDTH}px` : `${store.railWidth}px`));
+
+function onResize(width: number): void {
+  store.setRailWidth(width);
+  callbacks?.onRailGeometryChange({ collapsed: store.railCollapsed, width: store.railWidth });
+}
+
+/**
+ * Re-runs the DM-switch fade on the CONTENT HOST without re-creating it. The host is the
+ * element the tab engine captured on mount and mounts every DM's DOM into, so it must
+ * keep its identity for the life of the leaf — which rules out the usual `:key`-bump or
+ * `<Transition>` approach. Removing the class, forcing a reflow, and re-adding it is what
+ * restarts a CSS animation on a persistent node.
+ */
+function replayDmTransition(): void {
+  const el = hostEl.value;
+  if (!el) return;
+  el.removeClass('is-dm-entering');
+  void el.offsetWidth; // forced reflow: without it the re-add is coalesced and no animation runs
+  el.addClass('is-dm-entering');
+}
+
+watch(() => store.selectedAgentId, (agentId) => {
+  if (agentId) replayDmTransition();
 });
 
-// Decorative anchor for the no-DM-selected pane; reuses the view's own `users`
-// identity (getIcon). Painted through mountIcon's nodeType guard so popout leaves
-// stay safe, matching EditedFilesStrip.
-function emptyIcon(el: HTMLElement | null): void {
-  mountIcon(el, 'users');
-}
+// ResizeObserver on the leaf, not a media query: the pane is a workspace split, so its
+// width is independent of the window's (a narrow split in a maximized window must still
+// collapse). Guarded because the shared test-lane DOM polyfill has no ResizeObserver.
+let observer: ResizeObserver | null = null;
+onMounted(() => {
+  if (hostEl.value && mountHost) mountHost(hostEl.value);
+  const el = rootEl.value;
+  if (!el || typeof ResizeObserver === 'undefined') return;
+  observer = new ResizeObserver(([entry]) => {
+    const width = entry.contentRect.width;
+    // `width > 0` is not defensive noise: an unmeasured or hidden leaf (a deferred
+    // workspace leaf, a background tab, jsdom) reports 0, and treating that as "narrow"
+    // would collapse the rail on every restore and un-hide. Zero means "no measurement
+    // yet", so hold the current state until a real one arrives.
+    isNarrow.value = width > 0 && width < NARROW_LEAF_PX;
+  });
+  observer.observe(el);
+});
+
+onBeforeUnmount(() => {
+  observer?.disconnect();
+  observer = null;
+});
 </script>
 
 <template>
-  <div class="specorator-team-chat">
-    <aside class="specorator-team-chat-roster">
+  <div
+    ref="rootEl"
+    class="specorator-team-chat"
+    :class="{ 'is-rail-collapsed': collapsed }"
+    :style="{ '--sp-team-rail-width': railTrack }"
+  >
+    <aside
+      class="specorator-team-chat-roster"
+      :class="{ 'is-collapsed': collapsed }"
+    >
       <TeamRoster />
     </aside>
+    <!-- Resize is meaningless on the icon rail (its width is fixed), so the handle is
+         absent rather than inert while collapsed. -->
+    <TeamRailSeparator
+      v-if="!collapsed"
+      :width="store.railWidth"
+      @resize="onResize"
+    />
     <section class="specorator-team-chat-main">
-      <!-- Identity + edited-files header for the active DM's agent (self-hides
-           until an agent is selected), pinned above the transcript/composer host. -->
+      <!-- Identity + presence + model/provider + edited-files header for the active DM's
+           agent (self-hides until an agent is selected), pinned above the transcript. -->
       <TeamChatTopBar />
-      <!-- Phase 4a shows the empty state over a childless host; 4b opens a DM
-           into the host and hides this once an agent is selected. -->
-      <div
-        v-if="!store.selectedAgentId"
-        class="specorator-team-chat-empty"
-      >
-        <span
-          :ref="(el) => emptyIcon(el as HTMLElement | null)"
-          class="specorator-team-chat-empty-icon"
-          aria-hidden="true"
-        />
-        <p class="specorator-team-chat-empty-text">
-          {{ t('teamChat.emptyState') }}
-        </p>
-      </div>
+      <!-- Greeting + conversation starters for an open-but-empty DM; in normal flow, so
+           it simply occupies the gap an empty transcript leaves. -->
+      <TeamChatStarters />
+      <!-- No DM selected: icon, guidance, and agent quick-picks over a childless host. -->
+      <TeamChatEmptyPane v-if="!store.selectedAgentId" />
       <!-- Shares the sidebar's tab-content-container constraints (flex column +
            overflow:hidden + min-height:0) so a tall transcript scrolls INSIDE
-           the host instead of pushing the composer past the visible pane. -->
+           the host instead of pushing the composer past the visible pane.
+           NO `:key` and no `v-for`: the engine captured this exact element on mount
+           and createDiv's each DM's DOM into it, so re-creating it would strand the
+           tab engine on a detached node. The DM-switch transition is re-triggered
+           imperatively instead (see `replayDmTransition`). -->
       <div
         ref="hostEl"
         class="specorator-team-chat-content-host specorator-tab-content-container"
@@ -73,13 +142,19 @@ function emptyIcon(el: HTMLElement | null): void {
 <style scoped>
 .specorator-team-chat {
   display: grid;
-  grid-template-columns: minmax(200px, 260px) 1fr;
+  /* rail | separator | pane. The separator straddles the border with a negative
+     inline margin, so it costs no visual gutter. */
+  grid-template-columns: var(--sp-team-rail-width) auto 1fr;
   height: 100%;
   min-height: 0;
+}
+.specorator-team-chat.is-rail-collapsed {
+  grid-template-columns: var(--sp-team-rail-width) 1fr;
 }
 .specorator-team-chat-roster {
   border-right: 1px solid var(--sp-border);
   overflow-y: auto;
+  overflow-x: hidden;
   min-height: 0;
 }
 .specorator-team-chat-main {
@@ -88,6 +163,11 @@ function emptyIcon(el: HTMLElement | null): void {
   flex-direction: column;
   min-height: 0;
   overflow: hidden;
+  /* Declares the query container the top bar's progressive shedding measures against.
+     Safe here because this is a `1fr` grid item — its inline size is set by the grid,
+     never by its contents, so inline-size containment changes no layout. Measuring the
+     PANE (not the window) is what makes the bar shed correctly in a narrow split. */
+  container-type: inline-size;
 }
 /* .specorator-team-chat-content-host takes its flex-column / overflow:hidden /
    min-height:0 layout from the shared .specorator-tab-content-container class
@@ -98,6 +178,22 @@ function emptyIcon(el: HTMLElement | null): void {
    the top bar's --sp-space-s so the whole chat column aligns off the roster. */
 .specorator-team-chat-content-host {
   padding-inline: var(--sp-space-s);
+}
+/* Switching DMs swaps the host's contents in place; a short fade makes the change
+   legible instead of a teleport. Applied as a class the script re-adds per switch
+   (the host element itself must never be re-created). */
+.specorator-team-chat-content-host.is-dm-entering {
+  animation: specorator-team-chat-dm-enter 120ms ease-out;
+}
+@keyframes specorator-team-chat-dm-enter {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
 }
 /* The transcript is reused from the narrow sidebar; in this wide main-area pane
    long assistant messages would otherwise stretch edge-to-edge. Cap the transcript
@@ -115,29 +211,10 @@ function emptyIcon(el: HTMLElement | null): void {
 .specorator-team-chat-content-host :deep(.specorator-input-container) {
   margin-bottom: var(--sp-space-s);
 }
-.specorator-team-chat-empty {
-  position: absolute;
-  inset: 0;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: var(--sp-space-s);
-  padding: var(--sp-space-l);
-  color: var(--sp-text-muted);
-  font-size: var(--sp-font-small);
-  text-align: center;
-  pointer-events: none;
-}
-.specorator-team-chat-empty-icon {
-  display: flex;
-  color: var(--sp-text-faint);
-}
-.specorator-team-chat-empty-icon :deep(svg) {
-  width: 40px;
-  height: 40px;
-}
-.specorator-team-chat-empty-text {
-  max-width: 32ch;
+
+@media (prefers-reduced-motion: reduce) {
+  .specorator-team-chat-content-host.is-dm-entering {
+    animation: none;
+  }
 }
 </style>

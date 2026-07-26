@@ -84,6 +84,9 @@ function deferred<T>() {
  *  (mirrors SpecoratorView.test's harness). */
 function makeView(): any {
   const view = Object.create(TeamChatView.prototype) as any;
+  view.agentThreads = {};           // class-field initializer skipped by Object.create — the roster preview/timestamp source
+  view.lastSeenByAgent = new Map(); // ditto — the per-leaf unread baseline
+  view.railGeometry = { collapsed: false, width: 260 }; // ditto — the per-leaf rail chrome
   view.plugin = {
     logger: { scope: () => ({ error: jest.fn() }) },
     getConversationSync: jest.fn(() => null),
@@ -96,8 +99,7 @@ function makeView(): any {
   view.tabContentEl = createMockEl();
   view.registerEvent = jest.fn();     // ItemView method; Object.create skips it (used by the host-events wiring)
   view.containerEl = createMockEl();  // onOpen threads this into the host-events wiring (keydown target / click-away doc)
-  view.hydrationBanner = null;        // class-field initializer is skipped by Object.create (Round-62)
-  view.dmHostEventsDispose = null;    // ditto — the DM host-events disposer handle (Round-64/65)
+  view.subscriptions = null;          // class-field initializer skipped by Object.create — the consolidated leaf-subscription handle
   view.tabManager = null;
   view.tabsRestored = false;
   view.selectedAgentId = null;
@@ -198,7 +200,7 @@ describe('TeamChatView — leaf-owned persistence', () => {
     const view = makeView();
     // Set the manager directly (no initTabEngine → no restore projection) so this exercises
     // the raw setState→getState hint round-trip, not the restore-time selection reset (Fix 3).
-    view.tabManager = { getPersistedState: jest.fn(() => ({ openTabs: [], activeTabId: null })) };
+    view.tabManager = { getAllTabs: jest.fn(() => []), getPersistedState: jest.fn(() => ({ openTabs: [], activeTabId: null })) };
     await view.setState({ selectedAgentId: 'roster:x' }, {});
     const state = view.getState();
     expect(state.selectedAgentId).toBe('roster:x');
@@ -241,7 +243,17 @@ describe('TeamChatView — selectedAgentId projects from the active tab', () => 
     expect(view.selectedAgentId).toBe('roster:a');
     // Presence + the active DM's provider are projected alongside the selection; no
     // streaming tab → empty presence map.
-    expect(observer).toHaveBeenCalledWith({ selectedAgentId: 'roster:a', editedFiles: [], activeProviderId: 'claude', presence: {} });
+    expect(observer).toHaveBeenCalledWith({
+      selectedAgentId: 'roster:a',
+      editedFiles: [],
+      activeProviderId: 'claude',
+      presence: {},
+      // The roster-projection trio: no thread map on this fake, so all three are empty.
+      activeModelId: null,
+      threads: {},
+      unread: {},
+      activeDmIsEmpty: true,
+    });
   });
 
   it('projects null (empty state) when closing to no active tab', () => {
@@ -362,7 +374,7 @@ describe('TeamChatView — persisted DM tab restore', () => {
     view.tabsRestored = false;                 // restore mid-flight
     // Only ONE of the two DMs prewarmed so far → the live manager reports a PARTIAL layout.
     const getPersistedState = jest.fn(() => ({ openTabs: [twoDmLayout.openTabs[0]], activeTabId: 't1' }));
-    view.tabManager = { getPersistedState };
+    view.tabManager = { getAllTabs: jest.fn(() => []), getPersistedState };
 
     const state = view.getState();
 
@@ -375,7 +387,7 @@ describe('TeamChatView — persisted DM tab restore', () => {
     view.pendingTabManagerState = null; // consumed by restore (:255)
     view.tabsRestored = true;
     const liveLayout = { openTabs: [{ tabId: 't1', conversationId: 'c1', kind: 'chat' as const }], activeTabId: 't1' };
-    view.tabManager = { getPersistedState: jest.fn(() => liveLayout) };
+    view.tabManager = { getAllTabs: jest.fn(() => []), getPersistedState: jest.fn(() => liveLayout) };
 
     expect(view.getState().tabManagerState).toEqual(liveLayout);
   });
@@ -443,7 +455,7 @@ describe('TeamChatView — persisted DM tab restore', () => {
     expect(view.areTabsRestored()).toBe(false);
 
     // A re-entrant onOpen swapped in a replacement manager while m1's restore hung.
-    view.tabManager = {};
+    view.tabManager = { getAllTabs: jest.fn(() => []), };
 
     restoreGate.resolve();      // m1's now-stale restore completes and hits its finally
     await restoring;
@@ -483,6 +495,7 @@ describe('TeamChatView — persisted DM tab restore', () => {
       const view = makeView();
       view.leaf = { setViewState };
       view.tabManager = {
+        getAllTabs: jest.fn(() => []),
         getPersistedState: jest.fn(() => ({ openTabs: [], activeTabId: null })),
         destroy: jest.fn().mockResolvedValue(undefined),
       };
@@ -516,6 +529,7 @@ describe('TeamChatView — persisted DM tab restore', () => {
     });
     view.plugin.findConversationAcrossViews = jest.fn(() => null);
     view.tabManager = {
+      getAllTabs: jest.fn(() => []),
       createTab,
       switchToTab: jest.fn(),
       getPersistedState: jest.fn(() => ({ openTabs: [], activeTabId: null })),
@@ -544,6 +558,7 @@ describe('TeamChatView — persisted DM tab restore', () => {
     const view = makeView();
     view.tabsRestored = true; // old engine had finished restoring
     view.tabManager = {
+      getAllTabs: jest.fn(() => []),
       getPersistedState: jest.fn(() => ({ openTabs: [], activeTabId: null })),
       destroy: jest.fn().mockResolvedValue(undefined),
     };
@@ -570,6 +585,7 @@ describe('TeamChatView — persisted DM tab restore', () => {
     view.tabsRestored = true;
     view.pendingAgentSelection = 'roster:stale';
     view.tabManager = {
+      getAllTabs: jest.fn(() => []),
       getPersistedState: jest.fn(() => ({ openTabs: [], activeTabId: null })),
       destroy: jest.fn().mockResolvedValue(undefined),
     };
@@ -592,6 +608,7 @@ describe('TeamChatView — persisted DM tab restore', () => {
     const view = makeView();
     view.pendingTabManagerState = null; // initial setState layout already consumed by the first init
     view.tabManager = {
+      getAllTabs: jest.fn(() => []),
       getPersistedState: jest.fn(() => { order.push('capture'); return layout; }),
       destroy: jest.fn(() => { order.push('destroy'); return Promise.resolve(); }),
     };
@@ -827,6 +844,7 @@ describe('TeamChatView — onClose teardown', () => {
     const setViewState = jest.fn().mockResolvedValue(undefined);
     view.leaf = { setViewState };
     view.tabManager = {
+      getAllTabs: jest.fn(() => []),
       getPersistedState: jest.fn(() => ({ openTabs: [fullLayout.openTabs[0]], activeTabId: 't1' })), // partial
       destroy: jest.fn().mockResolvedValue(undefined),
     };
@@ -849,6 +867,7 @@ describe('TeamChatView — onClose teardown', () => {
     view.selectionGeneration = 7;
     view.pendingPersist = null;
     view.tabManager = {
+      getAllTabs: jest.fn(() => []),
       getPersistedState: jest.fn(() => {
         genAtPersist = view.selectionGeneration; // read while getState persists the layout
         return { openTabs: [], activeTabId: null };
@@ -876,6 +895,7 @@ describe('TeamChatView — onClose teardown', () => {
     const view = makeView();
     const order: string[] = [];
     view.tabManager = {
+      getAllTabs: jest.fn(() => []),
       getPersistedState: jest.fn(() => ({ openTabs: [], activeTabId: null })),
       destroy: jest.fn(() => { order.push('destroy'); return Promise.resolve(); }),
     };
@@ -924,7 +944,7 @@ describe('TeamChatView — DM host events + hydration banner (Round-62/65)', () 
     );
     const [, getActiveTab, , registerEvent] = (registerTeamChatDmHostEvents as jest.Mock).mock.calls[0];
     // The accessor reads the LIVE manager off `this` (survives a manager rebuild).
-    view.tabManager = { getActiveTab: jest.fn(() => 'ACTIVE-DM') };
+    view.tabManager = { getAllTabs: jest.fn(() => []), getActiveTab: jest.fn(() => 'ACTIVE-DM') };
     expect(getActiveTab()).toBe('ACTIVE-DM');
     // A null manager is a safe null (empty-roster state has no active tab).
     view.tabManager = null;
@@ -942,12 +962,14 @@ describe('TeamChatView — DM host events + hydration banner (Round-62/65)', () 
 
     expect(createDmHydrationBanner).toHaveBeenCalledWith(view.plugin, view);
     const controller = (createDmHydrationBanner as jest.Mock).mock.results[0].value;
-    expect(view.hydrationBanner).toBe(controller);
+    // Reached through the consolidated subscriptions handle (one dispose+recreate for every
+    // leaf subscription), not a dedicated field.
+    expect(view.subscriptions.hydrationBanner).toBe(controller);
 
     await view.onClose();
 
     expect(controller.dispose).toHaveBeenCalledTimes(1);
-    expect(view.hydrationBanner).toBeNull();
+    expect(view.subscriptions).toBeNull(); // the whole handle is dropped, banner included
   });
 
   it('re-entrant onOpen disposes the prior banner before re-subscribing (no leak)', async () => {
@@ -958,6 +980,7 @@ describe('TeamChatView — DM host events + hydration banner (Round-62/65)', () 
     // A re-entrant onOpen (popout/move, no interleaved onClose): tabManager is set, so the
     // teardown branch runs. The banner must be disposed and re-created, never doubled.
     view.tabManager = {
+      getAllTabs: jest.fn(() => []),
       getPersistedState: jest.fn(() => ({ openTabs: [], activeTabId: null })),
       destroy: jest.fn().mockResolvedValue(undefined),
     };
@@ -965,7 +988,7 @@ describe('TeamChatView — DM host events + hydration banner (Round-62/65)', () 
 
     expect(first.dispose).toHaveBeenCalledTimes(1);
     expect(createDmHydrationBanner).toHaveBeenCalledTimes(2);
-    expect(view.hydrationBanner).toBe((createDmHydrationBanner as jest.Mock).mock.results[1].value);
+    expect(view.subscriptions.hydrationBanner).toBe((createDmHydrationBanner as jest.Mock).mock.results[1].value);
   });
 
   // Round-64/65: the host-events registration must dispose-and-recreate like the presence/roster/banner
@@ -979,6 +1002,7 @@ describe('TeamChatView — DM host events + hydration banner (Round-62/65)', () 
 
     // A re-entrant onOpen (tabManager set → the teardown branch runs), no interleaved onClose.
     view.tabManager = {
+      getAllTabs: jest.fn(() => []),
       getPersistedState: jest.fn(() => ({ openTabs: [], activeTabId: null })),
       destroy: jest.fn().mockResolvedValue(undefined),
     };
@@ -997,7 +1021,7 @@ describe('TeamChatView — DM host events + hydration banner (Round-62/65)', () 
     await view.onClose();
 
     expect(dispose).toHaveBeenCalledTimes(1);
-    expect(view.dmHostEventsDispose).toBeNull();
+    expect(view.subscriptions).toBeNull(); // the host-event disposer rides the same handle
   });
 
   it('consumePendingHydrationError delegates to the banner controller (the restoreConversation seam)', async () => {

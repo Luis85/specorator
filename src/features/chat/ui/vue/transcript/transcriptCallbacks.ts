@@ -1,6 +1,7 @@
 import type { ProviderCapabilities } from '../../../../../core/providers/types';
 import type { ChatRewindMode } from '../../../../../core/runtime/types';
 import type { ChatMessage, ImageAttachment } from '../../../../../core/types';
+import type { AgentPersona } from '../../../../agents/agentTypes';
 import type { ActiveStreamState, TranscriptHydrationError } from './stores/transcriptStore';
 
 /** One projected snapshot the view pushes on every ChatState.onMessagesChanged
@@ -69,4 +70,20 @@ export interface TranscriptCallbacks {
   getCapabilities: () => ProviderCapabilities;
   /** Work-order note path for this tab, or null (drives protocol card splitting). */
   getWorkOrderPath: () => string | null;
+  /**
+   * Persona to attribute this tab's ASSISTANT messages to, or null for an anonymous
+   * transcript. Only Team Chat DM tabs supply it (surface-gated in
+   * `buildTranscriptCallbacks` through the shared `isTeamChatSurfaceConversation`
+   * predicate) — a DM's whole premise is that you are talking to one named agent, so
+   * its messages carry that agent's face; an ad-hoc sidebar chat has no such identity.
+   *
+   * OPTIONAL, and that is load-bearing twice over: every existing callback builder and
+   * unit fixture keeps compiling, and the sidebar path never even evaluates it, so
+   * non-Team-Chat surfaces render byte-identically to before (asserted by
+   * `domContract.test.ts`).
+   *
+   * Returns null when the bound agent has left the roster — the DM is read-only in that
+   * state, and attributing messages to a deleted agent would be worse than anonymity.
+   */
+  getMessageIdentity?: () => AgentPersona | null;
 }

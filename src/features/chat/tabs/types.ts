@@ -4,6 +4,7 @@ import type { InstructionRefineService, ProviderId, TitleGenerationService } fro
 import type { ChatRuntime } from '../../../core/runtime/ChatRuntime';
 import type { StreamChunk } from '../../../core/types';
 import type { SlashCommandDropdown } from '../../../shared/components/SlashCommandDropdown';
+import type { AgentPersona } from '../../agents/agentTypes';
 import type { BrowserSelectionController } from '../controllers/BrowserSelectionController';
 import type { CanvasSelectionController } from '../controllers/CanvasSelectionController';
 import type { ChatDropController } from '../controllers/ChatDropController';
@@ -208,6 +209,15 @@ export interface TabDisplayModel {
   model: string;
 }
 
+/** Conversation-keyed display-only persona seed for a Team Chat DM tab's transcript
+ *  attribution. See `TabData.boundAgentPersona` — same auto-invalidation key as
+ *  `TabDisplayModel`, so a rotation or rebind can never attribute one agent's messages
+ *  to another. */
+export interface TabBoundAgentPersona {
+  conversationId: string | null;
+  persona: AgentPersona;
+}
+
 /**
  * Represents a single tab in the multi-tab system.
  * Each tab is an independent chat session with its own runtime instance.
@@ -251,6 +261,18 @@ export interface TabData {
    * bound agent each send. Null for regular and work-order tabs.
    */
   displayModel?: TabDisplayModel | null;
+  /**
+   * Display-only persona seed for a Team Chat DM tab's transcript attribution, keyed to
+   * the conversation it was computed for (same auto-invalidation contract as
+   * `displayModel`: a stale seed can never outlive a conversation change).
+   *
+   * Exists because the roster store is async while `TranscriptCallbacks.getMessageIdentity`
+   * is read from a render computed — so the persona is resolved off-render into this field
+   * and read synchronously from it, mirroring `SpecoratorView.refreshBoundAgentChip`'s
+   * cache-then-reproject pattern. Null/absent on every non-DM tab, which is what keeps the
+   * sidebar transcript anonymous.
+   */
+  boundAgentPersona?: TabBoundAgentPersona | null;
 
   /** Vault-relative work-order note path when this tab hosts an Agent Board run. */
   workOrderPath?: string | null;

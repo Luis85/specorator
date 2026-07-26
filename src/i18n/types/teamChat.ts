@@ -19,4 +19,39 @@ export type TeamChatTranslationKey =
   // the reserved composer restored, so the user can retry once the transient glitch clears
   | 'teamChat.agentVerifyFailed'
   // A reused-island action (fork / clear / new-session) that a DM's one-fixed-thread model disallows
-  | 'teamChat.actionUnavailableInDm';
+  | 'teamChat.actionUnavailableInDm'
+  // --- Roster rail: search + sort (compact toolbar; shown once the roster passes
+  // ROSTER_SEARCH_MIN_AGENTS, below which a search field over a few rows is noise) ---
+  | 'teamChat.rosterSearchPlaceholder'
+  | 'teamChat.rosterSortLabel'
+  // `recent` is Team-Chat-only (DM activity order); name/updated mirror the shared LibrarySort
+  | 'teamChat.rosterSortRecent'
+  | 'teamChat.rosterSortName'
+  | 'teamChat.rosterSortUpdated'
+  | 'teamChat.rosterNoMatches'
+  // Roster row: a DM answered while the user was reading another thread (per-leaf, in-memory)
+  | 'teamChat.presenceUnread'
+  // --- Row / top-bar overflow menus ---
+  | 'teamChat.rowActions'
+  | 'teamChat.topBarActions'
+  | 'teamChat.menuOpenChat'
+  | 'teamChat.menuEditAgent'
+  | 'teamChat.menuCloseChat'
+  // --- Rail collapse / resize (per-leaf view state) ---
+  | 'teamChat.railCollapse'
+  | 'teamChat.railExpand'
+  | 'teamChat.railResize'
+  // --- Empty states: no DM selected (quick-picks) and an open DM with no history ---
+  | 'teamChat.emptyHeadline'
+  | 'teamChat.emptyQuickPicks'
+  | 'teamChat.dmGreetingTitle'
+  | 'teamChat.dmGreetingBody'
+  | 'teamChat.startersLabel'
+  | 'teamChat.starterExplain'
+  | 'teamChat.starterPlan'
+  | 'teamChat.starterReview'
+  // --- Relative DM activity timestamps (coarse buckets; absolute time rides `title`) ---
+  | 'teamChat.timeNow'
+  | 'teamChat.timeMinutes'
+  | 'teamChat.timeHours'
+  | 'teamChat.timeDays';
