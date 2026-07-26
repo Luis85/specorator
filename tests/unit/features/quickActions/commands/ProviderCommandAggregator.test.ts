@@ -95,6 +95,44 @@ describe('ProviderCommandAggregator', () => {
     expect(entries.map((e) => e.name)).toEqual(['build']);
   });
 
+  it.each(['clear', 'new', 'add-dir', 'resume', 'fork'])(
+    'drops %s, which InputController intercepts as a built-in before provider dispatch',
+    async (shadowed) => {
+      // sendMessage runs detectBuiltInCommand first, so such a row would fire
+      // Specorator's local action rather than the provider command it advertises.
+      // The composer dropdown already skips these collisions; the tab must too.
+      const aggregator = new ProviderCommandAggregator(() => [
+        makeRecord({
+          entries: [
+            makeEntry({ id: 'cmd-shadowed', name: shadowed }),
+            makeEntry({ id: 'cmd-ok', name: 'review' }),
+          ],
+        }),
+      ]);
+
+      const entries = await aggregator.listAll();
+
+      expect(entries.map((e) => e.name)).toEqual(['review']);
+    },
+  );
+
+  it('keeps a provider command whose name merely resembles a built-in', async () => {
+    // The guard matches whole names, not substrings — `/compact` and
+    // `/clear-cache` reach the provider untouched and must stay listed.
+    const aggregator = new ProviderCommandAggregator(() => [
+      makeRecord({
+        entries: [
+          makeEntry({ id: 'cmd-compact', name: 'compact' }),
+          makeEntry({ id: 'cmd-clear-cache', name: 'clear-cache' }),
+        ],
+      }),
+    ]);
+
+    const entries = await aggregator.listAll();
+
+    expect(entries.map((e) => e.name)).toEqual(['clear-cache', 'compact']);
+  });
+
   it('de-duplicates by name so a cold vault listing and a warm SDK listing cannot double up', async () => {
     const aggregator = new ProviderCommandAggregator(() => [
       makeRecord({

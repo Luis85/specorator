@@ -1,3 +1,4 @@
+import { isBuiltInCommandName } from '../../../core/commands/builtInCommands';
 import type { ProviderCommandEntry } from '../../../core/providers/commands/ProviderCommandEntry';
 import { ProviderEntryAggregator } from '../providerEntryAggregator';
 import type { ProviderRecord } from '../skills/types';
@@ -92,11 +93,21 @@ function mapCommandBucket(
   const out: CommandTabEntry[] = [];
   for (const entry of raw) {
     const key = entry.name.trim().toLowerCase();
-    // A cold Claude catalog falls back to the vault listing while a warm one
-    // returns the SDK's superset, so the same name can arrive twice across a
-    // refresh boundary; and a hidden command must not reappear here after the
-    // user suppressed it from the composer dropdown.
-    if (!key || seen.has(key) || record.hiddenNames.has(key)) continue;
+    // Three reasons to drop a row, all of them "this wouldn't do what the row
+    // says":
+    // - Duplicate name: a cold Claude catalog falls back to the vault listing
+    //   while a warm one returns the SDK's superset, so the same name can
+    //   arrive twice across a refresh boundary.
+    // - Hidden: the user suppressed it from the composer dropdown.
+    // - Shadowed by a built-in: `InputController.sendMessage` runs
+    //   `detectBuiltInCommand` BEFORE provider dispatch, so a provider command
+    //   named `clear`/`new`/`add-dir`/`resume`/`fork` would silently trigger
+    //   Specorator's local action instead. The composer dropdown already gives
+    //   built-ins precedence and skips the collision; this mirrors it, so the
+    //   tab never advertises a command it can't actually dispatch.
+    if (!key || seen.has(key) || record.hiddenNames.has(key) || isBuiltInCommandName(key)) {
+      continue;
+    }
     seen.add(key);
     out.push({
       id: `${record.providerId}:${entry.id}`,
