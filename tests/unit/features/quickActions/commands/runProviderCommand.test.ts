@@ -48,6 +48,7 @@ function makeTab(opts: {
   draftText?: string;
   streaming?: boolean;
   queued?: boolean;
+  busy?: 'creating' | 'switching' | 'hydrating';
 } = {}) {
   return {
     id: opts.id ?? 'tab-1',
@@ -58,6 +59,9 @@ function makeTab(opts: {
     state: {
       isStreaming: opts.streaming ?? false,
       queuedMessage: opts.queued ? {} : null,
+      isCreatingConversation: opts.busy === 'creating',
+      isSwitchingConversation: opts.busy === 'switching',
+      isHydrating: opts.busy === 'hydrating',
     },
     ui: {
       fileContextManager: {
@@ -227,6 +231,51 @@ describe('runProviderCommand', () => {
 
     expect(activeTab.controllers.inputController.seedComposerDraft)
       .toHaveBeenCalledWith('/review ');
+  });
+
+  it.each(['creating', 'switching', 'hydrating'] as const)(
+    'declines while the conversation is %s, rather than let sendMessage drop it silently',
+    async (busy) => {
+      // sendMessage early-returns in these states, so without the guard the row
+      // vanished with no feedback — and any picked pill stayed stranded.
+      const activeTab = makeTab({ lifecycleState: 'bound', busy });
+      const { plugin } = makePlugin({ activeTab });
+      const file = new TFile();
+      file.path = 'notes/spec.md';
+
+      await runProviderCommand(plugin as never, makeEntry(), file);
+
+      expect(activeTab.controllers.inputController.sendMessage).not.toHaveBeenCalled();
+      expect(activeTab.ui.fileContextManager.attachFileAsPill).not.toHaveBeenCalled();
+      expect(Notice).toHaveBeenCalledWith('quickActions.commands.queueBusy');
+    },
+  );
+
+  it('does not attach a picked file to a /compact invocation', async () => {
+    // Compact ships without the mention suffix and no longer consumes pills, so
+    // an attached file would never be used and would linger for the next send.
+    const activeTab = makeTab({ lifecycleState: 'bound' });
+    const { plugin } = makePlugin({ activeTab });
+    const file = new TFile();
+    file.path = 'notes/spec.md';
+
+    await runProviderCommand(plugin as never, makeEntry({ name: 'compact' }), file);
+
+    expect(activeTab.ui.fileContextManager.attachFileAsPill).not.toHaveBeenCalled();
+    expect(activeTab.controllers.inputController.sendMessage).toHaveBeenCalledWith({
+      content: '/compact',
+    });
+  });
+
+  it('still attaches a picked file to a non-compact command', async () => {
+    const activeTab = makeTab({ lifecycleState: 'bound' });
+    const { plugin } = makePlugin({ activeTab });
+    const file = new TFile();
+    file.path = 'notes/spec.md';
+
+    await runProviderCommand(plugin as never, makeEntry({ name: 'review' }), file);
+
+    expect(activeTab.ui.fileContextManager.attachFileAsPill).toHaveBeenCalledWith('notes/spec.md');
   });
 
   it('honors the provider-native prefix rather than assuming a slash', async () => {

@@ -2,11 +2,35 @@ import { Notice, type TAbstractFile } from 'obsidian';
 
 import { ProviderRegistry } from '@/core/providers/ProviderRegistry';
 import { asSettingsBag } from '@/core/types/settings';
+import { isCompactInvocation } from '@/features/chat/controllers/composerSendPhases';
+import type { TabData } from '@/features/chat/tabs/types';
 import { t } from '@/i18n/i18n';
 import type SpecoratorPlugin from '@/main';
 
 import { attachPickedContext, landOnProviderChatTab } from '../resolveProviderChatTab';
 import type { CommandTabEntry } from './types';
+
+/**
+ * States in which `InputController.sendMessage` will not dispatch this turn.
+ *
+ * `isStreaming` routes the send into the queue, whose single slot
+ * `mergeQueuedChatTurns` joins as `existing\n\nincoming` — ruinous for an
+ * invocation from either side (an occupied slot yields
+ * `queued text\n\n/command`, no longer a leading-token command; an empty one is
+ * merged by the user's NEXT send into `/command\n\ntheir message`, running the
+ * command with their message as arguments and swallowing it). The other three
+ * are `isConversationBusy()`, where `sendMessage` returns immediately without
+ * sending — the picked row would vanish with no feedback at all.
+ *
+ * Checked BEFORE attaching the picked file: a pill attached and then abandoned
+ * would sit on the composer and ride along with an unrelated later send.
+ */
+function cannotDispatchNow(tab: TabData): boolean {
+  return tab.state.isStreaming
+    || tab.state.isCreatingConversation
+    || tab.state.isSwitchingConversation
+    || tab.state.isHydrating;
+}
 
 /**
  * Routes a provider slash command picked in the Quick Actions modal to a chat
@@ -21,8 +45,7 @@ import type { CommandTabEntry } from './types';
  * targets a tab holding an unsent draft (see the routing note below); sending
  * is non-destructive (`sendMessage({ content })` neither folds in nor clears
  * the composer), so it always stays on the active conversation. A send is
- * declined outright while the tab is streaming, because it would enter the
- * mergeable queue rather than dispatch.
+ * declined outright while the tab cannot dispatch — see `cannotDispatchNow`.
  *
  * Provider-enable state is re-checked here via `ProviderRegistry.isEnabled` —
  * `CommandTabEntry.providerEnabled` is a listing-time cache used only for
@@ -62,30 +85,20 @@ export async function runProviderCommand(
   if (!target || !input) return;
 
   const invocation = `${entry.insertPrefix}${entry.name}`;
+  // `/compact` is a control operation on the transcript — it ships without the
+  // mention suffix and (since the pill-preservation fix) without consuming
+  // pills, so a picked file attached for it would never be used and would just
+  // linger on the composer for the next send to pick up.
+  const picked = isCompactInvocation(invocation) ? null : file;
   if (entry.argumentHint) {
-    attachPickedContext(target, file);
+    attachPickedContext(target, picked);
     input.seedComposerDraft(`${invocation} `);
     return;
   }
-  // While streaming, a send does not dispatch — it lands in the queue, whose
-  // single slot `mergeQueuedChatTurns` joins as `existing\n\nincoming`. Either
-  // side of that merge ruins the invocation: an occupied slot yields
-  // `queued text\n\n/command` (no longer a leading-token command, so the row
-  // posts prose), and an EMPTY slot is no safer — the queued `/command` is
-  // merged by the user's next send into `/command\n\ntheir message`, running the
-  // command with their message as arguments and swallowing it.
-  //
-  // So the guard is the whole streaming period, not just an occupied slot. The
-  // alternative — an unmergeable queued turn — means reworking a state machine
-  // whose own header warns that changing its merge logic "loses or duplicates
-  // user messages", which is not a side effect a picker tab should have.
-  //
-  // Checked BEFORE `attachPickedContext`: a pill attached and then abandoned
-  // here would sit on the composer and ride along with an unrelated later send.
-  if (target.state.isStreaming) {
+  if (cannotDispatchNow(target)) {
     new Notice(t('quickActions.commands.queueBusy'));
     return;
   }
-  attachPickedContext(target, file);
+  attachPickedContext(target, picked);
   await input.sendMessage({ content: invocation });
 }
