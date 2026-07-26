@@ -46,7 +46,8 @@ function makeTab(opts: {
   providerId?: string;
   lifecycleState?: string;
   draftText?: string;
-  queueBusy?: boolean;
+  streaming?: boolean;
+  queued?: boolean;
 } = {}) {
   return {
     id: opts.id ?? 'tab-1',
@@ -54,7 +55,10 @@ function makeTab(opts: {
     lifecycleState: opts.lifecycleState ?? 'blank',
     kind: 'chat',
     dom: { inputEl: { value: opts.draftText ?? '' } },
-    state: { isStreaming: opts.queueBusy ?? false, queuedMessage: opts.queueBusy ? {} : null },
+    state: {
+      isStreaming: opts.streaming ?? false,
+      queuedMessage: opts.queued ? {} : null,
+    },
     ui: {
       fileContextManager: {
         attachFileAsPill: jest.fn(),
@@ -170,11 +174,10 @@ describe('runProviderCommand', () => {
     expect(activeTab.dom.inputEl.value).toBe('half-written thought');
   });
 
-  it('declines rather than let a queued turn swallow the invocation', async () => {
+  it('declines rather than let an occupied queue slot swallow the invocation', async () => {
     // mergeQueuedChatTurns joins as `queued text\n\n/compact`, which stops being
-    // a leading-token command — the row would silently post prose. The queue is
-    // one slot, so there is no "keep it separate" option.
-    const activeTab = makeTab({ lifecycleState: 'bound', queueBusy: true });
+    // a leading-token command — the row would silently post prose.
+    const activeTab = makeTab({ lifecycleState: 'bound', streaming: true, queued: true });
     const { plugin } = makePlugin({ activeTab });
 
     await runProviderCommand(plugin as never, makeEntry({ name: 'compact' }), null);
@@ -183,10 +186,23 @@ describe('runProviderCommand', () => {
     expect(Notice).toHaveBeenCalledWith('quickActions.commands.queueBusy');
   });
 
-  it('still seeds an argument-taking command while a turn is queued', async () => {
-    // Seeding writes the composer instead of enqueuing, so the queue slot is
+  it('declines while streaming even with an EMPTY queue slot', async () => {
+    // An empty slot is no safer: the queued `/compact` gets merged by the
+    // user's next send into `/compact\n\ntheir message`, running the command
+    // with their message as arguments and swallowing it.
+    const activeTab = makeTab({ lifecycleState: 'bound', streaming: true });
+    const { plugin } = makePlugin({ activeTab });
+
+    await runProviderCommand(plugin as never, makeEntry({ name: 'compact' }), null);
+
+    expect(activeTab.controllers.inputController.sendMessage).not.toHaveBeenCalled();
+    expect(Notice).toHaveBeenCalledWith('quickActions.commands.queueBusy');
+  });
+
+  it('still seeds an argument-taking command while streaming', async () => {
+    // Seeding writes the composer instead of enqueuing, so the queue is
     // irrelevant to it.
-    const activeTab = makeTab({ queueBusy: true });
+    const activeTab = makeTab({ streaming: true, queued: true });
     const { plugin } = makePlugin({ activeTab });
 
     await runProviderCommand(

@@ -678,7 +678,7 @@
       "refreshTooltip": "Befehle aktualisieren",
       "noResults": "Keine Befehle entsprechen deiner Suche.",
       "argumentHint": "Erwartet Argumente {hint} – wird im Eingabefeld geöffnet statt gesendet.",
-      "queueBusy": "Eine Nachricht steht in der Warteschlange – sende oder verwirf sie, bevor du einen Befehl ausführst."
+      "queueBusy": "Der Chat antwortet noch – warte, bis er fertig ist, bevor du einen Befehl ausführst."
     },
     "editor": {
       "titleEdit": "Edit quick action",

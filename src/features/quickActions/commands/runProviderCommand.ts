@@ -21,8 +21,8 @@ import type { CommandTabEntry } from './types';
  * targets a tab holding an unsent draft (see the routing note below); sending
  * is non-destructive (`sendMessage({ content })` neither folds in nor clears
  * the composer), so it always stays on the active conversation. A send is
- * declined outright when the tab already holds a queued turn it would be
- * merged into.
+ * declined outright while the tab is streaming, because it would enter the
+ * mergeable queue rather than dispatch.
  *
  * Provider-enable state is re-checked here via `ProviderRegistry.isEnabled` —
  * `CommandTabEntry.providerEnabled` is a listing-time cache used only for
@@ -66,12 +66,19 @@ export async function runProviderCommand(
     input.seedComposerDraft(`${invocation} `);
     return;
   }
-  // While streaming, a send is enqueued — and `mergeQueuedChatTurns` joins an
-  // occupied slot as `queued text\n\n/command`, which stops reading as a command,
-  // so the row would silently post prose instead of running anything. The queue
-  // is a single slot, so there is no "keep it separate" option: decline rather
-  // than corrupt either half, leaving the user's queued turn untouched.
-  if (target.state.isStreaming && target.state.queuedMessage !== null) {
+  // While streaming, a send does not dispatch — it lands in the queue, whose
+  // single slot `mergeQueuedChatTurns` joins as `existing\n\nincoming`. Either
+  // side of that merge ruins the invocation: an occupied slot yields
+  // `queued text\n\n/command` (no longer a leading-token command, so the row
+  // posts prose), and an EMPTY slot is no safer — the queued `/command` is
+  // merged by the user's next send into `/command\n\ntheir message`, running the
+  // command with their message as arguments and swallowing it.
+  //
+  // So the guard is the whole streaming period, not just an occupied slot. The
+  // alternative — an unmergeable queued turn — means reworking a state machine
+  // whose own header warns that changing its merge logic "loses or duplicates
+  // user messages", which is not a side effect a picker tab should have.
+  if (target.state.isStreaming) {
     new Notice(t('quickActions.commands.queueBusy'));
     return;
   }

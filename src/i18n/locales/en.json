@@ -333,7 +333,7 @@
       "refreshTooltip": "Refresh commands",
       "noResults": "No commands match your search.",
       "argumentHint": "Takes arguments {hint} — opens in the composer instead of sending.",
-      "queueBusy": "A queued message is waiting — send or clear it before running a command."
+      "queueBusy": "The chat is still responding — wait for it to finish before running a command."
     },
     "editor": {
       "titleEdit": "Edit quick action",

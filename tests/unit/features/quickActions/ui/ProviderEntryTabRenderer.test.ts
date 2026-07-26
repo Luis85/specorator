@@ -437,6 +437,47 @@ describe('ProviderEntryTabRenderer — Skills tab config', () => {
     });
   });
 
+  describe('keyboard run ordering', () => {
+    it('Enter runs the row displayed FIRST, not whichever provider streamed first', async () => {
+      // patchProvider appends in resolution order, so the raw filtered array can
+      // lead with a different provider than the sorted list the user sees.
+      const source = makeSource({ defer: true });
+      const renderer = makeSkillsRenderer(source, jest.fn(), jest.fn(), jest.fn());
+      const onRun = (renderer as unknown as {
+        config: { onRun: jest.Mock };
+      }).config.onRun as jest.Mock;
+
+      const host = makeHost();
+      const input = (await renderer.render(host)) as HTMLInputElement;
+      const cb = source._streamingCallbacks[0];
+
+      // Codex resolves first, Claude second — display order sorts Claude above.
+      cb('codex', [
+        makeEntry({
+          id: 'codex:zzz',
+          providerId: 'codex',
+          providerDisplayName: 'Codex',
+          insertPrefix: '$',
+          name: 'shared-name-codex',
+        }),
+      ]);
+      cb('claude', [makeEntry({ id: 'claude:aaa', name: 'shared-name-claude' })]);
+      await flush();
+
+      input.value = 'shared-name';
+      input.dispatchEvent(new Event('input'));
+      const firstRowName = host.querySelector(
+        '.specorator-quick-actions-skill-row:not(.is-skeleton) strong',
+      )?.textContent;
+      input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter' }));
+
+      expect(firstRowName).toBe('shared-name-claude');
+      expect(onRun).toHaveBeenCalledWith(
+        expect.objectContaining({ name: 'shared-name-claude' }),
+      );
+    });
+  });
+
   describe('keyboard run', () => {
     it('Enter invokes onRunSkill with the first filtered result and closes the modal', async () => {
       const cached = [

@@ -678,7 +678,7 @@
       "refreshTooltip": "명령어 새로 고침",
       "noResults": "검색과 일치하는 명령어가 없습니다.",
       "argumentHint": "인수 {hint}가 필요합니다. 전송하지 않고 입력창에 넣습니다.",
-      "queueBusy": "대기 중인 메시지가 있습니다. 명령을 실행하기 전에 보내거나 지우세요."
+      "queueBusy": "채팅이 아직 응답 중입니다. 완료된 후에 명령을 실행하세요."
     },
     "editor": {
       "titleEdit": "Edit quick action",

@@ -678,7 +678,7 @@
       "refreshTooltip": "コマンドを更新",
       "noResults": "検索条件に一致するコマンドはありません。",
       "argumentHint": "引数 {hint} が必要です。送信せず入力欄に挿入されます。",
-      "queueBusy": "キューにメッセージがあります。コマンドを実行する前に送信するか取り消してください。"
+      "queueBusy": "チャットが応答中です。完了してからコマンドを実行してください。"
     },
     "editor": {
       "titleEdit": "Edit quick action",

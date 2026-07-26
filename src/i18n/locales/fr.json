@@ -678,7 +678,7 @@
       "refreshTooltip": "Actualiser les commandes",
       "noResults": "Aucune commande ne correspond à votre recherche.",
       "argumentHint": "Attend des arguments {hint} — s’ouvre dans le champ de saisie au lieu d’être envoyée.",
-      "queueBusy": "Un message est en file d’attente — envoyez-le ou supprimez-le avant de lancer une commande."
+      "queueBusy": "La discussion répond encore — attendez la fin avant de lancer une commande."
     },
     "editor": {
       "titleEdit": "Edit quick action",

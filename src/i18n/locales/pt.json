@@ -678,7 +678,7 @@
       "refreshTooltip": "Atualizar comandos",
       "noResults": "Nenhum comando corresponde à sua pesquisa.",
       "argumentHint": "Aceita argumentos {hint} — abre no editor em vez de enviar.",
-      "queueBusy": "Há uma mensagem na fila — envie-a ou descarte-a antes de executar um comando."
+      "queueBusy": "O chat ainda está respondendo — aguarde terminar antes de executar um comando."
     },
     "editor": {
       "titleEdit": "Edit quick action",

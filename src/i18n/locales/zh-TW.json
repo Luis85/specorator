@@ -678,7 +678,7 @@
       "refreshTooltip": "重新整理命令",
       "noResults": "沒有符合的命令。",
       "argumentHint": "需要參數 {hint}——會填入輸入框而不是直接送出。",
-      "queueBusy": "佇列中有待送出的訊息——請先送出或清除後再執行命令。"
+      "queueBusy": "對話仍在回覆中——請等待完成後再執行命令。"
     },
     "editor": {
       "titleEdit": "Edit quick action",

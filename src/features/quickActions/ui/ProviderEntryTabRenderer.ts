@@ -184,13 +184,7 @@ export class ProviderEntryTabRenderer<T extends ProviderEntryRow> {
       return;
     }
 
-    const filtered = this.applyFilter(this.entries);
-    filtered.sort((a, b) => {
-      if (a.providerId !== b.providerId) {
-        return a.providerId.localeCompare(b.providerId);
-      }
-      return a.name.localeCompare(b.name);
-    });
+    const filtered = this.orderedEntries();
 
     if (filtered.length === 0) {
       this.listEl.createDiv({
@@ -241,6 +235,20 @@ export class ProviderEntryTabRenderer<T extends ProviderEntryRow> {
     }
   }
 
+  /**
+   * The rows in display order: filtered, then grouped by provider and sorted by
+   * name. Copied before sorting — `applyFilter` returns `this.entries` itself
+   * when the search box is empty, so an in-place sort would reorder the
+   * renderer's own backing array as a side effect of painting.
+   */
+  private orderedEntries(): T[] {
+    return [...this.applyFilter(this.entries)].sort((a, b) => (
+      a.providerId !== b.providerId
+        ? a.providerId.localeCompare(b.providerId)
+        : a.name.localeCompare(b.name)
+    ));
+  }
+
   private applyFilter(entries: T[]): T[] {
     const needle = this.filter.trim().toLowerCase();
     if (!needle) return entries;
@@ -253,7 +261,11 @@ export class ProviderEntryTabRenderer<T extends ProviderEntryRow> {
   }
 
   private runFirstMatch(): void {
-    const first = this.applyFilter(this.entries)[0];
+    // MUST read the same ordering `renderList` paints. Streaming callbacks push
+    // each provider's rows in resolution order, so the raw filtered array's
+    // first element is whichever provider answered first — pressing Enter would
+    // run a different command than the top row the user is looking at.
+    const first = this.orderedEntries()[0];
     if (!first) return;
     this.config.onRun(first);
     this.config.close();
