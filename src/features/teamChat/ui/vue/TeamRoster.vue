@@ -65,7 +65,13 @@ const rows = computed(() => (sort.value === 'recent'
   ? applyRecentSort(list.rows.value, teamChatStore.threads)
   : list.rows.value));
 
-const showSearch = computed(() => teamChatStore.agents.length >= ROSTER_SEARCH_MIN_AGENTS);
+// Round-67: also shown whenever a query is ACTIVE, whatever the roster size. Deleting agents
+// can drop the roster below the threshold while a filter is applied — hiding the input there
+// would strand the rail on "No agents match" with no control left to clear it. Keeping the
+// field is preferred over silently resetting `query`: the user's typing survives, and the
+// input disappears on its own once they clear it.
+const showSearch = computed(() =>
+  teamChatStore.agents.length >= ROSTER_SEARCH_MIN_AGENTS || list.query.value.trim() !== '');
 
 // --- Roving tabindex (design §1.4) -------------------------------------------------
 const listEl = ref<HTMLElement | null>(null);

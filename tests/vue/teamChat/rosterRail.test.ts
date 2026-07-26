@@ -134,6 +134,32 @@ describe('roster search and sort', () => {
     expect(screen.getByText(t('teamChat.rosterNoMatches'))).toBeTruthy();
   });
 
+  // Round-67: deleting agents can drop the roster below the threshold WHILE a filter is
+  // applied. Hiding the input there left the rows filtered with no control to clear them —
+  // a now-unmatched query stranded the rail on "No agents match" with no way out.
+  it('keeps the search box while a query is active, even below the threshold', async () => {
+    const big = [...TEAM, ...Array.from({ length: 4 }, (_, i) => agent(`roster:${i}`, `Filler ${i}`))];
+    mountRoot(makePlugin(big), makeCallbacks());
+    await awaitRoster();
+    const search = screen.getByPlaceholderText(t('teamChat.rosterSearchPlaceholder'));
+    await fireEvent.update(search, 'zzzz');
+
+    // The roster shrinks below ROSTER_SEARCH_MIN_AGENTS (agents deleted elsewhere).
+    useTeamChatStore().setAgents(TEAM);
+    await nextTick();
+
+    // Still reachable, still carrying the query — so the user can clear it.
+    const stillThere = screen.getByPlaceholderText(t('teamChat.rosterSearchPlaceholder'));
+    expect((stillThere as HTMLInputElement).value).toBe('zzzz');
+    expect(screen.getByText(t('teamChat.rosterNoMatches'))).toBeTruthy();
+
+    // Clearing it restores the small roster AND retires the input on its own.
+    await fireEvent.update(stillThere, '');
+    await nextTick();
+    expect(screen.queryByPlaceholderText(t('teamChat.rosterSearchPlaceholder'))).toBeNull();
+    expect(await awaitRoster()).toBeTruthy();
+  });
+
   it('sorts by DM activity by default, newest first', async () => {
     mountRoot(makePlugin(TEAM), makeCallbacks());
     const list = await awaitRoster();
