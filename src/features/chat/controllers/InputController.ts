@@ -59,6 +59,7 @@ import {
   normalizeTabModelOverride,
   type OutgoingTurn,
   type PlanApprovalOutcome,
+  resolveComposerImagesForMessage,
   resolveComposerSend,
   resolveComposerSourceImages,
   restoreResumeCheckpointIfNeeded,
@@ -321,7 +322,8 @@ export class InputController {
       canvasSelectionController,
     } = this.deps;
 
-    const images = send.hasImages ? [...resolveComposerSourceImages(send)] : undefined;
+    const isCompact = isCompactInvocation(send.content);
+    const images = send.hasImages && !isCompact ? [...resolveComposerSourceImages(send)] : undefined;
     const editorContext = selectionController.getContext();
     const browserContext = browserSelectionController?.getContext() ?? null;
     const canvasContext = canvasSelectionController.getContext();
@@ -337,11 +339,11 @@ export class InputController {
       this.queuedMessages.createQueuedMessage(displayContent, turnRequest),
     );
 
-    // Pill mentions were folded into the queued turnRequest above; clear them now so they don't linger in the composer. Not for `/compact` — same guard as buildOutgoingTurn, since buildTurnSubmission ships it without the suffix.
-    if (!isCompactInvocation(send.content)) send.fileContextManager?.clearAttachedPills();
+    // Folded into the queued turnRequest above, so clear them — except for `/compact`, which buildTurnSubmission ships bare (no suffix, no images), so it consumed neither.
+    if (!isCompact) send.fileContextManager?.clearAttachedPills();
 
     clearConsumedComposerInput(send, () => this.deps.resetInputHeight());
-    if (send.shouldUseInput || send.consumesComposerDraft) {
+    if (!isCompact && (send.shouldUseInput || send.consumesComposerDraft)) {
       send.imageContextManager?.clearImages();
     }
     this.queuedMessages.updateQueueIndicator();
@@ -421,14 +423,12 @@ export class InputController {
   ): OutgoingTurn {
     // Slash commands are passed directly to SDK for handling
     // SDK handles expansion, $ARGUMENTS, @file references, and frontmatter options.
-    // Image persistence already ran above (covers queue + steer paths too).
-    const images = resolveComposerSourceImages(send);
-    const imagesForMessage = images.length > 0 ? [...images] : undefined;
+    // Image persistence already ran above (covers queue + steer paths too). `/compact` ships bare — no images, no mention suffix — so it transmits and consumes neither.
     const isCompact = isCompactInvocation(send.content);
+    const imagesForMessage = isCompact ? undefined : resolveComposerImagesForMessage(send);
 
-    // Only clear images if we consumed user input — either a plain user send or a
-    // content-override send that folded the composer draft in (quick actions).
-    if (send.shouldUseInput || send.consumesComposerDraft) {
+    // Only clear images if we consumed user input — a plain user send, or a content-override send that folded the composer draft in (quick actions). Never for `/compact`: like the pills below, a pending image is neither transmitted with the bare invocation nor taken from the user.
+    if (!isCompact && (send.shouldUseInput || send.consumesComposerDraft)) {
       send.imageContextManager?.clearImages();
     }
 

@@ -3881,6 +3881,43 @@ describe('InputController - Message Queue', () => {
       expect(capturedRequests[0].text).toBe('/compact');
     });
 
+    it('neither transmits nor consumes a pending image on /compact', async () => {
+      // The compact special case suppressed the mention suffix but not images,
+      // so a pasted image rode along with the bare invocation — and, on a plain
+      // typed send, was cleared from the composer too.
+      const fileContextManager = createMockFileContextManager();
+      const imageContextManager = {
+        hasImages: jest.fn(() => true),
+        getAttachedImages: jest.fn(() => [{ id: 'img-1', data: 'x', mimeType: 'image/png' }]),
+        clearImages: jest.fn(),
+      };
+
+      const localDeps = createSendableDeps({
+        getFileContextManager: () => fileContextManager as any,
+        getImageContextManager: () => imageContextManager as any,
+      });
+      const mockAgentService = (localDeps as any).mockAgentService;
+      const capturedRequests: any[] = [];
+      mockAgentService.prepareTurn = jest.fn().mockImplementation((request: any) => {
+        capturedRequests.push(request);
+        return {
+          request,
+          persistedContent: request.text,
+          prompt: request.text,
+          isCompact: true,
+          mcpMentions: new Set(),
+        };
+      });
+      mockAgentService.query = jest.fn().mockReturnValue(createMockStream([{ type: 'done' }]));
+
+      const localInput = localDeps.getInputEl() as ReturnType<typeof createMockInputEl>;
+      localInput.value = '/compact';
+      await new InputController(localDeps).sendMessage();
+
+      expect(capturedRequests[0].images).toBeUndefined();
+      expect(imageContextManager.clearImages).not.toHaveBeenCalled();
+    });
+
     it('keeps attached pills when a /compact turn is QUEUED during streaming', async () => {
       // Parallel to the non-queued case: buildTurnSubmission also skips the
       // suffix for compact, so the queue path must not consume the pills either.

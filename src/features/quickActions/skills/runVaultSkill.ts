@@ -5,7 +5,7 @@ import { asSettingsBag } from '@/core/types/settings';
 import { t } from '@/i18n/i18n';
 import type SpecoratorPlugin from '@/main';
 
-import { landOnProviderChatTab } from '../resolveProviderChatTab';
+import { attachPickedContext, landOnProviderChatTab } from '../resolveProviderChatTab';
 import type { SkillTabEntry } from './types';
 
 /**
@@ -51,9 +51,10 @@ export async function runVaultSkill(
     return;
   }
 
-  const target = await landOnProviderChatTab(plugin, entry.providerId, file);
+  const target = await landOnProviderChatTab(plugin, entry.providerId);
   const input = target?.controllers.inputController;
-  if (!input) return;
+  if (!target || !input) return;
+  attachPickedContext(target, file);
   await input.sendMessage({ content: `${entry.insertPrefix}${entry.name}` });
   plugin.events.emit('usage.recorded', {
     kind: 'skill',

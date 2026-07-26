@@ -186,6 +186,20 @@ describe('runProviderCommand', () => {
     expect(Notice).toHaveBeenCalledWith('quickActions.commands.queueBusy');
   });
 
+  it('leaves no picked pill behind when it declines a streaming dispatch', async () => {
+    // Attaching first and abandoning afterwards would strand the file on the
+    // composer, where it rides along with an unrelated later message.
+    const activeTab = makeTab({ lifecycleState: 'bound', streaming: true });
+    const { plugin } = makePlugin({ activeTab });
+    const file = new TFile();
+    file.path = 'notes/spec.md';
+
+    await runProviderCommand(plugin as never, makeEntry({ name: 'compact' }), file);
+
+    expect(activeTab.ui.fileContextManager.attachFileAsPill).not.toHaveBeenCalled();
+    expect(Notice).toHaveBeenCalledWith('quickActions.commands.queueBusy');
+  });
+
   it('declines while streaming even with an EMPTY queue slot', async () => {
     // An empty slot is no safer: the queued `/compact` gets merged by the
     // user's next send into `/compact\n\ntheir message`, running the command

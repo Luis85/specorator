@@ -5,7 +5,7 @@ import { asSettingsBag } from '@/core/types/settings';
 import { t } from '@/i18n/i18n';
 import type SpecoratorPlugin from '@/main';
 
-import { landOnProviderChatTab } from '../resolveProviderChatTab';
+import { attachPickedContext, landOnProviderChatTab } from '../resolveProviderChatTab';
 import type { CommandTabEntry } from './types';
 
 /**
@@ -55,7 +55,7 @@ export async function runProviderCommand(
   // WRITES the composer via seedComposerDraft, which would overwrite an unsent
   // draft, so it steps aside to a fresh tab rather than destroy the text. A
   // send-only dispatch touches nothing in the composer and always stays put.
-  const target = await landOnProviderChatTab(plugin, entry.providerId, file, {
+  const target = await landOnProviderChatTab(plugin, entry.providerId, {
     preferActiveTab: entry.argumentHint ? 'when-composer-empty' : 'always',
   });
   const input = target?.controllers.inputController;
@@ -63,6 +63,7 @@ export async function runProviderCommand(
 
   const invocation = `${entry.insertPrefix}${entry.name}`;
   if (entry.argumentHint) {
+    attachPickedContext(target, file);
     input.seedComposerDraft(`${invocation} `);
     return;
   }
@@ -78,9 +79,13 @@ export async function runProviderCommand(
   // alternative — an unmergeable queued turn — means reworking a state machine
   // whose own header warns that changing its merge logic "loses or duplicates
   // user messages", which is not a side effect a picker tab should have.
+  //
+  // Checked BEFORE `attachPickedContext`: a pill attached and then abandoned
+  // here would sit on the composer and ride along with an unrelated later send.
   if (target.state.isStreaming) {
     new Notice(t('quickActions.commands.queueBusy'));
     return;
   }
+  attachPickedContext(target, file);
   await input.sendMessage({ content: invocation });
 }

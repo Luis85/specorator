@@ -93,13 +93,17 @@ export interface LandOnProviderChatTabOptions {
  * The active tab's attached files/folders/images are snapshotted BEFORE the
  * target is resolved and re-applied AFTER the switch: a dispatch usually lands
  * in a FRESH tab, which does not inherit that context, and `switchToTab`'s
- * welcome reset wipes anything attached beforehand. The picked file/folder pill
- * is attached last, for the same ordering reason.
+ * welcome reset wipes anything attached beforehand.
+ *
+ * The user's PICKED file/folder is deliberately NOT attached here — callers
+ * call `attachPickedContext` once they know the dispatch will actually go
+ * ahead. Attaching it inside would strand the pill on the composer whenever a
+ * caller declines afterwards (a command refused because the tab is streaming),
+ * where it would silently ride along with an unrelated later message.
  */
 export async function landOnProviderChatTab(
   plugin: SpecoratorPlugin,
   providerId: ProviderId,
-  file: TAbstractFile | null,
   options: LandOnProviderChatTabOptions = {},
 ): Promise<TabData | null> {
   const tabManager = await ensureChatTabManager(plugin);
@@ -108,8 +112,7 @@ export async function landOnProviderChatTab(
   const activeTab = tabManager.getActiveTab();
   if (activeTab && canLandOnActiveTab(activeTab, plugin, providerId, options)) {
     // Already on the right conversation: no switch (so nothing resets), and no
-    // context carry (the tab keeps its own attachments). Just the picked pill.
-    attachPickedContext(activeTab, file);
+    // context carry (the tab keeps its own attachments).
     return activeTab;
   }
 
@@ -123,7 +126,6 @@ export async function landOnProviderChatTab(
 
   await tabManager.switchToTab(target.id);
   applyUserAttachedContext(target, carriedContext);
-  attachPickedContext(target, file);
   return target;
 }
 
@@ -146,7 +148,12 @@ function canLandOnActiveTab(
   return options.preferActiveTab === 'always' || !blankTabHasComposerText(tab);
 }
 
-function attachPickedContext(tab: TabData, file: TAbstractFile | null): void {
+/**
+ * Attaches the file/folder the user picked the dispatch from. MUST run after
+ * `landOnProviderChatTab` (a blank tab's welcome reset on switch wipes anything
+ * attached earlier) and only once the caller has committed to dispatching.
+ */
+export function attachPickedContext(tab: TabData, file: TAbstractFile | null): void {
   if (file instanceof TFile) {
     tab.ui.fileContextManager?.attachFileAsPill(file.path);
   } else if (file instanceof TFolder) {
