@@ -4,10 +4,12 @@ import type SpecoratorPlugin from '../../main';
 export type TeamChatPresence = 'idle' | 'busy';
 
 /** Minimal open-tab shape the presence projection reads (satisfied by `TabData`:
- *  `conversationId` plus a `state` whose `isStreaming` getter is a boolean). */
+ *  `conversationId` plus a `state` whose `isStreaming` getter is a boolean). `state` is
+ *  optional because presence now recomputes on every snapshot, including mid-teardown
+ *  when a tab has shed its state — matching `TeamChatTabView` in `teamChatDmTabs`. */
 export interface PresenceTabView {
   readonly conversationId: string | null;
-  readonly state: { readonly isStreaming: boolean };
+  readonly state?: { readonly isStreaming?: boolean };
 }
 
 /**
@@ -31,7 +33,7 @@ export function projectTeamChatPresence(
 ): Record<string, TeamChatPresence> {
   const presence: Record<string, TeamChatPresence> = {};
   for (const tab of tabs) {
-    if (!tab.conversationId || !tab.state.isStreaming) continue;
+    if (!tab.conversationId || !tab.state?.isStreaming) continue;
     const agentId = resolveBoundAgentId(tab.conversationId);
     if (agentId) presence[agentId] = 'busy';
   }

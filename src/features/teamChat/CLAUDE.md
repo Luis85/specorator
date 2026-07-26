@@ -49,6 +49,14 @@ would let one leaf's projection overwrite another's (`ui/vue/globalPinia.ts`).
   `onMounted` must not be dropped) and fans the view's `TeamChatSnapshot` into the
   setters. The view is the single writer, projecting on every change
   (`emitTeamChatChange`).
+- **`selectAgent` re-projects once AFTER its open resolves.** `restoreConversation` sets
+  `currentConversationId` BEFORE assigning `state.messages`, and that assignment re-emits only
+  the transcript — so the tab-conversation callback's snapshot froze `activeDmIsEmpty: true`
+  for a hydrating DM and nothing refreshed it, stacking the starters card above a populated
+  transcript. The trailing emit is deliberately UNGUARDED by the staleness check: a superseded
+  or torn-down selection just re-reads live state (a null manager projects an empty snapshot),
+  so there is nothing stale to publish. Any future post-open state that only the engine writes
+  is covered by the same emit.
 - **`selectedAgentId` is a PURE PROJECTION of the active tab** — derived from the
   active DM's `boundAgentId` in `projectSelectedAgentFromActiveTab`
   (`TeamChatView.ts:207`), never set optimistically. So the roster highlight and the

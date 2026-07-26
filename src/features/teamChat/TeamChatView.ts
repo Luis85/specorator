@@ -355,25 +355,21 @@ export class TeamChatView extends ItemView implements ChatViewHandle {
   }
 
   updateHiddenProviderCommands(): void {
-    // DM-scoped: repaint each open DM's persistent slash-command dropdown (mirror of
-    // SpecoratorView), then re-project the store.
+    // DM-scoped: repaint each open DM's persistent slash-command dropdown (mirror of SpecoratorView), then re-project.
     applyDmHiddenCommands(this.plugin, this.tabManager?.getAllTabs() ?? []);
     this.emitTeamChatChange();
   }
 
   /**
-   * Opens or resumes the agent's single persistent DM: resolve the DM's
-   * conversation, then reuse any already-open tab for it, else create one.
-   * `selectedAgentId` is NOT set here — it projects off whichever tab this open
-   * ends up activating (`onTabCreated`/`onTabSwitched`), so a cross-leaf reveal or
-   * a failed open never leaves the roster highlighting a DM this pane isn't
-   * showing. Idempotent per agent — a repeat select of an already-open DM switches
-   * to it rather than creating a duplicate.
+   * Opens or resumes the agent's single persistent DM: resolve the DM's conversation, then reuse any
+   * already-open tab for it, else create one. Idempotent per agent. `selectedAgentId` is NOT set here —
+   * it projects off whichever tab this open ends up activating (`onTabCreated`/`onTabSwitched`), so a
+   * cross-leaf reveal or a failed open never leaves the roster highlighting a DM this pane isn't showing.
    */
   async selectAgent(agentId: string, options: { preserveFocus?: boolean; displacedConversationId?: string | null } = {}): Promise<void> {
-    // Foreground selects bump the generation so the async open detects a newer select (last-click-wins)
-    // or a torn-down/replaced engine (see isSelectionStale). A BACKGROUND rotation (preserveFocus) READS
-    // it WITHOUT bumping, so it can't supersede a foreground click that lands mid-batch (Round-51).
+    // Foreground selects bump the generation so the async open detects a newer select (last-click-wins) or a
+    // torn-down/replaced engine (see isSelectionStale). A BACKGROUND rotation (preserveFocus) READS it WITHOUT
+    // bumping, so it can't supersede a foreground click landing mid-batch (Round-51).
     const generation = options.preserveFocus ? this.selectionGeneration : ++this.selectionGeneration;
     const manager = this.tabManager;
     if (!manager) return; // no engine yet (defensive; clicks only fire post-mount)
@@ -397,17 +393,21 @@ export class TeamChatView extends ItemView implements ChatViewHandle {
     // pre-resolve mapping — but ONLY when it is genuinely THIS agent's own DM, never a corrupt map
     // pointing at an unrelated chat/DM that reconcileRotation would then force-close (Round-48 A; Round-57).
     const displaced = options.displacedConversationId ?? ownedDisplacedDmId(this.plugin, previousConversationId, agentId);
-    // Serialize this leaf's open+reconcile on a per-leaf tail (Round-49): two fast clicks on DIFFERENT
-    // agents (distinct conversationIds → NOT collapsed by the per-id coordinator) must run one-at-a-time,
-    // else at full budget both evict the same LRU victim (double-close → cap Notice + neither opens).
-    // `openTeamChatDmForSelection` keeps the per-conversationId coordinator INSIDE the tail and brackets
-    // the open with `setOpening` so a pre-bind hydration error stashes on THIS leaf only (Round-64).
+    // Serialize this leaf's open+reconcile on a per-leaf tail (Round-49): two fast clicks on DIFFERENT agents (distinct
+    // conversationIds → NOT collapsed by the per-id coordinator) must run one-at-a-time, else at full budget both evict the
+    // same LRU victim (double-close → cap Notice + neither opens). `openTeamChatDmForSelection` keeps the per-conversationId
+    // coordinator INSIDE the tail and brackets the open with `setOpening`, so a pre-bind hydration error stays on THIS leaf (Round-64).
     await serializeOnTail(this.selectionOpenTail, () =>
       openTeamChatDmForSelection(this.plugin, manager, this.leaf, this.dmRecency, {
         conversationId, agentId, displaced, previousConversationId,
         isStale, preserveFocus: options.preserveFocus,
         setOpening: (id) => { if (id) this.openingConversationIds.add(id); else this.openingConversationIds.delete(conversationId); },
       }));
+    // Re-project AFTER the open resolves (Round-67): `restoreConversation` sets `currentConversationId` BEFORE assigning
+    // `state.messages`, and that assignment re-emits only the TRANSCRIPT — so the tab-conversation callback's snapshot froze
+    // `activeDmIsEmpty: true`, stacking the starters card above a populated transcript. Unguarded on purpose: a superseded or
+    // torn-down selection just re-reads live state (a null manager projects an empty snapshot).
+    this.emitTeamChatChange();
   }
 
   /**
