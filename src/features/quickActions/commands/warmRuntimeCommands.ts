@@ -26,11 +26,13 @@ import type { ProviderRecord } from '../skills/types';
  * provider's enabled flag). Failures propagate to the aggregator's
  * swallow-and-log handler.
  *
- * Returns whether the catalog was actually primed with entries — i.e. whether a
- * re-read is worth doing. Claude has no runtime loader, so it returns false and
- * the caller must NOT re-read: `ClaudeCommandCatalog.listDropdownEntries` would
- * run `ensureProbed()` again and spawn a second SDK subprocess for the same
- * empty answer.
+ * Returns whether the catalog HOLDS entries afterwards — i.e. whether a re-read
+ * is worth doing. Claude has no runtime loader, so it returns false and the
+ * caller must NOT re-read: `ClaudeCommandCatalog.listDropdownEntries` would run
+ * `ensureProbed()` again and spawn a second SDK subprocess for the same empty
+ * answer. It is deliberately "holds entries", not "we wrote entries", so a
+ * catalog primed concurrently by a chat tab still triggers the caller's re-read
+ * (see the clobber guard below).
  */
 export async function warmRuntimeCommands(
   plugin: SpecoratorPlugin,
@@ -49,6 +51,22 @@ export async function warmRuntimeCommands(
     plugin,
     runtime: null,
   });
+
+  // Never clobber a catalog someone else primed while we were loading. The
+  // catalog is provider-GLOBAL and `setRuntimeCommands` replaces wholesale, so
+  // a chat tab's own warmup (`TabProviderCommandCoordinator`) writes this same
+  // field. We only got here because the listing was empty; if it is populated
+  // now, that write landed during our load — and it is the better answer,
+  // because it is session-backed while ours is headless. Writing anyway would
+  // at best duplicate it and at worst (an empty headless result, e.g. the
+  // isolated session failing to enumerate) blank the commands the composer's
+  // dropdown had just discovered, then pin that emptiness for the aggregator's
+  // full TTL.
+  const primedMeanwhile = (await record.commandCatalog.listDropdownEntries({
+    includeBuiltIns: false,
+  })).length > 0;
+  if (primedMeanwhile) return true;
+
   record.commandCatalog.setRuntimeCommands(commands);
   return commands.length > 0;
 }
