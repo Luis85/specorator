@@ -83,13 +83,15 @@ onMounted(() => {
   if (!el || typeof ResizeObserver === 'undefined') return;
   observer = new ResizeObserver(([entry]) => {
     const width = entry.contentRect.width;
-    // `width > 0` is not defensive noise: an unmeasured or hidden leaf (a deferred
-    // workspace leaf, a background tab, jsdom) reports 0, and treating that as "narrow"
-    // would collapse the rail on every restore and un-hide. Zero means "no measurement
-    // yet", so hold the current state until a real one arrives.
+    // Zero means "no measurement yet" — a deferred workspace leaf, a background tab, jsdom —
+    // so RETURN rather than reporting it as not-narrow. Folding it into the boolean looked
+    // equivalent but wasn't: `false` is a threshold CROSSING for a narrow leaf, which flips
+    // the rail open while hidden and discards the user's in-session expand-override, so the
+    // next real measurement re-collapses a rail they had deliberately opened.
+    if (width <= 0) return;
     // The measured width goes along too: the boolean alone can't tell a pane that merely
     // STAYED narrow from one that kept shrinking under a manual expand-override.
-    store.setRailNarrow(width > 0 && width < NARROW_LEAF_PX, width);
+    store.setRailNarrow(width < NARROW_LEAF_PX, width);
   });
   observer.observe(el);
 });

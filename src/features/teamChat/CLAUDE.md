@@ -262,9 +262,14 @@ reaches `{ leaf, getTabManager() }`, so a second host is reuse, not a fork.
   is tracked by AGENT ID and the index derived, because the default `recent` order re-sorts
   on every `conversation:saved`: an index would silently re-point at whichever agent slid
   into that slot, so the focused row lost `tabindex="0"` and Enter opened the wrong DM.
-- **A leaf reporting width 0 must not auto-collapse the rail.** The responsive collapse
-  treats `0` as "not measured yet" (a deferred/hidden leaf, or jsdom), so a restore or
-  un-hide can't silently collapse the rail against the user's stored preference.
+- **A leaf reporting width 0 is IGNORED — the observer returns before touching the store.**
+  `0` means "not measured yet" (a deferred/hidden leaf, or jsdom), never "wide". Folding it
+  into the narrow boolean read as equivalent but wasn't: reporting `false` is a threshold
+  CROSSING for a narrow leaf, so the rail flipped open while hidden and the crossing discarded
+  the user's in-session expand-override — the next real measurement then re-collapsed a rail
+  they had deliberately opened. Covered end-to-end through a stubbed `ResizeObserver`
+  (`tests/vue/teamChat/railResizeObserver.test.ts`), since the bug was at the CALL SITE and a
+  store-level test would have passed either way.
 - **Collapsed is EFFECTIVE (`railIsCollapsed`), never the raw preference.** The root sizes the
   grid track from it while `TeamRoster` decides what to render; branching on `railCollapsed`
   alone left a narrow leaf rendering expanded rows clipped inside a 56px track. `railNarrow`
