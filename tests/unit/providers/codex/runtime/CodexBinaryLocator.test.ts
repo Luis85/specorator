@@ -22,7 +22,8 @@ describe('CodexBinaryLocator', () => {
     const pathDir = path.join(tempDir, 'bin');
     const pathBinary = path.join(pathDir, 'codex');
     fs.mkdirSync(pathDir, { recursive: true });
-    fs.writeFileSync(pathBinary, '');
+    // Mode matters: a PATH scan only accepts what the shell could run.
+    fs.writeFileSync(pathBinary, '', { mode: 0o755 });
 
     expect(findCodexBinaryPath(pathDir, 'darwin')).toBe(pathBinary);
   });
@@ -31,7 +32,8 @@ describe('CodexBinaryLocator', () => {
     const pathDir = path.join(tempDir, 'bin');
     const pathBinary = path.join(pathDir, 'codex.cmd');
     fs.mkdirSync(pathDir, { recursive: true });
-    fs.writeFileSync(pathBinary, '');
+    // Mode matters: a PATH scan only accepts what the shell could run.
+    fs.writeFileSync(pathBinary, '', { mode: 0o755 });
 
     expect(findCodexBinaryPath(pathDir, 'win32')).toBe(pathBinary);
   });
@@ -56,7 +58,8 @@ describe('CodexBinaryLocator', () => {
     const pathDir = path.join(tempDir, 'bin');
     const pathBinary = path.join(pathDir, 'codex');
     fs.mkdirSync(pathDir, { recursive: true });
-    fs.writeFileSync(pathBinary, '');
+    // Mode matters: a PATH scan only accepts what the shell could run.
+    fs.writeFileSync(pathBinary, '', { mode: 0o755 });
 
     expect(resolveCodexCliPath('', '', `PATH=${pathDir}`)).toBe(pathBinary);
   });

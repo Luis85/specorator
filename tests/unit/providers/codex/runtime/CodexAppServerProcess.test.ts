@@ -102,6 +102,24 @@ describe('CodexAppServerProcess', () => {
       );
     });
 
+    it('wraps a Windows .bat shim too — Windows refuses both without a shell', () => {
+      // The local resolver used to test `.cmd` only, so a pinned `codex.bat`
+      // was spawned raw and failed. Both extensions go through the shared
+      // batch-aware helper now.
+      Object.defineProperty(process, 'platform', { value: 'win32' });
+
+      const server = new CodexAppServerProcess(createLaunchSpec({
+        command: 'C:\\tools\\codex.bat',
+      }));
+      server.start();
+
+      const [command, args, options] = mockSpawn.mock.calls[0];
+      expect(String(command).toLowerCase()).toContain('cmd.exe');
+      expect(args.slice(0, 3)).toEqual(['/d', '/s', '/c']);
+      expect(args[3]).toContain('codex.bat');
+      expect(options).toEqual(expect.objectContaining({ windowsVerbatimArguments: true }));
+    });
+
     it('passes environment variables to the spawned process', () => {
       const env = { OPENAI_API_KEY: 'sk-test', PATH: '/usr/bin' };
       const server = new CodexAppServerProcess(createLaunchSpec({ env }));

@@ -68,6 +68,7 @@ const EXPECTED_COMMAND_IDS = [
   'open-agent-board',
   'run-next-ready-work-order',
   'open-marketplace',
+  'open-setup-guide',
   'open-library',
   'open-agent-roster',
   'open-skill-library',

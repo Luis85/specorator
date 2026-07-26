@@ -3,7 +3,11 @@ import { resolveCursorSpawnSpec } from '@/providers/cursor/runtime/cursorWindows
 describe('resolveCursorSpawnSpec', () => {
   it('passes the command through unchanged on non-Windows platforms', () => {
     const spec = resolveCursorSpawnSpec('/home/u/.local/bin/agent', ['-p', 'hi there'], 'linux');
-    expect(spec).toEqual({ command: '/home/u/.local/bin/agent', args: ['-p', 'hi there'] });
+    expect(spec).toEqual({
+      command: '/home/u/.local/bin/agent',
+      args: ['-p', 'hi there'],
+      env: {},
+    });
     expect(spec.windowsVerbatimArguments).toBeUndefined();
   });
 

@@ -113,6 +113,9 @@ export function resolveCursorLaunch(
   return {
     command: spec.command,
     args: spec.args,
+    // Any `%`-bearing value the wrap moved off the cmd.exe command line rides
+    // here; cmd expands `%NAME%` even inside quotes, so it cannot stay inline.
+    extraEnv: spec.env,
     windowsVerbatimArguments: spec.windowsVerbatimArguments,
   };
 }

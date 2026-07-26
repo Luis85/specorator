@@ -4,6 +4,8 @@ import type {
   PermissionMode as SDKPermissionMode,
 } from '@anthropic-ai/claude-agent-sdk';
 
+import { buildFullSubprocessEnvironment } from '@/core/providers/subprocessEnvironmentAllowlist';
+
 import type { McpServerManager } from '../../../core/mcp/McpServerManager';
 import {
   buildSystemPrompt,
@@ -342,11 +344,15 @@ export class QueryOptionsBuilder {
         claudeSettings.loadUserSettings,
         shouldHonorClaudeProjectSettingsFor(asSettingsBag(ctx.settings), ctx.vaultPath),
       ),
-      env: {
-        ...process.env,
-        ...ctx.customEnv,
-        PATH: ctx.enhancedPath,
-      },
+      // Shared builder, not a hand-rolled spread: a provider Environment entered
+      // as `Path=` (common on Windows, where env names are case-insensitive)
+      // would otherwise ship alongside the enhanced `PATH` and let the child
+      // resolve the un-enhanced one — silently undoing the enhancement.
+      env: buildFullSubprocessEnvironment({
+        processEnv: process.env,
+        customEnv: ctx.customEnv,
+        pathOverride: ctx.enhancedPath,
+      }),
       includePartialMessages: true,
     };
 

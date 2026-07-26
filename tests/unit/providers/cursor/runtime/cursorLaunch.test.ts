@@ -94,7 +94,9 @@ describe('resolveCursorLaunch', () => {
     expect(launch.args.slice(0, 3)).toEqual(['/d', '/s', '/c']);
     expect(launch.args[3]).toContain('agent.cmd');
     expect(launch.args[3]).toContain('"hello world"');
-    expect(launch.extraEnv).toBeUndefined();
+    // Empty rather than absent: nothing here contains `%`, so nothing had to
+    // travel through the environment to survive cmd.exe expansion.
+    expect(launch.extraEnv).toEqual({});
   });
 
   it('uses the extensionless node binary on non-win32', () => {

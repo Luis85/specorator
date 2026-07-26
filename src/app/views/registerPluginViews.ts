@@ -6,6 +6,8 @@ import { VIEW_TYPE_LIBRARY } from '@/features/library/viewType';
 import { activateMarketplace } from '@/features/marketplace/activateMarketplace';
 import { MarketplaceView } from '@/features/marketplace/MarketplaceView';
 import { VIEW_TYPE_MARKETPLACE } from '@/features/marketplace/viewType';
+import { OnboardingView } from '@/features/onboarding/OnboardingView';
+import { VIEW_TYPE_ONBOARDING } from '@/features/onboarding/viewType';
 import type { ChatTabExecutionSurface } from '@/features/tasks/execution/ChatTabExecutionSurface';
 import { AgentBoardView } from '@/features/tasks/ui/AgentBoardView';
 import { t } from '@/i18n/i18n';
@@ -46,4 +48,9 @@ export function registerPluginViews({ plugin, taskExecutionSurface }: PluginView
   plugin.addRibbonIcon('store', t('marketplace.ribbon'), () => {
     void activateMarketplace(plugin);
   });
+
+  // No ribbon icon: Setup is a first-run surface that opens itself once, then
+  // lives on the `open-setup-guide` command and the settings banner button.
+  // A permanent ribbon entry would be clutter for a flow most users run once.
+  plugin.registerView(VIEW_TYPE_ONBOARDING, (leaf) => new OnboardingView(leaf, plugin));
 }

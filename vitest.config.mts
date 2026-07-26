@@ -36,6 +36,10 @@ export default defineConfig({
         // accessors) — tested in this lane and excluded from Jest collection
         // (jest.config.js); gate its coverage here where it is exercised.
         'src/features/marketplace/vue/**/*.{ts,vue}',
+        // Setup (onboarding) Vue island (store, useAppSetting, root + step SFCs)
+        // — tested in this lane and excluded from Jest collection
+        // (jest.config.js); gate its coverage here where it is exercised.
+        'src/features/onboarding/vue/**/*.{ts,vue}',
         // Shared accessor/action modules whose meaningful exercise lives in
         // this lane: the loop accessors feed LoopsPanel, and the roster pair
         // is only function-covered by AgentsPanel tests (the legacy

@@ -558,6 +558,11 @@ describe('getEnhancedPath', () => {
       jest.spyOn(fs, 'statSync').mockImplementation(
         p => ({ isFile: () => String(p) === nodePath }) as fsType.Stats
       );
+      jest.spyOn(fs, 'accessSync').mockImplementation(p => {
+        if (String(p) !== nodePath) {
+          throw new Error('EACCES');
+        }
+      });
       return nodePath;
     }
 
@@ -889,6 +894,11 @@ describe('getMissingNodeError', () => {
     jest.spyOn(fs, 'statSync').mockImplementation(
       p => ({ isFile: () => String(p) === nodePath }) as fsType.Stats
     );
+    jest.spyOn(fs, 'accessSync').mockImplementation(p => {
+      if (String(p) !== nodePath) {
+        throw new Error('EACCES');
+      }
+    });
 
     const error = getMissingNodeError('/path/to/cli.js', nodeDir);
     expect(error).toBeNull();
@@ -897,6 +907,15 @@ describe('getMissingNodeError', () => {
 
 describe('findNodeDirectory', () => {
   const originalEnv = { ...process.env };
+
+  /** Only the listed paths pass the execute-permission check; everything else throws. */
+  function mockExecutable(executablePaths: string[]): void {
+    jest.spyOn(fs, 'accessSync').mockImplementation(p => {
+      if (!executablePaths.includes(String(p))) {
+        throw new Error('EACCES');
+      }
+    });
+  }
 
   afterEach(() => {
     jest.restoreAllMocks();
@@ -928,6 +947,7 @@ describe('findNodeDirectory', () => {
     jest.spyOn(fs, 'statSync').mockImplementation(
       p => ({ isFile: () => String(p) === nodePath }) as fsType.Stats
     );
+    mockExecutable([nodePath]);
 
     process.env.NVM_SYMLINK = nvmSymlink;
     process.env.PATH = '';
@@ -950,11 +970,31 @@ describe('findNodeDirectory', () => {
     jest.spyOn(fs, 'statSync').mockImplementation(
       () => ({ isFile: () => true }) as fsType.Stats
     );
+    mockExecutable([preferredNode, fallbackNode]);
 
     process.env.PATH = fallbackDir;
 
     const result = findNodeDirectory(preferredDir);
     expect(result).toBe(preferredDir);
+  });
+
+  it('skips a node it cannot execute and keeps scanning', () => {
+    // A `node` file without `+x` fails at spawn with EACCES. Stopping at it would
+    // hand back an interpreter that cannot run while a working one further along
+    // PATH went unfound — and the onboarding probe would then report a
+    // Node-backed CLI as ready on the strength of it.
+    const nodeExecutable = isWindows ? 'node.exe' : 'node';
+    const brokenDir = isWindows ? 'C:\\broken\\bin' : '/broken/bin';
+    const workingDir = isWindows ? 'C:\\working\\bin' : '/working/bin';
+    const workingNode = path.join(workingDir, nodeExecutable);
+
+    jest.spyOn(fs, 'existsSync').mockReturnValue(true);
+    jest.spyOn(fs, 'statSync').mockImplementation(
+      () => ({ isFile: () => true }) as fsType.Stats
+    );
+    mockExecutable([workingNode]);
+
+    expect(findNodeDirectory(`${brokenDir}${path.delimiter}${workingDir}`)).toBe(workingDir);
   });
 
   it('returns full path for findNodeExecutable when available', () => {
@@ -966,6 +1006,7 @@ describe('findNodeDirectory', () => {
     jest.spyOn(fs, 'statSync').mockImplementation(
       () => ({ isFile: () => true }) as fsType.Stats
     );
+    mockExecutable([preferredNode]);
 
     const result = findNodeExecutable(preferredDir);
     expect(result).toBe(preferredNode);

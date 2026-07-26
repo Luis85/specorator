@@ -16,6 +16,42 @@ export const codexProviderRegistration: ProviderRegistration = {
   displayName: 'Codex',
   firstRunBlurb: 'OpenAI Codex CLI',
   cliCommand: 'codex',
+  cliInstall: {
+    docsUrl: 'https://github.com/openai/codex',
+    authCommand: 'codex',
+    // Spawns its own command, so the shared cmd.exe wrap
+    // (`resolveBatchAwareSpawnSpec`) launches a `.cmd`/`.bat` shim.
+    launchForms: ['windows-batch'],
+    // `CodexLaunchSpecBuilder` spawns `resolvedCliCommand?.trim() || 'codex'`, so
+    // an unresolved path is not a refusal to start — the OS resolves the bare
+    // command against the child's PATH, which is built from the same environment
+    // text the resolver reads but case-insensitively. Without this declared,
+    // detection took the resolver's `null` as authoritative and offered to
+    // reinstall a CLI that chat launches fine.
+    runtimeFallsBackToPathLookup: true,
+    methods: [
+      {
+        id: 'npm',
+        label: 'npm (global)',
+        displayCommand: 'npm install -g @openai/codex',
+        argv: { command: 'npm', args: ['install', '-g', '@openai/codex'] },
+      },
+      {
+        id: 'native',
+        label: 'PowerShell installer',
+        displayCommand: 'powershell -ExecutionPolicy ByPass -c "irm https://chatgpt.com/codex/install.ps1 | iex"',
+        argv: null,
+        platforms: ['win32'],
+      },
+      {
+        id: 'homebrew',
+        label: 'Homebrew',
+        displayCommand: 'brew install codex',
+        argv: { command: 'brew', args: ['install', 'codex'] },
+        platforms: ['darwin'],
+      },
+    ],
+  },
   blankTabOrder: 15,
   isEnabled: (settings) => getCodexProviderSettings(settings).enabled,
   // Run resolution stays default-true: in WSL the app-server runs INSIDE the distro
