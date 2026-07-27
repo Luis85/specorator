@@ -144,6 +144,27 @@ while the context staged with it is both sent with someone else's turn and remov
   More principled, and generalises to every `sendMessage({ content })` caller — quick actions,
   loop prompts, Agent Board follow-ups. That reach is also why it needs its own review.
 
+### 4b. Commands dispatch to the wrong leaf when several sidebars are open (#515)
+
+`landOnProviderChatTab` resolves its `TabManager` through `ensureChatTabManager`, which calls
+`plugin.getView()` — and `getView()` returns the FIRST matching Specorator leaf, not the leaf
+whose modal the user opened. With two sidebars open, picking a command from the second one
+dispatches into the first one's active conversation.
+
+**Not a regression from this session's commits** — `runVaultSkill` resolved the same way before
+the prologue was extracted, so skills have always had it. What changed is the consequence:
+`/compact` is a destructive control operation on whatever transcript it lands in, so
+mis-routing it compacts a conversation the user was not looking at. That is materially worse
+than a skill prompt arriving in the wrong pane.
+
+*Fix:* thread the owning view (or its `TabManager`) through the modal callback, the way the
+Quick Actions callback already does, and have `landOnProviderChatTab` take it rather than
+re-resolving globally. Fixes skills at the same time.
+
+*Scope note:* this touches `openQuickActionsModal`'s wiring and both dispatch helpers, so it is
+a small but cross-cutting change — worth doing as its own commit rather than folded into
+another fix.
+
 ### 5. `InputController.ts` has no LOC headroom left
 
 At 1172, it is a grandfathered **shrink-only** hotspot (`scripts/loc-baseline.json`). This PR
