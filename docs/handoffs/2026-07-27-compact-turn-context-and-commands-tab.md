@@ -45,6 +45,27 @@ took, and one site acts on it. Every open item below is a symptom.
 
 ## Open issues
 
+### 0. SDK-discovered skills leak into the Commands tab (#515) — affects the normal case
+
+**Fix this first for #515.** It is wrong whenever Claude's discovery *succeeds*, which is the
+warm/steady state — not an edge case — and it undermines the tab's premise (commands, not skills).
+
+`probeRuntimeCommands.mapSdkCommands` and the equivalent `ClaudeChatRuntime` mapping emit every
+SDK result as `sdk:<name>` with **no `kind`**. `slashCommandToEntry` derives kind via `isSkill(cmd)`,
+which recognises a skill only from `kind === 'skill'` or an id starting with `skill-`. So an
+SDK-surfaced vault, user, or plugin skill becomes `kind: 'command'` and passes
+`ProviderCommandAggregator`'s `e.kind === 'command'` filter — showing in Skills AND Commands at
+once. The cold `listVaultEntries()` fallback classifies correctly, which is why this is invisible
+until a probe or runtime lands.
+
+*Fix:* preserve the classification at the mapping boundary — carry `kind` (and/or a `skill-`-style
+id) through `mapSdkCommands` and the runtime mapping — rather than filtering skills back out
+downstream. Filtering downstream would need the Commands tab to re-derive "is this really a skill"
+from a name, which is exactly the kind of second-guessing that produced the rest of this list.
+
+*Note:* this is provider-side (`providers/claude/`), not picker-side, so it is independent of the
+refresh-path cluster and can be fixed on its own.
+
 ### 1. `/compact`-led merge discards the user's image (#516) — REGRESSION, highest priority
 
 Introduced by `f92537b`. That commit strips `turnRequestOverride.images` when the merged
