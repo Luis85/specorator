@@ -109,9 +109,25 @@ reaching for — split **synchronous cache invalidation** from the **replacement
 `invalidate()` only drops caches and the single subsequent fetch does all the I/O. That shape also
 makes 2b-i fall out naturally, since a non-spawning invalidation is safe for any provider.
 
-> Note the pattern: the fire-and-forget `void Promise.resolve(...)` was chosen to keep
-> `invalidate()` synchronous, and it bought a race plus an enablement-guard bypass. The
-> sync/async split above is the real answer.
+**2b-iii — runtime-backed catalogs never re-warm.** `OpencodeCommandCatalog.refresh()` is still a
+no-op (only Claude's was implemented), and `fetchEntries` skips `warmRuntimeCommands` whenever
+`first.length > 0`. So once Opencode's provider-global `runtimeCommands` is populated, neither
+Refresh nor a TTL expiry ever picks up a changed command set — both keep reading the same array.
+
+*Fix:* implement `OpencodeCommandCatalog.refresh()` to clear `runtimeCommands`. The empty listing
+then routes through the existing `warmRuntimeCommands` path on the next fetch, so no new branch is
+needed in the aggregator. Note this deliberately re-spawns a runtime on an explicit Refresh —
+acceptable for a user-initiated action, and exactly why it must land WITH 2b-i/2b-ii rather than
+before them, or the double-spawn compounds.
+
+> Note the pattern across 2b: `refresh()` was treated as "the hook exists, so the path works",
+> but it was only implemented for one provider and its contract ("drop your cached listing") was
+> never stated on the interface. Fixing 2b should include documenting that contract on
+> `ProviderCommandCatalog.refresh()` so the next provider implements it.
+>
+> Likewise the fire-and-forget `void Promise.resolve(...)` was chosen to keep `invalidate()`
+> synchronous, and it bought a race plus an enablement-guard bypass. The sync/async split above
+> is the real answer.
 
 ### 3. `/compact` routed to a blank tab compacts an empty transcript (#515)
 
