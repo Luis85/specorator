@@ -423,9 +423,9 @@ export class SpecoratorView extends ItemView implements ChatViewHandle {
       },
       onOpenHistory: () => this.emitChatShellChange(),
       onQuickActions: () => this.openQuickActionsForActiveTab(),
-      // Pre-warm the Skills-tab cache on hover so the Quick Actions modal opens
-      // against a hot cache (old buildNavRowContent mouseenter). Idempotent:
-      // VaultSkillAggregator dedupes concurrent fetches per provider.
+      // Pre-warm the Skills-tab cache on hover; the aggregator dedupes concurrent
+      // fetches. Commands are deliberately NOT warmed here — an unprimed
+      // runtime-backed catalog spins up a provider process to answer.
       onQuickActionsHover: () => {
         void this.plugin.vaultSkillAggregator?.listAllStreaming(() => {});
       },

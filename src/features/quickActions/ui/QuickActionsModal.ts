@@ -5,14 +5,16 @@ import type { EventBus } from '../../../core/events/EventBus';
 import type { UsageEventMap } from '../../../core/usage/events';
 import type { UsageRecord } from '../../../core/usage/types';
 import { t } from '../../../i18n/i18n';
+import type { CommandTabEntry, ProviderCommandSource } from '../commands/types';
 import { quickActionStemFromPath } from '../quickActionStem';
 import type { QuickActionStorage } from '../QuickActionStorage';
 import { assignNextFavoriteRank } from '../QuickActionStorage';
 import type { SkillTabEntry, VaultSkillSource } from '../skills/types';
 import type { QuickAction } from '../types';
+import { buildCommandsTabConfig, buildSkillsTabConfig } from './entryTabConfigs';
 import { formatUsageBadge, loadBadgeI18n } from './formatUsageBadge';
+import { ProviderEntryTabRenderer } from './ProviderEntryTabRenderer';
 import { QuickActionEditorModal } from './QuickActionEditorModal';
-import { SkillsTabRenderer } from './SkillsTabRenderer';
 import { UsageStatsTab } from './UsageStatsTab';
 
 export interface QuickActionsModalCallbacks {
@@ -24,15 +26,18 @@ export interface QuickActionsModalCallbacks {
    * settings sub-tab; the modal closes itself before firing.
    */
   onEditSkill: (entry: SkillTabEntry) => void;
+  /** Dispatches a provider slash command picked on the Commands tab. */
+  onRunCommand: (entry: CommandTabEntry) => void;
   storage: QuickActionStorage;
   aggregator: VaultSkillSource;
+  commands: ProviderCommandSource;
   onFavoritesChanged?: () => void;
   usageTracker: { getAll(): ReadonlyMap<string, UsageRecord> } | null;
   events: EventBus<UsageEventMap>;
   now?: () => number;
 }
 
-type ActiveTab = 'quickActions' | 'skills' | 'stats';
+type ActiveTab = 'quickActions' | 'skills' | 'commands' | 'stats';
 
 export class QuickActionsModal extends Modal {
   private callbacks: QuickActionsModalCallbacks;
@@ -52,8 +57,9 @@ export class QuickActionsModal extends Modal {
   private actionsLoaded = false;
   private filter = '';
 
-  // Skills tab — delegated to a dedicated renderer.
-  private skillsRenderer: SkillsTabRenderer;
+  // Skills + Commands tabs — delegated to the shared entry-list renderer.
+  private skillsRenderer: ProviderEntryTabRenderer<SkillTabEntry>;
+  private commandsRenderer: ProviderEntryTabRenderer<CommandTabEntry>;
 
   // Stats tab — null when no usageTracker was provided.
   private statsTab: UsageStatsTab | null = null;
@@ -66,13 +72,19 @@ export class QuickActionsModal extends Modal {
   constructor(app: App, callbacks: QuickActionsModalCallbacks) {
     super(app);
     this.callbacks = callbacks;
-    this.skillsRenderer = new SkillsTabRenderer(
-      callbacks.aggregator,
-      callbacks.onRunSkill,
-      callbacks.onEditSkill,
-      () => this.close(),
-      callbacks.usageTracker,
-      callbacks.now ?? (() => Date.now()),
+    const now = callbacks.now ?? (() => Date.now());
+    this.skillsRenderer = new ProviderEntryTabRenderer(
+      buildSkillsTabConfig(
+        callbacks.aggregator,
+        callbacks.onRunSkill,
+        callbacks.onEditSkill,
+        { close: () => this.close(), usageTracker: callbacks.usageTracker, now },
+      ),
+    );
+    this.commandsRenderer = new ProviderEntryTabRenderer(
+      buildCommandsTabConfig(callbacks.commands, callbacks.onRunCommand, {
+        close: () => this.close(),
+      }),
     );
     if (callbacks.usageTracker) {
       this.statsTab = new UsageStatsTab({
@@ -104,6 +116,7 @@ export class QuickActionsModal extends Modal {
     const entries: Array<{ key: ActiveTab; label: string }> = [
       { key: 'quickActions', label: t('quickActions.modal.tabs.quickActions') },
       { key: 'skills', label: t('quickActions.modal.tabs.skills') },
+      { key: 'commands', label: t('quickActions.modal.tabs.commands') },
     ];
     if (this.statsTab) {
       entries.push({ key: 'stats', label: t('quickActions.usage.tabLabel') });
@@ -156,6 +169,8 @@ export class QuickActionsModal extends Modal {
     if (this.activeTab === 'quickActions') {
       inputToFocus = this.renderQuickActionsBody(this.bodyEl);
       await this.refreshList();
+    } else if (this.activeTab === 'commands') {
+      inputToFocus = await this.commandsRenderer.render(this.bodyEl);
     } else {
       inputToFocus = await this.skillsRenderer.render(this.bodyEl);
     }

@@ -66,6 +66,7 @@ import type { RosterAgent } from './features/agents/roster/rosterTypes';
 import { isChatViewHandle, isSpecoratorView } from './features/chat/isSpecoratorView';
 import type { GitStatusWatcher } from './features/chat/services/GitStatusWatcher';
 import type { SpecoratorView } from './features/chat/SpecoratorView';
+import { createProviderCommandAggregator } from './features/quickActions/commands/createProviderCommandAggregator';
 import { QuickActionFavoritesCache } from './features/quickActions/QuickActionFavoritesCache';
 import { QuickActionLastUsedStore } from './features/quickActions/quickActionLastUsedStore';
 import { QuickActionStorage } from './features/quickActions/QuickActionStorage';
@@ -106,6 +107,7 @@ export default class SpecoratorPlugin extends Plugin implements PluginContext {
   public quickActionFavoritesCache: QuickActionFavoritesCache | null = null;
   public quickActionLastUsedStore: QuickActionLastUsedStore | null = null;
   public vaultSkillAggregator: VaultSkillAggregator | null = null;
+  public providerCommandAggregator: ReturnType<typeof createProviderCommandAggregator> | null = null;
   public vaultFileAdapter!: VaultFileAdapter;
   /** Shared plugin-lifetime store for roster agent definitions. Constructed in onload
    * after vaultFileAdapter; consumers must not build their own instance. */
@@ -249,6 +251,7 @@ export default class SpecoratorPlugin extends Plugin implements PluginContext {
       return;
     }
     if (this.unloaded) return;
+    this.providerCommandAggregator = createProviderCommandAggregator(this);
     // Skills tab cache: hydrate persisted index, then pre-warm in background.
     const aggregator = new VaultSkillAggregator(
       () => buildProviderRecords(this),
@@ -285,6 +288,8 @@ export default class SpecoratorPlugin extends Plugin implements PluginContext {
     }
     this.vaultSkillAggregator?.dispose();
     this.vaultSkillAggregator = null;
+    this.providerCommandAggregator?.dispose();
+    this.providerCommandAggregator = null;
     this.quickActionFavoritesCache?.dispose();
     this.quickActionFavoritesCache = null;
     this.gitStatusWatcher?.stop();

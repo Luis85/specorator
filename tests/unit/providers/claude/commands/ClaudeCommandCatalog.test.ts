@@ -651,4 +651,57 @@ describe('ClaudeCommandCatalog EventBus emission', () => {
     const catalog = new ClaudeCommandCatalog(mkStorage(), mkStorage());
     await expect(catalog.saveVaultEntry(skillEntry())).resolves.not.toThrow();
   });
+
+  it.each(['save', 'delete'] as const)(
+    'emits providerCommand.changed when a command is %sd',
+    async (op) => {
+      // The command-kind counterpart of vaultSkill.changed: without it, an edit in
+      // provider settings stayed invisible to the Commands tab for its whole TTL.
+      const bus = new EventBus<{ 'providerCommand.changed': { providerId: 'claude' } }>();
+      const events: Array<{ providerId: string }> = [];
+      bus.on('providerCommand.changed', (p) => { events.push(p); });
+      const catalog = new ClaudeCommandCatalog(
+        mkStorage(), mkStorage(), undefined, bus as unknown as EventBus<SpecoratorEventMap>,
+      );
+
+      if (op === 'save') await catalog.saveVaultEntry(commandEntry());
+      else await catalog.deleteVaultEntry(commandEntry());
+
+      expect(events).toEqual([{ providerId: 'claude' }]);
+    },
+  );
+
+  it('does NOT emit providerCommand.changed for a skill', async () => {
+    const bus = new EventBus<{ 'providerCommand.changed': { providerId: 'claude' } }>();
+    const events: unknown[] = [];
+    bus.on('providerCommand.changed', (p) => { events.push(p); });
+    const catalog = new ClaudeCommandCatalog(
+      mkStorage(), mkStorage(), undefined, bus as unknown as EventBus<SpecoratorEventMap>,
+    );
+    await catalog.saveVaultEntry(skillEntry());
+    expect(events).toEqual([]);
+  });
+
+  it('drops the warm SDK listing BEFORE announcing a command change', async () => {
+    // Fresh-before-notify: a subscriber re-reading on the event must not get the
+    // pre-edit SDK superset and cache it for its own TTL. Asserted from inside the
+    // handler, since that is exactly when a consumer would re-read.
+    const bus = new EventBus<{ 'providerCommand.changed': { providerId: 'claude' } }>();
+    const catalog = new ClaudeCommandCatalog(
+      mkStorage(), mkStorage(), undefined, bus as unknown as EventBus<SpecoratorEventMap>,
+    );
+    catalog.setRuntimeCommands([
+      { name: 'stale', description: '', isBuiltIn: false } as never,
+    ]);
+
+    // Re-read the private SDK listing at event time — that is exactly when a
+    // subscriber (the Commands-tab aggregator) re-fetches.
+    let sdkAtEventTime: unknown[] | null = null;
+    bus.on('providerCommand.changed', () => {
+      sdkAtEventTime = (catalog as unknown as { sdkCommands: unknown[] }).sdkCommands;
+    });
+    await catalog.saveVaultEntry(commandEntry());
+
+    expect(sdkAtEventTime).toEqual([]);
+  });
 });

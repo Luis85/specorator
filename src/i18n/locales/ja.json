@@ -655,7 +655,8 @@
       "favoriteLimitReached": "お気に入りに登録できるクイックアクションは最大5つです",
       "tabs": {
         "quickActions": "Quick actions",
-        "skills": "Skills"
+        "skills": "Skills",
+        "commands": "コマンド"
       }
     },
     "skills": {
@@ -668,6 +669,17 @@
       "searchPlaceholder": "Search skills by name or description…",
       "refreshTooltip": "スキルを更新",
       "noResults": "No skills match your search."
+    },
+    "commands": {
+      "emptyAll": "プロバイダーのコマンドが見つかりません。",
+      "emptyHint": "コマンドはプロバイダーから提供されます。Claude は .claude/commands/ を読み取り、接続済みの CLI も独自のコマンドを追加します。",
+      "providerDisabled": "プロバイダー '{provider}' は無効です。設定で有効にしてください。",
+      "disabledBadge": "無効",
+      "searchPlaceholder": "名前または説明でコマンドを検索…",
+      "refreshTooltip": "コマンドを更新",
+      "noResults": "検索条件に一致するコマンドはありません。",
+      "argumentHint": "引数 {hint} が必要です。送信せず入力欄に挿入されます。",
+      "queueBusy": "チャットが応答中です。完了してからコマンドを実行してください。"
     },
     "editor": {
       "titleEdit": "Edit quick action",

@@ -31,6 +31,7 @@ function makeRecord(
       }),
       refresh: jest.fn(),
     },
+    hiddenNames: new Set<string>(),
     ...rest,
   };
 }

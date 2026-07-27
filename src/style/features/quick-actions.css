@@ -216,11 +216,23 @@
 }
 
 /* Tab strip */
+/* Four tabs (Quick Actions / Skills / Commands / Stats) no longer fit a 90vw
+   mobile modal at the old fixed padding, and a non-wrapping flex row put the
+   trailing tab outside the modal with no way to reach it. Scroll horizontally
+   rather than wrap: the strip stays one row (wrapping shifts the whole body on
+   a surface where every tab switch would reflow it), and the tabs shrink their
+   padding first so scrolling is the fallback, not the normal state. */
 .specorator-quick-actions-tabs {
   display: flex;
   gap: 0.25em;
   margin-bottom: 0.75em;
   border-bottom: 1px solid var(--background-modifier-border);
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.specorator-quick-actions-tabs::-webkit-scrollbar {
+  display: none;
 }
 
 .specorator-quick-actions-tab {
@@ -233,6 +245,16 @@
   color: var(--text-muted);
   cursor: pointer;
   border-radius: 0;
+  /* Keeps a localized label on one line; the strip scrolls instead of the
+     label wrapping and doubling the strip's height. */
+  white-space: nowrap;
+  flex: 0 0 auto;
+}
+
+@media (max-width: 400px) {
+  .specorator-quick-actions-tab {
+    padding: 0.5em 0.55em;
+  }
 }
 
 .specorator-quick-actions-tab:hover {
@@ -244,8 +266,9 @@
   border-bottom-color: var(--interactive-accent);
 }
 
-/* Skill list */
-.specorator-quick-actions-skill-list {
+/* Skill + command lists */
+.specorator-quick-actions-skill-list,
+.specorator-quick-actions-command-list {
   display: flex;
   flex-direction: column;
   gap: 0.4em;
@@ -264,8 +287,16 @@
   margin-top: 0;
 }
 
-.specorator-quick-actions-skill-row.is-provider-disabled {
+.specorator-quick-actions-skill-row.is-provider-disabled,
+.specorator-quick-actions-command-row.is-provider-disabled {
   opacity: 0.55;
+}
+
+/* Command rows advertise their argument hint under the description. */
+.specorator-quick-action-hint {
+  margin-top: 0.15em;
+  color: var(--text-faint);
+  font-size: var(--font-ui-smaller);
 }
 
 .specorator-quick-actions-skill-disabled-badge {
@@ -294,7 +325,8 @@
   font-size: var(--font-ui-small);
 }
 
-.specorator-quick-actions-skill-row.is-skeleton {
+.specorator-quick-actions-skill-row.is-skeleton,
+.specorator-quick-actions-command-row.is-skeleton {
   pointer-events: none;
   opacity: 0.55;
 }

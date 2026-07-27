@@ -47,6 +47,14 @@ export interface ProviderRecord {
   displayName: string;
   isEnabled: boolean;
   commandCatalog: ProviderCommandCatalog;
+  /**
+   * Lower-cased names the user hid from this provider's `/` dropdown
+   * (`hiddenProviderCommands`). Applied by `ProviderCommandAggregator` so the
+   * Commands tab can't offer an entry the composer deliberately suppresses.
+   * The skills aggregator ignores it — hiding is a dropdown-noise control and
+   * the Skills tab is the management surface for what exists on disk.
+   */
+  hiddenNames: ReadonlySet<string>;
 }
 
 /**

@@ -655,7 +655,8 @@
       "favoriteLimitReached": "Você pode favoritar até 5 ações rápidas",
       "tabs": {
         "quickActions": "Quick actions",
-        "skills": "Skills"
+        "skills": "Skills",
+        "commands": "Comandos"
       }
     },
     "skills": {
@@ -668,6 +669,17 @@
       "searchPlaceholder": "Search skills by name or description…",
       "refreshTooltip": "Atualizar skills",
       "noResults": "No skills match your search."
+    },
+    "commands": {
+      "emptyAll": "Nenhum comando de provedor encontrado.",
+      "emptyHint": "Os comandos vêm dos seus provedores — o Claude lê .claude/commands/ e as CLIs conectadas contribuem com os seus.",
+      "providerDisabled": "O provedor '{provider}' está desativado. Ative-o nas configurações.",
+      "disabledBadge": "desativado",
+      "searchPlaceholder": "Pesquisar comandos por nome ou descrição…",
+      "refreshTooltip": "Atualizar comandos",
+      "noResults": "Nenhum comando corresponde à sua pesquisa.",
+      "argumentHint": "Aceita argumentos {hint} — abre no editor em vez de enviar.",
+      "queueBusy": "O chat ainda está respondendo — aguarde terminar antes de executar um comando."
     },
     "editor": {
       "titleEdit": "Edit quick action",

@@ -3,6 +3,7 @@
  */
 import { EventBus } from '@/core/events/EventBus';
 import type { UsageEventMap } from '@/core/usage/events';
+import type { CommandTabEntry } from '@/features/quickActions/commands/types';
 import type { SkillTabEntry } from '@/features/quickActions/skills/types';
 import type { QuickAction } from '@/features/quickActions/types';
 import type { QuickActionsModalCallbacks } from '@/features/quickActions/ui/QuickActionsModal';
@@ -146,6 +147,45 @@ function makeAggregator(entries: SkillTabEntry[] = []) {
   } as unknown as QuickActionsModalCallbacks['aggregator'];
 }
 
+function makeCommandSource(
+  entries: CommandTabEntry[] = [],
+): QuickActionsModalCallbacks['commands'] {
+  return {
+    listAll: jest.fn().mockResolvedValue(entries),
+    listCachedNow: jest.fn().mockReturnValue(entries),
+    listAllStreaming: jest.fn().mockImplementation(
+      (onProviderResolved: (providerId: string, batch: CommandTabEntry[]) => void) => {
+        const byProvider = new Map<string, CommandTabEntry[]>();
+        for (const entry of entries) {
+          const bucket = byProvider.get(entry.providerId) ?? [];
+          bucket.push(entry);
+          byProvider.set(entry.providerId, bucket);
+        }
+        for (const [providerId, bucket] of byProvider) {
+          onProviderResolved(providerId, bucket);
+        }
+        return Promise.resolve();
+      },
+    ),
+    invalidate: jest.fn(),
+    dispose: jest.fn(),
+  } as unknown as QuickActionsModalCallbacks['commands'];
+}
+
+function makeCommand(overrides: Partial<CommandTabEntry> = {}): CommandTabEntry {
+  return {
+    id: 'claude:cmd-review',
+    providerId: 'claude',
+    providerDisplayName: 'Claude',
+    name: 'review',
+    description: 'Review a pull request',
+    insertPrefix: '/',
+    scope: 'vault',
+    providerEnabled: true,
+    ...overrides,
+  };
+}
+
 function makeSkill(overrides: Partial<SkillTabEntry> = {}): SkillTabEntry {
   return {
     id: 'claude:skill-tdd',
@@ -172,8 +212,10 @@ async function openModal(
     onRun: jest.fn(),
     onRunSkill: jest.fn(),
     onEditSkill: jest.fn(),
+    onRunCommand: jest.fn(),
     storage: makeStorage(),
     aggregator: makeAggregator(),
+    commands: makeCommandSource(),
     usageTracker: null,
     events: makeEvents(),
     ...overrides,
@@ -187,13 +229,82 @@ async function openModal(
 describe('QuickActionsModal tabs', () => {
   beforeEach(() => jest.clearAllMocks());
 
-  it('renders Quick Actions and Skills tabs with Quick Actions selected by default', async () => {
+  it('renders Quick Actions, Skills and Commands tabs with Quick Actions selected by default', async () => {
     const { modal } = await openModal();
     const tabs = modal.contentEl.querySelectorAll('.specorator-quick-actions-tab');
-    expect(tabs).toHaveLength(2);
+    expect(tabs).toHaveLength(3);
     expect(tabs[0].classList.contains('is-active')).toBe(true);
     expect(tabs[0].textContent).toBe('quickActions.modal.tabs.quickActions');
     expect(tabs[1].textContent).toBe('quickActions.modal.tabs.skills');
+    expect(tabs[2].textContent).toBe('quickActions.modal.tabs.commands');
+  });
+
+  it('switching to Commands renders provider commands from the command source', async () => {
+    const commands = makeCommandSource([
+      makeCommand({ name: 'review', description: 'Review a pull request' }),
+      makeCommand({
+        id: 'opencode:cmd-test',
+        providerId: 'opencode',
+        providerDisplayName: 'Opencode',
+        name: 'test',
+        description: 'Run the test suite',
+      }),
+    ]);
+    const { modal } = await openModal({ commands });
+
+    const tabs = modal.contentEl.querySelectorAll(
+      '.specorator-quick-actions-tab',
+    ) as NodeListOf<HTMLElement>;
+    tabs[2].click();
+    await new Promise((r) => setTimeout(r, 0));
+
+    const rows = modal.contentEl.querySelectorAll(
+      '.specorator-quick-actions-command-row:not(.is-skeleton)',
+    );
+    expect(Array.from(rows).map((r) => r.querySelector('strong')?.textContent))
+      .toEqual(['review', 'test']);
+    const headers = modal.contentEl.querySelectorAll(
+      '.specorator-quick-actions-provider-header',
+    );
+    expect(Array.from(headers).map((h) => h.textContent)).toEqual(['Claude', 'Opencode']);
+    // Commands are provider-owned; the modal offers no editor for them.
+    expect(modal.contentEl.querySelector('.specorator-quick-actions-skill-edit')).toBeNull();
+  });
+
+  it('clicking a command row fires onRunCommand and closes the modal', async () => {
+    const commands = makeCommandSource([makeCommand({ name: 'review' })]);
+    const { modal, callbacks } = await openModal({ commands });
+    const tabs = modal.contentEl.querySelectorAll(
+      '.specorator-quick-actions-tab',
+    ) as NodeListOf<HTMLElement>;
+    tabs[2].click();
+    await new Promise((r) => setTimeout(r, 0));
+
+    const row = modal.contentEl.querySelector(
+      '.specorator-quick-actions-command-row-main',
+    ) as HTMLElement;
+    row.click();
+
+    expect(callbacks.onRunCommand).toHaveBeenCalledWith(
+      expect.objectContaining({ id: 'claude:cmd-review', name: 'review' }),
+    );
+    expect(modal.close).toHaveBeenCalled();
+  });
+
+  it('surfaces the argument hint on commands that take arguments', async () => {
+    const commands = makeCommandSource([
+      makeCommand({ name: 'review', argumentHint: '[pr-url]' }),
+    ]);
+    const { modal } = await openModal({ commands });
+    const tabs = modal.contentEl.querySelectorAll(
+      '.specorator-quick-actions-tab',
+    ) as NodeListOf<HTMLElement>;
+    tabs[2].click();
+    await new Promise((r) => setTimeout(r, 0));
+
+    // The hint copy itself (with the interpolated placeholder) is asserted in
+    // the renderer suite, whose `t` mock echoes params.
+    expect(modal.contentEl.querySelector('.specorator-quick-action-hint')).not.toBeNull();
   });
 
   it('switching to Skills tab triggers aggregator and renders skill rows', async () => {
@@ -294,11 +405,13 @@ describe('QuickActionsModal tabs', () => {
     expect(row?.classList.contains('is-provider-disabled')).toBe(true);
   });
 
-  it('renders skeleton placeholders when the cache is cold and the stream has not yielded', async () => {
-    // makeAggregator() returns no entries, so listCachedNow() yields []
-    // and listAllStreaming() never fires onProviderResolved. The new SWR
-    // design shows skeleton rows instead of an empty-state message.
-    const { modal } = await openModal();
+  it('renders skeleton placeholders while the cache is cold and the stream is still open', async () => {
+    // listCachedNow() yields [] and listAllStreaming() never settles, so the
+    // SWR design shows skeleton rows rather than a premature empty state.
+    const aggregator = makeAggregator();
+    (aggregator as unknown as { listAllStreaming: jest.Mock }).listAllStreaming
+      .mockImplementation(() => new Promise<void>(() => undefined));
+    const { modal } = await openModal({ aggregator });
     const tabs = modal.contentEl.querySelectorAll(
       '.specorator-quick-actions-tab',
     ) as NodeListOf<HTMLElement>;
@@ -309,6 +422,24 @@ describe('QuickActionsModal tabs', () => {
       '.specorator-quick-actions-skill-row.is-skeleton',
     );
     expect(skeletonRows.length).toBeGreaterThan(0);
+  });
+
+  it('replaces the skeleton with an empty state once a stream settles with nothing', async () => {
+    // A provider that genuinely has no skills used to show the skeleton
+    // forever; the settled stream now flips it to the empty-state copy.
+    const { modal } = await openModal();
+    const tabs = modal.contentEl.querySelectorAll(
+      '.specorator-quick-actions-tab',
+    ) as NodeListOf<HTMLElement>;
+    tabs[1].click();
+    await new Promise((r) => setTimeout(r, 0));
+
+    expect(
+      modal.contentEl.querySelectorAll('.specorator-quick-actions-skill-row.is-skeleton'),
+    ).toHaveLength(0);
+    expect(
+      modal.contentEl.querySelector('.specorator-quick-actions-skills-empty-lead')?.textContent,
+    ).toBe('quickActions.skills.emptyAll');
   });
 
   it('renders the Edit button when sourceFilePath is set', async () => {
@@ -549,8 +680,8 @@ describe('QuickActionsModal tabs', () => {
     const tabs = modal.contentEl.querySelectorAll(
       '.specorator-quick-actions-tab',
     ) as NodeListOf<HTMLElement>;
-    expect(tabs).toHaveLength(3);
-    tabs[2].click();
+    expect(tabs).toHaveLength(4);
+    tabs[3].click();
     await Promise.resolve();
 
     // Stats must NOT have rendered yet — modal is awaiting the warm-up.

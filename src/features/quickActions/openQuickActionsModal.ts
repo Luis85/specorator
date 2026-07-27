@@ -7,6 +7,8 @@ import type { SkillLibraryRow } from '@/features/skills/skillLibraryRows';
 import type SpecoratorPlugin from '@/main';
 import { openSpecoratorProviderSettings } from '@/utils/obsidianPrivateApi';
 
+import { createProviderCommandAggregator } from './commands/createProviderCommandAggregator';
+import { runProviderCommand } from './commands/runProviderCommand';
 import { QuickActionStorage } from './QuickActionStorage';
 import { buildProviderRecords } from './skills/buildProviderRecords';
 import { runVaultSkill } from './skills/runVaultSkill';
@@ -35,9 +37,10 @@ export interface OpenQuickActionsModalOptions {
 
 /**
  * Single construction site for the Quick Actions modal. Builds the shared
- * `QuickActionStorage`, `VaultSkillAggregator` (wired to the plugin logger),
- * and Skills-tab routing, so every modal entry point (context menu, header
- * toolbar, per-tab toolbar) gets identical wiring — no fourth-site drift.
+ * `QuickActionStorage`, `VaultSkillAggregator` + `ProviderCommandAggregator`
+ * (wired to the plugin logger), and the Skills/Commands tab routing, so every
+ * modal entry point (context menu, header toolbar, per-tab toolbar) gets
+ * identical wiring — no fourth-site drift.
  */
 export function openQuickActionsModal(
   plugin: SpecoratorPlugin,
@@ -54,14 +57,20 @@ export function openQuickActionsModal(
     () => buildProviderRecords(plugin),
     { logger: plugin.logger },
   );
+  const commands = plugin.providerCommandAggregator
+    ?? createProviderCommandAggregator(plugin, { subscribe: false });
   const file = options.file ?? null;
 
   new QuickActionsModal(plugin.app, {
     storage,
     aggregator,
+    commands,
     onRun: options.onRun,
     onRunSkill: (entry) => {
       void runVaultSkill(plugin, entry, file);
+    },
+    onRunCommand: (entry) => {
+      void runProviderCommand(plugin, entry, file);
     },
     onEditSkill: (entry) => {
       // Cursor authoring is Cursor-owned: there is no in-settings skill manager,

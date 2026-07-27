@@ -655,7 +655,8 @@
       "favoriteLimitReached": "Можно добавить до 5 быстрых действий в избранное",
       "tabs": {
         "quickActions": "Quick actions",
-        "skills": "Skills"
+        "skills": "Skills",
+        "commands": "Команды"
       }
     },
     "skills": {
@@ -668,6 +669,17 @@
       "searchPlaceholder": "Search skills by name or description…",
       "refreshTooltip": "Обновить навыки",
       "noResults": "No skills match your search."
+    },
+    "commands": {
+      "emptyAll": "Команды провайдеров не найдены.",
+      "emptyHint": "Команды поступают от провайдеров: Claude читает .claude/commands/, а подключённые CLI добавляют свои.",
+      "providerDisabled": "Провайдер «{provider}» отключён. Включите его в настройках.",
+      "disabledBadge": "отключено",
+      "searchPlaceholder": "Поиск команд по имени или описанию…",
+      "refreshTooltip": "Обновить команды",
+      "noResults": "Нет команд, соответствующих запросу.",
+      "argumentHint": "Требует аргументы {hint} — подставляется в поле ввода, а не отправляется.",
+      "queueBusy": "Чат ещё отвечает — дождитесь завершения, прежде чем запускать команду."
     },
     "editor": {
       "titleEdit": "Edit quick action",

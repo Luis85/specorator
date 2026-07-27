@@ -98,6 +98,20 @@ export function isBuiltInCommandSupported(
 }
 
 /**
+ * Whether `/<name>` would be intercepted by {@link detectBuiltInCommand} before
+ * it ever reaches a provider. Reads the SAME `commandMap` the detection uses —
+ * names AND aliases — so the two can't drift.
+ *
+ * Deliberately capability-blind: `detectBuiltInCommand` matches on name alone,
+ * so `/resume` is intercepted even on a provider without `supportsNativeHistory`.
+ * Callers asking "will this reach the provider?" need that same answer, not the
+ * narrower set `getBuiltInCommandsForDropdown` offers for display.
+ */
+export function isBuiltInCommandName(name: string): boolean {
+  return commandMap.has(name.trim().toLowerCase());
+}
+
+/**
  * Checks if input is a built-in command.
  * Returns the command and arguments if found, null otherwise.
  */
