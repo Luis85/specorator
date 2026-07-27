@@ -85,6 +85,34 @@ caches for its full 60s TTL. Both the event path and the manual `refresh()` path
 `ProviderEntryAggregator.fetchBucket` — bump on clear, and have `ensureProbed`'s `.then`
 commit only if it still holds the current token.
 
+### 2b. `invalidate()` refreshes disabled providers, and races its own refetch (#515) — REGRESSION
+
+Both introduced by `c5fb8f5`, which made `ProviderCommandAggregator.invalidate()` also call
+`commandCatalog.refresh()`. Fix these **together with issue 2** — all three are the same
+"refresh path" and a partial fix leaves one of the spawns in place.
+
+**2b-i — it spawns providers the user disabled.** The loop refreshes *every* record before the
+`shouldFetch: (record) => record.isEnabled` guard is ever consulted. `CodexSkillCatalog.refresh()`
+calls `listSkills({ forceReload: true })`, which starts a `CodexAppServerProcess`. This directly
+contradicts the invariant this PR documents for `shouldFetch` (see `features/quickActions/CLAUDE.md`,
+"Disabled providers are never asked"): merely clicking Refresh must not launch an opted-out provider.
+
+*Fix:* filter `getRecordsToRefresh` by live `record.isEnabled`.
+
+**2b-ii — it double-spawns on the enabled path.** `invalidate()` fires `refresh()` and returns,
+then the renderer immediately calls `listAllStreaming()`. `CodexSkillListingService` does not
+register force-reloads in its `pending` slot, so the foreground listing starts a *second*
+`CodexAppServerProcess` for the same refresh.
+
+*Fix:* either await the refresh before refetching, or — better, and what the fire-and-forget was
+reaching for — split **synchronous cache invalidation** from the **replacement load**, so
+`invalidate()` only drops caches and the single subsequent fetch does all the I/O. That shape also
+makes 2b-i fall out naturally, since a non-spawning invalidation is safe for any provider.
+
+> Note the pattern: the fire-and-forget `void Promise.resolve(...)` was chosen to keep
+> `invalidate()` synchronous, and it bought a race plus an enablement-guard bypass. The
+> sync/async split above is the real answer.
+
 ### 3. `/compact` routed to a blank tab compacts an empty transcript (#515)
 
 `preferActiveTab: 'always'` only helps when the active tab's provider matches. Every other
