@@ -21,6 +21,10 @@ export function useTeamChatEventRouting(subscribe: TeamChatSubscribe): void {
     store.setEditedFiles(snapshot.editedFiles);
     store.setActiveProviderId(snapshot.activeProviderId);
     store.setPresence(snapshot.presence);
+    store.setActiveModelLabel(snapshot.activeModelLabel);
+    store.setThreads(snapshot.threads);
+    store.setUnread(snapshot.unread);
+    store.setActiveDmIsEmpty(snapshot.activeDmIsEmpty);
   });
   onUnmounted(dispose);
 }

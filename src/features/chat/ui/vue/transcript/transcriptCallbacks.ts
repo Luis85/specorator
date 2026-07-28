@@ -1,6 +1,7 @@
 import type { ProviderCapabilities } from '../../../../../core/providers/types';
 import type { ChatRewindMode } from '../../../../../core/runtime/types';
 import type { ChatMessage, ImageAttachment } from '../../../../../core/types';
+import type { AgentPersona } from '../../../../agents/agentTypes';
 import type { ActiveStreamState, TranscriptHydrationError } from './stores/transcriptStore';
 
 /** One projected snapshot the view pushes on every ChatState.onMessagesChanged
@@ -20,6 +21,17 @@ export interface TranscriptSnapshot {
   loadingText: string | null;
   /** Recorded history-hydration failure banner, or null. */
   hydrationError: TranscriptHydrationError | null;
+  /**
+   * Persona to attribute this tab's ASSISTANT messages to, or null for an anonymous
+   * transcript. Only Team Chat DM tabs ever carry one (pushed by `refreshDmAgentPersonas`);
+   * every other surface projects null and so renders exactly as it did before this existed.
+   *
+   * PROJECTED, not a callback: the roster store is async, so the persona lands after mount
+   * (and again on rename / re-avatar / delete). A callback read from a render computed is
+   * untracked and would stay cached at its first value, leaving restored transcripts
+   * anonymous and renamed agents stale.
+   */
+  messageIdentity: AgentPersona | null;
 }
 
 export type TranscriptSubscribe = (onChange: (s: TranscriptSnapshot) => void) => () => void;

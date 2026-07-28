@@ -12,6 +12,7 @@ import { chooseForkTarget } from '../../../shared/modals/ForkTargetModal';
 import { getTabProviderId } from './providerResolution';
 import {
   activateTab,
+  chainTabMessagesChanged,
   createTab,
   destroyTab,
   type ForkContext,
@@ -326,17 +327,17 @@ export class TabManager implements TabManagerInterface {
         },
       });
 
-      // Provider-switch wiring shared by the Vue toolbar model picker and the
-      // slash-command catalog refresh.
+      // Provider-switch wiring shared by the Vue toolbar model picker and the slash-command catalog refresh.
       const getProviderCatalogConfig = () => this.commandCoordinator.getProviderCatalogConfig(tab);
       const onProviderChanged = (providerId: ProviderId) => {
         this.callbacks.onTabProviderChanged?.(tab.id, providerId);
         void this.commandCoordinator.prewarmProviderTab(tab).catch(() => {});
       };
 
+      const onModelChanged = () => this.callbacks.onTabModelChanged?.(tab.id);
       // Mount the Vue composer island so its element handles are registered to
       // tab.dom.* BEFORE initializeTabUI builds the context managers into them.
-      mountTabComposer(tab, this.plugin, this.view, { getProviderCatalogConfig, onProviderChanged });
+      mountTabComposer(tab, this.plugin, this.view, { getProviderCatalogConfig, onProviderChanged, onModelChanged });
       mountTabChrome(tab, this.plugin, this.view);
       initializeTabUI(tab, this.plugin, { getProviderCatalogConfig });
 
@@ -349,7 +350,7 @@ export class TabManager implements TabManagerInterface {
         () => this.commandCoordinator.getProviderCatalogConfig(tab),
       );
 
-      // Wire input event handlers
+      chainTabMessagesChanged(tab, () => this.callbacks.onTabMessagesChanged?.(tab.id));
       wireTabInputEvents(tab, this.plugin);
 
       this.tabs.set(tab.id, tab);

@@ -31,20 +31,53 @@ AND a **fresh per-leaf `TabManager`** — deliberately NOT the sidebar's singlet
 because the plugin enumerates multiple Team Chat leaves and a shared store/manager
 would let one leaf's projection overwrite another's (`ui/vue/globalPinia.ts`).
 
-- **Tree**: `TeamChatRoot` → `TeamRoster` (rows: `TeamRosterAvatar` + name/desc +
-  `PresenceDot`) + a main pane holding `TeamChatTopBar` (`TeamRosterAvatar` + voice
-  line + `EditedFilesStrip`) over an opaque tab-content host. `TeamChatRoot`
-  captures that host synchronously on mount (`CONTENT_HOST_KEY`) and calls back into
-  `initTabEngine` — same leave-me-alone content-host contract as chat's
-  `TabContentHost` (Vue owns the element, the engine `createDiv`s each DM's DOM into
-  it, no `v-for`).
-- **Read-model**: `teamChatStore` is a `shallowRef` store (`agents`,
-  `selectedAgentId`, `editedFiles`, `presence`); truth stays in
+- **Tree**: `TeamChatRoot` → `TeamRoster` (header + collapse toggle, `TeamRosterToolbar`
+  search/sort, `TeamRosterRow`s, `TeamRosterEmpty`) + `TeamRailSeparator` + a main pane
+  holding `TeamChatTopBar` (avatar+`PresenceDot` + voice line + model/provider chips +
+  `EditedFilesStrip` + overflow menu), `TeamChatStarters`, `TeamChatEmptyPane`, and an
+  opaque tab-content host. `TeamChatRoot` captures that host synchronously on mount
+  (`CONTENT_HOST_KEY`) and calls back into `initTabEngine` — same leave-me-alone
+  content-host contract as chat's `TabContentHost` (Vue owns the element, the engine
+  `createDiv`s each DM's DOM into it, no `v-for`). The DM-switch fade is therefore
+  replayed by re-adding a class (`replayDmTransition`), never by keying the host: a
+  `:key` bump would strand the tab engine on a detached node.
+- **Read-model**: `teamChatStore` is a `shallowRef` store (`agents`, `selectedAgentId`,
+  `editedFiles`, `presence`, `activeModelLabel`, `threads`, `unread`, `activeDmIsEmpty`, plus
+  the per-leaf `railCollapsed`/`railWidth`); truth stays in
   `plugin.agentRosterStore` + the tab engine. `useTeamChatEventRouting` subscribes
   SYNCHRONOUSLY during setup (a restore-time emit fired inside the root's
   `onMounted` must not be dropped) and fans the view's `TeamChatSnapshot` into the
   setters. The view is the single writer, projecting on every change
   (`emitTeamChatChange`).
+- **`selectAgent` re-projects once AFTER its open resolves.** `restoreConversation` sets
+  `currentConversationId` BEFORE assigning `state.messages`, and that assignment re-emits only
+  the transcript — so the tab-conversation callback's snapshot froze `activeDmIsEmpty: true`
+  for a hydrating DM and nothing refreshed it, stacking the starters card above a populated
+  transcript. The trailing emit is deliberately UNGUARDED by the staleness check: a superseded
+  or torn-down selection just re-reads live state (a null manager projects an empty snapshot),
+  so there is nothing stale to publish. Any future post-open state that only the engine writes
+  is covered by the same emit.
+- **The first turn clears the starter card through `onTabMessagesChanged`.**
+  `beginStreamingTurnState` flips `isStreaming` BEFORE `presentOutgoingTurn` appends the user
+  and assistant messages, so the streaming-callback snapshot still read the DM as EMPTY — the
+  greeting and starter buttons stayed stacked above the live first turn for the whole response.
+  `chainTabMessagesChanged` wraps the transcript re-projection the tab controllers install and
+  adds a host notification, so any host rendering something derived from the message list gets
+  its own signal. The transcript re-projects FIRST, so the host reads a settled projection.
+- **A composer model pick re-projects through `onTabModelChanged`.** The top bar renders the
+  DM's model, but a SAME-provider pick fires no `onTabProviderChanged` and re-projects only
+  the composer — so the chip kept the previous model until an unrelated event landed, showing
+  two different active models at once. `mountTabComposer` fires the new hook AFTER the model
+  write settles (the write is async; notifying eagerly would hand back the old settings) and
+  fires it on failure too, since a partially-applied pick with a stale chip is the worse
+  outcome. It is optional on `TabManagerCallbacks`: `SpecoratorView` renders no model chip.
+- **Transcript attribution follows VISIBILITY, not `role`.** `MessageList` gives the
+  run-opening identity header to the first assistant record that actually RENDERS: restored
+  history can carry an empty assistant boundary record right before the real response, and
+  handing it the header left the whole visible reply looking like a continuation — anonymous.
+  An invisible record neither opens a run nor breaks one. The predicate
+  (`rendersMessageBubble`) is shared with `MessageBubble`, so the list and the bubble can
+  never disagree about what the reader sees.
 - **`selectedAgentId` is a PURE PROJECTION of the active tab** — derived from the
   active DM's `boundAgentId` in `projectSelectedAgentFromActiveTab`
   (`TeamChatView.ts:207`), never set optimistically. So the roster highlight and the
@@ -115,6 +148,20 @@ reaches `{ leaf, getTabManager() }`, so a second host is reuse, not a fork.
   reuse gate disagree with what creation built).
 - **`createTeamChatDmConversation`** — provider-first DM creation (above).
 - **`teamChatPresence`** — the idle/busy projection.
+- **`teamChatThreadMeta`** — the roster's per-agent DM projection: last-message preview
+  (the TAIL message, not `ConversationStore`'s first-user-message `preview`, which is the
+  right answer for a history dropdown and the wrong one for a DM list), activity timestamp,
+  and the unread derivation. Pure + synchronous — it runs inside the snapshot projection on
+  every stream frame, so an unmapped/unloaded conversation is omitted, never awaited.
+- **`teamChatDmActions`** — the island's engine ACTIONS (close a DM, fill the composer from a
+  starter, read the thread map, clamp the rail width), kept out of the view.
+- **`teamChatCallbacksFactory`** — builds `TeamChatCallbacks` from a narrow host interface
+  (never imports the view, so no cycle), plus the untrusted-view-state rail-geometry reader.
+- **`teamChatLeafSubscriptions`** — every leaf subscription (presence, roster, thread remaps,
+  hydration banner, DM host events) behind ONE dispose+recreate handle, so a re-entrant
+  `onOpen` can't leak a listener pointing at the previous mount.
+- **`teamChatLeafLifecycle`** — the re-entrant-remount teardown and the Vue island mount.
+- **`teamChatRestoreCompletion`** — the ordered post-restore publish step.
 - **`activateTeamChat`** — reveal-or-open the main-area leaf (mirrors
   `activateLibrary`); `loadIfDeferred` before an optional `selectAgent(agentId)`.
 
@@ -192,6 +239,143 @@ reaches `{ leaf, getTabManager() }`, so a second host is reuse, not a fork.
   `getState()` / `setState()`, round-tripped through Obsidian view state. It NEVER
   writes the global `persistTabManagerState()` slot (the sidebar's fallback), so two
   Team Chat leaves can't clobber each other or the sidebar's restore.
+- **Unread is a per-leaf, in-memory ACTIVITY signal, not a read model.** An agent is unread
+  when its thread advanced past this leaf's last-seen stamp (`updateSeenBaseline` seeds every
+  newly observed agent — so leaf-open means "everything so far is seen" — and re-stamps the
+  ACTIVE agent every frame, so watching a DM stream and then switching away never marks it
+  unread). It resets on close: losing a badge across a restart beats persisting a wrong one,
+  and it needs no new file. A dot, never a count — a count would imply per-message tracking.
+- **Transcript attribution is PUSHED through the projection, never pulled.** `messageIdentity`
+  is a `TranscriptSnapshot` field (an engine-pushed transient like `greeting`), set by
+  `refreshDmAgentPersonas` via `TabTranscriptProjection.setMessageIdentity(persona,
+  conversationId)` and driven off `projectSelectedAgentFromActiveTab` — the one event meaning
+  "a tab's conversation binding changed". Pushed, because the roster store is ASYNC: the
+  persona lands AFTER the transcript mounts (and again on rename / re-avatar / delete), and a
+  callback read from a render computed is untracked, so it would cache its first (null) value
+  and leave restored transcripts anonymous and renamed agents stale. The projection keys the
+  persona by conversation id, so a rotation invalidates it rather than attributing the fresh
+  thread to the previous agent; a deleted agent pushes null (the DM renders anonymously rather
+  than over a name that no longer exists). Consecutive assistant messages group under one
+  header, computed against the FULL message list so a "load earlier" can't grow a spurious
+  header at the window edge. Non-team-chat surfaces project null and so are byte-identical —
+  locked by `tests/vue/chat/transcript/messageIdentity.test.ts`.
+- **An empty DM shows ONE greeting.** The transcript's shared `WelcomeBanner` renders on
+  exactly the same condition as `TeamChatStarters` (`messages.length === 0`), so the
+  time-of-day greeting is suppressed on this surface (`greetingForSurface`) and the
+  agent-specific starters card is the empty state.
+- **The rail is a listbox, not a row of buttons.** One tab stop with a roving tabindex;
+  arrows move FOCUS and Enter/Space commits, because each open resolves a thread, spawns a
+  runtime, and consumes an LRU slot — select-follows-focus would be destructive here. Focus
+  is tracked by AGENT ID and the index derived, because the default `recent` order re-sorts
+  on every `conversation:saved`: an index would silently re-point at whichever agent slid
+  into that slot, so the focused row lost `tabindex="0"` and Enter opened the wrong DM.
+- **A leaf reporting width 0 is IGNORED — the observer returns before touching the store.**
+  `0` means "not measured yet" (a deferred/hidden leaf, or jsdom), never "wide". Folding it
+  into the narrow boolean read as equivalent but wasn't: reporting `false` is a threshold
+  CROSSING for a narrow leaf, so the rail flipped open while hidden and the crossing discarded
+  the user's in-session expand-override — the next real measurement then re-collapsed a rail
+  they had deliberately opened. Covered end-to-end through a stubbed `ResizeObserver`
+  (`tests/vue/teamChat/railResizeObserver.test.ts`), since the bug was at the CALL SITE and a
+  store-level test would have passed either way.
+- **Collapsed is EFFECTIVE (`railIsCollapsed`), never the raw preference.** The root sizes the
+  grid track from it while `TeamRoster` decides what to render; branching on `railCollapsed`
+  alone left a narrow leaf rendering expanded rows clipped inside a 56px track. `railNarrow`
+  (layout) is intentionally not exposed — only the derived value and its setter are — so no
+  component can reintroduce that split. The toggle derives its new value from the EFFECTIVE
+  state too: while narrow the button reads "Expand", and inverting the stored preference
+  (still false) would persist `collapsed: true` — leaving the rail collapsed once the pane
+  widens, the opposite of the action taken.
+- **Expanding a narrow-forced rail needs `railNarrowOverride`, not just the preference.**
+  Persisting the right preference was necessary but not sufficient: `railNarrow` still forced
+  the icon rail, so "Expand" was a button that visibly did nothing and the rail's search and
+  row menus stayed unreachable until the user resized the pane. `store.toggleRail()` owns the
+  flip — it clears BOTH gates when expanding and returns the preference to persist — and the
+  override is layout state, never persisted, cleared by `setRailNarrow` on any threshold
+  crossing so the width-driven default re-asserts on the next resize. `setRailNarrow` also
+  takes the MEASURED width, because the boolean alone cannot tell a pane that merely stayed
+  narrow from one that kept shrinking: an override taken at ~700px otherwise survived all the
+  way down, leaving a 260px rail in a 400px pane. It is dropped once
+  `leafWidth - railWidth < MIN_TRANSCRIPT_WIDTH` — a bound that tracks the user's own rail
+  width rather than a second hardcoded breakpoint. The same check runs from `setRailWidth`,
+  because the other way to squeeze the transcript is dragging the SEPARATOR: the root's own
+  width never changes, so no `ResizeObserver` callback ever fires.
+- **The rail's ceiling is DYNAMIC (`fitRailWidth`), not just `MAX_RAIL_WIDTH`.** 420px was a
+  half-screen ceiling, not a guarantee: a 721px leaf never trips `railNarrow` at all, so
+  nothing in the override machinery was consulted and a 420px rail left the transcript ~300px.
+  Every width now clamps to `leafWidth - MIN_TRANSCRIPT_WIDTH`, on drag AND on measurement, so
+  a shrinking leaf re-fits an over-wide rail. `MIN_RAIL_WIDTH` still wins at the bottom: below
+  `MIN_RAIL_WIDTH + MIN_TRANSCRIPT_WIDTH` no width works and `dropOverrideIfCramped` collapses
+  to the icon rail instead. The fit is REVERSIBLE because it is DERIVED, not assigned:
+  `preferredRailWidth` holds what the user chose and `railWidth` is
+  `computed(() => fitRailWidth(preferred))`. Writing the fit back over the single width made it
+  lossy — a 420px rail squeezed by a 721px leaf became 401px permanently, so widening again
+  could never restore it. Both persistence call sites write the PREFERENCE, never the fit.
+- **A user-initiated DM close is NON-FORCED and resolved CROSS-LEAF.** `closeTeamChatDmTab`
+  forces by default (eviction and rotation must close regardless of state), but the menu
+  action passes `force: false` so `closeTabImpl` re-checks `isStreaming` INSIDE
+  `runTabMutation`: the caller's pre-check is stale once the close queues behind another tab
+  mutation. It also resolves the owning tab through `findConversationAcrossViews`, not the
+  clicking leaf's own manager — the open coordinator single-mounts each DM and reveals it
+  wherever it lives, so a same-leaf lookup silently no-ops on a DM mounted in another leaf.
+- **An EMPTY thread projects zero activity.** `createConversation` stamps `updatedAt` with the
+  creation time, so a provider rotation's fresh replacement would otherwise read as brand-new
+  activity — showing `now` and, for an already-seeded agent, an unread badge on a DM nobody
+  has typed into. (`deriveUnreadAgents`'s "empty threads are never unread" rule only holds
+  because the projection reports 0.)
+- **A non-empty thread's activity is the LATER of `lastResponseAt` and its newest message
+  stamp**, not `lastResponseAt` alone. A CANCELLED turn saves with `updateLastResponse=false`
+  (the partial content must not be claimed as a finished response), so the messages advance
+  while `lastResponseAt` stays put — the row showed the cancelled turn's text under the
+  PREVIOUS turn's timestamp and stayed frozen in the `recent` sort. `updatedAt` remains the
+  last resort, for a legacy record whose messages predate per-message stamps.
+- **Switching AWAY from a DM marks it seen through NOW** (`updateSeenBaseline`'s
+  `activeAgentTracker`), not through its stored activity. A turn finishing while you watch
+  commits `lastResponseAt` asynchronously: `onTabStreamingChanged` fires and stamps the OLD
+  value, then `save()` stamps `Date.now()` — always later than the response you already read.
+  Switching inside that window made the `conversation:saved` re-projection light an unread
+  badge on the DM you had just finished reading. The stamp doesn't blunt the signal: activity
+  arriving after you leave still post-dates it. It never SEEDS an unstamped agent, which
+  would defeat the first-observation rule, and it never stamps BELOW what is already seen or
+  projected — a synced record can carry a timestamp ahead of this device's clock (Obsidian
+  Sync from a machine with skew), and a bare `Date.now()` would then stamp the departing DM
+  behind activity the user had just read.
+- **The roster's preview/timestamp read the STORED conversation, so they refresh on
+  `conversation:saved`.** The projection also fires from `onTabStreamingChanged`, which runs
+  BEFORE `ConversationController.save()` commits the turn, so without that subscription the
+  rail sat one turn behind (`conversation:renamed` is not a substitute — it only fires when
+  the title changes). Deliberately not read from the open tab's `ChatState.messages`: that
+  getter COPIES, and the projection runs per stream frame for every mapped agent.
+- **Row keystrokes belong to the focused control.** The listbox handler ignores keydowns
+  originating in an interactive descendant; without that, Enter/Space on a row's `⋯` button
+  bubbled up, got `preventDefault`ed, and opened the DM — making the keyboard-reachable action
+  menu unreachable by keyboard. The check is `nodeType`-based, NOT `instanceof Element`: a
+  popout leaf's nodes come from another realm's constructors and would fail `instanceof`,
+  silently reinstating the bug in exactly the window this codebase already guards elsewhere.
+- **The KEYBOARD menu anchor carries the row's `ownerDocument`.** A bare `{x, y}` is
+  window-ambiguous: `showAtPosition` resolves it against the MAIN window's document, so in an
+  Obsidian popout the menu opened in the wrong window (or off-viewport) from coordinates
+  measured in the popout. The pointer branch needs no hint — the event carries its realm.
+- **Detached menu actions log their rejections.** `onCloseDm`/`onEditAgent` are
+  fire-and-forget from Vue's side, but their engine work is async and can genuinely fail (a
+  thread-map read, a tab persist/destroy, a workspace activate). Under a bare `void` that was
+  both an unhandled promise and a menu click that silently did nothing, so both route through
+  the factory's `detach` helper — the behavior `openAgentDm` already had.
+  (`showAgentActionMenu`'s anchor discriminator is duck-typed on `preventDefault` for the
+  same reason — and NOT on `'x' in anchor`, since a `MouseEvent` carries `x`/`y` aliases.)
+- **The `⋯` button is never in the tab order** (`tabindex="-1"`, always). The listbox is one
+  tab stop, and a focusable descendant would make the focused row two — the composite-widget
+  rule. The keyboard route to the same menu is a row-level Shift+F10 / ContextMenu gesture,
+  anchored to the focused row's box.
+- **The top bar's model chip resolves its LABEL, not just the value.** It goes through
+  `getComposerToolbarSettings` AND the provider's `getModelOptions()`, mirroring
+  `tabComposer.ts:105`; resolving only the value still rendered a raw id beside a composer
+  showing the friendly name — two names for one model in a single pane.
+- **Relative timestamps ride a shared, ref-counted clock** (`useRelativeClock`). `Date.now()`
+  inside a computed is not reactive, so a row labelled `now` would stay `now` indefinitely;
+  one module-level interval serves every mounted row and stops with the last subscriber.
+- **Both action menus share `showAgentActionMenu`**, so the roster row and the top bar can't
+  drift about what a DM offers — or, more importantly, what it must NOT: fork, new session,
+  and `/clear` are surface-gated off and must never reappear as a menu "convenience".
 - **Avatars are image-first.** `TeamRosterAvatar` renders through the shared
   `renderAgentAvatar` (`avatarImage` → emoji → icon → initials → default,
   `agentAvatar.ts:37`); a missing/renamed image falls through so it never blanks the
@@ -207,12 +391,29 @@ reaches `{ leaf, getTabManager() }`, so a second host is reuse, not a fork.
 ## Tests
 
 `tests/unit/features/teamChat/` (thread store + factory, open coordinator, DM
-tabs/LRU/rotation, presence, and the view's `selectAgent`/refresh/lifecycle paths)
-and `tests/vue/teamChat/` (roster select, top bar — identity + provider chip +
-edited-files strip, presence, view mount).
+tabs/LRU/rotation, presence, thread-meta preview/unread derivation, roster sort +
+relative time, and the view's `selectAgent`/refresh/lifecycle paths) and
+`tests/vue/teamChat/` (roster select, rail search/sort/preview/unread/keyboard/menu/
+collapse/resize, top bar identity + presence + model chip + overflow menu, empty states
+and starters, presence, view mount — shared fixtures in `fixtures.ts`). Transcript
+attribution lives in `tests/vue/chat/transcript/messageIdentity.test.ts`.
 
 ## Known limitations
 
+- **A mapped DM that isn't open shows the agent description, not its last message, until
+  first opened.** `ConversationStore.loadConversations()` restores every conversation with
+  `messages: []` and Team Chat pre-warms only the tabs it restores, so a closed or
+  LRU-trimmed DM reaches `projectThreadMetas` with a valid conversation and no messages. The
+  row still carries the correct relative timestamp — but only because `activityTimestamp`
+  falls back to the record's persisted `lastResponseAt` for an EMPTY thread rather than
+  reporting 0. Empty is not the same as new: without that fallback every mapped-but-unopened
+  DM read as never-active after a restart and the whole rail dropped into name order. A
+  genuinely fresh replacement is still 0, since it has no `lastResponseAt` until its first
+  turn saves. The description is the same fallback a never-messaged agent shows, so the
+  missing PREVIEW degrades gracefully.
+  Closing it needs either a persisted last-message preview in the session metadata schema or
+  an async hydration pass over mapped-but-closed threads — both beyond a UX pass; deferred
+  pending a decision.
 - **Spurious LRU eviction under a rare full-budget race.** When the hot-DM budget
   is full and a new-agent selection's eviction is mid-flight (the victim's async
   save/close), a second click on an ALREADY-OPEN DM supersedes the first: the first

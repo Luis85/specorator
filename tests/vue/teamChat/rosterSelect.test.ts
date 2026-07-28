@@ -1,11 +1,10 @@
-import { fireEvent, render, screen } from '@testing-library/vue';
+import { fireEvent, screen } from '@testing-library/vue';
 import { createPinia, setActivePinia } from 'pinia';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import type { RosterAgent } from '@/features/agents/roster/rosterTypes';
-import { CALLBACKS_KEY, CONTENT_HOST_KEY, PLUGIN_KEY } from '@/features/teamChat/ui/vue/keys';
-import TeamChatRoot from '@/features/teamChat/ui/vue/TeamChatRoot.vue';
 import { t } from '@/i18n/i18n';
+
+import { agent, awaitRoster, makeCallbacks, makePlugin, mountRoot, rosterRow } from './fixtures';
 
 // Avatar rendering is imperative (setIcon/createSpan); stub it so the assertions
 // are about row interaction, not avatar internals.
@@ -18,48 +17,6 @@ vi.mock('@/features/marketplace/activateMarketplace', () => ({
   activateMarketplace: activateMarketplaceMock,
 }));
 
-function agent(id: string, name: string): RosterAgent {
-  return {
-    id, name, description: 'desc',
-    prompt: '', disallowedTools: [], skills: [],
-    roles: ['worker'], createdAt: 1, updatedAt: 2,
-  };
-}
-
-function makePlugin(agents: RosterAgent[]) {
-  return {
-    agentRosterStore: { list: vi.fn().mockResolvedValue(agents) },
-    events: { on: vi.fn(() => vi.fn()) },
-    logger: { scope: () => ({ error: vi.fn() }) },
-  } as never;
-}
-
-function makeCallbacks() {
-  return { subscribe: vi.fn(() => vi.fn()), onSelectAgent: vi.fn() };
-}
-
-function mountRoot(plugin: unknown, callbacks: unknown) {
-  const pinia = createPinia();
-  setActivePinia(pinia);
-  return render(TeamChatRoot, {
-    global: {
-      plugins: [pinia],
-      provide: {
-        [PLUGIN_KEY as symbol]: plugin,
-        [CALLBACKS_KEY as symbol]: callbacks,
-        [CONTENT_HOST_KEY as symbol]: vi.fn(),
-      },
-    },
-  });
-}
-
-function rowFor(name: string): HTMLElement {
-  const label = screen.getByText(name);
-  const row = label.closest('.specorator-team-roster-row');
-  if (!row) throw new Error(`no roster row for ${name}`);
-  return row as HTMLElement;
-}
-
 describe('TeamRoster (Phase 4b: interactive roster → DM)', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -69,9 +26,9 @@ describe('TeamRoster (Phase 4b: interactive roster → DM)', () => {
   it('fires onSelectAgent(agentId) when a roster row is clicked', async () => {
     const callbacks = makeCallbacks();
     mountRoot(makePlugin([agent('roster:a', 'Ada')]), callbacks);
-    await screen.findByText('Ada');
+    await awaitRoster();
 
-    await fireEvent.click(rowFor('Ada'));
+    await fireEvent.click(await rosterRow('Ada'));
 
     expect(callbacks.onSelectAgent).toHaveBeenCalledWith('roster:a');
   });
@@ -79,8 +36,8 @@ describe('TeamRoster (Phase 4b: interactive roster → DM)', () => {
   it('fires onSelectAgent on Enter and Space for keyboard access', async () => {
     const callbacks = makeCallbacks();
     mountRoot(makePlugin([agent('roster:a', 'Ada')]), callbacks);
-    await screen.findByText('Ada');
-    const row = rowFor('Ada');
+    await awaitRoster();
+    const row = await rosterRow('Ada');
 
     await fireEvent.keyDown(row, { key: 'Enter' });
     await fireEvent.keyDown(row, { key: ' ' });
@@ -89,12 +46,25 @@ describe('TeamRoster (Phase 4b: interactive roster → DM)', () => {
     expect(callbacks.onSelectAgent).toHaveBeenNthCalledWith(2, 'roster:a');
   });
 
-  it('exposes each row as a keyboard-focusable button for a11y', async () => {
+  // listbox/option, not button rows: "pick one of N, the pane shows the pick" is what a
+  // listbox announces, and it makes the selected row read as selected rather than pressed.
+  it('exposes the roster as a listbox of options', async () => {
     mountRoot(makePlugin([agent('roster:a', 'Ada')]), makeCallbacks());
-    await screen.findByText('Ada');
-    const row = rowFor('Ada');
-    expect(row.getAttribute('role')).toBe('button');
-    expect(row.getAttribute('tabindex')).toBe('0');
+    await awaitRoster();
+    const row = await rosterRow('Ada');
+    expect(row.getAttribute('role')).toBe('option');
+    expect(row.closest('[role="listbox"]')).toBeTruthy();
+  });
+
+  // Roving tabindex: the whole rail is ONE tab stop, so a 20-agent team isn't 20 stops
+  // before the composer.
+  it('makes exactly one row tabbable', async () => {
+    mountRoot(makePlugin([agent('roster:a', 'Ada'), agent('roster:b', 'Bo')]), makeCallbacks());
+    await awaitRoster();
+
+    const tabbable = [await rosterRow('Ada'), await rosterRow('Bo')].filter((row) => row.getAttribute('tabindex') === '0');
+
+    expect(tabbable).toHaveLength(1);
   });
 
   it('subscribes the store projection seam exactly once on mount', () => {
@@ -106,7 +76,7 @@ describe('TeamRoster (Phase 4b: interactive roster → DM)', () => {
   it('does not open any DM on mere render (interaction is click/keyboard only)', async () => {
     const callbacks = makeCallbacks();
     mountRoot(makePlugin([agent('roster:a', 'Ada')]), callbacks);
-    await screen.findByText('Ada');
+    await awaitRoster();
     expect(callbacks.onSelectAgent).not.toHaveBeenCalled();
   });
 });
@@ -137,7 +107,7 @@ describe('TeamRoster empty-roster Marketplace CTA (Round-43)', () => {
 
   it('does not render the CTA once the roster has agents', async () => {
     mountRoot(makePlugin([agent('roster:a', 'Ada')]), makeCallbacks());
-    await screen.findByText('Ada');
+    await awaitRoster();
     expect(screen.queryByRole('button', { name: t('teamChat.rosterEmptyCta') })).toBeNull();
   });
 });

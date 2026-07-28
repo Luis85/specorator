@@ -13,6 +13,11 @@ import type { TaskEventMap } from '../../features/tasks/events';
 export interface TeamChatEventMap {
   /** The team-chat thread map (roomKey → conversationId) changed. */
   'teamChat:threads-changed': void;
+  /** A conversation's metadata write committed. Fires once per save (turn end), NOT per
+   *  chunk, so surfaces projecting off stored conversation data can refresh without
+   *  polling. `conversation:renamed` is not a substitute — it only fires when the TITLE
+   *  changes, so an ordinary turn emits nothing. */
+  'conversation:saved': { conversationId: string };
   /** A DM's streaming state changed in some leaf; every Team Chat leaf re-projects
    *  presence so an agent busy in ANOTHER leaf's DM shows busy here too. */
   'teamChat:presence': void;

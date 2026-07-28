@@ -23,7 +23,14 @@ function makeView(overrides: { leaf?: unknown; plugin?: Record<string, unknown> 
     logger: { scope: () => ({ error: jest.fn() }) },
     app: { workspace: { revealLeaf: jest.fn().mockResolvedValue(undefined) } },
     findConversationAcrossViews: jest.fn(() => null),
-    getTeamChatThreadStore: jest.fn(() => ({ get: jest.fn().mockResolvedValue(null), resolveOrCreate: jest.fn().mockResolvedValue('conv-1') })),
+    getTeamChatThreadStore: jest.fn(() => ({ get: jest.fn().mockResolvedValue(null), resolveOrCreate: jest.fn().mockResolvedValue('conv-1'), listAgentThreads: jest.fn().mockResolvedValue({}) })),
+    // Defaults (overridable): the open path now also seeds each DM tab's transcript
+    // attribution, which reads the conversation + the roster store.
+    getConversationSync: jest.fn(() => null),
+    agentRosterStore: { get: jest.fn().mockResolvedValue(null) },
+    // The post-open re-project builds a full snapshot, whose presence slice enumerates
+    // every leaf's tabs (this fake wraps its own manager, like TeamChatView.test's).
+    getAllViews: () => [{ getTabManager: () => view.tabManager }],
     ...overrides.plugin,
   };
   view.contentEl = createMockEl();
@@ -35,6 +42,9 @@ function makeView(overrides: { leaf?: unknown; plugin?: Record<string, unknown> 
   view.tabsRestored = true;     // these flows assume a restored engine (Round-29 gate)
   view.teamChatObservers = new Set();
   view.openingConversationIds = new Set(); // Round-66: widened opening/restoring id set (Object.create skips field initializers)
+  view.agentThreads = {};                  // ditto — the roster preview/timestamp source
+  view.lastSeenByAgent = new Map();        // ditto — the per-leaf unread baseline
+  view.railGeometry = { collapsed: false, width: 260 }; // ditto — the per-leaf rail chrome
   return view;
 }
 
@@ -70,7 +80,7 @@ describe('TeamChatView.selectAgent — resolve → cross-view reuse / create', (
         findConversationAcrossViews: jest.fn(() => null),
       },
     });
-    view.tabManager = { createTab, switchToTab: jest.fn() };
+    view.tabManager = { getActiveTab: jest.fn(() => null), getAllTabs: jest.fn(() => []), createTab, switchToTab: jest.fn() };
     view.tabsRestored = false; // restore still in flight (manager already built)
 
     await view.selectAgent('roster:a');
@@ -93,6 +103,8 @@ describe('TeamChatView.selectAgent — resolve → cross-view reuse / create', (
     // Bare jest.fns that do NOT fire the manager's onTabCreated/onTabSwitched, so
     // nothing projects a selection during this open.
     view.tabManager = {
+      getActiveTab: jest.fn(() => null),
+      getAllTabs: jest.fn(() => []),
       createTab: jest.fn().mockResolvedValue({ id: 'tab-1' }),
       switchToTab: jest.fn(),
     };
@@ -100,9 +112,40 @@ describe('TeamChatView.selectAgent — resolve → cross-view reuse / create', (
     await view.selectAgent('roster:z');
 
     // Selection stays null: it is a projection of the active tab (written by the
-    // engine's tab callbacks), never an optimistic write inside selectAgent.
+    // engine's tab callbacks), never an optimistic write inside selectAgent. Asserted on
+    // the PROJECTED value, not on "no emit": selectAgent now re-projects once after the
+    // open resolves (so a hydrated DM's `activeDmIsEmpty` is fresh), and that emit must
+    // still carry the unchanged selection.
     expect(view.selectedAgentId).toBeNull();
-    expect(observer).not.toHaveBeenCalled();
+    for (const [snapshot] of observer.mock.calls) expect(snapshot.selectedAgentId).toBeNull();
+  });
+
+  // Round-67: `restoreConversation` sets `currentConversationId` BEFORE assigning
+  // `state.messages`, and the message assignment re-emits only the transcript — so the
+  // tab-conversation callback's snapshot froze `activeDmIsEmpty: true` and nothing
+  // refreshed it, leaving the starters card stacked above a populated transcript.
+  it('re-projects AFTER the open resolves, so a hydrated DM drops its starters card', async () => {
+    const observer = jest.fn();
+    const view = makeView();
+    // The tab hydrates DURING createTab: empty at mount, populated once the open settles.
+    const tab: any = { id: 'tab-1', conversationId: 'conv-1', state: { messages: [], isStreaming: false } };
+    view.tabManager = {
+      getActiveTab: jest.fn(() => tab),
+      getAllTabs: jest.fn(() => [tab]),
+      createTab: jest.fn(async () => {
+        view.teamChatObservers.forEach((o: any) => o(view.buildSnapshot())); // the mid-open callback emit
+        tab.state.messages = [{ id: 'm1', role: 'user', content: 'hi' }];
+        return tab;
+      }),
+      switchToTab: jest.fn(),
+    };
+    view.teamChatObservers = new Set([observer]);
+
+    await view.selectAgent('roster:a');
+
+    const emitted = observer.mock.calls.map(([snapshot]) => snapshot.activeDmIsEmpty);
+    expect(emitted).toContain(true);              // the stale mid-open projection still happens…
+    expect(emitted[emitted.length - 1]).toBe(false); // …but the post-open re-project corrects it
   });
 
   it('reuses a DM already open in THIS view via a LOCAL switchToTab (no createTab)', async () => {
@@ -120,7 +163,7 @@ describe('TeamChatView.selectAgent — resolve → cross-view reuse / create', (
         })),
       },
     });
-    view.tabManager = { createTab, switchToTab };
+    view.tabManager = { getActiveTab: jest.fn(() => null), getAllTabs: jest.fn(() => []), createTab, switchToTab };
 
     await view.selectAgent('roster:a');
 
@@ -145,7 +188,7 @@ describe('TeamChatView.selectAgent — resolve → cross-view reuse / create', (
         })),
       },
     });
-    view.tabManager = { createTab, switchToTab: localSwitch };
+    view.tabManager = { getActiveTab: jest.fn(() => null), getAllTabs: jest.fn(() => []), createTab, switchToTab: localSwitch };
 
     await view.selectAgent('roster:b');
 
@@ -163,7 +206,7 @@ describe('TeamChatView.selectAgent — resolve → cross-view reuse / create', (
         findConversationAcrossViews: jest.fn(() => null),
       },
     });
-    view.tabManager = { createTab, switchToTab: jest.fn() };
+    view.tabManager = { getActiveTab: jest.fn(() => null), getAllTabs: jest.fn(() => []), createTab, switchToTab: jest.fn() };
 
     await view.selectAgent('roster:c');
 
@@ -185,7 +228,7 @@ describe('TeamChatView.selectAgent — resolve → cross-view reuse / create', (
         findConversationAcrossViews: jest.fn(() => null),
       },
     });
-    view.tabManager = { createTab, switchToTab: jest.fn() };
+    view.tabManager = { getActiveTab: jest.fn(() => null), getAllTabs: jest.fn(() => []), createTab, switchToTab: jest.fn() };
 
     await view.selectAgent('roster:a');
 
@@ -200,7 +243,7 @@ describe('TeamChatView.selectAgent — resolve → cross-view reuse / create', (
         findConversationAcrossViews: jest.fn(() => null),
       },
     });
-    view.tabManager = { createTab: jest.fn().mockRejectedValue(new Error('create boom')), switchToTab: jest.fn() };
+    view.tabManager = { getActiveTab: jest.fn(() => null), getAllTabs: jest.fn(() => []), createTab: jest.fn().mockRejectedValue(new Error('create boom')), switchToTab: jest.fn() };
 
     await expect(view.selectAgent('roster:a')).rejects.toThrow('create boom');
 
@@ -228,7 +271,11 @@ describe('TeamChatView.selectAgent — resolve → cross-view reuse / create', (
     view.tabManager = {
       createTab,
       switchToTab: jest.fn(),
-      getAllTabs: jest.fn(() => [{ id: 'tab-1', conversationId: 'conv-1' }, { id: 'tab-2', conversationId: 'conv-2' }]),
+      getAllTabs: jest.fn(() => [
+        { id: 'tab-1', conversationId: 'conv-1', state: { isStreaming: false } },
+        { id: 'tab-2', conversationId: 'conv-2', state: { isStreaming: false } },
+      ]),
+      getActiveTab: jest.fn(() => null),
       getActiveTabId: jest.fn(() => 'tab-2'),
       closeTab,
     };
@@ -260,7 +307,11 @@ describe('TeamChatView.selectAgent — resolve → cross-view reuse / create', (
     view.tabManager = {
       createTab,
       switchToTab: jest.fn(),
-      getAllTabs: jest.fn(() => [{ id: 'tab-1', conversationId: 'conv-1' }, { id: 'tab-2', conversationId: 'conv-2' }]),
+      getAllTabs: jest.fn(() => [
+        { id: 'tab-1', conversationId: 'conv-1', state: { isStreaming: false } },
+        { id: 'tab-2', conversationId: 'conv-2', state: { isStreaming: false } },
+      ]),
+      getActiveTab: jest.fn(() => null),
       getActiveTabId: jest.fn(() => 'tab-2'),
       closeTab,
     };
@@ -311,6 +362,7 @@ describe('TeamChatView.selectAgent — resolve → cross-view reuse / create', (
       closeTab,
       switchToTab: jest.fn(),
       getAllTabs: () => tabs.slice(),
+      getActiveTab: jest.fn(() => null),
       getActiveTabId: () => 'tab-2',
     };
     const view = makeView({
@@ -371,13 +423,17 @@ describe('TeamChatView.selectAgent — resolve → cross-view reuse / create', (
     const createTabB = jest.fn();
     const viewA = makeView({ leaf: leafA });
     const viewB = makeView({ leaf: leafB });
-    viewA.tabManager = { createTab: createTabA, switchToTab: switchA };
-    viewB.tabManager = { createTab: createTabB, switchToTab: jest.fn() };
+    viewA.tabManager = { getActiveTab: jest.fn(() => null), getAllTabs: jest.fn(() => []), createTab: createTabA, switchToTab: switchA };
+    viewB.tabManager = { getActiveTab: jest.fn(() => null), getAllTabs: jest.fn(() => []), createTab: createTabB, switchToTab: jest.fn() };
     // ONE shared plugin object → both leaves resolve the SAME DM-open coordinator
     // (it is WeakMap-keyed by plugin).
     const sharedPlugin = {
       logger: { scope: () => ({ error: jest.fn() }) },
       app: { workspace: { revealLeaf } },
+      getAllViews: () => [
+        { getTabManager: () => viewA.tabManager },
+        { getTabManager: () => viewB.tabManager },
+      ],
       getTeamChatThreadStore: () => ({ get: jest.fn().mockResolvedValue(null), resolveOrCreate: jest.fn().mockResolvedValue('conv-1') }),
       findConversationAcrossViews: jest.fn(() =>
         createdTabId
@@ -417,6 +473,8 @@ describe('TeamChatView.selectAgent — resolve → cross-view reuse / create', (
     });
     view.pendingPersist = null;
     view.tabManager = {
+      getActiveTab: jest.fn(() => null),
+      getAllTabs: jest.fn(() => []),
       createTab,
       switchToTab: jest.fn(),
       getPersistedState: jest.fn(() => ({ openTabs: [], activeTabId: null })),
@@ -449,11 +507,11 @@ describe('TeamChatView.selectAgent — resolve → cross-view reuse / create', (
         findConversationAcrossViews: jest.fn(() => null),
       },
     });
-    view.tabManager = { createTab: staleCreate, switchToTab: jest.fn() };
+    view.tabManager = { getActiveTab: jest.fn(() => null), getAllTabs: jest.fn(() => []), createTab: staleCreate, switchToTab: jest.fn() };
 
     const pending = view.selectAgent('roster:a');
     const freshCreate = jest.fn();
-    view.tabManager = { createTab: freshCreate, switchToTab: jest.fn() }; // re-entrant onOpen
+    view.tabManager = { getActiveTab: jest.fn(() => null), getAllTabs: jest.fn(() => []), createTab: freshCreate, switchToTab: jest.fn() }; // re-entrant onOpen
     resolveConv.resolve('conv-1');
     await pending;
 
@@ -478,7 +536,7 @@ describe('TeamChatView.selectAgent — resolve → cross-view reuse / create', (
         findConversationAcrossViews: jest.fn(() => null),
       },
     });
-    view.tabManager = { createTab, switchToTab: jest.fn() };
+    view.tabManager = { getActiveTab: jest.fn(() => null), getAllTabs: jest.fn(() => []), createTab, switchToTab: jest.fn() };
 
     const a = view.selectAgent('roster:a'); // generation 1
     const b = view.selectAgent('roster:b'); // generation 2 (latest)
@@ -514,7 +572,7 @@ describe('TeamChatView.selectAgent — resolve → cross-view reuse / create', (
     });
     view.selectedAgentId = 'roster:prev'; // this leaf is showing its own DM
     view.teamChatObservers = new Set([observer]);
-    view.tabManager = { createTab, switchToTab: jest.fn() };
+    view.tabManager = { getActiveTab: jest.fn(() => null), getAllTabs: jest.fn(() => []), createTab, switchToTab: jest.fn() };
 
     await view.selectAgent('roster:new');
 
@@ -522,10 +580,10 @@ describe('TeamChatView.selectAgent — resolve → cross-view reuse / create', (
     expect(revealLeaf).toHaveBeenCalledWith(otherLeaf);
     expect(otherSwitch).toHaveBeenCalledWith('tab-9');
     expect(createTab).not.toHaveBeenCalled();
-    // No manual rollback and no optimistic set: selectedAgentId is unchanged and
-    // never re-emitted from selectAgent.
+    // No manual rollback and no optimistic set: every projection selectAgent emits still
+    // carries the PREVIOUS selection, because a cross-leaf reveal changes nothing here.
     expect(view.selectedAgentId).toBe('roster:prev');
-    expect(observer).not.toHaveBeenCalled();
+    for (const [snapshot] of observer.mock.calls) expect(snapshot.selectedAgentId).toBe('roster:prev');
   });
 
   it('shows a Notice on the tab cap and leaves selection to the projection (no manual revert)', async () => {
@@ -539,14 +597,14 @@ describe('TeamChatView.selectAgent — resolve → cross-view reuse / create', (
     });
     view.selectedAgentId = 'roster:prev'; // a DM was already showing
     view.teamChatObservers = new Set([observer]);
-    view.tabManager = { createTab, switchToTab: jest.fn() };
+    view.tabManager = { getActiveTab: jest.fn(() => null), getAllTabs: jest.fn(() => []), createTab, switchToTab: jest.fn() };
 
     await view.selectAgent('roster:new');
 
-    // No tab opened → nothing activated → the projection never fired, so selection
-    // stays exactly where it was (there was no optimistic set to revert).
+    // No tab opened → nothing activated → selection stays exactly where it was (there was
+    // no optimistic set to revert), and the post-open re-project reports that unchanged.
     expect(view.selectedAgentId).toBe('roster:prev');
-    expect(observer).not.toHaveBeenCalled();
+    for (const [snapshot] of observer.mock.calls) expect(snapshot.selectedAgentId).toBe('roster:prev');
     // The user is still told why nothing opened.
     expect(mockNotice).toHaveBeenCalledTimes(1);
   });
@@ -562,7 +620,7 @@ describe('TeamChatView.selectAgent — resolve → cross-view reuse / create', (
       },
     });
     view.selectedAgentId = 'roster:current'; // reflects the real active tab
-    view.tabManager = { createTab: jest.fn(), switchToTab: jest.fn() };
+    view.tabManager = { getActiveTab: jest.fn(() => null), getAllTabs: jest.fn(() => []), createTab: jest.fn(), switchToTab: jest.fn() };
 
     await expect(view.selectAgent('roster:new')).rejects.toThrow('resolve boom');
 
@@ -578,7 +636,7 @@ describe('TeamChatView.selectAgent — resolve → cross-view reuse / create', (
       },
     });
     view.selectedAgentId = 'roster:current';
-    view.tabManager = { createTab, switchToTab: jest.fn() };
+    view.tabManager = { getActiveTab: jest.fn(() => null), getAllTabs: jest.fn(() => []), createTab, switchToTab: jest.fn() };
 
     await expect(view.selectAgent('roster:new')).rejects.toThrow('create boom');
 
@@ -618,7 +676,7 @@ describe('TeamChatView.selectAgent — resolve → cross-view reuse / create', (
         }),
       },
     });
-    view.tabManager = { createTab, switchToTab: jest.fn() };
+    view.tabManager = { getActiveTab: jest.fn(() => null), getAllTabs: jest.fn(() => []), createTab, switchToTab: jest.fn() };
 
     await view.selectAgent('roster:a');
 
@@ -648,7 +706,7 @@ describe('TeamChatView.selectAgent — resolve → cross-view reuse / create', (
             : null),
       },
     });
-    view.tabManager = { createTab, switchToTab: jest.fn() };
+    view.tabManager = { getActiveTab: jest.fn(() => null), getAllTabs: jest.fn(() => []), createTab, switchToTab: jest.fn() };
 
     await view.selectAgent('roster:a');
 
@@ -691,6 +749,7 @@ describe('TeamChatView.selectAgent — resolve → cross-view reuse / create', (
     view.tabManager = {
       createTab,
       switchToTab: jest.fn(),
+      getActiveTab: jest.fn(() => null),
       getAllTabs: jest.fn(() => [
         { id: 'tab-old', conversationId: 'conv-old', state: { isStreaming: false } },
         { id: 'tab-hot', conversationId: 'conv-hot', state: { isStreaming: false } },
@@ -743,7 +802,7 @@ describe('TeamChatView.selectAgent — resolve → cross-view reuse / create', (
         }),
       },
     });
-    view.tabManager = { createTab, switchToTab: jest.fn() };
+    view.tabManager = { getActiveTab: jest.fn(() => null), getAllTabs: jest.fn(() => []), createTab, switchToTab: jest.fn() };
 
     await view.selectAgent('roster:a');
 
@@ -785,7 +844,7 @@ describe('TeamChatView.selectAgent — resolve → cross-view reuse / create', (
         }),
       },
     });
-    view.tabManager = { createTab, switchToTab: jest.fn() };
+    view.tabManager = { getActiveTab: jest.fn(() => null), getAllTabs: jest.fn(() => []), createTab, switchToTab: jest.fn() };
 
     await view.selectAgent('roster:a');
 
@@ -813,7 +872,7 @@ describe('TeamChatView.selectAgent — resolve → cross-view reuse / create', (
         findConversationAcrossViews: jest.fn(() => null),
       },
     });
-    view.tabManager = { createTab, switchToTab: jest.fn() };
+    view.tabManager = { getActiveTab: jest.fn(() => null), getAllTabs: jest.fn(() => []), createTab, switchToTab: jest.fn() };
 
     await view.selectAgent('rotA', { preserveFocus: true });   // rotation 1 completes (no generation bump)
     const pX = view.selectAgent('agentX');                     // foreground click lands mid-batch, parks on resolveOrCreate
@@ -842,11 +901,11 @@ describe('TeamChatView.selectAgent — resolve → cross-view reuse / create', (
         findConversationAcrossViews: jest.fn(() => null),
       },
     });
-    view.tabManager = { createTab: staleCreate, switchToTab: jest.fn() };
+    view.tabManager = { getActiveTab: jest.fn(() => null), getAllTabs: jest.fn(() => []), createTab: staleCreate, switchToTab: jest.fn() };
 
     const pending = view.selectAgent('roster:a', { preserveFocus: true });
     const freshCreate = jest.fn();
-    view.tabManager = { createTab: freshCreate, switchToTab: jest.fn() }; // re-entrant onOpen swapped the engine
+    view.tabManager = { getActiveTab: jest.fn(() => null), getAllTabs: jest.fn(() => []), createTab: freshCreate, switchToTab: jest.fn() }; // re-entrant onOpen swapped the engine
     resolveConv.resolve('conv-1');
     await pending;
 
@@ -873,7 +932,7 @@ describe('TeamChatView.selectAgent — queued restore-time selection (Round-48 F
         findConversationAcrossViews: jest.fn(() => null),
       },
     });
-    view.tabManager = { createTab, switchToTab: jest.fn() };
+    view.tabManager = { getActiveTab: jest.fn(() => null), getAllTabs: jest.fn(() => []), createTab, switchToTab: jest.fn() };
     view.tabsRestored = false;
     view.pendingAgentSelection = null;
 
@@ -887,7 +946,7 @@ describe('TeamChatView.selectAgent — queued restore-time selection (Round-48 F
 
   it('keeps only the LAST agent clicked during restore (last-click-wins)', async () => {
     const view = makeView();
-    view.tabManager = { createTab: jest.fn(), switchToTab: jest.fn() };
+    view.tabManager = { getActiveTab: jest.fn(() => null), getAllTabs: jest.fn(() => []), createTab: jest.fn(), switchToTab: jest.fn() };
     view.tabsRestored = false;
     view.pendingAgentSelection = null;
 
@@ -921,7 +980,7 @@ describe('TeamChatView.selectAgent — queued restore-time selection (Round-48 F
         findConversationAcrossViews: jest.fn(() => null),
       },
     });
-    view.tabManager = { createTab, switchToTab: jest.fn() };
+    view.tabManager = { getActiveTab: jest.fn(() => null), getAllTabs: jest.fn(() => []), createTab, switchToTab: jest.fn() };
     view.tabsRestored = true;
     view.pendingAgentSelection = 'roster:stale'; // an earlier restore-time click, still queued
 
@@ -948,7 +1007,7 @@ describe('TeamChatView.selectAgent — queued restore-time selection (Round-48 F
         findConversationAcrossViews: jest.fn(() => null),
       },
     });
-    view.tabManager = { createTab, switchToTab: jest.fn() };
+    view.tabManager = { getActiveTab: jest.fn(() => null), getAllTabs: jest.fn(() => []), createTab, switchToTab: jest.fn() };
     view.tabsRestored = false;         // restore still in flight
     view.pendingAgentSelection = null;
 
@@ -967,7 +1026,7 @@ describe('TeamChatView.selectAgent — queued restore-time selection (Round-48 F
         findConversationAcrossViews: jest.fn(() => null),
       },
     });
-    view.tabManager = { createTab: jest.fn(), switchToTab: jest.fn() };
+    view.tabManager = { getActiveTab: jest.fn(() => null), getAllTabs: jest.fn(() => []), createTab: jest.fn(), switchToTab: jest.fn() };
     view.tabsRestored = false;
     view.pendingAgentSelection = 'roster:foreground'; // a user click already queued during restore
 

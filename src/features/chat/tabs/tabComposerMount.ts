@@ -21,6 +21,10 @@ import type { TabData } from './types';
 export interface ComposerToolbarWiring {
   getProviderCatalogConfig?: () => ProviderCatalogInfo;
   onProviderChanged?: (providerId: ProviderId) => void | Promise<void>;
+  /** Fired after a model pick settles, for hosts that render the model outside the composer
+   *  (Team Chat's top-bar chip). Notified even on failure — the pick may have been partially
+   *  applied, and the host re-reads live settings, so a stale chip is the worse outcome. */
+  onModelChanged?: () => void;
 }
 
 /**
@@ -64,13 +68,20 @@ export function mountTabComposer(
   // vanish silently under `void … .finally()`; the deleted imperative widgets
   // surfaced it via a Notice (ui/toolbar/shared.ts `runToolbarAction`). Restore
   // that: catch + Notice, still emit so the widget snaps back to engine truth.
-  const runToolbarAction = (action: Promise<void>, failureMessage: string): void => {
-    void action.catch(() => { new Notice(failureMessage); }).finally(() => tab.composer?.emit());
+  // `onSettled` runs alongside the re-emit, and deliberately AFTER the action resolves:
+  // the model write is async, so notifying eagerly would hand the host the old settings.
+  const runToolbarAction = (action: Promise<void>, failureMessage: string, onSettled?: () => void): void => {
+    void action.catch(() => { new Notice(failureMessage); }).finally(() => {
+      tab.composer?.emit();
+      onSettled?.();
+    });
   };
 
   const callbacks: ComposerCallbacks = {
     subscribe: tab.composer.subscribe,
-    onSetModel: (model) => { runToolbarAction(toolbarActions.onModelChange(model), 'Failed to change model'); },
+    onSetModel: (model) => {
+      runToolbarAction(toolbarActions.onModelChange(model), 'Failed to change model', toolbarWiring.onModelChanged);
+    },
     onSetMode: (mode) => { runToolbarAction(toolbarActions.onModeChange(mode), 'Failed to change mode'); },
     onSetEffortLevel: (effort) => { runToolbarAction(toolbarActions.onEffortLevelChange(effort), 'Failed to change effort level'); },
     onSetThinkingBudget: (budget) => { runToolbarAction(toolbarActions.onThinkingBudgetChange(budget), 'Failed to change thinking budget'); },

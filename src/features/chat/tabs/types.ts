@@ -379,6 +379,24 @@ export interface TabManagerCallbacks {
 
   /** Called when the active provider changes within a tab (blank tab model selection). */
   onTabProviderChanged?: (tabId: TabId, providerId: ProviderId) => void;
+
+  /**
+   * Called after a composer model pick is committed to provider settings. Distinct from
+   * `onTabProviderChanged`, which only fires when the pick crosses providers: a same-provider
+   * change re-projects the composer alone, so a host that renders the model ANYWHERE ELSE
+   * (Team Chat's top-bar chip) would otherwise keep showing the previous model until some
+   * unrelated event happened to re-project it.
+   */
+  onTabModelChanged?: (tabId: TabId) => void;
+
+  /**
+   * Called when a tab's message LIST changes (add / remove / bulk set) — not on the in-place
+   * block growth of a streaming turn, which never fires it. For a host rendering anything
+   * derived from the list (Team Chat's empty-DM starter card), the streaming-state callback is
+   * not enough: `beginStreamingTurnState` flips `isStreaming` BEFORE the outgoing messages are
+   * appended, so a snapshot taken there still reads the DM as empty.
+   */
+  onTabMessagesChanged?: (tabId: TabId) => void;
 }
 
 /**

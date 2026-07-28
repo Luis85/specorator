@@ -21,6 +21,7 @@ export function useTranscriptEventRouting(subscribe: TranscriptSubscribe): void 
     store.setActiveStream(snapshot.activeStream);
     store.setConversationIdentity(snapshot.conversationId, snapshot.projectionRevision);
     store.setGreeting(snapshot.greeting);
+    store.setMessageIdentity(snapshot.messageIdentity);
     store.setLoadingText(snapshot.loadingText);
     store.setHydrationError(snapshot.hydrationError);
   });

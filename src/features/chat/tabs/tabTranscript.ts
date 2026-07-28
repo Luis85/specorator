@@ -1,4 +1,5 @@
 import type { ChatMessage, SubagentInfo } from '../../../core/types';
+import type { AgentPersona } from '../../agents/agentTypes';
 import type { ChatState } from '../state/ChatState';
 import type { TranscriptHydrationError } from '../ui/vue/transcript/stores/transcriptStore';
 import type { TranscriptSnapshot, TranscriptSubscribe } from '../ui/vue/transcript/transcriptCallbacks';
@@ -31,6 +32,9 @@ export class TabTranscriptProjection {
   private readonly dirtyMessageIds = new Set<string>();
   private projectionRevision = 0;
   private lastConversationId: string | null = null;
+  /** Assistant-attribution persona, CONVERSATION-KEYED (see `setMessageIdentity`). */
+  private messageIdentity: AgentPersona | null = null;
+  private messageIdentityConversationId: string | null = null;
 
   constructor(private readonly state: ChatState) {}
 
@@ -49,6 +53,21 @@ export class TabTranscriptProjection {
   setGreeting(greeting: string): void {
     if (greeting === this.greeting) return;
     this.greeting = greeting;
+    this.emit();
+  }
+
+  /**
+   * Sets the persona assistant messages are attributed to and re-emits. Only Team Chat DM
+   * tabs ever call this (`refreshDmAgentPersonas`); every other surface leaves it null.
+   *
+   * Keyed by the conversation it was resolved FOR, and `snapshot()` emits it only while that
+   * still matches the tab's live conversation. That is what makes a provider-change rotation
+   * safe: the fresh thread doesn't match the old key, so the header disappears until this is
+   * called again rather than attributing the new conversation to the previous persona.
+   */
+  setMessageIdentity(persona: AgentPersona | null, conversationId: string | null): void {
+    this.messageIdentity = persona;
+    this.messageIdentityConversationId = conversationId;
     this.emit();
   }
 
@@ -119,6 +138,9 @@ export class TabTranscriptProjection {
       greeting: messages.length === 0 ? this.greeting : '',
       loadingText: this.loadingText,
       hydrationError: this.hydrationError,
+      // Conversation-keyed: a rotation or rebind invalidates the persona rather than
+      // attributing the new thread to the previous agent.
+      messageIdentity: this.messageIdentityConversationId === conversationId ? this.messageIdentity : null,
     };
   }
 }

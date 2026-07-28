@@ -27,3 +27,20 @@ export function teamChatDmBoundAgentId(
   const conversation = conversationId ? plugin.getConversationSync(conversationId) : null;
   return conversation?.surface === 'team-chat' ? conversation.boundAgentId ?? null : null;
 }
+
+/**
+ * The welcome greeting a tab should show. Empty on the Team Chat surface: a DM's empty state
+ * is `TeamChatStarters`, which already greets the user BY AGENT and offers conversation
+ * starters, so letting the shared time-of-day greeting through as well stacks two greetings
+ * above one empty thread.
+ *
+ * A named helper rather than an inline ternary at the call site so the rule is testable
+ * without standing up a whole tab + controller stack.
+ */
+export function greetingForSurface(
+  plugin: SpecoratorPlugin,
+  conversationId: string | null | undefined,
+  greeting: string,
+): string {
+  return isTeamChatSurfaceConversation(plugin, conversationId) ? '' : greeting;
+}

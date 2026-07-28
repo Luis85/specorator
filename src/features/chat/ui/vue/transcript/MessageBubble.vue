@@ -11,9 +11,11 @@ import { resolveBlockListItems, shouldRenderToolCall } from './blocks/blockListV
 import TextBlock from './blocks/TextBlock.vue';
 import MessageActionBar from './cards/MessageActionBar.vue';
 import MessageContextCard from './cards/MessageContextCard.vue';
+import MessageIdentity from './cards/MessageIdentity.vue';
 import MessageImages from './cards/MessageImages.vue';
+import { useTranscriptStore } from './stores/transcriptStore';
 import { APP_KEY, CALLBACKS_KEY } from './transcriptKeys';
-import { hasVisibleBlock, hasVisibleText } from './visibleContentHelpers';
+import { hasAnyVisibleContent } from './visibleContentHelpers';
 
 /**
  * Reproduces `rendering/MessageRenderer.ts`'s message shell —
@@ -34,24 +36,43 @@ import { hasVisibleBlock, hasVisibleText } from './visibleContentHelpers';
  * directly below the response (not an overlay on the last line). The user
  * toolbar (fork/rewind/copy/actions) stays a message-level sibling below.
  */
-const props = defineProps<{ msg: ChatMessage }>();
+const props = defineProps<{
+  msg: ChatMessage;
+  /**
+   * True when this assistant message OPENS a run (the parent computes it against the full
+   * message list). Only a run-opener carries the identity header, so consecutive assistant
+   * messages group under one attribution. Optional so the many fixtures that mount
+   * `MessageBubble` directly keep working — an absent value simply never shows a header,
+   * which is also the correct default for every non-Team-Chat surface.
+   */
+  startsRun?: boolean;
+}>();
 
 const app = inject(APP_KEY, undefined);
 const callbacks = inject(CALLBACKS_KEY, undefined);
 
 const providerId = computed(() => callbacks?.getProviderId() ?? DEFAULT_CHAT_PROVIDER_ID);
 
+/**
+ * The persona to attribute this message to, or null. Non-null only when this message opens
+ * an assistant run AND the surface projected an identity (null everywhere but a Team Chat
+ * DM whose bound agent still exists).
+ *
+ * Read from the STORE, not a callback: the persona is resolved asynchronously and pushed
+ * through the snapshot, so a computed over an untracked callback would cache its first
+ * value and leave restored transcripts anonymous and renamed agents stale.
+ */
+const transcriptStore = useTranscriptStore();
+const identity = computed(() => (props.startsRun ? transcriptStore.messageIdentity : null));
+
 function isToolVisible(toolId: string): boolean {
   const toolCall = props.msg.toolCalls?.find((tc) => tc.id === toolId);
   return Boolean(toolCall && shouldRenderToolCall(toolCall, providerId.value));
 }
 
-const hasVisibleContent = computed(() => {
-  const msg = props.msg;
-  if (hasVisibleText(msg)) return true;
-  if (hasVisibleBlock(msg.contentBlocks, isToolVisible)) return true;
-  return Boolean(msg.toolCalls?.some((tc) => shouldRenderToolCall(tc, providerId.value)));
-});
+// Shared with `MessageList`'s run-start attribution, which must agree with this component
+// about which records actually render (see `rendersMessageBubble`).
+const hasVisibleContent = computed(() => hasAnyVisibleContent(props.msg, isToolVisible));
 
 const isInterruptOnly = computed(
   () => !!props.msg.isInterrupt && (props.msg.role === 'user' || !hasVisibleContent.value)
@@ -150,6 +171,13 @@ const mentions = computed(() => {
         class="specorator-message-content"
         dir="auto"
       >
+        <!-- Surface-gated agent attribution (Team Chat DMs only; `persona` is null on
+             every other surface, and the component then renders nothing). The null check
+             lives INSIDE MessageIdentity rather than as a v-if here, so this already-dense
+             template gains no branch. Inside -message-content so the -message shell's
+             structure — what the imperative NavigationController and selection controllers
+             query — is untouched. -->
+        <MessageIdentity :persona="identity" />
         <BlockList :msg="msg" />
         <div
           v-if="msg.isInterrupt"

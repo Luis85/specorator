@@ -346,3 +346,21 @@ function buildTranscriptCallbacks(
   };
 }
 
+/**
+ * Chains a HOST notification onto the transcript re-projection `initializeTabControllers`
+ * installs, using the same spread-and-wrap composition one layer up. Message add/remove/set
+ * otherwise re-projects the TRANSCRIPT alone, so a host rendering anything derived from the
+ * list — Team Chat's empty-DM starter card — stayed frozen: `beginStreamingTurnState` flips
+ * `isStreaming` BEFORE the outgoing messages are appended, so a snapshot taken from the
+ * streaming callback still reads the DM as empty.
+ */
+export function chainTabMessagesChanged(tab: TabData, notifyHost: () => void): void {
+  const reprojectTranscript = tab.state.callbacks.onMessagesChanged;
+  tab.state.callbacks = {
+    ...tab.state.callbacks,
+    onMessagesChanged: () => {
+      reprojectTranscript?.();
+      notifyHost();
+    },
+  };
+}

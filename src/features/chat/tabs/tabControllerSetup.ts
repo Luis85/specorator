@@ -12,6 +12,7 @@ import { InputController } from '../controllers/InputController';
 import { NavigationController } from '../controllers/NavigationController';
 import { SelectionController } from '../controllers/SelectionController';
 import { StreamController } from '../controllers/StreamController';
+import { greetingForSurface } from '../controllers/teamChatSurface';
 import { autoResizeTextarea } from '../ui/textareaResize';
 import { getTabProviderId } from './providerResolution';
 import { initializeTabService } from './tabLifecycle';
@@ -131,7 +132,11 @@ export function buildTabConversationController(
       plugin,
       state,
       subagentManager: services.subagentManager,
-      setTranscriptGreeting: (greeting) => tab.transcript?.setGreeting(greeting),
+      // Surface-gated: a Team Chat DM's empty state is `TeamChatStarters`, which already
+      // greets by agent — see `greetingForSurface`. Resolved live, since a tab's
+      // conversation changes over its life.
+      setTranscriptGreeting: (greeting) =>
+        tab.transcript?.setGreeting(greetingForSurface(plugin, tab.conversationId, greeting)),
       setTranscriptLoading: (loadingText) => tab.transcript?.setLoadingText(loadingText),
       setTranscriptHydrationError: (error) => tab.transcript?.setHydrationError(error),
       emitTranscript: () => tab.transcript?.emit(),

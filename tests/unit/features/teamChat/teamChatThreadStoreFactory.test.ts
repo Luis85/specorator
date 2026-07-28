@@ -73,6 +73,9 @@ function makeHarness() {
 
 function makeView(plugin: unknown): any {
   const view = Object.create(TeamChatView.prototype);
+  view.agentThreads = {};           // class-field initializer skipped by Object.create — the roster preview/timestamp source
+  view.lastSeenByAgent = new Map(); // ditto — the per-leaf unread baseline
+  view.railGeometry = { collapsed: false, width: 260 }; // ditto — the per-leaf rail chrome
   view.plugin = plugin;
   view.contentEl = createMockEl();
   return view;

@@ -2,6 +2,7 @@ import { defineStore } from 'pinia';
 import { shallowRef } from 'vue';
 
 import type { ChatMessage } from '../../../../../../core/types';
+import type { AgentPersona } from '../../../../../agents/agentTypes';
 import type { ActiveStreamState } from '../../../../state/types';
 
 // `ActiveStreamState` is defined in the engine's neutral `state/types` so
@@ -31,6 +32,10 @@ export const useTranscriptStore = defineStore('transcript', () => {
   const hydrationError = shallowRef<TranscriptHydrationError | null>(null);
   const conversationId = shallowRef<string | null>(null);
   const projectionRevision = shallowRef(0);
+  /** Persona to attribute assistant messages to (Team Chat DMs); null everywhere else.
+   *  Engine-pushed like `greeting` — NOT read through a callback, so a persona resolved
+   *  after mount (restore, rename, re-avatar, delete) actually re-renders the headers. */
+  const messageIdentity = shallowRef<AgentPersona | null>(null);
 
   function setMessages(next: ChatMessage[]): void {
     messages.value = next;
@@ -47,6 +52,9 @@ export const useTranscriptStore = defineStore('transcript', () => {
   function setHydrationError(next: TranscriptHydrationError | null): void {
     hydrationError.value = next;
   }
+  function setMessageIdentity(next: AgentPersona | null): void {
+    messageIdentity.value = next;
+  }
   function setConversationIdentity(nextId: string | null, nextRevision: number): void {
     conversationId.value = nextId;
     projectionRevision.value = nextRevision;
@@ -60,11 +68,13 @@ export const useTranscriptStore = defineStore('transcript', () => {
     hydrationError,
     conversationId,
     projectionRevision,
+    messageIdentity,
     setMessages,
     setActiveStream,
     setGreeting,
     setLoadingText,
     setHydrationError,
+    setMessageIdentity,
     setConversationIdentity,
   };
 });
