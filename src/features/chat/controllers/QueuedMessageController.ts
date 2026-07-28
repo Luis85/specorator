@@ -227,7 +227,14 @@ export class QueuedMessageController {
       () => {
         this.deps.requestSend({
           content: queuedMessage.content,
-          images: queuedMessage.images,
+          // `?? []` is load-bearing: `resolveComposerSend` treats an UNDEFINED image
+          // override as "read the live composer", so a snapshot queued without images
+          // would pick up whatever the user staged afterwards — and the merged content
+          // may no longer read as `/compact`, so the compact guards can't stop it. The
+          // transcript then showed an image the provider never received (the queued
+          // turnRequest has none). For a dequeued turn the snapshot IS the turn: an
+          // empty array means "no images", not "go look".
+          images: queuedMessage.images ?? [],
           turnRequestOverride: this.toQueuedChatTurn(queuedMessage).request,
         });
       },
@@ -419,10 +426,14 @@ export class QueuedMessageController {
         return;
       }
 
-      this.deps.getFileContextManager()?.markCurrentNoteSent();
-      // Pill mentions were folded into the prepared turn above; clear them so they
-      // don't linger in the composer after the steered message is committed.
-      this.deps.getFileContextManager()?.clearAttachedPills();
+      // A compact turn carries neither the mention suffix nor the current note —
+      // the provider drops the whole context envelope for it — so it consumed
+      // neither. Marking the note sent would omit it from the next ordinary
+      // prompt, and clearing the pills would drop context still staged.
+      if (!preparedTurn.isCompact) {
+        this.deps.getFileContextManager()?.markCurrentNoteSent();
+        this.deps.getFileContextManager()?.clearAttachedPills();
+      }
 
       this.deps.onSteerCommitted({
         displayContent,

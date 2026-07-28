@@ -407,6 +407,7 @@ for await (const chunk of runtime.query(preparedTurn, history)) {
 - `/compact`
   - Claude skips context injection so the provider recognizes the built-in command and persists the compaction boundary
   - Codex routes compact turns to `thread/compact/start` and persists the durable `context_compacted` boundary from JSONL history
+  - **A compact turn transmits and consumes NEITHER pills nor images.** `resolveTurnSubmission` deliberately ships the invocation bare — no mention suffix, no images — so the provider recognizes its built-in. Every site that CONSUMES composer context afterwards has to agree, or the turn eats attachments it never carried. There are three such sites — `buildOutgoingTurn`, the streaming-queue branch (`queueComposerSendWhileStreaming`), and the steer commit (`QueuedMessageController`) — and they all now gate on one predicate, `isCompactInvocation` (`composerSendPhases.ts`). Do not re-inline the regex: it was duplicated across two of them and drifted, which is how the queue path kept clearing pills a compact turn never folded in
 - Plan mode
   - Claude uses provider/runtime events for enter and exit plan mode
   - Codex sets `collaborationMode` on `turn/start` and triggers shared post-plan approval from consumed turn metadata

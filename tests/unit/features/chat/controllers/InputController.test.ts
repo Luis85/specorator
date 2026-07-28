@@ -4215,6 +4215,335 @@ describe('InputController - Message Queue', () => {
       expect(capturedRequests[0].text).toBe('/compact');
     });
 
+    it('strips images from a replayed override when the merged turn leads with /compact', async () => {
+      // Reverse of the ordinary→compact merge: queue `/compact` first, then merge an
+      // ordinary turn carrying an image. The merged text still LEADS with `/compact`, so
+      // the turn is classified compact and the image is hidden from the transcript — but
+      // the override still carried it into the request the provider reads. An attachment
+      // in neither composer nor transcript must not reach the runtime.
+      const localDeps = createSendableDeps({});
+      const mockAgentService = (localDeps as any).mockAgentService;
+      const prepared: any[] = [];
+      mockAgentService.prepareTurn = jest.fn().mockImplementation((request: any) => {
+        prepared.push(request);
+        return {
+          request,
+          persistedContent: request.text,
+          prompt: request.text,
+          isCompact: true,
+          mcpMentions: new Set(),
+        };
+      });
+      mockAgentService.query = jest.fn().mockReturnValue(createMockStream([{ type: 'done' }]));
+
+      await new InputController(localDeps).sendMessage({
+        content: '/compact\n\nlook at this',
+        turnRequestOverride: {
+          text: '/compact\n\nlook at this',
+          images: [{ id: 'img-1', data: 'x', mimeType: 'image/png' }],
+          editorSelection: null,
+          browserSelection: null,
+          canvasSelection: null,
+        } as any,
+      });
+
+      expect(prepared[0].images).toBeUndefined();
+    });
+
+    it('keeps override images on a replayed NON-compact turn', async () => {
+      const localDeps = createSendableDeps({});
+      const mockAgentService = (localDeps as any).mockAgentService;
+      const prepared: any[] = [];
+      mockAgentService.prepareTurn = jest.fn().mockImplementation((request: any) => {
+        prepared.push(request);
+        return {
+          request,
+          persistedContent: request.text,
+          prompt: request.text,
+          isCompact: false,
+          mcpMentions: new Set(),
+        };
+      });
+      mockAgentService.query = jest.fn().mockReturnValue(createMockStream([{ type: 'done' }]));
+
+      await new InputController(localDeps).sendMessage({
+        content: 'look at this',
+        turnRequestOverride: {
+          text: 'look at this',
+          images: [{ id: 'img-1', data: 'x', mimeType: 'image/png' }],
+          editorSelection: null,
+          browserSelection: null,
+          canvasSelection: null,
+        } as any,
+      });
+
+      expect(prepared[0].images).toHaveLength(1);
+    });
+
+    it('does not clear live pills when dispatching a replayed queue snapshot', async () => {
+      // A dequeued turn already folded in (and cleared) the pills it captured at
+      // queue time, so anything staged since belongs to the user's NEXT turn.
+      // Reachable via a merged queue — `ordinary\n\n/compact` no longer reads as
+      // compact, so the compact guard can't catch it and the live pills were
+      // cleared without the replayed request ever containing them.
+      const fileContextManager = createMockFileContextManager();
+
+      const localDeps = createSendableDeps({
+        getFileContextManager: () => fileContextManager as any,
+      });
+      const mockAgentService = (localDeps as any).mockAgentService;
+      mockAgentService.query = jest.fn().mockReturnValue(createMockStream([{ type: 'done' }]));
+
+      await new InputController(localDeps).sendMessage({
+        content: 'ordinary\n\n/compact',
+        turnRequestOverride: {
+          text: 'ordinary\n\n/compact',
+          images: undefined,
+          editorSelection: null,
+          browserSelection: null,
+          canvasSelection: null,
+        } as any,
+      });
+
+      expect(fileContextManager.clearAttachedPills).not.toHaveBeenCalled();
+    });
+
+    it('still clears pills on an ordinary live send', async () => {
+      const fileContextManager = createMockFileContextManager();
+
+      const localDeps = createSendableDeps({
+        getFileContextManager: () => fileContextManager as any,
+      });
+      const mockAgentService = (localDeps as any).mockAgentService;
+      mockAgentService.query = jest.fn().mockReturnValue(createMockStream([{ type: 'done' }]));
+
+      const localInput = localDeps.getInputEl() as ReturnType<typeof createMockInputEl>;
+      localInput.value = 'ordinary message';
+      await new InputController(localDeps).sendMessage();
+
+      expect(fileContextManager.clearAttachedPills).toHaveBeenCalled();
+    });
+
+    it('does not persist a pending image to the vault on /compact', async () => {
+      // Persistence runs up front, before the compact branch strips images. It
+      // would write an attachment file for a turn that never references it — and
+      // once the user removes the still-staged image, that file is orphaned. A
+      // write failure would also abort a compaction unrelated to the image.
+      (persistPastedImages as jest.Mock).mockClear();
+      const imageContextManager = {
+        hasImages: jest.fn(() => true),
+        getAttachedImages: jest.fn(() => [{ id: 'img-1', data: 'x', mimeType: 'image/png' }]),
+        clearImages: jest.fn(),
+      };
+
+      const localDeps = createSendableDeps({
+        getImageContextManager: () => imageContextManager as any,
+      });
+      const mockAgentService = (localDeps as any).mockAgentService;
+      mockAgentService.query = jest.fn().mockReturnValue(createMockStream([{ type: 'done' }]));
+
+      const localInput = localDeps.getInputEl() as ReturnType<typeof createMockInputEl>;
+      localInput.value = '/compact';
+      await new InputController(localDeps).sendMessage();
+
+      expect(persistPastedImages).not.toHaveBeenCalled();
+      // Still staged — not transmitted, not consumed, not written to the vault.
+      expect(imageContextManager.clearImages).not.toHaveBeenCalled();
+    });
+
+    it('still persists a pending image on a NON-compact send', async () => {
+      (persistPastedImages as jest.Mock).mockClear();
+      const imageContextManager = {
+        hasImages: jest.fn(() => true),
+        getAttachedImages: jest.fn(() => [{ id: 'img-1', data: 'x', mimeType: 'image/png' }]),
+        clearImages: jest.fn(),
+      };
+
+      const localDeps = createSendableDeps({
+        getImageContextManager: () => imageContextManager as any,
+      });
+      const mockAgentService = (localDeps as any).mockAgentService;
+      mockAgentService.query = jest.fn().mockReturnValue(createMockStream([{ type: 'done' }]));
+
+      const localInput = localDeps.getInputEl() as ReturnType<typeof createMockInputEl>;
+      localInput.value = 'look at this';
+      await new InputController(localDeps).sendMessage();
+
+      expect(persistPastedImages).toHaveBeenCalled();
+    });
+
+    it('neither transmits nor consumes a pending image on /compact', async () => {
+      // The compact special case suppressed the mention suffix but not images,
+      // so a pasted image rode along with the bare invocation — and, on a plain
+      // typed send, was cleared from the composer too.
+      const fileContextManager = createMockFileContextManager();
+      const imageContextManager = {
+        hasImages: jest.fn(() => true),
+        getAttachedImages: jest.fn(() => [{ id: 'img-1', data: 'x', mimeType: 'image/png' }]),
+        clearImages: jest.fn(),
+      };
+
+      const localDeps = createSendableDeps({
+        getFileContextManager: () => fileContextManager as any,
+        getImageContextManager: () => imageContextManager as any,
+      });
+      const mockAgentService = (localDeps as any).mockAgentService;
+      const capturedRequests: any[] = [];
+      mockAgentService.prepareTurn = jest.fn().mockImplementation((request: any) => {
+        capturedRequests.push(request);
+        return {
+          request,
+          persistedContent: request.text,
+          prompt: request.text,
+          isCompact: true,
+          mcpMentions: new Set(),
+        };
+      });
+      mockAgentService.query = jest.fn().mockReturnValue(createMockStream([{ type: 'done' }]));
+
+      const localInput = localDeps.getInputEl() as ReturnType<typeof createMockInputEl>;
+      localInput.value = '/compact';
+      await new InputController(localDeps).sendMessage();
+
+      expect(capturedRequests[0].images).toBeUndefined();
+      expect(imageContextManager.clearImages).not.toHaveBeenCalled();
+    });
+
+    it('keeps attached pills when a /compact turn is QUEUED during streaming', async () => {
+      // Parallel to the non-queued case: buildTurnSubmission also skips the
+      // suffix for compact, so the queue path must not consume the pills either.
+      const fileContextManager = createMockFileContextManager();
+      (fileContextManager.getAttachedMentionSuffix as jest.Mock).mockReturnValue(' @a.ts');
+
+      const localDeps = createSendableDeps({
+        getFileContextManager: () => fileContextManager as any,
+      });
+      localDeps.state.isStreaming = true;
+
+      const localInput = localDeps.getInputEl() as ReturnType<typeof createMockInputEl>;
+      localInput.value = '/compact';
+      const localController = new InputController(localDeps);
+
+      await localController.sendMessage();
+
+      expect(localDeps.state.queuedMessage).not.toBeNull();
+      expect(fileContextManager.clearAttachedPills).not.toHaveBeenCalled();
+    });
+
+    it('still clears attached pills when a NON-compact turn is queued during streaming', async () => {
+      const fileContextManager = createMockFileContextManager();
+      (fileContextManager.getAttachedMentionSuffix as jest.Mock).mockReturnValue(' @a.ts');
+
+      const localDeps = createSendableDeps({
+        getFileContextManager: () => fileContextManager as any,
+      });
+      localDeps.state.isStreaming = true;
+
+      const localInput = localDeps.getInputEl() as ReturnType<typeof createMockInputEl>;
+      localInput.value = 'ordinary follow-up';
+      const localController = new InputController(localDeps);
+
+      await localController.sendMessage();
+
+      expect(fileContextManager.clearAttachedPills).toHaveBeenCalled();
+    });
+
+    it('keeps attached pills after a /compact turn, which never folded them in', async () => {
+      // `/compact` passes through without the mention suffix so the provider
+      // recognises its built-in, so the pills were never consumed — clearing
+      // them would drop context the user still expects on their next turn.
+      const fileContextManager = createMockFileContextManager();
+      (fileContextManager.getAttachedMentionSuffix as jest.Mock).mockReturnValue(' @a.ts');
+
+      const localDeps = createSendableDeps({
+        getFileContextManager: () => fileContextManager as any,
+      });
+      const mockAgentService = (localDeps as any).mockAgentService;
+      mockAgentService.query = jest.fn().mockReturnValue(createMockStream([{ type: 'done' }]));
+
+      const localInput = localDeps.getInputEl() as ReturnType<typeof createMockInputEl>;
+      localInput.value = '/compact';
+      const localController = new InputController(localDeps);
+
+      await localController.sendMessage();
+
+      expect(fileContextManager.clearAttachedPills).not.toHaveBeenCalled();
+    });
+
+    it('does not mark the current note sent on a /compact turn', async () => {
+      // The provider drops the whole context envelope for compact (Claude's
+      // encoder emits no context blocks), so the note was never delivered.
+      // Marking it sent would omit it from the next ordinary prompt — the
+      // auto-attached current note would silently vanish for the rest of the
+      // session after a single compaction.
+      const fileContextManager = createMockFileContextManager();
+
+      const localDeps = createSendableDeps({
+        getFileContextManager: () => fileContextManager as any,
+      });
+      const mockAgentService = (localDeps as any).mockAgentService;
+      mockAgentService.query = jest.fn().mockReturnValue(createMockStream([{ type: 'done' }]));
+
+      const localInput = localDeps.getInputEl() as ReturnType<typeof createMockInputEl>;
+      localInput.value = '/compact';
+      const localController = new InputController(localDeps);
+
+      await localController.sendMessage();
+
+      expect(fileContextManager.markCurrentNoteSent).not.toHaveBeenCalled();
+    });
+
+    it('marks the current note sent when the PROVIDER does not treat /compact specially', async () => {
+      // Opencode has no compact concept — `prepareTurn` returns `isCompact:
+      // false` and `buildOpencodePromptText` renders `currentNotePath` into the
+      // envelope like any other turn. Unlike the pills and images, the note
+      // stays ON the turnRequest for a compact send, so whether it is delivered
+      // is the provider's call. Gating on the textual `/compact` would leave it
+      // unconsumed here and re-send it every subsequent turn.
+      const fileContextManager = createMockFileContextManager();
+
+      const localDeps = createSendableDeps({
+        getFileContextManager: () => fileContextManager as any,
+      });
+      const mockAgentService = (localDeps as any).mockAgentService;
+      mockAgentService.prepareTurn = jest.fn().mockImplementation((request: any) => ({
+        request,
+        persistedContent: request.text,
+        isCompact: false,
+        mcpMentions: new Set(),
+        prompt: request.text,
+      }));
+      mockAgentService.query = jest.fn().mockReturnValue(createMockStream([{ type: 'done' }]));
+
+      const localInput = localDeps.getInputEl() as ReturnType<typeof createMockInputEl>;
+      localInput.value = '/compact';
+      const localController = new InputController(localDeps);
+
+      await localController.sendMessage();
+
+      expect(fileContextManager.markCurrentNoteSent).toHaveBeenCalled();
+    });
+
+    it('still marks the current note sent on a NON-compact turn', async () => {
+      // The guard must not be a blanket skip: an ordinary turn does deliver the
+      // note, so it has to be marked or it would be re-sent every turn.
+      const fileContextManager = createMockFileContextManager();
+
+      const localDeps = createSendableDeps({
+        getFileContextManager: () => fileContextManager as any,
+      });
+      const mockAgentService = (localDeps as any).mockAgentService;
+      mockAgentService.query = jest.fn().mockReturnValue(createMockStream([{ type: 'done' }]));
+
+      const localInput = localDeps.getInputEl() as ReturnType<typeof createMockInputEl>;
+      localInput.value = 'ordinary message';
+      const localController = new InputController(localDeps);
+
+      await localController.sendMessage();
+
+      expect(fileContextManager.markCurrentNoteSent).toHaveBeenCalled();
+    });
+
     it('clears attached pills after send, with folded mentions already captured in turnRequest', async () => {
       const fileContextManager = createMockFileContextManager();
 

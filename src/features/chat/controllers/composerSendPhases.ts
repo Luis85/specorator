@@ -134,6 +134,14 @@ export function resolveComposerSourceImages(
   return send.imageOverride ?? send.imageContextManager?.getAttachedImages() ?? [];
 }
 
+/** The turn's image payload: a fresh copy, or undefined when there is none. */
+export function resolveComposerImagesForMessage(
+  send: ComposerSendContext,
+): ChatMessage['images'] {
+  const images = resolveComposerSourceImages(send);
+  return images.length > 0 ? [...images] : undefined;
+}
+
 export function normalizeTabModelOverride(raw: string | null | undefined): string | null {
   return typeof raw === 'string' && raw.trim() ? raw.trim() : null;
 }
